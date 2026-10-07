@@ -121,7 +121,7 @@ impl ViewGen<'_> {
             return "|| None".to_string();
         }
         let expr = self.color_expr(a.value.text(), Some(a.value_start));
-        wrap_signal_clones(&[v], format!("move || Some({expr})"))
+        wrap_signal_clones(&[v], format!("move || Some({expr})"), self.theme_access)
     }
 
     /// `stroke:` on an `svg`, overriding the stroke width the document declares. A theme that draws its icons at one weight sets it here rather than editing every asset, which is why the override exists on `Svg` at all — it was simply unreachable from `[view]`.
@@ -133,9 +133,12 @@ impl ViewGen<'_> {
         if v.is_empty() {
             return "|| None".to_string();
         }
-        let expr = substitute_reads(&crate::style::number_or(v, "1.0"));
+        let expr = substitute_reads(
+            &crate::style::number_or(v, "1.0", self.theme_access),
+            self.theme_access,
+        );
         // `.into()` rather than `Some(…)`, so a width and an already-optional one both work — std gives `From<T> for Option<T>` and the identity, and `with_stroke`'s parameter fixes the target.
-        wrap_signal_clones(&[v], format!("move || ({expr}).into()"))
+        wrap_signal_clones(&[v], format!("move || ({expr}).into()"), self.theme_access)
     }
 
     /// Resolves a media widget's `src` attribute into `(setup, data_fn)` fragments that slot into its construction block.
@@ -157,8 +160,11 @@ impl ViewGen<'_> {
             Some((a, Value::Expr(expr) | Value::Directive(expr))) if !expr.trim().is_empty() => {
                 let v = expr.trim();
                 if v.contains('$') {
-                    let data_fn =
-                        wrap_signal_clones(&[v], format!("move || {}", substitute_reads(v)));
+                    let data_fn = wrap_signal_clones(
+                        &[v],
+                        format!("move || {}", substitute_reads(v, self.theme_access)),
+                        self.theme_access,
+                    );
                     return (String::new(), data_fn);
                 }
                 let lead = expr.len() - expr.trim_start().len();

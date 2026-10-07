@@ -63,7 +63,7 @@ impl ViewGen<'_> {
         };
         let inner = super::redundant_parens(value).unwrap_or(value);
         let read = if inner.contains('$') {
-            substitute_reads(inner)
+            substitute_reads(inner, self.theme_access)
         } else {
             let lead = attr.value.text().len() - attr.value.text().trim_start().len()
                 + usize::from(inner.len() != value.len());
@@ -98,7 +98,7 @@ impl ViewGen<'_> {
         let raw = theme.value.text().trim();
         let value = super::redundant_parens(raw).unwrap_or(raw);
         let provided = if value.contains('$') {
-            let read = substitute_reads(value);
+            let read = substitute_reads(value, self.theme_access);
             format!(
                 "follow_theme({})",
                 self.clone_captures(&[value], format!("move || {read}"))

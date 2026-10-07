@@ -60,12 +60,17 @@ fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
 
     let prelude = telar_project::resolve_prelude(&manifest)
         .unwrap_or_else(|e| panic!("{} declares no readable prelude: {e}", project.name));
+    let library = telar_project::TelarManifest::load(&manifest)
+        .unwrap_or_else(|e| panic!("{} has no readable telar.toml: {e}", project.name))
+        .telar
+        .library;
 
     let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
         src_dir: &src_dir,
         theme_type: theme_type.as_deref(),
         assets: Some(&assets),
         prelude: &prelude,
+        library,
         // `Preview`, not `Plain`: it is the richer of the two shapes — the same Rust plus a build fn per `[preview]` — so snapshotting it keeps preview codegen covered. Pinning `Plain` would drop every preview from the corpus and stop asserting anything about how one is generated.
         flavour: telar_project::BuildFlavour::Preview,
     })

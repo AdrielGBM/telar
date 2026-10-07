@@ -263,6 +263,7 @@ fn transpiled_package(tag: &str, cargo: &str, telar: &str, rsx: &str) -> (PathBu
             theme_type: None,
             assets: None,
             prelude: &prelude,
+            library: false,
             flavour: telar_project::BuildFlavour::Plain,
         },
     )

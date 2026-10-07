@@ -27,6 +27,7 @@ fn a_single_side_leaves_every_other_side_at_nothing() {
         "stroke_width",
         "stroke_",
         side_target,
+        ThemeAccess::Handle,
     );
     assert!(
         edges.uniform.is_none(),
@@ -46,6 +47,7 @@ fn a_plain_width_stays_uniform() {
         "stroke_width",
         "stroke_",
         side_target,
+        ThemeAccess::Handle,
     );
     assert_eq!(edges.uniform.as_deref(), Some("2.0"));
 }
@@ -58,6 +60,7 @@ fn the_base_key_is_not_mistaken_for_one_of_its_own_sides() {
         "stroke_width",
         "stroke_",
         side_target,
+        ThemeAccess::Handle,
     );
     assert_eq!(
         edges.resolved("0.0"),
@@ -74,6 +77,7 @@ fn a_named_edge_beats_the_shorthand_whichever_came_first() {
         "radius",
         "radius_",
         corner_target,
+        ThemeAccess::Handle,
     );
     assert_eq!(
         written_backwards.resolved("0.0"),
@@ -92,6 +96,7 @@ fn a_pair_beats_the_shorthand_and_a_single_corner_beats_the_pair() {
         "radius",
         "radius_",
         corner_target,
+        ThemeAccess::Handle,
     );
     assert_eq!(
         edges.resolved("0.0"),
@@ -106,6 +111,7 @@ fn logical_edges_are_kept_apart_for_the_direction_to_resolve() {
         "stroke_width",
         "stroke_",
         side_target,
+        ThemeAccess::Handle,
     );
     assert!(
         edges.has_logical(),
@@ -116,6 +122,12 @@ fn logical_edges_are_kept_apart_for_the_direction_to_resolve() {
 
 #[test]
 fn nothing_written_is_empty() {
-    let edges = collect(&[attr("fill", "ink")], "radius", "radius_", corner_target);
+    let edges = collect(
+        &[attr("fill", "ink")],
+        "radius",
+        "radius_",
+        corner_target,
+        ThemeAccess::Handle,
+    );
     assert!(edges.is_empty(), "nothing written leaves the set empty");
 }

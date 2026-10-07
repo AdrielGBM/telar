@@ -25,6 +25,8 @@ pub struct PackageOptions<'a> {
     pub assets: Option<&'a AssetContext>,
     /// The crates the package's `.rsx` glob-imports besides `telar` and itself — see [`telar_project::resolve_prelude`], which is how every caller reads the package's `[telar] prelude`.
     pub prelude: &'a [PreludeEntry],
+    /// Whether the package is a `[telar] library`, whose `$theme` reads the shared `ThemeTokens` because it cannot name its application's theme type: the `library` key of [`telar_project::TelarManifest`], which every writer reads from the package's own `telar.toml`.
+    pub library: bool,
     /// Which shape to produce. Carries whether the build is hot-reloadable *and* whether it emits `[preview]` fns, because both change the Rust for the same source and each pair needs its own output directory.
     pub flavour: BuildFlavour,
 }
@@ -173,6 +175,7 @@ fn generate(
         theme_type: options.theme_type,
         assets: options.assets,
         prelude: options.prelude,
+        library: options.library,
         hot_reload: options.flavour.is_hot(),
         previews: options.flavour.has_previews(),
     })
@@ -224,6 +227,7 @@ pub fn write_package(
 /// let src_dir = package.join("src");
 /// let theme = telar_transpiler::resolve_theme_type(&package);
 /// let prelude = telar_project::resolve_prelude(&package)?;
+/// let library = telar_project::TelarManifest::load(&package)?.telar.library;
 /// // What the macro compares the index against: the `telar` this project resolves, not this crate's own.
 /// let workspace = telar_project::find_workspace_root(&package).unwrap_or_else(|| package.clone());
 /// let telar_version = telar_project::resolve_telar_version(&workspace).ok_or("no telar dependency")?;
@@ -235,6 +239,7 @@ pub fn write_package(
 ///     theme_type: theme.as_deref(),
 ///     assets: Some(&assets),
 ///     prelude: &prelude,
+///     library,
 ///     flavour,
 /// })?;
 /// telar_transpiler::write_package(&files, &telar_project::generated_dir(&package, flavour))?;

@@ -130,7 +130,11 @@ impl ViewGen<'_> {
             .filter(|a| is_paint_key(&a.key))
             .map(|a| a.value.text())
             .collect();
-        let closure = wrap_signal_clones(&raw_values, format!("move |{param}| {rect_style}"));
+        let closure = wrap_signal_clones(
+            &raw_values,
+            format!("move |{param}| {rect_style}"),
+            self.theme_access,
+        );
         (closure, layer_calls)
     }
 
@@ -138,8 +142,13 @@ impl ViewGen<'_> {
     ///
     /// `None` is not "no border": it is that one width on every side. Only a box that named an edge carries four of its own.
     pub(super) fn border_widths_expr(&self, pattrs: &[Attr]) -> Option<String> {
-        let edges =
-            crate::edges::collect(pattrs, "stroke_width", "stroke_", crate::edges::side_target);
+        let edges = crate::edges::collect(
+            pattrs,
+            "stroke_width",
+            "stroke_",
+            crate::edges::side_target,
+            self.theme_access,
+        );
         if edges.uniform.is_some() || edges.is_empty() {
             return None;
         }
@@ -154,7 +163,13 @@ impl ViewGen<'_> {
 
     /// The `BorderRadius` for a box: the one-value form while that is all the author wrote, and the four corners `BorderRadius` has always had as soon as one of them is named on its own.
     pub(super) fn radius_expr(&self, pattrs: &[Attr]) -> String {
-        let edges = crate::edges::collect(pattrs, "radius", "radius_", crate::edges::corner_target);
+        let edges = crate::edges::collect(
+            pattrs,
+            "radius",
+            "radius_",
+            crate::edges::corner_target,
+            self.theme_access,
+        );
         if let Some(all) = edges.uniform {
             return format!("BorderRadius::all({all})");
         }
@@ -185,17 +200,18 @@ impl ViewGen<'_> {
         let is_reactive = value.contains('$');
         let is_static = !is_reactive && value.parse::<f32>().is_ok();
         let expr = if is_reactive {
-            substitute_reads(value)
+            substitute_reads(value, self.theme_access)
         } else if is_static {
             format_f32(value.parse::<f32>().unwrap())
         } else {
             value.to_string()
         };
         // Cloned in so the closure owns `'static` handles independent of any sibling closure on the same widget. Empty for a static value, whose branches emit no `move` closure.
-        let clone_prefix: String = captured_idents(&[value], &self.loop_variables)
-            .iter()
-            .map(|s| format!("let {}{s} = {s}.clone(); ", super::shadow_marker(s)))
-            .collect();
+        let clone_prefix: String =
+            captured_idents(&[value], &self.loop_variables, self.theme_access)
+                .iter()
+                .map(|s| format!("let {}{s} = {s}.clone(); ", super::shadow_marker(s)))
+                .collect();
         if let Some(curve) = transitions.get(attr.key.as_str()) {
             let name = self.next_transition_name();
             hoists.push(format!(
@@ -275,7 +291,9 @@ impl ViewGen<'_> {
             for name in rest {
                 if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
                     for prop in &class.props {
-                        if let PropCall::Call(call) = layout_prop_call(&prop.key, &prop.value) {
+                        if let PropCall::Call(call) =
+                            layout_prop_call(&prop.key, &prop.value, self.theme_access)
+                        {
                             base.push_str(&call);
                         }
                     }
@@ -311,7 +329,9 @@ impl ViewGen<'_> {
 
         // Applied on top of the base style and taking precedence. A value the key cannot mean is dropped here and reported by `value_errors` instead.
         for attr in attrs {
-            if let PropCall::Call(call) = layout_prop_call(&attr.key, attr.value.text()) {
+            if let PropCall::Call(call) =
+                layout_prop_call(&attr.key, attr.value.text(), self.theme_access)
+            {
                 expr.push_str(&call);
             }
         }
@@ -339,7 +359,12 @@ impl ViewGen<'_> {
         attrs
             .iter()
             .filter(|a| !a.value.is_quoted() && !is_literal_value(tag, &a.key, a.value.text()))
-            .filter(|a| matches!(layout_prop_call(&a.key, a.value.text()), PropCall::Call(_)))
+            .filter(|a| {
+                matches!(
+                    layout_prop_call(&a.key, a.value.text(), self.theme_access),
+                    PropCall::Call(_)
+                )
+            })
             .map(|a| a.value.text().to_string())
             .collect()
     }

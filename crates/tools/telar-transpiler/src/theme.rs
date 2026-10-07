@@ -7,7 +7,15 @@ use std::path::{Path, PathBuf};
 use telar_project::{normalize_theme_path, theme_type_in_config};
 
 /// The theme type a package's components are transpiled against: `[telar] theme` when set, otherwise the first argument of the `app!` / `rsx_modules!` invocation that places the package's `.rsx`.
+///
+/// Never one for a `[telar] library`, whatever its source names: it is compiled into applications whose theme types it cannot know, so its `$theme` is transpiled against the shared `ThemeTokens` instead, and the macro refuses an invocation that names a type.
 pub fn resolve_theme_type(package_dir: &Path) -> Option<String> {
+    if telar_project::TelarManifest::load_or_default(package_dir)
+        .telar
+        .library
+    {
+        return None;
+    }
     theme_type_in_config(package_dir).or_else(|| theme_type_in_source(package_dir))
 }
 

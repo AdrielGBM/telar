@@ -4,6 +4,7 @@ use std::fmt::Write;
 use telar_parser::{Attr, Element, Value};
 
 use crate::style::format_f32;
+use crate::theme_access::ThemeAccess;
 use telar_project::naming::to_pascal_case;
 
 use super::signals::{
@@ -135,7 +136,11 @@ impl ViewGen<'_> {
                         ".cursor({})",
                         wrap_signal_clones(
                             &[value],
-                            format!("Reactive::of(move || {})", substitute_reads(value))
+                            format!(
+                                "Reactive::of(move || {})",
+                                substitute_reads(value, self.theme_access)
+                            ),
+                            self.theme_access
                         )
                     ),
                     None => format!(".cursor({})", value),
@@ -165,7 +170,7 @@ impl ViewGen<'_> {
             .map(|value| {
                 format!(
                     ".drag_threshold({})",
-                    crate::style::number_or(&value, "0.0")
+                    crate::style::number_or(&value, "0.0", self.theme_access)
                 )
             })
             .unwrap_or_default();
@@ -233,7 +238,7 @@ impl ViewGen<'_> {
         let on_focus = self.closure_attr_call(el, "on_focus", "on_focus");
         let on_long_press = self.closure_attr_call(el, "on_long_press", "on_long_press");
         let on_alt_press = self.closure_attr_call(el, "on_alt_press", "on_alt_press");
-        let consumes_keys = consumes_keys_call(el, &mut errors);
+        let consumes_keys = consumes_keys_call(el, &mut errors, self.theme_access);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
         let mut hoists: Vec<String> = Vec::new();
         let transform_call = self.transform_call(el, &transitions, &mut hoists);
@@ -369,10 +374,10 @@ impl ViewGen<'_> {
         if attr.value.is_flag() {
             return format!(".{key}(|| true)");
         }
-        let read = substitute_reads(value);
+        let read = substitute_reads(value, self.theme_access);
         format!(
             ".{key}({})",
-            wrap_signal_clones(&[value], format!("move || {read}"))
+            wrap_signal_clones(&[value], format!("move || {read}"), self.theme_access)
         )
     }
 
@@ -389,10 +394,10 @@ impl ViewGen<'_> {
                 "`to:external(\"{literal}\")` is not an absolute URI: it names no scheme (`https:`, `mailto:`…)"
             ));
         }
-        let read = substitute_reads(value);
+        let read = substitute_reads(value, self.theme_access);
         format!(
             ".to({})",
-            wrap_signal_clones(&[value], format!("move || {read}"))
+            wrap_signal_clones(&[value], format!("move || {read}"), self.theme_access)
         )
     }
 
@@ -416,14 +421,18 @@ impl ViewGen<'_> {
 
     /// Desugars a closure-valued attribute into a `move` closure: `$name` signals are cloned in, `$handle` reads are rewritten to the bare handle, and a `$`-free closure keeps its source span (so LSP completion works inside it). Shared by `closure_attr_call` (element event attrs) and the component closure-prop arm, which wrap the result as `.method(..)` and `Box::new(..)` respectively.
     pub(super) fn emit_closure_value(&self, attr: &Attr) -> String {
-        let closure = substitute_handles(&normalize_closure(attr.value.text()));
+        let closure = substitute_handles(&normalize_closure(attr.value.text()), self.theme_access);
         // A `$` substitution breaks the byte-for-byte span, so only a `$`-free closure carries a marker.
         let marker = if attr.value.text().contains('$') {
             String::new()
         } else {
             closure_marker(Some(attr))
         };
-        wrap_signal_clones(&[attr.value.text()], format!("move {marker}{closure}"))
+        wrap_signal_clones(
+            &[attr.value.text()],
+            format!("move {marker}{closure}"),
+            self.theme_access,
+        )
     }
 
     fn on_press_call(&self, el: &Element) -> String {
@@ -500,7 +509,7 @@ impl ViewGen<'_> {
         ];
         let mut args = Vec::new();
         for (value, prop) in &values {
-            let read = format!("({}) as f32", substitute_reads(value));
+            let read = format!("({}) as f32", substitute_reads(value, self.theme_access));
             args.push(match transitions.get(*prop) {
                 Some(curve) => self.wrap_transition(curve, &read, hoists),
                 None => read,
@@ -510,7 +519,10 @@ impl ViewGen<'_> {
         let refs: Vec<&str> = values.iter().map(|(v, _)| v.as_str()).collect();
         let (call, origin_refs) = match raw("transform_origin") {
             Some(origin) => (
-                format!("box_transform_about(__r, {}, {args})", origin_expr(&origin)),
+                format!(
+                    "box_transform_about(__r, {}, {args})",
+                    origin_expr(&origin, self.theme_access)
+                ),
                 origin_operands(&origin),
             ),
             None => (format!("box_transform(__r, {args})"), Vec::new()),
@@ -519,7 +531,7 @@ impl ViewGen<'_> {
             .into_iter()
             .chain(origin_refs.iter().map(String::as_str))
             .collect();
-        let call = wrap_signal_clones(&refs, format!("move |__r: Rect| {call}"));
+        let call = wrap_signal_clones(&refs, format!("move |__r: Rect| {call}"), self.theme_access);
         format!(".with_transform({call})")
     }
 
@@ -593,17 +605,17 @@ fn split_outside_delimiters(value: &str) -> Vec<(usize, &str)> {
 }
 
 /// `.consumes_keys(..)` for a box that names the keys it keeps: a list of names checked here, so a misspelt key is a compile error rather than a key silently handed back to the page, or a `$`-reading expression re-read every render.
-fn consumes_keys_call(el: &Element, errors: &mut Vec<String>) -> String {
+fn consumes_keys_call(el: &Element, errors: &mut Vec<String>, theme: ThemeAccess) -> String {
     let Some(attr) = el.attributes.iter().find(|a| a.key == "consumes_keys") else {
         return String::new();
     };
     let raw = attr.value.text().trim();
     let value = super::redundant_parens(raw).unwrap_or(raw).trim();
     if value.contains('$') {
-        let read = substitute_reads(value);
+        let read = substitute_reads(value, theme);
         return format!(
             ".consumes_keys({})",
-            wrap_signal_clones(&[value], format!("move || {read}"))
+            wrap_signal_clones(&[value], format!("move || {read}"), theme)
         );
     }
     let mut constants = Vec::new();
@@ -644,7 +656,7 @@ fn origin_operands(value: &str) -> Vec<String> {
 }
 
 /// `transform_origin:start`, `transform_origin:(start end)` or `transform_origin:( 0.25)` as the `TransformOrigin` it builds. A lone keyword places the pivot on the inline axis and keeps it vertically centred; a pair is horizontal then vertical, each a keyword or a fraction of the box that may read state. Anything else is a build error.
-fn origin_expr(value: &str) -> String {
+fn origin_expr(value: &str, theme: ThemeAccess) -> String {
     let operands = origin_operands(value);
     let keyword = |operand: &str| {
         ORIGIN_KEYWORDS
@@ -653,7 +665,7 @@ fn origin_expr(value: &str) -> String {
             .map(|(_, v)| v.to_string())
     };
     let fraction = |operand: &str| {
-        keyword(operand).unwrap_or_else(|| format!("({}) as f32", substitute_reads(operand)))
+        keyword(operand).unwrap_or_else(|| format!("({}) as f32", substitute_reads(operand, theme)))
     };
     match (value.starts_with('('), operands.as_slice()) {
         (false, [only]) if keyword(only).is_some() => {

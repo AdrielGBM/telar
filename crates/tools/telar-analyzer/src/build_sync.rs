@@ -41,6 +41,9 @@ pub fn generated_target(
     let assets = AssetContext::load(&root, &project_telar_version(&root));
     // An unreadable `telar.toml` is the build's error to report; the mirror keeps answering for the tags `telar` and the crate provide.
     let prelude = telar_project::resolve_prelude(&root).unwrap_or_default();
+    let library = telar_project::TelarManifest::load_or_default(&root)
+        .telar
+        .library;
     // No cross-file pre-pass: the editor mirrors the build exactly, because neither needs to know what any other file declares. A component call spells names, and the callee's own type answers for them.
     let result = telar_transpiler::transpile_buffer(
         rsx_path,
@@ -50,6 +53,7 @@ pub fn generated_target(
             theme_type,
             assets: Some(&assets),
             prelude: &prelude,
+            library,
             // With previews, unlike a shipping build: a `[preview]` block is markup the author is looking at while they type, and leaving it out would stop reporting an error inside one — the diagnostic would simply never be produced, which reads as a preview that is fine.
             flavour: BuildFlavour::Preview,
         },

@@ -95,3 +95,18 @@ fn prose_about_the_macro_names_no_theme() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A library is transpiled against the shared tokens, so a type its invocation names is the macro's error to report, not a theme every writer would then disagree with the artifact about.
+#[test]
+fn a_library_resolves_no_theme_whatever_its_source_names() {
+    let root = package("library");
+    write(&root.join("telar.toml"), "[telar]\nlibrary = true\n");
+    write(
+        &root.join("src/lib.rs"),
+        "telar::rsx_modules!(kit::KitTheme);\n",
+    );
+
+    assert_eq!(resolve_theme_type(&root), None);
+
+    let _ = std::fs::remove_dir_all(&root);
+}

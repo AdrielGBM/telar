@@ -121,6 +121,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         include_stmts,
         rerun_stmts,
         preview_const_idents,
+        flavour,
     } = match transpile_project(Some(theme_type_str.as_str())) {
         Ok(o) => o,
         Err(err) => return err.into(),
@@ -131,9 +132,9 @@ pub fn app(input: TokenStream) -> TokenStream {
         Err(err) => return err.into(),
     };
 
-    // Decided at macro expansion time by the features cargo-telar names on the build, which cargo tracks — unlike the environment variables these were, which it does not.
-    let is_hot_reload = build_flavour().is_hot();
-    let is_preview = cfg!(feature = "preview");
+    // Decided at macro expansion time by the features cargo-telar names on the build, which cargo tracks — unlike the environment variables these were, which it does not — and by whether the package is a library compiled for another one.
+    let is_hot_reload = flavour.is_hot();
+    let is_preview = flavour.has_previews();
 
     let preview_fn = preview_entries_fn(is_preview, &preview_const_idents);
 
@@ -434,6 +435,40 @@ fn build_flavour() -> telar_project::BuildFlavour {
     telar_project::BuildFlavour::new(cfg!(feature = "hot-reload"), cfg!(feature = "preview"))
 }
 
+/// The `telar` version every artifact this macro wires must have been written against: its own.
+///
+/// Not [`telar_project::resolve_telar_version`], which asks `cargo metadata` from the package's directory. For a library unpacked from a registry that is the library's own view of the world, not the build compiling it. This macro is the copy the build compiling the package resolved, and `telar` and `telar-macros` share one version, so it answers for the consumer — and under lockstep versioning a plugin's artifact was written for that same version.
+const ARTIFACT_TELAR_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// How one expansion treats the package it compiles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Wiring {
+    flavour: telar_project::BuildFlavour,
+    /// A `[telar] library` compiled for another package: wired read-only from the artifact it ships, whose advice is for whoever packages it.
+    library_dependency: bool,
+}
+
+impl Wiring {
+    /// The detection rule, apart from the environment it reads.
+    ///
+    /// cargo sets `CARGO_PRIMARY_PACKAGE` when compiling a package the command selected — by `-p`, by `--workspace`, or as the package in the current directory or a default member — and leaves it unset for every dependency, including a workspace member pulled in by another one. A registry or git dependency is never selected short of naming it with `-p`, so a published library always reads as a dependency.
+    ///
+    /// A dependency gets the Plain flavour whatever `hot-reload` or `preview` asked for: features unify across the graph, so the application's `cargo telar dev` turns them on for every crate, and a published library ships the Plain artifact alone. Selected, a library is being developed and gets the flavour asked for, like any other package.
+    ///
+    /// cargo does not hash `CARGO_PRIMARY_PACKAGE` into a unit, nor compare a proc macro's reads of it, so a workspace library compiled once selected and once as a dependency, with the same features, reuses whichever expansion ran first until one of its sources changes. Harmless: `cargo telar transpile` writes every flavour for a workspace member, and the features that let one flavour compile are the same in both builds.
+    fn decide(library: bool, primary: bool, requested: telar_project::BuildFlavour) -> Self {
+        let library_dependency = library && !primary;
+        let flavour = match library_dependency {
+            true => telar_project::BuildFlavour::Plain,
+            false => requested,
+        };
+        Self {
+            flavour,
+            library_dependency,
+        }
+    }
+}
+
 /// Refuses a build driven by a `cargo-telar` older than this `telar`.
 ///
 /// The two halves agree on the build shape through a feature now. An older CLI asks for it by setting `TELAR_HOT_RELOAD_BUILD` and pushing `--cfg=telar_hot_reload` into `RUSTFLAGS`, and neither is read any more — so nothing fails: the project compiles, the window opens, and hot reload simply never happens, because the dylib exports no factory and the host branch was never generated. `cargo telar dev` then reports only that the app is not connected to its own channel, which describes the symptom and names nothing that could be done about it.
@@ -460,7 +495,19 @@ fn stale_cli_message(hot_requested_by_env: bool) -> Option<String> {
 /// Refuses an invocation that contradicts `[telar] theme`. Naming nothing is not a contradiction: the key is the declaration, and repeating it at every invocation is what the key exists to spare.
 ///
 /// Nothing else in the build reads that key — the macro is handed the type directly — but everything that transpiles the same file *without* a macro to read does: the editor's live mirror and the golden harness both resolve the theme through `telar_transpiler::resolve_theme_type`, which answers with this key when it is set. Two answers means two different files generated from one source, and the last writer wins.
-fn check_theme_agrees(package_dir: &Path, given: Option<&str>) -> Result<(), TokenStream2> {
+///
+/// A library has no theme to agree on: its manifest may not declare one, every writer transpiles it against none, and its artifact records none. So an invocation naming one is refused rather than compared — it would be refused by the artifact anyway, under a message about re-running the CLI that no run could fix.
+fn check_theme_agrees(
+    package_dir: &Path,
+    library: bool,
+    given: Option<&str>,
+) -> Result<(), TokenStream2> {
+    if library && let Some(given) = given {
+        let msg = format!(
+            "rsx: this package is a `[telar] library`, so it cannot name a theme type: `{given}` would be one application's, and a library is compiled into applications whose theme types it cannot know. Drop the argument; a library's `$theme.x` reads the shared `ThemeTokens` tokens."
+        );
+        return Err(quote! { compile_error!(#msg); });
+    }
     let Some(declared) = telar_project::theme_type_in_config(package_dir) else {
         return Ok(());
     };
@@ -502,6 +549,14 @@ struct TranspileOutput {
     include_stmts: TokenStream2,
     rerun_stmts: TokenStream2,
     preview_const_idents: Vec<TokenStream2>,
+    flavour: telar_project::BuildFlavour,
+}
+
+/// The package an expansion compiles: where it is, what cargo calls it, and how it is wired.
+struct Package {
+    dir: PathBuf,
+    name: String,
+    wiring: Wiring,
 }
 
 /// One `.rsx` this crate has to wire, however its Rust got there.
@@ -509,34 +564,33 @@ struct WiredFile {
     rsx_path: PathBuf,
     /// Where the generated Rust sits, relative to the generated directory — the module path it is declared under.
     rel_out: PathBuf,
-    out_path: PathBuf,
     previews: bool,
 }
 
-/// The files to wire, taken from `cargo telar transpile`'s artifact when it still answers for the sources on disk, and produced here when it does not.
+/// The files to wire, taken from `cargo telar transpile`'s artifact when it still answers for the sources on disk, and refused with the reason when it does not.
 ///
-/// The artifact is never trusted on its word: [`telar_project::BuildIndex::answers_for`] re-hashes every `.rsx` before a line of it is used, so a source edited since the CLI last ran sends this straight to the fallback rather than compiling the output of the run before. Which makes a stale artifact slow, not wrong — the property that lets the fallback exist at all.
+/// The artifact is never trusted on its word: [`telar_project::BuildIndex::answers_for`] re-hashes every `.rsx` before a line of it is used, so a source edited since the CLI last ran is refused rather than compiled from the output of the run before.
 fn wire_sources(
-    package_dir: &Path,
+    package: &Package,
     src_dir: &Path,
     generated_dir: &Path,
     theme_type_str: Option<&str>,
     prelude: &[telar_project::PreludeEntry],
-    flavour: telar_project::BuildFlavour,
     assets: &telar_project::AssetContext,
 ) -> Result<Vec<WiredFile>, TokenStream2> {
     // A package with no markup needs nothing produced and nothing attested to, so it never reaches for an artifact — `rsx_modules!()` in a crate that only wires an i18n catalog is exactly this.
     if telar_project::find_rsx_files(src_dir).is_empty() {
         return Ok(Vec::new());
     }
-    let artifact = telar_project::read_build_index(package_dir, flavour);
+    let flavour = package.wiring.flavour;
+    let artifact = telar_project::read_build_index(&package.dir, flavour);
     if let Some(index) = &artifact
         && index.answers_for(
             src_dir,
             generated_dir,
             theme_type_str,
             prelude,
-            env!("CARGO_PKG_VERSION"),
+            ARTIFACT_TELAR_VERSION,
         )
         // Output that reaches into the baked asset module is only wirable while that module is: declared against an unusable artifact it would resolve to nothing, and rustc would report it against generated code instead of the `.rsx` line that named the asset — which is the whole thing `AssetContext`'s messages exist to prevent.
         && !(index.uses_assets && assets.module_file().is_none())
@@ -547,7 +601,6 @@ fn wire_sources(
                 let rel_out = telar_project::relative_output_path(&rsx_path, src_dir)?;
                 let previews = index.entry_for(&rsx_path, src_dir)?.previews;
                 Some(WiredFile {
-                    out_path: generated_dir.join(&rel_out),
                     rsx_path,
                     rel_out,
                     previews,
@@ -557,7 +610,7 @@ fn wire_sources(
     }
 
     // The reason the CLI recorded outranks both generic messages: it is the one thing the macro cannot work out for itself, and "re-run the command" is a loop when the command is what failed. Only while the source it names is unchanged — an edit since may have fixed it, and then the generic advice is true again.
-    if let Some(failure) = telar_project::read_build_failure(package_dir, flavour)
+    if let Some(failure) = telar_project::read_build_failure(&package.dir, flavour)
         && failure.still_applies(src_dir)
     {
         let msg = format!(
@@ -568,47 +621,124 @@ fn wire_sources(
     }
 
     if let Some(index) = &artifact {
+        check_version_agrees(package, index)?;
         check_prelude_agrees(index, prelude)?;
     }
 
     // Nothing here can produce the Rust: this crate carries no transpiler, on purpose. Which of the two messages is not a guess — an artifact that is absent and one that no longer answers are different facts, and only the first can mean the CLI was never installed. What else made an artifact stop answering (an edited `.rsx`, a rewritten output, another theme) it does not try to say: the command is the same for all of them.
-    let msg = match artifact.is_some() {
-        true => {
+    let msg = match (artifact.is_some(), package.wiring.library_dependency) {
+        (true, false) => {
             "rsx: the transpiled `.rsx` for this package no longer answers for its sources.\n\
              Re-run `cargo telar transpile`, or build through `cargo telar dev`/`check`/`build`/`test`."
                 .to_string()
         }
-        false => format!(
+        (false, false) => format!(
             "rsx: this package has no transpiled `.rsx` — it is compiled by the CLI, not by rustc.\n\
              Run `cargo telar transpile`, or build through `cargo telar dev`/`check`/`build`/`test`.\n\
              No CLI? `cargo install cargo-telar --version {v}`",
             v = env!("CARGO_PKG_VERSION")
         ),
+        (true, true) => format!(
+            "rsx: `{name}` is a telar library, and the transpiled `.rsx` it ships no longer answers for its sources: they changed after `cargo telar transpile` ran.\n\
+             Whoever packages `{name}` re-runs `cargo telar transpile` before packaging it.",
+            name = package.name
+        ),
+        (false, true) => format!(
+            "rsx: `{name}` is a telar library, and its package carries no transpiled `.rsx`.\n\
+             Whoever packages `{name}` runs `cargo telar transpile` first and ships its `.telar/` directory with it.",
+            name = package.name
+        ),
     };
     Err(quote! { compile_error!(#msg); })
 }
 
-// Transpiles every `.rsx` under `src/` into the build directory and wires each as a `#[path] mod` where its file sits, declares the hand-written `.rs` module tree alongside it, and emits the `include_str!` triggers that re-run this on an edit. Nothing is re-exported: a component is reached by the path its file spells. Shared by `app!`, which then adds the runner, and `rsx_modules!`, which transpiles only. `Err` carries a `compile_error!` stream to emit.
+/// Refuses an artifact written for another `telar`, saying which, since that is the one cause whose fix is not the command.
+///
+/// For a library dependency the fix is the dependency's version: the artifact ships with the package, and nothing the consumer runs rewrites it.
+fn check_version_agrees(
+    package: &Package,
+    index: &telar_project::BuildIndex,
+) -> Result<(), TokenStream2> {
+    if index.telar_version == ARTIFACT_TELAR_VERSION {
+        return Ok(());
+    }
+    let recorded = &index.telar_version;
+    let msg = match package.wiring.library_dependency {
+        true => format!(
+            "rsx: `{name}` was transpiled for telar {recorded}, and this build compiles it with telar {ARTIFACT_TELAR_VERSION}. A telar library ships its transpiled `.rsx` and is versioned in lockstep with telar: depend on the release of `{name}` made for telar {ARTIFACT_TELAR_VERSION}.",
+            name = package.name
+        ),
+        false => format!(
+            "rsx: this package's `.rsx` was transpiled for telar {recorded}, and this build uses telar {ARTIFACT_TELAR_VERSION}.\n\
+             Re-run `cargo telar transpile`, or build through `cargo telar dev`/`check`/`build`/`test`."
+        ),
+    };
+    Err(quote! { compile_error!(#msg); })
+}
+
+/// Refuses a module tree that no longer matches the source tree. The macro writes nothing, so a Rust module added, moved or removed since the CLI last ran is something it can only report.
+fn check_module_tree(
+    package: &Package,
+    tree: &telar_project::ModuleTree,
+) -> Result<(), TokenStream2> {
+    let Some(stale) = tree.first_difference() else {
+        return Ok(());
+    };
+    let shown = stale
+        .strip_prefix(&package.dir)
+        .unwrap_or(stale)
+        .display()
+        .to_string();
+    let msg = match (stale.exists(), package.wiring.library_dependency) {
+        (true, false) => format!(
+            "rsx: the module tree `cargo telar transpile` wrote for this package no longer matches `src/` (`{shown}` is out of date): a Rust module was added, moved or removed since.\n\
+             Re-run `cargo telar transpile`, or build through `cargo telar dev`/`check`/`build`/`test`."
+        ),
+        (false, false) => format!(
+            "rsx: this package has no module tree (`{shown}` is missing) — it is written by the CLI, not by rustc.\n\
+             Run `cargo telar transpile`, or build through `cargo telar dev`/`check`/`build`/`test`.\n\
+             No CLI? `cargo install cargo-telar --version {v}`",
+            v = env!("CARGO_PKG_VERSION")
+        ),
+        (_, true) => format!(
+            "rsx: `{name}` is a telar library, and the module tree it ships does not match its sources (`{shown}`).\n\
+             Whoever packages `{name}` re-runs `cargo telar transpile` before packaging it, and ships its `.telar/` directories with it.",
+            name = package.name
+        ),
+    };
+    Err(quote! { compile_error!(#msg); })
+}
+
+/// The expansion's view of its package, read from the environment cargo compiles it in, then wired by [`wire_package`].
 fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, TokenStream2> {
     check_cli_is_current()?;
-
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .map_err(|_| quote! { compile_error!("CARGO_MANIFEST_DIR not set"); })?;
+    wire_package(
+        manifest_dir,
+        std::env::var("CARGO_PKG_NAME").unwrap_or_default(),
+        std::env::var_os("CARGO_PRIMARY_PACKAGE").is_some(),
+        build_flavour(),
+        theme_type_str,
+    )
+}
 
-    // A hot-reload build emits different code for the same `.rsx`, so it needs its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other on every build, leaving each cargo unit permanently stale.
-    let flavour = build_flavour();
-    let generated_dir = telar_project::generated_dir(&manifest_dir, flavour);
-    if let Err(e) = std::fs::create_dir_all(&generated_dir) {
-        let msg = format!("Failed to create {}: {e}", generated_dir.display());
-        return Err(quote! { compile_error!(#msg); });
-    }
-
-    let src_dir = manifest_dir.join("src");
-    // This crate's own version, because it is the one whose generated code the artifact's `assets.rs` calls into. `telar` and `telar-macros` share the workspace version, but the handshake compares against whoever loads the module, not whoever wrote the check.
-    let assets = telar_project::AssetContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
-
+/// Wires what `cargo telar transpile` produced for the package: every `.rsx`'s Rust as a `#[path] mod` where its file sits, the hand-written `.rs` module tree alongside it, the baked catalog and assets, and the `include_str!` triggers that re-run this on an edit. Nothing is re-exported: a component is reached by the path its file spells. Shared by `app!`, which then adds the runner, and `rsx_modules!`, which wires only. `Err` carries a `compile_error!` stream to emit.
+///
+/// Reads and never writes. The CLI produces every file this names, and it checks each against the sources before wiring it, so the package directory can be a registry copy no build may modify.
+fn wire_package(
+    manifest_dir: PathBuf,
+    name: String,
+    primary: bool,
+    requested: telar_project::BuildFlavour,
+    theme_type_str: Option<&str>,
+) -> Result<TranspileOutput, TokenStream2> {
     // Before anything reads a setting out of it: every reader below falls back to a default on a manifest it cannot parse, which is right for them and wrong as the only answer — a misspelled key would configure nothing and say nothing.
+    let manifest = telar_project::TelarManifest::load(&manifest_dir).map_err(|e| {
+        let msg = format!("rsx: {e}");
+        quote! { compile_error!(#msg); }
+    })?;
     let prelude = match telar_project::resolve_prelude(&manifest_dir) {
         Ok(prelude) => prelude,
         Err(e) => {
@@ -616,24 +746,33 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             return Err(quote! { compile_error!(#msg); });
         }
     };
+    let package = Package {
+        name,
+        wiring: Wiring::decide(manifest.telar.library, primary, requested),
+        dir: manifest_dir,
+    };
+    let manifest_dir = &package.dir;
 
-    check_theme_agrees(&manifest_dir, theme_type_str)?;
+    // A hot-reload build emits different code for the same `.rsx`, so it has its own output dir: sharing one has the two flavours — and the analyzer's live mirror, which always writes the plain one — overwrite each other on every build, leaving each cargo unit permanently stale.
+    let flavour = package.wiring.flavour;
+    let generated_dir = telar_project::generated_dir(manifest_dir, flavour);
+
+    let src_dir = manifest_dir.join("src");
+    let assets = telar_project::AssetContext::load(manifest_dir, ARTIFACT_TELAR_VERSION);
+
+    check_theme_agrees(manifest_dir, manifest.telar.library, theme_type_str)?;
     // The same order `telar_transpiler::resolve_theme_type` answers in, because the editor's mirror and the golden harness read the key and this is the only other thing that decides what a `use_theme` resolves against. Dropping the argument in favour of the key has to mean the key, not no theme at all.
-    let declared_theme = telar_project::theme_type_in_config(&manifest_dir);
+    let declared_theme = telar_project::theme_type_in_config(manifest_dir);
     let theme_type_str = declared_theme.as_deref().or(theme_type_str);
 
     let wired = wire_sources(
-        &manifest_dir,
+        &package,
         &src_dir,
         &generated_dir,
         theme_type_str,
         &prelude,
-        flavour,
         &assets,
     )?;
-    // Every path this run is answerable for under `generated_dir`, so a stale file left behind by a renamed or deleted `.rsx` (or a dropped i18n catalog) can be told apart from live output and pruned. The CLI writes output but never sweeps: it does not know about the module tree written below, and a sweep that knows half the directory deletes the other half.
-    let mut written_files: std::collections::HashSet<PathBuf> =
-        wired.iter().map(|file| file.out_path.clone()).collect();
 
     let mut include_stmts = TokenStream2::new();
     let mut rerun_stmts = TokenStream2::new();
@@ -657,11 +796,11 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     }
 
     // The workspace's too: a theme or a prelude inherited from it changes what this package's generated code has to be, and only an expansion re-run against the new key can refuse the artifact written under the old one.
-    for telar_toml in telar_project::TelarManifest::files(&manifest_dir) {
+    for telar_toml in telar_project::TelarManifest::files(manifest_dir) {
         let telar_toml_str = telar_toml.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#telar_toml_str); });
     }
-    // Every site is written, and every invocation emits the same relative `include!`: the compiler resolves it against the file holding the call, which is the one thing here that knows where the macro was written. See `site_include_path` for what asking the macro instead cost.
+    // Every invocation emits the same relative `include!`: the compiler resolves it against the file holding the call, which is the one thing here that knows where the macro was written. See `site_include_path` for what asking the macro instead cost.
     {
         let strays = telar_project::stray_placement_files(&src_dir);
         if !strays.is_empty() {
@@ -675,30 +814,20 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
             );
             return Err(quote! { compile_error!(#msg); });
         }
-        // The discovered tree is split across real generated files (one per directory) so every module is a file-based `#[path] mod`; see `discover_rust_modules` for why inline `mod` blocks break rust-analyzer.
-        let modtree_dir = generated_dir.join("__modules");
-        if let Err(e) = std::fs::create_dir_all(&modtree_dir) {
-            let msg = format!("Failed to create {}: {e}", modtree_dir.display());
-            return Err(quote! { compile_error!(#msg); });
-        }
-        match telar_project::write_placement_sites(
-            &src_dir,
-            &modtree_dir,
-            &generated_dir,
-            flavour.site_file_name(),
-        ) {
-            Ok(written) => written_files.extend(written),
-            Err(e) => {
-                let msg = format!("Failed to write the auto-discovered module tree: {e}");
-                return Err(quote! { compile_error!(#msg); });
-            }
-        }
+        check_module_tree(
+            &package,
+            &telar_project::ModuleTree::discover(
+                &src_dir,
+                &generated_dir,
+                flavour.site_file_name(),
+            ),
+        )?;
         let include_path = telar_project::site_include_path(flavour);
         include_stmts.extend(quote! { include!(#include_path); });
     }
 
     // The catalog the CLI baked, wired exactly like the asset module. The macro neither discovers locale files nor parses one: an empty artifact is a project with no translations, and a missing one is a build that has not run the baker, which is `t!`'s error to report and not this pass's.
-    let catalog = telar_project::CatalogContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
+    let catalog = telar_project::CatalogContext::load(manifest_dir, ARTIFACT_TELAR_VERSION);
     if let Some(stale) = catalog.staleness() {
         return Err(quote! { compile_error!(#stale); });
     }
@@ -746,25 +875,15 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         rerun_stmts.extend(quote! { const _: &[u8] = include_bytes!(#path_str); });
     }
 
-    // Only reached once the whole project transpiled without error, so `written_files` is complete: anything else under the generated directory is what an earlier run wrote for a `.rsx` that is gone now.
-    //
-    // Any invocation may sweep: each one writes the whole crate's module tree, not just its own module's corner of it.
-    telar_project::prune_stale_generated(&generated_dir, &written_files);
-    telar_project::prune_stale_sites(
-        &src_dir,
-        &telar_project::placement_sites(&src_dir)
-            .into_iter()
-            .collect(),
-    );
-
     Ok(TranspileOutput {
         include_stmts,
         rerun_stmts,
         preview_const_idents,
+        flavour,
     })
 }
 
-/// Transpile every `.rsx` file under `src/` and declare the module tree — what `app!` does, minus the winit runner. Use this in a crate that drives rsx through a **custom** `Platform` (e.g. a Wayland layer-shell backend) instead of the built-in desktop runner: invoke `telar::rsx_modules!()` at the crate root, then build your own `App` from the transpiled components and run it via `telar::run_with_platform` / `telar::run_multi_with_platform`. Pass a theme type — `rsx_modules!(MyTheme)` — if your `.rsx` calls `use_theme`; otherwise `rsx_modules!()`.
+/// Transpile every `.rsx` file under `src/` and declare the module tree — what `app!` does, minus the winit runner. Use this in a crate that drives rsx through a **custom** `Platform` (e.g. a Wayland layer-shell backend) instead of the built-in desktop runner: invoke `telar::rsx_modules!()` at the crate root, then build your own `App` from the transpiled components and run it via `telar::run_with_platform` / `telar::run_multi_with_platform`. Pass a theme type — `rsx_modules!(MyTheme)` — if your `.rsx` calls `use_theme`; otherwise `rsx_modules!()`, which is also the only form a `[telar] library` may use: its `$theme` reads the shared `ThemeTokens`.
 #[proc_macro]
 pub fn rsx_modules(input: TokenStream) -> TokenStream {
     let theme_type_str = if input.is_empty() {
@@ -781,11 +900,12 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
         include_stmts,
         rerun_stmts,
         preview_const_idents,
+        flavour,
     } = match transpile_project(theme_type_str.as_deref()) {
         Ok(o) => o,
         Err(err) => return err.into(),
     };
-    let preview_fn = preview_entries_fn(cfg!(feature = "preview"), &preview_const_idents);
+    let preview_fn = preview_entries_fn(flavour.has_previews(), &preview_const_idents);
     quote! {
         #rerun_stmts
         #include_stmts

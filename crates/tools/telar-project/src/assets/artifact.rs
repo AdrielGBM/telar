@@ -7,7 +7,7 @@
 //! still current — gets its own file instead of being buried in generated Rust.
 //!
 //! Neither file lives under `.telar/build/` (or `.telar/build-hot/`): that directory is swept clean by
-//! [`crate::prune_stale_generated`] on every macro expansion, and the artifact is meant to survive a build
+//! [`crate::prune_stale_generated`] on every `cargo telar transpile`, and the artifact is meant to survive a run
 //! that produces no `.rsx` output at all (e.g. `cargo check` on an unrelated file). It is also independent
 //! of the `build`/`build-hot` flavour split, since it decodes no reactive-vs-hot-reload distinction of its
 //! own — both flavours reference the same `.telar/assets.rs`.

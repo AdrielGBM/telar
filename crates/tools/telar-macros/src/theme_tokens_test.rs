@@ -84,3 +84,34 @@ fn a_token_that_does_not_exist_is_rejected() {
         err
     );
 }
+
+/// The table the derive and the transpiler share is a mirror of the trait, so a token added to one and not the other is a failing test rather than a derive that cannot answer it or a library whose `$theme` refuses it.
+#[test]
+fn the_shared_token_table_is_exactly_the_trait() {
+    let context =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui/theme-core/src/context.rs");
+    let source = std::fs::read_to_string(&context).expect("theme-core's context.rs");
+    let file = syn::parse_file(&source).expect("context.rs parses");
+    let trait_item = file
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Trait(item) if item.ident == "ThemeTokens" => Some(item),
+            _ => None,
+        })
+        .expect("context.rs declares `ThemeTokens`");
+    let mut declared: Vec<String> = trait_item
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::TraitItem::Fn(method) => Some(method.sig.ident.to_string()),
+            _ => None,
+        })
+        .collect();
+    let mut tabled: Vec<String> = telar_project::theme_tokens::all()
+        .map(str::to_string)
+        .collect();
+    declared.sort();
+    tabled.sort();
+    assert_eq!(tabled, declared);
+}

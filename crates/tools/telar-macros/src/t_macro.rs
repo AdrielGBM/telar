@@ -1,6 +1,6 @@
 //! The `t!("key", name = expr, ..)` translation macro.
 //!
-//! Validates the key (and its arguments) against the on-disk catalog at expansion time — an unknown key or a mismatched argument is a `compile_error!`, the build-time-safety payoff of the baked-catalog approach — then emits a runtime `telar::i18n::translate` call. The catalog is referenced by path (`crate::__rsx_i18n::CATALOG`) at the call site, never stored, so it always resolves to the current dylib under hot reload.
+//! Validates the key (and its arguments) against the on-disk catalog at expansion time — an unknown key or a mismatched argument is a `compile_error!`, the build-time-safety payoff of the baked-catalog approach — then emits a runtime `telar::i18n::translate` call, or `translate_with_override` under the package's name in a `[telar] library`, so the application can override the library's strings. The catalog is referenced by path (`crate::__rsx_i18n::CATALOG`) at the call site, never stored, so it always resolves to the current dylib under hot reload.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -48,10 +48,9 @@ fn load_catalog(manifest_dir: &Path) -> Rc<CatalogContext> {
     if let Some(hit) = CATALOG_CACHE.with(|c| c.borrow().get(manifest_dir).cloned()) {
         return hit;
     }
-    // This crate's own version, for the same reason the asset artifact compares against it: what matters is the `telar` whose API the generated module calls, and that is whoever loads it.
     let loaded = Rc::new(CatalogContext::load(
         manifest_dir,
-        env!("CARGO_PKG_VERSION"),
+        crate::ARTIFACT_TELAR_VERSION,
     ));
     CATALOG_CACHE.with(|c| {
         c.borrow_mut()
@@ -102,6 +101,36 @@ pub(crate) fn expand(input: TInput) -> TokenStream2 {
         Err(msg) => return syn::Error::new(key.span(), msg).to_compile_error(),
     }
 
+    let namespace = library_namespace(
+        &manifest_dir,
+        &std::env::var("CARGO_PKG_NAME").unwrap_or_default(),
+    );
+    lookup(namespace.as_deref(), &key_str, &args)
+}
+
+thread_local! {
+    static LIBRARY_CACHE: RefCell<HashMap<PathBuf, bool>> = RefCell::new(HashMap::new());
+}
+
+/// The namespace a library's strings are overridden under: its package name as a crate name, the spelling the application's catalog keys them by (`telar_components.close`). `None` for a package that is not a `[telar] library`, whose strings are the application's own.
+///
+/// Whether or not the library is the package being built: the lookup falls back to the library's own catalog, so its own tests and previews read its text, and one call shape for both keeps an override from depending on who compiled it.
+fn library_namespace(manifest_dir: &Path, package_name: &str) -> Option<String> {
+    let library = LIBRARY_CACHE.with(|cache| {
+        *cache
+            .borrow_mut()
+            .entry(manifest_dir.to_path_buf())
+            .or_insert_with(|| {
+                telar_project::TelarManifest::load_or_default(manifest_dir)
+                    .telar
+                    .library
+            })
+    });
+    library.then(|| package_name.replace('-', "_"))
+}
+
+/// The runtime call: the plain lookup for an application, the overridable one for a library.
+fn lookup(namespace: Option<&str>, key: &str, args: &[(Ident, Expr)]) -> TokenStream2 {
     let catalog_path: syn::Path =
         syn::parse_str(telar_project::I18N_CATALOG_PATH).expect("catalog path is valid");
 
@@ -123,10 +152,22 @@ pub(crate) fn expand(input: TInput) -> TokenStream2 {
         })
         .collect();
 
+    let call = match namespace {
+        Some(namespace) => quote! {
+            ::telar::i18n::translate_with_override(#namespace, &#catalog_path, #key, &[ #(#arg_tuples),* ])
+        },
+        None => quote! {
+            ::telar::i18n::translate(&#catalog_path, #key, &[ #(#arg_tuples),* ])
+        },
+    };
     quote! {
         {
             #(#arg_lets)*
-            ::telar::i18n::translate(&#catalog_path, #key_str, &[ #(#arg_tuples),* ])
+            #call
         }
     }
 }
+
+#[cfg(test)]
+#[path = "t_macro_test.rs"]
+mod tests;

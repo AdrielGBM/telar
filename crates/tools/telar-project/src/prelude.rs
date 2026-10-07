@@ -55,7 +55,7 @@ impl std::fmt::Display for PreludeEntry {
     }
 }
 
-/// The prelude `<package_dir>/telar.toml` declares, inherited from the workspace's when the package names none.
+/// The prelude `<package_dir>/telar.toml` declares, inherited from the workspace's when the package names none and is not a library.
 ///
 /// The one resolver every writer of generated code calls. An unreadable manifest is an error rather than an empty prelude: transpiling against fewer crates than the project declared produces Rust that fails on every tag those crates provide, and reports it against the markup instead of the key that is wrong.
 pub fn resolve_prelude(package_dir: &Path) -> Result<Vec<PreludeEntry>, crate::ManifestError> {

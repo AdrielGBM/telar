@@ -2,7 +2,7 @@ use super::signals::normalize_closure;
 use super::*;
 
 fn make_gen<'a>() -> ViewGen<'a> {
-    ViewGen::with_theme(&[], None, None)
+    ViewGen::new(&[], None)
 }
 
 #[test]

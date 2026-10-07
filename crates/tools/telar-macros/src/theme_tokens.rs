@@ -5,46 +5,7 @@ use quote::quote;
 use std::collections::HashMap;
 use syn::spanned::Spanned;
 use syn::{Data, DeriveInput, Expr, Fields, Ident, Token, punctuated::Punctuated};
-
-/// The tokens whose built-in is a hard-coded constant, and therefore the ones a theme that stays silent contradicts on screen: a component answering 4px next to bars the user configured to 10.
-const REQUIRED: &[&str] = &[
-    "primary",
-    "on_primary",
-    "radius",
-    "spacing",
-    "icon_size",
-    "muted",
-    "scrollbar",
-    "ink",
-    "surface",
-    "surface_alt",
-    "border",
-    "success",
-    "warning",
-    "error",
-    "info",
-    "highlight_low",
-    "highlight_med",
-    "highlight_high",
-];
-
-/// `radius_sm`/`radius_md`/`radius_lg` derive from `radius`, so silence is the right answer rather than a contradiction — a theme moves the base and the steps follow.
-const DERIVED: &[&str] = &[
-    "radius_sm",
-    "radius_md",
-    "radius_lg",
-    "spacing_sm",
-    "spacing_md",
-    "spacing_lg",
-    "spacing_xl",
-];
-
-/// Tokens a silent theme does not contradict, because their built-in adds nothing to the screen rather than asserting a number beside one the theme chose. `root` is the theme's row at the top of the document: say nothing and the document keeps its own, which is exactly right.
-const OPTIONAL: &[&str] = &["root"];
-
-fn is_token(name: &str) -> bool {
-    REQUIRED.contains(&name) || DERIVED.contains(&name) || OPTIONAL.contains(&name)
-}
+use telar_project::theme_tokens::{DERIVED, OPTIONAL, REQUIRED, is_token};
 
 #[derive(Default)]
 struct Options {

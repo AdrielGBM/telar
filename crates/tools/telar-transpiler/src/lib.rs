@@ -30,6 +30,8 @@ mod style;
 mod tag_errors;
 mod theme;
 #[cfg(feature = "transpile")]
+mod theme_access;
+#[cfg(feature = "transpile")]
 mod transition;
 #[cfg(feature = "transpile")]
 mod view;

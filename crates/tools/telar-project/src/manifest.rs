@@ -187,10 +187,15 @@ pub struct TelarSection {
     pub backend: Option<RendererBackend>,
     /// The directory a baked `src:"…"` resolves against, joined onto the package root. Default `"assets"`.
     pub assets: Option<String>,
-    /// The theme type this package's components resolve `use_theme` against.
+    /// The theme type this package's components resolve `use_theme` against. A library may not set it, since it cannot name the theme type of an application that depends on it.
     pub theme: Option<String>,
-    /// The crates whose items every `.rsx` of this package can name as tags, glob-imported after `telar`'s and before the package's own. `None` inherits the workspace's and `[]` declares none, so a package can opt out of a crate its workspace shares. Read through [`Self::prelude`] or [`crate::resolve_prelude`].
+    /// The crates whose items every `.rsx` of this package can name as tags, glob-imported after `telar`'s and before the package's own. `None` inherits the workspace's, except in a library, and `[]` declares none, so a package can opt out of a crate its workspace shares. Read through [`Self::prelude`] or [`crate::resolve_prelude`].
     pub prelude: Option<Vec<PreludeEntry>>,
+    /// Whether this package is a library other crates depend on, such as a plugin written in `.rsx`. Compiled as a dependency, its `.rsx` is wired read-only from the Plain artifact it ships, and its `t!` lets the application override each string under the package's name.
+    ///
+    /// Never inherited: a workspace sharing one `telar.toml` holds applications too, and what a package is cannot be a default. Nor does a library inherit anything else; see [`TelarManifest::load`].
+    #[serde(default)]
+    pub library: bool,
     #[serde(default)]
     pub dev: DevSection,
     #[serde(default)]
@@ -237,19 +242,22 @@ impl TelarManifest {
     /// A package with no manifest gets the defaults — every setting here has one, and a project that configures nothing is the common case. A manifest that *exists* and cannot be understood is an error, which is the whole point: the alternative is what this replaces, where an unreadable file and a misspelled key both read as "not configured".
     ///
     /// Settings are inherited key by key, so a workspace declares its theme, backend and catalogs once and a package overrides only what differs from its siblings. Every package of a workspace answering the same way is the common case, and saying it eight times is how the eight drift apart.
+    ///
+    /// A `[telar] library` inherits nothing: it ships its artifact transpiled against its own manifest, and once published there is no workspace above it, or there is an application's, when a copy is vendored into one. Either way the answer would differ from the one the artifact was written under.
     pub fn load(package_root: &Path) -> Result<Self, ManifestError> {
         let own = Self::read(package_root)?;
-        let inherited = crate::find_workspace_root(package_root)
-            .filter(|root| root != package_root)
+        let library = own.as_ref().is_some_and(|own| own.telar.library);
+        let inherited = Self::workspace_dir(package_root, library)
             .map(|root| Self::read(&root))
             .transpose()?
             .flatten();
-        let manifest = match (own, inherited) {
+        let mut manifest = match (own, inherited) {
             (Some(own), Some(base)) => Self {
                 telar: own.telar.over(base.telar),
             },
             (own, base) => own.or(base).unwrap_or_default(),
         };
+        manifest.telar.library = library;
         let problems = manifest.telar.web.problems();
         if !problems.is_empty() {
             return Err(ManifestError::Invalid {
@@ -260,15 +268,25 @@ impl TelarManifest {
         Ok(manifest)
     }
 
-    /// Every `telar.toml` [`load`](Self::load) reads for `package_root` that exists: the package's own, then the workspace's it inherits from. What a build has to track to notice an inherited setting changing.
+    /// Every `telar.toml` [`load`](Self::load) reads for `package_root` that exists: the package's own, then the workspace's it inherits from, which a library has none of. What a build has to track to notice an inherited setting changing.
     pub fn files(package_root: &Path) -> Vec<PathBuf> {
-        let workspace =
-            crate::find_workspace_root(package_root).filter(|root| root != package_root);
+        let library = Self::read(package_root)
+            .ok()
+            .flatten()
+            .is_some_and(|own| own.telar.library);
+        let workspace = Self::workspace_dir(package_root, library);
         std::iter::once(package_root.to_path_buf())
             .chain(workspace)
             .map(|dir| dir.join(MANIFEST_FILENAME))
             .filter(|path| path.is_file())
             .collect()
+    }
+
+    fn workspace_dir(package_root: &Path, library: bool) -> Option<PathBuf> {
+        if library {
+            return None;
+        }
+        crate::find_workspace_root(package_root).filter(|root| root != package_root)
     }
 
     fn read(dir: &Path) -> Result<Option<Self>, ManifestError> {
@@ -286,6 +304,7 @@ impl TelarManifest {
             .iter()
             .flat_map(FontDeclaration::problems)
             .chain(crate::prelude::problems(manifest.telar.prelude()))
+            .chain(manifest.telar.library_theme_problem())
             .collect();
         if !problems.is_empty() {
             return Err(ManifestError::Invalid {
@@ -312,6 +331,7 @@ impl TelarSection {
             assets: self.assets.or(base.assets),
             theme: self.theme.or(base.theme),
             prelude: self.prelude.or(base.prelude),
+            library: self.library,
             dev: DevSection {
                 window: self.dev.window.or(base.dev.window),
                 devtools: self.dev.devtools.or(base.dev.devtools),
@@ -341,6 +361,14 @@ impl TelarSection {
             locales: self.locales.or(base.locales),
             default_locale: self.default_locale.or(base.default_locale),
         }
+    }
+
+    /// Why a library naming a theme type is refused. It ships one artifact for every application that will depend on it, and none of their theme types is known when it is transpiled, so its `$theme` reads the `ThemeTokens` vocabulary every theme answers instead.
+    fn library_theme_problem(&self) -> Option<String> {
+        let theme = self.theme.as_deref().filter(|_| self.library)?;
+        Some(format!(
+            "`[telar] theme = \"{theme}\"` cannot be set in a `[telar] library`: a library is compiled into applications whose theme types it cannot name, so its `$theme.x` reads the shared `ThemeTokens` tokens instead. Remove the `theme` key"
+        ))
     }
 
     /// The crates this package's `.rsx` glob-imports, in the order declared.

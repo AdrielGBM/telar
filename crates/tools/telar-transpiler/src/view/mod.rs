@@ -22,6 +22,7 @@ use telar_parser::{Attr, Element, IfBlock, StyleClass, ViewNode};
 
 use crate::lexer::contains_ident;
 use crate::registry::ValueKind;
+use crate::theme_access::ThemeAccess;
 pub(crate) use component::props_type;
 pub(crate) use signals::{is_paint_key, rust_str, substitute_reads};
 use telar_project::{AssetContext, asset_kind_for_tag};
@@ -215,8 +216,6 @@ pub struct ViewGen<'a> {
     classes: &'a [StyleClass],
     /// Per-widget-type variable counters, keyed by the descriptive prefix.
     counters: HashMap<String, usize>,
-    /// When set, the view binds `theme` and each `[style]` class function binds its own, so `$theme.field` is a read.
-    theme_type: Option<String>,
     /// Identifiers the `[logic]` zone binds. A bare name in the view resolves to one of these before the theme is consulted, so a local shadows a same-named token rather than the other way round — see [`crate::signal_scan::scan_locals`].
     locals: Vec<String>,
     /// Names the `[logic]` zone bound to a `signal(…)` or `memo(…)`. Read to tell a genuinely static iterable from one that reads reactive state without the `$` that would make the loop follow it — see [`ViewGen::signal_named_in`].
@@ -239,18 +238,15 @@ pub struct ViewGen<'a> {
     host_rows: Vec<bool>,
     /// The in-scope binding holding the enclosing scroll's live viewport, when the node being emitted sits inside one that exposed it. `VirtualList` needs it to know which rows are on screen, and only a `scroll` can supply it — so a `virtual` loop outside one is an error rather than a surprise at runtime.
     scroll_viewport: Option<String>,
+    /// What a `$theme` read compiles to: the `theme` handle, or in a library the shared tokens.
+    theme_access: ThemeAccess,
 }
 
 impl<'a> ViewGen<'a> {
-    pub fn with_theme(
-        classes: &'a [StyleClass],
-        theme_type: Option<&str>,
-        assets: Option<&'a AssetContext>,
-    ) -> Self {
+    pub fn new(classes: &'a [StyleClass], assets: Option<&'a AssetContext>) -> Self {
         Self {
             classes,
             counters: HashMap::new(),
-            theme_type: theme_type.map(str::to_string),
             locals: Vec::new(),
             signals: Vec::new(),
             indent: 1,
@@ -262,6 +258,7 @@ impl<'a> ViewGen<'a> {
             multi_referenced: Vec::new(),
             reactive_depth: 0,
             scroll_viewport: None,
+            theme_access: ThemeAccess::Handle,
         }
     }
 
@@ -358,6 +355,11 @@ impl<'a> ViewGen<'a> {
     /// Attaches the names the `[logic]` zone binds, so a bare identifier in the view reaches them before the theme. A preview has no logic zone and so passes none.
     pub(crate) fn with_locals(mut self, locals: Vec<String>) -> Self {
         self.locals = locals;
+        self
+    }
+
+    pub(crate) fn with_theme_access(mut self, theme_access: ThemeAccess) -> Self {
+        self.theme_access = theme_access;
         self
     }
 
@@ -556,8 +558,10 @@ impl<'a> ViewGen<'a> {
                 let pad = self.indent_str();
                 let wrapped = self.next_variable_name("clipped");
                 let clipped = if shape.contains('$') {
-                    let read = self
-                        .clone_captures(&[shape], format!("move || {}", substitute_reads(shape)));
+                    let read = self.clone_captures(
+                        &[shape],
+                        format!("move || {}", substitute_reads(shape, self.theme_access)),
+                    );
                     format!("ClippedItem::following(box_item({name}), {read})")
                 } else {
                     format!("ClippedItem::new(box_item({name}), {shape})")
@@ -614,7 +618,7 @@ impl<'a> ViewGen<'a> {
     fn attr_value_error(&self, tag: &str, attr: &Attr) -> Option<String> {
         let value = attr.value.text().trim();
         let Some(kind) = crate::registry::value_kind(tag, &attr.key) else {
-            return match crate::style::layout_prop_call(&attr.key, value) {
+            return match crate::style::layout_prop_call(&attr.key, value, self.theme_access) {
                 crate::style::PropCall::Invalid(message) => Some(message),
                 _ => None,
             };
@@ -626,12 +630,12 @@ impl<'a> ViewGen<'a> {
             ValueKind::KeywordsOrNumber(table) => (value.parse::<f32>().is_err())
                 .then(|| crate::style::keyword(&attr.key, value, table).err())
                 .flatten(),
-            ValueKind::Number => crate::style::format_number(value).err(),
+            ValueKind::Number => crate::style::format_number(value, self.theme_access).err(),
             // A yes or a no is whatever rustc can make one of, so there is nothing here to refuse.
             ValueKind::Boolean => None,
             ValueKind::Edges => value
                 .split_whitespace()
-                .find_map(|token| crate::style::format_number(token).err()),
+                .find_map(|token| crate::style::format_number(token, self.theme_access).err()),
             ValueKind::Color => crate::style::color(value).err(),
         }
     }

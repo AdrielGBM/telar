@@ -57,6 +57,7 @@ impl ViewGen<'_> {
             &super::signals::scoped_snippets(children, &[]),
             &self.loop_variables,
             &self.locals,
+            self.theme_access,
         );
         // Twice on purpose: the outer clone leaves the surrounding view its binding, the inner gives each run its own, since a body that hands a binding to a widget moves it.
         let per_run: String = idents
@@ -136,7 +137,7 @@ impl ViewGen<'_> {
             let _ = write!(
                 chain,
                 ".with_radius(BorderRadius::all({}))",
-                crate::style::number_or_error(radius)
+                crate::style::number_or_error(radius, self.theme_access)
             );
         }
         if chain.is_empty() {
@@ -146,7 +147,11 @@ impl ViewGen<'_> {
             .into_iter()
             .flatten()
             .collect();
-        let closure = wrap_signal_clones(&raw, format!("move |__s: RectStyle| __s{chain}"));
+        let closure = wrap_signal_clones(
+            &raw,
+            format!("move |__s: RectStyle| __s{chain}"),
+            self.theme_access,
+        );
         Some(format!("std::rc::Rc::new({closure})"))
     }
 
@@ -353,7 +358,8 @@ impl ViewGen<'_> {
         if v.contains('$') {
             return reads_state(&wrap_signal_clones(
                 &[v],
-                format!("move || {}", substitute_reads(v)),
+                format!("move || {}", substitute_reads(v, self.theme_access)),
+                self.theme_access,
             ));
         }
         // The delimiting parens are dropped here rather than at the call, so the span covers the expression and nothing wider.

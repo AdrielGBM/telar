@@ -33,6 +33,7 @@ fn generated(view: &str, entries: &[&str]) -> String {
             theme_type: None,
             assets: None,
             prelude: &prelude,
+            library: false,
             flavour: telar_project::BuildFlavour::Plain,
         },
     )

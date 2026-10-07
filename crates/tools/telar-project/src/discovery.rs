@@ -73,19 +73,72 @@ pub fn assets_root(package_root: &Path) -> PathBuf {
         .assets_root(package_root)
 }
 
-/// Declares `pub mod` for every `.rsx` and every hand-written `.rs` module mirroring the `src_dir` tree, so a package needs no `mod` statements of its own. Returns the top-level declarations and, for each discovered subdirectory, writes a generated file under `modtree_dir` holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`), directories with no `.rs` under them (asset- or markup-only dirs), and any name the site declares itself. A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery.
+/// The directory under a flavour's generated directory holding one file per discovered subdirectory of `src/`.
+pub const MODULE_TREE_DIR: &str = "__modules";
+
+/// One file of a package's module tree: a site's declarations, a directory's children, or the children a `mod.rsx` includes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ModuleTreeFile {
+    pub(crate) path: PathBuf,
+    pub(crate) content: String,
+}
+
+/// Every file a package's placement sites `include!` or declare, for one flavour: derived from the source tree alone, written by `cargo telar transpile`, and compared by the macro, which writes nothing.
 ///
-/// Every module — top-level file, subdirectory, and the children inside each generated file — is a *file-based* `#[path] pub mod` (the exact shape the `.rsx` build files use). It deliberately never emits an inline `mod dir { … }` block: rust-analyzer mis-resolves a `#[path]` attribute on a module nested inside an inline block produced by a proc macro, string-joining the inline module's name onto the child's already-absolute path (`core//abs/core/app.rs`) and failing to find it (E0583). rustc joins those pieces with real path semantics, so the absolute child path wins and it compiles — which is why the two disagreed. Routing every directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside that file) keeps the analyzer and the compiler in step.
+/// Each `#[path]` and `include!` in it is relative to the file holding it, which is how rustc and rust-analyzer resolve both — a module declared in an `include!`d file resolves against that file's directory, and so does a `#[path]` module's own children. So the tree stays valid wherever the package is unpacked, and the content is the same on every machine, which is what lets a published library be checked against the copy it ships.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModuleTree {
+    files: Vec<ModuleTreeFile>,
+}
+
+impl ModuleTree {
+    /// The tree every placement site under `src_dir` wires, declaring the `.rsx` output under `generated_dir`, with each site's declarations in `<site>/.telar/<site_file_name>`.
+    pub fn discover(src_dir: &Path, generated_dir: &Path, site_file_name: &str) -> Self {
+        let mut files = Vec::new();
+        for site in placement_sites(src_dir) {
+            let holder = site.join(SITE_DIR);
+            let (declarations, children) = discover_rust_modules(src_dir, &site, generated_dir);
+            files.extend(children);
+            files.push(ModuleTreeFile {
+                path: holder.join(site_file_name),
+                content: declarations,
+            });
+        }
+        Self { files }
+    }
+
+    /// Writes every file whose content differs, returning every path the tree holds for the caller's stale-output sweep.
+    pub fn write(&self) -> std::io::Result<Vec<PathBuf>> {
+        for file in &self.files {
+            if let Some(parent) = file.path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            crate::write_if_changed_atomic(&file.path, &file.content)?;
+        }
+        Ok(self.files.iter().map(|file| file.path.clone()).collect())
+    }
+
+    /// The first file that is missing on disk or holds something else, which is a tree written before the source tree last changed.
+    pub fn first_difference(&self) -> Option<&Path> {
+        self.files
+            .iter()
+            .find(|file| {
+                std::fs::read_to_string(&file.path).ok().as_deref() != Some(file.content.as_str())
+            })
+            .map(|file| file.path.as_path())
+    }
+}
+
+/// Declares `pub mod` for every `.rsx` and every hand-written `.rs` module mirroring the `src_dir` tree, so a package needs no `mod` statements of its own. Returns the declarations for the site at `from_dir` and, for each discovered subdirectory, a generated file under the flavour's [`MODULE_TREE_DIR`] holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`), directories with no `.rs` under them (asset- or markup-only dirs), and any name the site declares itself. A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery.
 ///
-/// Returns the declarations alongside every generated file path it wrote under `modtree_dir`, so a caller that prunes stale build output can tell these apart from an orphaned directory's leftover file.
+/// Every module — top-level file, subdirectory, and the children inside each generated file — is a *file-based* `#[path] pub mod` (the exact shape the `.rsx` build files use). It deliberately never emits an inline `mod dir { … }` block: rust-analyzer mis-resolves a `#[path]` attribute on a module nested inside an inline block produced by a proc macro, string-joining the inline module's name onto the child's path and failing to find it (E0583), while rustc joins those pieces with real path semantics. Routing every directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside that file) keeps the analyzer and the compiler in step.
 ///
 /// **`from_dir` is where the macro was invoked, which is not always `src_dir`.** A module declares its own children, so `rsx_modules!()` in `app/editor/mod.rs` places the `.rsx` files of `app/editor` — declaring `pub mod app;` there instead would name an ancestor of the file doing the declaring, which is a cycle. The generated `.rs` a `.rsx` compiles to still mirrors the whole `src` tree, so the walk carries the prefix from `src_dir` even when it starts below it.
-pub fn discover_rust_modules(
+pub(crate) fn discover_rust_modules(
     src_dir: &Path,
     from_dir: &Path,
-    modtree_dir: &Path,
     generated_dir: &Path,
-) -> std::io::Result<(String, Vec<PathBuf>)> {
+) -> (String, Vec<ModuleTreeFile>) {
     let prefix = from_dir
         .strip_prefix(src_dir)
         .unwrap_or(Path::new(""))
@@ -98,18 +151,30 @@ pub fn discover_rust_modules(
         // `src/bin/` is cargo's: every file in it is a crate root of its own. Declared as a module here, each binary's `fn main` would be compiled into the library that declared it.
         reserved.insert("bin".to_owned());
     }
+    let mut walk = TreeWalk {
+        package_dir: src_dir.parent().unwrap_or(src_dir),
+        modtree_dir: generated_dir.join(MODULE_TREE_DIR),
+        generated_dir,
+        files: Vec::new(),
+    };
     let mut out = String::new();
-    let mut written = Vec::new();
-    emit_children(
+    walk.emit_children(
         from_dir,
         &prefix,
-        modtree_dir,
-        generated_dir,
+        &from_dir.join(SITE_DIR),
         &reserved,
         &mut out,
-        &mut written,
-    )?;
-    Ok((out, written))
+    );
+    (out, walk.files)
+}
+
+/// What one walk over the source tree is writing into, and the files it has produced so far.
+struct TreeWalk<'a> {
+    /// What a path in a diagnostic is said relative to, so the tree reads the same wherever the package sits.
+    package_dir: &'a Path,
+    modtree_dir: PathBuf,
+    generated_dir: &'a Path,
+    files: Vec<ModuleTreeFile>,
 }
 
 /// The module names the site's own file already declares, which the discovered tree leaves alone. Redeclaring one is `E0428`, and `mod menu;` written by hand next to a `pub mod menu;` written here would also be a visibility the author did not ask for.
@@ -142,90 +207,149 @@ fn declared_module_names(source: &str) -> Vec<String> {
     names
 }
 
-/// Appends the `#[path] pub mod` declarations for the direct children of `dir` to `out`. A subdirectory's own children are written to a generated file under `modtree_dir` (named by the flattened module path, e.g. `core__widgets.rs`, so sibling directories never collide) that the emitted `pub mod` then points at.
-fn emit_children(
-    dir: &Path,
-    flat_prefix: &str,
-    modtree_dir: &Path,
-    generated_dir: &Path,
-    hand_written: &HashSet<String>,
-    out: &mut String,
-    written: &mut Vec<PathBuf>,
-) -> std::io::Result<()> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Ok(());
-    };
-    let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
-    paths.sort();
-    for path in paths {
-        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
+impl TreeWalk<'_> {
+    /// Appends the `#[path] pub mod` declarations for the direct children of `dir` to `out`, the content of a file in `holder`. A subdirectory's own children go into a generated file under the module tree directory (named by the flattened module path, e.g. `core__widgets.rs`, so sibling directories never collide) that the emitted `pub mod` then points at.
+    fn emit_children(
+        &mut self,
+        dir: &Path,
+        flat_prefix: &str,
+        holder: &Path,
+        hand_written: &HashSet<String>,
+        out: &mut String,
+    ) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
         };
-        if file_name.starts_with('.') {
-            continue;
-        }
-        let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-        if !crate::naming::is_ident(name) {
-            continue;
-        }
-        // A name the site declares itself keeps the author's declaration, visibility included; the diagnostics below still run, because a `mod.rs` sitting on unplaced `.rsx` is a problem whoever declared the module.
-        let declared_here = !hand_written.contains(name);
-        if path.is_dir() {
-            let mod_rs = path.join("mod.rs");
-            let flat = match flat_prefix.is_empty() {
-                true => name.to_string(),
-                false => format!("{flat_prefix}__{name}"),
+        let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+        paths.sort();
+        for path in paths {
+            let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
             };
-            if path.join(MODULE_ROOT_FILENAME).is_file() {
-                if declared_here {
-                    write_module_root(&path, &flat, modtree_dir, generated_dir, out, written)?;
-                }
-            } else if mod_rs.exists() {
-                // A `mod.rs` places its own `.rsx` children by invoking `rsx_modules!()`, the only place they can be declared from — an outside module cannot add items to one. Saying so beats a "cannot find" about a file that is plainly there.
-                if dir_has_rsx(&path) && !mod_rs_places_its_own(&mod_rs) {
-                    let _ = writeln!(
-                        out,
-                        "compile_error!(\"{} holds `.rsx` files and a `mod.rs`, so only that file can place them: add `telar::rsx_modules!();` to it, or give the directory a `mod.rsx` and let telar own the module\");",
-                        path.display()
-                    );
-                }
-                if declared_here {
-                    out.push_str(&mod_decl(name, &mod_rs));
-                }
-            } else if declared_here && dir_has_rust_module(&path) {
-                let mut body = String::new();
-                emit_children(
-                    &path,
-                    &flat,
-                    modtree_dir,
-                    generated_dir,
-                    &HashSet::new(),
-                    &mut body,
-                    written,
-                )?;
-                let gen_file = modtree_dir.join(format!("{flat}.rs"));
-                write_if_changed(&gen_file, &body)?;
-                written.push(gen_file.clone());
-                out.push_str(&mod_decl(name, &gen_file));
+            if file_name.starts_with('.') {
+                continue;
             }
-        } else if is_rust_module_file(&path) {
-            if declared_here {
-                out.push_str(&mod_decl(name, &path));
+            let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            if !crate::naming::is_ident(name) {
+                continue;
             }
-        } else if is_module_root(&path) {
-            // Its own directory's module, declared by the parent and generated with the children included; as a sibling here it would be `pub mod mod;`.
-        } else if declared_here && path.extension().and_then(|e| e.to_str()) == Some("rsx") {
-            // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
-            out.push_str(&mod_decl(
-                name,
-                &rsx_output(generated_dir, flat_prefix, name),
-            ));
+            // A name the site declares itself keeps the author's declaration, visibility included; the diagnostics below still run, because a `mod.rs` sitting on unplaced `.rsx` is a problem whoever declared the module.
+            let declared_here = !hand_written.contains(name);
+            if path.is_dir() {
+                let mod_rs = path.join("mod.rs");
+                let flat = match flat_prefix.is_empty() {
+                    true => name.to_string(),
+                    false => format!("{flat_prefix}__{name}"),
+                };
+                if path.join(MODULE_ROOT_FILENAME).is_file() {
+                    if declared_here {
+                        self.module_root(&path, &flat, holder, out);
+                    }
+                } else if mod_rs.exists() {
+                    // A `mod.rs` places its own `.rsx` children by invoking `rsx_modules!()`, the only place they can be declared from — an outside module cannot add items to one. Saying so beats a "cannot find" about a file that is plainly there.
+                    if dir_has_rsx(&path) && !file_places_its_own(&mod_rs) {
+                        let _ = writeln!(
+                            out,
+                            "compile_error!(\"{} holds `.rsx` files and a `mod.rs`, so only that file can place them: add `telar::rsx_modules!();` to it, or give the directory a `mod.rsx` and let telar own the module\");",
+                            self.shown(&path)
+                        );
+                    }
+                    if declared_here {
+                        out.push_str(&mod_decl(name, &mod_rs, holder));
+                    }
+                } else if declared_here && dir_has_rust_module(&path) {
+                    let gen_file = self.modtree_dir.join(format!("{flat}.rs"));
+                    let gen_holder = self.modtree_dir.clone();
+                    let mut body = String::new();
+                    self.emit_children(&path, &flat, &gen_holder, &HashSet::new(), &mut body);
+                    out.push_str(&mod_decl(name, &gen_file, holder));
+                    self.files.push(ModuleTreeFile {
+                        path: gen_file,
+                        content: body,
+                    });
+                }
+            } else if is_rust_module_file(&path) {
+                if declared_here {
+                    out.push_str(&mod_decl(name, &path, holder));
+                }
+            } else if is_module_root(&path) {
+                // Its own directory's module, declared by the parent and generated with the children included; as a sibling here it would be `pub mod mod;`.
+            } else if declared_here && path.extension().and_then(|e| e.to_str()) == Some("rsx") {
+                // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
+                out.push_str(&mod_decl(
+                    name,
+                    &rsx_output(self.generated_dir, flat_prefix, name),
+                    holder,
+                ));
+            }
         }
     }
-    Ok(())
+
+    /// Declares a directory whose `mod.rsx` makes it telar's, and produces the file that module's `include!` reads: its children, plus the hand-written `mod.rs` when the directory keeps one.
+    ///
+    /// The children cannot come from the transpiler — a `.rsx` is transpiled knowing nothing but itself — and they cannot be added from outside either, since a module takes items only from its own file. The generated module leaves an `include!` and this fills it.
+    fn module_root(&mut self, dir: &Path, flat: &str, holder: &Path, out: &mut String) {
+        let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
+            return;
+        };
+        let module_file = rsx_output(self.generated_dir, flat, "mod");
+        let children_file = module_file.with_file_name(MODULE_CHILDREN_FILENAME);
+        let children_holder = children_file
+            .parent()
+            .unwrap_or(self.generated_dir)
+            .to_path_buf();
+        let mut body = String::new();
+        self.emit_children(
+            dir,
+            flat,
+            &children_holder,
+            &hand_written_modules(dir),
+            &mut body,
+        );
+        let mod_rs = dir.join("mod.rs");
+        if mod_rs.is_file() {
+            if file_places_its_own(&mod_rs) {
+                let _ = writeln!(
+                    body,
+                    "compile_error!(\"{} has a `mod.rsx`, so telar places this directory: remove the `telar::rsx_modules!()` from its `mod.rs`\");",
+                    self.shown(dir)
+                );
+            }
+            match leading_inner_attribute(&mod_rs) {
+                Some(attr) => {
+                    let _ = writeln!(
+                        body,
+                        "compile_error!(\"{} starts with `{}`, and an included file cannot carry an inner attribute: move it to the `[logic]` of this directory's `mod.rsx`\");",
+                        self.shown(&mod_rs),
+                        attr.escape_debug()
+                    );
+                }
+                // `include!` rather than a `#[path] mod`, because the two files are one module: the `mod.rsx` holds what only a module's own file can hold, and this holds the Rust the author kept in `mod.rs`.
+                None => {
+                    let _ = writeln!(
+                        body,
+                        "include!({:?});",
+                        relative_path(&children_holder, &mod_rs)
+                    );
+                }
+            }
+        }
+        self.files.push(ModuleTreeFile {
+            path: children_file,
+            content: body,
+        });
+        out.push_str(&mod_decl(name, &module_file, holder));
+    }
+
+    /// `path` as a diagnostic names it: from the package root, `/`-separated, so the same tree is generated on every machine.
+    fn shown(&self, path: &Path) -> String {
+        path.strip_prefix(self.package_dir)
+            .map(slash_separated)
+            .unwrap_or_else(|_| path.to_string_lossy().into_owned())
+    }
 }
 
-/// Deletes every `.rs` file under `output_dir` that `written` does not list — the leftovers of a renamed or deleted `.rsx`, a directory that lost its last hand-written `.rs`, or a dropped i18n catalog. Only ever recurses through real subdirectories reached from `output_dir` itself (a symlink is skipped, not followed), so every path it can act on is provably inside the generated tree; it never removes a directory or a non-`.rs` file. Best-effort: a removal failure just leaves that orphan for next time.
+/// Deletes every `.rs` file under `output_dir` that `written` does not list — the leftovers of a renamed or deleted `.rsx`, a directory that lost its last hand-written `.rs`, or a dropped i18n catalog. Also deletes any `.rs.map` sidecar whose `.rs` is not in the written set. Only ever recurses through real subdirectories reached from `output_dir` itself (a symlink is skipped, not followed), so every path it can act on is provably inside the generated tree; it never removes a directory or a non-`.rs`/`.rs.map` file. Best-effort: a removal failure just leaves that orphan for next time.
 pub fn prune_stale_generated(output_dir: &Path, written: &HashSet<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(output_dir) else {
         return;
@@ -240,29 +364,60 @@ pub fn prune_stale_generated(output_dir: &Path, written: &HashSet<PathBuf>) {
         let path = entry.path();
         if file_type.is_dir() {
             prune_stale_generated(&path, written);
-        } else if file_type.is_file()
-            && path.extension().and_then(|e| e.to_str()) == Some("rs")
-            && !written.contains(&path)
-        {
-            let _ = std::fs::remove_file(&path);
+        } else if file_type.is_file() {
+            let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if file_name.ends_with(".rs") && !file_name.ends_with(".rs.map") {
+                if !written.contains(&path) {
+                    let _ = std::fs::remove_file(&path);
+                    let map_path = path.with_extension("rs.map");
+                    let _ = std::fs::remove_file(&map_path);
+                }
+            } else if file_name.ends_with(".rs.map") {
+                let rs_path = path.with_file_name(
+                    file_name
+                        .strip_suffix(".map")
+                        .map(|s| s.to_string())
+                        .unwrap_or_default(),
+                );
+                if !written.contains(&rs_path) {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
         }
     }
 }
 
-/// Writes `content` to `path` only when it differs, to avoid retriggering recompilation on unchanged output.
-fn write_if_changed(path: &Path, content: &str) -> std::io::Result<()> {
-    let stale = std::fs::read_to_string(path)
-        .map(|existing| existing != content)
-        .unwrap_or(true);
-    if stale {
-        std::fs::write(path, content)?;
-    }
-    Ok(())
+/// A `pub mod` declaration pinned to `file` by a `#[path]` relative to `holder`, the directory of the file the declaration is written into. `{:?}` renders the path as an escaped Rust string literal.
+fn mod_decl(name: &str, file: &Path, holder: &Path) -> String {
+    format!(
+        "#[path = {:?}] pub mod {name};\n",
+        relative_path(holder, file)
+    )
 }
 
-/// A `pub mod` declaration pinned to `file` via an absolute `#[path]`. `{:?}` renders the path as an escaped Rust string literal.
-fn mod_decl(name: &str, file: &Path) -> String {
-    format!("#[path = {:?}] pub mod {name};\n", file.to_string_lossy())
+/// `to` relative to `from_dir`, `/`-separated whatever the platform, as rustc reads a `#[path]` or an `include!` in a file in `from_dir`. Absolute only when the two share no root at all, which is two drives on Windows.
+pub(crate) fn relative_path(from_dir: &Path, to: &Path) -> String {
+    let from: Vec<Component> = from_dir.components().collect();
+    let target: Vec<Component> = to.components().collect();
+    let common = from.iter().zip(&target).take_while(|(a, b)| a == b).count();
+    if common == 0 && to.is_absolute() {
+        return to.to_string_lossy().into_owned();
+    }
+    std::iter::repeat_n("..".to_string(), from.len() - common)
+        .chain(
+            target[common..]
+                .iter()
+                .map(|part| part.as_os_str().to_string_lossy().into_owned()),
+        )
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn slash_separated(path: &Path) -> String {
+    path.components()
+        .map(|part| part.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 /// A `.rs` file that is a declarable module: not a crate root, not a `mod.rs` (the latter is the module root of its own directory, not a sibling child), and not a `*_test.rs`.
@@ -286,9 +441,9 @@ fn dir_has_rust_module(dir: &Path) -> bool {
         || !collect_files_by_ext(dir, &["rsx"], &|_| true).is_empty()
 }
 
-/// Whether the `mod.rs` invokes the macro that places its own `.rsx` siblings.
-fn mod_rs_places_its_own(mod_rs: &Path) -> bool {
-    std::fs::read_to_string(mod_rs).is_ok_and(|src| places_its_own_rsx(&src))
+/// Whether the file — a crate root or a `mod.rs` — invokes the macro that places its own directory.
+fn file_places_its_own(file: &Path) -> bool {
+    std::fs::read_to_string(file).is_ok_and(|src| places_its_own_rsx(&src))
 }
 
 /// Whether `source` invokes the placement macro, rather than naming it in prose. The call has to open its delimiter and survive having line comments stripped: a bare substring was harmless while it only decided whether to suppress a diagnostic, and stopped being so once the same answer decides which directories are placement sites — telar's own sandbox has two files whose comments mention `app!`.
@@ -399,7 +554,7 @@ fn collect_placement_sites(dir: &Path, out: &mut Vec<PathBuf>) {
         let mod_rs = path.join("mod.rs");
         // A `mod.rsx` makes the directory telar's, placed from the generated module: an invocation here would be a second placer, which is what `write_module_root` refuses.
         if mod_rs.is_file()
-            && mod_rs_places_its_own(&mod_rs)
+            && file_places_its_own(&mod_rs)
             && !path.join(MODULE_ROOT_FILENAME).is_file()
         {
             out.push(path.clone());
@@ -421,27 +576,12 @@ pub fn stray_placement_files(src_dir: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Writes what every placement site's `include!` resolves to, and returns every path written — the site files and the module-tree files they point at — for the caller's stale-output sweep.
-///
-/// Every invocation writes every site, because none of them knows which one it is. The writes are idempotent and the content is derived from the source tree, so the sites agree however the expansions are ordered or cached.
-pub fn write_placement_sites(
-    src_dir: &Path,
-    modtree_dir: &Path,
-    generated_dir: &Path,
-    file_name: &str,
-) -> std::io::Result<Vec<PathBuf>> {
-    let mut written = Vec::new();
-    for site in placement_sites(src_dir) {
-        let (declarations, modtree) =
-            discover_rust_modules(src_dir, &site, modtree_dir, generated_dir)?;
-        written.extend(modtree);
-        let dir = site.join(SITE_DIR);
-        std::fs::create_dir_all(&dir)?;
-        let file = dir.join(file_name);
-        write_if_changed(&file, &declarations)?;
-        written.push(file);
-    }
-    Ok(written)
+/// Whether anything in the package invokes the placement macro — a crate root, or a `mod.rs` placing its own directory — which is what decides whether it needs a module tree at all.
+pub fn invokes_placement_macro(src_dir: &Path) -> bool {
+    ["lib.rs", "main.rs"]
+        .iter()
+        .any(|root| file_places_its_own(&src_dir.join(root)))
+        || placement_sites(src_dir).len() > 1
 }
 
 /// Deletes the site files of directories that no longer place their own `.rsx` — a `mod.rs` that dropped its invocation, or a directory that lost its last `.rsx`. Only ever removes a `.rs` inside a `.telar/` directory that no live site owns, and only under `src_dir`.
@@ -486,65 +626,6 @@ pub const MODULE_CHILDREN_FILENAME: &str = "__children.rs";
 pub fn is_module_root(path: &Path) -> bool {
     path.file_name()
         .is_some_and(|name| name == MODULE_ROOT_FILENAME)
-}
-
-/// Declares a directory whose `mod.rsx` makes it telar's, and writes the file that module's `include!` reads: its children, plus the hand-written `mod.rs` when the directory keeps one.
-///
-/// The children cannot come from the transpiler — a `.rsx` is transpiled knowing nothing but itself — and they cannot be added from outside either, since a module takes items only from its own file. The generated module leaves an `include!` and this fills it.
-fn write_module_root(
-    dir: &Path,
-    flat: &str,
-    modtree_dir: &Path,
-    generated_dir: &Path,
-    out: &mut String,
-    written: &mut Vec<PathBuf>,
-) -> std::io::Result<()> {
-    let Some(name) = dir.file_name().and_then(|n| n.to_str()) else {
-        return Ok(());
-    };
-    let mut body = String::new();
-    emit_children(
-        dir,
-        flat,
-        modtree_dir,
-        generated_dir,
-        &hand_written_modules(dir),
-        &mut body,
-        written,
-    )?;
-    let mod_rs = dir.join("mod.rs");
-    if mod_rs.is_file() {
-        if mod_rs_places_its_own(&mod_rs) {
-            let _ = writeln!(
-                body,
-                "compile_error!(\"{} has a `mod.rsx`, so telar places this directory: remove the `telar::rsx_modules!()` from its `mod.rs`\");",
-                dir.display()
-            );
-        }
-        match leading_inner_attribute(&mod_rs) {
-            Some(attr) => {
-                let _ = writeln!(
-                    body,
-                    "compile_error!(\"{} starts with `{}`, and an included file cannot carry an inner attribute: move it to the `[logic]` of this directory's `mod.rsx`\");",
-                    mod_rs.display(),
-                    attr.escape_debug()
-                );
-            }
-            // `include!` rather than a `#[path] mod`, because the two files are one module: the `mod.rsx` holds what only a module's own file can hold, and this holds the Rust the author kept in `mod.rs`.
-            None => {
-                let _ = writeln!(body, "include!({:?});", mod_rs.to_string_lossy());
-            }
-        }
-    }
-    let module_file = rsx_output(generated_dir, flat, "mod");
-    let children_file = module_file.with_file_name(MODULE_CHILDREN_FILENAME);
-    if let Some(parent) = children_file.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    write_if_changed(&children_file, &body)?;
-    written.push(children_file);
-    out.push_str(&mod_decl(name, &module_file));
-    Ok(())
 }
 
 /// The first `//!` or `#![…]` of a file that is about to be `include!`d, which rustc refuses there (`E0753`, and "an inner attribute is not permitted in this context"). Reported before the include is written, so the message names the file and the move instead of landing on generated code.

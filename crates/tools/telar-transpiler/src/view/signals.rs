@@ -6,6 +6,7 @@ use telar_parser::{Attr, ViewNode};
 
 use crate::lexer::contains_ident;
 use crate::style::format_f32;
+use crate::theme_access::{ThemeAccess, TokensRead};
 
 use super::{ViewGen, expr_marker};
 
@@ -181,24 +182,29 @@ fn rewrite_compound_assign(closure: &str) -> String {
 }
 
 /// Replaces every `$ident` in `s` with `ident.get()` — a reactive read, for `[view]` interpolation where a signal reference is a value read.
-pub(crate) fn substitute_reads(s: &str) -> String {
-    substitute_dollar(s, true)
+pub(crate) fn substitute_reads(s: &str, theme: ThemeAccess) -> String {
+    substitute_dollar(s, true, theme)
 }
 
 /// Replaces every `$ident` in `s` with the bare `ident` (the signal handle), for closure bodies where `$count.update(…)` means the handle and `$` only marks it for cloning.
 ///
 /// `$theme` is the exception, because a theme handle has no second use: reading it is the only thing anyone can do with one, so `$theme.primary` means the same read wherever it is written.
-pub(super) fn substitute_handles(s: &str) -> String {
-    substitute_dollar(s, false)
+pub(super) fn substitute_handles(s: &str, theme: ThemeAccess) -> String {
+    substitute_dollar(s, false, theme)
 }
 
-/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`); everything else is copied through unchanged.
-fn substitute_dollar(s: &str, read: bool) -> String {
+/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`), and each library `$theme` read to its token; everything else is copied through unchanged.
+fn substitute_dollar(s: &str, read: bool, theme: ThemeAccess) -> String {
     let mut out = String::with_capacity(s.len());
     let mut copied = 0;
     for (marker, end) in dollar_spans(s) {
         let ident = &s[marker + 1..end];
         out.push_str(&s[copied..marker]);
+        if let Some(tokens) = tokens_read(ident, &s[end..], theme) {
+            out.push_str(&tokens.emit(""));
+            copied = end + tokens.consumed();
+            continue;
+        }
         out.push_str(ident);
         if read || ident == "theme" {
             out.push_str(".get()");
@@ -209,13 +215,22 @@ fn substitute_dollar(s: &str, read: bool) -> String {
     out
 }
 
-/// [`substitute_reads`] that also records where each identifier came from. The expression around it is rewritten — the `$` goes, a `.get()` arrives — but the identifier itself is copied byte for byte, and that is the part a cursor lands on. `base` is the source byte offset of `s`.
-pub(super) fn substitute_reads_spanned(s: &str, base: usize) -> String {
+/// [`substitute_reads`] that also records where each identifier came from. The expression around it is rewritten — the `$` goes, a `.get()` arrives — but the identifier itself is copied byte for byte, and that is the part a cursor lands on. `base` is the source byte offset of `s`. A library's token read records its token's name instead, the part that names something.
+pub(super) fn substitute_reads_spanned(s: &str, base: usize, theme: ThemeAccess) -> String {
     let mut out = String::with_capacity(s.len());
     let mut copied = 0;
     for (marker, end) in dollar_spans(s) {
         let ident = &s[marker + 1..end];
         out.push_str(&s[copied..marker]);
+        if let Some(tokens) = tokens_read(ident, &s[end..], theme) {
+            let mark = match tokens {
+                TokensRead::Token { name, .. } => expr_marker(base + end + 1, name.len()),
+                _ => String::new(),
+            };
+            out.push_str(&tokens.emit(&mark));
+            copied = end + tokens.consumed();
+            continue;
+        }
         out.push_str(&expr_marker(base + marker + 1, ident.len()));
         out.push_str(ident);
         out.push_str(".get()");
@@ -225,10 +240,16 @@ pub(super) fn substitute_reads_spanned(s: &str, base: usize) -> String {
     out
 }
 
-/// Collects the identifier of every `$ident` signal reference in `s`, used to clone signals captured by a closure.
-pub(super) fn signal_idents(s: &str) -> Vec<String> {
+/// The library read a `$ident` followed by `after` stands for, or `None` when it is not one.
+fn tokens_read<'a>(ident: &str, after: &'a str, theme: ThemeAccess) -> Option<TokensRead<'a>> {
+    (theme == ThemeAccess::Tokens && ident == "theme").then(|| TokensRead::parse(after))
+}
+
+/// Collects the identifier of every `$ident` signal reference in `s`, used to clone signals captured by a closure. A library's `$theme` is none: it reads a function, not a binding.
+pub(super) fn signal_idents(s: &str, theme: ThemeAccess) -> Vec<String> {
     dollar_spans(s)
         .map(|(marker, end)| s[marker + 1..end].to_string())
+        .filter(|ident| !(theme == ThemeAccess::Tokens && ident == "theme"))
         .collect()
 }
 
@@ -257,8 +278,12 @@ fn dollar_spans(s: &str) -> impl Iterator<Item = (usize, usize)> {
 }
 
 /// The distinct identifiers a `move` closure must clone so its captures stay independent of the outer bindings: every `$name` signal referenced across `snippets` (raw, still carrying `$`), deduped, followed by any `loop_variables` a snippet uses (also deduped against the signals). Pass `&[]` for `loop_variables` at a call site with no loop scope (e.g. the free-standing [`wrap_signal_clones`]); the three clone emitters ([`wrap_signal_clones`], `clone_bindings`, `scalar_closure`) all format this list for their own context (block wrapper / standalone statements / inline prefix).
-pub(super) fn captured_idents(snippets: &[&str], loop_variables: &[String]) -> Vec<String> {
-    captured_idents_with(snippets, loop_variables, &[])
+pub(super) fn captured_idents(
+    snippets: &[&str],
+    loop_variables: &[String],
+    theme: ThemeAccess,
+) -> Vec<String> {
+    captured_idents_with(snippets, loop_variables, &[], theme)
 }
 
 /// The same, plus the `[logic]` bindings the snippets name.
@@ -270,9 +295,10 @@ pub(super) fn captured_idents_with(
     snippets: &[&str],
     loop_variables: &[String],
     locals: &[String],
+    theme: ThemeAccess,
 ) -> Vec<String> {
     let flat: Vec<(&str, &[String])> = snippets.iter().map(|s| (*s, &[][..])).collect();
-    captured_from(&flat, loop_variables, locals)
+    captured_from(&flat, loop_variables, locals, theme)
 }
 
 /// The same for a subtree walked by [`scoped_snippets`], where each snippet carries the names bound between it and the closure being wrapped.
@@ -280,22 +306,24 @@ pub(super) fn captured_in_scope(
     snippets: &[ScopedSnippet],
     loop_variables: &[String],
     locals: &[String],
+    theme: ThemeAccess,
 ) -> Vec<String> {
     let borrowed: Vec<(&str, &[String])> = snippets
         .iter()
         .map(|s| (s.text.as_str(), s.shadowed.as_slice()))
         .collect();
-    captured_from(&borrowed, loop_variables, locals)
+    captured_from(&borrowed, loop_variables, locals, theme)
 }
 
 fn captured_from(
     snippets: &[(&str, &[String])],
     loop_variables: &[String],
     locals: &[String],
+    theme: ThemeAccess,
 ) -> Vec<String> {
     let mut idents: Vec<String> = Vec::new();
     for (s, shadowed) in snippets {
-        for id in signal_idents(s) {
+        for id in signal_idents(s, theme) {
             if !shadowed.contains(&id) && !idents.contains(&id) {
                 idents.push(id);
             }
@@ -303,7 +331,7 @@ fn captured_from(
     }
     let named: Vec<Option<Vec<String>>> = snippets
         .iter()
-        .map(|(s, _)| crate::rust::free_idents(&substitute_reads(s)))
+        .map(|(s, _)| crate::rust::free_idents(&substitute_reads(s, theme)))
         .collect();
     for var in loop_variables.iter().chain(locals) {
         let used = snippets.iter().zip(&named).any(|((s, shadowed), free)| {
@@ -327,15 +355,24 @@ fn captured_from(
 /// A closure that re-runs cannot *move* what it names, and a computed layout value names whatever the author had in scope — `inset_start:seat(&desk, id).x` captures `desk` and `id`, neither of which carries a `$`.
 impl ViewGen<'_> {
     pub(super) fn clone_captures(&self, raw_values: &[&str], closure_expr: String) -> String {
-        let idents = captured_idents_with(raw_values, &self.loop_variables, &self.locals);
+        let idents = captured_idents_with(
+            raw_values,
+            &self.loop_variables,
+            &self.locals,
+            self.theme_access,
+        );
         clone_block(&idents, closure_expr)
     }
 }
 
 /// Wraps a `move` closure literal in a block that clones every `$name` signal referenced (raw, still carrying `$`) across `raw_values` first, generalized for `color_expr` callers, whose reads (e.g. `accent.get()`) are embedded inside an already-built closure string rather than assembled inline. A no-op when none of `raw_values` reference a signal, so a purely static/theme color emits the closure unchanged.
-pub(super) fn wrap_signal_clones(raw_values: &[&str], closure_expr: String) -> String {
+pub(super) fn wrap_signal_clones(
+    raw_values: &[&str],
+    closure_expr: String,
+    theme: ThemeAccess,
+) -> String {
     // No loop scope is available in a free function, so loop variables are captured by move.
-    clone_block(&captured_idents(raw_values, &[]), closure_expr)
+    clone_block(&captured_idents(raw_values, &[], theme), closure_expr)
 }
 
 /// Prefixes a closure literal with one `let x = x.clone();` per name, inside a block so the whole thing is still an expression. A no-op when there is nothing to clone.

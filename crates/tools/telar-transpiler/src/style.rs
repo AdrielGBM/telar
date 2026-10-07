@@ -5,16 +5,17 @@ use std::fmt::Write;
 use telar_parser::{StyleClass, StyleSection};
 
 use crate::registry;
+use crate::theme_access::ThemeAccess;
 use telar_project::naming::style_function_name;
 
 /// A number for a key [`crate::registry::value_kind`] describes, where a value the key cannot mean has already been reported on the attribute itself. What stands in its place only has to be *something*: the build stops before anything reads it.
-pub fn number_or(value: &str, fallback: &str) -> String {
-    format_number(value).unwrap_or_else(|_| fallback.to_string())
+pub fn number_or(value: &str, fallback: &str, theme: ThemeAccess) -> String {
+    format_number(value, theme).unwrap_or_else(|_| fallback.to_string())
 }
 
 /// A number in a position with no attribute of its own to carry a diagnostic — a nested `hover_style(…)` property — where the error has to travel inside the expression or not at all.
-pub fn number_or_error(value: &str) -> String {
-    format_number(value)
+pub fn number_or_error(value: &str, theme: ThemeAccess) -> String {
+    format_number(value, theme)
         .unwrap_or_else(|message| format!("compile_error!({})", crate::view::rust_str(&message)))
 }
 
@@ -29,13 +30,17 @@ pub enum PropCall {
 }
 
 /// Renders one `LayoutStyle` constructor function per class in the document's style section.
-pub fn generate_style_section(section: &StyleSection, theme: Option<&str>) -> String {
+pub fn generate_style_section(
+    section: &StyleSection,
+    theme_type: Option<&str>,
+    theme: ThemeAccess,
+) -> String {
     let mut out = String::new();
     for (i, class) in section.classes.iter().enumerate() {
         if i > 0 {
             out.push('\n');
         }
-        out.push_str(&generate_class_function(class, theme));
+        out.push_str(&generate_class_function(class, theme_type, theme));
         out.push('\n');
     }
     out
@@ -48,11 +53,15 @@ fn is_style_key(key: &str) -> bool {
         || matches!(key, "lines" | "ellipsis")
 }
 
-fn generate_class_function(class: &StyleClass, theme: Option<&str>) -> String {
+fn generate_class_function(
+    class: &StyleClass,
+    theme_type: Option<&str>,
+    theme: ThemeAccess,
+) -> String {
     let mut out = String::new();
     // A class property has no attribute line, so the class name is what locates it. The key is checked here as well as the value: an unrecognised one is otherwise dropped, and a renamed key silently stops laying out.
     for prop in &class.props {
-        let message = match layout_prop_call(&prop.key, &prop.value) {
+        let message = match layout_prop_call(&prop.key, &prop.value, theme) {
             PropCall::Invalid(message) => Some(message),
             PropCall::Other if !is_style_key(&prop.key) => {
                 Some(format!("`{}` is not a style property", prop.key))
@@ -74,15 +83,15 @@ fn generate_class_function(class: &StyleClass, theme: Option<&str>) -> String {
         "fn {}() -> LayoutStyle {{",
         style_function_name(&class.name)
     );
-    if let Some(theme) = theme {
+    if let Some(theme_type) = theme_type {
         let _ = writeln!(
             out,
-            "    #[allow(unused_variables)] let theme = telar::Theme::<{theme}>::default();"
+            "    #[allow(unused_variables)] let theme = telar::Theme::<{theme_type}>::default();"
         );
     }
     out.push_str("    LayoutStyle::new()");
     for prop in &class.props {
-        if let PropCall::Call(call) = layout_prop_call(&prop.key, &prop.value) {
+        if let PropCall::Call(call) = layout_prop_call(&prop.key, &prop.value, theme) {
             let _ = write!(out, "\n        {call}");
         }
     }
@@ -91,60 +100,63 @@ fn generate_class_function(class: &StyleClass, theme: Option<&str>) -> String {
 }
 
 /// Maps a style property to the `LayoutStyle` builder call it contributes — or reports the value as one this key cannot mean, which is what stops a misspelling from being a property that silently does nothing.
-pub fn layout_prop_call(key: &str, value: &str) -> PropCall {
-    match layout_call(key, value.trim()) {
+pub fn layout_prop_call(key: &str, value: &str, theme: ThemeAccess) -> PropCall {
+    match layout_call(key, value.trim(), theme) {
         Ok(Some(call)) => PropCall::Call(call),
         Ok(None) => PropCall::Other,
         Err(message) => PropCall::Invalid(message),
     }
 }
 
-fn layout_call(key: &str, value: &str) -> Result<Option<String>, String> {
+fn layout_call(key: &str, value: &str, theme: ThemeAccess) -> Result<Option<String>, String> {
     // The markup's delimiting parens, dropped once here rather than at each key that splices the value as Rust: a key that forgot warned `unused_parens` in code the author cannot edit. An empty pair is a value of its own (`()`), not a delimiter around nothing.
     let value = crate::view::redundant_parens(value)
         .filter(|inner| !inner.trim().is_empty())
         .unwrap_or(value);
     let call = match key {
-        "width" => format!(".width({})", format_number(value)?),
-        "height" => format!(".height({})", format_number(value)?),
-        "min_width" => format!(".min_width({})", format_number(value)?),
-        "min_height" => format!(".min_height({})", format_number(value)?),
-        "max_width" => format!(".max_width({})", format_number(value)?),
-        "max_height" => format!(".max_height({})", format_number(value)?),
-        "basis" | "flex_basis" => format!(".flex_basis({})", format_number(value)?),
-        "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value)?),
+        "width" => format!(".width({})", format_number(value, theme)?),
+        "height" => format!(".height({})", format_number(value, theme)?),
+        "min_width" => format!(".min_width({})", format_number(value, theme)?),
+        "min_height" => format!(".min_height({})", format_number(value, theme)?),
+        "max_width" => format!(".max_width({})", format_number(value, theme)?),
+        "max_height" => format!(".max_height({})", format_number(value, theme)?),
+        "basis" | "flex_basis" => format!(".flex_basis({})", format_number(value, theme)?),
+        "aspect" | "aspect_ratio" => format!(".aspect_ratio({})", format_number(value, theme)?),
         "wrap" => format!(".{}()", keyword(key, value, registry::WRAP_VALUES)?),
         "self" => format!(".{}()", keyword(key, value, registry::SELF_VALUES)?),
-        "padding" | "pad" => format!(".padding_all({})", format_number(value)?),
-        "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value)?),
-        "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value)?),
+        "padding" | "pad" => format!(".padding_all({})", format_number(value, theme)?),
+        "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value, theme)?),
+        "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value, theme)?),
         // Resolved against the writing direction at layout time, so one build serves LTR and RTL.
         "padding_start" | "pad_start" => {
-            format!(".padding_start({})", format_number(value)?)
+            format!(".padding_start({})", format_number(value, theme)?)
         }
-        "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value)?),
-        "margin_start" => format!(".margin_inline_start({})", format_number(value)?),
-        "margin_end" => format!(".margin_inline_end({})", format_number(value)?),
-        "inset_start" => format!(".inset_start({})", format_number(value)?),
-        "inset_end" => format!(".inset_end({})", format_number(value)?),
-        "inset_top" => format!(".inset_top({})", format_number(value)?),
-        "inset_bottom" => format!(".inset_bottom({})", format_number(value)?),
+        "padding_end" | "pad_end" => format!(".padding_end({})", format_number(value, theme)?),
+        "margin_start" => format!(".margin_inline_start({})", format_number(value, theme)?),
+        "margin_end" => format!(".margin_inline_end({})", format_number(value, theme)?),
+        "inset_start" => format!(".inset_start({})", format_number(value, theme)?),
+        "inset_end" => format!(".inset_end({})", format_number(value, theme)?),
+        "inset_top" => format!(".inset_top({})", format_number(value, theme)?),
+        "inset_bottom" => format!(".inset_bottom({})", format_number(value, theme)?),
         // `absolute_fill` is the all-four-at-zero shorthand `overlay` uses; a floating panel wants three edges and its own size on the fourth.
         "absolute" => format!(".{}()", keyword(key, value, registry::ABSOLUTE_VALUES)?),
         "sticky" => match value.is_empty() {
             true => ".sticky()".to_string(),
-            false => format!(".sticky_when({})", crate::view::substitute_reads(value)),
+            false => format!(
+                ".sticky_when({})",
+                crate::view::substitute_reads(value, theme)
+            ),
         },
         // `shown:$open` keeps the subtree it hides — its scroll, its measurements — where an `if` rebuilds it.
         "shown" => match value.is_empty() {
             true => ".shown(true)".to_string(),
-            false => format!(".shown({})", crate::view::substitute_reads(value)),
+            false => format!(".shown({})", crate::view::substitute_reads(value, theme)),
         },
-        "gap" => format!(".gap({})", format_number(value)?),
-        "gap_x" => format!(".gap_x({})", format_number(value)?),
-        "gap_y" => format!(".gap_y({})", format_number(value)?),
-        "grow" => format!(".flex_grow({})", format_number(value)?),
-        "shrink" => format!(".flex_shrink({})", format_number(value)?),
+        "gap" => format!(".gap({})", format_number(value, theme)?),
+        "gap_x" => format!(".gap_x({})", format_number(value, theme)?),
+        "gap_y" => format!(".gap_y({})", format_number(value, theme)?),
+        "grow" => format!(".flex_grow({})", format_number(value, theme)?),
+        "shrink" => format!(".flex_shrink({})", format_number(value, theme)?),
         "span" => format!(".grid_column_span({})", track_count(key, value)?),
         "row_span" => format!(".grid_row_span({})", track_count(key, value)?),
         "cols" => {
@@ -275,7 +287,7 @@ pub fn color(value: &str) -> Result<(), String> {
 /// Resolves a numeric value to the Rust expression it stands for.
 ///
 /// Three token shapes resolve here — `50%`, a fraction of the surface like `50sw` (see [`surface_fraction`]) and a `$` read — and a plain literal is normalised so `12` reaches an `f32` parameter. Everything else is the author's own Rust, spliced as written for rustc to judge against this attribute's own line.
-pub fn format_number(value: &str) -> Result<String, String> {
+pub fn format_number(value: &str, theme: ThemeAccess) -> Result<String, String> {
     // Emitted, the markup's delimiting parens warn `unused_parens` in code the author cannot edit.
     let v = value.trim();
     let v = crate::view::redundant_parens(v).unwrap_or(v);
@@ -294,7 +306,7 @@ pub fn format_number(value: &str) -> Result<String, String> {
     }
     // Emitted inline, which is correct in both places the style expression lands: at construction, and again inside the `styled_by` effect a reactive layout prop grows.
     if v.contains('$') {
-        return Ok(crate::view::substitute_reads(v));
+        return Ok(crate::view::substitute_reads(v, theme));
     }
     if let Ok(n) = v.parse::<f32>() {
         return Ok(format_f32(n));
@@ -317,11 +329,11 @@ pub fn surface_fraction(value: &str) -> Option<(&'static str, f32)> {
 }
 
 /// The integer twin of [`format_number`], for the one property that counts rather than measures: `lines:2` feeds a `u16`, so it stays `2` where a length would become `2.0`.
-pub fn format_integer(value: &str) -> String {
+pub fn format_integer(value: &str, theme: ThemeAccess) -> String {
     let v = value.trim();
     let v = crate::view::redundant_parens(v).unwrap_or(v);
     match v.contains('$') {
-        true => crate::view::substitute_reads(v),
+        true => crate::view::substitute_reads(v, theme),
         false => v.to_string(),
     }
 }

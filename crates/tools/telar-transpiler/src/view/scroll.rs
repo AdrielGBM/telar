@@ -4,6 +4,8 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, Element};
 
+use crate::theme_access::ThemeAccess;
+
 use super::signals::rust_str;
 use super::{ChildEmit, ChildMode, ViewGen, wrap_as_single_content};
 
@@ -20,7 +22,7 @@ impl ViewGen<'_> {
             .map(|attr| rust_str(attr.value.text()));
         // Only the closure forms hand over a live viewport, so the constructor's shape follows what the subtree asked for and every other scroll keeps the cheaper form.
         let viewport = wants_viewport(&el.children).then(|| "__viewport".to_string());
-        let arrival = arrival_margin(&el.attributes)
+        let arrival = arrival_margin(&el.attributes, self.theme_access)
             .map(|margin| format!(".arrival_margin(move || {margin})"))
             .unwrap_or_default();
         let bind = viewport.as_deref().unwrap_or("_");
@@ -97,8 +99,14 @@ impl ViewGen<'_> {
 }
 
 /// The `Insets` a scroll's `arrival_margin` and its per-edge names ask for, or `None` when it names none: one value is every edge, as in `scroll-padding`.
-fn arrival_margin(attrs: &[Attr]) -> Option<String> {
-    let edges = crate::edges::collect(attrs, "arrival_margin", "arrival_margin_", arrival_side);
+fn arrival_margin(attrs: &[Attr], theme: ThemeAccess) -> Option<String> {
+    let edges = crate::edges::collect(
+        attrs,
+        "arrival_margin",
+        "arrival_margin_",
+        arrival_side,
+        theme,
+    );
     if let Some(all) = edges.uniform {
         return Some(format!("Insets::all({all})"));
     }

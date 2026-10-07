@@ -37,7 +37,11 @@ impl ViewGen<'_> {
             Some(attr) => {
                 let raw = attr.value.text();
                 let raw = super::redundant_parens(raw.trim()).unwrap_or(raw.trim());
-                wrap_signal_clones(&[raw], format!("move || {}", substitute_reads(raw)))
+                wrap_signal_clones(
+                    &[raw],
+                    format!("move || {}", substitute_reads(raw, self.theme_access)),
+                    self.theme_access,
+                )
             }
             // Without a condition there is nothing to defer until, which is a mistake rather than a request to build now.
             None => format!(
@@ -60,7 +64,12 @@ impl ViewGen<'_> {
         let _ = write!(body, "{pad}    }}");
 
         let snippets = scoped_snippets(&el.children, &[]);
-        let idents = captured_in_scope(&snippets, &self.loop_variables, &self.locals);
+        let idents = captured_in_scope(
+            &snippets,
+            &self.loop_variables,
+            &self.locals,
+            self.theme_access,
+        );
         let build = clone_block_multiline(&idents, body, &format!("{pad}        "));
 
         let _ = writeln!(code, "{pad}    Lazy::new(");

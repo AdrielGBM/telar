@@ -1,4 +1,5 @@
 use super::*;
+use crate::theme_access::ThemeAccess;
 
 /// The emitter and the tables were two lists of the same vocabulary, and they drifted: `aspect`, `aspect_ratio` and `flex_basis` were emitted by `layout_prop_call` for years while completion never offered them and the unknown-attribute check refused them. One table now, and this is what holds it to one.
 #[test]
@@ -14,7 +15,7 @@ fn every_layout_key_offered_is_one_the_emitter_accepts() {
     for key in layout_attr_keys() {
         assert!(
             !matches!(
-                crate::style::layout_prop_call(key, probe(key)),
+                crate::style::layout_prop_call(key, probe(key), ThemeAccess::Handle),
                 crate::style::PropCall::Invalid(_)
             ),
             "`{key}` is offered and the emitter refuses it"
@@ -23,7 +24,7 @@ fn every_layout_key_offered_is_one_the_emitter_accepts() {
     for key in ["aspect", "aspect_ratio", "flex_basis"] {
         assert!(
             matches!(
-                crate::style::layout_prop_call(key, "1"),
+                crate::style::layout_prop_call(key, "1", ThemeAccess::Handle),
                 crate::style::PropCall::Call(_)
             ) && layout_attr_keys().contains(&key),
             "`{key}` drifted out of the table again"

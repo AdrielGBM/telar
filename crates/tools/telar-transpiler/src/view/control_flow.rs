@@ -20,7 +20,12 @@ impl ViewGen<'_> {
         closure: String,
         pad: &str,
     ) -> String {
-        let idents = captured_in_scope(snippets, &self.loop_variables, &self.locals);
+        let idents = captured_in_scope(
+            snippets,
+            &self.loop_variables,
+            &self.locals,
+            self.theme_access,
+        );
         clone_block_multiline(&idents, closure, pad)
     }
 
@@ -57,13 +62,20 @@ impl ViewGen<'_> {
         let scrutinee = block.scrutinee.trim();
         let source = wrap_signal_clones(
             &[scrutinee],
-            format!("move || vec![{}]", substitute_reads(scrutinee)),
+            format!(
+                "move || vec![{}]",
+                substitute_reads(scrutinee, self.theme_access)
+            ),
+            self.theme_access,
         );
 
         let binding = block.binding.as_deref().unwrap_or("__value");
         let key_fn = match block.key_expr.as_deref().map(str::trim) {
             Some(key) if !key.is_empty() => {
-                format!("|{binding}: &_| {}", substitute_reads(key))
+                format!(
+                    "|{binding}: &_| {}",
+                    substitute_reads(key, self.theme_access)
+                )
             }
             // The variant alone: `discriminant` is `Hash` whether or not the item's own type is.
             _ => "|__value: &_| ::std::mem::discriminant(__value)".to_string(),
@@ -152,8 +164,14 @@ impl ViewGen<'_> {
         let pad = self.indent_str();
         let cond = block.condition.trim();
         // A one-element `vec![<bool>]`: the element is both reconciliation key and branch selector.
-        let source =
-            wrap_signal_clones(&[cond], format!("move || vec![{}]", substitute_reads(cond)));
+        let source = wrap_signal_clones(
+            &[cond],
+            format!(
+                "move || vec![{}]",
+                substitute_reads(cond, self.theme_access)
+            ),
+            self.theme_access,
+        );
 
         let mut body = String::new();
         let _ = writeln!(
@@ -307,7 +325,8 @@ impl ViewGen<'_> {
             .filter(|s| !s.is_empty());
         let source = wrap_signal_clones(
             &[iterable],
-            format!("move || {}", substitute_reads(iterable)),
+            format!("move || {}", substitute_reads(iterable, self.theme_access)),
+            self.theme_access,
         );
         let ctor = match (boxed, key_expr.is_some()) {
             (false, true) => "fragment",
@@ -392,7 +411,8 @@ impl ViewGen<'_> {
 
         let source = wrap_signal_clones(
             &[iterable],
-            format!("move || {}", substitute_reads(iterable)),
+            format!("move || {}", substitute_reads(iterable, self.theme_access)),
+            self.theme_access,
         );
 
         // `VirtualList` hands a row its index alongside the item; the author's pattern binds the item, `__index` the index.

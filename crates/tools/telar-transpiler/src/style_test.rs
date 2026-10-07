@@ -2,14 +2,14 @@ use super::*;
 use telar_parser::StyleProp;
 
 fn call(key: &str, value: &str) -> Option<String> {
-    match layout_prop_call(key, value) {
+    match layout_prop_call(key, value, ThemeAccess::Handle) {
         PropCall::Call(call) => Some(call),
         _ => None,
     }
 }
 
 fn invalid(key: &str, value: &str) -> Option<String> {
-    match layout_prop_call(key, value) {
+    match layout_prop_call(key, value, ThemeAccess::Handle) {
         PropCall::Invalid(message) => Some(message),
         _ => None,
     }
@@ -79,7 +79,10 @@ fn a_bare_ident_is_the_name_the_author_wrote() {
 #[test]
 fn radius_is_ignored() {
     assert!(
-        matches!(layout_prop_call("radius", "6"), PropCall::Other),
+        matches!(
+            layout_prop_call("radius", "6", ThemeAccess::Handle),
+            PropCall::Other
+        ),
         "radius is painted, not laid out"
     );
 }
@@ -177,8 +180,14 @@ fn a_grid_track_takes_a_fraction_of_the_surface_like_any_length() {
 
 #[test]
 fn a_name_ending_like_a_unit_is_still_the_name() {
-    assert_eq!(format_number("row_sw").as_deref(), Ok("row_sw"));
-    assert_eq!(format_number("wsh").as_deref(), Ok("wsh"));
+    assert_eq!(
+        format_number("row_sw", ThemeAccess::Handle).as_deref(),
+        Ok("row_sw")
+    );
+    assert_eq!(
+        format_number("wsh", ThemeAccess::Handle).as_deref(),
+        Ok("wsh")
+    );
 }
 
 /// S3: a value outside a closed keyword set now says what the set is, on the attribute, instead of the property being dropped and the layout coming out subtly wrong.
@@ -248,7 +257,7 @@ fn a_class_property_reports_its_own_bad_value() {
             line: 1,
         }],
     };
-    let out = generate_style_section(&section, None);
+    let out = generate_style_section(&section, None, ThemeAccess::Handle);
     assert!(
         out.contains("compile_error!"),
         "a bad class property must fail the build: {out}"
@@ -269,7 +278,7 @@ fn a_class_property_with_an_unknown_key_is_rejected() {
             line: 1,
         }],
     };
-    let out = generate_style_section(&section, None);
+    let out = generate_style_section(&section, None, ThemeAccess::Handle);
     assert!(out.contains("`direction` is not a style property"), "{out}");
 }
 
@@ -287,8 +296,8 @@ fn a_paint_property_in_a_class_is_not_mistaken_for_an_unknown_key() {
         }],
     };
     assert!(
-        !generate_style_section(&section, None).contains("compile_error!"),
+        !generate_style_section(&section, None, ThemeAccess::Handle).contains("compile_error!"),
         "a paint property belongs in a class: {}",
-        generate_style_section(&section, None)
+        generate_style_section(&section, None, ThemeAccess::Handle)
     );
 }

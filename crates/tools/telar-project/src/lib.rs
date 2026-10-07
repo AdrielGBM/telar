@@ -11,12 +11,14 @@ mod build;
 mod catalog;
 mod discovery;
 mod fonts;
+mod library;
 mod manifest;
 pub mod naming;
 mod paths;
 mod prelude;
 mod prerender;
 mod theme;
+pub mod theme_tokens;
 mod web;
 
 pub use assets::{
@@ -36,15 +38,16 @@ pub use catalog::{
     read_catalog_index,
 };
 pub use discovery::{
-    MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, SITE_DIR, assets_root, collect_files_by_ext,
-    component_name, discover_rust_modules, find_rsx_files, find_rsx_files_in_tree,
-    is_generated_output, is_module_root, placement_sites, prune_stale_generated, prune_stale_sites,
-    relative_output_path, site_include_path, source_for_generated, stray_placement_files,
-    write_placement_sites,
+    MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, MODULE_TREE_DIR, ModuleTree, SITE_DIR,
+    assets_root, collect_files_by_ext, component_name, find_rsx_files, find_rsx_files_in_tree,
+    invokes_placement_macro, is_generated_output, is_module_root, placement_sites,
+    prune_stale_generated, prune_stale_sites, relative_output_path, site_include_path,
+    source_for_generated, stray_placement_files,
 };
 pub use fonts::{
     FontDeclaration, FontDisplay, FontFormat, FontStyleDeclaration, WeightDeclaration,
 };
+pub use library::{library_files, library_include, library_include_covers};
 pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, RendererBackend,
     TelarManifest, TelarSection, WebSection, WindowSection,

@@ -19,6 +19,7 @@ fn transpile(root: &std::path::Path) -> super::BuildIndex {
         theme_type: Some("app::Theme"),
         assets: None,
         prelude: &[],
+        library: false,
         flavour: BuildFlavour::Plain,
     })
     .unwrap();
@@ -232,6 +233,7 @@ fn another_prelude_is_not_answered_for() {
         theme_type: None,
         assets: None,
         prelude: &prelude,
+        library: false,
         flavour: BuildFlavour::Plain,
     })
     .unwrap();

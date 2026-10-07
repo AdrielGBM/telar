@@ -55,7 +55,7 @@ impl ViewGen<'_> {
             let lead = expr.len() - expr.trim_start().len();
             return format!(
                 "{{ {} }}",
-                substitute_reads_spanned(trimmed, raw_start + lead)
+                substitute_reads_spanned(trimmed, raw_start + lead, self.theme_access)
             );
         }
         // Nor an expression carrying a string literal: the parser hands content back unescaped, so a `"` here was `\"` in the `.rsx` and every offset after it is off by one. The span is dropped rather than made to lie.
@@ -79,8 +79,9 @@ impl ViewGen<'_> {
     /// 3. A computed expression — a call, method chain, or arithmetic that yields a `Color`, recognized by a `(` or an embedded `$` beyond a bare handle (e.g. `chip_fill($snapshot, id)` for state-driven paint). `$signal` reads are made reactive via `substitute_reads`; the rest is emitted verbatim. For (2) and (3) the caller clones any captured signal into the enclosing `move` paint closure (see `wrap_signal_clones`), so the color re-reads and the outer handle stays usable.
     /// 4. `Color::*` literal / CSS keyword → static expression.
     /// 5. A `[logic]` binding of that name → the binding itself, so a local shadows a same-named token the way it would in Rust.
-    /// 6. `theme_type` set → `use_theme::<T>().field` (reactive) for every named color, including `[style]`-declared ones, so runtime theme switching takes effect; use inline hex for a true non-theme one-off.
-    /// 7. No `theme_type` → file-local `COLOR_*` constant (declared in `[style]`, or rustc catches the missing symbol if undeclared).
+    /// 6. Anything else → verbatim: a `[style]` constant, or rustc catches the missing symbol.
+    ///
+    /// A `$theme.x` is one of (3), so it reads the theme wherever it is written: `theme.get().x`, or a library's `::telar::use_theme_tokens().x()`.
     ///
     /// `at` is where `value` begins in the `.rsx`, or `None` for a value that is not an attribute of its own — a gradient stop, or a prop a component already parsed — and so has no position to record. Given one, a value that reaches the output byte for byte carries a source marker, which is what puts `color:(row_ink(state, index))` within reach of a rename. Cases 1, 2, 4 and the keywords are rewritten on the way, so there is no span to record and the cursor falls back to its line. The position is asked for rather than inferred because a caller holding only the text cannot be told apart from one that forgot to pass it, and forgetting costs a rename that refuses with no way to see why.
     pub(super) fn color_expr(&self, value: &str, at: Option<usize>) -> String {
@@ -101,14 +102,9 @@ impl ViewGen<'_> {
         if v.starts_with('#') {
             return hex_to_color_expr(v);
         }
-        if let Some(ident) = v.strip_prefix('$')
-            && is_ident(ident)
-        {
-            return format!("{ident}.get()");
-        }
         // Before the `Color::`/keyword arms, so a state-driven paint like `chip_fill($snapshot, id)` is emitted whole rather than treated as a token.
         if v.contains('(') || v.contains('$') {
-            return substitute_reads(v);
+            return substitute_reads(v, self.theme_access);
         }
         if v.starts_with("Color::") {
             return v.to_string();
@@ -120,10 +116,5 @@ impl ViewGen<'_> {
             return v.to_string();
         }
         v.to_string()
-    }
-
-    /// Whether codegen resolves any color through `use_theme`, requiring the import.
-    pub fn uses_theme(&self) -> bool {
-        self.theme_type.is_some()
     }
 }

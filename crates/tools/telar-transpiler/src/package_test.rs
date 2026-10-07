@@ -16,6 +16,7 @@ fn options(src_dir: &std::path::Path, flavour: BuildFlavour) -> PackageOptions<'
         theme_type: None,
         assets: None,
         prelude: &[],
+        library: false,
         flavour,
     }
 }
@@ -244,6 +245,7 @@ fn the_prelude_is_imported_between_telar_and_the_crate() {
     let src_dir = root.join("src");
     let files = transpile_package(&PackageOptions {
         prelude: &prelude,
+        library: false,
         ..options(&src_dir, BuildFlavour::Plain)
     })
     .unwrap();
@@ -280,6 +282,7 @@ fn a_buffer_transpiles_as_the_saved_file_would() {
     let src_dir = root.join("src");
     let options = PackageOptions {
         prelude: &prelude,
+        library: false,
         ..options(&src_dir, BuildFlavour::Preview)
     };
 

@@ -56,7 +56,11 @@ impl ViewGen<'_> {
             .filter(|a| crate::registry::color_attr_keys().contains(&a.key.as_str()))
             .map(|a| a.value.text())
             .collect();
-        let style_closure = wrap_signal_clones(&raw_colors, format!("move || {path_style}"));
+        let style_closure = wrap_signal_clones(
+            &raw_colors,
+            format!("move || {path_style}"),
+            self.theme_access,
+        );
 
         let err_line = match parse_err {
             Some(e) => format!("{pad}    compile_error!({});\n", rust_str(&e)),
@@ -95,7 +99,7 @@ impl ViewGen<'_> {
                     .find(|a| a.key == "stroke_width")
                     .map(|a| a.value.text().trim().to_string())
                     .filter(|value| !value.is_empty())
-                    .map(|value| crate::style::number_or(&value, "1.0"))
+                    .map(|value| crate::style::number_or(&value, "1.0", self.theme_access))
                     .unwrap_or_else(|| "1.0".to_string());
                 format!("Some(Stroke::new({color}, {width}){dash})")
             }

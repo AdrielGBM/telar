@@ -8,6 +8,7 @@ use crate::signal_scan::{scan_locals, scan_signals};
 use crate::source_map::{ExprSpan, ShadowBinding};
 use crate::style::generate_style_section;
 use crate::tag_errors::glob_import;
+use crate::theme_access::ThemeAccess;
 use crate::view::ViewGen;
 use telar_project::naming::{preview_entries_const_name, to_pascal_case, to_snake_case};
 use telar_project::{AssetContext, PreludeEntry};
@@ -164,6 +165,8 @@ pub(crate) struct TranspileInput<'a> {
     pub assets: Option<&'a AssetContext>,
     /// The package's `[telar] prelude`: each entry is glob-imported between `telar`'s glob and the crate's own, so its items can be named as tags.
     pub prelude: &'a [PreludeEntry],
+    /// Whether the package is a `[telar] library`, which cannot name the theme type of the application it is compiled into: `$theme.x` reads the shared `ThemeTokens` as `::telar::use_theme_tokens().x()`, and [`Self::theme_type`] is not consulted.
+    pub library: bool,
     /// Emit signal declarations in the keyed form the dev host restores across a dylib swap. An argument rather than an ambient one: this was read from the environment, which made the generated code depend on who ran the process — the editor mirror, the golden snapshots and the build could each produce a different file from the same source and none of them was wrong to.
     pub hot_reload: bool,
     /// Emit a build fn per `[preview]` block, and the entry table naming them.
@@ -205,6 +208,7 @@ pub fn transpile_source(
         theme_type,
         assets,
         prelude: &[],
+        library: false,
         hot_reload: false,
         previews: true,
     })
@@ -226,6 +230,22 @@ impl Code {
             }
         }
     }
+}
+
+/// Binds the `theme` handle an application's `$theme` reads go through, or nothing when there is no theme type, as in a library, whose reads name no binding.
+///
+/// Inside the fn so multiple `include!`-ed files don't conflict at crate scope. `theme` is a handle, not a value: the read must happen inside the closure that asks, or it freezes at build time.
+fn push_theme_binding(code: &mut Code, theme_type: Option<&str>) {
+    let Some(theme_type) = theme_type else {
+        return;
+    };
+    code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
+    code.push(
+        &format!(
+            "    #[allow(unused_variables)] let theme = telar::Theme::<{theme_type}>::default();\n"
+        ),
+        None,
+    );
 }
 
 pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
@@ -261,7 +281,12 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
 
     let signals = scan_signals(logic_source);
 
-    let style_section = generate_style_section(&doc.style, input.theme_type);
+    let theme = ThemeAccess::for_library(input.library);
+    let theme_type = match theme {
+        ThemeAccess::Tokens => None,
+        ThemeAccess::Handle => input.theme_type,
+    };
+    let style_section = generate_style_section(&doc.style, theme_type, theme);
 
     let mut locals = scan_locals(logic_source);
     let view_locals_bind_scheme = locals.iter().any(|name| name == "scheme");
@@ -269,11 +294,11 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     if view_uses_slot(&doc.view.nodes) && !locals.iter().any(|l| l == "children") {
         locals.push("children".to_string());
     }
-    let mut view_gen = ViewGen::with_theme(&doc.style.classes, input.theme_type, input.assets)
+    let mut view_gen = ViewGen::new(&doc.style.classes, input.assets)
+        .with_theme_access(theme)
         .with_locals(locals)
         .with_signals(signals.iter().map(|s| s.name.clone()).collect());
     let view_body = view_gen.generate_root(&doc.view.nodes);
-    let uses_theme = view_gen.uses_theme();
     let scheme_line = scheme_binding(&view_body, view_locals_bind_scheme);
 
     let logic = logic_source.trim_end().to_string();
@@ -368,17 +393,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     code.push(" {\n", None);
     // One owner per instance, so `provide` means "for my subtree": siblings sharing a parent scope would make the second a repeat that reads the first's value.
     code.push("    let __owner = telar::owner_scope();\n", None);
-    // Inside the fn so multiple `include!`-ed files don't conflict at crate scope. `theme` is a handle, not a value: the read must happen inside the closure that asks, or it freezes at build time.
-    if uses_theme {
-        code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
-        code.push(
-            &format!(
-                "    #[allow(unused_variables)] let theme = telar::Theme::<{}>::default();\n",
-                input.theme_type.unwrap_or_default()
-            ),
-            None,
-        );
-    }
+    push_theme_binding(&mut code, theme_type);
     if let Some(binding) = scheme_line {
         code.push(binding, None);
     }
@@ -484,7 +499,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         // One build fn per preview, so a prop-taking component can be previewed through its markup body.
         for (i, preview) in doc.previews.iter().enumerate() {
             let pfn = format!("{fn_name}_preview_{i}");
-            let mut pgen = ViewGen::with_theme(&doc.style.classes, input.theme_type, input.assets);
+            let mut pgen = ViewGen::new(&doc.style.classes, input.assets).with_theme_access(theme);
             let pbody = pgen.generate_root(&preview.body);
             code.push("\n", None);
             code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
@@ -492,16 +507,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
                 &format!("pub fn {pfn}() -> Result<Box<dyn LayoutItem>, LayoutError> {{\n"),
                 None,
             );
-            if pgen.uses_theme() {
-                code.push("    #[allow(unused_imports)] use telar::use_theme;\n", None);
-                code.push(
-                    &format!(
-                        "    #[allow(unused_variables)] let theme = telar::Theme::<{}>::default();\n",
-                        input.theme_type.unwrap_or_default()
-                    ),
-                    None,
-                );
-            }
+            push_theme_binding(&mut code, theme_type);
             if let Some(binding) = scheme_binding(&pbody, false) {
                 code.push(binding, None);
             }
@@ -900,7 +906,7 @@ fn field_line(lines: &[&str], name: &str) -> Option<usize> {
 ///
 /// `[logic]` lands at module level rather than inside a function, which is what gives a `//!` and a `#![…]` somewhere to live — a module is the one place in a `.rsx` where Rust items, not statements, are what belongs. A `[view]`, a `[preview]` or a `[style]` is refused rather than ignored: a module is not callable, so markup here has no caller and silently dropping it would be the surprise.
 ///
-/// The children of the directory are not known here — a file transpiles knowing nothing but itself — so the module ends with an `include!` of the file the macro writes beside it.
+/// The children of the directory are not known here — a file transpiles knowing nothing but itself — so the module ends with an `include!` of the file `cargo telar transpile` writes beside it.
 pub fn transpile_module_root(
     source: &str,
     children_file: &str,

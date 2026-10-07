@@ -7,6 +7,7 @@ use telar_parser::{Attr, Element, Value, ViewNode};
 
 use crate::registry;
 use crate::style::{PropCall, layout_prop_call, number_or};
+use crate::theme_access::ThemeAccess;
 
 use super::signals::{captured_idents, emit_transition_prelude, rust_str, wrap_signal_clones};
 use super::{ChildEmit, ChildMode, ViewGen};
@@ -33,10 +34,10 @@ impl ViewGen<'_> {
         // Regression: the class reached a container and stopped there, so `@heading { font_size: 22 }` compiled and did nothing.
         let attrs = self.effective_attrs(el);
         let style = self.text_style(&attrs, &transitions, &mut hoists);
-        let fit = fit_closure(&attrs, &mut errors);
+        let fit = fit_closure(&attrs, &mut errors, self.theme_access);
         let (constructor, fit_arg) = fit_constructor("Text::declaring", "Text::fitting", fit, &pad);
 
-        let layout_style = text_layout_style(&attrs);
+        let layout_style = text_layout_style(&attrs, self.theme_access);
 
         // Each `move` closure consumes its captures, so clone into block locals. Scan the raw `content`, still carrying `$`, not the substituted `content_fn`.
         let clones = self.clone_bindings(&[content, style.as_str()], &pad, "    ");
@@ -71,8 +72,8 @@ impl ViewGen<'_> {
         let mut hoists: Vec<String> = Vec::new();
         let attrs = self.effective_attrs(el);
         let style = self.text_style(&attrs, &transitions, &mut hoists);
-        let layout_style = text_layout_style(&attrs);
-        let fit = fit_closure(&attrs, &mut errors);
+        let layout_style = text_layout_style(&attrs, self.theme_access);
+        let fit = fit_closure(&attrs, &mut errors, self.theme_access);
         let (constructor, fit_arg) = fit_constructor("Text::runs", "Text::runs_fitting", fit, &pad);
 
         let mut runs: Vec<String> = Vec::new();
@@ -115,7 +116,11 @@ impl ViewGen<'_> {
                 let _ = write!(
                     run,
                     ".declaring({})",
-                    wrap_signal_clones(&raw_reactive_values(&span_attrs), closure)
+                    wrap_signal_clones(
+                        &raw_reactive_values(&span_attrs),
+                        closure,
+                        self.theme_access
+                    )
                 );
             }
             if let Some(to) = span_attrs.iter().find(|a| a.key == "to") {
@@ -127,11 +132,11 @@ impl ViewGen<'_> {
                         "`to:external(\"{literal}\")` is not an absolute URI: it names no scheme (`https:`, `mailto:`…)"
                     ));
                 }
-                let read = super::signals::substitute_reads(value);
+                let read = super::signals::substitute_reads(value, self.theme_access);
                 let _ = write!(
                     run,
                     ".to({})",
-                    wrap_signal_clones(&[value], format!("move || {read}"))
+                    wrap_signal_clones(&[value], format!("move || {read}"), self.theme_access)
                 );
             }
             runs.push(run);
@@ -166,7 +171,7 @@ impl ViewGen<'_> {
         } else {
             self.interpolate_content(content, start)
         };
-        wrap_signal_clones(&[content], closure)
+        wrap_signal_clones(&[content], closure, self.theme_access)
     }
 
     /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended (e.g. a `section`'s heading). The `mode` (from [`ViewGen::child_mode`]) picks the shape: [`ChildMode::Slots`] builds a `Vec<ChildSlot>` (`__slots`, for `from_slots`) when a reactive fragment is present, [`ChildMode::Vec`] a `Vec<Box<dyn LayoutItem>>` (`__children`, for `new`) for static control flow, and [`ChildMode::Literal`] a `children![...]`. The caller must have wrapped child emission in the matching [`ViewGen::with_child_sink`] so any `if`/`for` bodies pushed the same shape.
@@ -255,7 +260,7 @@ impl ViewGen<'_> {
     /// Emits `let name = name.clone();` for every signal (`$name`) referenced in the *raw* `snippets` — still carrying the `$` sigil, so captures are detected before substitution — plus any loop variable in scope they use. Indented under `pad + extra`.
     pub(super) fn clone_bindings(&self, snippets: &[&str], pad: &str, extra: &str) -> String {
         let mut out = String::new();
-        for name in captured_idents(snippets, &self.loop_variables) {
+        for name in captured_idents(snippets, &self.loop_variables, self.theme_access) {
             let _ = writeln!(
                 out,
                 "{pad}{extra}let {}{name} = {name}.clone();",
@@ -283,14 +288,14 @@ impl ViewGen<'_> {
         {
             modifiers.push_str(&format!(
                 ".with_clamp({}, {})",
-                crate::style::format_integer(&lines),
+                crate::style::format_integer(&lines, self.theme_access),
                 asserted("ellipsis")
             ));
         }
 
         let closure = format!("move |__inherited: TextStyle| __inherited{modifiers}");
         // The raw value, not the substituted expression, so a signal-backed colour clones itself into this closure.
-        wrap_signal_clones(&raw_reactive_values(attrs), closure)
+        wrap_signal_clones(&raw_reactive_values(attrs), closure, self.theme_access)
     }
 
     /// The builder calls for the text properties that flow down a tree, in the spelling both `TextStyle` and `Declared` answer to — which is what lets a `text` and the container above it be written the same way and mean the same thing at different reaches.
@@ -314,6 +319,7 @@ impl ViewGen<'_> {
                     size.value.text(),
                     DEFAULT_SIZE,
                     target,
+                    self.theme_access,
                 )),
             }
         }
@@ -362,7 +368,10 @@ impl ViewGen<'_> {
             .map(|a| a.value.text().trim().to_string())
             .filter(|value| !value.is_empty())
         {
-            modifiers.push_str(&format!(".with_line_height({})", number_or(&lh, "1.0")));
+            modifiers.push_str(&format!(
+                ".with_line_height({})",
+                number_or(&lh, "1.0", self.theme_access)
+            ));
         }
         if let Some(ls) = attrs
             .iter()
@@ -370,17 +379,23 @@ impl ViewGen<'_> {
             .map(|a| a.value.text().trim().to_string())
             .filter(|value| !value.is_empty())
         {
-            modifiers.push_str(&length_modifier("with_letter_spacing", &ls, "0.0", target));
+            modifiers.push_str(&length_modifier(
+                "with_letter_spacing",
+                &ls,
+                "0.0",
+                target,
+                self.theme_access,
+            ));
         }
         if let Some(attr) = attrs.iter().find(|a| a.key == "font_variation") {
-            let mut value = font_settings_expr(attr, FontSetting::Variations);
+            let mut value = font_settings_expr(attr, FontSetting::Variations, self.theme_access);
             if let Some(curve) = transitions.get("font_variation") {
                 value = self.wrap_transition(curve, &value, hoists);
             }
             let _ = write!(modifiers, ".with_font_variations({value})");
         }
         if let Some(attr) = attrs.iter().find(|a| a.key == "font_features") {
-            let value = font_settings_expr(attr, FontSetting::Features);
+            let value = font_settings_expr(attr, FontSetting::Features, self.theme_access);
             let _ = write!(modifiers, ".with_font_features({value})");
         }
         if let Some(variant) = attrs
@@ -402,7 +417,7 @@ impl ViewGen<'_> {
             let drawn = if value.is_empty() {
                 "true".to_string()
             } else {
-                super::signals::substitute_reads(value)
+                super::signals::substitute_reads(value, self.theme_access)
             };
             let _ = write!(modifiers, ".with_underline({drawn})");
         }
@@ -419,10 +434,16 @@ impl ViewGen<'_> {
                 continue;
             };
             if value.contains('$') {
-                let read = super::signals::substitute_reads(&value);
+                let read = super::signals::substitute_reads(&value, self.theme_access);
                 let _ = write!(modifiers, ".{method}(({read}) as f32)");
             } else {
-                modifiers.push_str(&length_modifier(method, &value, "0.0", target));
+                modifiers.push_str(&length_modifier(
+                    method,
+                    &value,
+                    "0.0",
+                    target,
+                    self.theme_access,
+                ));
             }
         }
         if let Some(a) = attrs.iter().find(|a| a.key == "underline_color") {
@@ -447,7 +468,7 @@ impl ViewGen<'_> {
         let closure = format!("move || Declared::default(){modifiers}");
         format!(
             ".declaring({})",
-            wrap_signal_clones(&raw_reactive_values(attrs), closure)
+            wrap_signal_clones(&raw_reactive_values(attrs), closure, self.theme_access)
         )
     }
 }
@@ -476,7 +497,7 @@ pub(super) enum FontSetting {
 }
 
 /// `font_variation:(wght 650, wdth $w)` or `font_features:(liga 0, tnum)` as the `FontVariations` or `FontFeatures` it builds: each clause a four-letter tag, then its value, which may read state. A feature named alone is turned on. A tag that is not four letters, or an axis with no value, is a build error naming it.
-pub(super) fn font_settings_expr(attr: &Attr, kind: FontSetting) -> String {
+pub(super) fn font_settings_expr(attr: &Attr, kind: FontSetting, theme: ThemeAccess) -> String {
     let text = match &attr.value {
         Value::Quoted(text) => text.as_str(),
         value => value.text().trim(),
@@ -513,7 +534,7 @@ pub(super) fn font_settings_expr(attr: &Attr, kind: FontSetting) -> String {
                     "::core::compile_error!(\"`font_variation:` gives the axis `{tag}` no value\")"
                 );
             }
-            (false, _) => super::signals::substitute_reads(value),
+            (false, _) => super::signals::substitute_reads(value, theme),
         };
         let _ = write!(expr, ".with(\"{tag}\", ({value}) as {cast})");
     }
@@ -575,7 +596,7 @@ fn parse_weight(value: &str) -> Option<String> {
 }
 
 /// The layout a `text` asks for: the keys that place it among its siblings, and a `height:` that pins the box over what it measures. Everything that styles the glyphs is the text style's, not the box's.
-fn text_layout_style(attrs: &[Attr]) -> String {
+fn text_layout_style(attrs: &[Attr], theme: ThemeAccess) -> String {
     let mut extra = String::new();
     for a in attrs {
         if matches!(
@@ -603,7 +624,7 @@ fn text_layout_style(attrs: &[Attr]) -> String {
         ) {
             continue;
         }
-        if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text()) {
+        if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text(), theme) {
             extra.push_str(&call);
         }
     }
@@ -611,10 +632,12 @@ fn text_layout_style(attrs: &[Attr]) -> String {
     let explicit_height = attrs
         .iter()
         .find(|a| a.key == "height")
-        .and_then(|a| match layout_prop_call("height", a.value.text()) {
-            PropCall::Call(call) => Some(call),
-            _ => None,
-        })
+        .and_then(
+            |a| match layout_prop_call("height", a.value.text(), theme) {
+                PropCall::Call(call) => Some(call),
+                _ => None,
+            },
+        )
         .unwrap_or_default();
     format!("LayoutStyle::new(){explicit_height}{extra}")
 }
@@ -646,7 +669,7 @@ pub(super) fn font_fit(value: &str) -> Option<&str> {
 }
 
 /// The `FontFit` a `fit(…)` builds: a width — a percentage of the box holding the text, a text length, or an expression yielding a `FitWidth` — and an optional `max_height:` length.
-fn font_fit_expr(inner: &str) -> Result<String, String> {
+fn font_fit_expr(inner: &str, theme: ThemeAccess) -> Result<String, String> {
     let clauses: Vec<String> = crate::transition::split_top_level(inner, ',')
         .into_iter()
         .map(|clause| clause.trim().to_string())
@@ -663,12 +686,16 @@ fn font_fit_expr(inner: &str) -> Result<String, String> {
             ),
             Err(_) => return Err(format!("`fit({width})`: `{width}` is not a percentage")),
         },
-        None => format!("FontFit::new({})", fit_length(width)?),
+        None => format!("FontFit::new({})", fit_length(width, theme)?),
     };
     for clause in rest {
         match clause.split_once(':') {
             Some((key, value)) if key.trim() == "max_height" => {
-                let _ = write!(expr, ".with_max_height({})", fit_length(value.trim())?);
+                let _ = write!(
+                    expr,
+                    ".with_max_height({})",
+                    fit_length(value.trim(), theme)?
+                );
             }
             _ => {
                 return Err(format!(
@@ -681,7 +708,7 @@ fn font_fit_expr(inner: &str) -> Result<String, String> {
 }
 
 /// A length inside `fit(…)`: pixels, `em` or a fraction of the surface as `font_size:` spells them, or an expression.
-fn fit_length(value: &str) -> Result<String, String> {
+fn fit_length(value: &str, theme: ThemeAccess) -> Result<String, String> {
     if value.is_empty() {
         return Err("`fit(…)` is missing a length".into());
     }
@@ -691,14 +718,14 @@ fn fit_length(value: &str) -> Result<String, String> {
     if let Ok(px) = value.parse::<f32>() {
         return Ok(format!("TextLength::Px({})", crate::style::format_f32(px)));
     }
-    Ok(super::signals::substitute_reads(value))
+    Ok(super::signals::substitute_reads(value, theme))
 }
 
 /// The closure a fitted `text` is built with, or `None` when it names no fit (or a fit that is an error, pushed onto `errors`).
-fn fit_closure(attrs: &[Attr], errors: &mut Vec<String>) -> Option<String> {
+fn fit_closure(attrs: &[Attr], errors: &mut Vec<String>, theme: ThemeAccess) -> Option<String> {
     let raw = attrs.iter().find(|a| a.key == "font_size")?.value.text();
-    match font_fit_expr(font_fit(raw)?) {
-        Ok(expr) => Some(wrap_signal_clones(&[raw], format!("move || {expr}"))),
+    match font_fit_expr(font_fit(raw)?, theme) {
+        Ok(expr) => Some(wrap_signal_clones(&[raw], format!("move || {expr}"), theme)),
         Err(message) => {
             errors.push(message);
             None
@@ -720,7 +747,13 @@ fn fit_constructor(
 }
 
 /// `.{method}(…)` for a length: pixels as they always were, a length with a unit resolved where the target resolves it. A `text` reads the surface reactively only for a fraction of it, so a resize re-styles just the text that depends on it.
-fn length_modifier(method: &str, value: &str, fallback: &str, target: StyleTarget) -> String {
+fn length_modifier(
+    method: &str,
+    value: &str,
+    fallback: &str,
+    target: StyleTarget,
+    theme: ThemeAccess,
+) -> String {
     match (text_length(value), target) {
         (Some((length, _)), StyleTarget::Declared) => format!(".{method}({length})"),
         (Some((length, surface)), StyleTarget::Text) => {
@@ -731,6 +764,6 @@ fn length_modifier(method: &str, value: &str, fallback: &str, target: StyleTarge
             };
             format!(".{method}_in({length}, {on})")
         }
-        (None, _) => format!(".{method}({})", number_or(value, fallback)),
+        (None, _) => format!(".{method}({})", number_or(value, fallback, theme)),
     }
 }

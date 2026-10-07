@@ -209,6 +209,7 @@ fn transpiled(rsx: &str, prelude: &[telar_project::PreludeEntry]) -> (String, So
             theme_type: None,
             assets: None,
             prelude,
+            library: false,
             flavour: telar_project::BuildFlavour::Plain,
         },
     )

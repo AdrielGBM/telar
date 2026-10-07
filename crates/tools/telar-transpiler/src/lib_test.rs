@@ -2776,6 +2776,7 @@ fn transpile_logic(logic: &str, hot_reload: bool) -> String {
         theme_type: None,
         assets: None,
         prelude: &[],
+        library: false,
         hot_reload,
         previews: true,
     })

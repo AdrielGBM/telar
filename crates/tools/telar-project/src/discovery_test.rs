@@ -1,5 +1,13 @@
 use super::*;
 
+fn content<'a>(files: &'a [ModuleTreeFile], path: &Path) -> &'a str {
+    files
+        .iter()
+        .find(|file| file.path == path)
+        .map(|file| file.content.as_str())
+        .unwrap_or_else(|| panic!("no {} among {files:?}", path.display()))
+}
+
 /// A workspace search must find every crate's `.rsx` and must not walk `target/` — the second half is what makes it usable on every keystroke, since a workspace's build directory dwarfs its sources.
 #[test]
 fn a_tree_search_crosses_crates_and_skips_what_a_build_wrote() {
@@ -77,10 +85,8 @@ fn a_name_the_site_declares_itself_is_left_alone() {
     std::fs::write(root.join("helper.rs"), "").unwrap();
     std::fs::write(root.join("tests.rs"), "").unwrap();
 
-    let modtree = root.join("__modules");
-    std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
-    let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
+    let (out, _) = discover_rust_modules(&root, &root, &generated);
 
     assert!(!out.contains("mod helper;"), "declared by hand: {out}");
     assert!(!out.contains("mod editor;"), "declared by hand: {out}");
@@ -104,15 +110,13 @@ fn a_module_that_must_place_its_own_rsx_is_told_to() {
     std::fs::write(root.join("drawer/mod.rs"), "// no macro here\n").unwrap();
     std::fs::write(root.join("drawer/panel.rsx"), "[view]\ncol\n").unwrap();
 
-    let modtree = root.join("__modules");
-    std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
-    let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
+    let (out, _) = discover_rust_modules(&root, &root, &generated);
     assert!(out.contains("compile_error!"), "{out}");
     assert!(out.contains("telar::rsx_modules!();"), "{out}");
 
     std::fs::write(root.join("drawer/mod.rs"), "telar::rsx_modules!();\n").unwrap();
-    let (quiet, _) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
+    let (quiet, _) = discover_rust_modules(&root, &root, &generated);
     assert!(!quiet.contains("compile_error!"), "{quiet}");
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -128,20 +132,16 @@ fn a_nested_invocation_places_its_own_directory() {
     std::fs::write(root.join("app/editor/act.rs"), "").unwrap();
     std::fs::write(root.join("app/editor/top_bar.rsx"), "[view]\ncol\n").unwrap();
 
-    let modtree = root.join("__modules");
-    std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
-    let (out, _) =
-        discover_rust_modules(&root, &root.join("app/editor"), &modtree, &generated).unwrap();
+    let (out, _) = discover_rust_modules(&root, &root.join("app/editor"), &generated);
 
     assert!(
         !out.contains("pub mod app;"),
         "no ancestor is declared: {out}"
     );
     assert!(out.contains("pub mod top_bar;"), "{out}");
-    let mirrored = generated.join("app").join("editor").join("top_bar.rs");
     assert!(
-        out.contains(&format!("{:?}", mirrored.to_string_lossy())),
+        out.contains("\"../../../build/app/editor/top_bar.rs\""),
         "the generated path still mirrors the whole src tree: {out}"
     );
     let _ = std::fs::remove_dir_all(&root);
@@ -178,13 +178,13 @@ fn discover_rust_modules_mirrors_tree() {
         std::fs::write(root.join(p), body).unwrap();
     }
 
-    let modtree = root.join("__modules");
-    std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("__generated");
-    let (out, written) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
-    let core_rs = std::fs::read_to_string(modtree.join("core.rs")).unwrap_or_default();
-    let shared_rs = std::fs::read_to_string(modtree.join("shared.rs")).unwrap_or_default();
-    let features_rs = std::fs::read_to_string(modtree.join("features.rs")).unwrap_or_default();
+    let modtree = generated.join(MODULE_TREE_DIR);
+    let (out, files) = discover_rust_modules(&root, &root, &generated);
+    let core_rs = content(&files, &modtree.join("core.rs"));
+    let shared_rs = content(&files, &modtree.join("shared.rs"));
+    let features_rs = content(&files, &modtree.join("features.rs"));
+    let written: Vec<PathBuf> = files.iter().map(|file| file.path.clone()).collect();
     let _ = std::fs::remove_dir_all(&root);
 
     assert_eq!(
@@ -287,10 +287,10 @@ fn no_site_declares_the_file_that_includes_it() {
     std::fs::write(root.join("media/mod.rs"), "telar::rsx_modules!();\n").unwrap();
     std::fs::write(root.join("media/player.rsx"), "[view]\ncol\n").unwrap();
 
-    let modtree = root.join("__modules");
-    std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
-    let written = write_placement_sites(&root, &modtree, &generated, "modules.rs").unwrap();
+    let written = ModuleTree::discover(&root, &generated, "modules.rs")
+        .write()
+        .unwrap();
 
     let sites = placement_sites(&root);
     assert_eq!(sites, vec![root.clone(), root.join("media")]);
@@ -302,7 +302,7 @@ fn no_site_declares_the_file_that_includes_it() {
         );
         let declarations = std::fs::read_to_string(&file).unwrap();
         assert!(
-            !declarations.contains(&format!("{:?}", file.to_string_lossy())),
+            !declarations.contains("\"modules.rs\"") && !declarations.contains("\"mod.rs\""),
             "a site declaring its own file is the circular module: {declarations}"
         );
     }
@@ -365,32 +365,28 @@ fn a_mod_rsx_owns_its_directory() {
     std::fs::write(root.join("media/panel.rsx"), "[view]\ncol\n").unwrap();
     std::fs::write(root.join("media/state.rs"), "").unwrap();
 
-    let modtree = root.join("__modules");
-    std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
-    let (out, written) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
+    let (out, files) = discover_rust_modules(&root, &root, &generated);
 
-    let module_file = generated.join("media").join("mod.rs");
     assert!(
-        out.contains(&format!(
-            "{:?}] pub mod media;",
-            module_file.to_string_lossy()
-        )),
+        out.contains("#[path = \"../build/media/mod.rs\"] pub mod media;"),
         "the parent declares the directory at its transpiled module: {out}"
     );
     assert!(
         placement_sites(&root) == vec![root.clone()],
         "a directory telar owns is not a site that has to invoke anything"
     );
-    let children = std::fs::read_to_string(generated.join("media").join(MODULE_CHILDREN_FILENAME))
-        .expect("the file the module's `include!` names");
+    let children = content(
+        &files,
+        &generated.join("media").join(MODULE_CHILDREN_FILENAME),
+    );
     assert!(children.contains("pub mod panel;"), "{children}");
     assert!(children.contains("pub mod state;"), "{children}");
     assert!(!children.contains("mod mod;"), "{children}");
     assert!(
-        written
+        files
             .iter()
-            .any(|p| p.ends_with(MODULE_CHILDREN_FILENAME)),
+            .any(|file| file.path.ends_with(MODULE_CHILDREN_FILENAME)),
         "written, so the stale sweep knows it is live"
     );
     let _ = std::fs::remove_dir_all(&root);
@@ -405,23 +401,24 @@ fn a_mod_rs_beside_a_mod_rsx_is_included_unless_it_opens_with_an_inner_attribute
     std::fs::write(root.join("media/mod.rsx"), "[logic]\n").unwrap();
     std::fs::write(root.join("media/mod.rs"), "pub fn helper() {}\n").unwrap();
 
-    let modtree = root.join("__modules");
-    std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
     let children_file = generated.join("media").join(MODULE_CHILDREN_FILENAME);
 
-    discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
-    let combined = std::fs::read_to_string(&children_file).unwrap();
+    let (_, files) = discover_rust_modules(&root, &root, &generated);
+    let combined = content(&files, &children_file);
     assert!(combined.contains("include!("), "{combined}");
-    assert!(combined.contains("mod.rs"), "{combined}");
+    assert!(
+        combined.contains("include!(\"../../media/mod.rs\");"),
+        "relative to the file holding it: {combined}"
+    );
 
     std::fs::write(
         root.join("media/mod.rs"),
         "//! The bar.\npub fn helper() {}\n",
     )
     .unwrap();
-    discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
-    let refused = std::fs::read_to_string(&children_file).unwrap();
+    let (_, files) = discover_rust_modules(&root, &root, &generated);
+    let refused = content(&files, &children_file);
     assert!(refused.contains("compile_error!"), "{refused}");
     assert!(!refused.contains("include!("), "{refused}");
     let _ = std::fs::remove_dir_all(&root);
@@ -438,13 +435,343 @@ fn the_crate_roots_bin_directory_is_left_to_cargo() {
     std::fs::write(root.join("bin/extra.rs"), "fn main() {}\n").unwrap();
     std::fs::write(root.join("app/bin/helper.rs"), "").unwrap();
 
-    let modtree = root.join("__modules");
-    std::fs::create_dir_all(&modtree).unwrap();
     let generated = root.join("build");
-    let (out, _) = discover_rust_modules(&root, &root, &modtree, &generated).unwrap();
+    let (out, files) = discover_rust_modules(&root, &root, &generated);
     assert!(!out.contains("pub mod bin;"), "{out}");
 
-    let nested = std::fs::read_to_string(modtree.join("app.rs")).unwrap();
+    let nested = content(&files, &generated.join(MODULE_TREE_DIR).join("app.rs"));
     assert!(nested.contains("pub mod bin;"), "{nested}");
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_relative_path_climbs_to_the_common_ancestor() {
+    let package = Path::new("/pkg");
+    for (from, to, expected) in [
+        ("/pkg/src/.telar", "/pkg/src/util.rs", "../util.rs"),
+        (
+            "/pkg/src/.telar",
+            "/pkg/.telar/build/home.rs",
+            "../../.telar/build/home.rs",
+        ),
+        (
+            "/pkg/.telar/build/__modules",
+            "/pkg/src/core/theme.rs",
+            "../../../src/core/theme.rs",
+        ),
+        (
+            "/pkg/.telar/build/media",
+            "/pkg/.telar/build/media/panel.rs",
+            "panel.rs",
+        ),
+        (
+            "/pkg/.telar/build/__modules",
+            "/pkg/.telar/build/core/sidebar.rs",
+            "../core/sidebar.rs",
+        ),
+    ] {
+        assert_eq!(
+            relative_path(&package.join(from), &package.join(to)),
+            expected,
+            "{from} -> {to}"
+        );
+    }
+    assert_eq!(
+        relative_path(Path::new("a/b"), Path::new("a/c.rs")),
+        "../c.rs"
+    );
+    assert_eq!(
+        relative_path(Path::new("a"), Path::new("b/c.rs")),
+        "../b/c.rs"
+    );
+}
+
+/// The macro writes nothing, so a tree that no longer matches the sources is something it can only notice. Adding a module is the common way to get there.
+#[test]
+fn a_tree_written_before_a_module_was_added_differs() {
+    let root = std::env::temp_dir().join(format!("rsx_tree_difference_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let src = root.join("src");
+    std::fs::create_dir_all(src.join("core")).unwrap();
+    std::fs::write(src.join("lib.rs"), "telar::rsx_modules!();\n").unwrap();
+    std::fs::write(src.join("core/theme.rs"), "").unwrap();
+    let generated = root.join(".telar/build");
+
+    let tree = ModuleTree::discover(&src, &generated, "modules.rs");
+    assert!(tree.first_difference().is_some(), "nothing written yet");
+    tree.write().unwrap();
+    assert_eq!(tree.first_difference(), None);
+
+    std::fs::write(src.join("core/menu.rs"), "").unwrap();
+    let grown = ModuleTree::discover(&src, &generated, "modules.rs");
+    let stale = grown.first_difference().map(Path::to_path_buf);
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(stale, Some(generated.join(MODULE_TREE_DIR).join("core.rs")));
+}
+
+#[test]
+fn only_a_package_that_invokes_the_macro_is_placed() {
+    let root = std::env::temp_dir().join(format!("rsx_invokes_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("media")).unwrap();
+    std::fs::write(root.join("lib.rs"), "pub mod media;\n").unwrap();
+    std::fs::write(root.join("media/mod.rs"), "").unwrap();
+    let none = invokes_placement_macro(&root);
+    std::fs::write(root.join("media/mod.rs"), "telar::rsx_modules!();\n").unwrap();
+    let nested = invokes_placement_macro(&root);
+    std::fs::write(root.join("media/mod.rs"), "").unwrap();
+    std::fs::write(root.join("main.rs"), "telar::app!(Theme);\n").unwrap();
+    let root_site = invokes_placement_macro(&root);
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(!none);
+    assert!(nested);
+    assert!(root_site);
+}
+
+/// What a published library ships is the tree `cargo telar transpile` wrote in another directory. Compiled from a read-only copy somewhere else, every `#[path]` and `include!` in it has to resolve against the file holding it — through an `include!`d site file, a module-tree file, a nested site and a `mod.rsx`'s children — and the tree has to read as current where it landed.
+#[test]
+fn a_tree_compiles_from_a_read_only_copy_in_another_directory() {
+    let base = std::env::temp_dir().join(format!("rsx_relocated_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&base);
+    let original = base.join("written");
+    let src = original.join("src");
+    let generated = original.join(".telar/build");
+    let leaf = "pub fn f() {}\n";
+    for (path, body) in [
+        (
+            "src/lib.rs",
+            "macro_rules! rsx_modules { () => { include!(\".telar/modules.rs\"); } }\nrsx_modules!();\npub fn reach() { util::f(); home::f(); core::theme::f(); core::sidebar::f(); media::helper(); media::panel::f(); media::state::f(); app::inner::f(); app::view::f(); }\n",
+        ),
+        ("src/util.rs", leaf),
+        ("src/home.rsx", ""),
+        ("src/core/theme.rs", leaf),
+        ("src/core/sidebar.rsx", ""),
+        ("src/media/mod.rsx", ""),
+        ("src/media/mod.rs", "pub fn helper() {}\n"),
+        ("src/media/panel.rsx", ""),
+        ("src/media/state.rs", leaf),
+        ("src/app/mod.rs", "rsx_modules!();\n"),
+        ("src/app/inner.rs", leaf),
+        ("src/app/view.rsx", ""),
+        (".telar/build/home.rs", leaf),
+        (".telar/build/core/sidebar.rs", leaf),
+        (
+            ".telar/build/media/mod.rs",
+            "include!(\"__children.rs\");\n",
+        ),
+        (".telar/build/media/panel.rs", leaf),
+        (".telar/build/app/view.rs", leaf),
+    ] {
+        let path = original.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body).unwrap();
+    }
+    ModuleTree::discover(&src, &generated, "modules.rs")
+        .write()
+        .unwrap();
+
+    let moved = base.join("elsewhere/unpacked");
+    copy_tree(&original, &moved);
+    std::fs::remove_dir_all(&original).unwrap();
+    set_read_only(&moved, true);
+
+    let still_current = ModuleTree::discover(
+        &moved.join("src"),
+        &moved.join(".telar/build"),
+        "modules.rs",
+    )
+    .first_difference()
+    .map(Path::to_path_buf);
+    let out_dir = base.join("out");
+    std::fs::create_dir_all(&out_dir).unwrap();
+    let compiled = std::process::Command::new(std::env::var("RUSTC").unwrap_or("rustc".into()))
+        .args([
+            "--edition",
+            "2021",
+            "--crate-type",
+            "lib",
+            "--emit",
+            "metadata",
+        ])
+        .args(["--crate-name", "relocated", "--out-dir"])
+        .arg(&out_dir)
+        .arg(moved.join("src/lib.rs"))
+        .output()
+        .expect("rustc runs");
+
+    set_read_only(&moved, false);
+    let _ = std::fs::remove_dir_all(&base);
+    assert_eq!(
+        still_current, None,
+        "the tree reads the same wherever it is"
+    );
+    assert!(
+        compiled.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compiled.stderr)
+    );
+}
+
+/// A deleted `.rsx` leaves neither its `.rs` nor `.rs.map` behind after pruning.
+#[test]
+fn a_deleted_rsx_leaves_no_rs_or_rs_map() {
+    let root = std::env::temp_dir().join(format!("rsx_prune_deleted_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+
+    let rs_file = root.join("component.rs");
+    let map_file = root.join("component.rs.map");
+
+    std::fs::write(&rs_file, "// generated").unwrap();
+    std::fs::write(&map_file, "{}").unwrap();
+
+    assert!(rs_file.exists());
+    assert!(map_file.exists());
+
+    let written = std::collections::HashSet::new();
+    prune_stale_generated(&root, &written);
+
+    assert!(!rs_file.exists(), "stale .rs should be removed");
+    assert!(!map_file.exists(), "stale .rs.map should be removed");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A live `.rs` keeps its `.rs.map` during pruning.
+#[test]
+fn a_live_rs_keeps_its_rs_map() {
+    let root = std::env::temp_dir().join(format!("rsx_prune_live_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+
+    let rs_file = root.join("component.rs");
+    let map_file = root.join("component.rs.map");
+
+    std::fs::write(&rs_file, "// generated").unwrap();
+    std::fs::write(&map_file, "{}").unwrap();
+
+    let mut written = std::collections::HashSet::new();
+    written.insert(rs_file.clone());
+
+    prune_stale_generated(&root, &written);
+
+    assert!(rs_file.exists(), "live .rs should be kept");
+    assert!(map_file.exists(), "live .rs.map should be kept");
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A stray `.rs.map` with no `.rs` is removed during pruning.
+#[test]
+fn a_stray_rs_map_without_rs_is_removed() {
+    let root = std::env::temp_dir().join(format!("rsx_prune_stray_map_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+
+    let rs_file = root.join("component.rs");
+    let map_file = root.join("component.rs.map");
+
+    std::fs::write(&map_file, "{}").unwrap();
+    assert!(!rs_file.exists(), "no .rs file");
+    assert!(map_file.exists(), "only .rs.map exists");
+
+    let written = std::collections::HashSet::new();
+    prune_stale_generated(&root, &written);
+
+    assert!(
+        !map_file.exists(),
+        "stray .rs.map with no .rs should be removed"
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Pruning works across nested directories with multiple flavours.
+#[test]
+fn pruning_removes_orphans_across_flavours() {
+    let root = std::env::temp_dir().join(format!("rsx_prune_flavours_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for dir in [
+        root.join("build/core"),
+        root.join("build-hot/core"),
+        root.join("build-preview/core"),
+    ] {
+        std::fs::create_dir_all(&dir).unwrap();
+    }
+
+    let files = vec![
+        ("build/core/button.rs", "build/core/button.rs.map", true),
+        ("build/core/card.rs", "build/core/card.rs.map", false),
+        (
+            "build-hot/core/button.rs",
+            "build-hot/core/button.rs.map",
+            true,
+        ),
+        (
+            "build-hot/core/panel.rs",
+            "build-hot/core/panel.rs.map",
+            false,
+        ),
+        (
+            "build-preview/core/icon.rs",
+            "build-preview/core/icon.rs.map",
+            false,
+        ),
+    ];
+
+    let mut written = std::collections::HashSet::new();
+    for (rs, map, is_live) in &files {
+        let rs_path = root.join(rs);
+        let map_path = root.join(map);
+        std::fs::write(&rs_path, "// generated").unwrap();
+        std::fs::write(&map_path, "{}").unwrap();
+        if *is_live {
+            written.insert(rs_path);
+        }
+    }
+
+    prune_stale_generated(&root, &written);
+
+    for (rs, map, is_live) in &files {
+        let rs_path = root.join(rs);
+        let map_path = root.join(map);
+        if *is_live {
+            assert!(rs_path.exists(), "{} should be kept", rs);
+            assert!(map_path.exists(), "{} should be kept", map);
+        } else {
+            assert!(!rs_path.exists(), "{} should be removed", rs);
+            assert!(!map_path.exists(), "{} should be removed", map);
+        }
+    }
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap().flatten() {
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+fn set_read_only(dir: &Path, read_only: bool) {
+    for entry in std::fs::read_dir(dir).unwrap().flatten() {
+        if entry.path().is_dir() {
+            set_read_only(&entry.path(), read_only);
+        }
+        set_permissions(&entry.path(), read_only);
+    }
+    set_permissions(dir, read_only);
+}
+
+fn set_permissions(path: &Path, read_only: bool) {
+    let mut permissions = std::fs::metadata(path).unwrap().permissions();
+    #[allow(clippy::permissions_set_readonly_false)]
+    permissions.set_readonly(read_only);
+    std::fs::set_permissions(path, permissions).unwrap();
 }

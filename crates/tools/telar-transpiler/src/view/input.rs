@@ -39,12 +39,13 @@ impl ViewGen<'_> {
         let style = wrap_signal_clones(
             &super::text::raw_reactive_values(&el.attributes),
             format!("move |__inherited: TextStyle| __inherited{modifiers}"),
+            self.theme_access,
         );
         let size = el
             .attributes
             .iter()
             .find(|a| a.key == "font_size")
-            .map(|a| crate::style::number_or(a.value.text(), "14.0"))
+            .map(|a| crate::style::number_or(a.value.text(), "14.0", self.theme_access))
             .unwrap_or_else(|| "14.0".to_string());
 
         // `value`/`size`/`color`/`on_submit` are consumed above; the rest is layout.
@@ -65,7 +66,9 @@ impl ViewGen<'_> {
             ) {
                 continue;
             }
-            if let PropCall::Call(call) = layout_prop_call(&a.key, a.value.text()) {
+            if let PropCall::Call(call) =
+                layout_prop_call(&a.key, a.value.text(), self.theme_access)
+            {
                 extra.push_str(&call);
             }
         }
@@ -82,8 +85,13 @@ impl ViewGen<'_> {
             .iter()
             .find(|a| a.key == "on_submit")
             .map(|a| {
-                let closure = substitute_handles(&normalize_closure(a.value.text()));
-                wrap_signal_clones(&[a.value.text()], format!("move {closure}"))
+                let closure =
+                    substitute_handles(&normalize_closure(a.value.text()), self.theme_access);
+                wrap_signal_clones(
+                    &[a.value.text()],
+                    format!("move {closure}"),
+                    self.theme_access,
+                )
             });
 
         let placeholder = el
@@ -101,8 +109,13 @@ impl ViewGen<'_> {
             .iter()
             .find(|a| a.key == "on_cancel")
             .map(|a| {
-                let closure = substitute_handles(&normalize_closure(a.value.text()));
-                wrap_signal_clones(&[a.value.text()], format!("move {closure}"))
+                let closure =
+                    substitute_handles(&normalize_closure(a.value.text()), self.theme_access);
+                wrap_signal_clones(
+                    &[a.value.text()],
+                    format!("move {closure}"),
+                    self.theme_access,
+                )
             });
 
         let mut tail = String::new();

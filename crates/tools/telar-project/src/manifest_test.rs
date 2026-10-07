@@ -352,3 +352,143 @@ fn a_package_inherits_the_workspace_prelude_unless_it_declares_its_own() {
         ]
     );
 }
+
+#[test]
+fn a_package_that_says_nothing_is_not_a_library() {
+    let root = package("not_library", Some("[telar]\nbackend = \"auto\"\n"));
+    let manifest = TelarManifest::load(&root).unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(!manifest.telar.library);
+}
+
+#[test]
+fn a_package_declares_itself_a_library() {
+    let root = package("library", Some("[telar]\nlibrary = true\n"));
+    let manifest = TelarManifest::load(&root).unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(manifest.telar.library);
+}
+
+/// A library cannot know the theme type of the application it is compiled into, so naming one would compile its `$theme` against a type no consumer has.
+#[test]
+fn a_library_that_names_a_theme_is_an_error_naming_the_key() {
+    let root = package(
+        "library_theme",
+        Some("[telar]\nlibrary = true\ntheme = \"crate::KitTheme\"\n"),
+    );
+    let error = TelarManifest::load(&root).unwrap_err().to_string();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(error.contains("theme = \"crate::KitTheme\""), "{error}");
+    assert!(error.contains("[telar] library"), "{error}");
+    assert!(error.contains("ThemeTokens"), "{error}");
+}
+
+#[test]
+fn an_application_may_name_its_theme() {
+    let root = package("app_theme", Some("[telar]\ntheme = \"crate::AppTheme\"\n"));
+    let manifest = TelarManifest::load(&root).unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(manifest.telar.theme.as_deref(), Some("crate::AppTheme"));
+}
+
+/// A workspace manifest is shared by its applications too, so `library` in it describes the workspace's own package at most and never a member's.
+#[test]
+fn a_package_never_inherits_library_from_its_workspace() {
+    let root = std::env::temp_dir().join(format!("telar_inherit_library_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let with_own = root.join("plugins/kit");
+    let without_own = root.join("apps/site");
+    std::fs::create_dir_all(&with_own).unwrap();
+    std::fs::create_dir_all(&without_own).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+    std::fs::write(
+        root.join(MANIFEST_FILENAME),
+        "[telar]\nlibrary = true\nbackend = \"software\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        with_own.join(MANIFEST_FILENAME),
+        "[telar]\nbackend = \"auto\"\n",
+    )
+    .unwrap();
+
+    let own = TelarManifest::load(&with_own).unwrap();
+    let inherited = TelarManifest::load(&without_own).unwrap();
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(!own.telar.library);
+    assert!(!inherited.telar.library);
+    assert_eq!(inherited.telar.backend, Some(RendererBackend::Software));
+}
+
+/// A library ships an artifact transpiled against its own manifest, so a workspace above it — its own while it is developed, or an application's once a copy is vendored into one — must not change what any reader answers for it.
+#[test]
+fn a_library_inherits_nothing_from_a_workspace_above_it() {
+    let root = std::env::temp_dir().join(format!("telar_library_vendored_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let vendored = root.join("vendor/kit");
+    std::fs::create_dir_all(&vendored).unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"app\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join(MANIFEST_FILENAME),
+        "[telar]\nbackend = \"software\"\ntheme = \"app::Theme\"\nprelude = [\"telar-components\"]\nassets = \"art\"\n\n[telar.i18n]\ndefault = \"es\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        vendored.join("Cargo.toml"),
+        "[package]\nname = \"kit\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        vendored.join(MANIFEST_FILENAME),
+        "[telar]\nlibrary = true\n",
+    )
+    .unwrap();
+
+    let telar = TelarManifest::load(&vendored).unwrap().telar;
+    let prelude = crate::resolve_prelude(&vendored).unwrap();
+    let theme = crate::theme_type_in_config(&vendored);
+    let assets = crate::assets_root(&vendored);
+    let files = TelarManifest::files(&vendored);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(telar.library);
+    assert_eq!(telar.backend, None);
+    assert_eq!(telar.theme, None);
+    assert!(prelude.is_empty());
+    assert_eq!(theme, None);
+    assert_eq!(assets, vendored.join("assets"));
+    assert_eq!(telar.default_locale(), None);
+    assert_eq!(files, [vendored.join(MANIFEST_FILENAME)]);
+}
+
+/// What a library declares is still its own to declare: the rule drops the inheritance, not the keys.
+#[test]
+fn a_library_keeps_the_keys_it_declares_itself() {
+    let root = std::env::temp_dir().join(format!("telar_library_member_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let member = root.join("plugins/kit");
+    std::fs::create_dir_all(&member).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+    std::fs::write(
+        root.join(MANIFEST_FILENAME),
+        "[telar]\nbackend = \"software\"\nprelude = [\"telar-components\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        member.join(MANIFEST_FILENAME),
+        "[telar]\nlibrary = true\nprelude = [\"telar-navigate\"]\n",
+    )
+    .unwrap();
+
+    let telar = TelarManifest::load(&member).unwrap().telar;
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(telar.backend, None);
+    let prelude: Vec<&str> = telar.prelude().iter().map(PreludeEntry::path).collect();
+    assert_eq!(prelude, ["telar_navigate"]);
+}
