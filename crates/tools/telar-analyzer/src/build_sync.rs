@@ -24,6 +24,8 @@ pub struct GeneratedTarget {
     pub code: String,
     /// Where every part of [`Self::code`] came from — the lines, and the verbatim spans that make a column mean something. One value rather than two halves, because the two are only ever right together.
     pub map: SourceMap,
+    /// The `[telar] prelude` [`Self::code`] was transpiled against, which an unknown tag's diagnostic lists.
+    pub prelude: Vec<telar_project::PreludeEntry>,
 }
 
 /// Transpiles `source` into a [`GeneratedTarget`] without touching disk. Shared by [`sync_build_file`] and the embedded-analyzer completion path so both see byte-identical generated text.
@@ -35,16 +37,23 @@ pub fn generated_target(
     let root = crate_root(rsx_path)?;
     let src_dir = root.join("src");
     let rel = telar_project::relative_output_path(rsx_path, &src_dir)?;
-    let stem = telar_project::component_name(rsx_path);
     // The same artifact the macro reads, so the mirror shows the same `src:"…"` errors the build will. Loaded, never baked: this runs on the completion and hover paths too, and neither should be spawning cargo.
     let assets = AssetContext::load(&root, &project_telar_version(&root));
+    // An unreadable `telar.toml` is the build's error to report; the mirror keeps answering for the tags `telar` and the crate provide.
+    let prelude = telar_project::resolve_prelude(&root).unwrap_or_default();
     // No cross-file pre-pass: the editor mirrors the build exactly, because neither needs to know what any other file declares. A component call spells names, and the callee's own type answers for them.
-    let result = match telar_project::is_module_root(rsx_path) {
-        true => {
-            telar_transpiler::transpile_module_root(source, telar_project::MODULE_CHILDREN_FILENAME)
-        }
-        false => telar_transpiler::transpile_source(source, &stem, theme_type, Some(&assets)),
-    }
+    let result = telar_transpiler::transpile_buffer(
+        rsx_path,
+        source,
+        &telar_transpiler::PackageOptions {
+            src_dir: &src_dir,
+            theme_type,
+            assets: Some(&assets),
+            prelude: &prelude,
+            // With previews, unlike a shipping build: a `[preview]` block is markup the author is looking at while they type, and leaving it out would stop reporting an error inside one — the diagnostic would simply never be produced, which reads as a preview that is fine.
+            flavour: BuildFlavour::Preview,
+        },
+    )
     .ok()?;
     let out_path = telar_project::generated_dir(&root, BuildFlavour::Plain).join(&rel);
     Some(GeneratedTarget {
@@ -55,6 +64,7 @@ pub fn generated_target(
             map.shadows = result.shadows;
             map
         },
+        prelude,
     })
 }
 
@@ -114,7 +124,9 @@ pub fn sync_build_file(
     if let Some(root) = crate_root(rsx_path) {
         bake_if_unanswered(&root, document);
     }
-    let Some(GeneratedTarget { path, code, map }) = generated_target(rsx_path, source, theme_type)
+    let Some(GeneratedTarget {
+        path, code, map, ..
+    }) = generated_target(rsx_path, source, theme_type)
     else {
         return;
     };

@@ -476,6 +476,28 @@ fn check_theme_agrees(package_dir: &Path, given: Option<&str>) -> Result<(), Tok
     Err(quote! { compile_error!(#msg); })
 }
 
+/// Refuses an artifact transpiled against another `[telar] prelude` than the one `telar.toml` declares now.
+///
+/// Said apart from the generic "no longer answers" because nothing in `src/` changed: the cause is a key in `telar.toml`, and a message about the sources would send the author looking in the wrong file. Reordering counts, since glob order is what the generated header spells.
+fn check_prelude_agrees(
+    index: &telar_project::BuildIndex,
+    declared: &[telar_project::PreludeEntry],
+) -> Result<(), TokenStream2> {
+    if index.was_transpiled_with(declared) {
+        return Ok(());
+    }
+    let declared: Vec<&str> = declared
+        .iter()
+        .map(telar_project::PreludeEntry::path)
+        .collect();
+    let msg = format!(
+        "rsx: telar.toml declares `prelude = {declared:?}`, but this package's `.rsx` was transpiled with `prelude = {:?}`, so the generated code imports a different set of crates.\n\
+         Re-run `cargo telar transpile`, or build through `cargo telar dev`/`check`/`build`/`test`.",
+        index.prelude
+    );
+    Err(quote! { compile_error!(#msg); })
+}
+
 struct TranspileOutput {
     include_stmts: TokenStream2,
     rerun_stmts: TokenStream2,
@@ -499,6 +521,7 @@ fn wire_sources(
     src_dir: &Path,
     generated_dir: &Path,
     theme_type_str: Option<&str>,
+    prelude: &[telar_project::PreludeEntry],
     flavour: telar_project::BuildFlavour,
     assets: &telar_project::AssetContext,
 ) -> Result<Vec<WiredFile>, TokenStream2> {
@@ -512,6 +535,7 @@ fn wire_sources(
             src_dir,
             generated_dir,
             theme_type_str,
+            prelude,
             env!("CARGO_PKG_VERSION"),
         )
         // Output that reaches into the baked asset module is only wirable while that module is: declared against an unusable artifact it would resolve to nothing, and rustc would report it against generated code instead of the `.rsx` line that named the asset — which is the whole thing `AssetContext`'s messages exist to prevent.
@@ -543,7 +567,11 @@ fn wire_sources(
         return Err(quote! { compile_error!(#msg); });
     }
 
-    // Nothing here can produce the Rust: this crate carries no transpiler, on purpose. Which of the two messages is not a guess — an artifact that is absent and one that no longer answers are different facts, and only the first can mean the CLI was never installed. What made an artifact stop answering (an edited `.rsx`, a rewritten output, another theme) it does not try to say: the command is the same for all of them.
+    if let Some(index) = &artifact {
+        check_prelude_agrees(index, prelude)?;
+    }
+
+    // Nothing here can produce the Rust: this crate carries no transpiler, on purpose. Which of the two messages is not a guess — an artifact that is absent and one that no longer answers are different facts, and only the first can mean the CLI was never installed. What else made an artifact stop answering (an edited `.rsx`, a rewritten output, another theme) it does not try to say: the command is the same for all of them.
     let msg = match artifact.is_some() {
         true => {
             "rsx: the transpiled `.rsx` for this package no longer answers for its sources.\n\
@@ -581,10 +609,13 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
     let assets = telar_project::AssetContext::load(&manifest_dir, env!("CARGO_PKG_VERSION"));
 
     // Before anything reads a setting out of it: every reader below falls back to a default on a manifest it cannot parse, which is right for them and wrong as the only answer — a misspelled key would configure nothing and say nothing.
-    if let Err(e) = telar_project::TelarManifest::load(&manifest_dir) {
-        let msg = format!("rsx: {e}");
-        return Err(quote! { compile_error!(#msg); });
-    }
+    let prelude = match telar_project::resolve_prelude(&manifest_dir) {
+        Ok(prelude) => prelude,
+        Err(e) => {
+            let msg = format!("rsx: {e}");
+            return Err(quote! { compile_error!(#msg); });
+        }
+    };
 
     check_theme_agrees(&manifest_dir, theme_type_str)?;
     // The same order `telar_transpiler::resolve_theme_type` answers in, because the editor's mirror and the golden harness read the key and this is the only other thing that decides what a `use_theme` resolves against. Dropping the argument in favour of the key has to mean the key, not no theme at all.
@@ -596,6 +627,7 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         &src_dir,
         &generated_dir,
         theme_type_str,
+        &prelude,
         flavour,
         &assets,
     )?;
@@ -624,9 +656,8 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         }
     }
 
-    let telar_toml = manifest_dir.join(telar_project::MANIFEST_FILENAME);
-    if telar_toml.exists() {
-        // Re-run the macro when telar.toml changes (e.g. the theme it declares), like the `.rsx` sources.
+    // The workspace's too: a theme or a prelude inherited from it changes what this package's generated code has to be, and only an expansion re-run against the new key can refuse the artifact written under the old one.
+    for telar_toml in telar_project::TelarManifest::files(&manifest_dir) {
         let telar_toml_str = telar_toml.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#telar_toml_str); });
     }

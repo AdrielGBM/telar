@@ -159,6 +159,7 @@ impl Backend {
                 path: gen_path,
                 code: gen_text,
                 map,
+                prelude,
             }) = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())
             else {
                 return;
@@ -176,10 +177,8 @@ impl Backend {
             }
 
             let mut merged = native;
-            merged.extend(raw.into_iter().filter_map(|mut diag| {
-                diag.range =
-                    super::mapping::diagnostic_range(diag.range, &gen_text, &map, &source)?;
-                Some(diag)
+            merged.extend(raw.into_iter().filter_map(|diag| {
+                super::mapping::map_rust_diagnostic(diag, &gen_text, &map, &source, &prelude)
             }));
             outgoing.publish_diagnostics(uri, merged);
         });

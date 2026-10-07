@@ -10,6 +10,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use super::BuildFlavour;
+use crate::PreludeEntry;
 
 /// Bumped whenever the generated Rust changes shape in a way an older `telar-macros` cannot wire — a different output path convention, a preview const that is named differently, or (at 2) previews being emitted only for the flavours that ask. Any mismatch sends the reader back to transpiling for itself, which is always correct and only slower.
 pub const BUILD_ARTIFACT_FORMAT: u32 = 2;
@@ -38,6 +39,9 @@ pub struct BuildIndex {
     pub telar_version: String,
     /// The theme type the sources were transpiled against. A build naming a different one gets different Rust for the same markup, so it cannot use this.
     pub theme: Option<String>,
+    /// The `[telar] prelude` the sources were transpiled against, as each glob's path. A different one imports a different set of crates into the same markup, so a build declaring another cannot use this. Absent in an index written before the key existed, which is the empty prelude every such transpile used.
+    #[serde(default)]
+    pub prelude: Vec<String>,
     /// Whether any generated file reaches into the baked asset module. Wiring that module is the reader's decision, not this one's, and it declines when the asset artifact is unusable — so output that references it has to be re-produced instead, or the reference resolves to nothing and rustc reports it against generated code rather than against the `.rsx` line that named the asset.
     pub uses_assets: bool,
     pub entries: Vec<BuildEntry>,
@@ -58,11 +62,13 @@ impl BuildIndex {
         src_dir: &Path,
         generated_dir: &Path,
         theme: Option<&str>,
+        prelude: &[PreludeEntry],
         current_telar_version: &str,
     ) -> bool {
         if self.format != BUILD_ARTIFACT_FORMAT
             || self.telar_version != current_telar_version
             || self.theme.as_deref() != theme
+            || !self.was_transpiled_with(prelude)
         {
             return false;
         }
@@ -90,6 +96,14 @@ impl BuildIndex {
                     .map(|bytes| crate::content_hash(&bytes) == entry.hash)
                     .unwrap_or(false)
         })
+    }
+
+    /// Whether the sources were transpiled against exactly `prelude`, in the same order.
+    pub fn was_transpiled_with(&self, prelude: &[PreludeEntry]) -> bool {
+        self.prelude
+            .iter()
+            .map(String::as_str)
+            .eq(prelude.iter().map(PreludeEntry::path))
     }
 
     /// The entry for a `.rsx`, by its path under `src_dir`.

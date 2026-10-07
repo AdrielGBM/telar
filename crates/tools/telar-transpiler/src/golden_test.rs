@@ -40,7 +40,7 @@ fn golden_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("golden")
 }
 
-/// Transpiles one package exactly the way `app!` does — the same walk, the same component names, the same baked artifact, the same theme — because it calls the same function the macro calls. Nothing is written: the snapshots are compared against what a build *would* produce, not against what one left behind.
+/// Transpiles one package exactly the way `app!` does — the same walk, the same component names, the same baked artifact, the same theme and prelude — because it calls the same function the macro calls. Nothing is written: the snapshots are compared against what a build *would* produce, not against what one left behind.
 fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
     let manifest = workspace_root().join(project.manifest);
     let src_dir = manifest.join("src");
@@ -58,10 +58,14 @@ fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
         project.name
     );
 
+    let prelude = telar_project::resolve_prelude(&manifest)
+        .unwrap_or_else(|e| panic!("{} declares no readable prelude: {e}", project.name));
+
     let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
         src_dir: &src_dir,
         theme_type: theme_type.as_deref(),
         assets: Some(&assets),
+        prelude: &prelude,
         // `Preview`, not `Plain`: it is the richer of the two shapes — the same Rust plus a build fn per `[preview]` — so snapshotting it keeps preview codegen covered. Pinning `Plain` would drop every preview from the corpus and stop asserting anything about how one is generated.
         flavour: telar_project::BuildFlavour::Preview,
     })

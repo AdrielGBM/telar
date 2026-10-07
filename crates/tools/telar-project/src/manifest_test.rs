@@ -260,3 +260,95 @@ fn a_prerender_table_names_the_reader_pages_are_written_for() {
     assert_eq!(preferences.reduced_motion, None);
     assert_eq!(preferences.locales, ["es-CL"]);
 }
+
+#[test]
+fn the_prelude_is_read_normalised_and_in_order() {
+    let root = package(
+        "prelude",
+        Some("[telar]\nprelude = [\"telar-components\", \"my_plugin::prelude\"]\n"),
+    );
+    let paths: Vec<String> = crate::resolve_prelude(&root)
+        .expect("a valid prelude")
+        .iter()
+        .map(|entry| entry.path().to_string())
+        .collect();
+    assert_eq!(paths, ["telar_components", "my_plugin::prelude"]);
+}
+
+#[test]
+fn a_package_that_declares_no_prelude_has_an_empty_one() {
+    let root = package("no_prelude", Some("[telar]\nbackend = \"auto\"\n"));
+    assert!(crate::resolve_prelude(&root).unwrap().is_empty());
+    assert!(
+        crate::resolve_prelude(&package("no_manifest", None))
+            .unwrap()
+            .is_empty()
+    );
+}
+
+/// The error is on the `telar.toml` value, with its line, rather than on the generated `use` every `.rsx` of the package would otherwise fail on.
+#[test]
+fn a_prelude_entry_that_is_not_a_path_is_an_error_on_the_value() {
+    let root = package(
+        "bad_prelude",
+        Some("[telar]\nbackend = \"auto\"\nprelude = [\"telar-components\", \"not a path\"]\n"),
+    );
+    let error = TelarManifest::load(&root).unwrap_err().to_string();
+    assert!(error.contains(MANIFEST_FILENAME), "{error}");
+    assert!(error.contains("line 3"), "{error}");
+    assert!(
+        error.contains("\"not a path\" is not a Rust path"),
+        "{error}"
+    );
+    assert!(crate::resolve_prelude(&root).is_err());
+}
+
+#[test]
+fn a_prelude_naming_one_crate_twice_is_an_error() {
+    let root = package(
+        "twice_prelude",
+        Some("[telar]\nprelude = [\"telar-components\", \"telar_components\"]\n"),
+    );
+    let error = TelarManifest::load(&root).unwrap_err().to_string();
+    assert!(error.contains("more than once"), "{error}");
+}
+
+/// A workspace may share a prelude, and a package that does not depend on one of its crates has to be able to say so: an empty list is a declaration, not an absence.
+#[test]
+fn a_package_inherits_the_workspace_prelude_unless_it_declares_its_own() {
+    let root = std::env::temp_dir().join(format!("telar_inherit_prelude_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let package_root = root.join("apps/site");
+    std::fs::create_dir_all(&package_root).unwrap();
+    std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+    std::fs::write(
+        root.join(MANIFEST_FILENAME),
+        "[telar]\nprelude = [\"telar-components\"]\n",
+    )
+    .unwrap();
+    let declared = |manifest: &str| {
+        std::fs::write(package_root.join(MANIFEST_FILENAME), manifest).unwrap();
+        crate::resolve_prelude(&package_root)
+            .unwrap()
+            .iter()
+            .map(|entry| entry.path().to_string())
+            .collect::<Vec<_>>()
+    };
+
+    let inherited = declared("[telar]\nbackend = \"auto\"\n");
+    let own = declared("[telar]\nprelude = [\"my-plugin\"]\n");
+    let none = declared("[telar]\nprelude = []\n");
+    let files = TelarManifest::files(&package_root);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(inherited, ["telar_components"]);
+    assert_eq!(own, ["my_plugin"]);
+    assert!(none.is_empty());
+    assert_eq!(
+        files,
+        [
+            package_root.join(MANIFEST_FILENAME),
+            root.join(MANIFEST_FILENAME)
+        ]
+    );
+}

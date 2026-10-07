@@ -7,9 +7,10 @@ use crate::lexer::{contains_ident, literal_or_comment_end};
 use crate::signal_scan::{scan_locals, scan_signals};
 use crate::source_map::{ExprSpan, ShadowBinding};
 use crate::style::generate_style_section;
+use crate::tag_errors::glob_import;
 use crate::view::ViewGen;
-use telar_project::AssetContext;
 use telar_project::naming::{preview_entries_const_name, to_pascal_case, to_snake_case};
+use telar_project::{AssetContext, PreludeEntry};
 
 /// A parsed `Props` field: its name, its type, and any inline default expression (the `name: Type = expr` sugar). Whether it is `Option<...>` is no longer anyone's business here — the builder's `some` attribute answers that in the callee's own declaration.
 struct ParsedField {
@@ -161,6 +162,8 @@ pub(crate) struct TranspileInput<'a> {
     pub theme_type: Option<&'a str>,
     /// The package's baked asset artifact, which static `svg`/`img` paths (`src:"path"`) resolve against. `None` when no package anchors this transpile (e.g. some analyzer/test paths), in which case a static asset yields a `compile_error!`.
     pub assets: Option<&'a AssetContext>,
+    /// The package's `[telar] prelude`: each entry is glob-imported between `telar`'s glob and the crate's own, so its items can be named as tags.
+    pub prelude: &'a [PreludeEntry],
     /// Emit signal declarations in the keyed form the dev host restores across a dylib swap. An argument rather than an ambient one: this was read from the environment, which made the generated code depend on who ran the process — the editor mirror, the golden snapshots and the build could each produce a different file from the same source and none of them was wrong to.
     pub hot_reload: bool,
     /// Emit a build fn per `[preview]` block, and the entry table naming them.
@@ -186,6 +189,8 @@ pub struct TranspiledSource {
 
 /// Parses `source` and generates Rust for `component_name`, resolving `[style]` colors through `theme_type` when provided so theme switching at runtime takes effect. `assets` is the package's baked artifact, against which static `svg`/`img` `src:"path"` references are resolved.
 ///
+/// Against no `[telar] prelude`: a file that belongs to a package is transpiled through [`crate::transpile_buffer`], which reads everything the package declares.
+///
 /// **It takes no registry, and that is the point.** A call site used to need the callee's shape — which props it declared, which were optional, which took a closure, whether it accepted children — so every `.rsx` in the workspace had to be scanned before any one of them could be transpiled. Every component takes the same two arguments now, and the props builder answers the rest in the callee's own type, so a file transpiles knowing nothing but itself.
 pub fn transpile_source(
     source: &str,
@@ -199,8 +204,8 @@ pub fn transpile_source(
         component_name,
         theme_type,
         assets,
+        prelude: &[],
         hot_reload: false,
-        // On, unlike a shipping build: this is the one-file entry the editor mirrors a live buffer through, and a `[preview]` block is markup the author is looking at while they type. Omitting it here would stop reporting an error inside one — the diagnostic would simply never be produced, which reads as a preview that is fine.
         previews: true,
     })
 }
@@ -297,9 +302,12 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     code.push("#![allow(clippy::all)]\n", None);
     // The clone emitter cannot tell `&[T]` from an owned value, and cloning a reference is a no-op rustc warns about.
     code.push("#![allow(noop_method_call)]\n", None);
-    code.push("#[allow(unused_imports)] use telar::*;\n", None);
+    code.push(&format!("{}\n", glob_import("telar")), None);
+    for entry in input.prelude {
+        code.push(&format!("{}\n", glob_import(entry.path())), None);
+    }
     // The crate root's own items, so a `[logic]` line can name `core::theme::SandboxTheme`. Deliberately not `use super::*` too, which would make a `.rsx` named after anything in the prelude ambiguous in its siblings.
-    code.push("#[allow(unused_imports)] use crate::*;\n", None);
+    code.push(&format!("{}\n", glob_import("crate")), None);
 
     // `Props` and each `[preview]` are emitted as siblings of the component fn, so a `use` left in the body would be out of scope for exactly the declarations most likely to name an imported type.
     let hoisted_uses = hoisted_use_lines(logic_source);

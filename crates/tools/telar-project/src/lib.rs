@@ -14,6 +14,7 @@ mod fonts;
 mod manifest;
 pub mod naming;
 mod paths;
+mod prelude;
 mod prerender;
 mod theme;
 mod web;
@@ -51,6 +52,10 @@ pub use manifest::{
 pub use paths::{
     find_ancestor_dir, find_package_root, find_target_dir, find_telar_root, find_workspace_root,
     resolve_telar_version, write_if_changed_atomic,
+};
+pub use prelude::{
+    PreludeDeclaration, PreludeEntry, PreludeProblem, prelude_declarations, prelude_problems,
+    resolve_prelude,
 };
 pub use prerender::{
     DEFAULT_SURFACE, PRERENDER_ENV, PageLocation, PageRequest, Preferences, PrerenderRequest,

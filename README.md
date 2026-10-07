@@ -164,6 +164,15 @@ card pad:20
     text "inside" font_size:14
 ```
 
+Every `.rsx` already sees `telar`'s items and your crate root's. Components that ship in a crate of their own are made visible the same way by naming that crate once, in `telar.toml`:
+
+```toml
+[telar]
+prelude = ["telar-components"]   # a package name, or a path inside one: "my_plugin::prelude"
+```
+
+Each entry is glob-imported after `telar`'s glob and before your crate's, so it has to be a dependency of the package. An explicit `use` in `[logic]` shadows every glob, which is how one file picks a name two crates both export. A workspace `telar.toml` can declare the list for every package; a package that sets its own, `[]` included, replaces it.
+
 A directory is a module too, and `mod.rsx` is that module's file — `mod.rs` in the other language. Its `[logic]` is Rust at module level, which is where a `//!` and a `#![…]` belong; it takes no `[view]`, because a module is not callable. Give a directory one and telar declares it and everything under it, so nothing in it has to be placed by hand:
 
 ```

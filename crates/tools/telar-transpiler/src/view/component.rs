@@ -409,7 +409,7 @@ impl ViewGen<'_> {
 /// The `Props` type belonging to `tag`, which may be a path.
 ///
 /// Only the last segment is the component's name, so `topbar::strip` wants `topbar::StripProps` — Pascal- casing the whole path would ask for a `TopbarstripProps` that exists nowhere. A bare tag keeps resolving however it did: through the crate root today, through an author's `use` once tags are paths.
-fn props_type(tag: &str) -> String {
+pub(crate) fn props_type(tag: &str) -> String {
     match tag.rsplit_once("::") {
         Some((module, name)) => format!("{module}::{}Props", to_pascal_case(name)),
         None => to_pascal_case(tag) + "Props",

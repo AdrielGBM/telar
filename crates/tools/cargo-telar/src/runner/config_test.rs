@@ -276,3 +276,142 @@ fn has_web_profile_is_false_when_there_is_no_manifest_at_all() {
         "/nonexistent/cargo_telar_test_path"
     )));
 }
+
+fn table(manifest: &str) -> toml::Table {
+    manifest.parse().unwrap()
+}
+
+/// Cargo's error for a feature `telar` no longer has names no fix, so the check names it: the crate each one became, the feature groups it stood for, and the prelude line that brings the tags back.
+#[test]
+fn the_catalogue_features_become_telar_components_with_their_groups() {
+    let manifest = table(
+        "[package]\nname = \"app\"\n[dependencies]\ntelar = { version = \"0.2\", features = [\"desktop\", \"components-overlays\", \"components-advanced\", \"components-base\"] }\n",
+    );
+    let moved = moved_telar_features(&manifest, None);
+    assert_eq!(
+        moved,
+        BTreeSet::from([
+            "components-advanced",
+            "components-base",
+            "components-overlays"
+        ])
+    );
+
+    let hint = moved_features_hint("app", &moved, &[]).unwrap();
+    assert!(
+        hint.contains("cargo add -p app telar-components --features advanced,overlays\n"),
+        "{hint}"
+    );
+    assert!(!hint.contains("telar-navigate"), "{hint}");
+    assert!(hint.contains("prelude = [\"telar_components\"]"), "{hint}");
+}
+
+#[test]
+fn the_whole_catalogue_is_every_group_and_navigate_is_its_own_crate() {
+    let moved = moved_telar_features(
+        &table(
+            "[package]\nname = \"app\"\n[dependencies]\ntelar = { version = \"0.2\", features = [\"components\", \"navigate\"] }\n",
+        ),
+        None,
+    );
+    let hint = moved_features_hint("app", &moved, &[]).unwrap();
+    assert!(
+        hint.contains("cargo add -p app telar-components --features advanced,chrome,overlays"),
+        "{hint}"
+    );
+    assert!(hint.contains("cargo add -p app telar-navigate"), "{hint}");
+    assert!(
+        hint.contains("prelude = [\"telar_components\", \"telar_navigate\"]"),
+        "{hint}"
+    );
+}
+
+/// `components-base` was the catalogue with no group, which is what `telar-components` is with no features.
+#[test]
+fn the_base_catalogue_needs_no_feature() {
+    let moved = moved_telar_features(
+        &table(
+            "[package]\nname = \"app\"\n[dependencies]\ntelar = { version = \"0.2\", features = [\"components-base\"] }\n",
+        ),
+        None,
+    );
+    let hint = moved_features_hint("app", &moved, &[]).unwrap();
+    assert!(
+        hint.contains("cargo add -p app telar-components\n"),
+        "{hint}"
+    );
+    assert!(!hint.contains("--features"), "{hint}");
+}
+
+/// Everywhere a manifest can turn a `telar` feature on: a `[features]` entry in either spelling, a target-specific dependency, a renamed one, and the workspace entry a `workspace = true` inherits.
+#[test]
+fn a_moved_feature_is_found_wherever_the_manifest_turns_it_on() {
+    for spelling in ["telar/navigate", "telar?/navigate"] {
+        let manifest = table(&format!(
+            "[package]\nname = \"app\"\n[dependencies]\ntelar = \"0.2\"\n[features]\nroutes = [\"{spelling}\"]\n"
+        ));
+        assert_eq!(
+            moved_telar_features(&manifest, None),
+            BTreeSet::from(["navigate"]),
+            "{spelling}"
+        );
+    }
+    let target = table(
+        "[package]\nname = \"app\"\n[target.'cfg(unix)'.dependencies]\ntelar = { version = \"0.2\", features = [\"components-chrome\"] }\n",
+    );
+    assert_eq!(
+        moved_telar_features(&target, None),
+        BTreeSet::from(["components-chrome"])
+    );
+    let renamed = table(
+        "[package]\nname = \"app\"\n[dependencies]\nui = { package = \"telar\", version = \"0.2\" }\n[features]\nnav = [\"ui/navigate\"]\n",
+    );
+    assert_eq!(
+        moved_telar_features(&renamed, None),
+        BTreeSet::from(["navigate"])
+    );
+    let workspace = table(
+        "[workspace.dependencies]\ntelar = { version = \"0.2\", features = [\"components\"] }\n",
+    );
+    let inheriting =
+        table("[package]\nname = \"app\"\n[dependencies]\ntelar = { workspace = true }\n");
+    assert_eq!(
+        moved_telar_features(
+            &inheriting,
+            workspace
+                .get("workspace")
+                .and_then(|w| w.get("dependencies"))
+                .and_then(toml::Value::as_table)
+        ),
+        BTreeSet::from(["components"])
+    );
+}
+
+#[test]
+fn a_project_that_names_none_of_them_gets_no_hint() {
+    let manifest = table(
+        "[package]\nname = \"app\"\n[dependencies]\ntelar = { version = \"0.2\", features = [\"desktop\"] }\ntelar-components = \"0.2\"\n[features]\nnavigate = []\n",
+    );
+    let moved = moved_telar_features(&manifest, None);
+    assert!(moved.is_empty(), "{moved:?}");
+    assert_eq!(moved_features_hint("app", &moved, &[]), None);
+}
+
+/// A prelude that already names the crate is not told to name it again; one that names others keeps them in the line it is told to write.
+#[test]
+fn the_prelude_line_keeps_what_is_declared_and_is_left_out_when_complete() {
+    let moved = BTreeSet::from(["components", "navigate"]);
+    let declared = [telar_project::PreludeEntry::parse("my-plugin").unwrap()];
+    let hint = moved_features_hint("app", &moved, &declared).unwrap();
+    assert!(
+        hint.contains("prelude = [\"my_plugin\", \"telar_components\", \"telar_navigate\"]"),
+        "{hint}"
+    );
+
+    let complete = [
+        telar_project::PreludeEntry::parse("telar-components").unwrap(),
+        telar_project::PreludeEntry::parse("telar-navigate").unwrap(),
+    ];
+    let hint = moved_features_hint("app", &moved, &complete).unwrap();
+    assert!(!hint.contains("prelude"), "{hint}");
+}

@@ -42,6 +42,7 @@ pub(crate) fn run_check_cmd(args: CheckArgs) {
         }
     }
     super::config::warn_if_tooling_unlocked(&cargo_args, &["telar/previews"]);
+    super::config::warn_if_features_moved(&cargo_args);
     // A `[preview]` is markup the author wrote, so a check that skipped it would report nothing about the one block most likely to be half-finished. It is the only command that asks for previews without going on to render them.
     cargo_args.push("--features".to_string());
     cargo_args.push("telar/previews".to_string());
@@ -70,6 +71,7 @@ pub(crate) fn run_check_cmd(args: CheckArgs) {
     let status = child.wait();
 
     report.add_all_semantic();
+    report.add_all_prelude_problems();
 
     if !report.is_empty() {
         eprintln!();
@@ -108,6 +110,22 @@ impl diagnostics::Report {
                     &rsx,
                     telar_diagnostics::semantic_diagnostics(&document, catalog.as_ref()),
                 );
+            }
+        }
+    }
+
+    /// The `[telar] prelude` entries each package with `.rsx` sources cannot reach, on the `telar.toml` lines that declare them.
+    ///
+    /// Checked against `Cargo.toml` rather than left to rustc, whose answer is an unresolved import in every generated file and no word about the key that caused it. An unreadable `telar.toml` is skipped: the transpile reports that, with the line serde names.
+    fn add_all_prelude_problems(&mut self) {
+        let dir = super::config::find_package_dir(&[]);
+        let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
+        for member in super::bake::member_dirs(&root) {
+            if telar_project::find_rsx_files(&member.join("src")).is_empty() {
+                continue;
+            }
+            if let Ok(problems) = telar_project::prelude_problems(&member) {
+                self.add_prelude_problems(&problems);
             }
         }
     }

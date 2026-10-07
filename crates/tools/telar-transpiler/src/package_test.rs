@@ -15,6 +15,7 @@ fn options(src_dir: &std::path::Path, flavour: BuildFlavour) -> PackageOptions<'
         src_dir,
         theme_type: None,
         assets: None,
+        prelude: &[],
         flavour,
     }
 }
@@ -223,6 +224,69 @@ fn a_recorded_failure_is_forgotten_when_cleared() {
         telar_project::read_build_failure(&root, BuildFlavour::Plain),
         None
     );
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Each prelude entry is glob-imported between `telar`'s glob and the crate's own, in the order declared, and an explicit `use` from `[logic]` still lands after all three — where it shadows any of them.
+#[test]
+fn the_prelude_is_imported_between_telar_and_the_crate() {
+    let root = package("prelude");
+    std::fs::write(
+        root.join("src/home.rsx"),
+        "[logic]\nuse other::button;\n\n[view]\nbutton\n",
+    )
+    .unwrap();
+    let prelude = [
+        telar_project::PreludeEntry::parse("telar-components").unwrap(),
+        telar_project::PreludeEntry::parse("my_plugin::prelude").unwrap(),
+    ];
+    let src_dir = root.join("src");
+    let files = transpile_package(&PackageOptions {
+        prelude: &prelude,
+        ..options(&src_dir, BuildFlavour::Plain)
+    })
+    .unwrap();
+    let code = &files[0].source.rust_code;
+
+    let header: Vec<&str> = code.lines().filter(|line| line.contains(" use ")).collect();
+    assert_eq!(
+        header,
+        [
+            "#[allow(unused_imports)] use telar::*;",
+            "#[allow(unused_imports)] use telar_components::*;",
+            "#[allow(unused_imports)] use my_plugin::prelude::*;",
+            "#[allow(unused_imports)] use crate::*;",
+            "#[allow(unused_imports)] use other::button;",
+        ],
+        "{code}"
+    );
+    let map = &files[0].source.source_map;
+    let line_of = |needle: &str| code.lines().position(|line| line.contains(needle)).unwrap();
+    assert_eq!(map[line_of("use telar_components::*")], None);
+    assert_eq!(map[line_of("use other::button")], Some(1));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The editor's mirror and the package walk are one code path, so a buffer transpiled in memory is byte-identical to the same text transpiled from disk — prelude included.
+#[test]
+fn a_buffer_transpiles_as_the_saved_file_would() {
+    let root = package("buffer");
+    let source = "[view]\ntext \"a\"\n";
+    let rsx = root.join("src/home.rsx");
+    std::fs::write(&rsx, source).unwrap();
+    let prelude = [telar_project::PreludeEntry::parse("telar-components").unwrap()];
+    let src_dir = root.join("src");
+    let options = PackageOptions {
+        prelude: &prelude,
+        ..options(&src_dir, BuildFlavour::Preview)
+    };
+
+    let walked = transpile_package(&options).unwrap();
+    let buffered = super::transpile_buffer(&rsx, source, &options).unwrap();
+    assert_eq!(walked[0].source.rust_code, buffered.rust_code);
+    assert!(buffered.rust_code.contains("use telar_components::*;"));
 
     let _ = std::fs::remove_dir_all(&root);
 }

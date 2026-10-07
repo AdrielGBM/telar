@@ -12,7 +12,8 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
-use telar_transpiler::{RsxSpan, SourceMap};
+use telar_project::{PreludeDeclaration, PreludeEntry, PreludeProblem};
+use telar_transpiler::{GeneratedSite, RsxSpan, SourceMap};
 
 /// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that says what to do about it.
 pub(crate) struct Note {
@@ -61,6 +62,40 @@ impl Report {
                 message: d.message,
                 notes: Vec::new(),
             }));
+    }
+
+    /// Adds `item`, or folds its notes into an identical frame already here.
+    ///
+    /// One mistake in the markup is often several in the Rust it became — an unknown tag is an unresolved function and an unresolved `Props`, a missing prelude crate an unresolved import in every generated file — and once each is said about the `.rsx` they are the same sentence on the same line.
+    fn push(&mut self, item: Projected) {
+        let existing = self.projected.iter_mut().find(|p| {
+            p.source == item.source
+                && p.line == item.line
+                && p.underline == item.underline
+                && p.level == item.level
+                && p.message == item.message
+        });
+        match existing {
+            Some(existing) => {
+                for note in item.notes {
+                    if !existing
+                        .notes
+                        .iter()
+                        .any(|n| n.level == note.level && n.message == note.message)
+                    {
+                        existing.notes.push(note);
+                    }
+                }
+            }
+            None => self.projected.push(item),
+        }
+    }
+
+    /// Adds the `[telar] prelude` entries a package cannot reach, on the `telar.toml` lines that declare them.
+    pub(crate) fn add_prelude_problems(&mut self, problems: &[PreludeProblem]) {
+        for problem in problems {
+            self.push(problem_frame(problem));
+        }
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -153,6 +188,7 @@ impl Projected {
 /// Reads cargo's `--message-format=json` stream, mapping every diagnostic it can onto its `.rsx`.
 pub(crate) fn collect(reader: impl BufRead) -> Report {
     let mut origins: HashMap<PathBuf, Option<Origin>> = HashMap::new();
+    let mut preludes: HashMap<PathBuf, PackagePrelude> = HashMap::new();
     let mut report = Report::default();
 
     for line in reader.lines().map_while(Result::ok) {
@@ -194,17 +230,49 @@ pub(crate) fn collect(reader: impl BufRead) -> Report {
             let Some(origin) = origin.as_ref() else {
                 continue;
             };
+            let prelude = preludes
+                .entry(origin.package_root.clone())
+                .or_insert_with(|| PackagePrelude::read(&origin.package_root));
+            let site = origin.site(span, line_start as u32);
+            if let Some(GeneratedSite::Glob(path)) = &site {
+                if let Some(projected) = prelude.unresolved(path, level, &text) {
+                    report.push(projected);
+                    mapped_any = true;
+                }
+                continue;
+            }
             let Some((line, underline)) = origin.locate(span, line_start as u32) else {
                 continue;
             };
-            report.projected.push(Projected {
-                source: origin.rsx_path.clone(),
-                line,
-                underline,
-                level: level.to_string(),
-                message: text.clone(),
-                notes: sigil_advice(message, notes_of(message)),
+            let code = error_code(message);
+            let rewritten = site.as_ref().and_then(|site| {
+                let candidates = glob_candidates(message);
+                let rewritten =
+                    telar_transpiler::tag_error_message(code, site, &prelude.entries, &candidates)?;
+                Some((site, rewritten))
             });
+            let projected = match rewritten {
+                Some((GeneratedSite::Tag { tag, name }, rewritten)) => Projected {
+                    source: origin.rsx_path.clone(),
+                    line,
+                    underline: origin.tag_underline(line, tag).or(underline),
+                    level: level.to_string(),
+                    message: rewritten,
+                    notes: match code != "E0659" && tag_names(tag, name) {
+                        true => notes_of(message),
+                        false => Vec::new(),
+                    },
+                },
+                _ => Projected {
+                    source: origin.rsx_path.clone(),
+                    line,
+                    underline,
+                    level: level.to_string(),
+                    message: text.clone(),
+                    notes: sigil_advice(message, notes_of(message)),
+                },
+            };
+            report.push(projected);
             mapped_any = true;
         }
         if !mapped_any && !rendered.is_empty() {
@@ -212,6 +280,57 @@ pub(crate) fn collect(reader: impl BufRead) -> Report {
         }
     }
     report
+}
+
+fn error_code(message: &serde_json::Value) -> &str {
+    message
+        .get("code")
+        .and_then(|c| c.get("code"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+}
+
+/// Whether `name` is the tag's own name rather than its `Props` type or a module on its path. rustc's help at the other two is about a struct or a module the author never wrote.
+fn tag_names(tag: &str, name: &str) -> bool {
+    tag.rsplit("::").next() == Some(name)
+}
+
+/// The glob imports an ambiguity (E0659) is between, in rustc's order: the path each `could refer to … imported here` note underlines, without its `::*`.
+fn glob_candidates(message: &serde_json::Value) -> Vec<String> {
+    let mut candidates: Vec<String> = Vec::new();
+    let children = message
+        .get("children")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten();
+    for span in children
+        .filter_map(|child| child.get("spans").and_then(serde_json::Value::as_array))
+        .flatten()
+    {
+        let Some(highlighted) = highlighted_text(span) else {
+            continue;
+        };
+        if let Some(path) = highlighted.strip_suffix("::*")
+            && !candidates.iter().any(|known| known == path)
+        {
+            candidates.push(path.to_string());
+        }
+    }
+    candidates
+}
+
+/// The text a span underlines on its first line. rustc's highlight columns are 1-based and count characters.
+fn highlighted_text(span: &serde_json::Value) -> Option<String> {
+    let first = span.get("text")?.as_array()?.first()?;
+    let line = first.get("text")?.as_str()?;
+    let from = first.get("highlight_start")?.as_u64()? as usize;
+    let to = first.get("highlight_end")?.as_u64()? as usize;
+    Some(
+        line.chars()
+            .skip(from.checked_sub(1)?)
+            .take(to.checked_sub(from)?)
+            .collect(),
+    )
 }
 
 fn str_field(message: &serde_json::Value, key: &str) -> String {
@@ -226,12 +345,7 @@ fn str_field(message: &serde_json::Value, key: &str) -> String {
 ///
 /// rustc says "consider cloning the value", which is right for Rust and wrong here: writing `held.clone()` in markup is the bookkeeping the sigil exists to remove, and it clones on every call rather than once per closure. `$held` is the answer — the transpiler emits one clone per capturing closure and leaves the binding usable. The diagnostic already knew *where*; this is what to write.
 fn sigil_advice(message: &serde_json::Value, notes: Vec<Note>) -> Vec<Note> {
-    let code = message
-        .get("code")
-        .and_then(|c| c.get("code"))
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default();
-    if code != "E0382" {
+    if error_code(message) != "E0382" {
         return notes;
     }
     let mut notes: Vec<Note> = notes
@@ -248,6 +362,8 @@ fn sigil_advice(message: &serde_json::Value, notes: Vec<Note>) -> Vec<Note> {
 }
 
 /// The `help`/`note` children, flattened to their text. Nested children are not followed: rustc uses those for suggestion machinery whose value is in the span rendering, which is exactly what does not survive the hop to another file.
+///
+/// A help whose whole point is one replacement — "a function with a similar name exists" — names it, since the span that carried the name is the part that does not survive.
 fn notes_of(message: &serde_json::Value) -> Vec<Note> {
     message
         .get("children")
@@ -260,8 +376,14 @@ fn notes_of(message: &serde_json::Value) -> Vec<Note> {
                     if level != "help" && level != "note" {
                         return None;
                     }
-                    let message = str_field(child, "message");
-                    (!message.is_empty()).then(|| Note {
+                    let mut message = str_field(child, "message");
+                    if message.is_empty() {
+                        return None;
+                    }
+                    if let Some(replacement) = single_replacement(child) {
+                        message.push_str(&format!(": `{replacement}`"));
+                    }
+                    Some(Note {
                         level: level.to_string(),
                         message,
                     })
@@ -269,6 +391,19 @@ fn notes_of(message: &serde_json::Value) -> Vec<Note> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// The one replacement a child suggests, when it suggests exactly one and it fits on a line.
+fn single_replacement(child: &serde_json::Value) -> Option<String> {
+    let mut replacements = child
+        .get("spans")?
+        .as_array()?
+        .iter()
+        .filter_map(|span| span.get("suggested_replacement")?.as_str())
+        .map(str::trim);
+    let first = replacements.next()?;
+    let single = replacements.all(|other| other == first);
+    (single && !first.is_empty() && !first.contains('\n')).then(|| first.to_string())
 }
 
 fn primary_spans(message: &serde_json::Value) -> Vec<&serde_json::Value> {
@@ -291,6 +426,7 @@ fn primary_spans(message: &serde_json::Value) -> Vec<&serde_json::Value> {
 /// One generated file, everything needed to place a diagnostic in it, read once. A single broken component usually produces a run of diagnostics, so this is cached for the length of the stream.
 struct Origin {
     rsx_path: PathBuf,
+    package_root: PathBuf,
     rsx_source: String,
     generated: String,
     map: SourceMap,
@@ -305,8 +441,29 @@ impl Origin {
             rsx_source: std::fs::read_to_string(&rsx_path).ok()?,
             generated: std::fs::read_to_string(generated).ok()?,
             map: SourceMap::from_json(&std::fs::read_to_string(PathBuf::from(map_path)).ok()?)?,
+            package_root: generated
+                .ancestors()
+                .find(|dir| dir.file_name() == Some(".telar".as_ref()))?
+                .parent()?
+                .to_path_buf(),
             rsx_path,
         })
+    }
+
+    /// What the transpiler wrote the span's generated text for, when the file on disk is still the one rustc compiled.
+    fn site(&self, span: &serde_json::Value, line_start: u32) -> Option<GeneratedSite<'_>> {
+        let (start, end) = span_bytes(span)?;
+        if line_of(&self.generated, start) != Some(line_start as usize - 1) {
+            return None;
+        }
+        telar_transpiler::generated_site(&self.generated, start as usize, end as usize)
+    }
+
+    /// The characters `tag` covers on 1-based `line` of the `.rsx`.
+    fn tag_underline(&self, line: usize, tag: &str) -> Option<(usize, usize)> {
+        let text = telar_transpiler::nth_line(&self.rsx_source, line.checked_sub(1)?)?;
+        let (from, to) = telar_transpiler::tag_columns(text, tag)?;
+        Some((text[..from].chars().count(), text[..to].chars().count()))
     }
 
     /// Places one rustc span in the `.rsx`: its 1-based line, and the characters to underline when the columns can be trusted.
@@ -343,6 +500,62 @@ impl Origin {
                 Some((line + 1, Some((chars_to(from), chars_to(to)))))
             }
         }
+    }
+}
+
+/// One package's `[telar] prelude` as the error mapping needs it, read once per stream.
+struct PackagePrelude {
+    entries: Vec<PreludeEntry>,
+    declarations: Vec<PreludeDeclaration>,
+    problems: Vec<PreludeProblem>,
+}
+
+impl PackagePrelude {
+    /// An unreadable `telar.toml` reads as an empty prelude: the transpile that produced these files has already reported it, and the tags still deserve their own errors.
+    fn read(package_root: &Path) -> Self {
+        let declarations = telar_project::prelude_declarations(package_root).unwrap_or_default();
+        Self {
+            entries: declarations.iter().map(|d| d.entry.clone()).collect(),
+            problems: telar_project::prelude_problems(package_root).unwrap_or_default(),
+            declarations,
+        }
+    }
+
+    /// rustc failing on the glob import of `path`, said on the `telar.toml` line that asked for it. `None` for a glob no prelude entry wrote — `telar`'s or the crate's own.
+    fn unresolved(&self, path: &str, level: &str, rustc_message: &str) -> Option<Projected> {
+        if let Some(problem) = self
+            .problems
+            .iter()
+            .find(|problem| problem.declaration.entry.path() == path)
+        {
+            return Some(problem_frame(problem));
+        }
+        let declaration = self
+            .declarations
+            .iter()
+            .find(|declaration| declaration.entry.path() == path)?;
+        Some(Projected {
+            source: declaration.file.clone(),
+            line: declaration.line,
+            underline: Some(declaration.columns),
+            level: level.to_string(),
+            message: format!("`[telar] prelude` entry `{path}` does not resolve: {rustc_message}"),
+            notes: Vec::new(),
+        })
+    }
+}
+
+fn problem_frame(problem: &PreludeProblem) -> Projected {
+    Projected {
+        source: problem.declaration.file.clone(),
+        line: problem.declaration.line,
+        underline: Some(problem.declaration.columns),
+        level: "error".to_string(),
+        message: problem.message.clone(),
+        notes: vec![Note {
+            level: "help".to_string(),
+            message: problem.help.clone(),
+        }],
     }
 }
 

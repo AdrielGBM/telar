@@ -47,6 +47,13 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
     // Loaded, never baked: the bake already ran, and a `src:"…"` the artifact cannot answer for is an error the macro puts on its own `.rsx` line rather than one this pass can act on.
     let assets = telar_project::AssetContext::load(member, telar_version);
     let theme = telar_transpiler::resolve_theme_type(member);
+    let prelude = match telar_project::resolve_prelude(member) {
+        Ok(prelude) => prelude,
+        Err(e) => {
+            eprintln!("[cargo-telar] error: {e}");
+            return false;
+        }
+    };
 
     let mut reported: Vec<String> = Vec::new();
     let mut all_ok = true;
@@ -55,6 +62,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
             src_dir: &src_dir,
             theme_type: theme.as_deref(),
             assets: Some(&assets),
+            prelude: &prelude,
             flavour,
         }) {
             Ok(files) => files,
@@ -83,6 +91,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
             &files,
             &src_dir,
             theme.as_deref(),
+            &prelude,
             producer,
             telar_version,
         );

@@ -138,3 +138,24 @@ fn an_existing_generated_file_is_never_rewritten() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// The mirror reads `[telar] prelude` the way the CLI does, so the buffer being typed resolves the same tags the build will.
+#[test]
+fn the_mirror_imports_the_declared_prelude() {
+    let root = unbaked_crate("prelude");
+    std::fs::write(
+        root.join("telar.toml"),
+        "[telar]\nprelude = [\"telar-components\"]\n",
+    )
+    .unwrap();
+    let source = "[view]\ntext \"a\"\n";
+    let rsx = root.join("src/view.rsx");
+    std::fs::write(&rsx, source).unwrap();
+
+    let mirrored = generated_target(&rsx, source, None).unwrap().code;
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(
+        mirrored.contains("#[allow(unused_imports)] use telar_components::*;\n"),
+        "{mirrored}"
+    );
+}

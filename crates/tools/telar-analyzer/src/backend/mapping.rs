@@ -117,6 +117,60 @@ pub(crate) fn reverse_map_rust_refs(
     (out, unmapped)
 }
 
+/// One rust-analyzer diagnostic on the generated file, as the `.rsx` should show it, or `None` when its line came from no `.rsx` line.
+///
+/// An error at a component tag is reworded through [`telar_transpiler::tag_error_message`] — what `cargo telar check` rewrites rustc's with — and underlines the tag, since the Rust it landed on is a call and a `Props` path the author never wrote. Everything else keeps rust-analyzer's message on the range [`diagnostic_range`] finds.
+pub(crate) fn map_rust_diagnostic(
+    mut diag: Diagnostic,
+    gen_code: &str,
+    map: &SourceMap,
+    rsx_source: &str,
+    prelude: &[telar_project::PreludeEntry],
+) -> Option<Diagnostic> {
+    let tag = tag_error(&diag, gen_code, prelude);
+    diag.range = diagnostic_range(diag.range, gen_code, map, rsx_source)?;
+    if let Some((tag, message)) = tag {
+        diag.message = message;
+        let line = diag.range.start.line;
+        if let Some(text) = telar_transpiler::nth_line(rsx_source, line as usize)
+            && let Some((from, to)) = telar_transpiler::tag_columns(text, &tag)
+        {
+            diag.range = Range {
+                start: Position {
+                    line,
+                    character: crate::text::byte_to_utf16(text, from),
+                },
+                end: Position {
+                    line,
+                    character: crate::text::byte_to_utf16(text, to),
+                },
+            };
+        }
+    }
+    Some(diag)
+}
+
+/// The tag a diagnostic landed on and what to say about it instead, when it is an error a tag explains.
+fn tag_error(
+    diag: &Diagnostic,
+    gen_code: &str,
+    prelude: &[telar_project::PreludeEntry],
+) -> Option<(String, String)> {
+    let Some(NumberOrString::String(code)) = &diag.code else {
+        return None;
+    };
+    let start =
+        crate::text::byte_offset(gen_code, diag.range.start.line, diag.range.start.character)?;
+    let end = crate::text::byte_offset(gen_code, diag.range.end.line, diag.range.end.character)
+        .unwrap_or(start);
+    let site = telar_transpiler::generated_site(gen_code, start, end)?;
+    let telar_transpiler::GeneratedSite::Tag { tag, .. } = &site else {
+        return None;
+    };
+    let message = telar_transpiler::tag_error_message(code, &site, prelude, &[])?;
+    Some((tag.to_string(), message))
+}
+
 /// Reverse-maps a diagnostic's generated-file range onto the `.rsx`, narrowing it to the exact columns when they can be trusted and widening it to the whole line when they cannot.
 ///
 /// The exact mapping was built for go-to-definition and rename, and was never wired here — so every diagnostic underlined its whole line, however precise rustc had been. Which columns can be trusted is [`SourceMap::locate`]'s answer, shared with `cargo telar check` so the terminal and the editor cannot come to two different conclusions about the same error.

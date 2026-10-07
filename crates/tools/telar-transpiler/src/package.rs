@@ -12,7 +12,7 @@ use telar_project::{BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFlavour, BuildIndex,
 use crate::codegen::{TranspileInput, TranspiledSource, transpile};
 use crate::error::TranspileError;
 use crate::source_map::SourceMap;
-use telar_project::AssetContext;
+use telar_project::{AssetContext, PreludeEntry};
 
 /// Everything a package transpile needs to know, and nothing it can read behind the caller's back.
 #[cfg(feature = "transpile")]
@@ -23,6 +23,8 @@ pub struct PackageOptions<'a> {
     pub theme_type: Option<&'a str>,
     /// The package's baked asset artifact, which static `svg`/`img` `src:"…"` references resolve against.
     pub assets: Option<&'a AssetContext>,
+    /// The crates the package's `.rsx` glob-imports besides `telar` and itself — see [`telar_project::resolve_prelude`], which is how every caller reads the package's `[telar] prelude`.
+    pub prelude: &'a [PreludeEntry],
     /// Which shape to produce. Carries whether the build is hot-reloadable *and* whether it emits `[preview]` fns, because both change the Rust for the same source and each pair needs its own output directory.
     pub flavour: BuildFlavour,
 }
@@ -131,27 +133,48 @@ fn transpile_one(
         message: e.message.clone(),
     })?;
     let source_hash = telar_project::content_hash(source.as_bytes());
-    let component_name = telar_project::component_name(&rsx_path);
-    let generated = match telar_project::is_module_root(&rsx_path) {
-        true => crate::codegen::module_root(&document, telar_project::MODULE_CHILDREN_FILENAME),
-        false => transpile(TranspileInput {
-            document: &document,
-            component_name: &component_name,
-            theme_type: options.theme_type,
-            assets: options.assets,
-            hot_reload: options.flavour.is_hot(),
-            previews: options.flavour.has_previews(),
-        }),
-    };
-    let source = generated.map_err(|source| PackageError::Codegen {
-        path: rsx_path.clone(),
-        source,
-    })?;
+    let source =
+        generate(&rsx_path, &document, options).map_err(|source| PackageError::Codegen {
+            path: rsx_path.clone(),
+            source,
+        })?;
     Ok(GeneratedFile {
         rsx_path,
         source_hash,
         rel_out,
         source,
+    })
+}
+
+#[cfg(feature = "transpile")]
+/// Transpiles one `.rsx` of the package from `source` rather than from disk, exactly as [`transpile_package`] would transpile it were `source` saved at `rsx_path`.
+///
+/// For a writer holding text no file has yet: the editor's live mirror, which has to produce what the build will from the buffer being typed.
+pub fn transpile_buffer(
+    rsx_path: &Path,
+    source: &str,
+    options: &PackageOptions<'_>,
+) -> Result<TranspiledSource, TranspileError> {
+    generate(rsx_path, &telar_parser::parse(source)?, options)
+}
+
+#[cfg(feature = "transpile")]
+fn generate(
+    rsx_path: &Path,
+    document: &telar_parser::RsxDocument,
+    options: &PackageOptions<'_>,
+) -> Result<TranspiledSource, TranspileError> {
+    if telar_project::is_module_root(rsx_path) {
+        return crate::codegen::module_root(document, telar_project::MODULE_CHILDREN_FILENAME);
+    }
+    transpile(TranspileInput {
+        document,
+        component_name: &telar_project::component_name(rsx_path),
+        theme_type: options.theme_type,
+        assets: options.assets,
+        prelude: options.prelude,
+        hot_reload: options.flavour.is_hot(),
+        previews: options.flavour.has_previews(),
     })
 }
 
@@ -200,6 +223,7 @@ pub fn write_package(
 /// let package = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
 /// let src_dir = package.join("src");
 /// let theme = telar_transpiler::resolve_theme_type(&package);
+/// let prelude = telar_project::resolve_prelude(&package)?;
 /// // What the macro compares the index against: the `telar` this project resolves, not this crate's own.
 /// let workspace = telar_project::find_workspace_root(&package).unwrap_or_else(|| package.clone());
 /// let telar_version = telar_project::resolve_telar_version(&workspace).ok_or("no telar dependency")?;
@@ -210,14 +234,18 @@ pub fn write_package(
 ///     src_dir: &src_dir,
 ///     theme_type: theme.as_deref(),
 ///     assets: Some(&assets),
+///     prelude: &prelude,
 ///     flavour,
 /// })?;
 /// telar_transpiler::write_package(&files, &telar_project::generated_dir(&package, flavour))?;
-/// let index = telar_transpiler::build_index(&files, &src_dir, theme.as_deref(), "build.rs", &telar_version);
+/// let index = telar_transpiler::build_index(&files, &src_dir, theme.as_deref(), &prelude, "build.rs", &telar_version);
 /// telar_project::write_build_index(&package, flavour, &index)?;
 ///
 /// for file in &files {
 ///     println!("cargo:rerun-if-changed={}", file.rsx_path.display());
+/// }
+/// for manifest in telar_project::TelarManifest::files(&package) {
+///     println!("cargo:rerun-if-changed={}", manifest.display());
 /// }
 /// # Ok(())
 /// # }
@@ -226,6 +254,7 @@ pub fn build_index(
     files: &[GeneratedFile],
     src_dir: &Path,
     theme_type: Option<&str>,
+    prelude: &[PreludeEntry],
     producer: &str,
     telar_version: &str,
 ) -> BuildIndex {
@@ -234,6 +263,10 @@ pub fn build_index(
         producer: producer.to_string(),
         telar_version: telar_version.to_string(),
         theme: theme_type.map(str::to_string),
+        prelude: prelude
+            .iter()
+            .map(|entry| entry.path().to_string())
+            .collect(),
         uses_assets: files
             .iter()
             .any(|file| file.source.rust_code.contains(telar_project::ASSETS_MODULE)),

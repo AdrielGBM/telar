@@ -5,7 +5,7 @@ use std::process::Command;
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
 use super::config::{
     WEB_PROFILE_TOML, backend_as_str, find_package_dir, has_web_profile, load_config,
-    manifest_has_telar, resolve_package,
+    manifest_has_telar, moved_features_hint_for, resolve_package,
 };
 
 struct Doctor {
@@ -129,6 +129,34 @@ pub(crate) fn run_doctor_cmd() -> ! {
         "config precedence",
         "CLI flags > telar.toml > [package.metadata.telar] > defaults",
     );
+    match telar_project::prelude_problems(&package_dir) {
+        Ok(problems) if !problems.is_empty() => {
+            for problem in problems {
+                let declaration = &problem.declaration;
+                doc.fail(
+                    "[telar] prelude",
+                    &format!(
+                        "{}:{}: {} — {}",
+                        declaration.file.display(),
+                        declaration.line,
+                        problem.message,
+                        problem.help
+                    ),
+                );
+            }
+        }
+        Ok(_) => match telar_project::resolve_prelude(&package_dir) {
+            Ok(prelude) if !prelude.is_empty() => {
+                let entries: Vec<String> = prelude.iter().map(ToString::to_string).collect();
+                doc.ok("[telar] prelude", &entries.join(", "));
+            }
+            _ => doc.info("[telar] prelude", "none"),
+        },
+        Err(e) => doc.fail("telar.toml", &e.to_string()),
+    }
+    if let Some(hint) = moved_features_hint_for(&package_dir) {
+        doc.warn("moved telar features", &hint.replace('\n', "\n      "));
+    }
     let resolved = resolve_package(&[]);
     if resolved.targets_web() {
         if has_web_profile(&resolved.workspace_root) {

@@ -26,6 +26,8 @@ mod signal_scan;
 mod source_map;
 #[cfg(feature = "transpile")]
 mod style;
+#[cfg(feature = "transpile")]
+mod tag_errors;
 mod theme;
 #[cfg(feature = "transpile")]
 mod transition;
@@ -38,7 +40,8 @@ pub use codegen::{TranspiledSource, transpile_module_root, transpile_source};
 pub use error::TranspileError;
 #[cfg(feature = "transpile")]
 pub use package::{
-    GeneratedFile, PackageError, PackageOptions, build_index, transpile_package, write_package,
+    GeneratedFile, PackageError, PackageOptions, build_index, transpile_buffer, transpile_package,
+    write_package,
 };
 #[cfg(feature = "transpile")]
 pub use registry::{
@@ -50,6 +53,8 @@ pub use registry::{
 pub use signal_scan::{SignalInfo, scan_effects, scan_locals, scan_signals};
 #[cfg(feature = "transpile")]
 pub use source_map::{ExprSpan, RsxSpan, SourceMap, nth_line};
+#[cfg(feature = "transpile")]
+pub use tag_errors::{GeneratedSite, generated_site, tag_columns, tag_error_message};
 pub use theme::resolve_theme_type;
 
 #[cfg(all(test, feature = "transpile"))]

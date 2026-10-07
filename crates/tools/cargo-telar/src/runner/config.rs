@@ -418,6 +418,201 @@ pub(crate) fn warn_if_tooling_unlocked(args: &[String], injected: &[&str]) {
     }
 }
 
+/// A `telar` feature that is a crate of its own now, and the feature groups of that crate it stood for.
+struct MovedFeature {
+    feature: &'static str,
+    package: &'static str,
+    groups: &'static [&'static str],
+}
+
+const COMPONENTS: &str = "telar-components";
+
+const MOVED_FEATURES: [MovedFeature; 6] = [
+    MovedFeature {
+        feature: "components",
+        package: COMPONENTS,
+        groups: &["overlays", "chrome", "advanced"],
+    },
+    MovedFeature {
+        feature: "components-base",
+        package: COMPONENTS,
+        groups: &[],
+    },
+    MovedFeature {
+        feature: "components-overlays",
+        package: COMPONENTS,
+        groups: &["overlays"],
+    },
+    MovedFeature {
+        feature: "components-chrome",
+        package: COMPONENTS,
+        groups: &["chrome"],
+    },
+    MovedFeature {
+        feature: "components-advanced",
+        package: COMPONENTS,
+        groups: &["advanced"],
+    },
+    MovedFeature {
+        feature: "navigate",
+        package: "telar-navigate",
+        groups: &[],
+    },
+];
+
+const DEPENDENCY_TABLES: [&str; 3] = ["dependencies", "dev-dependencies", "build-dependencies"];
+
+/// The moved `telar` features `manifest` turns on: in a `telar` dependency's `features`, or in a `[features]` entry naming `telar/<feature>`. `workspace_dependencies` answers for a `telar = { workspace = true }`, whose features the workspace's own entry carries.
+pub(crate) fn moved_telar_features(
+    manifest: &toml::Table,
+    workspace_dependencies: Option<&toml::Table>,
+) -> BTreeSet<&'static str> {
+    let targets = manifest
+        .get("target")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(|targets| targets.values())
+        .filter_map(toml::Value::as_table);
+    let tables: Vec<&toml::Table> = std::iter::once(manifest)
+        .chain(targets)
+        .flat_map(|scope| DEPENDENCY_TABLES.iter().filter_map(|t| scope.get(*t)))
+        .filter_map(toml::Value::as_table)
+        .collect();
+
+    let mut keys = BTreeSet::from(["telar".to_string()]);
+    let mut named: Vec<String> = Vec::new();
+    for (key, dependency) in tables.iter().flat_map(|table| table.iter()) {
+        let package = dependency.get("package").and_then(toml::Value::as_str);
+        if package.unwrap_or(key) != "telar" {
+            continue;
+        }
+        keys.insert(key.clone());
+        named.extend(feature_list(dependency.get("features")));
+        if dependency.get("workspace").and_then(toml::Value::as_bool) == Some(true) {
+            named.extend(feature_list(
+                workspace_dependencies
+                    .and_then(|deps| deps.get(key))
+                    .and_then(|dependency| dependency.get("features")),
+            ));
+        }
+    }
+    let features = manifest.get("features").and_then(toml::Value::as_table);
+    for entry in features
+        .into_iter()
+        .flat_map(|features| features.values())
+        .flat_map(|value| feature_list(Some(value)))
+    {
+        if let Some((dependency, feature)) = entry.split_once('/')
+            && keys.contains(dependency.trim_end_matches('?'))
+        {
+            named.push(feature.to_string());
+        }
+    }
+    MOVED_FEATURES
+        .iter()
+        .map(|moved| moved.feature)
+        .filter(|feature| named.iter().any(|name| name == feature))
+        .collect()
+}
+
+/// What to run instead of naming `moved`, for `package`, whose prelude is `prelude` today.
+///
+/// Cargo's own error says only that `telar` has no such feature, which is true and leaves the author to find out where the widgets went. The `[telar] prelude` line repeats the entries already there, so pasting it over the old one loses nothing.
+pub(crate) fn moved_features_hint(
+    package: &str,
+    moved: &BTreeSet<&str>,
+    prelude: &[telar_project::PreludeEntry],
+) -> Option<String> {
+    if moved.is_empty() {
+        return None;
+    }
+    let moved: Vec<&MovedFeature> = MOVED_FEATURES
+        .iter()
+        .filter(|m| moved.contains(m.feature))
+        .collect();
+    let mut commands: Vec<String> = Vec::new();
+    let mut entries: Vec<String> = prelude.iter().map(ToString::to_string).collect();
+    for crate_package in [COMPONENTS, "telar-navigate"] {
+        let wanted: Vec<&&MovedFeature> = moved
+            .iter()
+            .filter(|m| m.package == crate_package)
+            .collect();
+        if wanted.is_empty() {
+            continue;
+        }
+        let groups: BTreeSet<&str> = wanted
+            .iter()
+            .flat_map(|m| m.groups.iter().copied())
+            .collect();
+        let features = match groups.is_empty() {
+            true => String::new(),
+            false => format!(
+                " --features {}",
+                groups.into_iter().collect::<Vec<_>>().join(",")
+            ),
+        };
+        commands.push(format!("cargo add -p {package} {crate_package}{features}"));
+        let crate_name = crate_package.replace('-', "_");
+        if !entries.contains(&crate_name) {
+            entries.push(crate_name);
+        }
+    }
+    let features = moved
+        .iter()
+        .map(|m| format!("`{}`", m.feature))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut hint = format!(
+        "`{package}` turns on `telar` features that are crates of their own now: {features}. Drop them from its `telar` dependency, then run:\n    {}",
+        commands.join("\n    ")
+    );
+    if entries.len() > prelude.len() {
+        let quoted = entries
+            .iter()
+            .map(|entry| format!("\"{entry}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        hint.push_str(&format!(
+            "\nand name their tags in its telar.toml:\n    [telar]\n    prelude = [{quoted}]"
+        ));
+    }
+    Some(hint)
+}
+
+/// [`moved_features_hint`] for the package at `dir`, reading its manifest, its workspace's `[workspace.dependencies]` and its prelude.
+pub(crate) fn moved_features_hint_for(dir: &Path) -> Option<String> {
+    let manifest: toml::Table = std::fs::read_to_string(dir.join("Cargo.toml"))
+        .ok()?
+        .parse()
+        .ok()?;
+    let workspace: Option<toml::Table> = telar_project::find_workspace_root(dir)
+        .and_then(|root| std::fs::read_to_string(root.join("Cargo.toml")).ok())
+        .and_then(|content| content.parse().ok());
+    let workspace_dependencies = workspace
+        .as_ref()
+        .and_then(|root| root.get("workspace"))
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(toml::Value::as_table);
+    let moved = moved_telar_features(&manifest, workspace_dependencies);
+    let package = manifest
+        .get("package")
+        .and_then(|package| package.get("name"))
+        .and_then(toml::Value::as_str)?;
+    let prelude = telar_project::resolve_prelude(dir).unwrap_or_default();
+    moved_features_hint(package, &moved, &prelude)
+}
+
+/// Prints [`moved_features_hint_for`] for every member of the workspace `args` select.
+pub(crate) fn warn_if_features_moved(args: &[String]) {
+    let dir = find_package_dir(args);
+    let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
+    for member in super::bake::member_dirs(&root) {
+        if let Some(hint) = moved_features_hint_for(&member) {
+            eprintln!("[cargo-telar] warning: {hint}");
+        }
+    }
+}
+
 // dpkg reads the maintainer from `DEBFULLNAME`/`DEBEMAIL`, so honour the same pair: cargo stopped emitting `authors` years ago, and refusing every manifest without it would rule out most projects.
 fn maintainer_from_env() -> Option<String> {
     maintainer_from(

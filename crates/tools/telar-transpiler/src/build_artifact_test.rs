@@ -18,11 +18,12 @@ fn transpile(root: &std::path::Path) -> super::BuildIndex {
         src_dir: &src_dir,
         theme_type: Some("app::Theme"),
         assets: None,
+        prelude: &[],
         flavour: BuildFlavour::Plain,
     })
     .unwrap();
     write_package(&files, &generated(root)).unwrap();
-    build_index(&files, &src_dir, Some("app::Theme"), "test", "0.0.0")
+    build_index(&files, &src_dir, Some("app::Theme"), &[], "test", "0.0.0")
 }
 
 fn generated(root: &std::path::Path) -> PathBuf {
@@ -40,6 +41,7 @@ fn an_untouched_package_is_answered_for() {
         &root.join("src"),
         &generated(&root),
         Some("app::Theme"),
+        &[],
         "0.0.0"
     ));
 
@@ -58,6 +60,7 @@ fn an_edited_source_is_not() {
         &root.join("src"),
         &generated(&root),
         Some("app::Theme"),
+        &[],
         "0.0.0"
     ));
 
@@ -77,6 +80,7 @@ fn a_source_added_or_removed_since_is_not() {
             &root.join("src"),
             &generated(&root),
             Some("app::Theme"),
+            &[],
             "0.0.0"
         ),
         "a new .rsx has no output yet"
@@ -89,6 +93,7 @@ fn a_source_added_or_removed_since_is_not() {
             &root.join("src"),
             &generated(&root),
             Some("app::Theme"),
+            &[],
             "0.0.0"
         ),
         "a deleted .rsx leaves output that is about to be swept"
@@ -108,9 +113,10 @@ fn another_theme_is_not_answered_for() {
         &root.join("src"),
         &generated(&root),
         Some("other::Theme"),
+        &[],
         "0.0.0"
     ));
-    assert!(!index.answers_for(&root.join("src"), &generated(&root), None, "0.0.0"));
+    assert!(!index.answers_for(&root.join("src"), &generated(&root), None, &[], "0.0.0"));
 
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -126,6 +132,7 @@ fn a_foreign_format_or_version_is_not_answered_for() {
         &root.join("src"),
         &generated(&root),
         Some("app::Theme"),
+        &[],
         "0.0.1"
     ));
 
@@ -134,6 +141,7 @@ fn a_foreign_format_or_version_is_not_answered_for() {
         &root.join("src"),
         &generated(&root),
         Some("app::Theme"),
+        &[],
         "0.0.0"
     ));
 
@@ -178,6 +186,7 @@ fn output_deleted_since_is_not_answered_for() {
         &root.join("src"),
         &generated(&root),
         Some("app::Theme"),
+        &[],
         "0.0.0"
     ));
 
@@ -201,6 +210,64 @@ fn output_rewritten_since_is_not_answered_for() {
         &root.join("src"),
         &generated(&root),
         Some("app::Theme"),
+        &[],
+        "0.0.0"
+    ));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A different prelude imports a different set of crates into the same markup, so an artifact recorded under one cannot answer for a `telar.toml` declaring another — including one that only reorders it.
+#[test]
+fn another_prelude_is_not_answered_for() {
+    let root = package("prelude");
+    std::fs::write(root.join("src/home.rsx"), "[view]\ntext \"a\"\n").unwrap();
+    let src_dir = root.join("src");
+    let prelude = [
+        telar_project::PreludeEntry::parse("telar-components").unwrap(),
+        telar_project::PreludeEntry::parse("extra::prelude").unwrap(),
+    ];
+    let files = transpile_package(&PackageOptions {
+        src_dir: &src_dir,
+        theme_type: None,
+        assets: None,
+        prelude: &prelude,
+        flavour: BuildFlavour::Plain,
+    })
+    .unwrap();
+    write_package(&files, &generated(&root)).unwrap();
+    let index = build_index(&files, &src_dir, None, &prelude, "test", "0.0.0");
+
+    assert_eq!(index.prelude, ["telar_components", "extra::prelude"]);
+    let answers = |prelude: &[telar_project::PreludeEntry]| {
+        index.answers_for(&src_dir, &generated(&root), None, prelude, "0.0.0")
+    };
+    assert!(answers(&prelude));
+    assert!(!answers(&[]));
+    assert!(!answers(&prelude[..1]));
+    assert!(!answers(&[prelude[1].clone(), prelude[0].clone()]));
+
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An index written before the key existed records no prelude, which is what every transpile then used: it still answers for a package that declares none, and for no other.
+#[test]
+fn an_index_from_before_the_prelude_reads_as_the_empty_one() {
+    let root = package("pre_prelude");
+    std::fs::write(root.join("src/home.rsx"), "[view]\ntext \"a\"\n").unwrap();
+    let index = transpile(&root);
+    let mut json: serde_json::Value = serde_json::from_str(&index.to_json()).unwrap();
+    json.as_object_mut().unwrap().remove("prelude");
+    std::fs::create_dir_all(root.join(".telar")).unwrap();
+    std::fs::write(root.join(".telar/build.json"), json.to_string()).unwrap();
+
+    let read = read_build_index(&root, BuildFlavour::Plain).expect("an older index still reads");
+    assert!(read.prelude.is_empty());
+    assert!(read.answers_for(
+        &root.join("src"),
+        &generated(&root),
+        Some("app::Theme"),
+        &[],
         "0.0.0"
     ));
 

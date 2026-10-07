@@ -59,6 +59,7 @@ impl Backend {
             path: gen_path,
             code: gen_text,
             map,
+            ..
         } = crate::build_sync::generated_target(&rsx_path, &source, theme.as_deref())?;
         let offset = locate(section, &source, &gen_text, &map, pos)?;
 

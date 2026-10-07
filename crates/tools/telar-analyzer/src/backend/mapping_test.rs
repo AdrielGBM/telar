@@ -198,3 +198,93 @@ fn a_view_diagnostic_still_takes_the_whole_line() {
         (0, u32::MAX)
     );
 }
+
+/// What the build directory would hold for `rsx` transpiled against `prelude`.
+fn transpiled(rsx: &str, prelude: &[telar_project::PreludeEntry]) -> (String, SourceMap) {
+    let out = telar_transpiler::transpile_buffer(
+        &abs("/p/src/home.rsx"),
+        rsx,
+        &telar_transpiler::PackageOptions {
+            src_dir: &abs("/p/src"),
+            theme_type: None,
+            assets: None,
+            prelude,
+            flavour: telar_project::BuildFlavour::Plain,
+        },
+    )
+    .unwrap();
+    (
+        out.rust_code.clone(),
+        SourceMap::new(out.source_map, out.expr_spans),
+    )
+}
+
+/// rust-analyzer's "no such value in this scope" on the call an unknown tag became.
+fn unresolved_at(generated: &str, needle: &str) -> Diagnostic {
+    let at = generated.find(needle).unwrap();
+    Diagnostic {
+        range: Range {
+            start: offset_to_position(generated, at),
+            end: offset_to_position(generated, at + needle.len()),
+        },
+        severity: Some(DiagnosticSeverity::ERROR),
+        code: Some(NumberOrString::String("E0425".to_string())),
+        source: Some("rust-analyzer".to_string()),
+        message: "no such value in this scope".to_string(),
+        ..Default::default()
+    }
+}
+
+/// The editor says what `cargo telar check` says about an unknown tag, in the same words, and underlines the tag rather than the whole line the call was generated from.
+#[test]
+fn an_unknown_tag_reads_as_the_terminal_says_it() {
+    let rsx = "[view]\ncolumn\n    buton label:\"Go\"\n";
+    let prelude = [telar_project::PreludeEntry::parse("telar-components").unwrap()];
+    let (generated, map) = transpiled(rsx, &prelude);
+
+    let mapped = map_rust_diagnostic(
+        unresolved_at(&generated, "buton"),
+        &generated,
+        &map,
+        rsx,
+        &prelude,
+    )
+    .expect("the call maps to the tag's line");
+
+    assert_eq!(
+        mapped.message,
+        "unknown tag `buton`: not a built-in, not a `.rsx` in this package, and not exported by any `[telar] prelude` entry (`telar_components`)"
+    );
+    assert_eq!(
+        mapped.range.start,
+        Position {
+            line: 2,
+            character: 4
+        }
+    );
+    assert_eq!(
+        mapped.range.end,
+        Position {
+            line: 2,
+            character: 9
+        }
+    );
+}
+
+#[test]
+fn an_error_that_is_not_at_a_tag_keeps_rust_analyzers_words() {
+    let rsx = "[view]\ntext \"{missing}\"\n";
+    let (generated, map) = transpiled(rsx, &[]);
+
+    let mapped = map_rust_diagnostic(
+        unresolved_at(&generated, "missing"),
+        &generated,
+        &map,
+        rsx,
+        &[],
+    )
+    .expect("the expression maps");
+
+    assert_eq!(mapped.message, "no such value in this scope");
+    assert_eq!(mapped.range.start.line, 1);
+}

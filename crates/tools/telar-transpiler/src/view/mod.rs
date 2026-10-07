@@ -22,6 +22,7 @@ use telar_parser::{Attr, Element, IfBlock, StyleClass, ViewNode};
 
 use crate::lexer::contains_ident;
 use crate::registry::ValueKind;
+pub(crate) use component::props_type;
 pub(crate) use signals::{is_paint_key, rust_str, substitute_reads};
 use telar_project::{AssetContext, asset_kind_for_tag};
 

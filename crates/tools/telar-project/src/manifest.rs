@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::fonts::FontDeclaration;
+use crate::prelude::PreludeEntry;
 use crate::web::{OgImage, ThemeColor, WebHost};
 
 /// The file this describes, in the package root.
@@ -188,6 +189,8 @@ pub struct TelarSection {
     pub assets: Option<String>,
     /// The theme type this package's components resolve `use_theme` against.
     pub theme: Option<String>,
+    /// The crates whose items every `.rsx` of this package can name as tags, glob-imported after `telar`'s and before the package's own. `None` inherits the workspace's and `[]` declares none, so a package can opt out of a crate its workspace shares. Read through [`Self::prelude`] or [`crate::resolve_prelude`].
+    pub prelude: Option<Vec<PreludeEntry>>,
     #[serde(default)]
     pub dev: DevSection,
     #[serde(default)]
@@ -257,6 +260,17 @@ impl TelarManifest {
         Ok(manifest)
     }
 
+    /// Every `telar.toml` [`load`](Self::load) reads for `package_root` that exists: the package's own, then the workspace's it inherits from. What a build has to track to notice an inherited setting changing.
+    pub fn files(package_root: &Path) -> Vec<PathBuf> {
+        let workspace =
+            crate::find_workspace_root(package_root).filter(|root| root != package_root);
+        std::iter::once(package_root.to_path_buf())
+            .chain(workspace)
+            .map(|dir| dir.join(MANIFEST_FILENAME))
+            .filter(|path| path.is_file())
+            .collect()
+    }
+
     fn read(dir: &Path) -> Result<Option<Self>, ManifestError> {
         let path = dir.join(MANIFEST_FILENAME);
         let Ok(content) = std::fs::read_to_string(&path) else {
@@ -271,6 +285,7 @@ impl TelarManifest {
             .fonts
             .iter()
             .flat_map(FontDeclaration::problems)
+            .chain(crate::prelude::problems(manifest.telar.prelude()))
             .collect();
         if !problems.is_empty() {
             return Err(ManifestError::Invalid {
@@ -296,6 +311,7 @@ impl TelarSection {
             backend: self.backend.or(base.backend),
             assets: self.assets.or(base.assets),
             theme: self.theme.or(base.theme),
+            prelude: self.prelude.or(base.prelude),
             dev: DevSection {
                 window: self.dev.window.or(base.dev.window),
                 devtools: self.dev.devtools.or(base.dev.devtools),
@@ -325,6 +341,11 @@ impl TelarSection {
             locales: self.locales.or(base.locales),
             default_locale: self.default_locale.or(base.default_locale),
         }
+    }
+
+    /// The crates this package's `.rsx` glob-imports, in the order declared.
+    pub fn prelude(&self) -> &[PreludeEntry] {
+        self.prelude.as_deref().unwrap_or_default()
     }
 
     /// The directory a baked `src:"…"` resolves against, joined onto `package_root`.

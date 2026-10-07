@@ -60,6 +60,13 @@ fn package(name: &str) -> std::path::PathBuf {
 }
 
 fn wire(root: &std::path::Path) -> Result<Vec<super::WiredFile>, proc_macro2::TokenStream> {
+    wire_with(root, &[])
+}
+
+fn wire_with(
+    root: &std::path::Path,
+    prelude: &[telar_project::PreludeEntry],
+) -> Result<Vec<super::WiredFile>, proc_macro2::TokenStream> {
     let assets = telar_project::AssetContext::load(root, "0.0.0");
     let flavour = telar_project::BuildFlavour::Plain;
     super::wire_sources(
@@ -67,6 +74,7 @@ fn wire(root: &std::path::Path) -> Result<Vec<super::WiredFile>, proc_macro2::To
         &root.join("src"),
         &telar_project::generated_dir(root, flavour),
         None,
+        prelude,
         flavour,
         &assets,
     )
@@ -112,4 +120,88 @@ fn a_record_for_an_edited_source_is_not_reported() {
     assert!(!message.contains("unterminated"), "{message}");
 
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An artifact exactly as `cargo telar transpile` would leave it for one `home.rsx`, recorded under `prelude`.
+fn transpiled_under(name: &str, prelude: &[&str]) -> std::path::PathBuf {
+    let root = package(name);
+    let source = "[view]\ntext \"a\"\n";
+    let output = "// generated\n";
+    std::fs::write(root.join("src/home.rsx"), source).unwrap();
+    let flavour = telar_project::BuildFlavour::Plain;
+    let generated = telar_project::generated_dir(&root, flavour);
+    std::fs::create_dir_all(&generated).unwrap();
+    std::fs::write(generated.join("home.rs"), output).unwrap();
+    let index = telar_project::BuildIndex {
+        format: telar_project::BUILD_ARTIFACT_FORMAT,
+        producer: "test".to_string(),
+        telar_version: env!("CARGO_PKG_VERSION").to_string(),
+        theme: None,
+        prelude: prelude.iter().map(|path| path.to_string()).collect(),
+        uses_assets: false,
+        entries: vec![telar_project::BuildEntry {
+            source: "home.rsx".to_string(),
+            hash: telar_project::content_hash(source.as_bytes()),
+            output_hash: telar_project::content_hash(output.as_bytes()),
+            previews: false,
+        }],
+    };
+    telar_project::write_build_index(&root, flavour, &index).unwrap();
+    root
+}
+
+fn entries(declared: &[&str]) -> Vec<telar_project::PreludeEntry> {
+    declared
+        .iter()
+        .map(|entry| telar_project::PreludeEntry::parse(entry).unwrap())
+        .collect()
+}
+
+#[test]
+fn an_artifact_transpiled_under_the_declared_prelude_is_wired() {
+    let root = transpiled_under("prelude_agrees", &["telar_components"]);
+    let wired = wire_with(&root, &entries(&["telar-components"]));
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(wired.map(|files| files.len()).ok(), Some(1));
+}
+
+/// Nothing under `src/` changed, so the message has to point at `telar.toml` and at the command that brings the artifact back in line with it.
+#[test]
+fn an_artifact_transpiled_under_another_prelude_is_refused_naming_both() {
+    let one: &[&str] = &["telar_components"];
+    let two: &[&str] = &["telar_components", "other"];
+    for (label, recorded, declared) in [
+        ("added", one, two),
+        ("removed", one, &[][..]),
+        ("reordered", two, &["other", "telar-components"][..]),
+    ] {
+        let root = transpiled_under(&format!("prelude_{label}"), recorded);
+        let message = wire_with(&root, &entries(declared))
+            .err()
+            .unwrap_or_else(|| panic!("a prelude {label} since the transpile is refused"))
+            .to_string();
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            message.contains("telar.toml declares `prelude"),
+            "{message}"
+        );
+        assert!(
+            message.contains("was transpiled with `prelude"),
+            "{message}"
+        );
+        assert!(message.contains("cargo telar transpile"), "{message}");
+    }
+}
+
+#[test]
+fn a_source_edited_under_the_same_prelude_gets_the_generic_message() {
+    let root = transpiled_under("prelude_same_edited", &["telar_components"]);
+    std::fs::write(root.join("src/home.rsx"), "[view]\ntext \"b\"\n").unwrap();
+    let message = wire_with(&root, &entries(&["telar_components"]))
+        .err()
+        .unwrap()
+        .to_string();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(message.contains("no longer answers"), "{message}");
+    assert!(!message.contains("prelude"), "{message}");
 }
