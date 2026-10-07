@@ -54,12 +54,40 @@ pub struct HandleProps {
     /// `Color::TRANSPARENT` (the default) falls back to the theme's warning colour.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub clamped_color: Reactive<Color>,
+    /// Runs as a drag takes hold of the handle, before its first value is asked for. Arrow-key steps are not drags and do not run it.
+    #[props(some, default)]
+    pub on_start: Option<Rc<dyn Fn()>>,
+    /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept: `true` when it was let go, `false` when it was cancelled — Escape, another pointer button, the window losing focus — or the handle went away mid-drag. An undone drag has reverted its transaction by the time this runs; a kept one has written the value it was let go at, and its transaction commits as this returns. A drag that joined a transaction already open elsewhere leaves that decision to whoever opened it, and ends kept whenever its gesture ends.
+    #[props(some, default)]
+    pub on_end: Option<Rc<dyn Fn(bool)>>,
 }
 
 #[derive(Clone, Copy)]
 struct Grab {
     lift: (f32, f32),
     offset: (f32, f32),
+}
+
+/// A drag under way, so [`HandleProps::on_end`] answers each [`HandleProps::on_start`] exactly once: at the release, at a cancel, or — when neither comes because the handle is gone — as the last closure holding it drops.
+struct Stroke {
+    on_end: Option<Rc<dyn Fn(bool)>>,
+    live: Cell<bool>,
+}
+
+impl Stroke {
+    fn end(&self, kept: bool) {
+        if self.live.replace(false)
+            && let Some(on_end) = &self.on_end
+        {
+            on_end(kept);
+        }
+    }
+}
+
+impl Drop for Stroke {
+    fn drop(&mut self) {
+        self.end(false);
+    }
 }
 
 pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -76,6 +104,8 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
         clamped,
         color,
         clamped_color,
+        on_start,
+        on_end,
     } = props;
     let (min, max) = if max < min { (max, min) } else { (min, max) };
     let step = if step > 0.0 { step } else { 1.0 };
@@ -85,6 +115,10 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
     let value = transaction.signal();
     let clamped = clamped.unwrap_or_else(|| signal(false));
     let grab: Rc<Cell<Option<Grab>>> = Rc::new(Cell::new(None));
+    let stroke = Rc::new(Stroke {
+        on_end,
+        live: Cell::new(false),
+    });
 
     let placed = {
         let to_point = to_point.clone();
@@ -155,8 +189,14 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
     .drag_transaction(transaction)
     .on_drag({
         let grab = grab.clone();
+        let stroke = stroke.clone();
         move |local_x, local_y| {
             let held = grab.get().unwrap_or_else(|| {
+                if !stroke.live.replace(true)
+                    && let Some(on_start) = &on_start
+                {
+                    on_start();
+                }
                 let at = value.peek();
                 let lift = placed(at);
                 let centre = to_point(at);
@@ -174,9 +214,16 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
     })
     .on_drag_end({
         let release = release.clone();
-        move |_, _| release()
+        let stroke = stroke.clone();
+        move |_, _| {
+            release();
+            stroke.end(true);
+        }
     })
-    .on_drag_cancel(release)
+    .on_drag_cancel(move || {
+        release();
+        stroke.end(false);
+    })
     .on_focused_key(move |key: &Key| -> bool {
         let direction = match key {
             Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => 1.0,

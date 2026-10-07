@@ -139,3 +139,33 @@ fn a_live_drag_is_cancelled_only_from_its_own_surface() {
     assert!(cancelled.get());
     assert!(drag.settle());
 }
+
+/// A drag that waits for its threshold starts reporting where it crossed it, so where the press itself landed is what it says armed it — in the box's own coordinates and in the ones the box is laid out in.
+#[test]
+fn a_drag_says_where_the_press_that_armed_it_landed() {
+    let placed = Rect {
+        x: 200.0,
+        y: 100.0,
+        width: 100.0,
+        height: 100.0,
+    };
+    let (mut drag, log) = logging(4.0);
+    drag.press(&press_at(230.0, 140.0), placed);
+    drag.moved(&move_to(250.0, 140.0), placed);
+
+    let entries = log.borrow();
+    assert_eq!(entries.len(), 1);
+    let ((x, y), start) = entries[0];
+    assert_eq!((x, y), (50.0, 40.0), "reported from where it crossed");
+    let start = start.expect("reported inside the drag");
+    assert_eq!(
+        start.at,
+        (30.0, 40.0),
+        "the press, in the box's coordinates"
+    );
+    assert_eq!(
+        start.at_surface,
+        (230.0, 140.0),
+        "and in the coordinates the box is laid out in"
+    );
+}

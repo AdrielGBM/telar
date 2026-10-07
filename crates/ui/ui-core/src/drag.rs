@@ -11,13 +11,19 @@ use ui_tree::EventResult;
 
 use crate::pointer::PointerButtons;
 
-/// What armed a drag: the button pressed, and what was held down at that moment.
+/// What armed a drag: the button pressed, what was held down at that moment, and where it landed.
 ///
 /// Frozen at the press, and that is the whole of it. [`modifiers`](crate::modifiers) answers what is held *now*, so a mode read from it mid-stroke would change under a hand that let go of Shift — turning an orbit into a pan halfway through. A gesture chooses what it is once, when it starts, and is measured from there.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+///
+/// The place is part of it for the same reason. A drag is reported from where it starts moving — past its [threshold](crate::StyledContainer::drag_threshold), not back at the press — so a widget that has to take hold of what is under the press point, rather than under the pointer once it has slid off it, reads it here.
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DragStart {
     pub button: PointerButton,
     pub modifiers: ModifiersState,
+    /// Where the press landed, in the box's own coordinates: the space [`on_drag`](crate::StyledContainer::on_drag) reports in.
+    pub at: (f32, f32),
+    /// Where the press landed, in the coordinates the box itself is laid out in — the surface's, for a box not inside a scrolled or transformed one — as the pointer event that armed it carried them.
+    pub at_surface: (f32, f32),
 }
 
 thread_local! {
@@ -357,6 +363,8 @@ impl DragGesture {
                 DragStart {
                     button: *button,
                     modifiers: crate::keyboard::modifiers(),
+                    at: local,
+                    at_surface: (*x as f32, *y as f32),
                 },
             ));
             self.travel = 0.0;
