@@ -250,7 +250,7 @@ Four exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you insta
 | [`telar-renderer-cache`](crates/renderer/renderer-cache) · [`telar-renderer-record`](crates/renderer/renderer-record) | The shared byte-budgeted cache; a backend that records instead of drawing |
 | [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,tui,web,headless}` | Window/event abstraction and its backends |
 | [`telar-preferences-core`](crates/preferences/preferences-core) | The user's system preferences as reactive state, which theme, motion and plugins follow |
-| [`telar-devtools`](crates/telar-devtools) | The dev overlay: FPS counter, node inspector, build-error banner — pulled in by `telar/dev`, and by nothing else |
+| [`telar-devtools`](crates/devtools/telar-devtools) | The dev overlay: FPS counter, node inspector, build-error banner — pulled in by `telar/dev`, and by nothing else |
 | [`telar-parser`](crates/tools/telar-parser) · [`telar-transpiler`](crates/tools/telar-transpiler) · [`telar-macros`](crates/tools/telar-macros) | The `.rsx` pipeline |
 | [`telar-project`](crates/tools/telar-project) | What a project *is*: `telar.toml`, source discovery, output paths, and the build artifacts a transpile leaves behind |
 | [`telar-i18n-core`](crates/i18n/i18n-core) · [`telar-navigate-core`](crates/navigate/navigate-core) · [`telar-services-core`](crates/services/services-core) | i18n runtime, navigation, platform paths and DI |

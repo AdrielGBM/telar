@@ -87,7 +87,7 @@ pub use app_runtime::{AppRuntime, LocalApp};
 #[cfg(feature = "runtime")]
 pub use runner::font_config::FontSetup;
 #[cfg(feature = "runtime")]
-pub use ui_tree::{DevAction, DevPlugin};
+pub use ui_tree::{DevAction, DevOverlay};
 
 /// The overlay [`run_app_with_name`] installs: the one `cargo telar dev` ships, or none at all.
 ///

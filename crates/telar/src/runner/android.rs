@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::app::App;
 use crate::app_config::AppConfig;
 use services_core::AppPathsProvider;
-use ui_tree::DevPlugin;
+use ui_tree::DevOverlay;
 
 // App processes do not inherit the adb shell environment, so the engine's env-var debug flags are unreachable. Bridged from `debug.telar.<k>` system properties, which need no root. Must run before any `OnceLock` reads them or the render thread spawns.
 #[cfg(feature = "runtime")]
@@ -35,14 +35,14 @@ pub fn run_android_app_with_name<A: App>(
     android_app: platform_android::AndroidApp,
 ) {
     bridge_debug_props_to_env();
-    run_android_with_plugin::<A, crate::DefaultDevTools>(config, app, app_name, android_app);
+    run_android_with_overlay::<A, crate::DefaultDevTools>(config, app, app_name, android_app);
 }
 
 /// Builds the Android platform and paths provider, then hands over to the one shared boot sequence.
 ///
 /// The sequence itself — load prefs, resolve the backend, resolve the window, build the handler, run — used to be written out again here, `run_with_platform` being gated off this target for no reason: it is generic over `Platform`, `AndroidPlatform` implements it, and it imports nothing desktop-only.
 #[cfg(feature = "runtime")]
-fn run_android_with_plugin<A: App, D: DevPlugin>(
+fn run_android_with_overlay<A: App, D: DevOverlay>(
     config: AppConfig,
     app: A,
     app_name: &str,

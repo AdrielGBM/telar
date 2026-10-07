@@ -19,7 +19,7 @@ fn headless_renders_fill_color_to_pixels() {
         .with_frames(2)
         .capture_into(sink.clone());
 
-    // `()` is the no-op dev plugin — the same one a non-dev desktop build uses.
+    // `()` is the no-op dev overlay — the same one a non-dev desktop build uses.
     run_with_platform::<_, _, ()>(
         platform,
         AppConfig::default(),

@@ -18,7 +18,7 @@ use super::handler::build_app_handler;
 ///
 /// Each surface `(id, config)` gets a fresh app from `app_factory(id)` and a paths provider from `paths_factory(id)`; the backend builds and drives that surface's handler. On the headless and out-of-tree backends each surface runs on its own thread, so it gets a fully isolated reactive/theme/overlay/focus world with no cross-talk. Blocks until all surfaces close.
 ///
-/// This is the multi-surface analogue of [`crate::run_with_platform`]. It always uses the no-op dev plugin (`()`): the per-window devtools overlay is a single-surface concern.
+/// This is the multi-surface analogue of [`crate::run_with_platform`]. It always uses the no-op dev overlay (`()`): the per-window devtools overlay is a single-surface concern.
 pub fn run_multi_with_platform<P, A, PF, AF>(
     platform: P,
     surfaces: Vec<(SurfaceId, AppConfig)>,

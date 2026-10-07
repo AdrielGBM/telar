@@ -4,7 +4,7 @@ use platform_core::{Platform, PlatformError};
 use renderer_core::RendererFactory;
 use services_core::AppPathsProvider;
 use std::sync::Arc;
-use ui_tree::DevPlugin;
+use ui_tree::DevOverlay;
 
 use crate::app::App;
 use crate::app_config::AppConfig;
@@ -31,7 +31,7 @@ where
     P: Platform,
     P::Window: SurfaceWindow,
     A: App,
-    D: DevPlugin,
+    D: DevOverlay,
 {
     run_on_platform::<P, A, D>(
         platform,
@@ -63,7 +63,7 @@ where
     P::Window: Clone + 'static,
     F: RendererFactory<P::Window>,
     A: App,
-    D: DevPlugin,
+    D: DevOverlay,
 {
     run_on_platform::<P, A, D>(
         platform,
@@ -93,7 +93,7 @@ where
     P: Platform,
     P::Window: Clone + 'static,
     A: App,
-    D: DevPlugin,
+    D: DevOverlay,
 {
     // The one place every runner passes through, so app code can ask `telar::paths::cache()` instead of resolving XDG for itself and landing somewhere other than the runtime it is embedded in.
     services_core::app_paths::install(app_name, paths.clone());

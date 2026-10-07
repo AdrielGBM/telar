@@ -1,11 +1,11 @@
 //! That an overlay of your own can be installed through the facade alone.
 //!
-//! `DevPlugin` was public and the frame loop generic over it for as long as both existed, and neither fact was reachable: every entry point that opens a window named the built-in overlay, and installing another meant depending on `telar-platform-desktop` and building the platform by hand. This is the door, and it is a compile test because what it asserts is that the *types* line up — running it would open a window.
+//! `DevOverlay` was public and the frame loop generic over it for as long as both existed, and neither fact was reachable: every entry point that opens a window named the built-in overlay, and installing another meant depending on `telar-platform-desktop` and building the platform by hand. This is the door, and it is a compile test because what it asserts is that the *types* line up — running it would open a window.
 
 use std::borrow::Cow;
 use std::time::Duration;
 
-use telar::{DevAction, DevPlugin, DrawCommand, Key, ModifiersState, SegmentNodeInfo};
+use telar::{DevAction, DevOverlay, DrawCommand, Key, ModifiersState, SegmentNodeInfo};
 
 /// The smallest overlay that is not `()`: it counts the frames it was handed and draws nothing.
 #[derive(Default)]
@@ -13,7 +13,7 @@ struct Ruler {
     frames: usize,
 }
 
-impl DevPlugin for Ruler {
+impl DevOverlay for Ruler {
     fn on_frame<'a>(
         &mut self,
         base: &'a [DrawCommand],

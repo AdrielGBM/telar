@@ -1,6 +1,6 @@
 //! The dev overlay `cargo telar dev` draws over a running application: an FPS counter, a node inspector and the build-error banner.
 //!
-//! Nothing here is privileged. It implements [`ui_tree::DevPlugin`], which is the whole of what the runner asks of an overlay, and an overlay of your own goes in through the same door — see `telar::run_app_with_devtools`.
+//! Nothing here is privileged. It implements [`ui_tree::DevOverlay`], which is the whole of what the runner asks of an overlay, and an overlay of your own goes in through the same door — see `telar::run_app_with_devtools`.
 //!
 //! Kept out of `telar` because it is 400 lines of chrome no shipping application draws, and because a seam whose only implementation lives inside the crate that defines it is a seam nobody can be shown how to use.
 #![warn(rustdoc::broken_intra_doc_links)]
@@ -15,7 +15,7 @@ use platform_core::{Key, ModifiersState};
 use renderer_core::{
     BlendMode, Border, BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle,
 };
-use ui_tree::{DevAction, DevPlugin, SegmentNodeInfo};
+use ui_tree::{DevAction, DevOverlay, SegmentNodeInfo};
 
 fn rect_command(rect: Rect, style: RectStyle) -> DrawCommand {
     DrawCommand::Rect {
@@ -94,7 +94,7 @@ impl Default for DevTools {
     }
 }
 
-impl DevPlugin for DevTools {
+impl DevOverlay for DevTools {
     fn set_renderer_info(&mut self, info: &str) {
         self.renderer_info = Some(info.to_owned());
     }

@@ -17,7 +17,7 @@ pub enum DevAction {
 }
 
 /// The dev overlay seam: `()` in a release build, the inspector and FPS counter in a dev one.
-pub trait DevPlugin: Default + 'static {
+pub trait DevOverlay: Default + 'static {
     fn on_frame<'a>(
         &mut self,
         base: &'a [DrawCommand],
@@ -46,7 +46,7 @@ pub trait DevPlugin: Default + 'static {
     fn on_tree(&mut self, _nodes: &[SegmentNodeInfo]) {}
 }
 
-impl DevPlugin for () {
+impl DevOverlay for () {
     fn on_frame<'a>(
         &mut self,
         base: &'a [DrawCommand],

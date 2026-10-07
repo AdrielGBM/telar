@@ -6,7 +6,7 @@ use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
 use std::sync::Arc;
 use ui_core::EventResult;
-use ui_tree::{DevAction, DevPlugin};
+use ui_tree::{DevAction, DevOverlay};
 
 use crate::app_runtime::AppRuntime;
 use crate::config::{self, RendererBackend};
@@ -20,7 +20,7 @@ use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, Surf
 use super::state::{AppEnv, FramePacer, WindowTitle};
 use super::{FRAME_BUDGET, HW_KEEPALIVE_INTERVAL, IDLE_GRACE};
 
-pub(super) struct AppHandler<W, D: DevPlugin>
+pub(super) struct AppHandler<W, D: DevOverlay>
 where
     W: Window + Clone + 'static,
 {
@@ -120,7 +120,7 @@ pub(super) fn build_app_handler<W, D>(
 ) -> AppHandler<W, D>
 where
     W: Window + Clone + 'static,
-    D: DevPlugin,
+    D: DevOverlay,
 {
     let SurfaceRenderer { host, raw_handles } = renderer;
     AppHandler::<W, D> {
@@ -168,7 +168,7 @@ where
 impl<W, D> Drop for AppHandler<W, D>
 where
     W: Window + Clone + 'static,
-    D: DevPlugin,
+    D: DevOverlay,
 {
     fn drop(&mut self) {
         let _surface = self.enter_surface();
@@ -197,7 +197,7 @@ struct FramePass {
 impl<W, D> AppHandler<W, D>
 where
     W: Window + Clone + 'static,
-    D: DevPlugin,
+    D: DevOverlay,
 {
     /// Drains and applies the window-management commands a handler enqueued — from a title-bar control during event dispatch, or from `on_frame` (e.g. raising this window on a routed handoff). Returns whether any applied. Routed through the App bridge so the dylib-backed `HotApp` drains the dylib's own queue.
     fn apply_window_commands(&mut self, window: &W) -> bool {
@@ -669,7 +669,7 @@ where
         })
     }
 
-    /// Composes the tree's commands, hands them past the dev plugin, and packs the result into the message a renderer takes.
+    /// Composes the tree's commands, hands them past the dev overlay, and packs the result into the message a renderer takes.
     fn build_frame(&mut self, pass: &FramePass) -> FrameMsg {
         renderer_core::perf::tick();
         // Reclaim buffers the render thread finished with, capped so the free-list stays tiny.
@@ -748,7 +748,7 @@ where
 impl<W, D> EventHandler<W> for AppHandler<W, D>
 where
     W: Window + Clone + 'static,
-    D: DevPlugin,
+    D: DevOverlay,
 {
     fn accessibility(&self) -> Vec<platform_core::AccessNode> {
         let _surface = self.enter_surface();
@@ -1033,7 +1033,7 @@ where
             Some(FRAME_BUDGET.saturating_sub(self.pacer.last_tick.elapsed()))
         } else {
             if let Some(interval) = self.dev.keepalive_interval() {
-                // The dev plugin drives its own cadence.
+                // The dev overlay drives its own cadence.
                 Some(interval)
             } else if self.keepalive_due() {
                 Some(HW_KEEPALIVE_INTERVAL)

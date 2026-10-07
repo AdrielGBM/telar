@@ -18,10 +18,10 @@ pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
 
 /// The same, with a devtools overlay of your own drawn over the application.
 ///
-/// The seam is [`DevPlugin`](crate::DevPlugin), and it was reachable only by building a platform by hand: the frame loop has always been generic over the overlay, but every entry point that opens a window for you named the built-in one. This is that entry point with the choice left open.
+/// The seam is [`DevOverlay`](crate::DevOverlay), and it was reachable only by building a platform by hand: the frame loop has always been generic over the overlay, but every entry point that opens a window for you named the built-in one. This is that entry point with the choice left open.
 ///
 /// Only a window has an overlay. A terminal run ignores `D`, because the frame it composes is a grid of cells with nothing to draw chrome on.
-pub fn run_app_with_devtools<A: App, D: crate::DevPlugin>(
+pub fn run_app_with_devtools<A: App, D: crate::DevOverlay>(
     config: AppConfig,
     app: A,
     app_name: &str,
@@ -58,7 +58,7 @@ fn tui_selected() -> bool {
     not(target_os = "android"),
     not(target_arch = "wasm32")
 ))]
-fn run_default_frontend<A: App, D: crate::DevPlugin>(config: AppConfig, app: A, app_name: &str) {
+fn run_default_frontend<A: App, D: crate::DevOverlay>(config: AppConfig, app: A, app_name: &str) {
     super::desktop::run_desktop_app_with_devtools::<A, D>(config, app, app_name)
 }
 
@@ -71,7 +71,7 @@ fn run_default_frontend<A: App, D: crate::DevPlugin>(config: AppConfig, app: A, 
         not(target_arch = "wasm32")
     ))
 ))]
-fn run_default_frontend<A: App, D: crate::DevPlugin>(config: AppConfig, app: A, app_name: &str) {
+fn run_default_frontend<A: App, D: crate::DevOverlay>(config: AppConfig, app: A, app_name: &str) {
     super::run_web_app_with_name(config, super::WebOptions::default(), app, app_name)
 }
 
@@ -83,7 +83,11 @@ fn run_default_frontend<A: App, D: crate::DevPlugin>(config: AppConfig, app: A, 
     ),
     all(feature = "web-dom", target_arch = "wasm32")
 )))]
-fn run_default_frontend<A: App, D: crate::DevPlugin>(_config: AppConfig, _app: A, _app_name: &str) {
+fn run_default_frontend<A: App, D: crate::DevOverlay>(
+    _config: AppConfig,
+    _app: A,
+    _app_name: &str,
+) {
     // Reachable only from a build with no frontend at all: a `tui`-only build never gets here, because `tui_selected` answers `true` when nothing else is compiled in.
     panic!(
         "this build of telar has no frontend to run on — enable `desktop` for a window, `web` for a page, \
