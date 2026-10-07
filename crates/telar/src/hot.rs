@@ -271,6 +271,16 @@ impl crate::app_runtime::AppRuntime for HotApp {
         }
     }
 
+    // The cascade the family seeds is the dylib's. A missing symbol leaves its text in the platform's family until the dylib is rebuilt.
+    fn open_font_family(&self, family: Option<&str>) {
+        if let Ok(open) = unsafe {
+            self._lib
+                .get::<unsafe extern "Rust" fn(Option<&str>)>(b"_rsx_hot_open_font_family\0")
+        } {
+            unsafe { open(family) }
+        }
+    }
+
     // Its dialogs and its history are the dylib's. A missing symbol answers that nothing went back.
     fn navigate_back(&self) -> bool {
         let Ok(back) = (unsafe {

@@ -11,6 +11,8 @@ use reactive_core::RwSignal;
 use renderer_core::{Color, RectStyle, ShapeStyle, TextStyle};
 use ui_core::{LayoutItem, StyledContainer, Text, box_item, track_layout};
 
+use crate::shared;
+
 /// Which window-management controls a frame draws, beside the close button it always has.
 ///
 /// Off by default: a layer-shell panel has no top-level window to minimize, and drawing a control that does nothing is worse than not drawing it. A windowed backend turns on what its platform can honour.
@@ -107,17 +109,17 @@ pub fn window_frame(
     let title = title.into();
     let title_color = style.title_text;
     let font_size = style.font_size;
-    let title_label = box_item(Text::new(
+    let title_label = box_item(Text::declaring(
         move || title.clone(),
         LayoutStyle::new(),
-        move || TextStyle::new(font_size, title_color),
+        move |inherited| shared::in_family_of(TextStyle::new(font_size, title_color), inherited),
     )?);
 
     let close_color = style.close;
-    let close_label = box_item(Text::new(
+    let close_label = box_item(Text::declaring(
         || "\u{2715}".to_string(),
         LayoutStyle::new(),
-        move || TextStyle::new(font_size, close_color),
+        move |inherited| shared::in_family_of(TextStyle::new(font_size, close_color), inherited),
     )?);
     let close_hover = style.close_hover;
     let close_button = box_item(
@@ -139,10 +141,12 @@ pub fn window_frame(
     let control_button = |glyph: &'static str,
                           command: platform_core::WindowCommand|
      -> Result<Box<dyn LayoutItem>, LayoutError> {
-        let label = box_item(Text::new(
+        let label = box_item(Text::declaring(
             move || glyph.to_string(),
             LayoutStyle::new(),
-            move || TextStyle::new(font_size, close_color),
+            move |inherited| {
+                shared::in_family_of(TextStyle::new(font_size, close_color), inherited)
+            },
         )?);
         Ok(box_item(
             StyledContainer::new(

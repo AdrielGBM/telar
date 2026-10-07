@@ -560,3 +560,45 @@ fn a_text_is_written_in_the_language_said_nearest_above_it_or_the_locale() {
     .join()
     .unwrap();
 }
+
+/// Spans scanned out of the text — as many as it holds right now — over a paragraph that takes its style from the tree above it, measured again as either moves.
+#[test]
+fn spans_scanned_from_an_inheriting_paragraph_follow_both() {
+    use renderer_core::{Declared, Span};
+    reset_layout_runtime();
+    let content = signal("one two".to_string());
+    let text = Text::spanned_declaring(
+        move || content.get(),
+        move || {
+            content.with(|t| {
+                t.match_indices("two")
+                    .map(|(at, found)| {
+                        let range = at as u32..(at + found.len()) as u32;
+                        Span::new(range, Declared::default().with_font_size(40.0))
+                    })
+                    .collect()
+            })
+        },
+        LayoutStyle::new(),
+        |inherited| inherited,
+    )
+    .unwrap();
+    let root = new_container(LayoutStyle::new().flex_row(), &[text.layout_node()]).unwrap();
+    crate::inherit::declare(root, Declared::default().with_font_size(20.0));
+    assert_eq!((text.style)().font_size, 20.0);
+    let width = || {
+        relayout_if_dirty();
+        compute_layout(root, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
+        track_layout(text.layout_node()).unwrap().get().width
+    };
+    let one = width();
+    content.set("one two two".to_string());
+    assert_eq!(text.spans.as_ref().unwrap()().len(), 2);
+    let two = width();
+    assert!(two > one, "one={one} two={two}");
+    crate::inherit::declare(root, Declared::default().with_font_size(10.0));
+    assert!(
+        width() < two,
+        "the paragraph around the spans shrinks with what it inherits"
+    );
+}

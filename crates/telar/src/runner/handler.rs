@@ -291,6 +291,7 @@ where
         if let Some(title) = &self.title {
             self.app.open_title(&title.app, &title.showing);
         }
+        self.app.open_font_family(self.fonts.family.as_deref());
         self.tree = Some(self.app.mount());
         self.fit_tree_to(window);
         if let Some(hydration) = hydration {

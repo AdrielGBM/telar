@@ -9,9 +9,9 @@ pub struct AppConfig {
     pub window: WindowConfig,
     /// The faces this application ships, embedded in the binary or read from a file beside it. The faces `[[telar.fonts]]` declares in `telar.toml` are added by `telar::app!`; see `docs/fonts.md`.
     pub fonts: Vec<FontAsset>,
-    /// The family this application's unstyled text shapes in — a shell's theme font. `None` keeps the platform's own. Loading a face with `fonts` does not choose it; this does.
+    /// The family this surface's text shapes in where nothing above it names one — a shell's theme font. `None` keeps the platform's own. Loading a face with `fonts` does not choose it; this does.
     ///
-    /// A property of *this* configuration, so a second surface built later renders in its own family rather than in whichever one was configured last. A single text overrides it with [`TextStyle::with_font_family`](crate::TextStyle::with_font_family).
+    /// It seeds the root of the surface's text cascade as the surface opens, and [`set_font_family`](crate::set_font_family) moves it while the surface runs. A property of *this* configuration, so a second surface built later renders in its own family rather than in whichever one was configured last. Text declares its own with `font_family:` or [`TextStyle::with_font_family`](crate::TextStyle::with_font_family); a text given a whole style with [`Text::new`](crate::Text::new) opts out of the cascade, and with it out of this.
     pub font_family: Option<String>,
 }
 

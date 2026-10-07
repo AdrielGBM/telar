@@ -190,6 +190,16 @@ pub fn font_family_available(family: &str) -> bool {
     renderer_text::font_family_available(family)
 }
 
+/// Every font family text can be set in on this system, sorted and each once, for a list that offers them to [`set_font_family`] or [`TextStyle::with_font_family`](crate::TextStyle::with_font_family).
+///
+/// Read from the database the text shaper already loaded, like [`font_family_available`], and kept with it, so asking again copies a list rather than scanning, and every name in it is one text resolves. The faces an application ships ([`AppConfig::fonts`](crate::AppConfig::fonts)) are listed under the family they declare. A name starting with a dot is a face the platform keeps for itself and is left out.
+///
+/// The database only grows: a face added while the app runs is listed from then on. A list that should follow it reads [`use_text_metrics_generation`] beside this, which moves when one lands.
+#[cfg(feature = "shaper")]
+pub fn font_families() -> Vec<String> {
+    renderer_text::font_families()
+}
+
 /// Installs the glyph-shaping text measurer, for code that lays out text with no runner behind it — a layout test, or a tool that composes a tree only to measure it.
 ///
 /// An app never needs this: the runner installs it on resume with the app's own fonts. Nothing happens if a measurer is already installed.
@@ -271,6 +281,9 @@ pub use ui_core::{
     TitleParts, compose_title, open_surface_title, set_page_title, set_title_format, surface_title,
     use_surface_title,
 };
+// The family a surface's text shapes in where nothing above it names one: seeded from `AppConfig::font_family`, changed live with `set_font_family`.
+#[cfg(feature = "runtime")]
+pub use ui_core::{open_surface_font_family, set_font_family, use_font_family};
 // The seam and nothing behind it: `telar-dynamic` carries the decoders and transports that plug in here, and an application's own plug in exactly the same way.
 #[cfg(feature = "runtime")]
 pub use ui_core::{

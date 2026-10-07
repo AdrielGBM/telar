@@ -945,3 +945,68 @@ fn a_history_the_platform_reports_is_not_echoed_to_it() {
         "the platform already stands there"
     );
 }
+
+/// An app of one `text` naming no family, as `.rsx` writes one.
+struct Labelled;
+
+impl App for Labelled {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        ui_core::reset_layout_runtime();
+        Box::new(
+            ui_core::Text::declaring(
+                || "Configured".to_string(),
+                layout_core::LayoutStyle::new(),
+                |t| t,
+            )
+            .expect("a text builds"),
+        )
+    }
+}
+
+fn drawn_family(handler: &AppHandler<HeadlessWindow, ()>) -> renderer_core::FontFamily {
+    ui_core::relayout_if_dirty();
+    let tree = handler.tree.as_ref().expect("a tree is mounted");
+    let frame = tree.frame();
+    frame
+        .iter()
+        .find_map(|command| match command {
+            renderer_core::DrawCommand::Text { style, .. } => Some(style.font_family.clone()),
+            _ => None,
+        })
+        .expect("the tree drew its text")
+}
+
+/// The family a surface is configured with is where its text starts, and the app moves it while the surface runs without building anything again.
+#[test]
+fn a_surface_opens_in_its_configured_family_and_follows_a_new_one() {
+    crate::install_default_text_metrics();
+    let mut handler = build_app_handler::<HeadlessWindow, ()>(
+        Box::new(LocalApp(Labelled)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup {
+            faces: Vec::new(),
+            family: Some("Telar Configured Face".to_string()),
+        },
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "font-family-test".to_string(),
+        SurfaceRenderer::builtin(),
+    );
+    let window = HeadlessWindow::new(200, 40);
+    handler.remount(&window);
+    let configured = renderer_core::FontFamily::from("Telar Configured Face");
+    assert_eq!(
+        drawn_family(&handler),
+        renderer_core::FontFamily::stack([configured, renderer_core::FontFamily::SansSerif])
+    );
+
+    ui_core::set_font_family(Some(renderer_core::FontFamily::Monospace));
+    assert_eq!(drawn_family(&handler), renderer_core::FontFamily::Monospace);
+
+    handler.remount(&window);
+    assert_eq!(
+        drawn_family(&handler),
+        renderer_core::FontFamily::Monospace,
+        "a tree built again keeps what the app chose over what the surface was configured with"
+    );
+}

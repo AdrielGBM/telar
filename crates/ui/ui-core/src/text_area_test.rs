@@ -1,5 +1,7 @@
 use super::*;
-use crate::context::{compute_layout, new_container, reset_layout_runtime};
+use crate::context::{
+    compute_layout, new_container, relayout_if_dirty, reset_layout_runtime, track_layout,
+};
 use crate::layout_item::LayoutItem;
 use layout_core::AvailableSpace;
 use renderer_core::Color;
@@ -193,4 +195,119 @@ fn ctrl_chord_is_ignored_as_shortcut() {
     };
     assert_eq!(area.on_event(&save), EventResult::Ignored);
     assert_eq!(value.get(), "hi");
+}
+
+/// The area and a column holding it, laid out whenever its height is asked for.
+struct Laid {
+    area: TextArea,
+    root: layout_core::NodeId,
+}
+
+impl Laid {
+    fn new(area: TextArea) -> Self {
+        let root = new_container(LayoutStyle::new().flex_column(), &[area.layout_node()]).unwrap();
+        Self { area, root }
+    }
+
+    fn height(&self) -> f32 {
+        relayout_if_dirty();
+        compute_layout(
+            self.root,
+            AvailableSpace::MaxContent,
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        track_layout(self.area.layout_node()).unwrap().get().height
+    }
+}
+
+/// A style that follows state moves the line height, so it measures the area again the way a new line does; a size or family read from a signal used to leave the box at the old height.
+#[test]
+fn a_restyled_area_is_measured_again() {
+    reset_layout_runtime();
+    let size = signal(12.0f32);
+    let laid = Laid::new(
+        TextArea::new(
+            signal("one\ntwo".to_string()),
+            LayoutStyle::new(),
+            move || TextStyle::new(size.get(), Color::BLACK),
+        )
+        .unwrap(),
+    );
+    let small = laid.height();
+    size.set(48.0);
+    let large = laid.height();
+    assert!(large > small * 3.5, "small={small} large={large}");
+}
+
+#[test]
+fn a_new_line_measures_the_area_again() {
+    reset_layout_runtime();
+    let value = signal("one".to_string());
+    let laid = Laid::new(
+        TextArea::new(value, LayoutStyle::new(), || {
+            TextStyle::new(14.0, Color::BLACK)
+        })
+        .unwrap(),
+    );
+    let one = laid.height();
+    value.set("one\ntwo\nthree".to_string());
+    let three = laid.height();
+    assert!(three > one * 2.5, "one={one} three={three}");
+}
+
+/// What `.rsx` text does: it takes the size declared above it, and follows it when it moves.
+#[test]
+fn a_declaring_area_is_sized_by_the_tree_above_it() {
+    use renderer_core::Declared;
+    reset_layout_runtime();
+    let laid = Laid::new(
+        TextArea::declaring(
+            signal("one\ntwo".to_string()),
+            LayoutStyle::new(),
+            |inherited| inherited,
+        )
+        .unwrap(),
+    );
+    crate::inherit::declare(laid.root, Declared::default().with_font_size(20.0));
+    assert_eq!((laid.area.style)().font_size, 20.0);
+    let small = laid.height();
+    crate::inherit::declare(laid.root, Declared::default().with_font_size(40.0));
+    let large = laid.height();
+    assert!(large > small * 1.8, "small={small} large={large}");
+}
+
+#[test]
+fn a_declaring_area_follows_the_surfaces_family_and_a_complete_one_does_not() {
+    use renderer_core::FontFamily;
+    let surface = crate::Surface::new();
+    let _entered = surface.enter();
+    reset_layout_runtime();
+    let declaring = TextArea::declaring(signal(String::new()), LayoutStyle::new(), |t| t).unwrap();
+    let complete = TextArea::new(signal(String::new()), LayoutStyle::new(), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .unwrap();
+    crate::set_font_family(Some(FontFamily::Monospace));
+    assert_eq!((declaring.style)().font_family, FontFamily::Monospace);
+    assert_eq!((complete.style)().font_family, FontFamily::SansSerif);
+    crate::set_font_family(None);
+    assert_eq!((declaring.style)().font_family, FontFamily::SansSerif);
+}
+
+/// Like a field, an area shows what was typed: its caret and selection index the value, so a case inherited from above would put them between the wrong letters.
+#[test]
+fn an_area_shows_what_was_typed_whatever_case_it_inherits() {
+    reset_layout_runtime();
+    let laid = Laid::new(
+        TextArea::declaring(signal("typed".to_string()), LayoutStyle::new(), |t| t).unwrap(),
+    );
+    crate::inherit::declare(
+        laid.root,
+        renderer_core::Declared::default().with_text_case(renderer_core::TextCase::Upper),
+    );
+    assert_eq!(
+        (laid.area.style)().text_case,
+        renderer_core::TextCase::AsWritten
+    );
 }

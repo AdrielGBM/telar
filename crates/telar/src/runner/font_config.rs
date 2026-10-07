@@ -2,13 +2,13 @@
 
 use services_core::AppPathsProvider;
 
-/// The faces a surface loads, and which of them its unstyled text shapes in.
+/// The faces a surface loads, and which family its text shapes in where nothing above it names one.
 ///
-/// One value because the three always travel together: they arrive from an [`AppConfig`](crate::AppConfig), cross the handler, and reach four builders that each took them as three positional arguments. `multi.rs` had already given the triple a name — as a tuple alias — which is the shape asking to be a struct.
+/// One value because the two always travel together: they arrive from an [`AppConfig`](crate::AppConfig), cross the handler, and reach the builders that load the faces and the surface that takes the family.
 #[derive(Clone, Default)]
 pub struct FontSetup {
     pub faces: Vec<renderer_core::FontAsset>,
-    /// The family this surface's unstyled text shapes in. A property of *this* surface, so a second one built later renders in its own rather than in whichever was configured last.
+    /// What this surface's text shapes in where nothing above it names a family: the root of its text cascade, seeded as the surface opens and changed while it runs with [`set_font_family`](crate::set_font_family). A property of *this* surface, so a second one built later renders in its own rather than in whichever was configured last.
     pub family: Option<String>,
 }
 
@@ -76,23 +76,18 @@ pub(super) fn build_hardware_font_config(
     }
 }
 
-/// The faces a surface loads and which of them its unstyled text shapes in.
+/// The faces a surface loads, behind the platform's own sans-serif candidates.
 ///
-/// `font_family` is the surface's own — it arrives with the rest of its configuration rather than from a process-wide setting, so two surfaces in one process can render in two different faces, and neither can change the other's by being built later.
+/// The family a surface names is not routed here: the shaper's database is the process's, and a family chosen there would be every surface's — layout measures each surface's text with one shaper. It is the root of the surface's text cascade instead, so the family travels in each text's style and measuring and drawing agree per surface.
 pub(super) fn build_font_config(
     fonts: FontSetup,
     system: &SystemFonts,
 ) -> renderer_core::FontConfig {
-    // A platform fact supplied by the injected paths provider, so this stays OS-agnostic. The named family takes priority, so a shell's theme font wins and the OS candidates remain as fallbacks.
-    let sans_serif_family_candidates = fonts
-        .family
-        .into_iter()
-        .chain(system.sans_serif.iter().cloned())
-        .collect();
+    // A platform fact supplied by the injected paths provider, so this stays OS-agnostic.
     renderer_core::FontConfig {
         faces: fonts.faces,
         system_fonts_dir: system.dir.clone(),
-        sans_serif_family_candidates,
+        sans_serif_family_candidates: system.sans_serif.clone(),
     }
 }
 

@@ -75,7 +75,7 @@ pub fn prerender_page<A: App>(
     renderer_text::fonts::install(build_font_config(
         FontSetup {
             faces,
-            family: font_family,
+            family: font_family.clone(),
         },
         &SystemFonts::from_provider(&NoPaths),
     ));
@@ -90,6 +90,7 @@ pub fn prerender_page<A: App>(
     app.set_surface_size(size);
     app.set_location_history(&[location_of(&request.page)]);
     app.open_title(&window.title, &window.title);
+    app.open_font_family(font_family.as_deref());
     let mut tree = app.mount();
     app.set_surface_size(size);
     tree.on_event(&Event::WindowResized {

@@ -373,6 +373,11 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_open_title(app: &str, showing: &str) {
                 ::telar::open_surface_title(app, showing);
             }
+            // The dylib's own copy of the surface's default family, which its text cascade starts from.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_open_font_family(family: ::std::option::Option<&str>) {
+                ::telar::open_surface_font_family(family.map(::telar::FontFamily::from));
+            }
             // Back closes the dylib's dialogs and steps the dylib's history, neither of which the host can reach.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_navigate_back() -> bool {

@@ -8,6 +8,9 @@ const TEST_FACE: &[u8] = include_bytes!("../test-fonts/TelarTest.ttf");
 // One test rather than several: the installed database is process-wide, so separate tests would race.
 #[test]
 fn the_database_only_grows_and_every_shaper_takes_a_face_that_arrives() {
+    let _installing = FACES_STABLE
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     // A family nothing resolves to and faces nothing can read, so every install changes which `Fonts` is in force without changing a face — the tests measuring text beside this keep measuring the same widths.
     let named = FontConfig {
         sans_serif_family_candidates: vec!["a family no system has".to_string()],
@@ -70,6 +73,15 @@ fn the_database_only_grows_and_every_shaper_takes_a_face_that_arrives() {
         "and to the family the file itself declares"
     );
     assert!(crate::font_family_available("Telar Declared"));
+    assert!(!both.family_names().contains(&"Telar Declared".to_string()));
+    assert!(
+        crate::font_families().contains(&"Telar Declared".to_string()),
+        "the list is read from the database text resolves in, so a face that arrives is offered"
+    );
+    assert!(
+        std::ptr::eq(arrived.family_names(), arrived.family_names()),
+        "and read out of it once"
+    );
     let resolved = drawing.measure_text("Wide Words", None, 1000.0, &stack);
     assert_ne!(
         resolved, fallback,
@@ -109,4 +121,24 @@ fn a_declared_family_style_and_weight_are_what_the_face_answers_to() {
     assert!(face.families.iter().any(|(name, _)| name == "Telar Test"));
     assert_eq!(face.style, fontdb::Style::Italic);
     assert_eq!(face.weight, fontdb::Weight(700));
+}
+
+#[test]
+fn families_are_listed_sorted_once_each_without_the_ones_a_platform_hides() {
+    let mut db = fontdb::Database::new();
+    for (family, weight) in [
+        ("Display", 400),
+        (".LastResort", 400),
+        ("Display", 700),
+        ("Alpha", 400),
+        ("  ", 400),
+    ] {
+        load_asset(
+            &mut db,
+            &FontAsset::embedded(TEST_FACE)
+                .named(family)
+                .with_weight(FontWeight::fixed(weight)),
+        );
+    }
+    assert_eq!(listed_families(&db), ["Alpha", "Display"]);
 }

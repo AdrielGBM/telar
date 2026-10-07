@@ -1,10 +1,11 @@
 //! [`TextArea`]: the multi-line editor — caret, selection, and a height measured from its line count.
 
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use layout_core::{LayoutError, LayoutStyle};
+use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton};
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{RectStyle, ShapeStyle, TextStyle};
@@ -35,7 +36,7 @@ pub struct TextArea {
     id: FocusId,
     leaf: LayoutLeaf,
     placeholder: String,
-    // Re-measures the leaf's height on any change to the bound value, so a keystroke and a programmatic load both drive the line count into the layout.
+    // Reads what the measure reads — the line count and the style — and dirties the leaf only when one of them moves its height, so a new line, a programmatic load and a restyle (a size, a family) all reach the layout while a keystroke within a line costs none.
     _remeasure: Effect,
     blink: Blink,
     // Keeps the blink running while the area holds the keyboard, and stops it when it does not.
@@ -52,22 +53,45 @@ impl TextArea {
             .focusable(focus::focusable_of(self.id, role, None))
     }
 
+    /// An area in exactly `style_fn`'s style: the opt-out from the tree above, the surface's family included. [`declaring`](Self::declaring) is the one that follows it.
     pub fn new(
         value: RwSignal<String>,
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
-        let style: Rc<dyn Fn() -> TextStyle> = Rc::new(style_fn);
+        Self::build(value, layout_style, |_| Rc::new(style_fn))
+    }
+
+    /// An area styled by what the tree above it declared, amended by whatever it says for itself — the counterpart of [`Text::declaring`](crate::Text::declaring) and [`Input::declaring`](crate::Input::declaring), and what keeps an editor in the surface's family ([`set_font_family`](crate::set_font_family)) and at the size of the text around it.
+    pub fn declaring(
+        value: RwSignal<String>,
+        layout_style: LayoutStyle,
+        style_fn: impl Fn(TextStyle) -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        Self::build(value, layout_style, |node| {
+            Rc::new(move || style_fn(crate::inherit::inherited_text_style_at(node.get())))
+        })
+    }
+
+    fn build(
+        value: RwSignal<String>,
+        layout_style: LayoutStyle,
+        style: impl FnOnce(Rc<Cell<Option<NodeId>>>) -> Rc<dyn Fn() -> TextStyle>,
+    ) -> Result<Self, LayoutError> {
+        // The measure closure reads the style and exists before the node does, so an inheriting style finds its node through this cell.
+        let node_cell = Rc::new(Cell::new(None));
+        let declared = style(Rc::clone(&node_cell));
+        // Its caret and selection index the value, and a case that changed a letter's length would put them between the wrong letters.
+        let style: Rc<dyn Fn() -> TextStyle> =
+            Rc::new(move || declared().with_text_case(renderer_core::TextCase::AsWritten));
         // Width is left to the parent, so a long line overflows to the right rather than widening the layout.
-        let measure_value = value;
         let measure_style = Rc::clone(&style);
         let measure = Box::new(move |_: layout_core::MeasureInput| {
-            let s = (measure_style)();
-            let line_h = crate::text_metrics::line_box(&s);
-            let lines = measure_value.with(|t| t.matches('\n').count() + 1);
-            (0.0, lines as f32 * line_h)
+            let line_h = crate::text_metrics::line_box(&(measure_style)());
+            (0.0, value.with(|t| line_count(t)) as f32 * line_h)
         });
         let (node, rect) = new_measured_leaf(layout_style.align_self_stretch(), measure)?;
+        node_cell.set(Some(node));
         let caret = value.with(|s| s.len());
         let id = focus::next_id();
         focus::register_with_role(
@@ -76,11 +100,22 @@ impl TextArea {
             node,
             focus::Role::MultilineTextInput,
         );
-        let remeasure = effect(move || {
-            // A tracked read that subscribes without cloning the value.
-            value.with(|_| {});
-            mark_dirty(node).ok();
-        });
+        let remeasure = {
+            let style = Rc::clone(&style);
+            let measured = RefCell::new(None::<(usize, TextStyle)>);
+            effect(move || {
+                let next = (value.with(|t| line_count(t)), style());
+                let unchanged = measured
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|(lines, style)| *lines == next.0 && style.same_extent(&next.1));
+                if unchanged {
+                    return;
+                }
+                *measured.borrow_mut() = Some(next);
+                mark_dirty(node).ok();
+            })
+        };
         let blink = Blink::new();
         let watching = blink.clone();
         let mut input = InputHandle::new();
@@ -156,7 +191,7 @@ impl TextArea {
         Some(from)
     }
 
-    /// Applies a key while focused, editing the bound signal and/or moving the caret. Returns whether the key was consumed. On a text change the leaf is marked dirty so the runner re-measures the (possibly new) line count on the next frame.
+    /// Applies a key while focused, editing the bound signal and/or moving the caret. Returns whether the key was consumed.
     fn edit(&mut self, key: &Key, mods: &ModifiersState, style: &TextStyle) -> EventResult {
         // Before the key is even read; see `Input::edit`.
         self.blink.wake();
@@ -284,7 +319,6 @@ impl TextArea {
             _ => return EventResult::Ignored,
         }
         if changed {
-            // Fires the re-measure effect, which marks the leaf dirty so the runner re-measures the line count.
             self.value.set(text);
         }
         self.caret.set(caret);
@@ -423,6 +457,10 @@ impl Drop for TextArea {
 }
 
 impl_leaf_widget!(TextArea);
+
+fn line_count(text: &str) -> usize {
+    text.matches('\n').count() + 1
+}
 
 /// Byte range `[start, end)` of the line containing `caret` (bounded by the surrounding `\n`s or the text ends).
 fn line_bounds(text: &str, caret: usize) -> (usize, usize) {

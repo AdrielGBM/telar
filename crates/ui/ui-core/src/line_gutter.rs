@@ -1,5 +1,6 @@
 //! [`LineGutter`]: the line-number column beside a text area, measured to track its line count.
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use geometry_core::Rect;
@@ -21,7 +22,7 @@ pub struct LineGutter {
     line_count: Rc<dyn Fn() -> usize>,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
-    // Re-measures whenever the line count changes, so the gutter tracks the editor as it grows.
+    // Re-measures when the line count or anything in the style that takes room changes, so the gutter tracks the editor.
     _remeasure: Effect,
 }
 
@@ -38,9 +39,8 @@ impl LineGutter {
         let measure_style = Rc::clone(&style);
         let measure = Box::new(move |_: layout_core::MeasureInput| {
             let s = (measure_style)();
-            let line_h = crate::text_metrics::line_height(s.font_size);
+            let line_h = crate::text_metrics::line_box(&s);
             let n = (measure_count)().max(1);
-            // Width of the widest (last) number; height from the line count, matching the editor's own metric.
             let width =
                 crate::text_metrics::measure_text(&n.to_string(), None, NO_WRAP_WIDTH, &s).0;
             (width, n as f32 * line_h)
@@ -48,9 +48,18 @@ impl LineGutter {
         let (node, rect) = new_measured_leaf(layout_style, measure)?;
         let remeasure = {
             let line_count = Rc::clone(&line_count);
+            let style = Rc::clone(&style);
+            let measured = RefCell::new(None::<(usize, TextStyle)>);
             effect(move || {
-                // A tracked read of the count source, so a change re-measures the leaf.
-                let _ = (line_count)();
+                let next = ((line_count)(), (style)());
+                let unchanged = measured
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|(lines, style)| *lines == next.0 && style.same_extent(&next.1));
+                if unchanged {
+                    return;
+                }
+                *measured.borrow_mut() = Some(next);
                 mark_dirty(node).ok();
             })
         };
@@ -66,7 +75,7 @@ impl LineGutter {
 impl Component for LineGutter {
     fn view(&self) -> RenderNode {
         let style = (self.style)();
-        let line_h = crate::text_metrics::line_height(style.font_size);
+        let line_h = crate::text_metrics::line_box(&style);
         let n = (self.line_count)().max(1);
         let mut numbers = String::new();
         for i in 1..=n {

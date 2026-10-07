@@ -125,5 +125,74 @@ let config = telar::AppConfig::default().with_fonts([
 ]);
 ```
 
-Loading a face does not make it the default: `AppConfig::font_family` names the family unstyled text shapes
-in.
+Loading a face does not make it the default: `AppConfig::font_family` names the family text shapes in where
+nothing names one; see [The default family](#the-default-family).
+
+## The default family
+
+`AppConfig::font_family` is the family a surface's text shapes in where nothing above it names one. It is
+the surface's own, and it sits at the root of the surface's text cascade, under the theme's
+`ThemeTokens::root` row: a `font_family:` declared on a box, or by the theme, wins over it the way an
+author's stylesheet wins over a browser's default font.
+
+The surface opens in the configured family, and `set_font_family` moves it while the surface runs:
+
+```rust
+telar::set_font_family(Some("JetBrains Mono".into())); // the active surface
+telar::set_font_family(None);                          // back to the platform's own
+```
+
+Every text that inherits its style — every `text` in `.rsx`, every catalogue control — is measured and drawn
+in the new family on the next frame. Nothing is reopened or rebuilt. `use_font_family()` reads it reactively.
+
+| Item | What it is |
+| --- | --- |
+| `AppConfig::font_family` | What a surface opens in. A surface opened later carries its own configuration. |
+| `set_font_family(Option<FontFamily>)` | Moves the active surface's family. Call it inside the surface: from its tree, an effect it owns, or with the surface entered (`TextureUi::enter`). A tree built again on the surface keeps it. |
+| `use_font_family()` | Reactive read of the active surface's family, `None` while it is the platform's. |
+| `open_surface_font_family(Option<FontFamily>)` | What the runner tells a surface before it builds the tree. A host with no runner calls it to stand in for one. |
+
+- **The family travels in the style.** A text's resolved `TextStyle` carries it, so layout measures each
+  surface's text in that surface's family and every target draws it: a document writes it as
+  `font-family`, and a terminal ignores it like any other face.
+- **A missing face falls back.** A named family is followed by the platform's sans-serif, the way a
+  document's `font-family` list is, so a family the system lacks draws in the platform's own.
+  `font_family_available` says which it will be.
+- **A whole style opts out.** `Text::new` takes a complete `TextStyle`, which says the tree above has no
+  business in that text, the surface's family included. `Text::declaring` starts from what the tree says.
+  Every text widget has both forms, and a widget built in Rust that should follow the surface takes the
+  second:
+
+  | Complete style | Inherits, amended by a closure |
+  | --- | --- |
+  | `Text::new` | `Text::declaring` |
+  | `Text::spanned` | `Text::spanned_declaring`, or `Text::runs` for a fixed list of runs |
+  | `Input::new` | `Input::declaring` |
+  | `TextArea::new` | `TextArea::declaring` |
+
+  Each amendment is handed the inherited style and returns the final one:
+  `TextArea::declaring(value, layout, |inherited| inherited.with_font_size(13.0))`.
+
+## Listing the installed families
+
+`font_families()` answers every family text can be set in, sorted and each once, for a picker that offers
+them to `set_font_family`:
+
+```rust
+let families = memo(|| {
+    use_text_metrics_generation(); // a face added later is listed too
+    telar::font_families()
+});
+```
+
+- **No second scan.** It reads the database the shaper already loaded, the one `font_family_available`
+  asks, and keeps the list with it: asking again copies it, and every name in it is one text resolves. An
+  application has no reason to load a `fontdb` of its own, which is a full scan of the system's fonts and a
+  second answer that can disagree with the faces text is shaped in.
+- **Each face under its first name.** That is the English one, or the family a declared face
+  (`[[telar.fonts]]`, `AppConfig::fonts`) was registered under. Names starting with a dot (`.LastResort`,
+  `.SF NS`) are faces a platform keeps for itself and are left out.
+- **It only grows.** A face that arrives while the app runs is listed from then on; reading
+  `use_text_metrics_generation()` beside it is what runs a list again when one does.
+- **Shaping builds only**, like `font_family_available`: a document is drawn by the browser in its own
+  fonts and a terminal has none, so neither has a database to list.

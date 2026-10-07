@@ -7,6 +7,7 @@ pub mod fonts;
 mod measure;
 mod shaper;
 
+pub use fonts::font_families;
 pub use measure::{
     ShaperMetrics, font_family_available, measure_ink_bounds, measure_min_content, measure_text,
 };

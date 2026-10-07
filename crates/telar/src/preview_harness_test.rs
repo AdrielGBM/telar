@@ -6,7 +6,7 @@ use std::process::Command;
 
 use telar::{
     AppConfig, Color, FontAsset, LayoutError, LayoutItem, LayoutStyle, PreviewEntry, Text,
-    TextStyle, font_family_available, try_run_test,
+    TextStyle, font_families, font_family_available, try_run_test,
 };
 
 const CHILD_MARKER: &str = "TELAR_PREVIEW_HARNESS_CHILD";
@@ -18,6 +18,12 @@ fn labelled() -> Result<Box<dyn LayoutItem>, LayoutError> {
     assert!(
         font_family_available(DECLARED_FAMILY),
         "the face the app config declares was not loaded before the preview was built"
+    );
+    assert!(
+        font_families()
+            .iter()
+            .any(|family| family == DECLARED_FAMILY),
+        "and is offered under the family it declares"
     );
     let text = Text::new(
         || String::from("A preview with some text to measure"),

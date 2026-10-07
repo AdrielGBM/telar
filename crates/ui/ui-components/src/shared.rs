@@ -117,6 +117,11 @@ pub(crate) fn quiet(inherited: TextStyle, ratio: f32) -> TextStyle {
     text.with_color(ink)
 }
 
+/// `style` as a frame or a menu sets it whole, in the family the tree above it shapes in: chrome keeps its own size and ink, and still follows the surface's default family and any family declared over it.
+pub(crate) fn in_family_of(style: TextStyle, inherited: TextStyle) -> TextStyle {
+    style.with_font_family(inherited.font_family)
+}
+
 /// [`control_text`]'s size on its own, for the box a control sizes to hold that text.
 ///
 /// Takes the node rather than the style because a box is sized outside the closure that styles its text — and reading the context here is what makes the box follow a declaration the text is already following.

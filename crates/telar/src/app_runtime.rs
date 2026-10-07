@@ -105,6 +105,11 @@ pub trait AppRuntime: 'static {
         ui_core::open_surface_title(app, showing);
     }
 
+    /// Tells the surface the family its configuration names, in the store its text cascade starts from; see [`open_surface_font_family`](crate::open_surface_font_family).
+    fn open_font_family(&self, family: Option<&str>) {
+        ui_core::open_surface_font_family(family.map(renderer_core::FontFamily::from));
+    }
+
     /// One back as the user means it; see [`navigate_back`](crate::navigate_back).
     fn navigate_back(&self) -> bool {
         crate::location::navigate_back()

@@ -1,6 +1,6 @@
 //! `Surface` — one RSX surface's complete per-surface world.
 //!
-//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, focus state, input region, force-tick, title, and window-command queue. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
+//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, focus state, input region, force-tick, title, default font family, and window-command queue. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
 //! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and `enter` is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
@@ -26,6 +26,7 @@ use crate::inherit::{CascadeContext, CascadeGuard};
 use crate::input_region::{InputRegionContext, InputRegionGuard};
 use crate::presence::{ExitsContext, ExitsGuard};
 use crate::scroll_viewports::{ViewportsContext, ViewportsGuard};
+use crate::surface_font::{SurfaceFontContext, SurfaceFontGuard};
 use crate::surface_title::{SurfaceTitleContext, SurfaceTitleGuard};
 
 /// The complete per-surface world plus its reactive [`SurfaceHandle`]. Build one per window/layer-surface with [`Surface::new`]; activate it with [`Surface::enter`].
@@ -45,6 +46,7 @@ pub struct Surface {
     viewports: ViewportsContext,
     places: PlacesContext,
     title: SurfaceTitleContext,
+    font: SurfaceFontContext,
     window_commands: WindowCommandContext,
 }
 
@@ -71,6 +73,7 @@ impl Surface {
                 viewports: ViewportsContext::new_owned(),
                 places: PlacesContext::new_owned(),
                 title: SurfaceTitleContext::new_owned(),
+                font: SurfaceFontContext::new_owned(),
                 window_commands: WindowCommandContext::new_owned(),
             })
         };
@@ -104,6 +107,7 @@ impl Surface {
             _viewports: self.viewports.enter(),
             _places: self.places.enter(),
             _title: self.title.enter(),
+            _font: self.font.enter(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -131,6 +135,7 @@ impl Surface {
             _viewports: ViewportsContext::enter_ambient(),
             _places: PlacesContext::enter_ambient(),
             _title: SurfaceTitleContext::enter_ambient(),
+            _font: SurfaceFontContext::enter_ambient(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -166,6 +171,7 @@ pub struct SurfaceGuard {
     _viewports: ViewportsGuard,
     _places: PlacesGuard,
     _title: SurfaceTitleGuard,
+    _font: SurfaceFontGuard,
     _prev_surface: RestoreSurface,
 }
 

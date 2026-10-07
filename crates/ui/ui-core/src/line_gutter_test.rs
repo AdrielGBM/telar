@@ -1,5 +1,6 @@
 use super::*;
 use crate::context::{compute_layout, new_container, reset_layout_runtime};
+use crate::layout_item::LayoutItem;
 use layout_core::AvailableSpace;
 use reactive_core::{RwSignal, signal};
 use renderer_core::Color;
@@ -53,5 +54,83 @@ fn height_tracks_line_count() {
         rect.get().width > 0.0,
         "gutter reserves a width: {:?}",
         rect.get()
+    );
+}
+
+fn laid_height(g: &LineGutter) -> f32 {
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(200.0),
+        &[g.leaf.node],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    g.leaf.rect.get().height
+}
+
+#[test]
+fn a_restyled_gutter_is_measured_again() {
+    reset_layout_runtime();
+    let size = signal(12.0f32);
+    let g = LineGutter::new(
+        || 3,
+        LayoutStyle::new(),
+        move || TextStyle::new(size.get(), Color::BLACK),
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(200.0),
+        &[g.leaf.node],
+    )
+    .unwrap();
+    let lay = || {
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        g.leaf.rect.get().height
+    };
+    let small = lay();
+    size.set(48.0);
+    let large = lay();
+    assert!(large > small * 3.5, "small={small} large={large}");
+}
+
+#[test]
+fn gutter_and_area_agree_under_a_declared_line_height() {
+    reset_layout_runtime();
+    let style = || TextStyle::new(14.0, Color::BLACK).with_line_height(1.0);
+    let g = LineGutter::new(|| 4, LayoutStyle::new(), style).unwrap();
+    let area =
+        crate::TextArea::new(signal("a\nb\nc\nd".to_string()), LayoutStyle::new(), style).unwrap();
+    let gutter_height = laid_height(&g);
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(200.0),
+        &[area.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    let area_height = crate::context::track_layout(area.layout_node())
+        .unwrap()
+        .get()
+        .height;
+    assert!(
+        (gutter_height - 4.0 * 14.0).abs() < 0.5,
+        "gutter={gutter_height}"
+    );
+    assert!(
+        (gutter_height - area_height).abs() < 0.5,
+        "gutter={gutter_height} area={area_height}"
     );
 }

@@ -14,6 +14,8 @@ use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, TextStyle};
 use ui_core::{Children, LayoutItem, Overlay, StyledContainer, Text, box_item};
 
+use crate::shared;
+
 /// One line of a menu.
 ///
 /// The action rides on the entry rather than coming back as an index, because the rows of a context menu are heterogeneous by nature — half of them are only there when they apply — and a caller matching on numbers keeps a second list in step with the first for no reason.
@@ -614,15 +616,17 @@ fn line(
         true => style.label,
         false => style.faint,
     };
-    let name = Text::new(
+    let name = Text::declaring(
         move || label.clone(),
         LayoutStyle::new(),
-        move || TextStyle::new(style.font_size, ink),
+        move |inherited| shared::in_family_of(TextStyle::new(style.font_size, ink), inherited),
     )?;
-    let key = Text::new(
+    let key = Text::declaring(
         move || hint.clone(),
         LayoutStyle::new(),
-        move || TextStyle::new(style.font_size, style.faint),
+        move |inherited| {
+            shared::in_family_of(TextStyle::new(style.font_size, style.faint), inherited)
+        },
     )?;
     let row = StyledContainer::new(
         LayoutStyle::new()

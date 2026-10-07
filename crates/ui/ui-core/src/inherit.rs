@@ -26,8 +26,10 @@ impl Inherited {
     /// Text size inherits, so this stays a constant rather than a theme token — a theme instead sets [`ThemeTokens::root`].
     pub const BASE_FONT_SIZE: f32 = 14.0;
 
+    /// The row `tokens` set, over the active surface's default family ([`set_font_family`](crate::set_font_family)) — read reactively, so a cascade resolved from here follows it.
     pub fn from_tokens(tokens: &dyn ThemeTokens) -> Self {
-        let base = TextStyle::new(Self::BASE_FONT_SIZE, tokens.ink());
+        let base = TextStyle::new(Self::BASE_FONT_SIZE, tokens.ink())
+            .with_font_family(crate::surface_font::root_family());
         Self {
             text: {
                 let root = tokens.root();
@@ -227,6 +229,14 @@ fn root(resolved: Inherited) -> Rc<Inherited> {
 }
 pub fn inherited_text_style(node: NodeId) -> TextStyle {
     context(node).text_style()
+}
+
+/// [`inherited_text_style`] for a leaf whose style is read before its node exists — a measured leaf builds its measure first — which resolves against the surface's root until it has one.
+pub(crate) fn inherited_text_style_at(node: Option<NodeId>) -> TextStyle {
+    match node {
+        Some(node) => inherited_text_style(node),
+        None => Inherited::initial().text_style(),
+    }
 }
 
 /// Reads the context inside the closure, not before, so the widget re-runs when a declaration above it moves rather than baking whatever was in force when it was built.

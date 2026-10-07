@@ -138,7 +138,7 @@ impl Text {
         )
     }
 
-    /// [`new`](Self::new) with byte ranges that style themselves differently from the paragraph — a bold word, a coloured link — shaped and wrapped as one text rather than as separate widgets.
+    /// [`new`](Self::new) with byte ranges that style themselves differently from the paragraph — a bold word, a coloured link — shaped and wrapped as one text rather than as separate widgets. [`spanned_declaring`](Self::spanned_declaring) is the form that inherits.
     pub fn spanned(
         content_fn: impl Fn() -> String + 'static,
         spans_fn: impl Fn() -> Vec<Span> + 'static,
@@ -150,6 +150,23 @@ impl Text {
             Some(Rc::new(spans_fn)),
             layout_style,
             StyleSource::Complete(Rc::new(style_fn)),
+        )
+    }
+
+    /// [`spanned`](Self::spanned) styled by what the tree above it declared, amended by `style_fn`, like [`declaring`](Self::declaring): each span declares over the inherited style, so the paragraph and its spans follow the surface's family and the sizes around them.
+    ///
+    /// [`runs`](Self::runs) is the same paragraph written as a fixed list of strings. This is the form for spans a string is scanned for — matches, mentions, highlighted tokens — whose number moves with the text.
+    pub fn spanned_declaring(
+        content_fn: impl Fn() -> String + 'static,
+        spans_fn: impl Fn() -> Vec<Span> + 'static,
+        layout_style: LayoutStyle,
+        style_fn: impl Fn(TextStyle) -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        Self::build(
+            Rc::new(content_fn),
+            Some(Rc::new(spans_fn)),
+            layout_style,
+            StyleSource::Inheriting(Rc::new(style_fn)),
         )
     }
 
@@ -233,10 +250,7 @@ impl Text {
         };
         let inherited = in_language({
             let cell = Rc::clone(&node_cell);
-            Rc::new(move || match cell.get() {
-                Some(node) => crate::inherit::inherited_text_style(node),
-                None => crate::inherit::Inherited::initial().text_style(),
-            })
+            Rc::new(move || crate::inherit::inherited_text_style_at(cell.get()))
         });
         let declared_by = |amend: Rc<dyn Fn(TextStyle) -> TextStyle>| {
             let inherited = Rc::clone(&inherited);

@@ -1,8 +1,9 @@
 //! The one font database, which only ever grows: loading a face is cheap and additive, where a face that vanishes from under a shaper already built from it is exactly the disagreement this module exists to prevent.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 use cosmic_text::{FontSystem, fontdb};
 use renderer_core::{FontAsset, FontConfig, FontSource, FontStyle};
@@ -21,6 +22,8 @@ pub struct Fonts {
     families: Vec<String>,
     /// Which [`faces_generation`] this database holds.
     faces: u64,
+    /// [`Fonts::family_names`], read out of `db` the first time it is asked for.
+    listed: OnceLock<Vec<String>>,
 }
 
 impl Fonts {
@@ -56,6 +59,31 @@ impl Fonts {
     pub(crate) fn faces(&self) -> u64 {
         self.faces
     }
+
+    /// Every family these faces answer to, sorted and each once: the name each face gives first, which is the one a declared face was registered under, leaving out the dot-prefixed faces a platform keeps for itself (`.LastResort`, `.SF NS`).
+    ///
+    /// Read from this database once, on first asking: the faces never change under a `Fonts`, and a face that arrives makes a new one.
+    pub fn family_names(&self) -> &[String] {
+        self.listed.get_or_init(|| listed_families(&self.db))
+    }
+}
+
+fn listed_families(db: &fontdb::Database) -> Vec<String> {
+    db.faces()
+        .filter_map(|face| face.families.first())
+        .map(|(name, _)| name.trim())
+        .filter(|name| !name.is_empty() && !name.starts_with('.'))
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+/// Every font family text can be set in here, from the database every shaper shapes in: no second scan, and no second list to disagree with the faces text resolves. Sorted, each once; see [`Fonts::family_names`].
+///
+/// The database only grows, so a face that arrives later ([`add_faces`], [`install_face`]) is in the answer from then on.
+pub fn font_families() -> Vec<String> {
+    installed().family_names().to_vec()
 }
 
 static INSTALLED: RwLock<Option<Arc<Fonts>>> = RwLock::new(None);
@@ -111,6 +139,7 @@ fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
                 sources: wanted,
                 families: families.unwrap_or_default(),
                 faces: faces_generation(),
+                listed: OnceLock::new(),
             },
         );
     };
@@ -128,6 +157,7 @@ fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
                 sources: loaded.sources.clone(),
                 families,
                 faces: loaded.faces,
+                listed: loaded.listed.clone(),
             },
         );
     }
@@ -146,6 +176,7 @@ fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
             sources,
             families,
             faces,
+            listed: OnceLock::new(),
         },
     )
 }
@@ -171,6 +202,7 @@ pub fn installed() -> Arc<Fonts> {
             sources,
             families: Vec::new(),
             faces: faces_generation(),
+            listed: OnceLock::new(),
         },
     )
 }
@@ -315,6 +347,10 @@ fn declare(info: &mut fontdb::FaceInfo, asset: &FontAsset, family: &str) {
     };
     info.weight = fontdb::Weight(info.weight.0.clamp(asset.weight.min, asset.weight.max));
 }
+
+#[cfg(test)]
+/// Held for writing by the test that installs faces and for reading by a test whose shaper must not see the face generation move between two of its calls, which clears the caches it is counting.
+pub(crate) static FACES_STABLE: RwLock<()> = RwLock::new(());
 
 #[cfg(test)]
 #[path = "fonts_test.rs"]

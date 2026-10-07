@@ -17,7 +17,7 @@ use std::rc::Rc;
 use geometry_core::{Rect, Transform};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, SizeDimension};
 use platform_core::Event;
-use renderer_core::{Color, RenderBackend, RendererError};
+use renderer_core::{Color, FontFamily, RenderBackend, RendererError};
 use renderer_hardware::HardwareRenderer;
 use renderer_hardware::gpu::wgpu;
 use ui_core::{
@@ -116,7 +116,7 @@ impl TextureUi {
     ///
     /// **Loading a face is not choosing it**, which is what `font_family` is for: without it the face is loaded and the platform's own is drawn, which looks like the file failed to load and did not.
     ///
-    /// The faces join the one font database every shaper is built from, so they stay loaded for the rest of the process and a window already drawing takes them too. The *family*, though, is this surface's own: a pixel face here and a different one in the window around it are now two configurations rather than one process-wide setting they would have to share.
+    /// The faces join the one font database every shaper is built from, so they stay loaded for the rest of the process and a window already drawing takes them too. The *family*, though, is this surface's own — the root of its text cascade, changed later with [`set_font_family`](crate::set_font_family) inside it — so a pixel face here and a different one in the window around it are two configurations rather than one process-wide setting they would have to share.
     pub fn with_fonts(
         target: wgpu::Texture,
         scale: f32,
@@ -126,6 +126,7 @@ impl TextureUi {
         // The tree built below measures its text, and a texture UI can be the only Telar in the process — there may be no runner that installed a measurer.
         crate::install_default_text_metrics();
         let (width, height) = (target.width(), target.height());
+        let family = fonts.family.clone();
         let renderer = HardwareRenderer::for_texture(
             target,
             None,
@@ -136,6 +137,7 @@ impl TextureUi {
         let surface = Surface::new();
         let (tree, root) = {
             let _g = surface.enter();
+            ui_core::open_surface_font_family(family.map(FontFamily::from));
             let logical = scale.max(f32::MIN_POSITIVE);
             ui_core::set_surface_size(geometry_core::Size::new(
                 width as f32 / logical,

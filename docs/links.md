@@ -117,7 +117,8 @@ text, each run restyled by the text properties it names (`color`, `font_weight`,
 link by `to:`, which takes the same destinations a box does. The text's own quoted content, if any, is the first
 run. A `span` belongs inside a `text`, and a `text` with children holds `span`s and nothing else; either mistake
 is a build error. In Rust it is `Text::runs(vec![TextRun::new(...).declaring(...).to(...)], ...)`, or
-`Span::linking_to` on the spans of `Text::spanned`.
+`Span::linking_to` on the spans of `Text::spanned_declaring` (or `Text::spanned`, which takes a whole style
+rather than inheriting one) when the spans are found by scanning the text and their number moves with it.
 
 | Target | A link run is |
 | --- | --- |

@@ -519,6 +519,9 @@ fn collect_colr_gating_records_and_skips() {
 // The clock case end to end. Admission itself is covered in `renderer-cache`, so what matters here is that `rasterize` is wired to it: the previous arrangement applied admission in the shaper and kept an unconditional second copy in the software backend, making the policy a no-op where it counted.
 #[test]
 fn a_string_rasterized_once_is_not_kept_and_a_second_sighting_keeps_it() {
+    let _stable = crate::fonts::FACES_STABLE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let mut shaper = TextShaper::new();
     let style = TextStyle::new(16.0, Color::BLACK);
     let rect = Rect {
