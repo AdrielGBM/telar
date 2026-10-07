@@ -49,6 +49,7 @@ members = [
     "crates/devtools/telar-devtools",
     "crates/preferences/preferences-core",
     "plugins/telar-expression",
+    "plugins/telar-rsx-fixture",
 ]
 
 default-members = [

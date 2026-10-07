@@ -10,6 +10,10 @@ readme = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
+[[test]]
+name = "rsx_library"
+path = "src/rsx_library_test.rs"
+
 [dependencies]
 telar-baker = { workspace = true }
 telar-diagnostics = { workspace = true }

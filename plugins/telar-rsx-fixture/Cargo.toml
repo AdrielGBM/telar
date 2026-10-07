@@ -1,0 +1,26 @@
+[package]
+name = "telar-rsx-fixture"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+readme = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+# A test fixture, not a library anyone installs: it exists so a `[telar] library` has a package to be packaged, unpacked and compiled as a dependency from.
+publish = false
+include = [
+    "/telar.toml",
+    "/src/**",
+    "!/src/**/.telar/modules-hot.rs",
+    "!/src/**/.telar/modules-preview.rs",
+    "!/src/**/.telar/modules-hot-preview.rs",
+    "/.telar/build/**",
+    "/.telar/build.json",
+    "/.telar/i18n.rs",
+    "/.telar/i18n.json",
+    "/.telar/assets.rs",
+    "/.telar/assets.json",
+]
+
+[dependencies]
+telar = { workspace = true, features = ["runtime", "svg"] }

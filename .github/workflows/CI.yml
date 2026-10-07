@@ -220,6 +220,17 @@ jobs:
           (cd "$dir" && cargo run -q --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" -p cargo-telar -- package --check)
           CARGO_TARGET_DIR="$RUNNER_TEMP/scaffold-target" cargo check --manifest-path "$dir/Cargo.toml"
 
+  # A `[telar] library` is compiled by its consumers from the package cargo publishes, read-only and without the CLI. `plugins/telar-rsx-fixture` is packaged, unpacked and built as a dependency of a generated application, Plain and with the dev features; the test compiles that application into its own target directory, which is why it is ignored in the `test` job and run here.
+  rsx-library:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Every cargo the test starts runs offline, so what `Cargo.lock` names has to be on disk first.
+      - run: cargo fetch --locked
+      - run: cargo test -p cargo-telar --test rsx_library -- --ignored
+
   test:
     strategy:
       fail-fast: false

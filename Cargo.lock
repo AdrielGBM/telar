@@ -6013,6 +6013,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "telar-rsx-fixture"
+version = "0.2.1"
+dependencies = [
+ "telar",
+]
+
+[[package]]
 name = "telar-semantics-core"
 version = "0.2.1"
 
