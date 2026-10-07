@@ -29,6 +29,9 @@ LOG=$(mktemp)
 trap 'rm -f "$LOG"' EXIT
 waited=0
 
+mapfile -t library_names < <("$(dirname "${BASH_SOURCE[0]}")/library-crates.sh")
+LIBRARY_LINES=$'\n'$(printf '%s\n' "${library_names[@]}")$'\n'
+
 mapfile -t crates < <(
   cargo metadata --format-version 1 --no-deps |
     jq -r '.packages[] | select(.publish == null or (.publish | length) > 0) | "\(.name) \(.version)"'
@@ -58,6 +61,17 @@ attempt() {
   cargo publish "$@" $PUBLISH_ARGS 2>&1 | tee -a "$LOG"
 }
 
+# A `[telar] library` is published through `cargo telar publish`, which transpiles it, checks that its package
+# carries an artifact answering for its sources, and allows the gitignored artifact `cargo publish` would refuse.
+attempt_library() {
+  # shellcheck disable=SC2086
+  cargo run -q -p cargo-telar -- publish "$@" -- $PUBLISH_ARGS 2>&1 | tee -a "$LOG"
+}
+
+is_library() {
+  [[ $LIBRARY_LINES == *$'\n'"$1"$'\n'* ]]
+}
+
 # A 429 names the instant its bucket refills. Reading it is what separates a release that waits the eight
 # minutes a brand-new crate costs from one that sleeps 70s ten times and dies four seconds short.
 retry_deadline() {
@@ -76,8 +90,16 @@ echo "${#pending[@]} of ${#crates[@]} crates need publishing."
 echo "==> cargo publish --workspace"
 # Tried whole-workspace first because cargo resolves the publish order itself; the sweep below can only
 # approximate that order by retrying what failed.
-attempt --workspace ||
+excludes=()
+for name in "${library_names[@]}"; do excludes+=(--exclude "$name"); done
+attempt --workspace "${excludes[@]}" ||
   echo "Workspace publish stopped early — sweeping the remainder one crate at a time."
+# Libraries go in one call so cargo orders them among themselves; the sweep below retries any that stop short.
+if ((${#library_names[@]} > 0)); then
+  echo "==> cargo telar publish --workspace"
+  attempt_library --workspace ||
+    echo "Library publish stopped early — sweeping the remainder one crate at a time."
+fi
 
 for ((round = 1; round <= ROUNDS; round++)); do
   mapfile -t pending < <(missing)
@@ -89,7 +111,11 @@ for ((round = 1; round <= ROUNDS; round++)); do
   for entry in "${pending[@]}"; do
     read -r name version <<<"$entry"
     echo "--> $name $version"
-    attempt -p "$name" && progressed=1
+    if is_library "$name"; then
+      attempt_library -p "$name" && progressed=1
+    else
+      attempt -p "$name" && progressed=1
+    fi
   done
 
   mapfile -t pending < <(missing)

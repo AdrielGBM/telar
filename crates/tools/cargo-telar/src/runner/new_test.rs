@@ -247,3 +247,55 @@ fn a_real_path_names_itself_without_asking_for_the_current_directory() {
     });
     assert_eq!(name.as_deref(), Some("my-app"));
 }
+
+/// A library published with cargo's default file list ships no `.telar/`, and a crate no build can compile; the scaffold has to start with the list `cargo telar package` checks against.
+#[test]
+fn a_library_scaffold_includes_the_artifact_it_ships() {
+    let files = library_files("my-kit");
+    let manifest = files
+        .iter()
+        .find(|(path, _)| *path == "Cargo.toml")
+        .map(|(_, content)| toml::from_str::<toml::Table>(content).expect("valid TOML"))
+        .expect("a Cargo.toml is scaffolded");
+    let include: Vec<&str> = manifest["package"]["include"]
+        .as_array()
+        .expect("an include list")
+        .iter()
+        .filter_map(|entry| entry.as_str())
+        .collect();
+    assert_eq!(include, telar_project::library_include());
+    assert_eq!(
+        manifest["dependencies"]["telar"]["version"].as_str(),
+        Some(format!("={TELAR_VERSION}").as_str()),
+        "a library's artifact is accepted only by the telar it was transpiled for"
+    );
+}
+
+#[test]
+fn a_library_scaffold_declares_itself_a_library_and_transpiles() {
+    let dir = temp_dir("library");
+    let files = library_files("my-kit");
+    write_all(&dir, &files);
+    let manifest =
+        telar_project::TelarManifest::load(&dir).expect("the scaffolded telar.toml parses");
+    let transpiled = super::super::transpile::transpile_member(&dir, "test", TELAR_VERSION);
+    let index = telar_project::read_build_index(&dir, telar_project::BuildFlavour::Plain);
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert!(manifest.telar.library);
+    assert!(transpiled, "the scaffolded component transpiles");
+    assert_eq!(index.expect("a Plain index").entries.len(), 1);
+}
+
+#[test]
+fn a_library_takes_no_target() {
+    use clap::Parser;
+    let parse = |args: &[&str]| {
+        super::super::cli::Cli::try_parse_from(
+            std::iter::once("cargo-telar").chain(args.iter().copied()),
+        )
+    };
+    assert!(parse(&["new", "kit", "--lib"]).is_ok());
+    assert!(parse(&["new", "kit", "--lib", "--target", "web"]).is_err());
+    assert!(parse(&["init", "--lib"]).is_ok());
+}

@@ -23,6 +23,7 @@ pub(crate) fn run_new_cmd(args: NewArgs) {
         name,
         target,
         renderer,
+        lib,
     } = args;
     let crate_name = derive_crate_name(&path, name);
     if let Err(msg) = validate_name(&crate_name) {
@@ -39,9 +40,10 @@ pub(crate) fn run_new_cmd(args: NewArgs) {
         ));
     }
 
-    let files = scaffold_files(&crate_name, target, renderer);
+    let kind = Kind::new(lib, target, renderer);
+    let files = kind.files(&crate_name);
     write_all(&path, &files);
-    finish(&path, &crate_name, target, renderer);
+    kind.finish(&path, &crate_name);
 }
 
 pub(crate) fn run_init_cmd(args: InitArgs) {
@@ -50,6 +52,7 @@ pub(crate) fn run_init_cmd(args: InitArgs) {
         name,
         target,
         renderer,
+        lib,
     } = args;
     let path = path.unwrap_or_else(|| PathBuf::from("."));
     let crate_name = derive_crate_name(&path, name);
@@ -57,7 +60,8 @@ pub(crate) fn run_init_cmd(args: InitArgs) {
         fail(&msg);
     }
 
-    let files = scaffold_files(&crate_name, target, renderer);
+    let kind = Kind::new(lib, target, renderer);
+    let files = kind.files(&crate_name);
     let conflicts = conflicts_in(&path, &files);
     if !conflicts.is_empty() {
         fail(&format!(
@@ -72,7 +76,40 @@ pub(crate) fn run_init_cmd(args: InitArgs) {
     }
 
     write_all(&path, &files);
-    finish(&path, &crate_name, target, renderer);
+    kind.finish(&path, &crate_name);
+}
+
+/// What a scaffold starts as: an application on one target, or a library other crates depend on.
+#[derive(Clone, Copy)]
+enum Kind {
+    App {
+        target: Target,
+        renderer: Option<WebRenderer>,
+    },
+    Library,
+}
+
+impl Kind {
+    fn new(lib: bool, target: Target, renderer: Option<WebRenderer>) -> Self {
+        match lib {
+            true => Self::Library,
+            false => Self::App { target, renderer },
+        }
+    }
+
+    fn files(self, crate_name: &str) -> Vec<(&'static str, String)> {
+        match self {
+            Self::App { target, renderer } => scaffold_files(crate_name, target, renderer),
+            Self::Library => library_files(crate_name),
+        }
+    }
+
+    fn finish(self, path: &Path, crate_name: &str) {
+        match self {
+            Self::App { target, renderer } => finish(path, crate_name, target, renderer),
+            Self::Library => finish_library(path, crate_name),
+        }
+    }
 }
 
 /// The files `new` and `init` both write, differing only in the target (and, for the web, the renderer)
@@ -92,6 +129,17 @@ fn scaffold_files(
         ("src/app.rs", APP_RS.to_string()),
         ("src/theme.rs", THEME_RS.to_string()),
         ("src/home.rsx", HOME_RSX.to_string()),
+    ]
+}
+
+/// A `[telar] library`: a component, the macro that places it, and a manifest whose `include` already carries the artifact a dependency is compiled from — cargo leaves `.telar/` out of a package otherwise, and the crate it publishes compiles nowhere.
+fn library_files(crate_name: &str) -> Vec<(&'static str, String)> {
+    vec![
+        ("Cargo.toml", library_manifest(crate_name)),
+        ("telar.toml", LIBRARY_CONFIG.to_string()),
+        (".gitignore", "/target\n.telar/\n".to_string()),
+        ("src/lib.rs", LIBRARY_LIB_RS.to_string()),
+        ("src/badge.rsx", BADGE_RSX.to_string()),
     ]
 }
 
@@ -135,6 +183,24 @@ fn finish(path: &Path, crate_name: &str, target: Target, renderer: Option<WebRen
     println!();
     println!(
         "Other targets are one word each: `default = [\"…\"]` in Cargo.toml, or `--target` on the command line."
+    );
+}
+
+/// Transpiles the new library, so it opens in an editor without an error naming the command, and says how it is packaged.
+fn finish_library(path: &Path, crate_name: &str) {
+    let producer = format!("cargo-telar {TELAR_VERSION}");
+    super::transpile::transpile_member(path, &producer, TELAR_VERSION);
+
+    println!(
+        "Created the telar library `{crate_name}` at {}",
+        path.display()
+    );
+    println!();
+    println!("    cd {}", path.display());
+    println!("    cargo telar package --check");
+    println!();
+    println!(
+        "`cargo telar package` transpiles and bakes it, checks that the package carries an artifact that answers for its sources, and writes the .crate."
     );
 }
 
@@ -272,6 +338,46 @@ strip = "symbols"
 {web_profile}"#
     )
 }
+
+fn library_manifest(name: &str) -> String {
+    let include = super::library::include_block();
+    format!(
+        r#"[package]
+name = "{name}"
+version = "0.1.0"
+edition = "2024"
+# A dependency is compiled from the transpiled `.rsx` this package ships, and cargo leaves `.telar/` out of a
+# package unless it is named here. `cargo telar package --check` says what to add when this falls behind.
+{include}
+
+[dependencies]
+# Pinned with `=`: a dependency's transpiled `.rsx` is accepted only by the telar it was transpiled for, so a
+# library is released in lockstep with telar, and the pin lets cargo pick the release matching an application's.
+telar = {{ version = "={TELAR_VERSION}", default-features = false, features = ["runtime"] }}
+"#
+    )
+}
+
+const LIBRARY_CONFIG: &str = r#"[telar]
+# Compiled as a dependency, this package is wired read-only from the artifact it ships. A library inherits
+# nothing from a workspace's telar.toml: what it declares here is all it is transpiled against.
+library = true
+# Crates whose components every `.rsx` file sees without a `use`.
+prelude = []
+"#;
+
+const LIBRARY_LIB_RS: &str = "telar::rsx_modules!();\n";
+
+const BADGE_RSX: &str = r#"[logic]
+#[derive(Default)]
+pub struct Props {
+    pub label: &'static str,
+}
+
+[view]
+col pad:8
+    text "{props.label}" font_size:14
+"#;
 
 fn config(name: &str, target: Target) -> String {
     let window = match target {

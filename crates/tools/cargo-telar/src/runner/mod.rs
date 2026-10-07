@@ -1,4 +1,4 @@
-//! The subcommands: dev, check, fmt, preview, test, build, package and migrate.
+//! The subcommands: dev, check, fmt, preview, test, build, package, publish and migrate.
 
 use std::process::Command;
 
@@ -12,6 +12,7 @@ mod config;
 mod diagnostics;
 mod doctor;
 mod fmt;
+mod library;
 mod migrate;
 mod new;
 mod package;
@@ -29,6 +30,7 @@ use cli::{
 use config::{TelarSection, load_config, resolve_package};
 use doctor::run_doctor_cmd;
 use fmt::run_fmt_cmd;
+use library::{run_package_cmd, run_publish_cmd};
 use migrate::run_migrate_cmd;
 use new::{run_init_cmd, run_new_cmd};
 use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis, build_web};
@@ -40,7 +42,7 @@ use web_dev::run_web_dev;
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-telar".to_string()).chain(args));
     let command = cli.command.unwrap_or_else(default_dev_command);
-    // The one place `cargo telar` prepares a build, rather than at each of the nine sites that spawn `cargo`; the five excluded here compile nothing. Bake first: a `src:"…"` transpiles against the artifact the bake writes.
+    // The one place `cargo telar` prepares a build, rather than at each of the nine sites that spawn `cargo`; the ones excluded here compile nothing or prepare for themselves. Bake first: a `src:"…"` transpiles against the artifact the bake writes.
     if !matches!(
         command,
         TelarCommand::New(_)
@@ -50,6 +52,8 @@ pub fn run(args: Vec<String>) {
             | TelarCommand::Migrate(_)
             | TelarCommand::Bake
             | TelarCommand::Transpile
+            | TelarCommand::Package(_)
+            | TelarCommand::Publish(_)
     ) {
         bake_workspace();
         transpile_workspace();
@@ -69,6 +73,8 @@ pub fn run(args: Vec<String>) {
                 std::process::exit(1);
             }
         }
+        TelarCommand::Package(args) => run_package_cmd(args),
+        TelarCommand::Publish(args) => run_publish_cmd(args),
         TelarCommand::Doctor => run_doctor_cmd(),
         TelarCommand::Fmt(args) => run_fmt_cmd(args),
         TelarCommand::Migrate(args) => run_migrate_cmd(args),

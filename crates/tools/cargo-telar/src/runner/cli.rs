@@ -35,6 +35,10 @@ pub(crate) enum TelarCommand {
     Bake,
     /// Transpile every `.rsx` into `.telar/build/`, so a project build wires the result instead of producing it
     Transpile,
+    /// Package a `[telar] library` with the transpiled artifact a dependency is compiled from, after checking that the package carries all of it and that it answers for the sources
+    Package(PackageArgs),
+    /// Publish a `[telar] library` with the transpiled artifact a dependency is compiled from, after the same checks as `package`; the gitignored artifact does not make `cargo publish` refuse it
+    Publish(PublishArgs),
     /// Check the development environment
     Doctor,
     /// Format every `.rsx` and `.rs` file in the project
@@ -57,6 +61,9 @@ pub(crate) struct NewArgs {
     /// Which renderer a `--target web` project starts on (`dom` writes `default = ["web-dom"]`)
     #[arg(long, value_enum)]
     pub(crate) renderer: Option<WebRenderer>,
+    /// A `[telar] library` other crates depend on, instead of an application
+    #[arg(long, conflicts_with_all = ["target", "renderer"])]
+    pub(crate) lib: bool,
 }
 
 /// Same scaffold as `new`, into a directory that may already exist and hold files: only a name this would
@@ -74,6 +81,43 @@ pub(crate) struct InitArgs {
     /// Which renderer a `--target web` project starts on (`dom` writes `default = ["web-dom"]`)
     #[arg(long, value_enum)]
     pub(crate) renderer: Option<WebRenderer>,
+    /// A `[telar] library` other crates depend on, instead of an application
+    #[arg(long, conflicts_with_all = ["target", "renderer"])]
+    pub(crate) lib: bool,
+}
+
+/// A library is compiled as a dependency from the artifact it ships, so packaging one is transpiling it, checking what `cargo package` would carry, and only then packaging.
+#[derive(clap::Args)]
+pub(crate) struct PackageArgs {
+    /// Library to package; defaults to the package in the current directory
+    #[arg(short = 'p', long, conflicts_with = "workspace")]
+    pub(crate) package: Option<String>,
+    /// Every workspace member whose `telar.toml` declares `library = true`
+    #[arg(long)]
+    pub(crate) workspace: bool,
+    /// Only check that each library is ready to package, and exit non-zero when one is not
+    #[arg(long)]
+    pub(crate) check: bool,
+    /// Extra args passed directly to `cargo package` (after --)
+    #[arg(last = true)]
+    pub(crate) cargo_args: Vec<String>,
+}
+
+/// Publishing a library is packaging it, then uploading what was checked: the same selection, transpile and readiness checks as `package`, then `cargo publish --allow-dirty` over the selected libraries, which cargo orders by their dependencies on each other.
+#[derive(clap::Args)]
+pub(crate) struct PublishArgs {
+    /// Library to publish; defaults to the package in the current directory
+    #[arg(short = 'p', long, conflicts_with = "workspace")]
+    pub(crate) package: Option<String>,
+    /// Every workspace member whose `telar.toml` declares `library = true`
+    #[arg(long)]
+    pub(crate) workspace: bool,
+    /// Run every check and cargo's own, without uploading
+    #[arg(long)]
+    pub(crate) dry_run: bool,
+    /// Extra args passed directly to `cargo publish` (after --), such as `--registry` or `--no-verify`
+    #[arg(last = true)]
+    pub(crate) cargo_args: Vec<String>,
 }
 
 /// Idempotent by construction: a file already in the new grammar comes out byte-identical, so running it twice is safe and `--check` is how a CI says a project is migrated.

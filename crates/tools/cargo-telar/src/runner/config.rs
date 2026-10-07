@@ -186,7 +186,7 @@ fn read_manifest_in(dir: &Path) -> Option<CargoManifest> {
     toml::from_str(&content).ok()
 }
 
-fn read_package_manifest_in(dir: &Path) -> Option<CargoPackage> {
+pub(crate) fn read_package_manifest_in(dir: &Path) -> Option<CargoPackage> {
     read_manifest_in(dir)?.package
 }
 
