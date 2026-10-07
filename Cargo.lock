@@ -5586,6 +5586,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "telar-embed"
+version = "0.2.1"
+dependencies = [
+ "document-features",
+ "libloading",
+ "telar-geometry-core",
+ "telar-layout-core",
+ "telar-motion-core",
+ "telar-platform-core",
+ "telar-preferences-core",
+ "telar-reactive-core",
+ "telar-renderer-core",
+ "telar-ui-core",
+ "telar-ui-tree",
+ "web-time",
+]
+
+[[package]]
 name = "telar-expression"
 version = "0.2.1"
 dependencies = [
@@ -5774,24 +5792,6 @@ dependencies = [
  "raw-window-handle",
  "telar-platform-core",
  "winit",
-]
-
-[[package]]
-name = "telar-plugin"
-version = "0.2.1"
-dependencies = [
- "document-features",
- "libloading",
- "telar-geometry-core",
- "telar-layout-core",
- "telar-motion-core",
- "telar-platform-core",
- "telar-preferences-core",
- "telar-reactive-core",
- "telar-renderer-core",
- "telar-ui-core",
- "telar-ui-tree",
- "web-time",
 ]
 
 [[package]]

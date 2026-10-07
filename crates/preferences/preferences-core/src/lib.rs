@@ -2,7 +2,7 @@
 //!
 //! One signal per field, so a view that reads only the locales does not re-render when the colour scheme flips.
 //!
-//! Its own crate so the consumers below the facade can follow it without the facade: `theme-core` drives `follow_system` from the colour scheme, `motion-core` reads reduced motion on every frame, and `telar-plugin` writes a guest's copy across the plugin boundary. It sits on `platform-core` for the snapshot type and on `reactive-core` for the signals; `platform-core` stays clear of the reactive runtime, so the store cannot live there.
+//! Its own crate so the consumers below the facade can follow it without the facade: `theme-core` drives `follow_system` from the colour scheme, `motion-core` reads reduced motion on every frame, and `telar-embed` writes a guest's copy across the embedding boundary. It sits on `platform-core` for the snapshot type and on `reactive-core` for the signals; `platform-core` stays clear of the reactive runtime, so the store cannot live there.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 

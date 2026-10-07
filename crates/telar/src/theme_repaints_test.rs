@@ -187,7 +187,7 @@ fn an_application_hosting_other_trees_is_told_the_preferences_changed() {
     assert_eq!(
         told.get(),
         Some(ColorScheme::Dark),
-        "the application was never told, so a host could not fan the change out to its plugins"
+        "the application was never told, so a host could not fan the change out to the apps it embeds"
     );
     assert_eq!(
         repainted,

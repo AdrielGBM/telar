@@ -51,8 +51,8 @@ the widget tree never sees it. It writes the store, which everything below follo
 `App::on_system_preferences(&preferences)`.
 
 That hook is for a host that draws other applications' trees: each tree it loads from a dylib has its own
-copy of the store, and only the host's is written. A `telar-plugin` host forwards the snapshot with
-`LoadedPlugin::set_system_preferences` (`load_plugin` already seeds a new plugin with the host's current
+copy of the store, and only the host's is written. A `telar-embed` host forwards the snapshot with
+`LoadedEmbed::set_system_preferences` (`load_embedded` already seeds a new guest with the host's current
 snapshot). Under `cargo telar dev` the runner forwards the snapshot into the hot-reloaded library, and hands
 it over again after every reload, before the reloaded state is restored so a mode picked by hand survives.
 
@@ -115,8 +115,8 @@ animations should not set it, nor turn `follow_reduced_motion` off.
 Like the scheme, it is app state, so it behaves the same on every target. It persists between sessions in the
 target's preference store under `telar.reduced_motion` (`localStorage` on the web, a file in the config
 directory on desktop, a terminal and Android, memory in a headless run), and survives a hot reload. It belongs
-to the runtime that set it: the snapshot a `telar-plugin` host forwards is what the system reported, so a
-plugin keeps following the system, or its own override, rather than its host's.
+to the runtime that set it: the snapshot a `telar-embed` host forwards is what the system reported, so a
+guest keeps following the system, or its own override, rather than its host's.
 
 ### Negotiating a locale
 

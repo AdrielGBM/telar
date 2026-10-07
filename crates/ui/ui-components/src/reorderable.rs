@@ -30,7 +30,7 @@ struct Drag {
 
 /// A strip of items the user can drag into a different order.
 ///
-/// The widget owns the *interaction* and nothing else: which slot the pointer is over, showing a gap there, and reporting the move once. The items, their identity and what happens to them stay with the caller — [`on_move`](Self::on_move) is called with the two positions and writes nothing itself, so a strip backed by a config file, a plugin host or three separate zones all use the same widget.
+/// The widget owns the *interaction* and nothing else: which slot the pointer is over, showing a gap there, and reporting the move once. The items, their identity and what happens to them stay with the caller — [`on_move`](Self::on_move) is called with the two positions and writes nothing itself, so a strip backed by a config file, an embedding host or three separate zones all use the same widget.
 #[derive(Props)]
 pub struct ReorderableProps {
     /// How many items there are, read reactively — the strip rebuilds when it changes.

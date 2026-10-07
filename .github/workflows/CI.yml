@@ -221,9 +221,9 @@ jobs:
       - run: cargo test -p telar --features headless,dev
         env:
           TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
-      # Same reason, for the half of `telar-plugin` only a host enables: nothing in this workspace loads a
+      # Same reason, for the half of `telar-embed` only a host enables: nothing in this workspace loads a
       # plugin, so the loader compiles nowhere else.
-      - run: cargo test -p telar-plugin --all-features
+      - run: cargo test -p telar-embed --all-features
 
   # Exercises `cargo telar build` per host OS: the raw binary everywhere plus each platform's native installer formats.
   package:

@@ -48,34 +48,34 @@ fn shift() -> ModifiersState {
     }
 }
 
-// No crate here links a plugin cdylib, so this is the only place the expansion is ever compiled: without it, adding a vtable field type-checks and breaks every guest at load time.
-crate::plugin!(|_args: &[String]| -> Box<dyn EmbeddedApp> { Box::new(Stub::new()) });
+// No crate here links a guest cdylib, so this is the only place the expansion is ever compiled: without it, adding a vtable field type-checks and breaks every guest at load time.
+crate::embed!(|_args: &[String]| -> Box<dyn EmbeddedApp> { Box::new(Stub::new()) });
 
 #[test]
 fn the_export_macro_builds_a_vtable_at_the_current_abi() {
-    assert_eq!(_rsx_plugin_vtable.abi, TELAR_PLUGIN_ABI);
-    let inst = unsafe { (_rsx_plugin_vtable.create)(&[]) };
+    assert_eq!(_rsx_embed_vtable.abi, TELAR_EMBED_ABI);
+    let inst = unsafe { (_rsx_embed_vtable.create)(&[]) };
     assert!(!inst.is_null(), "the exported vtable built an instance");
-    assert_eq!(unsafe { (_rsx_plugin_vtable.id)(inst) }, "stub");
+    assert_eq!(unsafe { (_rsx_embed_vtable.id)(inst) }, "stub");
     let dark = SystemPreferences {
         color_scheme: Some(platform_core::ColorScheme::Dark),
         reduced_motion: Some(true),
         ..SystemPreferences::default()
     };
-    unsafe { (_rsx_plugin_vtable.set_system_preferences)(inst, &dark) };
+    unsafe { (_rsx_embed_vtable.set_system_preferences)(inst, &dark) };
     assert_eq!(
         preferences_core::system_preferences(),
         dark,
         "the whole snapshot crosses, not only the scheme"
     );
     preferences_core::set_system_preferences(SystemPreferences::default());
-    unsafe { (_rsx_plugin_vtable.destroy)(inst) };
+    unsafe { (_rsx_embed_vtable.destroy)(inst) };
 }
 
-// These deliberately never observe on the caller's behalf, so they fail the moment either observe call leaves `PluginInstance::on_event`.
+// These deliberately never observe on the caller's behalf, so they fail the moment either observe call leaves `EmbedInstance::on_event`.
 #[test]
-fn a_plugin_records_the_modifiers_it_is_handed() {
-    let mut inst = PluginInstance::new(Box::new(Stub::new()));
+fn a_guest_records_the_modifiers_it_is_handed() {
+    let mut inst = EmbedInstance::new(Box::new(Stub::new()));
     let _g = inst.surface.enter();
     assert_eq!(ui_core::modifiers(), ModifiersState::default());
     drop(_g);
@@ -85,13 +85,13 @@ fn a_plugin_records_the_modifiers_it_is_handed() {
     let _g = inst.surface.enter();
     assert!(
         ui_core::modifiers().is_shift,
-        "a shift-drag inside a plugin is indistinguishable from a plain one without this"
+        "a shift-drag inside a guest is indistinguishable from a plain one without this"
     );
 }
 
 #[test]
 fn an_overlay_event_reaches_the_registry_too() {
-    let inst = PluginInstance::new(Box::new(Stub::new()));
+    let inst = EmbedInstance::new(Box::new(Stub::new()));
     inst.dispatch_overlays(&Event::ModifiersChanged { modifiers: shift() });
 
     let _g = inst.surface.enter();
@@ -103,7 +103,7 @@ fn an_overlay_event_reaches_the_registry_too() {
 
 #[test]
 fn a_press_answers_for_one_frame_and_end_frame_closes_it() {
-    let mut inst = PluginInstance::new(Box::new(Stub::new()));
+    let mut inst = EmbedInstance::new(Box::new(Stub::new()));
     inst.on_event(&Event::KeyPressed {
         key: Key::Char('c'),
         modifiers: ModifiersState::default(),
@@ -129,19 +129,19 @@ fn a_press_answers_for_one_frame_and_end_frame_closes_it() {
 }
 
 #[test]
-fn a_plugin_paints_and_its_generation_is_stable_between_frames() {
-    let mut inst = PluginInstance::new(Box::new(Stub::new()));
+fn a_guest_paints_and_its_generation_is_stable_between_frames() {
+    let mut inst = EmbedInstance::new(Box::new(Stub::new()));
     inst.relayout(40.0, 20.0);
     assert!(
         !inst.paint().is_empty(),
-        "a plugin that paints emits commands"
+        "a guest that paints emits commands"
     );
     assert_eq!(inst.generation(), inst.generation());
 }
 
 #[test]
 fn the_driver_forwards_metadata_from_the_embedded_app() {
-    let inst = PluginInstance::new(Box::new(Stub::new()));
+    let inst = EmbedInstance::new(Box::new(Stub::new()));
     assert_eq!(inst.title(), "stub");
     assert_eq!(inst.id(), "stub");
     assert_eq!(inst.clear_color(), None);
@@ -167,14 +167,14 @@ fn composite_translates_into_the_sub_rect_and_clips_to_it() {
             assert_eq!(clip, rect, "clipped to the host's sub-rect");
             assert!(
                 !children.is_empty(),
-                "the composite wraps the plugin's own nodes"
+                "the composite wraps the guest's own nodes"
             );
         }
-        _ => panic!("expected the plugin's frame to be wrapped in a clip"),
+        _ => panic!("expected the guest's frame to be wrapped in a clip"),
     }
 }
 
-// What a plugin built before ABI 2 exports: a shorter table whose only field the host may read is the version at offset 0.
+// What a guest built before ABI 2 exports: a shorter table whose only field the host may read is the version at offset 0.
 #[cfg(feature = "host")]
 #[repr(C)]
 struct AbiOneTable {
@@ -187,20 +187,20 @@ static ABI_ONE: AbiOneTable = AbiOneTable { abi: 1, _create: 0 };
 
 #[cfg(feature = "host")]
 #[test]
-fn a_plugin_built_for_abi_one_is_refused_before_its_table_is_read() {
-    let refused = unsafe { crate::host::read_vtable((&raw const ABI_ONE).cast::<PluginVTable>()) };
+fn a_guest_built_for_abi_one_is_refused_before_its_table_is_read() {
+    let refused = unsafe { crate::host::read_vtable((&raw const ABI_ONE).cast::<EmbedVTable>()) };
     let mismatch = refused.err().expect("an ABI 1 table must not load");
-    assert_eq!(mismatch.plugin, 1);
+    assert_eq!(mismatch.guest, 1);
     assert_eq!(
         mismatch.to_string(),
-        format!("plugin built for ABI 1, host is ABI {TELAR_PLUGIN_ABI}")
+        format!("guest built for ABI 1, host is ABI {TELAR_EMBED_ABI}")
     );
 }
 
 #[cfg(feature = "host")]
 #[test]
-fn a_plugin_built_for_this_abi_is_read_whole() {
-    let read = unsafe { crate::host::read_vtable(&raw const _rsx_plugin_vtable) }
+fn a_guest_built_for_this_abi_is_read_whole() {
+    let read = unsafe { crate::host::read_vtable(&raw const _rsx_embed_vtable) }
         .expect("the current table loads");
-    assert_eq!(read.abi, TELAR_PLUGIN_ABI);
+    assert_eq!(read.abi, TELAR_EMBED_ABI);
 }

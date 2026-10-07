@@ -44,11 +44,11 @@ members = [
     "crates/navigate/navigate-core",
     "crates/reactive/reactive-local",
     "crates/i18n/i18n-fixture",
-    "crates/telar-dynamic",
-    "crates/telar-plugin",
+    "plugins/telar-dynamic",
+    "crates/embed/telar-embed",
     "crates/telar-devtools",
     "crates/preferences/preferences-core",
-    "crates/telar-expression",
+    "plugins/telar-expression",
 ]
 
 default-members = [
@@ -83,11 +83,11 @@ default-members = [
     "crates/tools/telar-macros",
     "crates/tools/telar-baker",
     "apps/sandbox",
-    "crates/telar-dynamic",
-    "crates/telar-plugin",
+    "plugins/telar-dynamic",
+    "crates/embed/telar-embed",
     "crates/telar-devtools",
     "crates/preferences/preferences-core",
-    "crates/telar-expression",
+    "plugins/telar-expression",
 ]
 
 [workspace.package]
@@ -164,8 +164,8 @@ telar = { path = "crates/telar", version = "0.2.1", default-features = false }
 telar-baker = { path = "crates/tools/telar-baker", version = "0.2.1" }
 telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.2.1" }
 telar-devtools = { path = "crates/telar-devtools", version = "0.2.1" }
-telar-dynamic = { path = "crates/telar-dynamic", version = "0.2.1" }
-telar-expression = { path = "crates/telar-expression", version = "0.2.1" }
+telar-dynamic = { path = "plugins/telar-dynamic", version = "0.2.1" }
+telar-expression = { path = "plugins/telar-expression", version = "0.2.1" }
 telar-project = { path = "crates/tools/telar-project", version = "0.2.1" }
 telar-macros = { path = "crates/tools/telar-macros", version = "0.2.1" }
 telar-parser = { path = "crates/tools/telar-parser", version = "0.2.1" }

@@ -189,7 +189,7 @@ crossed, and none for each pixel of the resize.
 | Terminal | the terminal's `Resize`, as columns × rows | whole cells × the cell size the layout uses (8 × 16 by default). `width / layout_grid().x` is the column count |
 | Headless | the size the window was created with, then each size from `HeadlessPlatform::with_resizes` | logical pixels |
 | `TextureUi` | the texture's size divided by its scale | logical pixels |
-| Plugin (`telar-plugin`) | the area the host gives the plugin | logical pixels |
+| Embedded app (`telar-embed`) | the area the host gives the guest | logical pixels |
 
 A breakpoint written once works on every target. On the default terminal grid, the width `640` is 80
 columns.
@@ -211,4 +211,4 @@ also follows the surface size, so it writes new CSS on a resize, even when its o
 Send `Event::WindowResized { width, height }` in logical units whenever the surface changes size. The runner
 passes it on to `set_surface_size` before the tree gets the event. A host that builds its tree outside the
 runner calls `set_surface_size` itself, inside that surface's world, before building the tree and on every
-resize. `TextureUi`, `telar::testing::mount`, the `telar-plugin` driver and `cargo telar test` all do this.
+resize. `TextureUi`, `telar::testing::mount`, the `telar-embed` driver and `cargo telar test` all do this.

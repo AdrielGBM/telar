@@ -94,7 +94,7 @@ Two things are exempt:
   preference. Use it only when the application tones its motion down itself, by reading `use_reduced_motion()`
   and choosing gentler animations; an application that simply prefers its animations is overriding the user.
 
-The switch belongs to each runtime: a hot-reloaded library or a plugin reads its own copy of the preferences and
+The switch belongs to each runtime: a hot-reloaded library or an embedded guest reads its own copy of the preferences and
 keeps its own switch.
 
 ### D6. Scroll and view timelines are progress, not time

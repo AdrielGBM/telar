@@ -26,7 +26,7 @@ pub trait App: 'static {
 
     /// The user's system preferences changed; [`use_system_preferences`](crate::use_system_preferences) already answers the new ones when this runs, and this runtime's theme and motion already follow them. Override it to carry the snapshot somewhere this runtime does not reach.
     ///
-    /// Which in practice means across a process or an FFI boundary: a host that draws other applications' trees out of dylibs has one runtime per loaded library, and only the host's own is updated for it — a `telar-plugin` host hands each plugin the snapshot with `LoadedPlugin::set_system_preferences`. `Event::SystemPreferencesChanged` is consumed by the runner and never reaches the tree, so this is the only place an application hears about it.
+    /// Which in practice means across a process or an FFI boundary: a host that draws other applications' trees out of dylibs has one runtime per loaded library, and only the host's own is updated for it — a `telar-embed` host hands each guest the snapshot with `LoadedEmbed::set_system_preferences`. `Event::SystemPreferencesChanged` is consumed by the runner and never reaches the tree, so this is the only place an application hears about it.
     fn on_system_preferences(&self, _preferences: &SystemPreferences) {}
 }
 
