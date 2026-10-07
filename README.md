@@ -248,6 +248,7 @@ Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 | --- | --- |
 | [`telar-components`](plugins/telar-components) | The widget catalogue. No default features; groups `overlays`, `chrome` and `advanced` |
 | [`telar-navigate`](plugins/telar-navigate) | The page stack: `Navigator`, the host that animates between pages, per-tab stacks |
+| [`telar-watch`](plugins/telar-watch) | Filesystem watching delivered on the UI thread: `watch_path` |
 | [`telar-dynamic`](plugins/telar-dynamic) | Decoders and transports for assets that arrive at run time, one feature each |
 | [`telar-expression`](plugins/telar-expression) | A typed, pure expression language bound to signals |
 

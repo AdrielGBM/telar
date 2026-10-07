@@ -1,0 +1,20 @@
+[package]
+name = "telar-watch"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "Filesystem watching for Telar, delivered on the UI thread."
+keywords = ["telar", "watch", "filesystem", "reload", "gui"]
+categories = ["gui", "filesystem"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+[[test]]
+name = "watch_path"
+path = "src/watch_path_test.rs"
+
+[dependencies]
+notify.workspace = true
+telar = { workspace = true, features = ["runtime"] }
+tracing.workspace = true

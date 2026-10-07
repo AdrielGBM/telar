@@ -427,7 +427,10 @@ struct MovedFeature {
 
 const COMPONENTS: &str = "telar-components";
 
-const MOVED_FEATURES: [MovedFeature; 6] = [
+/// A plugin with no `.rsx` tags, so moving to it adds nothing to a `prelude`.
+const WATCH: &str = "telar-watch";
+
+const MOVED_FEATURES: [MovedFeature; 7] = [
     MovedFeature {
         feature: "components",
         package: COMPONENTS,
@@ -456,6 +459,11 @@ const MOVED_FEATURES: [MovedFeature; 6] = [
     MovedFeature {
         feature: "navigate",
         package: "telar-navigate",
+        groups: &[],
+    },
+    MovedFeature {
+        feature: "watch",
+        package: WATCH,
         groups: &[],
     },
 ];
@@ -532,7 +540,7 @@ pub(crate) fn moved_features_hint(
         .collect();
     let mut commands: Vec<String> = Vec::new();
     let mut entries: Vec<String> = prelude.iter().map(ToString::to_string).collect();
-    for crate_package in [COMPONENTS, "telar-navigate"] {
+    for crate_package in [COMPONENTS, "telar-navigate", WATCH] {
         let wanted: Vec<&&MovedFeature> = moved
             .iter()
             .filter(|m| m.package == crate_package)
@@ -553,7 +561,7 @@ pub(crate) fn moved_features_hint(
         };
         commands.push(format!("cargo add -p {package} {crate_package}{features}"));
         let crate_name = crate_package.replace('-', "_");
-        if !entries.contains(&crate_name) {
+        if crate_package != WATCH && !entries.contains(&crate_name) {
             entries.push(crate_name);
         }
     }

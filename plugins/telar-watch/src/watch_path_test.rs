@@ -6,7 +6,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use telar::{drain_tasks, watch_path};
+use telar::drain_tasks;
+use telar_watch::watch_path;
 
 fn scratch(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("telar-watch-{name}-{}", std::process::id()));

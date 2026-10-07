@@ -202,6 +202,11 @@ holds no parser for either; reading one whose bytes arrive while the app runs â€
 [`telar-dynamic`](https://docs.rs/telar-dynamic), a separate dependency you add on purpose, one feature per
 format and transport. Nothing in the table above pays for it.
 
+Nor is watching the filesystem. `telar` has the seam that carries a callback from a worker thread onto the UI
+thread, and no file-notification backend; reloading a config or a document when it changes is
+[`telar-watch`](https://docs.rs/telar-watch), a plugin you add beside `telar`. It ships no `.rsx` tags, so
+there is nothing to list in `telar.toml`.
+
 Nor are the widgets. Buttons, fields, menus, modals and the rest are
 [`telar-components`](https://docs.rs/telar-components), a plugin you add beside `telar`, with no default
 features. The widgets every interface uses are in every build, and each group beyond them is one feature:
@@ -236,4 +241,4 @@ prelude = ["telar_components", "telar_navigate"]
 
 Writing a plugin of your own, in Rust or in `.rsx`, is covered in [plugins.md](plugins.md).
 
-A project that still turns on the old `navigate` feature of `telar` fails to resolve; `cargo telar check` and `cargo telar doctor` print the `cargo add` and the `prelude` line that replace it.
+A project that still turns on the old `navigate` or `watch` feature of `telar` fails to resolve; `cargo telar check` and `cargo telar doctor` print the `cargo add` and the `prelude` line that replace it.

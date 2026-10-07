@@ -61,8 +61,6 @@ mod texture_ui;
 pub mod tree;
 #[cfg(feature = "runtime")]
 pub mod user_preferences;
-#[cfg(feature = "watch")]
-pub mod watch;
 #[cfg(feature = "runtime")]
 pub mod window;
 
@@ -128,8 +126,6 @@ pub use platform_core::{
     ConsumedKeys, Cursor, Event, FullscreenMode, Key, NamedKey, NumericValue, ScrollDelta,
     WindowCommand, WindowConfig, WindowPosition, push_window_command, take_window_commands,
 };
-#[cfg(feature = "watch")]
-pub use watch::watch_path;
 // The seam for an application rendering its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on. Two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
 #[cfg(feature = "hardware")]
 pub use renderer_hardware::gpu;

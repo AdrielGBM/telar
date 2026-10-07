@@ -1,15 +1,28 @@
-//! Filesystem watching that arrives on the UI thread.
+//! Filesystem watching that arrives on the UI thread: [`watch_path`] calls back on the thread that owns the signals whenever a file, or a directory and everything under it, changes.
 //!
 //! The hard half of "reload when this file changes" is not noticing the change — `notify` does that — it is getting the notification onto the thread that owns the signals, since the watcher calls back from its own. Every app that wanted it wrote that bridge again, and one of them settled for polling mtime on a timer rather than build it.
 //!
-//! [`reactive_core::spawn_stream`] is the bridge, already here for exactly this shape: many values from a worker, each callback run on the UI thread during a later frame's `drain_tasks`.
+//! [`telar::spawn_stream`] is the bridge, already in the facade for exactly this shape: many values from a worker, each callback run on the UI thread during a later frame's `drain_tasks`. This crate is written against that public seam alone, the way an application's own code could be.
+//!
+//! An application depends on it beside `telar`:
+//!
+//! ```toml
+//! # Cargo.toml
+//! telar-watch = "0.2.1"
+//! ```
+//!
+//! It ships no `.rsx` tags, so there is nothing to list in `telar.toml`.
+//!
+//! **Keep this crate on the same version as `telar`.** The [`Task`] [`watch_path`] returns is the facade's own, so a mismatch resolves two copies of the kernel and the task stops being the type `telar` hands out — a type error naming one type twice. It is the same lockstep `telar` and `telar-macros` already have, and for the same reason.
+
+#![warn(rustdoc::broken_intra_doc_links)]
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
 
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use reactive_core::{Emitter, Task, spawn_stream};
+use telar::{Emitter, Task, spawn_stream};
 
 /// One editor save is several filesystem events — a truncate, a write, a rename into place — and a directory copy is thousands. Events are collected until this long has passed with none, so a caller reloads once.
 const COALESCE: Duration = Duration::from_millis(50);
@@ -24,7 +37,7 @@ const CANCEL_POLL: Duration = Duration::from_millis(500);
 /// `on_change` takes no argument on purpose. What changed is a question with a different answer on every platform (and no answer at all for a coalesced batch), while *something under here changed, re-read it* is the same everywhere and is what a reloading caller acts on.
 ///
 /// ```ignore
-/// let _watch = telar::watch_path(config_dir, move || settings.set(load_settings()));
+/// let _watch = telar_watch::watch_path(config_dir, move || settings.set(load_settings()));
 /// ```
 pub fn watch_path(path: impl Into<PathBuf>, mut on_change: impl FnMut() + 'static) -> Task {
     let path = path.into();

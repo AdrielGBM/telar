@@ -415,3 +415,18 @@ fn the_prelude_line_keeps_what_is_declared_and_is_left_out_when_complete() {
     let hint = moved_features_hint("app", &moved, &complete).unwrap();
     assert!(!hint.contains("prelude"), "{hint}");
 }
+
+#[test]
+fn the_watch_feature_becomes_telar_watch_without_a_prelude_entry() {
+    let moved = moved_telar_features(
+        &table(
+            "[package]\nname = \"app\"\n[dependencies]\ntelar = { version = \"0.2\", features = [\"desktop\", \"watch\"] }\n",
+        ),
+        None,
+    );
+    assert_eq!(moved, BTreeSet::from(["watch"]));
+
+    let hint = moved_features_hint("app", &moved, &[]).unwrap();
+    assert!(hint.contains("cargo add -p app telar-watch"), "{hint}");
+    assert!(!hint.contains("prelude"), "{hint}");
+}

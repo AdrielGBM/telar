@@ -102,10 +102,6 @@ path = "src/texture_ui_test.rs"
 name = "theme_repaints"
 path = "src/theme_repaints_test.rs"
 
-[[test]]
-name = "watch_path"
-path = "src/watch_path_test.rs"
-
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -214,10 +210,6 @@ di = ["services-core/di"]
 ## same parser is behind `telar-dynamic`'s `catalog`, which routes it through the asset seam so a corrupt
 ## file fails before it is cached instead of after.
 runtime-catalog = ["i18n-core/runtime-catalog"]
-
-## Filesystem watching delivered on the UI thread. Opt-in: an application that reloads nothing should not
-## link a platform file-notification backend.
-watch = ["runtime", "dep:notify"]
 
 #! ## Desktop extras
 #!
@@ -375,7 +367,6 @@ ui-tree = { workspace = true, optional = true }
 
 document-features = { workspace = true, optional = true }
 libloading = { version = "0.8", optional = true }
-notify = { workspace = true, optional = true }
 raw-window-handle = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
@@ -403,7 +394,7 @@ renderer-record = { workspace = true }
 # Self-referencing so the integration tests get the opt-in `testing` module without it being a default that
 # ships in every binary. Nothing here covers an asset transport any more: `src/http_assets_test.rs` moved to
 # `telar-dynamic` along with the transport it exercises.
-telar = { path = ".", features = ["testing", "watch", "prerender", "previews"] }
+telar = { path = ".", features = ["testing", "prerender", "previews"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

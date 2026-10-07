@@ -50,6 +50,7 @@ members = [
     "crates/preferences/preferences-core",
     "plugins/telar-expression",
     "plugins/telar-rsx-fixture",
+    "plugins/telar-watch",
 ]
 
 default-members = [
@@ -91,6 +92,7 @@ default-members = [
     "crates/preferences/preferences-core",
     "plugins/telar-expression",
     "plugins/telar-navigate",
+    "plugins/telar-watch",
 ]
 
 [workspace.package]
