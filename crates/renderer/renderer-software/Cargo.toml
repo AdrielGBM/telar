@@ -45,7 +45,6 @@ layout-core = { workspace = true }
 platform-core = { workspace = true }
 platform-headless = { workspace = true }
 reactive-core = { workspace = true }
-ui-components = { workspace = true, features = ["overlays"] }
 ui-core = { workspace = true }
 ui-tree = { workspace = true }
 
@@ -80,10 +79,6 @@ path = "src/shadow_restyle_test.rs"
 [[test]]
 name = "visual_check"
 path = "src/visual_check_test.rs"
-
-[[test]]
-name = "widget_gallery"
-path = "src/widget_gallery_test.rs"
 
 [[bench]]
 name = "render_frame"

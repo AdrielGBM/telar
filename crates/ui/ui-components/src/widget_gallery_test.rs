@@ -1,29 +1,43 @@
 //! Headless render gallery for the ui-components catalogue: builds the inline form widgets in visible states and renders them to a PNG for eyeballing. Runs in CI (asserts it renders with content); pass TELAR_WIDGETS_OUT=/path.png to also dump the image.
 
-#[path = "test_common.rs"]
-mod common;
+#![cfg(not(target_arch = "wasm32"))]
 
 use layout_core::{AvailableSpace, LayoutStyle};
 use platform_headless::HeadlessWindow;
 use reactive_core::signal;
-use renderer_core::TextStyle;
 use renderer_core::{Color, RenderBackend};
-use telar_renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
-use ui_components::{
+use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
+use telar_ui_components::{
     CheckboxProps, RadioProps, SliderProps, TextFieldProps, ToggleProps, checkbox, radio, slider,
     text_field, toggle,
 };
-use ui_components::{ModalProps, modal};
 use ui_core::{
-    Children, Container, LayoutItem, Slots, Text, box_item, compute_layout, new_container,
-    relayout_if_dirty, reset_layout_runtime,
+    Children, Container, LayoutItem, compute_layout, new_container, relayout_if_dirty,
+    reset_layout_runtime,
 };
 use ui_tree::ComponentList;
+
+/// Installs the glyph measurer layout sizes text with, which a gallery test has no runner to do for it.
+fn install_text_metrics() {
+    renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+}
+
+/// Writes the frame to whatever `env_key` names as a PNG, or nothing when it is unset.
+fn save_png_if_requested(env_key: &str, w: u32, h: u32, rgba: &[u8]) {
+    let Ok(path) = std::env::var(env_key) else {
+        return;
+    };
+    image::RgbaImage::from_raw(w, h, rgba.to_vec())
+        .expect("rgba length matches w*h*4")
+        .save(&path)
+        .expect("write PNG");
+    eprintln!("wrote {path}");
+}
 
 #[test]
 fn form_widgets_render() {
     let (w, h) = (360u32, 400u32);
-    common::install_text_metrics();
+    install_text_metrics();
     reset_layout_runtime();
 
     let cb = checkbox(
@@ -130,13 +144,18 @@ fn form_widgets_render() {
         rgba.as_chunks::<4>().0.iter().any(|px| px[0] != 244),
         "expected widgets to draw content over the clear color"
     );
-    common::save_png_if_requested("TELAR_WIDGETS_OUT", w, h, rgba);
+    save_png_if_requested("TELAR_WIDGETS_OUT", w, h, rgba);
 }
 
+#[cfg(feature = "overlays")]
 #[test]
 fn modal_renders_over_a_page() {
+    use renderer_core::TextStyle;
+    use telar_ui_components::{ModalProps, modal};
+    use ui_core::{Slots, Text, box_item};
+
     let (w, h) = (420u32, 300u32);
-    common::install_text_metrics();
+    install_text_metrics();
     reset_layout_runtime();
     let open = signal(false);
 
@@ -191,17 +210,17 @@ fn modal_renders_over_a_page() {
         rgba.as_chunks::<4>().0.iter().any(|px| px[0] != 238),
         "expected the modal to draw over the page"
     );
-    common::save_png_if_requested("TELAR_MODAL_OUT", w, h, rgba);
+    save_png_if_requested("TELAR_MODAL_OUT", w, h, rgba);
 }
 
 #[test]
 fn select_open_renders() {
     use platform_core::{Event, PointerButton, PointerSource};
-    use ui_components::{ItemProps, SelectProps, item, select};
+    use telar_ui_components::{ItemProps, SelectProps, item, select};
     use ui_core::{Children, EventResult, Slots, dispatch_overlays, track_layout};
 
     let (w, h) = (300u32, 240u32);
-    common::install_text_metrics();
+    install_text_metrics();
     reset_layout_runtime();
     let picked = signal(1u32);
     let sel = select(
@@ -286,5 +305,5 @@ fn select_open_renders() {
         panel_rows > 0,
         "expected the open panel's rows to draw below the trigger"
     );
-    common::save_png_if_requested("TELAR_SELECT_OUT", w, h, rgba);
+    save_png_if_requested("TELAR_SELECT_OUT", w, h, rgba);
 }

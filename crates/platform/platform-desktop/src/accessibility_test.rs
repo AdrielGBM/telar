@@ -223,10 +223,10 @@ mod from_a_screen {
     use geometry_core::Size;
     use layout_core::{LayoutError, LayoutStyle};
     use platform_core::{Event, Key, Location, ModifiersState, NamedKey, anchor, external};
+    use reactive_core::signal;
     use renderer_core::{Color, RectStyle, TextStyle};
-    use ui_components::{ButtonProps, CheckboxProps, TextFieldProps, button, checkbox, text_field};
     use ui_core::{
-        Accessible, Children, ComponentList, Container, FixedLayer, LayoutItem, PageAnchor,
+        Accessible, ComponentList, Container, FixedLayer, Input, LayoutItem, PageAnchor,
         ScrollPage, ScrollViewport, StyledContainer, Text, TextRun, WindowRoot, box_item, focus,
         use_anchor_at,
     };
@@ -279,7 +279,61 @@ mod from_a_screen {
         Ok(box_item(control))
     }
 
-    /// The same screen the document's axe audit runs over (`renderer-dom/src/audit_test.rs`), so the two targets are held to one fixture.
+    /// What the catalogue's `button` is to a reader: a box around its words that is a button and presses.
+    fn button(label: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let control = StyledContainer::new(
+            LayoutStyle::new().padding_all(8.0),
+            |_| RectStyle::default(),
+            vec![box_item(words(label)?)],
+        )?
+        .control(platform_core::Role::Button)
+        .on_press(|| {});
+        Ok(box_item(control))
+    }
+
+    /// What the catalogue's `text_field` is to a reader: a caption over a framed `Input` that carries the caption as its name.
+    fn text_field(
+        caption: &'static str,
+        placeholder: &'static str,
+    ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let input = Input::new(signal(String::new()), LayoutStyle::new(), ink)?
+            .placeholder(placeholder)
+            .a11y_label(move || caption);
+        let line = input.focus_id();
+        let frame = StyledContainer::new(
+            LayoutStyle::new().padding_all(8.0),
+            |_| RectStyle::default(),
+            vec![box_item(input)],
+        )?
+        .frames_focus_of(line);
+        let column = Container::new(
+            LayoutStyle::new().flex_column().gap(4.0),
+            vec![box_item(words(caption)?), box_item(frame)],
+        )?;
+        Ok(box_item(column))
+    }
+
+    /// What the catalogue's `checkbox` is to a reader: a row of a box and its words that is one checkbox, flipped by its own press.
+    fn checkbox(label: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let checked = Rc::new(Cell::new(false));
+        let read = checked.clone();
+        let mark = StyledContainer::new(
+            LayoutStyle::new().width(18.0).height(18.0),
+            |_| RectStyle::default(),
+            vec![],
+        )?;
+        let row = StyledContainer::new(
+            LayoutStyle::new().flex_row().gap(10.0),
+            |_| RectStyle::default(),
+            vec![box_item(mark), box_item(words(label)?)],
+        )?
+        .control(platform_core::Role::CheckBox)
+        .toggled(move || read.get())
+        .on_press(move || checked.set(!checked.get()));
+        Ok(box_item(row))
+    }
+
+    /// The same screen the document's axe audit runs over (`ui-components/src/audit_test.rs`), with `ui-core` primitives standing in for the catalogue's button, field and checkbox, so the two targets are held to one fixture.
     fn screen() -> Result<Box<dyn LayoutItem>, LayoutError> {
         let heading = StyledContainer::new(
             LayoutStyle::new(),
@@ -287,28 +341,11 @@ mod from_a_screen {
             vec![box_item(words("Settings")?)],
         )?
         .role(platform_core::Role::Heading(1));
-        let save = button(
-            ButtonProps::props()
-                .label("Save")
-                .on_press(Rc::new(|| {}))
-                .build(),
-            Children::default(),
-        )?;
+        let save = button("Save")?;
         let source = link("Source code", || external("https://example.com/telar"))?;
         let about = link("About", || Location::root().segment("about"))?;
-        let name = text_field(
-            TextFieldProps::props()
-                .label("Name")
-                .placeholder("Ada Lovelace")
-                .build(),
-            Children::default(),
-        )?;
-        let subscribe = checkbox(
-            CheckboxProps::props()
-                .label("Send me the newsletter")
-                .build(),
-            Children::default(),
-        )?;
+        let name = text_field("Name", "Ada Lovelace")?;
+        let subscribe = checkbox("Send me the newsletter")?;
         let calm = stateful_control(platform_core::Role::Switch, "Reduce motion", "≈", true)?;
         let bold = stateful_control(platform_core::Role::Button, "Bold", "B", false)?;
         let paragraph = Text::runs(

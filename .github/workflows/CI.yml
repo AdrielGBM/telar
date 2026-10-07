@@ -125,6 +125,7 @@ jobs:
         run: |
           export CHROMEDRIVER="$CHROMEWEBDRIVER/chromedriver"
           cargo test -p telar-renderer-dom --target wasm32-unknown-unknown
+          cargo test -p telar-ui-components --target wasm32-unknown-unknown --test audit
 
   # `apps/landing` is what ships to production, and the module a visitor downloads is what `--profile web`
   # plus `wasm-opt` produce, not what `cargo check` sees. This is the only leg that builds it release-mode

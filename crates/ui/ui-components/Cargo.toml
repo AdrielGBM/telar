@@ -44,7 +44,30 @@ web-time = { workspace = true }
 
 [dev-dependencies]
 renderer-text = { workspace = true }
+ui-tree.workspace = true
 
 [[test]]
 name = "reachable"
 path = "src/reachable_test.rs"
+
+[[test]]
+name = "widget_gallery"
+path = "src/widget_gallery_test.rs"
+
+[[test]]
+name = "audit"
+path = "src/audit_test.rs"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+image = { workspace = true, features = ["png"] }
+platform-headless.workspace = true
+renderer-software.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+js-sys.workspace = true
+renderer-dom.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+# Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin in [workspace.dependencies]. The two move together.
+wasm-bindgen-test = "=0.3.77"
+web-sys = { workspace = true, features = ["CssStyleDeclaration", "Document", "Element", "HtmlElement", "HtmlHeadElement", "Node", "Window"] }

@@ -8,8 +8,10 @@ use geometry_core::Size;
 use layout_core::{LayoutError, LayoutStyle};
 use platform_core::{Event, Location, Role, external};
 use renderer_core::{Color, RectStyle, RenderBackend, TextStyle};
-use telar_renderer_dom::{CanvasTextMetrics, DomRenderer};
-use ui_components::{ButtonProps, CheckboxProps, TextFieldProps, button, checkbox, text_field};
+use renderer_dom::{CanvasTextMetrics, DomRenderer};
+use telar_ui_components::{
+    ButtonProps, CheckboxProps, TextFieldProps, button, checkbox, text_field,
+};
 use ui_core::{
     Accessible, Children, ComponentList, Container, LayoutItem, StyledContainer, Text, TextRun,
     WindowRoot, box_item, focus,
@@ -94,6 +96,8 @@ fn stateful_control(
 }
 
 /// One of everything an application builds most of its screens from.
+///
+/// `platform-desktop/src/accessibility_test.rs` builds the same screen from `ui-core` primitives standing in for the catalogue's button, field and checkbox, so a change here is mirrored there.
 fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let heading = StyledContainer::new(
         LayoutStyle::new(),

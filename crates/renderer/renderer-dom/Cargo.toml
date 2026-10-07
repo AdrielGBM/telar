@@ -27,7 +27,6 @@ js-sys.workspace = true
 layout-core = { workspace = true }
 platform-web.workspace = true
 reactive-core.workspace = true
-ui-components.workspace = true
 ui-core.workspace = true
 ui-tree.workspace = true
 wasm-bindgen-futures.workspace = true
@@ -79,10 +78,6 @@ path = "src/picture_test.rs"
 [[test]]
 name = "prerender_parity"
 path = "src/prerender_parity_test.rs"
-
-[[test]]
-name = "audit"
-path = "src/audit_test.rs"
 
 [[test]]
 name = "hydration"

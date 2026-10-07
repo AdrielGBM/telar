@@ -165,7 +165,6 @@ telar-baker = { path = "crates/tools/telar-baker", version = "0.2.1" }
 telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.2.1" }
 telar-devtools = { path = "crates/devtools/telar-devtools", version = "0.2.1" }
 telar-dynamic = { path = "plugins/telar-dynamic", version = "0.2.1" }
-telar-expression = { path = "plugins/telar-expression", version = "0.2.1" }
 telar-project = { path = "crates/tools/telar-project", version = "0.2.1" }
 telar-macros = { path = "crates/tools/telar-macros", version = "0.2.1" }
 telar-parser = { path = "crates/tools/telar-parser", version = "0.2.1" }
