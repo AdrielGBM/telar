@@ -3,8 +3,6 @@
 //! It serves two masters. The `.rsx` side queries it directly (see [`crate::ra`]): the generated Rust reaches it as a `didChange` on the same ordered channel the query travels on, so a keystroke is analysed without the text ever touching disk — the cross-process bridge this replaces could not win that race, and answered hover and go-to-definition only. Everything the editor asks about real `.rs` files is passed through instead, which is what lets one rust-analyzer serve both and leaves the editor with a single index.
 
 use std::collections::HashMap;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -54,10 +52,10 @@ type Pending = Arc<std::sync::Mutex<HashMap<RequestId, Waiting>>>;
 /// Requests rust-analyzer sent to the client, relayed onward under an id of ours: maps that id back to the one rust-analyzer is waiting on.
 type Relayed = Arc<std::sync::Mutex<HashMap<i32, RequestId>>>;
 
-/// What rust-analyzer has been told a file contains: the document version it was sent under, and a digest of the text so an unchanged buffer is not resent.
+/// What rust-analyzer has been told a file contains: the document version it was sent under, and the text, so an unchanged buffer is not resent and a temporary edit can be put back.
 struct Synced {
     version: i32,
-    digest: u64,
+    text: String,
 }
 
 pub struct Inner {
@@ -116,24 +114,50 @@ impl Inner {
 
     /// Sends a request and waits for its reply. Yields `None` when rust-analyzer never answers, which is what it does for analysis requests that arrive before the workspace has loaded.
     pub async fn request(&self, method: &str, params: Value, timeout: Duration) -> Option<Value> {
-        let id = self.claim_id();
-        let (tx, rx) = oneshot::channel();
-        self.pending
-            .lock()
-            .ok()?
-            .insert(id.clone(), Waiting::Ours(tx));
-        if !self.send_request(&id, method, params) {
-            self.pending.lock().ok()?.remove(&id);
-            return None;
-        }
-        match tokio::time::timeout(timeout, rx).await {
-            Ok(Ok(value)) => Some(value),
+        self.request_all(method, vec![params], timeout)
+            .await
+            .pop()
+            .flatten()
+    }
+
+    /// Sends every request before waiting on any, so rust-analyzer works on them side by side, and answers each as [`Self::request`] would. One deadline covers them all.
+    pub async fn request_all(
+        &self,
+        method: &str,
+        params: Vec<Value>,
+        timeout: Duration,
+    ) -> Vec<Option<Value>> {
+        let deadline = tokio::time::Instant::now() + timeout;
+        let waiting: Vec<_> = params
+            .into_iter()
+            .map(|params| {
+                let id = self.claim_id();
+                let (tx, rx) = oneshot::channel();
+                if let Ok(mut pending) = self.pending.lock() {
+                    pending.insert(id.clone(), Waiting::Ours(tx));
+                }
+                let sent = self.send_request(&id, method, params);
+                (id, sent.then_some(rx))
+            })
+            .collect();
+        let mut answers = Vec::with_capacity(waiting.len());
+        for (id, rx) in waiting {
+            let answer = match rx {
+                Some(rx) => tokio::time::timeout_at(deadline, rx)
+                    .await
+                    .ok()
+                    .and_then(Result::ok),
+                None => None,
+            };
             // Timed out, or the server dropped the reply: drop the slot so it cannot leak for the life of the session.
-            _ => {
-                self.pending.lock().ok()?.remove(&id);
-                None
+            if answer.is_none()
+                && let Ok(mut pending) = self.pending.lock()
+            {
+                pending.remove(&id);
             }
+            answers.push(answer);
         }
+        answers
     }
 
     pub fn notify(&self, method: &str, params: Value) {
@@ -166,16 +190,15 @@ impl Inner {
 
     /// Puts `text` in front of rust-analyzer as the content of `path`, opening the document on first use. Text it already holds is not resent: every query syncs before asking, and a `didChange` invalidates salsa whether or not anything changed.
     pub fn sync(&self, path: &Path, text: &str) {
-        let digest = digest(text);
         let Ok(mut synced) = self.synced.lock() else {
             return;
         };
         let uri = uri_for(path);
         match synced.get_mut(path) {
-            Some(state) if state.digest == digest => {}
+            Some(state) if state.text == text => {}
             Some(state) => {
                 state.version += 1;
-                state.digest = digest;
+                state.text = text.to_owned();
                 let version = state.version;
                 drop(synced);
                 self.notify(
@@ -187,7 +210,13 @@ impl Inner {
                 );
             }
             None => {
-                synced.insert(path.to_path_buf(), Synced { version: 1, digest });
+                synced.insert(
+                    path.to_path_buf(),
+                    Synced {
+                        version: 1,
+                        text: text.to_owned(),
+                    },
+                );
                 drop(synced);
                 self.notify(
                     "textDocument/didOpen",
@@ -197,6 +226,12 @@ impl Inner {
                 );
             }
         }
+    }
+
+    /// The text rust-analyzer currently holds for `path`, or `None` when it was never synced.
+    pub fn synced_text(&self, path: &Path) -> Option<String> {
+        let synced = self.synced.lock().ok()?;
+        synced.get(path).map(|state| state.text.clone())
     }
 
     fn claim_id(&self) -> RequestId {
@@ -220,12 +255,6 @@ pub fn uri_for(path: &Path) -> String {
     crate::uri::from_path(path)
         .map(|uri| uri.as_str().to_owned())
         .unwrap_or_else(|| format!("file://{}", path.display()))
-}
-
-fn digest(text: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    text.hash(&mut hasher);
-    hasher.finish()
 }
 
 /// Mirrors what `rust_analyzer::session::run_session` does for stdio, which cannot be reused: its `IoThreads` has no variant for an in-memory connection.

@@ -10,6 +10,8 @@ pub struct ProjectInfo {
     pub component_root: PathBuf,
     pub theme_type: Option<String>,
     pub theme_fields: HashSet<String>,
+    /// Whether the package is a `[telar] library`, whose `$theme` reads the shared `ThemeTokens` rather than a theme type of its own.
+    pub library: bool,
     /// Every key the project's baked catalog defines, or empty when it has no translations.
     pub i18n_keys: HashSet<String>,
 }
@@ -63,11 +65,15 @@ impl ProjectInfo {
             .unwrap_or_default();
         let component_root =
             telar_project::find_workspace_root(&root).unwrap_or_else(|| root.clone());
+        let library = telar_project::TelarManifest::load_or_default(&root)
+            .telar
+            .library;
         Some(Self {
             root,
             component_root,
             theme_type,
             theme_fields,
+            library,
             i18n_keys,
         })
     }

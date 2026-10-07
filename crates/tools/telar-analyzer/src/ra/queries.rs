@@ -35,9 +35,7 @@ impl Analyzer {
         else {
             return Vec::new();
         };
-        // A `CompletionList` when rust-analyzer flags incompleteness, a bare array otherwise.
-        let items = result.get("items").cloned().unwrap_or(result);
-        let mut items: Vec<CompletionItem> = serde_json::from_value(items).unwrap_or_default();
+        let mut items = completion_list(result);
         for item in &mut items {
             // Both carry ranges in generated-file coordinates, which land nowhere near the cursor once the editor reads them against the `.rsx`: it drops such an item without a word, so the list looks empty however good the answer was. Without them the client inserts at the cursor itself.
             item.text_edit = None;
@@ -210,6 +208,12 @@ impl Analyzer {
         let result = self.inner.request(method, params, timeout).await?;
         (!result.is_null()).then_some(result)
     }
+}
+
+/// The items of a completion answer: a `CompletionList` when rust-analyzer flags incompleteness, a bare array otherwise.
+pub(super) fn completion_list(result: Value) -> Vec<CompletionItem> {
+    let items = result.get("items").cloned().unwrap_or(result);
+    serde_json::from_value(items).unwrap_or_default()
 }
 
 /// LSP's `Location | Location[]` as `(path, range)` pairs. Anything whose URI is not a local file is dropped, since the backend has nothing to map it onto.

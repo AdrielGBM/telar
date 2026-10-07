@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 
 use crate::analysis::completions::{
     CompletionKind, attribute_key_items, color_items, completion_context, element_name_items,
-    signal_items, style_class_items,
+    signal_items, style_class_items, theme_items,
 };
 use crate::analysis::definition::goto_definition;
 use crate::analysis::hover::hover_info;
@@ -29,6 +29,7 @@ use telar_transpiler::nth_line;
 
 mod lifecycle;
 mod mapping;
+mod prelude;
 mod query;
 mod rename;
 
@@ -53,6 +54,14 @@ pub(crate) struct AnalyzerHandle {
 /// Whether `path` sits inside a cargo build directory. rust-analyzer runs `cargo check` to discover build scripts, which writes generated `.rs` under `target/`; treating those as `.rsx` neighbours would churn the symbol index for files nobody wrote. The client cannot be trusted to exclude them — a non-VS Code editor registers its own watchers.
 fn is_under_target_dir(path: &Path) -> bool {
     path.components().any(|c| c.as_os_str() == "target")
+}
+
+/// Whether a change to `path` can change what a crate exports: its Rust, its `.rsx`, or a manifest that picks its version or features.
+fn changes_exports(path: &Path) -> bool {
+    let extension = path.extension().and_then(|e| e.to_str());
+    let name = path.file_name().and_then(|n| n.to_str());
+    matches!(extension, Some("rs" | "rsx"))
+        || matches!(name, Some("Cargo.toml" | "Cargo.lock" | "telar.toml"))
 }
 
 /// The workspace the editor opened, from whichever of the three fields it filled in.
@@ -99,6 +108,7 @@ pub struct Backend {
     index: Arc<Mutex<Option<WorkspaceIndex>>>,
     // Deferred documentation for the last rust-analyzer completion batch (see [`CompletionCache`]).
     completion_cache: Arc<Mutex<CompletionCache>>,
+    prelude_cache: Arc<Mutex<prelude::PreludeCache>>,
     // A spawned diagnostics task captures the value it was queued for and bails before the round-trip if a newer edit superseded it, so keystroke-rate edits do not pile up.
     revision: Arc<AtomicU64>,
     // Our semantic token types as indices into the legend actually advertised, which is rust-analyzer's. `None` until `initialize` has one to map against.
@@ -121,6 +131,7 @@ impl Backend {
             store: Arc::new(RwLock::new(Store::new())),
             index: Arc::new(Mutex::new(None)),
             completion_cache: Arc::new(Mutex::new(CompletionCache::default())),
+            prelude_cache: Arc::default(),
             revision: Arc::new(AtomicU64::new(0)),
             token_types: Mutex::new(None),
             advertised: Mutex::new(None),
@@ -400,9 +411,10 @@ impl Backend {
         self.store.write().await.close(&uri);
     }
 
-    /// `workspace/didChangeWatchedFiles`: keeps the workspace symbol index current when a sibling `.rsx` is edited, created or deleted outside the editor. Rust files and the manifests are not our business — rust-analyzer watches the filesystem itself and reloads its own crate graph.
+    /// `workspace/didChangeWatchedFiles`: keeps the workspace symbol index current when a sibling `.rsx` is edited, created or deleted outside the editor, and forgets the prelude components once a crate's source or manifest changes. rust-analyzer watches the filesystem itself and reloads its own crate graph.
     pub async fn did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
         let mut rsx_changes: Vec<(PathBuf, bool)> = Vec::new();
+        let mut exports_may_differ = false;
         for change in params.changes {
             let Some(path) = crate::uri::to_path(&change.uri) else {
                 continue;
@@ -411,9 +423,13 @@ impl Backend {
             if crate::build_sync::is_generated_build_file(&path) || is_under_target_dir(&path) {
                 continue;
             }
+            exports_may_differ |= changes_exports(&path);
             if path.extension().and_then(|e| e.to_str()) == Some("rsx") {
                 rsx_changes.push((path, change.typ == FileChangeType::DELETED));
             }
+        }
+        if exports_may_differ && let Ok(mut cache) = self.prelude_cache.lock() {
+            cache.clear();
         }
         if rsx_changes.is_empty() {
             return;
@@ -440,33 +456,56 @@ impl Backend {
         let pos = params.text_document_position.position;
         let file_path = crate::uri::to_path(uri);
 
-        let (source, native, theme, component_props) = {
+        let (source, native, incomplete, theme, component_props) = {
             let store = self.store.read().await;
             let parsed = store.get(uri)?;
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
+            let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             let context = completion_context(&parsed.source, pos.line, pos.character);
             // A component's props are the props struct's own business, so the key position is a question for rust-analyzer, which answers with names, types and doc comments. The registry can only answer for the tags it defines.
             let component_props =
                 matches!(&context, Some(CompletionKind::AttributeKey(tag)) if !is_builtin_tag(tag));
+            let mut incomplete = false;
             let native = context.filter(|_| !component_props).map(|kind| match kind {
-                // The whole workspace, not the file's own directory: a component lives wherever its crate is, and offering only its siblings is what keeps `.rsx` files from composing.
-                CompletionKind::ElementName => element_name_items(
-                    project
-                        .as_ref()
-                        .map(|p| p.component_root.as_path())
-                        .or_else(|| file_path.as_deref().and_then(|p| p.parent())),
-                ),
+                CompletionKind::ElementName => {
+                    let (prelude, pending) = file_path
+                        .as_deref()
+                        .map(|path| self.prelude_components(path, &parsed.source, theme.as_deref()))
+                        .unwrap_or_default();
+                    incomplete = pending;
+                    // The whole workspace, not the file's own directory: a component lives wherever its crate is, and offering only its siblings is what keeps `.rsx` files from composing.
+                    element_name_items(
+                        project
+                            .as_ref()
+                            .map(|p| p.component_root.as_path())
+                            .or_else(|| file_path.as_deref().and_then(|p| p.parent())),
+                        &prelude,
+                    )
+                }
                 CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
                 CompletionKind::ColorValue => color_items(project.as_ref()),
                 CompletionKind::StyleClass => style_class_items(&parsed.document),
                 CompletionKind::SignalRef => signal_items(&parsed.source),
+                CompletionKind::ThemeToken => theme_items(project.as_ref()),
             });
-            let theme = project.as_ref().and_then(|p| p.theme_type.clone());
-            (parsed.source.clone(), native, theme, component_props)
+            (
+                parsed.source.clone(),
+                native,
+                incomplete,
+                theme,
+                component_props,
+            )
         };
 
         if let Some(items) = native {
-            return Some(CompletionResponse::Array(items));
+            return Some(match incomplete {
+                // Asked again on the next keystroke, which is how prelude components still being worked out reach a list already open.
+                true => CompletionResponse::List(CompletionList {
+                    is_incomplete: true,
+                    items,
+                }),
+                false => CompletionResponse::Array(items),
+            });
         }
         // Line-mapped for `[logic]`, expression-span-mapped for `[view]`, and props-builder-mapped for a component's attribute keys.
         let rsx_path = file_path?;

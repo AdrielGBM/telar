@@ -11,6 +11,7 @@ use serde_json::Value;
 use crate::inner::Inner;
 use crate::rpc::OutgoingSender;
 
+mod exports;
 mod queries;
 
 /// How long a query waits for rust-analyzer. Past this it is either still loading the workspace or wedged, and either way the backend answers with what the `.rsx` side worked out natively rather than holding the editor.
