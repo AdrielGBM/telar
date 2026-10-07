@@ -89,17 +89,24 @@ fn a_directory_inside_another_is_not_watched_separately() {
 }
 
 /// An asset edit has to reach the rebuild on its own now: nothing touches `.rsx` mtimes any more, and the `include_bytes!` the macro emits is what makes cargo see it.
-#[test]
-fn an_asset_extension_is_a_rebuild_event() {
-    let event = notify::Event {
+fn modified(path: &Path) -> notify::Event {
+    notify::Event {
         kind: EventKind::Modify(notify::event::ModifyKind::Data(
             notify::event::DataChange::Content,
         )),
-        paths: vec![PathBuf::from("/p/assets/badge.webp")],
+        paths: vec![path.to_path_buf()],
         attrs: Default::default(),
+    }
+}
+
+#[test]
+fn an_asset_extension_is_a_rebuild_event() {
+    let watched = WatchSet {
+        dirs: vec![PathBuf::from("/p/assets")],
+        manifests: vec![],
     };
     assert!(
-        note_event(&event),
+        watched.wants(&modified(Path::new("/p/assets/badge.webp"))),
         "an edited asset has to rebuild, or the baked artifact goes stale"
     );
 }
@@ -156,4 +163,74 @@ fn every_feature_the_loop_injects_is_one_a_project_can_lock() {
             );
         }
     }
+}
+
+/// `prelude` and `theme` change the Rust every `.rsx` becomes, and the loop used to watch neither file: an edit there did nothing until some unrelated source was saved.
+#[test]
+fn every_telar_toml_a_member_reads_is_watched_through_its_directory() {
+    let root = std::env::temp_dir().join(format!(
+        "cargo_telar_watch_manifests_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    let member = root.join("apps/site");
+    std::fs::create_dir_all(member.join("src")).unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"apps/*\"]\n",
+    )
+    .unwrap();
+    std::fs::write(member.join("Cargo.toml"), "[package]\nname = \"site\"\n").unwrap();
+    std::fs::write(root.join("telar.toml"), "[telar]\n").unwrap();
+    let root = root.canonicalize().unwrap();
+    let member = root.join("apps/site");
+
+    let watched = WatchSet::collect(&root);
+    let watches = watched.watches();
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(
+        watched.manifests.contains(&root.join("telar.toml")),
+        "the workspace's, which every member inherits from: {:?}",
+        watched.manifests
+    );
+    assert!(
+        watched.manifests.contains(&member.join("telar.toml")),
+        "the member's own, even before it exists, so creating it is noticed: {:?}",
+        watched.manifests
+    );
+    for dir in [&root, &member] {
+        assert!(
+            watches
+                .iter()
+                .any(|(watched, mode)| watched == dir && *mode == RecursiveMode::NonRecursive),
+            "{dir:?} is watched for its manifest alone: {watches:?}"
+        );
+    }
+    assert!(
+        watches
+            .iter()
+            .any(|(watched, mode)| *watched == member.join("src")
+                && *mode == RecursiveMode::Recursive),
+        "{watches:?}"
+    );
+}
+
+#[test]
+fn a_telar_toml_edit_rebuilds_and_its_neighbours_do_not() {
+    let watched = WatchSet {
+        dirs: vec![PathBuf::from("/w/app/src")],
+        manifests: vec![
+            PathBuf::from("/w/telar.toml"),
+            PathBuf::from("/w/app/telar.toml"),
+        ],
+    };
+    assert!(watched.wants(&modified(Path::new("/w/telar.toml"))));
+    assert!(watched.wants(&modified(Path::new("/w/app/telar.toml"))));
+    assert!(watched.wants(&modified(Path::new("/w/app/src/home.rsx"))));
+    assert!(
+        !watched.wants(&modified(Path::new("/w/Cargo.toml"))),
+        "a manifest's directory is watched for the manifest only"
+    );
+    assert!(!watched.wants(&modified(Path::new("/w/app/.telar.toml.swp"))));
 }

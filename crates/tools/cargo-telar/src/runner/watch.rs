@@ -120,18 +120,86 @@ fn is_asset_extension(ext: &str) -> bool {
         .any(|kind| kind.extensions.contains(&ext))
 }
 
-// Whether the event should trigger a rebuild. Assets need no special handling any more: the macro emits an `include_bytes!` per baked asset, so cargo sees the edit as a real dependency, and the bake before each rebuild refreshes the artifact it reads.
-fn note_event(event: &notify::Event) -> bool {
-    if !matches!(
-        event.kind,
-        EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
-    ) {
-        return false;
+/// Everything an edit that should rebuild can come from.
+struct WatchSet {
+    /// Watched recursively: each member's `src/`, asset root and catalog directory.
+    dirs: Vec<PathBuf>,
+    /// Every `telar.toml` a member's settings are read from, present or not. A `prelude` or `theme` changes the Rust every `.rsx` becomes, so an edit there is a source edit.
+    manifests: Vec<PathBuf>,
+}
+
+impl WatchSet {
+    /// Canonical, because an event names the path the platform resolved — macOS reports `/private/var/…` for a watch on `/var/…` — and a set spelled any other way would match nothing.
+    fn collect(workspace_root: &Path) -> Self {
+        let canonical = |path: PathBuf| path.canonicalize().unwrap_or(path);
+        Self {
+            dirs: collect_watch_dirs(workspace_root)
+                .into_iter()
+                .map(canonical)
+                .collect(),
+            manifests: collect_watch_manifests(workspace_root)
+                .into_iter()
+                .map(|manifest| match (manifest.parent(), manifest.file_name()) {
+                    (Some(parent), Some(name)) => canonical(parent.to_path_buf()).join(name),
+                    _ => manifest,
+                })
+                .collect(),
+        }
     }
-    event.paths.iter().any(|p| {
-        let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
-        matches!(ext, "rs" | "rsx" | "toml") || is_asset_extension(ext)
-    })
+
+    /// Whether the event should trigger a rebuild. Assets need no special handling any more: the macro emits an `include_bytes!` per baked asset, so cargo sees the edit as a real dependency, and the bake before each rebuild refreshes the artifact it reads.
+    ///
+    /// A manifest's directory is watched only for the manifest, so anything else changing beside it — a `Cargo.lock` cargo rewrote, an editor's swap file — is not an edit to the project.
+    fn wants(&self, event: &notify::Event) -> bool {
+        if !matches!(
+            event.kind,
+            EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
+        ) {
+            return false;
+        }
+        event.paths.iter().any(|p| {
+            if self.manifests.contains(p) {
+                return true;
+            }
+            let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
+            self.dirs.iter().any(|dir| p.starts_with(dir))
+                && (matches!(ext, "rs" | "rsx" | "toml") || is_asset_extension(ext))
+        })
+    }
+
+    /// The directories to hand the watcher, each with how deep to watch it. A manifest is watched through its directory rather than as a file, because an editor that saves by writing a new file and renaming it over the old one would end a watch on the file itself; and not at all when a recursive watch already covers it.
+    fn watches(&self) -> Vec<(PathBuf, RecursiveMode)> {
+        let mut parents: Vec<PathBuf> = self
+            .manifests
+            .iter()
+            .filter_map(|manifest| manifest.parent().map(Path::to_path_buf))
+            .filter(|parent| parent.is_dir())
+            .filter(|parent| !self.dirs.iter().any(|dir| parent.starts_with(dir)))
+            .collect();
+        parents.sort();
+        parents.dedup();
+        self.dirs
+            .iter()
+            .map(|dir| (dir.clone(), RecursiveMode::Recursive))
+            .chain(
+                parents
+                    .into_iter()
+                    .map(|parent| (parent, RecursiveMode::NonRecursive)),
+            )
+            .collect()
+    }
+}
+
+/// The `telar.toml` of every member and of the workspace root — the files [`telar_project::TelarManifest::files`] reads for any member — whether or not each exists yet, so creating one is noticed too.
+fn collect_watch_manifests(workspace_root: &Path) -> Vec<PathBuf> {
+    let mut manifests: Vec<PathBuf> = super::bake::member_dirs(workspace_root)
+        .into_iter()
+        .chain(std::iter::once(workspace_root.to_path_buf()))
+        .map(|dir| dir.join(telar_project::MANIFEST_FILENAME))
+        .collect();
+    manifests.sort();
+    manifests.dedup();
+    manifests
 }
 
 // Every directory an edit can come from: each member's `src/`, the asset root, and the catalog directory. The last two sit outside `src/` by default, so watching only `src/` meant editing an asset or a translation raised no event at all — not one that was handled badly, one that never arrived.
@@ -222,19 +290,17 @@ impl HotChannel {
 
 fn make_watcher(
     tx: mpsc::Sender<notify::Result<notify::Event>>,
-    workspace_root: &Path,
+    watched: &WatchSet,
 ) -> RecommendedWatcher {
     let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default())
         .expect("[cargo-telar] failed to create file watcher");
-    for src_dir in collect_watch_dirs(workspace_root) {
-        watcher
-            .watch(&src_dir, RecursiveMode::Recursive)
-            .unwrap_or_else(|e| {
-                eprintln!(
-                    "[cargo-telar] warning: could not watch {}: {e}",
-                    src_dir.display()
-                )
-            });
+    for (dir, mode) in watched.watches() {
+        watcher.watch(&dir, mode).unwrap_or_else(|e| {
+            eprintln!(
+                "[cargo-telar] warning: could not watch {}: {e}",
+                dir.display()
+            )
+        });
     }
     watcher
 }
@@ -248,7 +314,8 @@ fn watch_and_hot_reload(
     workspace_root: PathBuf,
 ) -> ! {
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
-    let _watcher = make_watcher(tx, &workspace_root);
+    let watched = WatchSet::collect(&workspace_root);
+    let _watcher = make_watcher(tx, &watched);
 
     eprintln!("[cargo-telar] Starting with hot reload...");
     let mut child = Command::new(&bin_path)
@@ -273,7 +340,7 @@ fn watch_and_hot_reload(
         }
 
         while let Ok(Ok(event)) = rx.try_recv() {
-            if note_event(&event) {
+            if watched.wants(&event) {
                 last_event = Instant::now();
                 pending_rebuild = true;
             }
@@ -304,7 +371,7 @@ fn watch_and_hot_reload(
         }
 
         if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50))
-            && note_event(&event)
+            && watched.wants(&event)
         {
             last_event = Instant::now();
             pending_rebuild = true;
@@ -318,7 +385,8 @@ fn watch_and_run(
     workspace_root: PathBuf,
 ) -> ! {
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
-    let _watcher = make_watcher(tx, &workspace_root);
+    let watched = WatchSet::collect(&workspace_root);
+    let _watcher = make_watcher(tx, &watched);
 
     loop {
         eprintln!("[cargo-telar] Starting...");
@@ -348,7 +416,7 @@ fn watch_and_run(
                     eprintln!("[cargo-telar] Process exited ({code}). Watching for changes...");
                     loop {
                         match rx.recv() {
-                            Ok(Ok(event)) if note_event(&event) => {
+                            Ok(Ok(event)) if watched.wants(&event) => {
                                 while rx.try_recv().is_ok() {}
                                 eprintln!("[cargo-telar] Change detected, restarting...");
                                 break 'watch;
@@ -362,7 +430,7 @@ fn watch_and_run(
             }
 
             while let Ok(Ok(event)) = rx.try_recv() {
-                if note_event(&event) {
+                if watched.wants(&event) {
                     last_event = Instant::now();
                     pending_restart = true;
                 }
@@ -377,7 +445,7 @@ fn watch_and_run(
             }
 
             if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50))
-                && note_event(&event)
+                && watched.wants(&event)
             {
                 last_event = Instant::now();
                 pending_restart = true;
