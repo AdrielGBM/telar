@@ -36,7 +36,7 @@ pub struct AssetKind {
     pub component: Option<ComponentAsset>,
 }
 
-/// Where a component-named kind is written and configured. The id is the literal value of [`AssetKind::attr`] on [`Self::tag`]; the baker resolves it through the sources `[telar.<section>]` names, and in a package that bakes it the transpiler hands the prop `(id, Arc<data>)` instead of the bare string, which the component's prop type accepts through `From`.
+/// Where a component-named kind is written and configured. The id is the literal value of [`AssetKind::attr`] on [`Self::tag`]; the baker resolves it through the sources `[telar.<section>]` names, and in a package that bakes it the transpiler hands the prop `(id, Arc<data>, monochrome)` instead of the bare string, which the component's prop type accepts through `From`; `monochrome` says whether the artwork takes the colour around it (see [`BakedAsset::monochrome`](crate::BakedAsset::monochrome)). The id is spelled the way the bake keys it, so a bare icon name arrives read in its default set.
 ///
 /// The general half of this is the protocol — a tag, a prop, a section, and the pair the prop receives. What cannot be general is the resolver: it runs inside the CLI at bake time, and the CLI does not load plugin code, so each kind is an entry here plus a resolver in `telar-baker`, the same as a path kind is an entry plus a `Baker`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

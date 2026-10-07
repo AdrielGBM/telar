@@ -9,10 +9,12 @@ use std::path::Path;
 
 use telar_parser::{RsxDocument, ViewNode};
 use telar_project::{
-    ASSET_KINDS, AssetContext, AssetIndex, AssetKind, BakedAsset, IdBaking, TelarManifest,
-    asset_kind_for_tag, assets_root,
+    ASSET_KINDS, AssetContext, AssetIndex, AssetKind, BakedAsset, IconsSection, IdBaking,
+    TelarManifest, asset_kind_for_tag, assets_root,
 };
 
+use crate::icon_dependencies::IconDependency;
+use crate::icons::{Recording, read_icon_record, resolve_with};
 use crate::ids::{IdRef, collect_id_refs};
 
 /// What baking one package turned up. Warnings and errors are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer. A warning is not fatal: a package with one unreadable asset still bakes the rest.
@@ -26,18 +28,57 @@ pub struct BakeReport {
     pub errors: Vec<String>,
 }
 
-/// Bakes every asset `package_dir`'s `.rsx` files reference, writing `<package_dir>/.telar/assets.{json,rs}`. `None` when the package holds no `.rsx` at all, so a crate with nothing to bake never grows a `.telar/`.
+/// Bakes every asset `package_dir`'s `.rsx` files reference, writing `<package_dir>/.telar/assets.{json,rs}`. `None` when the package holds no `.rsx` and ships no icon of the crates it is built with, so a crate with nothing to bake never grows a `.telar/`.
 ///
 /// That is every `src:"…"` file, and every literal id given to a component-named kind's prop where the package bakes that kind: the icons `[telar.icons]` resolves, judged against its licence policy and recorded beside the artifact.
 ///
 /// `telar_version` is the version of `telar` the *project* resolves — see [`telar_project::resolve_telar_version`]. Writing this binary's own version here would hand the macro a mismatch it cannot act on.
+///
+/// The icon notice keeps the icons of the crates the package is built with as the last bake that knew them recorded; [`bake_package_with`] is the bake that is told them.
 pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> Option<BakeReport> {
+    bake_package_with(package_dir, producer, telar_version, None)
+}
+
+/// [`bake_package`], told the crates the package is built with, as [`DependencyGraph::icon_dependencies`](crate::DependencyGraph::icon_dependencies) finds them, so its notice lists their icons beside its own. `None` keeps the ones the last bake recorded, for a caller that cannot ask cargo every time it bakes, such as the editor.
+///
+/// A package with no `.rsx` bakes nothing of its own, and still writes the notice of what the crates it is built with baked, since it ships their icons.
+pub fn bake_package_with(
+    package_dir: &Path,
+    producer: &str,
+    telar_version: &str,
+    dependencies: Option<&[IconDependency]>,
+) -> Option<BakeReport> {
     let rsx_files = telar_project::find_rsx_files_in_tree(package_dir);
+    let manifest = TelarManifest::load_or_default(package_dir);
+    let recording = Recording {
+        library: manifest.telar.library,
+        dependencies,
+    };
     if rsx_files.is_empty() {
-        return None;
+        if dependencies.is_none_or(<[IconDependency]>::is_empty)
+            && read_icon_record(package_dir).is_none()
+        {
+            return None;
+        }
+        let icons = resolve_with(
+            package_dir,
+            &icons_section(&manifest, false),
+            &[],
+            recording,
+        );
+        if icons.warnings.is_empty()
+            && icons.errors.is_empty()
+            && read_icon_record(package_dir).is_none()
+        {
+            return None;
+        }
+        return Some(BakeReport {
+            warnings: icons.warnings,
+            errors: icons.errors,
+            ..BakeReport::default()
+        });
     }
 
-    let manifest = TelarManifest::load_or_default(package_dir);
     let id_kinds: Vec<(&'static AssetKind, IdBaking)> = ASSET_KINDS
         .iter()
         .map(|kind| (kind, manifest.telar.id_baking(kind)))
@@ -90,7 +131,7 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
                 continue;
             }
         };
-        baked.extend(bake_one(kind, path, bytes, &previous, &mut report));
+        baked.extend(bake_one(kind, path, bytes, false, &previous, &mut report));
     }
 
     for (kind, baking) in &id_kinds {
@@ -119,22 +160,23 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
                 .is_some_and(|c| c.section == "icons")
         })
         .collect();
-    let icons_section = manifest
-        .telar
-        .icons
-        .clone()
-        .filter(|_| id_kinds.iter().any(|(kind, _)| kind.id == "icon"))
-        .unwrap_or_default();
-    let icons = crate::icons::resolve(package_dir, &icons_section, &icon_refs);
+    let bakes_icons = id_kinds.iter().any(|(kind, _)| kind.id == "icon");
+    let icons = resolve_with(
+        package_dir,
+        &icons_section(&manifest, bakes_icons),
+        &icon_refs,
+        recording,
+    );
     report.warnings.extend(icons.warnings);
     report.errors.extend(icons.errors);
     let icon_kind =
         telar_project::asset_kind_for_id("icon").expect("icon is a registered asset kind");
-    for (id, svg) in icons.icons {
+    for icon in icons.icons {
         baked.extend(bake_one(
             icon_kind,
-            id.to_string(),
-            svg,
+            icon.id.to_string(),
+            icon.svg,
+            icon.monochrome,
             &previous,
             &mut report,
         ));
@@ -162,6 +204,18 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
     Some(report)
 }
 
+/// The `[telar.icons]` the bake resolves the package's own ids through, which names no source unless the package bakes icons. Its licence policy holds either way, since it also judges the icons of the crates the package is built with.
+fn icons_section(manifest: &TelarManifest, bakes_icons: bool) -> IconsSection {
+    match manifest.telar.icons.clone() {
+        Some(section) if bakes_icons => section,
+        Some(section) => IconsSection {
+            licenses: section.licenses,
+            ..IconsSection::default()
+        },
+        None => IconsSection::default(),
+    }
+}
+
 /// The artifact a previous bake left, consulted so an asset whose content is unchanged keeps the expression already written for it.
 struct Previous<'a> {
     index: Option<&'a AssetIndex>,
@@ -173,6 +227,7 @@ fn bake_one(
     kind: &'static AssetKind,
     path: String,
     bytes: Vec<u8>,
+    monochrome: bool,
     previous: &Previous<'_>,
     report: &mut BakeReport,
 ) -> Option<BakedAsset> {
@@ -214,6 +269,7 @@ fn bake_one(
         path,
         content: bytes,
         init_expr,
+        monochrome,
     })
 }
 

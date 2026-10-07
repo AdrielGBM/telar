@@ -12,6 +12,10 @@ fn fixtures() -> PathBuf {
 }
 
 fn package(name: &str, mode: &str, view: &str) -> PathBuf {
+    package_with(name, mode, "", view)
+}
+
+fn package_with(name: &str, mode: &str, extra: &str, view: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("telar_icon_bake_{name}_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("src")).unwrap();
@@ -23,7 +27,7 @@ fn package(name: &str, mode: &str, view: &str) -> PathBuf {
     std::fs::write(
         root.join("telar.toml"),
         format!(
-            "[telar.icons]\nmode = \"{mode}\"\niconify = \"{}\"\n",
+            "[telar.icons]\nmode = \"{mode}\"\niconify = \"{}\"\n{extra}",
             fixtures().display()
         ),
     )
@@ -136,4 +140,77 @@ fn runtime_mode_bakes_nothing_and_ships_no_notice() {
     assert!(baked_icons(&root).is_empty());
     assert!(read_icon_record(&root).is_none());
     assert!(!root.join(".telar").join(ICONS_NOTICE_FILENAME).exists());
+}
+
+#[test]
+fn a_bare_name_bakes_under_the_default_sets_id_and_resolves_from_the_rsx() {
+    let root = package_with(
+        "default_set",
+        "baked",
+        "default_set = \"demo\"\n",
+        "[view]\ncol\n    icon name:\"home\"\n    icon name:\"demo:star\"\n",
+    );
+    let report = bake_package(&root, "test", VERSION).unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(baked_icons(&root), vec!["demo:home", "demo:star"]);
+
+    let assets = AssetContext::load(&root, VERSION);
+    let kind = telar_project::asset_kind_for_id("icon").unwrap();
+    let triple = assets.resolve_id(kind, "home").unwrap();
+    assert!(triple.starts_with("(\"demo:home\", "), "{triple}");
+}
+
+#[test]
+fn a_bare_name_without_a_default_set_fails_the_bake_on_its_line() {
+    let root = package(
+        "no_default_set",
+        "baked",
+        "[view]\ncol\n    icon name:\"demo:star\"\n    icon name:\"home\"\n",
+    );
+    let report = bake_package(&root, "test", VERSION).unwrap();
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    let error = &report.errors[0];
+    assert!(error.starts_with("src/app.rsx:4:"), "{error}");
+    assert!(error.contains("default_set"), "{error}");
+    assert_eq!(baked_icons(&root), vec!["demo:star"]);
+}
+
+#[test]
+fn the_tint_decision_is_carried_into_the_artifact() {
+    let root = package(
+        "tint",
+        "baked",
+        "[view]\ncol\n    icon name:\"demo:home\"\n    icon name:\"brand:acme\"\n",
+    );
+    let report = bake_package(&root, "test", VERSION).unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let monochrome: Vec<(String, bool)> = read_index(&root.join(".telar"))
+        .unwrap()
+        .unwrap()
+        .entries
+        .into_iter()
+        .map(|entry| (entry.path, entry.monochrome))
+        .collect();
+    assert_eq!(
+        monochrome,
+        vec![
+            ("brand:acme".to_string(), false),
+            ("demo:home".to_string(), true)
+        ]
+    );
+
+    let assets = AssetContext::load(&root, VERSION);
+    let kind = telar_project::asset_kind_for_id("icon").unwrap();
+    assert!(
+        assets
+            .resolve_id(kind, "demo:home")
+            .unwrap()
+            .ends_with(", true)")
+    );
+    assert!(
+        assets
+            .resolve_id(kind, "brand:acme")
+            .unwrap()
+            .ends_with(", false)")
+    );
 }

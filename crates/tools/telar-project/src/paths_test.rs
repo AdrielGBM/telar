@@ -104,3 +104,18 @@ fn every_internal_dependency_asks_for_the_version_this_workspace_publishes() {
         unversioned.join("\n  ")
     );
 }
+
+#[test]
+fn the_telar_version_is_the_resolved_package_named_telar() {
+    let metadata = serde_json::json!({
+        "packages": [
+            { "name": "telar-macros", "version": "9.0.0" },
+            { "name": "telar", "version": "1.2.3" },
+        ]
+    });
+    assert_eq!(telar_version_in(&metadata).as_deref(), Some("1.2.3"));
+    assert_eq!(
+        telar_version_in(&serde_json::json!({ "packages": [] })),
+        None
+    );
+}

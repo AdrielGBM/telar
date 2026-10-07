@@ -573,3 +573,106 @@ fn an_empty_catalog_is_not_installed() {
 
     assert_eq!(installer, None);
 }
+
+const ICON_NOTICE: &str = "Icons in kit\n\nmdi — Material Design Icons\n";
+
+/// The text the expansion compiles into the binary, or `None` when it emits no installer.
+fn icon_notice_installer(
+    root: &std::path::Path,
+    flavour: telar_project::BuildFlavour,
+    invocation: super::Invocation,
+) -> Option<String> {
+    let output = super::wire_package(
+        root.to_path_buf(),
+        "kit".into(),
+        true,
+        flavour,
+        invocation,
+        None,
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let wired = output.include_stmts.to_string();
+    let rerun = output.rerun_stmts.to_string();
+    let notice = telar_project::icon_notice_file(root)?;
+    let path = notice.to_string_lossy().to_string();
+    let installed = wired.contains(&format!(
+        ":: telar :: __install_icon_licenses (include_str ! ({path:?}))"
+    ));
+    assert_eq!(
+        installed,
+        rerun.contains(&format!("include_str ! ({path:?})"))
+    );
+    installed.then(|| std::fs::read_to_string(notice).unwrap())
+}
+
+fn write_icon_notice(root: &std::path::Path) {
+    std::fs::write(
+        root.join(".telar")
+            .join(telar_project::ICONS_NOTICE_FILENAME),
+        ICON_NOTICE,
+    )
+    .unwrap();
+}
+
+/// Every flavour, the hot ones included: the dylib a reload swaps in carries its own constructor and installs the notice into its own copy of the facade.
+#[test]
+fn an_application_compiles_its_icon_notice_in_and_installs_it_as_its_binary_loads() {
+    use telar_project::BuildFlavour;
+    for flavour in [
+        BuildFlavour::Plain,
+        BuildFlavour::Hot,
+        BuildFlavour::HotPreview,
+    ] {
+        let root = with_baked_catalog(
+            &format!("icon_notice_{flavour:?}"),
+            "[telar]\n",
+            flavour,
+            &[],
+        );
+        write_icon_notice(&root);
+        let app = icon_notice_installer(&root, flavour, super::Invocation::App);
+        let modules = icon_notice_installer(&root, flavour, super::Invocation::Modules);
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert_eq!(app.as_deref(), Some(ICON_NOTICE), "{flavour:?}");
+        assert_eq!(modules.as_deref(), Some(ICON_NOTICE), "{flavour:?}");
+    }
+}
+
+/// A bake that found no icons removes the notice, and an application without one installs nothing, so `licenses()` answers `None`.
+#[test]
+fn an_application_that_baked_no_icons_installs_no_notice() {
+    let flavour = telar_project::BuildFlavour::Plain;
+    let root = with_baked_catalog("no_icon_notice", "[telar]\n", flavour, &[]);
+    let wired = super::wire_package(
+        root.clone(),
+        "kit".into(),
+        true,
+        flavour,
+        super::Invocation::App,
+        None,
+    )
+    .unwrap_or_else(|e| panic!("{e}"))
+    .include_stmts
+    .to_string();
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(!wired.contains("__install_icon_licenses"), "{wired}");
+}
+
+/// The application's notice lists the library's icons already, and a library installing its own would replace it.
+#[test]
+fn a_library_never_installs_an_icon_notice() {
+    let flavour = telar_project::BuildFlavour::Plain;
+    let root = with_baked_catalog(
+        "library_icon_notice",
+        "[telar]\nlibrary = true\n",
+        flavour,
+        &[],
+    );
+    write_icon_notice(&root);
+    let installer = icon_notice_installer(&root, flavour, super::Invocation::Modules);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(installer, None);
+}

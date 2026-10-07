@@ -40,6 +40,9 @@ fn a_library_ships_its_sources_and_the_plain_artifact_only() {
             ".telar/i18n.json",
             ".telar/assets.rs",
             ".telar/assets.json",
+            ".telar/icons-library.json",
+            ".telar/icons.json",
+            ".telar/ICONS-LICENSES.txt",
             "locales/en.toml",
             "assets/logo.svg",
         ],
@@ -60,6 +63,7 @@ fn a_library_ships_its_sources_and_the_plain_artifact_only() {
             ".telar/build/sub/card.rs",
             ".telar/i18n.json",
             ".telar/i18n.rs",
+            ".telar/icons-library.json",
             "src/.telar/modules.rs",
             "src/home.rsx",
             "src/lib.rs",
@@ -87,6 +91,7 @@ fn the_include_entries_cover_every_file_a_library_ships() {
             ".telar/i18n.json",
             ".telar/assets.rs",
             ".telar/assets.json",
+            ".telar/icons-library.json",
         ],
     );
     let files = library_files(&root);

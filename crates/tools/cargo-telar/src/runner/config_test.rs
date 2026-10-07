@@ -60,6 +60,7 @@ fn resolved(manifest: &str) -> ResolvedPackage {
     let parsed: CargoManifest = toml::from_str(manifest).unwrap();
     ResolvedPackage {
         workspace_root: PathBuf::new(),
+        package_dir: PathBuf::new(),
         features: parsed.features.clone(),
         package: parsed.package,
         workspace_package: None,

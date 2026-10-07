@@ -7,7 +7,7 @@ use super::config::{
     TelarSection, backend_as_str, default_app_id, read_package_manifest, resolve_package,
     split_android_flag,
 };
-use super::package::{dist_dir, profile_of};
+use super::package::{apk_notice_path, copy_icon_notice, dist_dir, profile_of};
 
 pub(crate) fn resolve_ndk_root() -> Option<String> {
     if let Ok(v) = std::env::var("ANDROID_NDK_ROOT")
@@ -167,5 +167,14 @@ pub(crate) fn build_android_package(cargo_args: Vec<String>, config: TelarSectio
         std::process::exit(1);
     }
     eprintln!("[cargo-telar] Packaged APK at {}", dest.display());
+    if let Some(notice) = copy_icon_notice(
+        &resolved.package_dir,
+        &apk_notice_path(&dist_dir, &resolved.name()),
+    ) {
+        eprintln!(
+            "[cargo-telar] The licence notice of its icons is beside it, at {}: an APK carries only the `assets` directory its manifest names, so ship the notice with it or show it in the app.",
+            notice.display()
+        );
+    }
     std::process::exit(0);
 }

@@ -1,11 +1,12 @@
 //! Packaging a Debian `.deb`.
 
+use std::path::Path;
 use std::process::Command;
 
 use super::super::config::{TelarSection, resolve_package};
 use super::{
-    create_dir_or_exit, desktop_entry_file, dist_dir, run_bundler_tool, run_release_build,
-    stage_binary, write_or_exit,
+    create_dir_or_exit, desktop_entry_file, dist_dir, doc_dir, run_bundler_tool, run_release_build,
+    stage_binary, stage_icon_notice, write_or_exit,
 };
 
 // Maps Rust's target arch name to the Debian architecture label; unknown arches pass through unchanged.
@@ -29,6 +30,33 @@ fn deb_control_file(
     )
 }
 
+/// The tree `dpkg-deb` packs: the control file, the binary, its desktop entry, and the icon licence notice in the package's documentation directory.
+fn stage_deb(
+    staging: &Path,
+    bin_path: &Path,
+    package_dir: &Path,
+    package_name: &str,
+    control: &str,
+) {
+    // Clear any previous staging so stale files never leak into the package.
+    let _ = std::fs::remove_dir_all(staging);
+
+    let debian_dir = staging.join("DEBIAN");
+    let bin_dir = staging.join("usr").join("bin");
+    let apps_dir = staging.join("usr").join("share").join("applications");
+    create_dir_or_exit(&debian_dir);
+    create_dir_or_exit(&bin_dir);
+    create_dir_or_exit(&apps_dir);
+
+    write_or_exit(&debian_dir.join("control"), control);
+    stage_binary(bin_path, &bin_dir.join(package_name));
+    write_or_exit(
+        &apps_dir.join(format!("{package_name}.desktop")),
+        desktop_entry_file(package_name, false),
+    );
+    stage_icon_notice(package_dir, &doc_dir(staging, package_name));
+}
+
 pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
     // Resolved before the build: failing on a missing manifest field after a full release compile wastes the one thing the author cannot get back.
     let Some(maintainer) = resolve_package(&cargo_args).maintainer() else {
@@ -47,24 +75,12 @@ pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
 
     let dist_dir = dist_dir(&resolved.workspace_root);
     let staging = dist_dir.join("deb-staging").join(&package_name);
-    // Clear any previous staging so stale files never leak into the package.
-    let _ = std::fs::remove_dir_all(&staging);
-
-    let debian_dir = staging.join("DEBIAN");
-    let bin_dir = staging.join("usr").join("bin");
-    let apps_dir = staging.join("usr").join("share").join("applications");
-    create_dir_or_exit(&debian_dir);
-    create_dir_or_exit(&bin_dir);
-    create_dir_or_exit(&apps_dir);
-
-    write_or_exit(
-        &debian_dir.join("control"),
-        deb_control_file(&package_name, &version, arch, &maintainer, &description),
-    );
-    stage_binary(&bin_path, &bin_dir.join(&package_name));
-    write_or_exit(
-        &apps_dir.join(format!("{package_name}.desktop")),
-        desktop_entry_file(&package_name, false),
+    stage_deb(
+        &staging,
+        &bin_path,
+        &resolved.package_dir,
+        &package_name,
+        &deb_control_file(&package_name, &version, arch, &maintainer, &description),
     );
 
     let deb_path = dist_dir.join(format!("{package_name}_{version}_{arch}.deb"));

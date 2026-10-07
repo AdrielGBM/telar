@@ -177,7 +177,7 @@ fn the_notice_lists_each_set_its_licence_and_its_icons() {
         "{text}"
     );
     assert!(
-        text.contains("app\n  The application's own artwork.\n  Icons: logo"),
+        text.contains("app\n  demo's own artwork.\n  Icons: logo"),
         "{text}"
     );
 }

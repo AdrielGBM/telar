@@ -20,7 +20,9 @@ include = [
     "/.telar/i18n.json",
     "/.telar/assets.rs",
     "/.telar/assets.json",
+    "/.telar/icons-library.json",
 ]
 
 [dependencies]
 telar = { workspace = true, features = ["runtime", "svg"] }
+telar-icons.workspace = true

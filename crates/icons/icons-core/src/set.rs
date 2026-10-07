@@ -89,7 +89,7 @@ pub struct SetInfo {
     pub license: Option<License>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub category: Option<String>,
-    /// `true` for a set whose icons are drawn in fixed colours rather than `currentColor`.
+    /// `true` for a set whose icons are drawn in fixed colours, `false` for a monochrome one whose icons are drawn in `currentColor` and take the colour around them. See [`is_monochrome`](crate::is_monochrome).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub palette: Option<bool>,
 }

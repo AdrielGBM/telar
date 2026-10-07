@@ -573,6 +573,20 @@ fn catalog_install(invocation: Invocation, module: &Ident) -> TokenStream2 {
     }
 }
 
+/// Installs the icon licence notice an expansion compiled in as the process's, from a constructor that runs as the binary holding it loads.
+///
+/// The notice is text in the binary because a bundle cannot always carry a file beside it, and it is installed at load for the reason the catalog is: a unit test, a custom runner and each load of a hot-reload dylib all reach it without anyone passing it along, and the dylib's copy of the facade is the one its own `telar-icons` reads.
+fn icon_licenses_install(notice_path: &str) -> TokenStream2 {
+    quote! {
+        ::telar::__ctor::declarative::ctor! {
+            #[ctor(unsafe, anonymous)]
+            fn install_application_icon_licenses() {
+                ::telar::__install_icon_licenses(include_str!(#notice_path));
+            }
+        }
+    }
+}
+
 struct TranspileOutput {
     include_stmts: TokenStream2,
     rerun_stmts: TokenStream2,
@@ -886,6 +900,15 @@ fn wire_package(
     // Editing a translation re-expands every `t!` in the crate, which is what makes the staleness check fire instead of the build quietly keeping last week's wording.
     for file in catalog.tracked_files() {
         let path_str = file.to_string_lossy().to_string();
+        rerun_stmts.extend(quote! { const _: &str = include_str!(#path_str); });
+    }
+
+    // A library's icons are in the notice of the application built with it, and a library installing its own would take the application's place.
+    if !manifest.telar.library
+        && let Some(notice_file) = telar_project::icon_notice_file(manifest_dir)
+    {
+        let path_str = notice_file.to_string_lossy().to_string();
+        include_stmts.extend(icon_licenses_install(&path_str));
         rerun_stmts.extend(quote! { const _: &str = include_str!(#path_str); });
     }
 

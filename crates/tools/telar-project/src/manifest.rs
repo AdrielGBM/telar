@@ -398,6 +398,19 @@ impl TelarSection {
         }
     }
 
+    /// The id `written` names for the component-named `kind`, spelled the way the bake keys it: for an icon, `set:name`, with a bare name read in `[telar.icons] default_set`. `None` where the package does not configure `kind`, whose ids then reach the component as written.
+    pub fn canonical_id(&self, kind: &AssetKind, written: &str) -> Option<Result<String, String>> {
+        match kind.component?.section {
+            "icons" => Some(
+                self.icons
+                    .as_ref()?
+                    .icon_id(written)
+                    .map(|id| id.to_string()),
+            ),
+            _ => None,
+        }
+    }
+
     /// The crates this package's `.rsx` glob-imports, in the order declared.
     pub fn prelude(&self) -> &[PreludeEntry] {
         self.prelude.as_deref().unwrap_or_default()

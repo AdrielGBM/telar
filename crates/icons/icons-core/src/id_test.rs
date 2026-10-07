@@ -25,8 +25,62 @@ fn a_path_reads_back_into_the_same_id() {
 #[test]
 fn an_id_without_a_set_is_refused() {
     let error = IconId::parse("home").unwrap_err();
-    assert!(matches!(error, IconError::InvalidId { ref id, .. } if id == "home"));
+    assert_eq!(
+        error,
+        IconError::MissingSet {
+            name: "home".to_string()
+        }
+    );
     assert!(error.to_string().contains("set:name"), "{error}");
+}
+
+#[test]
+fn a_bare_name_is_read_in_the_default_set() {
+    let id = IconId::parse_with_default("home", Some("mdi")).unwrap();
+    assert_eq!(id, IconId::parse("mdi:home").unwrap());
+}
+
+#[test]
+fn a_written_set_wins_over_the_default() {
+    let id = IconId::parse_with_default("lucide:home", Some("mdi")).unwrap();
+    assert_eq!(id.prefix(), "lucide");
+}
+
+#[test]
+fn a_bare_name_without_a_default_set_names_the_missing_set() {
+    let error = IconId::parse_with_default("arrow-left", None).unwrap_err();
+    assert!(matches!(error, IconError::MissingSet { ref name } if name == "arrow-left"));
+    assert!(error.to_string().contains("mdi:arrow-left"), "{error}");
+}
+
+#[test]
+fn a_bare_name_outside_iconify_naming_is_refused_as_an_id() {
+    for default_set in [None, Some("mdi")] {
+        let error = IconId::parse_with_default("Home", default_set).unwrap_err();
+        assert!(
+            matches!(error, IconError::InvalidId { .. }),
+            "{default_set:?}: {error}"
+        );
+    }
+}
+
+#[test]
+fn an_invalid_default_set_is_refused() {
+    let error = IconId::parse_with_default("home", Some("MDI")).unwrap_err();
+    assert!(matches!(error, IconError::InvalidId { .. }), "{error}");
+}
+
+#[test]
+fn a_set_prefix_follows_iconify_naming() {
+    for prefix in ["mdi", "material-symbols", "fa6-solid"] {
+        assert!(IconId::is_valid_set(prefix), "`{prefix}` should be a set");
+    }
+    for prefix in ["", "MDI", "mdi:home", "mdi_x", "-mdi", "mdi--x", "mdi/x"] {
+        assert!(
+            !IconId::is_valid_set(prefix),
+            "`{prefix}` should be refused"
+        );
+    }
 }
 
 #[test]

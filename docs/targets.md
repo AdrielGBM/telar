@@ -42,6 +42,10 @@ cargo telar dev
 cargo telar build --format appimage   # deb | dmg | nsis | dir
 ```
 
+Each format ships the licence notice of the icons the build baked, `ICONS-LICENSES.txt`, where it keeps
+third-party notices: beside the executable, in `/usr/share/doc/<name>/`, in the bundle's `Contents/Resources/` or
+in the install directory (see [`telar-icons`](../plugins/telar-icons#licences)).
+
 A native window through winit, drawn by the GPU where there is one and the CPU where there is not.
 `backend = "auto"` in `telar.toml` is what picks between them at startup; `"hardware"` or `"software"`
 forces one. Both renderers are compiled in, because which machine the binary lands on is not known at build
@@ -144,6 +148,9 @@ android = ["telar/android"]
 cargo telar dev --target android
 cargo telar build --target android --format apk
 ```
+
+An APK carries only the `assets` directory its manifest names, so the licence notice of the baked icons lands
+beside it, as `target/telar-dist/<name>-ICONS-LICENSES.txt`. The same text is compiled into the app for an "Open source licences" screen: `telar_icons::licenses()`.
 
 A `NativeActivity`, with both renderers behind it. `opt-level = "z"` in `[profile.release]` is worth more
 here than anywhere else.

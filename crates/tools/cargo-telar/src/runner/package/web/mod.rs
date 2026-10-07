@@ -225,14 +225,11 @@ struct Shell<'a> {
     reserved: &'a [&'a str],
 }
 
-/// The licence notice of the icons the bake put in the module, at the root of the site, where it is served beside what it describes.
+/// The licence notice of the icons baked into the module, the application's and those of the crates it is built with, at the root of the site, where it is served beside what it describes.
 fn ship_icon_notice(out: &Path, package_root: &Path) -> Result<(), String> {
-    let notice = package_root
-        .join(".telar")
-        .join(telar_baker::ICONS_NOTICE_FILENAME);
-    if !notice.is_file() {
+    let Some(notice) = super::icon_notice(package_root) else {
         return Ok(());
-    }
+    };
     std::fs::copy(&notice, out.join(telar_baker::ICONS_NOTICE_FILENAME))
         .map(|_| ())
         .map_err(|e| format!("could not copy {} into the site: {e}", notice.display()))

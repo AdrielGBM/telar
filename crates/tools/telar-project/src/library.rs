@@ -11,7 +11,10 @@ use crate::{
 
 const PACKAGE_TELAR_DIR: &str = ".telar";
 
-/// The `include` entries a library's `Cargo.toml` needs, each rooted at the package: its `telar.toml`, the whole of `src/` (the `.rsx`, the Rust modules and each placement site's `.telar/`) but the module trees of the flavours a dependency is never compiled in, and the Plain flavour's artifact with the baked catalog and assets beside it.
+/// File name, under a library's `.telar/`, of the record of the icons it baked and the sets they came from, which an application built with it merges into the licence notice it ships.
+pub const ICONS_LIBRARY_RECORD_FILENAME: &str = "icons-library.json";
+
+/// The `include` entries a library's `Cargo.toml` needs, each rooted at the package: its `telar.toml`, the whole of `src/` (the `.rsx`, the Rust modules and each placement site's `.telar/`) but the module trees of the flavours a dependency is never compiled in, and the Plain flavour's artifact with the baked catalog, assets and icon record beside it.
 ///
 /// An entry for a file the library does not produce is harmless: cargo includes what matches and nothing else.
 pub fn library_include() -> Vec<String> {
@@ -30,6 +33,7 @@ pub fn library_include() -> Vec<String> {
             format!("/{PACKAGE_TELAR_DIR}/{CATALOG_INDEX_FILENAME}"),
             format!("/{PACKAGE_TELAR_DIR}/{ASSETS_SOURCE_FILENAME}"),
             format!("/{PACKAGE_TELAR_DIR}/{ASSETS_INDEX_FILENAME}"),
+            format!("/{PACKAGE_TELAR_DIR}/{ICONS_LIBRARY_RECORD_FILENAME}"),
         ])
         .collect()
 }
@@ -50,7 +54,7 @@ pub fn library_include_covers(entry: &str, relative: &str) -> bool {
 
 /// Every file under `package_dir` that a build compiling it as a dependency reads, `/`-separated and relative to it, sorted.
 ///
-/// That is its `telar.toml`, which is what makes it a library at all; every `.rsx` the artifact's hashes answer for and every `.rs` its module tree declares; each placement site's Plain module tree; the Plain flavour's generated directory and index, source maps included so go-to-definition lands in the `.rsx`; and the baked catalog and assets. Locale files and asset sources are not on the list: the baked artifacts carry their content, and the build only checks one against the other when it has both.
+/// That is its `telar.toml`, which is what makes it a library at all; every `.rsx` the artifact's hashes answer for and every `.rs` its module tree declares; each placement site's Plain module tree; the Plain flavour's generated directory and index, source maps included so go-to-definition lands in the `.rsx`; the baked catalog and assets; and the record of the icons it baked, which an application's licence notice is merged from. Locale files and asset sources are not on the list: the baked artifacts carry their content, and the build only checks one against the other when it has both.
 pub fn library_files(package_dir: &Path) -> Vec<String> {
     let src_dir = package_dir.join("src");
     let telar_dir = package_dir.join(PACKAGE_TELAR_DIR);
@@ -71,6 +75,7 @@ pub fn library_files(package_dir: &Path) -> Vec<String> {
         CATALOG_INDEX_FILENAME,
         ASSETS_SOURCE_FILENAME,
         ASSETS_INDEX_FILENAME,
+        ICONS_LIBRARY_RECORD_FILENAME,
     ]
     .into_iter()
     .map(|name| telar_dir.join(name));

@@ -6,10 +6,15 @@ use telar::{Memo, Reactive, ReadSignal, RwSignal, SvgData};
 
 /// An icon, as the `icon` tag is given it: an id baked ahead of time, or one left to resolve as the application runs.
 ///
-/// Written in `.rsx` as `name:"mdi:home"`. Where `[telar.icons]` bakes, the transpiler hands the prop the pair the artifact holds for that literal, `("mdi:home", Arc<SvgData>)`, and it becomes [`Baked`](Self::Baked). Anywhere else — a signal, an expression, a package that bakes nothing — it is the id as written, [`Named`](Self::Named), for the runtime source to resolve.
+/// Written in `.rsx` as `name:"mdi:home"`. Where `[telar.icons]` bakes, the transpiler hands the prop the triple the artifact holds for that literal, `("mdi:home", Arc<SvgData>, monochrome)`, and it becomes [`Baked`](Self::Baked); a bare name written where `[telar.icons] default_set` is configured arrives already read in that set. Anywhere else — a signal, an expression, a package that bakes nothing — it is the id as written, [`Named`](Self::Named), for the runtime source to resolve.
 #[derive(Clone)]
 pub enum IconName {
-    Baked { id: &'static str, svg: Arc<SvgData> },
+    Baked {
+        id: &'static str,
+        svg: Arc<SvgData>,
+        /// Whether the icon takes the colour around it, decided when it was baked from its set's `palette` and its markup.
+        monochrome: bool,
+    },
     Named(Reactive<String>),
 }
 
@@ -23,9 +28,13 @@ impl IconName {
     }
 }
 
-impl From<(&'static str, Arc<SvgData>)> for IconName {
-    fn from((id, svg): (&'static str, Arc<SvgData>)) -> Self {
-        Self::Baked { id, svg }
+impl From<(&'static str, Arc<SvgData>, bool)> for IconName {
+    fn from((id, svg, monochrome): (&'static str, Arc<SvgData>, bool)) -> Self {
+        Self::Baked {
+            id,
+            svg,
+            monochrome,
+        }
     }
 }
 

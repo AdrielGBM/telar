@@ -17,6 +17,8 @@ mod macros;
 
 pub mod config;
 
+mod licenses;
+
 #[cfg(feature = "runtime")]
 pub mod app;
 #[cfg(feature = "runtime")]
@@ -120,7 +122,11 @@ pub use i18n_core::set_catalog;
 // Named by the load-time constructor `app!` and `rsx_modules!` emit to install an application's baked catalog, so an application needs no `ctor` dependency of its own.
 #[doc(hidden)]
 pub use ctor as __ctor;
+// The notice of the icons an application baked, installed by the same constructor and read back by `telar-icons`.
 pub use i18n_core::{current_locale, negotiate_locale, set_locale, use_locale};
+pub use licenses::icon_licenses;
+#[doc(hidden)]
+pub use licenses::install_icon_licenses as __install_icon_licenses;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     ConsumedKeys, Cursor, Event, FullscreenMode, Key, NamedKey, NumericValue, ScrollDelta,

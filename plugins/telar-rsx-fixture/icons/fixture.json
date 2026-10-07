@@ -1,0 +1,13 @@
+{
+  "prefix": "fixture",
+  "info": {
+    "name": "Fixture Icons",
+    "author": { "name": "Telar" },
+    "license": { "title": "MIT", "spdx": "MIT", "url": "https://opensource.org/licenses/MIT" }
+  },
+  "width": 16,
+  "height": 16,
+  "icons": {
+    "dot": { "body": "<circle cx=\"8\" cy=\"8\" r=\"4\" fill=\"currentColor\"/>" }
+  }
+}

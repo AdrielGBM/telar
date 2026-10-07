@@ -49,15 +49,20 @@ pub use discovery::{
 pub use fonts::{
     FontDeclaration, FontDisplay, FontFormat, FontStyleDeclaration, WeightDeclaration,
 };
-pub use icons::{IconLicensesSection, IconMode, IconsSection, UnlistedLicense};
-pub use library::{library_files, library_include, library_include_covers};
+pub use icons::{
+    ICONS_NOTICE_FILENAME, IconLicensesSection, IconMode, IconsSection, UnlistedLicense,
+    icon_notice_file,
+};
+pub use library::{
+    ICONS_LIBRARY_RECORD_FILENAME, library_files, library_include, library_include_covers,
+};
 pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, RendererBackend,
     TelarManifest, TelarSection, WebSection, WindowSection,
 };
 pub use paths::{
-    find_ancestor_dir, find_package_root, find_target_dir, find_telar_root, find_workspace_root,
-    resolve_telar_version, write_if_changed_atomic,
+    cargo_metadata, find_ancestor_dir, find_package_root, find_target_dir, find_telar_root,
+    find_workspace_root, resolve_telar_version, telar_version_in, write_if_changed_atomic,
 };
 pub use prelude::{
     PreludeDeclaration, PreludeEntry, PreludeProblem, prelude_declarations, prelude_problems,

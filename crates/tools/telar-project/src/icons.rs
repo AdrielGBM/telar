@@ -2,7 +2,17 @@
 
 use std::path::{Path, PathBuf};
 
+use icons_core::{IconError, IconId};
 use serde::Deserialize;
+
+/// File name of the icon licence notice the bake writes, joined onto a package's `.telar/`.
+pub const ICONS_NOTICE_FILENAME: &str = "ICONS-LICENSES.txt";
+
+/// The icon licence notice `cargo telar bake` wrote for the package at `package_dir`, or `None` when it baked no icons, its own or its dependencies'.
+pub fn icon_notice_file(package_dir: &Path) -> Option<PathBuf> {
+    let path = package_dir.join(".telar").join(ICONS_NOTICE_FILENAME);
+    path.is_file().then_some(path)
+}
 
 /// When an icon id is resolved.
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -50,6 +60,8 @@ pub struct IconsSection {
     pub svg: Option<String>,
     /// The base URL of an Iconify-compatible API the bake may fetch from, such as a self-hosted instance.
     pub provider: Option<String>,
+    /// The set a bare name is read in, so `icon name:"home"` draws `mdi:home` where this is `"mdi"`. Unset, every id names its set.
+    pub default_set: Option<String>,
     #[serde(default)]
     pub licenses: IconLicensesSection,
 }
@@ -71,6 +83,16 @@ impl IconsSection {
         self.licenses.unlisted.unwrap_or_default()
     }
 
+    /// The icon `written` names: `set:name`, or a bare name read in [`default_set`](Self::default_set). The error is a sentence for the `.rsx` line that wrote it.
+    pub fn icon_id(&self, written: &str) -> Result<IconId, String> {
+        IconId::parse_with_default(written, self.default_set.as_deref()).map_err(|error| match error {
+            IconError::MissingSet { name } => format!(
+                "`{name}` names no icon set: write it as `set:name`, like `mdi:{name}`, or set `[telar.icons] default_set` to the set a bare name is read in, like `default_set = \"mdi\"`"
+            ),
+            other => other.to_string(),
+        })
+    }
+
     pub(crate) fn problems(&self) -> Vec<String> {
         let mut problems = Vec::new();
         for (key, value) in [("iconify", &self.iconify), ("svg", &self.svg)] {
@@ -87,9 +109,20 @@ impl IconsSection {
                 "`[telar.icons] provider = \"{provider}\"` is not an http(s) URL, like \"https://icons.example.com\""
             ));
         }
+        if let Some(set) = &self.default_set
+            && !IconId::is_valid_set(set)
+        {
+            problems.push(format!(
+                "`[telar.icons] default_set = \"{set}\"` is not an Iconify set prefix: it is lowercase letters and digits joined by single hyphens, like \"mdi\" or \"material-symbols\""
+            ));
+        }
         let names_a_source =
             self.iconify.is_some() || self.svg.is_some() || self.provider.is_some();
-        if self.mode() != IconMode::Runtime && !names_a_source {
+        // A section holding only `[telar.icons.licenses]` is how a package that draws no icon of its own accepts the sets of the libraries it is built with.
+        let only_a_licence_policy = self.mode.is_none()
+            && self.default_set.is_none()
+            && self.licenses != IconLicensesSection::default();
+        if self.mode() != IconMode::Runtime && !names_a_source && !only_a_licence_policy {
             problems.push(
                 "`[telar.icons]` bakes icons but names nowhere to read them from: set `svg` (a folder of your own SVGs), `iconify` (a directory of Iconify JSON sets) or `provider` (an Iconify-compatible API), or `mode = \"runtime\"` to resolve them as the application runs".to_string(),
             );

@@ -19,6 +19,7 @@ fn init_expr_round_trips_a_real_baked_entry() {
         path: "badge.svg".to_string(),
         content: ICON_SVG.to_vec(),
         init_expr: expected.clone(),
+        monochrome: false,
     };
     let generated =
         telar_project::generate_assets(std::slice::from_ref(&baked), "p", "1.0.0").unwrap();

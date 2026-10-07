@@ -27,6 +27,7 @@ fn icon(id: &str) -> BakedAsset {
         path: id.to_string(),
         content: b"<svg/>".to_vec(),
         init_expr: "SvgData::from_baked_vector((24.0, 24.0), vec![])".to_string(),
+        monochrome: false,
     }
 }
 
@@ -79,7 +80,7 @@ fn a_baked_id_becomes_the_pair_its_prop_accepts() {
     assert_eq!(
         pair,
         format!(
-            "(\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{}))",
+            "(\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{}), false)",
             crate::static_name_for_path("mdi:home")
         )
     );
@@ -133,9 +134,75 @@ fn an_icon_is_not_a_file_to_track() {
                 path: "mark.svg".to_string(),
                 content: b"<svg/>".to_vec(),
                 init_expr: "SvgData::from_baked_vector((1.0, 1.0), vec![])".to_string(),
+                monochrome: false,
             },
         ],
     );
     let tracked = AssetContext::load(&root, VERSION).tracked_files();
     assert_eq!(tracked, vec![root.join("assets/mark.svg")]);
+}
+
+#[test]
+fn a_monochrome_icon_carries_its_tint_in_the_triple() {
+    let root = package("monochrome", "[telar.icons]\nsvg = \"icons\"\n");
+    bake(
+        &root,
+        &[BakedAsset {
+            monochrome: true,
+            ..icon("mdi:home")
+        }],
+    );
+    let triple = AssetContext::load(&root, VERSION)
+        .resolve_id(icon_kind(), "mdi:home")
+        .unwrap();
+    assert!(triple.ends_with(", true)"), "{triple}");
+}
+
+#[test]
+fn a_bare_name_resolves_in_the_default_set() {
+    let root = package(
+        "default_set",
+        "[telar.icons]\nsvg = \"icons\"\ndefault_set = \"mdi\"\n",
+    );
+    bake(&root, &[icon("mdi:home")]);
+    let context = AssetContext::load(&root, VERSION);
+    let triple = context.resolve_id(icon_kind(), "home").unwrap();
+    assert!(triple.starts_with("(\"mdi:home\", "), "{triple}");
+    assert_eq!(context.literal_id("icon", "name", "home"), Some(Ok(triple)));
+}
+
+#[test]
+fn a_bare_name_without_a_default_set_names_the_key() {
+    let root = package("no_default_set", "[telar.icons]\nsvg = \"icons\"\n");
+    bake(&root, &[icon("mdi:home")]);
+    let message = AssetContext::load(&root, VERSION)
+        .resolve_id(icon_kind(), "home")
+        .unwrap_err();
+    assert!(message.contains("`home` names no icon set"), "{message}");
+    assert!(message.contains("default_set"), "{message}");
+}
+
+#[test]
+fn a_literal_is_spelled_in_full_where_icons_resolve_at_run_time() {
+    let root = package(
+        "runtime_literal",
+        "[telar.icons]\nmode = \"runtime\"\ndefault_set = \"mdi\"\n",
+    );
+    let context = AssetContext::load(&root, VERSION);
+    assert_eq!(
+        context.literal_id("icon", "name", "home"),
+        Some(Ok("\"mdi:home\"".to_string()))
+    );
+    assert_eq!(
+        context.literal_id("icon", "name", "lucide:home"),
+        Some(Ok("\"lucide:home\"".to_string()))
+    );
+}
+
+#[test]
+fn a_literal_reaches_the_component_as_written_where_icons_are_not_configured() {
+    let root = package("unconfigured", "[telar]\n");
+    let context = AssetContext::load(&root, VERSION);
+    assert_eq!(context.literal_id("icon", "name", "home"), None);
+    assert_eq!(context.literal_id("icon", "size", "24"), None);
 }

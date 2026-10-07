@@ -11,7 +11,8 @@
   "icons": {
     "home": { "body": "<path fill=\"currentColor\" d=\"M3 11L12 3l9 8v10h-6v-6H9v6H3z\"/>" },
     "gear": { "body": "<circle cx=\"12\" cy=\"12\" r=\"8\" fill=\"currentColor\"/>" },
-    "star": { "body": "<path fill=\"currentColor\" d=\"M12 2l3 7h7l-6 5 2 8-6-4-6 4 2-8-6-5h7z\"/>" }
+    "star": { "body": "<path fill=\"currentColor\" d=\"M12 2l3 7h7l-6 5 2 8-6-4-6 4 2-8-6-5h7z\"/>" },
+    "badge": { "body": "<rect width=\"24\" height=\"24\" fill=\"#e91e63\"/>" }
   },
   "aliases": {
     "house": { "parent": "home", "hFlip": true }

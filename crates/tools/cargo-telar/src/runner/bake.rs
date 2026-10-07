@@ -11,21 +11,42 @@ use super::config::{CargoManifest, expand_member, find_package_dir};
 /// Called once from [`super::run`], before dispatching to any subcommand that goes on to invoke `cargo`, and again from each of `watch.rs`'s two loops, which spawn their own `cargo` per rebuild. **Every place in this binary that spawns `cargo` is a build route**, and a build route that has not baked compiles against a stale artifact — or, since the macro checks hashes, fails. A new one either calls this first or sits downstream of a call that did.
 ///
 /// An error is printed here and left to the caller to act on: a one-off command exits on it, while a watch loop goes on to the build, whose `compile_error!` points at the `.rsx` line, and waits for the next edit.
+///
+/// Members bake after the members they are built with, and each is told every crate it is built with, so its icon notice merges the records those crates' bakes leave.
 pub(crate) fn bake_workspace() -> bool {
     let mut clean = true;
     let dir = find_package_dir(&[]);
     let workspace_root = telar_project::find_workspace_root(&dir).unwrap_or_else(|| dir.clone());
+    let metadata = telar_project::cargo_metadata(&workspace_root);
     // This binary's own version is the right fallback only because every crate here shares the workspace version; for any other project a failed resolve means cargo itself is unusable, and the build is about to say so.
-    let telar_version = telar_project::resolve_telar_version(&workspace_root)
+    let telar_version = metadata
+        .as_ref()
+        .and_then(telar_project::telar_version_in)
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
     super::config::warn_if_foreign_version(&telar_version);
     let producer = format!("cargo-telar {}", env!("CARGO_PKG_VERSION"));
-    for member in member_dirs(&workspace_root) {
+    let graph = metadata
+        .as_ref()
+        .map(telar_baker::DependencyGraph::from_metadata);
+    let members = member_dirs(&workspace_root);
+    let members = match &graph {
+        Some(graph) => graph.bake_order(members),
+        None => members,
+    };
+    for member in members {
         let name = member
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("package");
-        if let Some(report) = telar_baker::bake_package(&member, &producer, &telar_version) {
+        let dependencies = graph
+            .as_ref()
+            .and_then(|graph| graph.icon_dependencies(&member));
+        if let Some(report) = telar_baker::bake_package_with(
+            &member,
+            &producer,
+            &telar_version,
+            dependencies.as_deref(),
+        ) {
             for warning in &report.warnings {
                 eprintln!("[cargo-telar] warning: {warning}");
             }

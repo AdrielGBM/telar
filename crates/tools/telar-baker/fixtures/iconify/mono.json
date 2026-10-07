@@ -1,0 +1,13 @@
+{
+  "prefix": "mono",
+  "info": {
+    "name": "Monochrome Icons",
+    "license": { "title": "MIT", "spdx": "MIT", "url": "https://opensource.org/licenses/MIT" },
+    "palette": false
+  },
+  "width": 16,
+  "height": 16,
+  "icons": {
+    "dot": { "body": "<circle cx=\"8\" cy=\"8\" r=\"4\" fill=\"#000\"/>" }
+  }
+}

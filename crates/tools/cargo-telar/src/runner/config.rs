@@ -196,6 +196,7 @@ pub(crate) fn read_package_manifest(args: &[String]) -> Option<CargoPackage> {
 
 pub(crate) struct ResolvedPackage {
     pub(crate) workspace_root: PathBuf,
+    pub(crate) package_dir: PathBuf,
     pub(crate) package: Option<CargoPackage>,
     // Read once here rather than per getter, since a member that inherits one field usually inherits several.
     pub(crate) workspace_package: Option<CargoWorkspacePackage>,
@@ -665,6 +666,7 @@ pub(crate) fn resolve_package(args: &[String]) -> ResolvedPackage {
         .unwrap_or_default();
     ResolvedPackage {
         workspace_root,
+        package_dir: dir,
         package: manifest.and_then(|m| m.package),
         workspace_package,
         produces_cdylib,

@@ -1,10 +1,12 @@
 //! Packaging a macOS `.dmg`.
 
+use std::path::Path;
 use std::process::Command;
 
 use super::super::config::{TelarSection, default_app_id};
 use super::{
-    create_dir_or_exit, dist_dir, run_bundler_tool, run_release_build, stage_binary, write_or_exit,
+    create_dir_or_exit, dist_dir, run_bundler_tool, run_release_build, stage_binary,
+    stage_icon_notice, write_or_exit,
 };
 
 fn info_plist(name: &str, version: &str) -> String {
@@ -28,6 +30,26 @@ fn info_plist(name: &str, version: &str) -> String {
     )
 }
 
+/// The `<name>.app` bundle `hdiutil` puts in the image: `Info.plist`, the binary under `Contents/MacOS`, and the icon licence notice under `Contents/Resources`, where a bundle keeps every file that is not code.
+fn stage_app_bundle(
+    staging: &Path,
+    bin_path: &Path,
+    package_dir: &Path,
+    package_name: &str,
+    version: &str,
+) {
+    let _ = std::fs::remove_dir_all(staging);
+    let contents = staging.join(format!("{package_name}.app")).join("Contents");
+    let macos_dir = contents.join("MacOS");
+    create_dir_or_exit(&macos_dir);
+    write_or_exit(
+        &contents.join("Info.plist"),
+        info_plist(package_name, version),
+    );
+    stage_binary(bin_path, &macos_dir.join(package_name));
+    stage_icon_notice(package_dir, &contents.join("Resources"));
+}
+
 pub(crate) fn build_dmg(cargo_args: Vec<String>, config: TelarSection) -> ! {
     // hdiutil only exists on macOS and rsx does not cross-compile, so the bundle must be produced on a mac host.
     if !cfg!(target_os = "macos") {
@@ -42,15 +64,13 @@ pub(crate) fn build_dmg(cargo_args: Vec<String>, config: TelarSection) -> ! {
 
     let dist_dir = dist_dir(&resolved.workspace_root);
     let staging = dist_dir.join("dmg-staging");
-    let _ = std::fs::remove_dir_all(&staging);
-    let contents = staging.join(format!("{package_name}.app")).join("Contents");
-    let macos_dir = contents.join("MacOS");
-    create_dir_or_exit(&macos_dir);
-    write_or_exit(
-        &contents.join("Info.plist"),
-        info_plist(&package_name, &version),
+    stage_app_bundle(
+        &staging,
+        &bin_path,
+        &resolved.package_dir,
+        &package_name,
+        &version,
     );
-    stage_binary(&bin_path, &macos_dir.join(&package_name));
 
     let dmg_path = dist_dir.join(format!("{package_name}_{version}.dmg"));
     let mut cmd = Command::new("hdiutil");

@@ -102,16 +102,18 @@ impl ViewGen<'_> {
         format!("{}::props(){setters}.build()", props_type(tag))
     }
 
-    /// The value of a prop that names a baked asset by id — `icon name:"mdi:home"` where `[telar.icons]` bakes — or `None` for every other prop, which takes the ordinary emission.
+    /// The value of a prop that names an asset by id — `icon name:"mdi:home"` where `[telar.icons]` configures icons — or `None` for every other prop, which takes the ordinary emission.
     ///
-    /// A literal becomes the `(id, Arc<data>)` pair the artifact answers for it, and a value that is not a literal is a `compile_error!` naming runtime mode where every id must be baked. Where only literals are baked, a computed id reaches the component as written, for its runtime source.
+    /// A literal becomes the `(id, Arc<data>, monochrome)` triple the artifact answers for it where the package bakes it, or the id spelled in full where it resolves at run time, so a bare name is read in the default set here and a bare name with none is a `compile_error!` on its line. A value that is not a literal is a `compile_error!` naming runtime mode where every id must be baked; anywhere else it reaches the component as written, for its runtime source.
     fn baked_id_expr(&self, tag: &str, attr: &Attr) -> Option<String> {
         let name = tag.rsplit("::").next().unwrap_or(tag);
-        let (kind, baking) = self.assets?.id_baking(name, &attr.key)?;
+        let assets = self.assets?;
         let resolved = match &attr.value {
-            Value::Quoted(id) => self.assets?.resolve_id(kind, id.trim()),
-            _ if baking == IdBaking::Required => Err(AssetContext::dynamic_id_message(kind)),
-            _ => return None,
+            Value::Quoted(id) => assets.literal_id(name, &attr.key, id.trim())?,
+            _ => match assets.id_baking(name, &attr.key)? {
+                (kind, IdBaking::Required) => Err(AssetContext::dynamic_id_message(kind)),
+                _ => return None,
+            },
         };
         Some(resolved.unwrap_or_else(|message| format!("compile_error!({})", rust_str(&message))))
     }

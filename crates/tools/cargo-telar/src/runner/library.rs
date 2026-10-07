@@ -509,7 +509,17 @@ pub(super) fn artifact_problems(package_dir: &Path, telar_version: &str) -> Vec<
 
     problems.extend(catalog_problems(package_dir, &telar_dir, telar_version));
     problems.extend(asset_problems(package_dir, &telar_dir, telar_version));
+    problems.extend(icon_record_problem(package_dir));
     problems
+}
+
+/// Why the record of the library's baked icons, which the licence notice of every application built with it is merged from, would not answer for them.
+fn icon_record_problem(package_dir: &Path) -> Option<String> {
+    telar_baker::read_library_icons(package_dir).err().map(|problem| {
+        format!(
+            "the icons it baked could not be credited in the licence notice of an application built with it: {problem}. Run `cargo telar bake` and package again."
+        )
+    })
 }
 
 fn catalog_problems(package_dir: &Path, telar_dir: &Path, telar_version: &str) -> Vec<String> {

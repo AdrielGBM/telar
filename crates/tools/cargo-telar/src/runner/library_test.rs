@@ -402,3 +402,55 @@ fn publishing_the_workspace_skips_what_forbids_it_and_a_named_one_is_refused() {
     assert!(error.contains("`fixture` cannot be published"), "{error}");
     assert!(publishable(vec![named("kit")], &closed, true).is_ok());
 }
+
+/// A library whose `.rsx` draws one icon from an Iconify set of its own, baked.
+fn icon_library(name: &str) -> Library {
+    let library = library(name);
+    write(
+        &library.dir,
+        "telar.toml",
+        "[telar]\nlibrary = true\n\n[telar.icons]\niconify = \"icons\"\n",
+    );
+    write(
+        &library.dir,
+        "icons/demo.json",
+        r#"{"prefix":"demo","info":{"name":"Demo","license":{"spdx":"MIT"}},"icons":{"star":{"body":"<circle cx=\"8\" cy=\"8\" r=\"4\"/>"}}}"#,
+    );
+    write(
+        &library.dir,
+        "src/badge.rsx",
+        "[view]\nicon name:\"demo:star\"\n",
+    );
+    let report = telar_baker::bake_package(&library.dir, "test", VERSION).unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    library
+}
+
+#[test]
+fn a_library_that_bakes_icons_has_to_ship_their_record() {
+    let library = icon_library("icon_record");
+    assert_eq!(icon_record_problem(&library.dir), None);
+
+    let listed: BTreeSet<String> = telar_project::library_files(&library.dir)
+        .into_iter()
+        .filter(|file| file != ".telar/icons-library.json")
+        .collect();
+    let left_out = missing_from_package(&library, &listed);
+
+    std::fs::remove_file(library.dir.join(".telar/icons-library.json")).unwrap();
+    let unrecorded = icon_record_problem(&library.dir);
+    let _ = std::fs::remove_dir_all(&library.dir);
+
+    let left_out = left_out.expect("the record is left out of the package");
+    assert!(
+        left_out.contains("    .telar/icons-library.json"),
+        "{left_out}"
+    );
+    assert!(
+        left_out.contains("\"/.telar/icons-library.json\","),
+        "{left_out}"
+    );
+    let unrecorded = unrecorded.expect("an artifact with icons and no record is refused");
+    assert!(unrecorded.contains("demo:star"), "{unrecorded}");
+    assert!(unrecorded.contains("cargo telar bake"), "{unrecorded}");
+}

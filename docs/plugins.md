@@ -228,6 +228,8 @@ catalog is used as it stands.
 application that wires its own runner from several `rsx_modules!` crates that each bake a catalog names the
 one it means with it too.
 
+The notice of the icons the application baked travels the same way. `telar::app!` and `telar::rsx_modules!` compile `.telar/ICONS-LICENSES.txt` into an application crate, when the bake wrote one, and install it from a load-time constructor into the facade, so `telar_icons::licenses()` returns it on every platform, in a test and in each load of a hot-reload dylib, whose own copy of the facade it is installed into. It lists the icons of the `[telar] library` crates the application is built with too, and a library never installs one of its own. An application shows it in an "Open source licences" screen (see [`telar-icons`](../plugins/telar-icons#in-the-app)).
+
 ### A prop that names a baked asset
 
 A built-in tag bakes a file named by path (`svg src:"logo.svg"`). A plugin's tag can have a prop the CLI bakes
@@ -235,16 +237,18 @@ too, naming its asset by id: [`telar-icons`](../plugins/telar-icons)' `icon name
 The protocol is general, and lives in `telar_project::ComponentAsset`: a tag, a prop, and a `[telar.<section>]`
 of `telar.toml` that configures where ids resolve and whether they are baked. Where the package bakes them,
 `cargo telar bake` resolves every literal the `.rsx` gives that prop and writes it into the package's artifact,
-and the transpiler hands the prop the pair `("set:name", Arc<Data>)` instead of the string, so the props type
-accepts both through `From`:
+and the transpiler hands the prop the triple `("set:name", Arc<Data>, monochrome)` instead of the string, so the
+props type accepts both through `From`. The id is spelled the way the bake keyed it, so a bare name written where
+`[telar.icons] default_set` is set arrives read in that set, and `monochrome` is the tint decision the bake made from
+the set's Iconify `palette` and the SVG's `currentColor`:
 
 ```rust
 pub enum IconName {
-    Baked { id: &'static str, svg: Arc<SvgData> },
+    Baked { id: &'static str, svg: Arc<SvgData>, monochrome: bool },
     Named(Reactive<String>),
 }
 
-impl From<(&'static str, Arc<SvgData>)> for IconName { /* … */ }
+impl From<(&'static str, Arc<SvgData>, bool)> for IconName { /* … */ }
 impl From<&'static str> for IconName { /* … */ }
 ```
 
@@ -296,7 +300,11 @@ it, or there is an application's. What it declares is all it is transpiled again
 - **`t!`** calls `telar::i18n::translate_with_override` with the package name, dashes as underscores, as the
   namespace, so an application overrides each string the way the previous section describes. The catalog comes
   from the package's own `locales/` directory.
-- **Assets**: `svg src:"mark.svg"` is baked into the artifact like an application's.
+- **Assets**: `svg src:"mark.svg"` is baked into the artifact like an application's, and so is an
+  `icon name:"set:name"` resolved through the library's own `[telar.icons]`. A library that bakes icons also ships
+  `.telar/icons-library.json`, the record of those icons and the sets and licences they come from: an application
+  built with it merges the record into the licence notice it ships, judged against its own
+  `[telar.icons.licenses]` (see [`telar-icons`](../plugins/telar-icons#icons-from-libraries)).
 - **Components** are reached by path, as in an application. Re-export them from `lib.rs` so a consumer's
   `prelude` glob sees them:
 
@@ -307,8 +315,9 @@ pub use greeting_card::{GreetingCardProps, greeting_card};
 ```
 
 `plugins/telar-rsx-fixture` is the complete example: a component that reads `$theme.primary`, translates through
-its own catalog and draws a baked SVG, packaged, unpacked read-only and compiled into a generated application by
-`cargo test -p cargo-telar --test rsx_library -- --ignored`.
+its own catalog, draws a baked SVG and bakes an icon from an Iconify set of its own, packaged, unpacked read-only
+and compiled into a generated application by `cargo test -p cargo-telar --test rsx_library -- --ignored`, whose
+notice, and `telar_icons::licenses()` in the compiled application, have to credit the library's icon.
 
 ```rsx
 [logic]
@@ -320,6 +329,7 @@ pub struct Props {
 [view]
 row gap:8 pad:12 align:center fill:$theme.primary radius:$theme.radius
     svg src:"mark.svg" width:24 height:24
+    icon name:"fixture:dot" size:16
     text "{t!(\"greeting\", name = props.name)}" font_size:14 color:$theme.on_primary
 ```
 
@@ -352,8 +362,8 @@ Both transpile and bake first, then check that the package carries the whole art
 answers for the sources on disk. Cargo leaves every dot-directory out of a package unless `include` names it,
 and `.telar/` is one, so a library on cargo's defaults publishes a crate no build can compile. The `include`
 list is the exact one `cargo telar new --lib` writes: `telar.toml`, `src/**` minus the module trees of the
-hot-reload and preview flavours, and the Plain flavour's generated directory, index, baked catalog and baked
-assets under `.telar/`. `package --check` names what to add when the list falls behind. `telar_project::library_include()` is where the list is defined.
+hot-reload and preview flavours, and the Plain flavour's generated directory, index, baked catalog, baked
+assets and icon record under `.telar/`. The icon record also has to answer for the icons the artifact baked. `package --check` names what to add when the list falls behind. `telar_project::library_include()` is where the list is defined.
 
 Cargo refuses a package with uncommitted files, and the gitignored `.telar/` is exactly that, so `package` and
 `publish` call cargo with `--allow-dirty` after checking that no packaged source git tracks has uncommitted

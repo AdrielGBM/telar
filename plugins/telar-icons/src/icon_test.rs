@@ -1,6 +1,6 @@
 use telar::{
-    AvailableSpace, ComponentList, Declared, NodeId, Rect, Role, compute_layout, declare,
-    new_container, reset_layout_runtime, track_layout,
+    AvailableSpace, ComponentList, Declared, DrawCommand, NodeId, Paint, Rect, Role,
+    compute_layout, declare, new_container, reset_layout_runtime, track_layout,
 };
 use telar_dynamic::{AssetDecoder, SvgDecoder};
 
@@ -8,13 +8,18 @@ use super::*;
 
 const MONOTONE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M3 11L12 3l9 8v10H3z"/></svg>"#;
 const PALETTE: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><rect width="12" height="24" fill="#ff0000"/><rect x="12" width="12" height="24" fill="#0000ff"/></svg>"##;
+const BRAND: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#1877f2"/></svg>"##;
 
 fn svg(source: &str) -> Arc<SvgData> {
     SvgDecoder.decode(source.as_bytes()).unwrap()
 }
 
 fn baked(source: &str) -> IconName {
-    IconName::from(("demo:glyph", svg(source)))
+    IconName::from(("demo:glyph", svg(source), true))
+}
+
+fn baked_in_palette(source: &str) -> IconName {
+    IconName::from(("demo:glyph", svg(source), false))
 }
 
 /// `item` laid out in a row that declares `ink` as its text colour, with the icon's own box tracked.
@@ -97,7 +102,7 @@ fn a_colour_given_wins_over_the_text_colour() {
 fn a_multicolour_icon_keeps_its_colours() {
     reset_layout_runtime();
     let item = icon(
-        IconProps::props().name(baked(PALETTE)).build(),
+        IconProps::props().name(baked_in_palette(PALETTE)).build(),
         Children::default(),
     )
     .unwrap();
@@ -159,8 +164,59 @@ fn an_id_nothing_resolves_keeps_its_box_and_draws_nothing() {
     assert_eq!((laid.rect.width, laid.rect.height), (20.0, 20.0));
 }
 
+fn brand_blue() -> Color {
+    Color::from_hex("#1877f2").unwrap()
+}
+
 #[test]
-fn one_ink_tells_a_monotone_icon_from_a_palette() {
-    assert!(OneInk::default().of(&svg(MONOTONE)));
-    assert!(!OneInk::default().of(&svg(PALETTE)));
+fn a_one_colour_logo_of_a_palette_set_keeps_its_colour() {
+    reset_layout_runtime();
+    let item = icon(
+        IconProps::props()
+            .name(baked_in_palette(BRAND))
+            .size(24.0)
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let fills = path_fills(&lay_out(item, Color::RED).tree.commands());
+    assert_eq!(fills.len(), 1, "{fills:?}");
+    let Paint::Solid(fill) = fills[0] else {
+        panic!("{fills:?}");
+    };
+    assert_ne!(fill, Color::RED, "{fills:?}");
+    assert!((fill.b - brand_blue().b).abs() < 0.01, "{fills:?}");
+}
+
+#[test]
+fn a_monochrome_icon_is_tinted_whatever_colour_it_is_drawn_in() {
+    reset_layout_runtime();
+    let item = icon(
+        IconProps::props().name(baked(BRAND)).size(24.0).build(),
+        Children::default(),
+    )
+    .unwrap();
+    assert_eq!(
+        path_fills(&lay_out(item, Color::RED).tree.commands()),
+        vec![Paint::Solid(Color::RED)]
+    );
+}
+
+#[test]
+fn a_colour_given_tints_even_a_palette_icon() {
+    reset_layout_runtime();
+    let item = icon(
+        IconProps::props()
+            .name(baked_in_palette(PALETTE))
+            .color(Color::BLUE)
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let fills = path_fills(&lay_out(item, Color::RED).tree.commands());
+    assert_eq!(fills.len(), 2, "{fills:?}");
+    assert!(
+        fills.iter().all(|fill| *fill == Paint::Solid(Color::BLUE)),
+        "{fills:?}"
+    );
 }

@@ -15,12 +15,15 @@
 //! and the CLI loads no plugin code: the icons `[telar.icons]` configures resolve through `telar-icons-core`'s
 //! sources, are judged against the package's licence policy, and are recorded in `.telar/icons.json` with the
 //! notice [`ICONS_NOTICE_FILENAME`] beside it.
+//!
+//! A dependency's icons are baked into its own artifact, so the notice also lists the icons of every crate in the [`DependencyGraph`] the package is built with, a `[telar] library` through the record it ships.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
 use telar_project::AssetKind;
 
 mod catalog;
+mod icon_dependencies;
 mod icons;
 mod ids;
 mod image;
@@ -31,12 +34,11 @@ mod web_image;
 pub use catalog::{
     CatalogReport, bake_catalog, catalog_files, locales_root, parse_catalog, to_source,
 };
-pub use icons::{
-    ICONS_NOTICE_FILENAME, ICONS_RECORD_FILENAME, IconRecord, RecordedIcon, RecordedSet,
-    read_icon_record,
-};
+pub use icon_dependencies::{CrateIcons, DependencyGraph, IconDependency, read_library_icons};
+pub use icons::{ICONS_RECORD_FILENAME, IconRecord, RecordedIcon, RecordedSet, read_icon_record};
 pub use ids::{IdRef, collect_id_refs};
-pub use package::{BakeReport, bake_package, collect_asset_refs};
+pub use package::{BakeReport, bake_package, bake_package_with, collect_asset_refs};
+pub use telar_project::ICONS_NOTICE_FILENAME;
 pub use web_image::{WEB_IMAGES_DIR, WebImage, WebImageFile, web_image};
 
 /// Converts one registered [`AssetKind`]'s raw file bytes into the Rust source expression that reconstructs

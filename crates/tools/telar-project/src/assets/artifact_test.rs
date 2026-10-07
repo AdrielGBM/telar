@@ -6,6 +6,7 @@ fn svg_asset(path: &str, content: &[u8]) -> BakedAsset {
         path: path.to_string(),
         content: content.to_vec(),
         init_expr: "SvgData::from_baked_vector(&[])".to_string(),
+        monochrome: false,
     }
 }
 
@@ -15,6 +16,7 @@ fn image_asset(path: &str, content: &[u8]) -> BakedAsset {
         path: path.to_string(),
         content: content.to_vec(),
         init_expr: "ImageData::new(vec![0; 4], 1, 1)".to_string(),
+        monochrome: false,
     }
 }
 
@@ -29,6 +31,7 @@ fn index_round_trips_through_json() {
             path: "badge.svg".to_string(),
             hash: content_hash(b"<svg/>"),
             static_name: static_name_for_path("badge.svg"),
+            monochrome: false,
         }],
     };
     let parsed = AssetIndex::from_json(&index.to_json()).unwrap();
@@ -89,6 +92,7 @@ fn the_generated_module_imports_telar_wholesale() {
         content: b"1".to_vec(),
         init_expr: "SvgData::from_baked_vector((1.0, 1.0), vec![VectorCommand::Path { data: PathData::new() }])"
             .to_string(),
+        monochrome: false,
     };
     let generated = generate_assets(&[asset], "test", "0.1.8").unwrap();
     assert!(
@@ -160,6 +164,7 @@ fn unknown_kinds_are_rejected() {
         path: "sans.ttf".to_string(),
         content: b"1".to_vec(),
         init_expr: "x".to_string(),
+        monochrome: false,
     };
     let err = generate_assets(&[asset], "t", "0.1.8").unwrap_err();
     assert!(err.contains("font"), "{err}");

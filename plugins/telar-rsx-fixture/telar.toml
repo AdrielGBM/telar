@@ -1,3 +1,6 @@
 [telar]
 library = true
-prelude = []
+prelude = ["telar_icons"]
+
+[telar.icons]
+iconify = "icons"

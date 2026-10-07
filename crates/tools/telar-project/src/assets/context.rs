@@ -10,7 +10,7 @@ use super::artifact::{
     ASSETS_INDEX_FILENAME, ASSETS_MODULE, ASSETS_SOURCE_FILENAME, ArtifactHandshake, AssetIndex,
     check_artifact, content_hash,
 };
-use super::{ASSET_KINDS, AssetKind, IdBaking};
+use super::{AssetKind, IdBaking, asset_kind_for_component};
 
 /// What a package's `.telar/` had to say. `Unusable` carries the mismatch already phrased, so a caller that hits it for ten different assets writes the same explanation ten times without re-deriving it.
 enum ArtifactState {
@@ -25,8 +25,8 @@ pub struct AssetContext {
     telar_dir: PathBuf,
     telar_version: String,
     state: ArtifactState,
-    /// Every component-named kind this package bakes, and how.
-    id_bakings: Vec<(&'static AssetKind, IdBaking)>,
+    /// The package's `[telar]` table, which says how it bakes and spells the ids a component-named kind's prop is given.
+    telar: crate::TelarSection,
 }
 
 impl AssetContext {
@@ -44,18 +44,12 @@ impl AssetContext {
             ),
             Err(e) => ArtifactState::Unusable(format!("it could not be read: {e}")),
         };
-        let manifest = crate::TelarManifest::load_or_default(package_dir);
-        let id_bakings = ASSET_KINDS
-            .iter()
-            .map(|kind| (kind, manifest.telar.id_baking(kind)))
-            .filter(|(_, baking)| *baking != IdBaking::Off)
-            .collect();
         Self {
             root: crate::assets_root(package_dir),
             telar_dir,
             telar_version: current_telar_version.to_string(),
             state,
-            id_bakings,
+            telar: crate::TelarManifest::load_or_default(package_dir).telar,
         }
     }
 
@@ -137,16 +131,43 @@ impl AssetContext {
 
     /// The component-named kind whose id `prop` carries on `tag`, and how this package bakes it. `None` when the package bakes nothing there, and the prop then receives the id as written.
     pub fn id_baking(&self, tag: &str, prop: &str) -> Option<(&'static AssetKind, IdBaking)> {
-        self.id_bakings.iter().copied().find(|(kind, _)| {
-            kind.attr == prop && kind.component.is_some_and(|component| component.tag == tag)
+        let kind = asset_kind_for_component(tag, prop)?;
+        let baking = self.telar.id_baking(kind);
+        (baking != IdBaking::Off).then_some((kind, baking))
+    }
+
+    /// The value a literal id given to `prop` on `tag` becomes, or the message explaining why it cannot be one. Where the package bakes that kind, it is the triple [`Self::resolve_id`] answers; where the package configures the kind without baking it, the id spelled out in full, so a bare name reaches the runtime already read in its default set. `None` where the package does not configure the kind, and the literal reaches the component as written.
+    pub fn literal_id(
+        &self,
+        tag: &str,
+        prop: &str,
+        written: &str,
+    ) -> Option<Result<String, String>> {
+        let kind = asset_kind_for_component(tag, prop)?;
+        Some(match self.telar.id_baking(kind) {
+            IdBaking::Off => self
+                .telar
+                .canonical_id(kind, written)?
+                .map(|id| format!("{id:?}"))
+                .map_err(|message| format!("rsx: {message}")),
+            IdBaking::Literals | IdBaking::Required => self.resolve_id(kind, written),
         })
     }
 
-    /// The value a baked id becomes, `("set:name", Arc::clone(&crate::__rsx_assets::ASSET_…))` — the pair a component-named kind's prop accepts — or the message explaining why it cannot be one.
+    /// The value a baked id becomes, `("set:name", Arc::clone(&crate::__rsx_assets::ASSET_…), monochrome)` — the triple a component-named kind's prop accepts — or the message explaining why it cannot be one. `written` is read the way the bake keyed it, so a bare icon name finds the icon of the default set.
     ///
     /// Unlike a path, there is no file here to re-hash: the id is either in the artifact or it is not, and whether its source changed is the bake's question, which runs before every build route.
-    pub fn resolve_id(&self, kind: &AssetKind, id: &str) -> Result<String, String> {
-        let written = format!("{}:\"{id}\"", kind.attr);
+    pub fn resolve_id(&self, kind: &AssetKind, written: &str) -> Result<String, String> {
+        let id = match self.telar.canonical_id(kind, written) {
+            Some(Ok(id)) => id,
+            Some(Err(message)) => return Err(format!("rsx: {message}")),
+            None => written.to_string(),
+        };
+        let id = id.as_str();
+        let written = match written == id {
+            true => format!("{}:\"{id}\"", kind.attr),
+            false => format!("{}:\"{written}\" (`{id}`)", kind.attr),
+        };
         let index = match &self.state {
             ArtifactState::NotBaked => {
                 return Err(format!(
@@ -171,8 +192,8 @@ impl AssetContext {
             ));
         };
         Ok(format!(
-            "({id:?}, ::std::sync::Arc::clone(&crate::{ASSETS_MODULE}::{}))",
-            entry.static_name
+            "({id:?}, ::std::sync::Arc::clone(&crate::{ASSETS_MODULE}::{}), {})",
+            entry.static_name, entry.monochrome
         ))
     }
 

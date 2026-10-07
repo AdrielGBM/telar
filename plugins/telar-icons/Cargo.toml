@@ -34,3 +34,7 @@ ui-core.workspace = true
 name = "runtime"
 path = "src/runtime_test.rs"
 required-features = ["runtime"]
+
+[[test]]
+name = "licenses"
+path = "src/licenses_test.rs"

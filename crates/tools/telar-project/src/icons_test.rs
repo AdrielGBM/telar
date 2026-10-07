@@ -67,6 +67,17 @@ fn baking_with_no_source_is_refused() {
 }
 
 #[test]
+fn a_licence_policy_alone_needs_no_source() {
+    let root = package(
+        "policy",
+        "[telar.icons.licenses]\nallow = [\"CC-BY-4.0\"]\nunlisted = \"fail\"\n",
+    );
+    let icons = TelarManifest::load(&root).unwrap().telar.icons.unwrap();
+    assert_eq!(icons.licenses.allow, ["CC-BY-4.0"]);
+    assert_eq!(icons.unlisted_license(), UnlistedLicense::Fail);
+}
+
+#[test]
 fn runtime_mode_needs_no_source() {
     let root = package("runtime", "[telar.icons]\nmode = \"runtime\"\n");
     let icons = TelarManifest::load(&root).unwrap().telar.icons.unwrap();
@@ -112,4 +123,45 @@ fn a_package_inherits_the_workspaces_section_whole() {
     std::fs::write(member.join(MANIFEST_FILENAME), "[telar]\n").unwrap();
     let icons = TelarManifest::load(&member).unwrap().telar.icons.unwrap();
     assert_eq!(icons.svg_dir(&member), Some(member.join("icons")));
+}
+
+#[test]
+fn a_default_set_reads_a_bare_name() {
+    let root = package(
+        "default_set",
+        "[telar.icons]\nsvg = \"icons\"\ndefault_set = \"mdi\"\n",
+    );
+    let icons = TelarManifest::load(&root).unwrap().telar.icons.unwrap();
+    assert_eq!(icons.default_set.as_deref(), Some("mdi"));
+    assert_eq!(icons.icon_id("home").unwrap().to_string(), "mdi:home");
+    assert_eq!(
+        icons.icon_id("lucide:home").unwrap().to_string(),
+        "lucide:home"
+    );
+}
+
+#[test]
+fn a_bare_name_without_a_default_set_points_at_the_key() {
+    let icons = IconsSection {
+        svg: Some("icons".to_string()),
+        ..IconsSection::default()
+    };
+    let message = icons.icon_id("home").unwrap_err();
+    assert!(message.contains("`home` names no icon set"), "{message}");
+    assert!(message.contains("mdi:home"), "{message}");
+    assert!(message.contains("[telar.icons] default_set"), "{message}");
+}
+
+#[test]
+fn a_default_set_outside_iconify_naming_is_refused() {
+    for set in ["MDI", "mdi:home", "material_symbols", ""] {
+        let message = load_error(
+            "bad_default_set",
+            &format!("[telar.icons]\nsvg = \"icons\"\ndefault_set = \"{set}\"\n"),
+        );
+        assert!(
+            message.contains("is not an Iconify set prefix"),
+            "{set}: {message}"
+        );
+    }
 }

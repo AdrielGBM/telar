@@ -14,6 +14,7 @@ mod http;
 mod iconify_dir;
 mod id;
 mod license;
+mod palette;
 mod set;
 mod source;
 mod svg_dir;
@@ -26,6 +27,7 @@ pub use id::IconId;
 pub use license::{
     LicenseClass, LicensePolicy, NoticeSet, OnUnlisted, Verdict, is_brand_set, notice,
 };
+pub use palette::{is_monochrome, uses_current_color};
 pub use set::{Author, Icon, IconSet, License, SetInfo};
 pub use source::{IconSource, SourcedIcon, Sources};
 pub use svg_dir::SvgDir;

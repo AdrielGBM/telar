@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 /// mandatory, not discretionary: [`check_artifact`] treats any mismatch here as fatal on its own, without
 /// even looking at `telar_version`, because a shape it can't parse makes that second comparison moot.
 /// Compared against an index's own [`AssetIndex::format`] by [`check_artifact`].
-pub const ASSET_ARTIFACT_FORMAT: u32 = 4;
+pub const ASSET_ARTIFACT_FORMAT: u32 = 5;
 
 /// The module every baked `static` is wired under once a macro declares `#[path = "…/assets.rs"] pub mod
 /// __rsx_assets;`, mirroring [`crate::I18N_MODULE`]. Unused by this module itself — the generated source
@@ -53,6 +53,9 @@ pub struct AssetEntry {
     pub hash: String,
     /// The `static` this entry is reachable as in the generated module, e.g. `ASSET_A1B2C3D4`.
     pub static_name: String,
+    /// See [`BakedAsset::monochrome`].
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub monochrome: bool,
 }
 
 /// The index `.telar/assets.json` holds. Written by the baker, read by the macro to emit
@@ -98,6 +101,8 @@ pub struct BakedAsset {
     /// Rust source for the baked value's initializer, e.g. `SvgData::from_baked_vector(&[..])` — the
     /// baker's output. Wrapped here in `Arc::new(..)` behind a `LazyLock`.
     pub init_expr: String,
+    /// Whether the artwork takes the colour it is drawn in rather than keeping its own: an icon of a monochrome set, or one drawn in `currentColor`. The transpiler hands it to a component-named kind's prop with the data; a path asset leaves it `false`, since its tag is told its tint where it is written.
+    pub monochrome: bool,
 }
 
 /// What [`generate_assets`] produces: the index and the Rust source it was derived from, kept together so
@@ -186,6 +191,7 @@ pub fn generate_assets(
             path: asset.path.clone(),
             hash: content_hash(&asset.content),
             static_name,
+            monochrome: asset.monochrome,
         });
     }
 

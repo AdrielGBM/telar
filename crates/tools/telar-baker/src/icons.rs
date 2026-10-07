@@ -1,6 +1,6 @@
 //! Resolving the icon ids a package bakes through the sources `[telar.icons]` names, judging each set's licence against the package's policy, and recording what was baked under which licence.
 //!
-//! Three files land in `.telar/` beside the asset artifact: `icons.json`, the record of every baked icon's set and source; `ICONS-LICENSES.txt`, the notice an application ships; and `icons/<set>/<name>.svg`, a copy of each icon a provider answered, so a rebake does not ask the network again for what it already has.
+//! Three files land in `.telar/` beside the asset artifact: `icons.json`, the record of every baked icon's set and source and of the icons the crates the package is built with baked; `ICONS-LICENSES.txt`, the notice an application ships, listing both; and `icons/<set>/<name>.svg`, a copy of each icon a provider answered, so a rebake does not ask the network again for what it already has. A `[telar] library` also writes `icons-library.json`, the record of its own icons that it ships.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -10,24 +10,32 @@ use icons_core::{
     SetInfo, SourcedIcon, Sources, SvgDir, Verdict,
 };
 use serde::{Deserialize, Serialize};
-use telar_project::{IconsSection, UnlistedLicense};
+use telar_project::{ICONS_NOTICE_FILENAME, IconsSection, UnlistedLicense};
 
+use crate::icon_dependencies::{
+    CrateIcons, IconDependency, dependency_icons, write_library_record,
+};
 use crate::ids::IdRef;
 
 /// File name of the record, joined onto a package's `.telar/`.
 pub const ICONS_RECORD_FILENAME: &str = "icons.json";
-/// File name of the licence notice, joined onto a package's `.telar/`.
-pub const ICONS_NOTICE_FILENAME: &str = "ICONS-LICENSES.txt";
 const PROVIDER_CACHE_DIR: &str = "icons";
 const RECORD_FORMAT: u32 = 1;
 
 /// The icons a package's literal ids resolved to, and what the resolution had to say.
 #[derive(Default)]
 pub(crate) struct ResolvedIcons {
-    /// Each baked id and its SVG document.
-    pub icons: Vec<(IconId, Vec<u8>)>,
+    pub icons: Vec<BakedIcon>,
     pub warnings: Vec<String>,
     pub errors: Vec<String>,
+}
+
+/// One icon to bake: its id, its SVG document, and whether it takes the colour around it, decided from its set's `palette` and its markup by [`SourcedIcon::monochrome`].
+#[derive(Debug, PartialEq)]
+pub(crate) struct BakedIcon {
+    pub id: IconId,
+    pub svg: Vec<u8>,
+    pub monochrome: bool,
 }
 
 /// What `.telar/icons.json` holds: where each baked icon came from and what its set says about itself.
@@ -39,6 +47,18 @@ pub struct IconRecord {
     pub provider: Option<String>,
     pub sets: BTreeMap<String, RecordedSet>,
     pub icons: BTreeMap<String, RecordedIcon>,
+    /// The icons of the crates the package is built with, by crate name, which its notice lists after its own.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub dependencies: BTreeMap<String, CrateIcons>,
+}
+
+/// What the bake knows of a package beyond its own `.rsx`.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Recording<'a> {
+    /// Whether the package is a `[telar] library`, which ships the record of its own icons for the applications built with it.
+    pub library: bool,
+    /// The crates the package is built with, or `None` to keep the ones the previous record holds.
+    pub dependencies: Option<&'a [IconDependency]>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -62,8 +82,13 @@ pub fn read_icon_record(package_dir: &Path) -> Option<IconRecord> {
     serde_json::from_str(&text).ok()
 }
 
-/// Resolves every literal id in `refs`, then judges, records and notices what resolved. `refs` holding no literal clears the record and the notice, so a package that stopped drawing icons stops shipping their notice.
-pub(crate) fn resolve(package_dir: &Path, section: &IconsSection, refs: &[IdRef]) -> ResolvedIcons {
+/// Resolves every literal id in `refs`, then judges, records and notices what resolved, together with the icons of the crates `recording` says the package is built with. Neither holding an icon clears the record and the notice, so a package that stopped drawing icons stops shipping their notice.
+pub(crate) fn resolve_with(
+    package_dir: &Path,
+    section: &IconsSection,
+    refs: &[IdRef],
+    recording: Recording<'_>,
+) -> ResolvedIcons {
     let telar_dir = package_dir.join(".telar");
     let mut out = ResolvedIcons::default();
 
@@ -72,7 +97,7 @@ pub(crate) fn resolve(package_dir: &Path, section: &IconsSection, refs: &[IdRef]
         let Some(literal) = &reference.literal else {
             continue;
         };
-        match IconId::parse(literal) {
+        match section.icon_id(literal) {
             Ok(id) => {
                 wanted.entry(id).or_insert(reference);
             }
@@ -190,8 +215,15 @@ pub(crate) fn resolve(package_dir: &Path, section: &IconsSection, refs: &[IdRef]
             })
             .collect(),
         sets,
+        dependencies: dependency_icons(
+            previous.as_ref(),
+            recording.dependencies,
+            &policy,
+            &mut out.warnings,
+            &mut out.errors,
+        ),
     };
-    if let Err(e) = write_record(package_dir, &record) {
+    if let Err(e) = write_record(package_dir, &record, recording.library) {
         out.warnings.push(format!(
             "could not write the icon record in {}: {e}",
             telar_dir.display()
@@ -201,7 +233,11 @@ pub(crate) fn resolve(package_dir: &Path, section: &IconsSection, refs: &[IdRef]
 
     out.icons = resolved
         .into_iter()
-        .map(|(id, icon)| (id, icon.svg.into_bytes()))
+        .map(|(id, icon)| BakedIcon {
+            monochrome: icon.monochrome(),
+            svg: icon.svg.into_bytes(),
+            id,
+        })
         .collect();
     out
 }
@@ -271,42 +307,62 @@ fn prune_cache(telar_dir: &Path, kept: &BTreeSet<IconId>) {
 }
 
 /// Writes the record and the notice, or removes both when nothing was baked.
-fn write_record(package_dir: &Path, record: &IconRecord) -> std::io::Result<()> {
+fn write_record(package_dir: &Path, record: &IconRecord, library: bool) -> std::io::Result<()> {
     let telar_dir = package_dir.join(".telar");
     let record_path = telar_dir.join(ICONS_RECORD_FILENAME);
     let notice_path = telar_dir.join(ICONS_NOTICE_FILENAME);
-    if record.icons.is_empty() {
+    let own = CrateIcons::own(record);
+    if own.icons.is_empty() && record.dependencies.is_empty() {
         for path in [record_path, notice_path] {
             match std::fs::remove_file(path) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
                 _ => {}
             }
         }
-        return Ok(());
+        return write_library_record(&telar_dir, None);
     }
     std::fs::create_dir_all(&telar_dir)?;
+    write_library_record(
+        &telar_dir,
+        Some(own.clone()).filter(|own| library && !own.icons.is_empty()),
+    )?;
     let json = serde_json::to_string_pretty(record).map_err(std::io::Error::other)?;
     telar_project::write_if_changed_atomic(&record_path, &format!("{json}\n"))?;
-    let sets: Vec<NoticeSet> = record
+    telar_project::write_if_changed_atomic(
+        &notice_path,
+        &notice_text(&package_name(package_dir), &own, &record.dependencies),
+    )
+}
+
+/// The notice of the package's own icons, then one for each crate it is built with that baked any, each naming the crate the icons were baked into.
+fn notice_text(
+    package: &str,
+    own: &CrateIcons,
+    dependencies: &BTreeMap<String, CrateIcons>,
+) -> String {
+    let own = (!own.icons.is_empty()).then_some((package, own));
+    own.into_iter()
+        .chain(
+            dependencies
+                .iter()
+                .map(|(name, icons)| (name.as_str(), icons)),
+        )
+        .map(|(name, icons)| icons_core::notice(name, &notice_sets(icons)))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+fn notice_sets(icons: &CrateIcons) -> Vec<NoticeSet> {
+    icons
         .sets
         .iter()
         .map(|(prefix, set)| NoticeSet {
             prefix: prefix.clone(),
             set: set.info.clone(),
             own: set.own,
-            icons: record
-                .icons
-                .keys()
-                .filter_map(|id| id.split_once(':'))
-                .filter(|(set_prefix, _)| set_prefix == prefix)
-                .map(|(_, name)| name.to_string())
-                .collect(),
+            icons: icons.names_in(prefix),
         })
-        .collect();
-    telar_project::write_if_changed_atomic(
-        &notice_path,
-        &icons_core::notice(&package_name(package_dir), &sets),
-    )
+        .collect()
 }
 
 fn package_name(package_dir: &Path) -> String {

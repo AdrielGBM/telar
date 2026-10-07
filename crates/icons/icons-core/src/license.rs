@@ -204,7 +204,7 @@ pub fn notice(package: &str, sets: &[NoticeSet]) -> String {
             None => out.push_str(&format!("{}\n", entry.prefix)),
         }
         if entry.own {
-            out.push_str("  The application's own artwork.\n");
+            out.push_str(&format!("  {package}'s own artwork.\n"));
         } else {
             out.push_str(&format!("  Licence: {}\n", describe_license(info)));
         }

@@ -1,12 +1,32 @@
 //! Packaging a Windows NSIS installer.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::super::config::TelarSection;
-use super::{create_dir_or_exit, dist_dir, run_bundler_tool, run_release_build, write_or_exit};
+use super::{
+    create_dir_or_exit, dist_dir, run_bundler_tool, run_release_build, stage_icon_notice,
+    write_or_exit,
+};
 
-fn nsis_script(name: &str, bin_path: &Path, installer_path: &Path) -> String {
+/// The installer script: the renamed exe, and the icon licence notice beside it in the install directory when `notice` names one, each removed again by the uninstaller.
+fn nsis_script(
+    name: &str,
+    bin_path: &Path,
+    notice: Option<&Path>,
+    installer_path: &Path,
+) -> String {
+    let notice_file = telar_baker::ICONS_NOTICE_FILENAME;
+    let (install_notice, uninstall_notice) = match notice {
+        Some(notice) => (
+            format!(
+                "    File \"/oname={notice_file}\" \"{}\"\n",
+                notice.display()
+            ),
+            format!("    Delete \"$INSTDIR\\{notice_file}\"\n"),
+        ),
+        None => (String::new(), String::new()),
+    };
     format!(
         r#"Name "{name}"
 OutFile "{installer}"
@@ -19,13 +39,13 @@ Page instfiles
 Section "Install"
     SetOutPath $INSTDIR
     File "/oname={name}.exe" "{bin}"
-    CreateShortcut "$SMPROGRAMS\{name}.lnk" "$INSTDIR\{name}.exe"
+{install_notice}    CreateShortcut "$SMPROGRAMS\{name}.lnk" "$INSTDIR\{name}.exe"
     WriteUninstaller "$INSTDIR\uninstall.exe"
 SectionEnd
 
 Section "Uninstall"
     Delete "$INSTDIR\{name}.exe"
-    Delete "$INSTDIR\uninstall.exe"
+{uninstall_notice}    Delete "$INSTDIR\uninstall.exe"
     Delete "$SMPROGRAMS\{name}.lnk"
     RMDir "$INSTDIR"
 SectionEnd
@@ -33,6 +53,25 @@ SectionEnd
         installer = installer_path.display(),
         bin = bin_path.display(),
     )
+}
+
+/// The staging directory `makensis` reads: a copy of the icon licence notice taken at build time, and the script that installs it beside the exe. Answers the script's path.
+fn stage_nsis(
+    staging: &Path,
+    bin_path: &Path,
+    package_dir: &Path,
+    package_name: &str,
+    installer_path: &Path,
+) -> PathBuf {
+    let _ = std::fs::remove_dir_all(staging);
+    create_dir_or_exit(staging);
+    let notice = stage_icon_notice(package_dir, staging);
+    let script_path = staging.join(format!("{package_name}.nsi"));
+    write_or_exit(
+        &script_path,
+        nsis_script(package_name, bin_path, notice.as_deref(), installer_path),
+    );
+    script_path
 }
 
 pub(crate) fn build_nsis(cargo_args: Vec<String>, config: TelarSection) -> ! {
@@ -48,14 +87,13 @@ pub(crate) fn build_nsis(cargo_args: Vec<String>, config: TelarSection) -> ! {
     let version = resolved.version();
 
     let dist_dir = dist_dir(&resolved.workspace_root);
-    let staging = dist_dir.join("nsis-staging");
-    let _ = std::fs::remove_dir_all(&staging);
-    create_dir_or_exit(&staging);
     let installer_path = dist_dir.join(format!("{package_name}_{version}_setup.exe"));
-    let script_path = staging.join(format!("{package_name}.nsi"));
-    write_or_exit(
-        &script_path,
-        nsis_script(&package_name, &bin_path, &installer_path),
+    let script_path = stage_nsis(
+        &dist_dir.join("nsis-staging"),
+        &bin_path,
+        &resolved.package_dir,
+        &package_name,
+        &installer_path,
     );
 
     let mut cmd = Command::new("makensis");

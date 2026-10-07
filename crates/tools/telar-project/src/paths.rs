@@ -33,32 +33,33 @@ pub fn find_telar_root(start: &Path) -> Option<PathBuf> {
 
 /// The `telar`/`telar-macros` version a generated artifact must be written against: the version `telar` actually resolves to for `workspace_root`, not the producing binary's own — a project can pin an older `telar` than whatever produced its artifact, and the version recorded in one exists precisely to catch that. `--no-deps` would miss it whenever `telar` is a published dependency rather than a workspace member (as in every project but this one), so this runs the full resolve. `None` when cargo cannot be run at all or names no `telar` dependency; a caller with a sensible fallback is better placed to choose one than this.
 pub fn resolve_telar_version(workspace_root: &Path) -> Option<String> {
+    telar_version_in(&cargo_metadata(workspace_root)?)
+}
+
+/// `cargo metadata` for `workspace_root` with the full resolve, for a caller that asks it more than one question: it is the slow half of cargo's answers, so it is worth running once. `None` when cargo cannot be run or fails.
+pub fn cargo_metadata(workspace_root: &Path) -> Option<serde_json::Value> {
     std::process::Command::new("cargo")
         .args(["metadata", "--format-version", "1"])
         .current_dir(workspace_root)
         .output()
         .ok()
         .filter(|output| output.status.success())
-        .and_then(|output| serde_json::from_slice::<CargoMetadata>(&output.stdout).ok())
-        .and_then(|metadata| {
-            metadata
-                .packages
-                .into_iter()
-                .find(|pkg| pkg.name == "telar")
-        })
-        .map(|pkg| pkg.version)
+        .and_then(|output| serde_json::from_slice(&output.stdout).ok())
+}
+
+/// The version of `telar` that `metadata`, the output of [`cargo_metadata`], resolves; what [`resolve_telar_version`] answers.
+pub fn telar_version_in(metadata: &serde_json::Value) -> Option<String> {
+    metadata["packages"]
+        .as_array()?
+        .iter()
+        .find(|package| package["name"] == "telar")?["version"]
+        .as_str()
+        .map(str::to_string)
 }
 
 #[derive(serde::Deserialize)]
 struct CargoMetadata {
-    packages: Vec<CargoMetadataPackage>,
     target_directory: PathBuf,
-}
-
-#[derive(serde::Deserialize)]
-struct CargoMetadataPackage {
-    name: String,
-    version: String,
 }
 
 /// Where cargo writes build output for the workspace rooted at `workspace_root` — the one directory every

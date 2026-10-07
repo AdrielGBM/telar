@@ -15,19 +15,35 @@ pub struct IconId {
 }
 
 impl IconId {
-    /// Reads `set:name`.
+    /// Reads `set:name`. A bare name is refused with [`IconError::MissingSet`]; [`parse_with_default`](Self::parse_with_default) reads one in a default set.
     pub fn parse(id: &str) -> Result<Self, IconError> {
+        Self::parse_with_default(id, None)
+    }
+
+    /// Reads `set:name`, or a bare `name` as `default_set:name`, the way an application that draws most of its icons from one set writes them (`home` for `mdi:home`). A bare name with no `default_set` is [`IconError::MissingSet`].
+    pub fn parse_with_default(id: &str, default_set: Option<&str>) -> Result<Self, IconError> {
         let invalid = |reason| IconError::InvalidId {
             id: id.to_string(),
             reason,
         };
-        let (prefix, name) = id
-            .split_once(':')
-            .ok_or_else(|| invalid("write it as `set:name`, like `mdi:home`"))?;
+        let Some((prefix, name)) = id.split_once(':') else {
+            return match default_set {
+                Some(set) => Self::new(set, id),
+                None if is_iconify_word(id) => Err(IconError::MissingSet {
+                    name: id.to_string(),
+                }),
+                None => Err(invalid("write it as `set:name`, like `mdi:home`")),
+            };
+        };
         Self::new(prefix, name).map_err(|error| match error {
             IconError::InvalidId { reason, .. } => invalid(reason),
             other => other,
         })
+    }
+
+    /// Whether `prefix` can name a set: lowercase ASCII letters and digits in runs joined by single hyphens, like `mdi` or `material-symbols`.
+    pub fn is_valid_set(prefix: &str) -> bool {
+        is_iconify_word(prefix)
     }
 
     /// Reads `set/name`, the layout a provider URL and a folder of SVGs use, and the id a runtime transport is handed.

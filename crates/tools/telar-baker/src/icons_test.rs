@@ -20,6 +20,10 @@ fn package(name: &str) -> PathBuf {
     root
 }
 
+fn resolve(package_dir: &Path, section: &IconsSection, refs: &[IdRef]) -> ResolvedIcons {
+    resolve_with(package_dir, section, refs, Recording::default())
+}
+
 fn section() -> IconsSection {
     IconsSection {
         iconify: Some(fixtures().display().to_string()),
@@ -42,7 +46,7 @@ fn baked_ids(resolved: &ResolvedIcons) -> Vec<String> {
     resolved
         .icons
         .iter()
-        .map(|(id, _)| id.to_string())
+        .map(|icon| icon.id.to_string())
         .collect()
 }
 
@@ -85,7 +89,7 @@ fn own_svgs_and_iconify_sets_resolve_and_are_recorded() {
         "{notice}"
     );
     assert!(
-        notice.contains("app\n  The application's own artwork.\n  Icons: logo"),
+        notice.contains("app\n  demo-app's own artwork.\n  Icons: logo"),
         "{notice}"
     );
 }
@@ -96,7 +100,7 @@ fn an_own_svg_redraws_a_sets_icon_under_its_name() {
     std::fs::create_dir_all(root.join("icons/demo")).unwrap();
     std::fs::write(root.join("icons/demo/home.svg"), OWN_SVG).unwrap();
     let resolved = resolve(&root, &section(), &[literal("demo:home", 1)]);
-    assert_eq!(resolved.icons[0].1, OWN_SVG.as_bytes());
+    assert_eq!(resolved.icons[0].svg, OWN_SVG.as_bytes());
 }
 
 #[test]
@@ -112,7 +116,7 @@ fn an_id_no_source_has_is_an_error_naming_the_sources() {
 }
 
 #[test]
-fn an_id_that_is_not_set_and_name_is_an_error() {
+fn a_bare_name_without_a_default_set_is_an_error() {
     let root = package("invalid");
     let resolved = resolve(&root, &section(), &[literal("home", 4)]);
     assert!(
@@ -124,6 +128,91 @@ fn an_id_that_is_not_set_and_name_is_an_error() {
         resolved.errors[0].contains("set:name"),
         "{:?}",
         resolved.errors
+    );
+    assert!(
+        resolved.errors[0].contains("[telar.icons] default_set"),
+        "{:?}",
+        resolved.errors
+    );
+    assert!(resolved.icons.is_empty());
+}
+
+#[test]
+fn a_bare_name_resolves_in_the_default_set_and_is_baked_under_its_full_id() {
+    let root = package("default_set");
+    let with_default = IconsSection {
+        default_set: Some("demo".to_string()),
+        ..section()
+    };
+    let resolved = resolve(
+        &root,
+        &with_default,
+        &[
+            literal("home", 1),
+            literal("demo:home", 2),
+            literal("app:logo", 3),
+        ],
+    );
+    assert!(resolved.errors.is_empty(), "{:?}", resolved.errors);
+    assert_eq!(baked_ids(&resolved), vec!["app:logo", "demo:home"]);
+    assert_eq!(
+        read_icon_record(&root)
+            .unwrap()
+            .icons
+            .keys()
+            .collect::<Vec<_>>(),
+        vec!["app:logo", "demo:home"]
+    );
+}
+
+fn monochrome(resolved: &ResolvedIcons, id: &str) -> bool {
+    resolved
+        .icons
+        .iter()
+        .find(|icon| icon.id.to_string() == id)
+        .unwrap_or_else(|| panic!("`{id}` was not baked"))
+        .monochrome
+}
+
+#[test]
+fn the_sets_palette_decides_whether_an_icon_is_tinted() {
+    let root = package("palette");
+    let resolved = resolve(
+        &root,
+        &section(),
+        &[
+            literal("brand:acme", 1),
+            literal("mono:dot", 2),
+            literal("demo:home", 3),
+            literal("demo:badge", 4),
+            literal("app:logo", 5),
+        ],
+    );
+    assert!(resolved.errors.is_empty(), "{:?}", resolved.errors);
+    assert!(
+        !monochrome(&resolved, "brand:acme"),
+        "a one-colour logo of a palette set keeps its colour"
+    );
+    assert!(
+        monochrome(&resolved, "mono:dot"),
+        "a set declaring `palette: false` is tinted whatever its markup"
+    );
+    assert!(
+        monochrome(&resolved, "demo:home"),
+        "a set declaring no palette is tinted where it draws in currentColor"
+    );
+    assert!(
+        !monochrome(&resolved, "demo:badge"),
+        "a set declaring no palette keeps a fixed colour"
+    );
+    assert!(
+        monochrome(&resolved, "app:logo"),
+        "an own SVG in currentColor is tinted"
+    );
+    let record = read_icon_record(&root).unwrap();
+    assert_eq!(
+        record.sets["brand"].info.as_ref().unwrap().palette,
+        Some(true)
     );
 }
 
@@ -210,15 +299,23 @@ fn a_provider_icon_already_fetched_is_reused_without_the_network() {
             },
         )]
         .into(),
+        dependencies: BTreeMap::new(),
     };
-    write_record(&root, &record).unwrap();
+    write_record(&root, &record, false).unwrap();
     let from_provider = IconsSection {
         provider: Some(provider.to_string()),
         ..IconsSection::default()
     };
     let resolved = resolve(&root, &from_provider, &[literal("remote:bell", 1)]);
     assert!(resolved.errors.is_empty(), "{:?}", resolved.errors);
-    assert_eq!(resolved.icons, vec![(id, OWN_SVG.as_bytes().to_vec())]);
+    assert_eq!(
+        resolved.icons,
+        vec![BakedIcon {
+            id,
+            svg: OWN_SVG.as_bytes().to_vec(),
+            monochrome: true,
+        }]
+    );
 }
 
 #[test]

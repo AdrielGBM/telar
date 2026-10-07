@@ -1,6 +1,6 @@
 //! The end-to-end proof that a `[telar] library` builds from the package it publishes: `plugins/telar-rsx-fixture` passes `cargo telar package --check`, is packaged by cargo, unpacked read-only, and compiled as a dependency of a generated application that the CLI transpiles while never running on the library.
 //!
-//! The application overrides one of the library's strings from a catalog it never installs by hand, names a theme of its own and draws the library's component headlessly, once with the Plain flavour and once with the features `cargo telar dev` and `cargo telar preview` turn on. Afterwards the unpacked library has to be byte-for-byte what cargo packaged.
+//! The application overrides one of the library's strings from a catalog it never installs by hand, names a theme of its own, ships the licence notice of the icon the library baked, and draws the library's component headlessly, once with the Plain flavour and once with the features `cargo telar dev` and `cargo telar preview` turn on. Afterwards the unpacked library has to be byte-for-byte what cargo packaged.
 //!
 //! It compiles a few hundred crates into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p cargo-telar --test rsx_library -- --ignored`. Every cargo it starts runs offline, so the registry has to hold what `Cargo.lock` names first (`cargo fetch`).
 
@@ -29,6 +29,7 @@ fn a_packaged_rsx_library_builds_as_a_read_only_dependency() {
     let consumer = run.join("consumer");
     write_consumer(&consumer, &repo, &library);
     run_cli(&consumer, &target_dir, &["transpile"]);
+    assert_notice_credits_the_library(&consumer);
     run_cargo(&consumer, &target_dir, &["test"]);
     run_cargo(
         &consumer,
@@ -45,6 +46,20 @@ fn a_packaged_rsx_library_builds_as_a_read_only_dependency() {
         "building the application changed the unpacked library at {}",
         library.display()
     );
+}
+
+/// The application draws no icon of its own, and still ships the notice of the one the library baked, read from the record the unpacked package carries.
+fn assert_notice_credits_the_library(consumer: &Path) {
+    let notice_path = consumer.join(".telar/ICONS-LICENSES.txt");
+    let notice = std::fs::read_to_string(&notice_path)
+        .unwrap_or_else(|e| panic!("the bake wrote no {}: {e}", notice_path.display()));
+    assert!(
+        notice.starts_with(&format!("Icons in {FIXTURE}\n")),
+        "{notice}"
+    );
+    assert!(notice.contains("fixture — Fixture Icons\n"), "{notice}");
+    assert!(notice.contains("  Licence: MIT"), "{notice}");
+    assert!(notice.contains("  Icons: dot\n"), "{notice}");
 }
 
 fn repo_root() -> PathBuf {
@@ -212,15 +227,18 @@ publish = false
 
 [dependencies]
 telar = {{ version = "={VERSION}", default-features = false, features = ["runtime", "shaper", "testing"] }}
+telar-icons = {{ version = "={VERSION}" }}
 telar-rsx-fixture = {{ path = {library} }}
 
 [patch.crates-io]
 telar = {{ path = {telar} }}
+telar-icons = {{ path = {telar_icons} }}
 
 [workspace]
 "#,
         library = toml_string(library),
         telar = toml_string(&repo.join("crates/telar")),
+        telar_icons = toml_string(&repo.join("plugins/telar-icons")),
     );
     let files = [
         ("Cargo.toml", manifest.as_str()),
@@ -349,5 +367,13 @@ fn the_library_component_draws_with_the_application_catalog_and_theme() {
     telar::set_locale("es");
     let drawn = texts(&render());
     assert!(drawn.iter().any(|text| text == "¡Hola, Ada!"), "a locale the application does not override falls back to the library's catalog: {drawn:?}");
+}
+
+#[test]
+fn the_binary_carries_the_notice_of_the_icon_the_library_baked() {
+    let notice = telar_icons::licenses().expect("the application compiled its notice in");
+    assert!(notice.starts_with("Icons in telar-rsx-fixture\n"), "{notice}");
+    assert!(notice.contains("fixture — Fixture Icons\n"), "{notice}");
+    assert!(notice.contains("  Icons: dot\n"), "{notice}");
 }
 "#;

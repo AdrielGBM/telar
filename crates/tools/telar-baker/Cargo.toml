@@ -40,3 +40,7 @@ path = "src/formats_test.rs"
 [[test]]
 name = "icon_bake"
 path = "src/icon_bake_test.rs"
+
+[[test]]
+name = "library_icons"
+path = "src/library_icons_test.rs"

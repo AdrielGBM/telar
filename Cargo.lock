@@ -6033,6 +6033,7 @@ version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
+ "telar-icons-core",
  "toml",
 ]
 
@@ -6228,6 +6229,7 @@ name = "telar-rsx-fixture"
 version = "0.2.1"
 dependencies = [
  "telar",
+ "telar-icons",
 ]
 
 [[package]]

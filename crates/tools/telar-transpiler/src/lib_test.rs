@@ -1834,6 +1834,7 @@ fn baked_package(name: &str, kind: &str, rel: &str, content: &[u8]) -> std::path
             path: rel.to_string(),
             hash: content_hash(content),
             static_name: static_name_for_path(rel),
+            monochrome: false,
         }],
     };
     std::fs::write(root.join(".telar/assets.json"), index.to_json()).unwrap();
@@ -2912,12 +2913,16 @@ fn a_typed_signal_keeps_its_type_in_the_hot_form_on_its_own_line() {
 
 /// A package whose `telar.toml` configures icons with `mode`, holding the baked icon `mdi:home`.
 fn icon_package(name: &str, mode: &str) -> std::path::PathBuf {
+    icon_package_with(name, mode, "")
+}
+
+fn icon_package_with(name: &str, mode: &str, extra: &str) -> std::path::PathBuf {
     let root = std::env::temp_dir().join(format!("rsx_icons_{name}_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join(".telar")).unwrap();
     std::fs::write(
         root.join("telar.toml"),
-        format!("[telar.icons]\nmode = \"{mode}\"\nsvg = \"icons\"\n"),
+        format!("[telar.icons]\nmode = \"{mode}\"\nsvg = \"icons\"\n{extra}"),
     )
     .unwrap();
     let index = AssetIndex {
@@ -2929,6 +2934,7 @@ fn icon_package(name: &str, mode: &str) -> std::path::PathBuf {
             path: "mdi:home".to_string(),
             hash: content_hash(b"<svg/>"),
             static_name: static_name_for_path("mdi:home"),
+            monochrome: false,
         }],
     };
     std::fs::write(root.join(".telar/assets.json"), index.to_json()).unwrap();
@@ -2949,7 +2955,7 @@ fn a_baked_icon_id_becomes_the_artifacts_pair() {
     let name = static_name_for_path("mdi:home");
     assert!(
         code.contains(&format!(
-            "IconProps::props().name((\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{name}))).size(20.0).build()"
+            "IconProps::props().name((\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{name}), false)).size(20.0).build()"
         )),
         "{code}"
     );
@@ -2994,5 +3000,50 @@ fn an_icon_id_is_a_plain_string_where_nothing_bakes_it() {
     let root = icon_package("runtime", "runtime");
     let code = transpile_in(&root, "[view]\nicon name:\"mdi:home\"\n");
     assert!(code.contains(".name(\"mdi:home\")"), "{code}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_bare_icon_name_is_read_in_the_default_set_and_baked() {
+    let root = icon_package_with("bare", "baked", "default_set = \"mdi\"\n");
+    let code = transpile_in(&root, "[view]\nicon name:\"home\"\n");
+    let name = static_name_for_path("mdi:home");
+    assert!(
+        code.contains(&format!(
+            ".name((\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{name}), false))"
+        )),
+        "{code}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_bare_icon_name_without_a_default_set_is_an_error_on_its_line() {
+    let root = icon_package("bare_unset", "baked");
+    let code = transpile_in(&root, "[view]\nicon name:\"home\"\n");
+    assert!(code.contains(".name(compile_error!("), "{code}");
+    assert!(code.contains("names no icon set"), "{code}");
+    assert!(code.contains("[telar.icons] default_set"), "{code}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_bare_icon_name_reaches_the_runtime_spelled_in_full() {
+    let root = icon_package_with("bare_runtime", "runtime", "default_set = \"mdi\"\n");
+    let code = transpile_in(
+        &root,
+        "[view]\nicon name:\"home\"\nicon name:\"lucide:home\"\n",
+    );
+    assert!(code.contains(".name(\"mdi:home\")"), "{code}");
+    assert!(code.contains(".name(\"lucide:home\")"), "{code}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_bare_icon_name_resolved_at_run_time_still_needs_a_default_set() {
+    let root = icon_package("bare_runtime_unset", "runtime");
+    let code = transpile_in(&root, "[view]\nicon name:\"home\"\n");
+    assert!(code.contains(".name(compile_error!("), "{code}");
+    assert!(code.contains("default_set"), "{code}");
     let _ = std::fs::remove_dir_all(&root);
 }

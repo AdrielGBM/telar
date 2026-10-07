@@ -1,11 +1,12 @@
 //! Packaging a Linux AppImage.
 
+use std::path::Path;
 use std::process::Command;
 
 use super::super::config::TelarSection;
 use super::{
-    create_dir_or_exit, desktop_entry_file, dist_dir, run_bundler_tool, run_release_build,
-    set_executable, stage_binary, write_or_exit,
+    create_dir_or_exit, desktop_entry_file, dist_dir, doc_dir, run_bundler_tool, run_release_build,
+    set_executable, stage_binary, stage_icon_notice, write_or_exit,
 };
 
 // Minimal valid 1x1 transparent PNG; appimagetool requires an icon, and rsx apps carry their own assets so a real icon is unnecessary.
@@ -23,6 +24,25 @@ fn apprun_script(name: &str) -> String {
     )
 }
 
+/// The AppDir `appimagetool` packs, laid out like the root it stands in for: the binary under `usr/bin`, the icon licence notice under `usr/share/doc/<name>`.
+fn stage_appdir(appdir: &Path, bin_path: &Path, package_dir: &Path, package_name: &str) {
+    // Clear any previous AppDir so stale files never leak into the image.
+    let _ = std::fs::remove_dir_all(appdir);
+    let bin_dir = appdir.join("usr").join("bin");
+    create_dir_or_exit(&bin_dir);
+
+    let apprun = appdir.join("AppRun");
+    write_or_exit(&apprun, apprun_script(package_name));
+    set_executable(&apprun);
+    write_or_exit(
+        &appdir.join(format!("{package_name}.desktop")),
+        desktop_entry_file(package_name, true),
+    );
+    write_or_exit(&appdir.join(format!("{package_name}.png")), MINIMAL_PNG);
+    stage_binary(bin_path, &bin_dir.join(package_name));
+    stage_icon_notice(package_dir, &doc_dir(appdir, package_name));
+}
+
 pub(crate) fn build_appimage(cargo_args: Vec<String>, config: TelarSection) -> ! {
     let (bin_path, resolved) = run_release_build(cargo_args, config);
     let package_name = resolved.name();
@@ -31,23 +51,10 @@ pub(crate) fn build_appimage(cargo_args: Vec<String>, config: TelarSection) -> !
 
     let dist_dir = dist_dir(&resolved.workspace_root);
     let appdir = dist_dir.join(format!("{package_name}.AppDir"));
-    // Clear any previous AppDir so stale files never leak into the image.
-    let _ = std::fs::remove_dir_all(&appdir);
-    let bin_dir = appdir.join("usr").join("bin");
-    create_dir_or_exit(&bin_dir);
-
-    let apprun = appdir.join("AppRun");
-    write_or_exit(&apprun, apprun_script(&package_name));
-    set_executable(&apprun);
-    write_or_exit(
-        &appdir.join(format!("{package_name}.desktop")),
-        desktop_entry_file(&package_name, true),
-    );
-    write_or_exit(&appdir.join(format!("{package_name}.png")), MINIMAL_PNG);
-    stage_binary(&bin_path, &bin_dir.join(&package_name));
+    stage_appdir(&appdir, &bin_path, &resolved.package_dir, &package_name);
 
     let appimage_path = dist_dir.join(format!("{package_name}-{arch}.AppImage"));
-    // The AppImage bundles only the binary (rsx embeds its assets) and relies on the host's wayland/vulkan libraries at runtime.
+    // The AppImage bundles only the binary and its notices (rsx embeds its assets) and relies on the host's wayland/vulkan libraries at runtime.
     let mut cmd = Command::new("appimagetool");
     cmd.arg(&appdir).arg(&appimage_path).env("ARCH", arch);
     run_bundler_tool(
