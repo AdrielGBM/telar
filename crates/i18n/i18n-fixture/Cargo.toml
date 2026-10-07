@@ -11,3 +11,6 @@ publish = false
 
 [dependencies]
 telar = { workspace = true, features = ["runtime"] }
+
+[dev-dependencies]
+telar = { workspace = true, features = ["shaper", "testing"] }

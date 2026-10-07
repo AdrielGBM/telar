@@ -11,6 +11,13 @@ fn app_root_builds_and_lays_out() {
     let _ = tree.commands();
 }
 
+// `app!` installs the catalog it baked as the binary loads, so plain Rust and plugin overrides read it before any runner starts.
+#[test]
+fn the_baked_catalog_is_installed_without_a_call() {
+    let installed = telar::i18n::catalog().expect("the application catalog is installed");
+    assert!(std::ptr::eq(installed, &crate::__rsx_i18n::CATALOG));
+}
+
 #[test]
 fn an_rtl_locale_mirrors_the_shell() {
     telar::set_theme(crate::core::theme::SandboxTheme::modern());

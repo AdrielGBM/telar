@@ -6,3 +6,6 @@ overview = "Overview"
 [items]
 one = "{count} item"
 other = "{count} items"
+
+[telar_components]
+close = "Dismiss"

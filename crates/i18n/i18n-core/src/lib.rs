@@ -14,7 +14,7 @@ mod plural;
 
 #[cfg(feature = "runtime-catalog")]
 pub use catalog::{CatalogModel, MessageModel, PartModel, flatten, is_plural_table, parse_message};
-pub use installed::{catalog, set_catalog, t};
+pub use installed::{catalog, set_catalog, set_catalog_if_unset, t};
 pub use locale::{current_locale, set_locale, use_locale};
 pub use message::{Catalog, Entry, Message, Part};
 pub use negotiate::negotiate_locale;
@@ -38,9 +38,9 @@ pub fn translate(catalog: &Catalog, key: &str, args: &[(&str, &str)]) -> String 
 ///
 /// Resolution order, first hit wins: the app's message for the active locale, the plugin's message for the active locale, the app's default-locale message, the plugin's default-locale message, then the raw `key`. An active-locale message always beats a default-locale one, so an app that overrides only its default language never shows that text to a user whose language the plugin already translates. When no locale is set, the app's default locale is the active one.
 ///
-/// With no installed catalog this is exactly `translate(catalog, key, args)`.
+/// The application's catalog is the one installed for the process, which `telar::app!` does as the binary loads; with none installed this is exactly `translate(catalog, key, args)`.
 ///
-/// Like [`set_catalog`], the `&Catalog` must outlive every call: a catalog baked into a **hot-reload dylib** lives in that dylib's data, so a reference kept across a reload dangles. A plugin should hand over a catalog it loaded at runtime, or take a fresh reference after each reload.
+/// The plugin's `catalog` is borrowed for this call alone. Naming a `static` at the call site keeps it the current one under hot reload, where a reference stored across a reload would point into the dylib that was unloaded.
 pub fn translate_with_override(
     namespace: &str,
     catalog: &Catalog,

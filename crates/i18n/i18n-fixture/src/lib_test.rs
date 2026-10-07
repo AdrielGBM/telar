@@ -32,3 +32,48 @@ fn plural_selects_a_branch_per_locale() {
     assert_eq!(telar::t!("items", count = "11"), "11 عنصرًا");
     telar::set_locale("en");
 }
+
+mod plugin_override {
+    use telar::i18n::{Catalog, Entry, Message, translate_with_override};
+    use telar::testing::{mount, texts};
+    use telar::{Color, LayoutStyle, Text, TextStyle, WindowRoot};
+
+    // The catalog `telar-components` ships its "Close" in, which a core crate may not depend on.
+    static COMPONENTS: Catalog = Catalog {
+        locales: &["ar", "en", "es"],
+        default_locale: "en",
+        entries: &[Entry {
+            key: "close",
+            messages: &[
+                ("ar", Message::Plain("إغلاق")),
+                ("en", Message::Plain("Close")),
+                ("es", Message::Plain("Cerrar")),
+            ],
+        }],
+    };
+
+    fn drawn_close_label() -> Vec<String> {
+        telar::reset_layout_runtime();
+        let label = Text::new(
+            || translate_with_override("telar_components", &COMPONENTS, "close", &[]),
+            LayoutStyle::new(),
+            || TextStyle::new(14.0, Color::BLACK),
+        )
+        .expect("the label lays out");
+        texts(&mount(WindowRoot::new(Box::new(label)), 320, 80))
+    }
+
+    // `rsx_modules!` installed the catalog it baked as this binary loaded, so the override reaches a plugin string with no call to install it.
+    #[test]
+    fn the_baked_catalog_overrides_a_plugin_string_without_being_installed_by_hand() {
+        let installed = telar::i18n::catalog().expect("the application catalog is installed");
+        assert!(std::ptr::eq(installed, &crate::__rsx_i18n::CATALOG));
+
+        telar::set_locale("en");
+        assert_eq!(drawn_close_label(), ["Dismiss"]);
+        telar::set_locale("es");
+        assert_eq!(drawn_close_label(), ["Descartar"]);
+        telar::set_locale("ar");
+        assert_eq!(drawn_close_label(), ["إغلاق"]);
+    }
+}

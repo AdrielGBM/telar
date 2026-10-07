@@ -386,6 +386,7 @@ fn a_library_dependency_is_wired_from_a_read_only_package_without_writing() {
         "kit".into(),
         false,
         BuildFlavour::HotPreview,
+        super::Invocation::Modules,
         None,
     );
     let selected = super::wire_package(
@@ -393,6 +394,7 @@ fn a_library_dependency_is_wired_from_a_read_only_package_without_writing() {
         "kit".into(),
         true,
         BuildFlavour::HotPreview,
+        super::Invocation::Modules,
         None,
     );
 
@@ -453,4 +455,121 @@ fn a_module_tree_older_than_the_sources_is_refused() {
     assert!(current.is_ok());
     assert!(stale.contains("no longer matches `src/`"), "{stale}");
     assert!(stale.contains("cargo telar transpile"), "{stale}");
+}
+
+/// A package with no `.rsx` whose catalog the CLI baked with `keys`, wired for `flavour`: what `rsx_modules!` sees in a crate that only translates.
+fn with_baked_catalog(
+    name: &str,
+    telar_toml: &str,
+    flavour: telar_project::BuildFlavour,
+    keys: &[&str],
+) -> std::path::PathBuf {
+    let root = package(name);
+    std::fs::write(root.join("src/lib.rs"), "telar::rsx_modules!();\n").unwrap();
+    std::fs::write(root.join(telar_project::MANIFEST_FILENAME), telar_toml).unwrap();
+    let telar_dir = root.join(".telar");
+    std::fs::create_dir_all(&telar_dir).unwrap();
+    let index = telar_project::CatalogIndex {
+        format: telar_project::CATALOG_ARTIFACT_FORMAT,
+        producer: "test".to_string(),
+        telar_version: env!("CARGO_PKG_VERSION").to_string(),
+        entries: keys
+            .iter()
+            .map(|key| telar_project::CatalogEntry {
+                key: key.to_string(),
+                args: Vec::new(),
+            })
+            .collect(),
+        sources: Vec::new(),
+    };
+    std::fs::write(
+        telar_dir.join(telar_project::CATALOG_INDEX_FILENAME),
+        index.to_json(),
+    )
+    .unwrap();
+    std::fs::write(
+        telar_dir.join(telar_project::CATALOG_SOURCE_FILENAME),
+        "// generated\n",
+    )
+    .unwrap();
+    telar_project::ModuleTree::discover(
+        &root.join("src"),
+        &telar_project::generated_dir(&root, flavour),
+        flavour.site_file_name(),
+    )
+    .write()
+    .unwrap();
+    root
+}
+
+/// The function the expansion's load-time constructor installs its catalog with, or `None` when it emits no constructor.
+fn catalog_installer(
+    root: &std::path::Path,
+    flavour: telar_project::BuildFlavour,
+    invocation: super::Invocation,
+) -> Option<&'static str> {
+    let output = super::wire_package(
+        root.to_path_buf(),
+        "kit".into(),
+        true,
+        flavour,
+        invocation,
+        None,
+    )
+    .unwrap_or_else(|e| panic!("{e}"));
+    let wired = output.include_stmts.to_string();
+    ["set_catalog_if_unset", "set_catalog"]
+        .into_iter()
+        .find(|installer| wired.contains(&format!("{installer} (& self :: __rsx_i18n :: CATALOG)")))
+}
+
+/// The hot flavours are the dylib a reload swaps in: it carries its own constructor, so every load installs the catalog it holds into its own copy of the runtime.
+#[test]
+fn an_application_catalog_is_installed_as_its_binary_loads_in_every_flavour() {
+    use telar_project::BuildFlavour;
+    for flavour in [
+        BuildFlavour::Plain,
+        BuildFlavour::Hot,
+        BuildFlavour::HotPreview,
+    ] {
+        let root = with_baked_catalog(
+            &format!("installs_{flavour:?}"),
+            "[telar]\n",
+            flavour,
+            &["greeting"],
+        );
+        let app = catalog_installer(&root, flavour, super::Invocation::App);
+        let modules = catalog_installer(&root, flavour, super::Invocation::Modules);
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert_eq!(app, Some("set_catalog"), "{flavour:?}");
+        assert_eq!(modules, Some("set_catalog_if_unset"), "{flavour:?}");
+    }
+}
+
+/// A library's strings are what the application overrides, so its catalog must never take the application's place.
+#[test]
+fn a_library_catalog_is_never_installed() {
+    let flavour = telar_project::BuildFlavour::Plain;
+    let root = with_baked_catalog(
+        "library_catalog",
+        "[telar]\nlibrary = true\n",
+        flavour,
+        &["greeting"],
+    );
+    let installer = catalog_installer(&root, flavour, super::Invocation::Modules);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(installer, None);
+}
+
+/// The CLI bakes an empty catalog for an application with no `locales/`, and there is nothing in it to install.
+#[test]
+fn an_empty_catalog_is_not_installed() {
+    let flavour = telar_project::BuildFlavour::Plain;
+    let root = with_baked_catalog("empty_catalog", "[telar]\n", flavour, &[]);
+    let installer = catalog_installer(&root, flavour, super::Invocation::App);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(installer, None);
 }

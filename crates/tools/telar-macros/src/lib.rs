@@ -101,7 +101,7 @@ pub fn t(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-/// Transpiles the project's `.rsx`, wires the generated modules, and emits the runner entry point.
+/// Transpiles the project's `.rsx`, wires the generated modules, installs the baked catalog as the binary loads, and emits the runner entry point.
 pub fn app(input: TokenStream) -> TokenStream {
     let AppInput {
         theme_type,
@@ -122,7 +122,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         rerun_stmts,
         preview_const_idents,
         flavour,
-    } = match transpile_project(Some(theme_type_str.as_str())) {
+    } = match transpile_project(Invocation::App, Some(theme_type_str.as_str())) {
         Ok(o) => o,
         Err(err) => return err.into(),
     };
@@ -545,6 +545,33 @@ fn check_prelude_agrees(
     Err(quote! { compile_error!(#msg); })
 }
 
+/// Which macro wires the package, which decides how firmly its catalog claims the process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Invocation {
+    /// `app!`: the application itself, whose catalog replaces any installed before it.
+    App,
+    /// `rsx_modules!`: one of possibly several crates an application links, whose catalog only fills an empty slot.
+    Modules,
+}
+
+/// Installs the catalog an expansion wired as the process's, from a constructor that runs as the binary holding it loads.
+///
+/// At load rather than from a runner, because a runner is not the only way in: a unit test mounts the application's components with none, and a hot-reload dylib is a second image with its own copy of the i18n runtime, which only code inside it reaches. A constructor runs in each image, into that image's copy, before any of its code — so every load of a dylib installs the catalog it carries, and the slot never outlives the data it points at.
+fn catalog_install(invocation: Invocation, module: &Ident) -> TokenStream2 {
+    let install = match invocation {
+        Invocation::App => quote! { ::telar::i18n::set_catalog },
+        Invocation::Modules => quote! { ::telar::i18n::set_catalog_if_unset },
+    };
+    quote! {
+        ::telar::__ctor::declarative::ctor! {
+            #[ctor(unsafe, anonymous)]
+            fn install_application_catalog() {
+                #install(&self::#module::CATALOG);
+            }
+        }
+    }
+}
+
 struct TranspileOutput {
     include_stmts: TokenStream2,
     rerun_stmts: TokenStream2,
@@ -710,7 +737,10 @@ fn check_module_tree(
 }
 
 /// The expansion's view of its package, read from the environment cargo compiles it in, then wired by [`wire_package`].
-fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, TokenStream2> {
+fn transpile_project(
+    invocation: Invocation,
+    theme_type_str: Option<&str>,
+) -> Result<TranspileOutput, TokenStream2> {
     check_cli_is_current()?;
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
@@ -720,11 +750,12 @@ fn transpile_project(theme_type_str: Option<&str>) -> Result<TranspileOutput, To
         std::env::var("CARGO_PKG_NAME").unwrap_or_default(),
         std::env::var_os("CARGO_PRIMARY_PACKAGE").is_some(),
         build_flavour(),
+        invocation,
         theme_type_str,
     )
 }
 
-/// Wires what `cargo telar transpile` produced for the package: every `.rsx`'s Rust as a `#[path] mod` where its file sits, the hand-written `.rs` module tree alongside it, the baked catalog and assets, and the `include_str!` triggers that re-run this on an edit. Nothing is re-exported: a component is reached by the path its file spells. Shared by `app!`, which then adds the runner, and `rsx_modules!`, which wires only. `Err` carries a `compile_error!` stream to emit.
+/// Wires what `cargo telar transpile` produced for the package: every `.rsx`'s Rust as a `#[path] mod` where its file sits, the hand-written `.rs` module tree alongside it, the baked catalog — installed as the process's when the package is an application — and assets, and the `include_str!` triggers that re-run this on an edit. Nothing is re-exported: a component is reached by the path its file spells. Shared by `app!`, which then adds the runner, and `rsx_modules!`, which wires only. `Err` carries a `compile_error!` stream to emit.
 ///
 /// Reads and never writes. The CLI produces every file this names, and it checks each against the sources before wiring it, so the package directory can be a registry copy no build may modify.
 fn wire_package(
@@ -732,6 +763,7 @@ fn wire_package(
     name: String,
     primary: bool,
     requested: telar_project::BuildFlavour,
+    invocation: Invocation,
     theme_type_str: Option<&str>,
 ) -> Result<TranspileOutput, TokenStream2> {
     // Before anything reads a setting out of it: every reader below falls back to a default on a manifest it cannot parse, which is right for them and wrong as the only answer — a misspelled key would configure nothing and say nothing.
@@ -841,6 +873,10 @@ fn wire_package(
             #[allow(clippy::duplicate_mod)]
             pub mod #mod_ident;
         });
+        // A library's strings are the ones an application overrides: installed in the application's place, its catalog would hide the application's. An empty catalog is an application with no `locales/`, which has nothing to install.
+        if !manifest.telar.library && !catalog.is_empty() {
+            include_stmts.extend(catalog_install(invocation, &mod_ident));
+        }
     }
     if let Some(index_file) = catalog.index_file() {
         let path_str = index_file.to_string_lossy().to_string();
@@ -884,6 +920,8 @@ fn wire_package(
 }
 
 /// Transpile every `.rsx` file under `src/` and declare the module tree — what `app!` does, minus the winit runner. Use this in a crate that drives rsx through a **custom** `Platform` (e.g. a Wayland layer-shell backend) instead of the built-in desktop runner: invoke `telar::rsx_modules!()` at the crate root, then build your own `App` from the transpiled components and run it via `telar::run_with_platform` / `telar::run_multi_with_platform`. Pass a theme type — `rsx_modules!(MyTheme)` — if your `.rsx` calls `use_theme`; otherwise `rsx_modules!()`, which is also the only form a `[telar] library` may use: its `$theme` reads the shared `ThemeTokens`.
+///
+/// In an application crate it also installs the catalog the crate baked as the binary loads, unless one is installed already, so the one `app!` installs wins over it; a `[telar] library` never installs its own.
 #[proc_macro]
 pub fn rsx_modules(input: TokenStream) -> TokenStream {
     let theme_type_str = if input.is_empty() {
@@ -901,7 +939,7 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
         rerun_stmts,
         preview_const_idents,
         flavour,
-    } = match transpile_project(theme_type_str.as_deref()) {
+    } = match transpile_project(Invocation::Modules, theme_type_str.as_deref()) {
         Ok(o) => o,
         Err(err) => return err.into(),
     };

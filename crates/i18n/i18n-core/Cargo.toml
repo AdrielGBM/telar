@@ -11,6 +11,10 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [[test]]
+name = "installed_if_unset"
+path = "src/installed_if_unset_test.rs"
+
+[[test]]
 name = "override_installed"
 path = "src/override_installed_test.rs"
 

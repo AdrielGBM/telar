@@ -119,6 +119,9 @@ pub use direction::follow_locale_direction;
 pub use i18n_core as i18n;
 // App lifecycle, like `set_locale`, so it belongs at the root. Its lookup `i18n::t` is deliberately not re-exported: `t` here is already the `t!` macro, and a second `t` resolving at runtime would be unreadable.
 pub use i18n_core::set_catalog;
+// Named by the load-time constructor `app!` and `rsx_modules!` emit to install an application's baked catalog, so an application needs no `ctor` dependency of its own.
+#[doc(hidden)]
+pub use ctor as __ctor;
 pub use i18n_core::{current_locale, negotiate_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
 pub use platform_core::{

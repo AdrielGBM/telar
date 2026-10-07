@@ -382,6 +382,8 @@ serde_json = { workspace = true, optional = true }
 toml = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 web-time = { workspace = true }
+# Always on: `app!` and `rsx_modules!` install an application's baked catalog as its binary loads, before any runner, test or hot-reload factory runs.
+ctor = { version = "0.10.1", default-features = false }
 
 
 # Excludes wasm as well as Android: `not(target_os = "android")` is true on wasm32, which would drag winit

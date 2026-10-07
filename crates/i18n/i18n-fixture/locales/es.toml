@@ -6,3 +6,6 @@ overview = "Resumen"
 [items]
 one = "{count} elemento"
 other = "{count} elementos"
+
+[telar_components]
+close = "Descartar"

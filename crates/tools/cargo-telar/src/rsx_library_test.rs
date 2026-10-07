@@ -1,6 +1,6 @@
 //! The end-to-end proof that a `[telar] library` builds from the package it publishes: `plugins/telar-rsx-fixture` passes `cargo telar package --check`, is packaged by cargo, unpacked read-only, and compiled as a dependency of a generated application that the CLI transpiles while never running on the library.
 //!
-//! The application overrides one of the library's strings, names a theme of its own and draws the library's component headlessly, once with the Plain flavour and once with the features `cargo telar dev` and `cargo telar preview` turn on. Afterwards the unpacked library has to be byte-for-byte what cargo packaged.
+//! The application overrides one of the library's strings from a catalog it never installs by hand, names a theme of its own and draws the library's component headlessly, once with the Plain flavour and once with the features `cargo telar dev` and `cargo telar preview` turn on. Afterwards the unpacked library has to be byte-for-byte what cargo packaged.
 //!
 //! It compiles a few hundred crates into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p cargo-telar --test rsx_library -- --ignored`. Every cargo it starts runs offline, so the registry has to hold what `Cargo.lock` names first (`cargo fetch`).
 
@@ -315,7 +315,6 @@ fn render() -> ComponentList {
 #[test]
 fn the_library_component_draws_with_the_application_catalog_and_theme() {
     telar::set_theme(ConsumerTheme::new());
-    telar::set_catalog(&crate::__rsx_i18n::CATALOG);
 
     telar::set_locale("en");
     let tree = render();
