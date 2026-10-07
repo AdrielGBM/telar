@@ -78,6 +78,7 @@
               # has nowhere to run the module.
               pkgs.chromedriver
               pkgs.ungoogled-chromium
+              pkgs.jq
             ];
             buildInputs = desktopDeps;
             ANDROID_HOME = "${androidSdk}/libexec/android-sdk";

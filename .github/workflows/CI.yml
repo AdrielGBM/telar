@@ -20,6 +20,7 @@ jobs:
       # macro emits an error naming this command instead. It bakes on the way through, so a `src:"…"` asset
       # still resolves against an artifact that is there before anything reads it.
       - run: cargo run -q -p cargo-telar -- transpile
+      - run: .github/scripts/check-layering.sh
       # Not `-D warnings`: the tree carries 247 of them today. This catches the `deny`-level lints, which is
       # what went unnoticed for two days when a `never_loop` in `telar-macros` stopped clippy reaching
       # anything downstream of it.
