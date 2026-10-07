@@ -120,6 +120,7 @@ pub enum Event {
         key: Key,
         modifiers: ModifiersState,
     },
+    /// A key coming up. `key` is the one its press reported, not what the layout would make of the physical key under the modifiers held now: a backend with a physical key to go on pairs the two through [`KeyPairing`](crate::KeyPairing).
     KeyReleased {
         key: Key,
         modifiers: ModifiersState,

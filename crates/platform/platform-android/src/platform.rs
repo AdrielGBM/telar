@@ -2,7 +2,8 @@
 
 use android_activity::AndroidApp;
 use platform_core::{
-    Event, EventHandler, Platform, PlatformError, SystemPreferences, Window, WindowConfig,
+    Event, EventHandler, KeyPairing, Platform, PlatformError, SystemPreferences, Window,
+    WindowConfig,
 };
 
 // `ANativeWindow_setFrameRate` is API 30+ and may live in libnativewindow.so on some OEM devices, so it is resolved at runtime to avoid a hard dlopen failure where the NDK stub does not match the runtime library.
@@ -148,6 +149,7 @@ mod choreographer {
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::keyboard::PhysicalKey;
 use winit::platform::android::EventLoopBuilderExtAndroid;
 use winit::window::{WindowAttributes, WindowId};
 
@@ -194,6 +196,7 @@ struct AndroidRunner<H: EventHandler<AndroidWindow>> {
     cursor_position: (f64, f64),
     // Last position of an active touch finger, used to emit Scrolled deltas from drag gestures.
     touch: TouchDrag,
+    keys: KeyPairing<PhysicalKey>,
     app: AndroidApp,
     // The snapshot last reported to the app, so a poll only produces an event when something actually changed.
     preferences: Option<SystemPreferences>,
@@ -343,6 +346,7 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
             &mut self.scale_factor,
             &mut self.modifiers,
             &mut self.touch,
+            &mut self.keys,
         ) {
             SurfaceIntent::Event(e) => self.handler.on_event(e, &window),
             SurfaceIntent::Dragged(scrolled, moved) => {
@@ -401,6 +405,7 @@ impl Platform for AndroidPlatform {
             modifiers: platform_core::ModifiersState::default(),
             cursor_position: (0.0, 0.0),
             touch: TouchDrag::default(),
+            keys: KeyPairing::default(),
             app: self.app,
             preferences: None,
             safe_area: None,

@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 
 use platform_core::{
-    Event, EventHandler, Key, NamedKey, Platform, PlatformError, Window, WindowConfig,
+    Event, EventHandler, Key, KeyPairing, NamedKey, Platform, PlatformError, Window, WindowConfig,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -21,6 +21,8 @@ thread_local! {
     static PRESSED: std::cell::Cell<Option<(i32, f32, f32)>> = const { std::cell::Cell::new(None) };
     // The safe area last reported, so a resize that leaves it where it was reports nothing.
     static SAFE_AREA: std::cell::Cell<Option<geometry_core::Insets>> = const { std::cell::Cell::new(None) };
+    // The key each physical key (its DOM `code`) went down as, so its `keyup` names that key whatever the layout reads it as by then.
+    static KEYS: RefCell<KeyPairing<String>> = RefCell::new(KeyPairing::default());
 }
 
 struct Frame {
@@ -322,6 +324,9 @@ fn install_listeners(
             {
                 return;
             }
+            if !focused {
+                KEYS.with(|keys| keys.borrow_mut().clear());
+            }
             push([Event::FocusChanged {
                 is_focused: focused,
             }]);
@@ -439,7 +444,16 @@ fn on_pointer(
 
 fn on_key(pressed: bool, owns_keyboard: bool, event: &web_sys::KeyboardEvent) {
     let modifiers = map::key_modifiers(event);
-    let Some(key) = map::key_of(&event.key()) else {
+    let read = map::key_of(&event.key());
+    let code = event.code();
+    let paired = KEYS.with(|keys| {
+        let mut keys = keys.borrow_mut();
+        match pressed {
+            true => read.map(|key| keys.press(code, key)),
+            false => keys.release(&code, read),
+        }
+    });
+    let Some(key) = paired else {
         return;
     };
     let kept = if owns_keyboard {

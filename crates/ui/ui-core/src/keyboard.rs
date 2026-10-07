@@ -66,6 +66,8 @@ pub fn modifiers() -> ModifiersState {
 }
 
 /// Whether `key` is down right now, however long it has been down.
+///
+/// A release lets go of the key its press reported, which the backend pairs by physical key ([`platform_core::KeyPairing`]), so a `\` typed through `AltGr` comes up with its key even when `AltGr` came up first. Losing the window's focus lets go of everything.
 pub fn key_held(key: &Key) -> bool {
     KEYBOARD.with(|k| k.borrow().held.contains(key))
 }

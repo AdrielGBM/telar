@@ -15,6 +15,7 @@ pub mod event_sink;
 #[cfg(feature = "dylib")]
 pub mod guest;
 pub mod history;
+pub mod key_pairing;
 pub mod location_format;
 pub mod location_source;
 pub mod loop_waker;
@@ -41,6 +42,7 @@ pub use history::{
     receive_location_history, rename_anchor, replace_location, report_location_history,
     rewrite_location_history, set_anchor_revealer, set_location_locale, unfollow_location_history,
 };
+pub use key_pairing::KeyPairing;
 pub use location_format::{LocationFormat, location_format, set_location_format};
 pub use location_source::{
     ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, LocationSource,

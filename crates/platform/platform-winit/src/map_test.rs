@@ -39,6 +39,7 @@ fn map_alone(event: WindowEvent) -> SurfaceIntent {
         &mut 1.0,
         &mut platform_core::ModifiersState::default(),
         &mut TouchDrag::default(),
+        &mut KeyPairing::default(),
     )
 }
 
@@ -77,4 +78,71 @@ fn the_menu_key_maps() {
         ),
         Some(Key::Named(NamedKey::ContextMenu))
     );
+}
+
+fn released_as(intent: SurfaceIntent) -> Option<Key> {
+    match intent {
+        SurfaceIntent::Event(Event::KeyReleased { key, .. }) => Some(key),
+        _ => None,
+    }
+}
+
+/// `AltGr` let go before the key it modified: the layout reads the release as the key's plain level, and the release still names the `\` that went down.
+#[test]
+fn a_release_names_the_key_its_physical_press_produced() {
+    let mut keys = KeyPairing::default();
+    let backslash = PhysicalKey::Code(winit::keyboard::KeyCode::Backquote);
+    let modifiers = platform_core::ModifiersState::default();
+    assert!(matches!(
+        paired_key_event(
+            &mut keys,
+            backslash,
+            ElementState::Pressed,
+            Some(Key::Char('\\')),
+            modifiers
+        ),
+        SurfaceIntent::Event(Event::KeyPressed {
+            key: Key::Char('\\'),
+            ..
+        })
+    ));
+    let released = paired_key_event(
+        &mut keys,
+        backslash,
+        ElementState::Released,
+        Some(Key::Char('º')),
+        modifiers,
+    );
+    assert_eq!(released_as(released), Some(Key::Char('\\')));
+}
+
+/// A window that loses the keyboard never hears the releases, so what it remembers as down is forgotten with it.
+#[test]
+fn losing_focus_forgets_what_was_down() {
+    let mut keys = KeyPairing::default();
+    let backslash = PhysicalKey::Code(winit::keyboard::KeyCode::Backquote);
+    let modifiers = platform_core::ModifiersState::default();
+    paired_key_event(
+        &mut keys,
+        backslash,
+        ElementState::Pressed,
+        Some(Key::Char('\\')),
+        modifiers,
+    );
+    map_window_event(
+        WindowEvent::Focused(false),
+        &mut (0.0, 0.0),
+        &mut 1.0,
+        &mut platform_core::ModifiersState::default(),
+        &mut TouchDrag::default(),
+        &mut keys,
+    );
+    let released = paired_key_event(
+        &mut keys,
+        backslash,
+        ElementState::Released,
+        Some(Key::Char('º')),
+        modifiers,
+    );
+    assert_eq!(released_as(released), Some(Key::Char('º')));
 }

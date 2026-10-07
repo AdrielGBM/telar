@@ -91,3 +91,34 @@ fn losing_focus_forgets_what_was_held() {
     assert!(!key_held(&up()), "losing focus releases the key");
     assert!(!modifiers().is_shift, "and clears the modifier with it");
 }
+
+/// `AltGr` let go before the key it modified: the layout reads that key's release as its plain level, `º`, and only the physical key pairs it with the `\` its press produced — which is what a backend's [`platform_core::KeyPairing`] is for.
+#[test]
+fn a_key_typed_through_altgr_comes_up_when_its_physical_key_does() {
+    fresh();
+    let backslash_key = 41_u32;
+    let altgr = ModifiersState {
+        is_alt: true,
+        ..ModifiersState::default()
+    };
+    let mut pairing = platform_core::KeyPairing::default();
+    observe(&Event::ModifiersChanged { modifiers: altgr });
+    observe(&Event::KeyPressed {
+        key: pairing.press(backslash_key, Key::Char('\\')),
+        modifiers: altgr,
+    });
+    assert!(key_held(&Key::Char('\\')));
+
+    observe(&Event::ModifiersChanged {
+        modifiers: ModifiersState::default(),
+    });
+    let released = pairing
+        .release(&backslash_key, Some(Key::Char('º')))
+        .expect("the press was seen");
+    observe(&Event::KeyReleased {
+        key: released,
+        modifiers: ModifiersState::default(),
+    });
+    assert!(!key_held(&Key::Char('\\')), "the backslash came up");
+    assert!(!key_held(&Key::Char('º')), "and nothing else went down");
+}

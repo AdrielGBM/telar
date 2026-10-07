@@ -1,9 +1,9 @@
 //! Translating winit's events into Telar's, and the input state that translation needs.
 
-use platform_core::{Event, PointerButton, PointerSource, ScrollDelta};
+use platform_core::{Event, KeyPairing, PointerButton, PointerSource, ScrollDelta};
 use winit::event::{ElementState, MouseScrollDelta, Touch, TouchPhase, WindowEvent};
 use winit::event::{Modifiers, MouseButton as WinitMouseButton};
-use winit::keyboard::{Key as WinitKey, KeyLocation, NamedKey as WinitNamedKey};
+use winit::keyboard::{Key as WinitKey, KeyLocation, NamedKey as WinitNamedKey, PhysicalKey};
 
 /// Translates a winit logical key into a [`platform_core::Key`], resolving the keypad from `location`.
 ///
@@ -180,6 +180,7 @@ pub fn map_window_event(
     scale_factor: &mut f64,
     modifiers: &mut platform_core::ModifiersState,
     touch: &mut TouchDrag,
+    keys: &mut KeyPairing<PhysicalKey>,
 ) -> SurfaceIntent {
     match event {
         WindowEvent::CloseRequested => SurfaceIntent::Close(Event::WindowCloseRequested),
@@ -268,6 +269,9 @@ pub fn map_window_event(
             }
         }
         WindowEvent::Focused(is_focused) => {
+            if !is_focused {
+                keys.clear();
+            }
             SurfaceIntent::Event(Event::FocusChanged { is_focused })
         }
         WindowEvent::CursorEntered { .. } => SurfaceIntent::Event(Event::CursorEntered),
@@ -314,25 +318,36 @@ pub fn map_window_event(
         {
             back_on_press(event.state)
         }
-        WindowEvent::KeyboardInput { event, .. } => {
-            let Some(key) = crate::map_key(&event.logical_key, event.location) else {
-                return SurfaceIntent::Ignore;
-            };
-            let mods = *modifiers;
-            SurfaceIntent::Event(match event.state {
-                ElementState::Pressed => Event::KeyPressed {
-                    key,
-                    modifiers: mods,
-                },
-                ElementState::Released => Event::KeyReleased {
-                    key,
-                    modifiers: mods,
-                },
-            })
-        }
+        WindowEvent::KeyboardInput { event, .. } => paired_key_event(
+            keys,
+            event.physical_key,
+            event.state,
+            crate::map_key(&event.logical_key, event.location),
+            *modifiers,
+        ),
         WindowEvent::ThemeChanged(_) => SurfaceIntent::RereadPreferences,
         _ => SurfaceIntent::Ignore,
     }
+}
+
+/// A key going down or coming up, the release naming the key its press reported however the layout reads it now; see [`KeyPairing`].
+fn paired_key_event(
+    keys: &mut KeyPairing<PhysicalKey>,
+    physical: PhysicalKey,
+    state: ElementState,
+    key: Option<platform_core::Key>,
+    modifiers: platform_core::ModifiersState,
+) -> SurfaceIntent {
+    let event = match state {
+        ElementState::Pressed => key.map(|key| Event::KeyPressed {
+            key: keys.press(physical, key),
+            modifiers,
+        }),
+        ElementState::Released => keys
+            .release(&physical, key)
+            .map(|key| Event::KeyReleased { key, modifiers }),
+    };
+    event.map_or(SurfaceIntent::Ignore, SurfaceIntent::Event)
 }
 
 // On the press, so it answers as soon as the button goes down; the release carries nothing.

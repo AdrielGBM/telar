@@ -4,12 +4,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use platform_core::{
-    Event, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, PlatformError, SurfaceId,
-    SystemPreferences, Window, WindowConfig, WindowPosition,
+    Event, EventHandler, FullscreenMode, KeyPairing, MultiSurfacePlatform, Platform, PlatformError,
+    SurfaceId, SystemPreferences, Window, WindowConfig, WindowPosition,
 };
 use winit::application::ApplicationHandler;
 use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::keyboard::PhysicalKey;
 use winit::window::{Fullscreen, WindowAttributes, WindowId, WindowLevel};
 
 use platform_winit::{SurfaceIntent, TouchDrag, WinitWindow, map_window_event};
@@ -59,6 +60,7 @@ struct WinitRunner<H: EventHandler<WinitWindow>> {
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
     touch: TouchDrag,
+    keys: KeyPairing<PhysicalKey>,
     // True only on `WaitUntil` timer expiry, so keepalive redraws do not fire on every event-queue drain.
     timer_has_fired: bool,
     preferences: PreferencesTracker,
@@ -198,15 +200,15 @@ impl<H: EventHandler<WinitWindow>> ApplicationHandler<UserEvent> for WinitRunner
         }
         #[cfg(feature = "a11y")]
         let redrawn = matches!(event, WindowEvent::RedrawRequested);
-        let outcome = dispatch_window_event(
-            &mut self.handler,
-            &window,
+        let intent = map_window_event(
+            event,
             &mut self.cursor_position,
             &mut self.scale_factor,
             &mut self.modifiers,
             &mut self.touch,
-            event,
+            &mut self.keys,
         );
+        let outcome = dispatch_intent(&mut self.handler, &window, intent);
         // After the frame rather than before, so what is announced is the frame that was drawn.
         #[cfg(feature = "a11y")]
         if redrawn {
@@ -276,16 +278,12 @@ fn create_window_from_config(
 }
 
 // Returns whether the surface requested close.
-fn dispatch_window_event<H: EventHandler<WinitWindow>>(
+fn dispatch_intent<H: EventHandler<WinitWindow>>(
     handler: &mut H,
     window: &WinitWindow,
-    cursor_position: &mut (f64, f64),
-    scale_factor: &mut f64,
-    modifiers: &mut platform_core::ModifiersState,
-    touch: &mut TouchDrag,
-    event: WindowEvent,
+    intent: SurfaceIntent,
 ) -> WindowEventOutcome {
-    match map_window_event(event, cursor_position, scale_factor, modifiers, touch) {
+    match intent {
         SurfaceIntent::Event(e) => handler.on_event(e, window),
         SurfaceIntent::RereadPreferences => return WindowEventOutcome::PreferencesStale,
         SurfaceIntent::Dragged(scrolled, moved) => {
@@ -326,6 +324,7 @@ impl Platform for WinitPlatform {
             scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
             touch: TouchDrag::default(),
+            keys: KeyPairing::default(),
             timer_has_fired: false,
             preferences: PreferencesTracker::default(),
             #[cfg(feature = "a11y")]
@@ -411,6 +410,7 @@ struct SurfaceRunner {
     scale_factor: f64,
     modifiers: platform_core::ModifiersState,
     touch: TouchDrag,
+    keys: KeyPairing<PhysicalKey>,
     pace: Option<std::time::Duration>,
     // `None` for a statically declared surface; `Some` for one opened via `open_surface`.
     close_flag: Option<Arc<std::sync::atomic::AtomicBool>>,
@@ -521,6 +521,7 @@ impl WinitMultiRunner {
             scale_factor: 1.0,
             modifiers: platform_core::ModifiersState::default(),
             touch: TouchDrag::default(),
+            keys: KeyPairing::default(),
             pace: None,
             close_flag,
             resumed: false,
@@ -702,15 +703,15 @@ impl ApplicationHandler<UserEvent> for WinitMultiRunner {
         surface.handler.new_events();
         // A widget handler, render or effect panic unmounts just this surface. `about_to_wait` is guarded separately so it always runs and the reactive batch stays balanced. Under `panic=unwind` only.
         let dispatched = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            dispatch_window_event(
-                &mut surface.handler,
-                &window,
+            let intent = map_window_event(
+                event,
                 &mut surface.cursor_position,
                 &mut surface.scale_factor,
                 &mut surface.modifiers,
                 &mut surface.touch,
-                event,
-            )
+                &mut surface.keys,
+            );
+            dispatch_intent(&mut surface.handler, &window, intent)
         }));
         let paced = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             surface.handler.about_to_wait()
