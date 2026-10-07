@@ -4,8 +4,8 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender};
@@ -41,6 +41,46 @@ pub fn install_tracing() {
 /// How long the handshake may take before startup is called a failure. Generous: it only covers rust-analyzer answering `initialize`, which precedes any workspace loading.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// rust-analyzer garbage-collects the types it interns, and their storage is process-wide: a collection frees whatever its own database no longer reaches, on the promise that no other database is in the process. Two sessions at once free each other's types mid-query, so they take turns.
+static SESSIONS: Turnstile = Turnstile::new();
+
+/// Lets one holder through at a time. The [`Turn`] it hands out is owned rather than borrowed from a lock guard, so it can move to the thread whose end releases it.
+struct Turnstile {
+    taken: Mutex<bool>,
+    freed: Condvar,
+}
+
+impl Turnstile {
+    const fn new() -> Self {
+        Self {
+            taken: Mutex::new(false),
+            freed: Condvar::new(),
+        }
+    }
+
+    /// Blocks until no other [`Turn`] is held, then takes one.
+    fn enter(&'static self) -> Turn {
+        let mut taken = self.taken.lock().unwrap_or_else(PoisonError::into_inner);
+        while *taken {
+            taken = self
+                .freed
+                .wait(taken)
+                .unwrap_or_else(PoisonError::into_inner);
+        }
+        *taken = true;
+        Turn(self)
+    }
+}
+
+struct Turn(&'static Turnstile);
+
+impl Drop for Turn {
+    fn drop(&mut self) {
+        *self.0.taken.lock().unwrap_or_else(PoisonError::into_inner) = false;
+        self.0.freed.notify_one();
+    }
+}
+
 enum Waiting {
     /// A query the `.rsx` side asked; the answer goes back to the awaiting task.
     Ours(oneshot::Sender<Value>),
@@ -48,9 +88,9 @@ enum Waiting {
     Editor(Value),
 }
 
-type Pending = Arc<std::sync::Mutex<HashMap<RequestId, Waiting>>>;
+type Pending = Arc<Mutex<HashMap<RequestId, Waiting>>>;
 /// Requests rust-analyzer sent to the client, relayed onward under an id of ours: maps that id back to the one rust-analyzer is waiting on.
-type Relayed = Arc<std::sync::Mutex<HashMap<i32, RequestId>>>;
+type Relayed = Arc<Mutex<HashMap<i32, RequestId>>>;
 
 /// What rust-analyzer has been told a file contains: the document version it was sent under, and the text, so an unchanged buffer is not resent and a temporary edit can be put back.
 struct Synced {
@@ -63,13 +103,15 @@ pub struct Inner {
     pending: Pending,
     relayed: Relayed,
     next_id: Arc<AtomicI32>,
-    synced: std::sync::Mutex<HashMap<PathBuf, Synced>>,
+    synced: Mutex<HashMap<PathBuf, Synced>>,
     /// rust-analyzer's own `initialize` result, so the editor is offered what it can do for `.rs` alongside what we do for `.rsx`.
     capabilities: Value,
 }
 
 impl Inner {
     /// Boots rust-analyzer against the cargo workspace at `root` and completes the LSP handshake, passing the editor's own `initializationOptions` and capabilities through so the user's `rust-analyzer.*` settings and their client's real abilities are the ones that apply. Blocking and slow enough to keep off the runtime thread; the workspace load it kicks off continues in the background.
+    ///
+    /// Waits first for any other session in the process to have wound down, since two cannot share one (see [`SESSIONS`]).
     pub fn start(
         root: &Path,
         options: Value,
@@ -78,9 +120,14 @@ impl Inner {
     ) -> anyhow::Result<Self> {
         let (ra_side, our_side) = Connection::memory();
         let abs = AbsPathBuf::assert_utf8(root.to_path_buf());
+        let turn = SESSIONS.enter();
         std::thread::Builder::new()
             .name("rust-analyzer".to_owned())
-            .spawn(move || run_server(ra_side, abs))?;
+            .spawn(move || {
+                // Released only once `run_server` returns: rust-analyzer's teardown cancels every query still running on its database and waits for each to let go, so after that nothing of this session can reach an interned type.
+                let _turn = turn;
+                run_server(ra_side, abs)
+            })?;
 
         let Connection { sender, receiver } = our_side;
         let capabilities = handshake(&sender, &receiver, root, options, &editor_caps)?;
@@ -102,7 +149,7 @@ impl Inner {
             pending,
             relayed,
             next_id,
-            synced: std::sync::Mutex::default(),
+            synced: Mutex::default(),
             capabilities,
         })
     }
@@ -247,6 +294,15 @@ impl Inner {
                 params,
             }))
             .is_ok()
+    }
+}
+
+impl Drop for Inner {
+    /// Ends the session the way an editor does, so rust-analyzer stops its checks and proc-macro server and returns cleanly rather than reporting a client that vanished.
+    fn drop(&mut self) {
+        let id = self.claim_id();
+        self.send_request(&id, "shutdown", Value::Null);
+        self.notify("exit", Value::Null);
     }
 }
 

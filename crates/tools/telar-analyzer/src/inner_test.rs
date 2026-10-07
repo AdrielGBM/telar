@@ -162,3 +162,25 @@ async fn completion_answers_from_the_overlay_rather_than_from_disk() {
         "the test must never write the in-flight text to disk"
     );
 }
+
+#[test]
+fn a_turnstile_lets_one_holder_through_at_a_time() {
+    static GATE: Turnstile = Turnstile::new();
+    let first = GATE.enter();
+    let (entered, waiting) = std::sync::mpsc::channel();
+    let second = std::thread::spawn(move || {
+        let _turn = GATE.enter();
+        entered.send(()).unwrap();
+    });
+
+    assert!(
+        waiting.recv_timeout(Duration::from_millis(200)).is_err(),
+        "a second holder got through while the first still held its turn"
+    );
+    drop(first);
+    assert!(
+        waiting.recv_timeout(Duration::from_secs(10)).is_ok(),
+        "the turn was never passed on"
+    );
+    second.join().unwrap();
+}
