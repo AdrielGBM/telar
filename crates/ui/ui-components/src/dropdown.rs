@@ -14,6 +14,7 @@ use ui_core::{
     Children, Container, LayoutItem, Overlay, ReactiveList, StyledContainer, Text, box_item,
     track_layout,
 };
+use ui_core::{SurfaceStyle, amend_surface};
 
 use crate::shared;
 
@@ -68,7 +69,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         caret: with_caret,
         style: surface,
     } = props;
-    let surface: shared::SurfaceStyle = surface;
+    let surface: SurfaceStyle = surface;
     let open = signal(false);
     let dismiss_open = open;
     // Not the same as what is selected: a bound `select` opens with its value under the cursor, and moving off it must not commit anything.
@@ -112,7 +113,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     let trigger_style = {
         let color = color.clone();
         let surface = surface.clone();
-        move |_r: Rect| shared::amend(trigger_rect_style(&color, bordered), &surface)
+        move |_r: Rect| amend_surface(trigger_rect_style(&color, bordered), &surface)
     };
     // Key events are broadcast, so without this a bare Enter would open every dropdown on the page.
     let trigger_focused = signal(false);

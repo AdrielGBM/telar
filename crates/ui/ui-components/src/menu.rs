@@ -40,7 +40,7 @@ pub struct MenuProps {
     /// Show the caret that says the trigger opens something. On by default.
     #[props(default = true)]
     pub caret: bool,
-    /// Amends the paint of the trigger — this component's **principal surface**, the thing a caller means when they point at a menu. See `shared::SurfaceStyle` for why it takes the finished style rather than naming one property, and for when a theme token is the right instrument instead.
+    /// Amends the paint of the trigger — this component's **principal surface**, the thing a caller means when they point at a menu. See [`ui_core::SurfaceStyle`] for why it takes the finished style rather than naming one property, and for when a theme token is the right instrument instead.
     #[props(some, default)]
     pub style: Option<Rc<dyn Fn(renderer_core::RectStyle) -> renderer_core::RectStyle>>,
 }

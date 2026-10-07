@@ -60,6 +60,7 @@ mod styled_container;
 mod surface;
 mod surface_context;
 mod surface_font;
+mod surface_style;
 mod surface_title;
 #[cfg(feature = "svg")]
 mod svg;
@@ -144,6 +145,7 @@ pub use styled_container::{KeyAnswer, StyledContainer, box_transform, style_foll
 pub use surface::{DEFAULT_SCRIM, Edge, SurfaceScaffold, SurfaceTransition};
 pub use surface_context::{Surface, SurfaceGuard};
 pub use surface_font::{open_surface_font_family, set_font_family, use_font_family};
+pub use surface_style::{SurfaceStyle, amend_surface};
 pub use surface_title::{
     TitleParts, compose_title, open_surface_title, set_app_title, set_page_title, set_title_format,
     surface_title, use_surface_title,

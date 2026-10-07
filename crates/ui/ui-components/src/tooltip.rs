@@ -9,8 +9,8 @@ use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle, TextW
 #[cfg(test)]
 use ui_core::Slots;
 use ui_core::{
-    Children, Container, LayoutItem, Overlay, Placement, ReactiveList, StyledContainer, Text,
-    box_item,
+    Children, Container, LayoutItem, Overlay, Placement, ReactiveList, StyledContainer,
+    SurfaceStyle, Text, amend_surface, box_item,
 };
 
 use crate::shared;
@@ -57,7 +57,7 @@ pub struct TooltipProps {
     /// Bubble surface colour. `Color::TRANSPARENT` (the default) means "unset" -> `DEFAULT_BUBBLE`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
-    /// Amends the paint of the bubble — this component's **principal surface**, the thing a caller means when they point at a tooltip. See `shared::SurfaceStyle` for why it takes the finished style rather than naming one property, and for when a theme token is the right instrument instead.
+    /// Amends the paint of the bubble — this component's **principal surface**, the thing a caller means when they point at a tooltip. See [`ui_core::SurfaceStyle`] for why it takes the finished style rather than naming one property, and for when a theme token is the right instrument instead.
     #[props(some, default)]
     pub style: Option<Rc<dyn Fn(RectStyle) -> RectStyle>>,
     /// Let the trigger take the space its parent offers instead of hugging its content.
@@ -105,7 +105,7 @@ pub fn tooltip(
     let trigger_node = trigger.layout_node();
 
     // The bubble is a fresh `text` each hover, with no slot children to preserve, so keying on `hovered` mounts and disposes the anchored overlay like a reactive `if`. Both closures are re-erased to `Rc` so each remount can clone them into a fresh bubble.
-    let style: shared::SurfaceStyle = style;
+    let style: SurfaceStyle = style;
     let key_hovered = hovered;
     let bubble = ReactiveList::new(
         move || vec![key_hovered.get()],
@@ -147,7 +147,7 @@ pub fn tooltip(
 fn build_bubble(
     content: Content,
     color: Reactive<Color>,
-    style: shared::SurfaceStyle,
+    style: SurfaceStyle,
     placement: Placement,
     trigger_node: ui_core::NodeId,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -162,7 +162,7 @@ fn build_bubble(
     let chip = StyledContainer::new(
         bubble(),
         move |_r| {
-            shared::amend(
+            amend_surface(
                 RectStyle::default()
                     .with_fill(shared::resolve(&color, || DEFAULT_BUBBLE))
                     .with_radius(BorderRadius::all(bubble_radius())),

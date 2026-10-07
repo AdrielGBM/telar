@@ -283,6 +283,8 @@ pub use ui_core::{
 };
 // The family a surface's text shapes in where nothing above it names one: seeded from `AppConfig::font_family`, changed live with `set_font_family`.
 #[cfg(feature = "runtime")]
+pub use ui_core::{SurfaceStyle, amend_surface};
+#[cfg(feature = "runtime")]
 pub use ui_core::{open_surface_font_family, set_font_family, use_font_family};
 // The seam and nothing behind it: `telar-dynamic` carries the decoders and transports that plug in here, and an application's own plug in exactly the same way.
 #[cfg(feature = "runtime")]
