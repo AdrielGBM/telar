@@ -396,14 +396,16 @@ fn anchored_content_tracks_trigger() {
     let tree = ComponentList::new(root);
     let _ = tree.commands();
 
-    let trigger = signal(Rect::new(50.0, 20.0, 80.0, 30.0));
+    let (node, trigger) = crate::context::new_leaf(LayoutStyle::new()).unwrap();
+    trigger.set(Rect::new(50.0, 20.0, 80.0, 30.0));
     let panel = Container::new(LayoutStyle::new().width(120.0).height(60.0), vec![]).unwrap();
     let overlay = Overlay::build(
         LayoutStyle::new(),
         vec![Box::new(panel)],
         true,
         Some(Anchor {
-            trigger,
+            trigger: node,
+            laid: trigger,
             placement: Placement::Below,
         }),
         Rc::new(|| true),

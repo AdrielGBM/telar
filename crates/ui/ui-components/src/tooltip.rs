@@ -10,7 +10,7 @@ use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle, TextStyle, TextW
 use ui_core::Slots;
 use ui_core::{
     Children, Container, LayoutItem, Overlay, Placement, ReactiveList, StyledContainer, Text,
-    box_item, track_layout,
+    box_item,
 };
 
 use crate::shared;
@@ -103,8 +103,6 @@ pub fn tooltip(
     let trigger = StyledContainer::new(trigger_style, |_r| RectStyle::default(), trigger_content)?
         .on_hover(move |over| hover_sink.set(over));
     let trigger_node = trigger.layout_node();
-    // A fresh runtime handle, not the borrowed `ctx`: the anchored overlay reads it to position the bubble.
-    let trigger_rect = track_layout(trigger_node).expect("trigger container is registered");
 
     // The bubble is a fresh `text` each hover, with no slot children to preserve, so keying on `hovered` mounts and disposes the anchored overlay like a reactive `if`. Both closures are re-erased to `Rc` so each remount can clone them into a fresh bubble.
     let style: shared::SurfaceStyle = style;
@@ -129,7 +127,6 @@ pub fn tooltip(
                 style.clone(),
                 placement,
                 trigger_node,
-                trigger_rect,
             )
         },
         0.0,
@@ -146,16 +143,14 @@ pub fn tooltip(
     )?))
 }
 
-/// Builds the bubble for the hovered state: a padded rounded chip with the tooltip `text`, positioned just below the trigger (via `absolute_rect`, so it works even when the trigger is in a separately-computed sub-root) inside a NON-blocking overlay (a tooltip must not eat clicks on the page).
+/// Builds the bubble for the hovered state: a padded rounded chip with the tooltip `text`, anchored to the trigger where it is drawn, inside a NON-blocking overlay (a tooltip must not eat clicks on the page).
 fn build_bubble(
     content: Content,
     color: Reactive<Color>,
     style: shared::SurfaceStyle,
     placement: Placement,
     trigger_node: ui_core::NodeId,
-    trigger_rect: reactive_core::RwSignal<geometry_core::Rect>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let _ = trigger_node;
     // Laid out at the origin and translated to the trigger by the anchored overlay, rather than pushed there with a left margin: a margin eats the width the bubble had to lay out in, so a trigger near the right edge left it a 50px column. The translate happens after layout, when the real size is known, which is also what lets it flip and slide to stay on screen.
     let bubble = move || {
         LayoutStyle::new()
@@ -181,7 +176,7 @@ fn build_bubble(
     let overlay = Overlay::anchored_click_through(
         LayoutStyle::new().flex_row().align_items(AlignItems::START),
         vec![box_item(chip)],
-        trigger_rect,
+        trigger_node,
         placement,
     )?;
     Ok(box_item(overlay))

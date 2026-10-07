@@ -11,7 +11,7 @@ use ui_tree::{
     Component, EventResult, OverlaySink, RenderNode, register_overlay, unregister_overlay,
 };
 
-use crate::context::{attach_overlay, detach_overlay, remove_node};
+use crate::context::{attach_overlay, detach_overlay, remove_node, track_layout};
 use crate::input_region::{InputHandle, receives_input, visible_rect, withhold};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::{dispatch_container_event, offset_pointer};
@@ -36,11 +36,19 @@ pub fn anchor_rect(node: NodeId, fallback: &RwSignal<Rect>) -> Rect {
     visible_rect(node).unwrap_or_else(|| fallback.peek())
 }
 
-/// Anchors an overlay's content to a trigger widget. `trigger` is the trigger's laid-out rect (what `track_layout` returns); reading it in `view()` makes the content follow the trigger across relayouts.
+/// Anchors an overlay's content to a trigger widget, placed off the trigger's on-screen rect. `laid` is its laid-out rect (what `track_layout` returns); reading it in `view()` makes the content follow the trigger across relayouts.
 #[derive(Clone)]
 struct Anchor {
-    trigger: RwSignal<Rect>,
+    trigger: NodeId,
+    laid: RwSignal<Rect>,
     placement: Placement,
+}
+
+impl Anchor {
+    fn on_screen(&self, read: impl Fn(&RwSignal<Rect>) -> Rect) -> Rect {
+        let laid = read(&self.laid);
+        visible_rect(self.trigger).unwrap_or(laid)
+    }
 }
 
 /// The panel box: the union of the children's laid-out rects (their intrinsic size before anchoring). `read` is `peek` during event routing (untracked) and `get` inside `view()` (so the render follows layout).
@@ -117,7 +125,7 @@ fn anchored_placement(
 ) -> (Rect, (f32, f32)) {
     let panel = panel_rect(children, &read);
     let (dx, dy) = anchor_translate(
-        read(&anchor.trigger),
+        anchor.on_screen(&read),
         panel,
         anchor.placement,
         anchor_viewport(),
@@ -230,18 +238,25 @@ impl Overlay {
         Self::build(layout_style, children, true, None, Rc::new(visible))
     }
 
-    /// A portal whose content is positioned next to `trigger` (a dropdown/menu/tooltip popping up by its button) and takes no pointer: a tooltip bubble, a hint, anything that appears because the pointer is *near* it and would be dismissed by touching it. The content sizes to its intrinsic panel and is translated to the trigger's rect per `placement`.
+    /// A portal whose content is positioned next to `trigger` (a dropdown/menu/tooltip popping up by its button) and takes no pointer: a tooltip bubble, a hint, anything that appears because the pointer is *near* it and would be dismissed by touching it. The content sizes to its intrinsic panel and is translated to the trigger's rect per `placement` — the rect it is drawn at, so a trigger moved by a transform or a scroll still gets its panel beside it.
     pub fn anchored_click_through(
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
-        trigger: RwSignal<Rect>,
+        trigger: NodeId,
         placement: Placement,
     ) -> Result<Self, LayoutError> {
+        let laid = track_layout(trigger).ok_or_else(|| {
+            LayoutError::Engine("an anchored overlay's trigger has no layout node".to_string())
+        })?;
         Self::build(
             layout_style,
             children,
             false,
-            Some(Anchor { trigger, placement }),
+            Some(Anchor {
+                trigger,
+                laid,
+                placement,
+            }),
             Rc::new(|| true),
         )
     }
@@ -352,7 +367,7 @@ impl Component for Overlay {
                 // `get`, not `peek`, so the transform re-runs when the trigger or the panel's size changes.
                 let panel = panel_rect(&self.children, |s| s.get());
                 let (dx, dy) = anchor_translate(
-                    anchor.trigger.get(),
+                    anchor.on_screen(|s| s.get()),
                     panel,
                     anchor.placement,
                     anchor_viewport(),

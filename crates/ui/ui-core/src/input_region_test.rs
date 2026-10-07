@@ -936,11 +936,13 @@ fn a_rotated_box_claims_the_shape_it_draws_and_not_the_corners_around_it() {
 fn an_anchored_panel_claims_and_takes_the_pointer_where_it_is_drawn() {
     reset_layout_runtime();
     let (taps, on_tap) = counter();
+    let (trigger, laid) = crate::context::new_leaf(LayoutStyle::new()).unwrap();
+    laid.set(Rect::new(100.0, 100.0, 50.0, 20.0));
     let button = boxed(LayoutStyle::new().width(80.0).height(40.0), vec![]).on_press(on_tap);
     let overlay = Overlay::anchored_click_through(
         LayoutStyle::new(),
         vec![Box::new(button)],
-        signal(Rect::new(100.0, 100.0, 50.0, 20.0)),
+        trigger,
         crate::overlay::Placement::Below,
     )
     .unwrap();
@@ -950,6 +952,36 @@ fn an_anchored_panel_claims_and_takes_the_pointer_where_it_is_drawn() {
     assert!(!claimed(40.0, 20.0), "not at the origin it was laid out at");
     tap_overlays(140.0, 144.0);
     assert_eq!(taps.get(), 1);
+}
+
+/// A trigger inside a box a transform moves is drawn away from where it was laid out, and a panel placed off the laid-out spot opens beside nothing.
+#[test]
+fn an_anchored_panel_opens_beside_a_trigger_where_a_transform_drew_it() {
+    reset_layout_runtime();
+    let trigger = boxed(placed(0.0, 0.0, 20.0), vec![]);
+    let trigger_node = trigger.layout_node();
+    let card = boxed(placed(10.0, 10.0, 100.0), vec![Box::new(trigger)])
+        .with_transform(|_r| Some([1.0, 0.0, 0.0, 1.0, 200.0, 50.0]));
+    let root = Container::new(full(), vec![Box::new(card)]).unwrap();
+    lay_out(&root);
+
+    let (_, on_tap) = counter();
+    let bubble = boxed(LayoutStyle::new().width(40.0).height(20.0), vec![]).on_press(on_tap);
+    let _overlay = Overlay::anchored_click_through(
+        LayoutStyle::new(),
+        vec![Box::new(bubble)],
+        trigger_node,
+        crate::overlay::Placement::Below,
+    )
+    .unwrap();
+    lay_out(&root);
+
+    assert!(
+        claimed(230.0, 94.0),
+        "under the trigger as drawn: {:?}",
+        interactive_rects()
+    );
+    assert!(!claimed(30.0, 44.0), "not under where it was laid out");
 }
 
 #[test]
