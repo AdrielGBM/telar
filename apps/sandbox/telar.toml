@@ -1,5 +1,6 @@
 [telar]
 backend = "auto"
+prelude = ["telar_components"]
 # Root for baked `src:"..."` assets, relative to the package. Defaults to "assets"; e.g. "src/shared/assets".
 # assets = "assets"
 

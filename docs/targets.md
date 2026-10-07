@@ -194,11 +194,28 @@ yourself: `cargo telar dev --target tui` compiles one frontend, and there is not
 
 ## The rest of the features
 
-Everything beyond the target — the widget catalogue, navigation, SVG, i18n — is listed with what it costs
-at **<https://docs.rs/telar#feature-flags>**. Most applications name a target, `components`, and nothing
-else.
+Everything beyond the target — navigation, SVG, i18n — is listed with what it costs at
+**<https://docs.rs/telar#feature-flags>**. Most applications name a target and nothing else.
 
 Decoding at runtime is not among them. `telar` draws an SVG or an image that was baked from `src:"…"`, and
 holds no parser for either; reading one whose bytes arrive while the app runs — off disk, over HTTP — is
 [`telar-dynamic`](https://docs.rs/telar-dynamic), a separate dependency you add on purpose, one feature per
 format and transport. Nothing in the table above pays for it.
+
+Nor are the widgets. Buttons, fields, menus, modals and the rest are
+[`telar-components`](https://docs.rs/telar-components), a plugin you add beside `telar`, with no default
+features. The widgets every interface uses are in every build, and each group beyond them is one feature:
+`overlays` for menus, modals, drawers and tooltips, `chrome` for a window frame the app draws itself, and
+`advanced` for reorderable lists, accordions and steppers. List it in `telar.toml` so `.rsx` sees its tags
+without a `use`:
+
+```toml
+# Cargo.toml
+telar-components = { version = "0.2.1", features = ["overlays"] }
+
+# telar.toml
+[telar]
+prelude = ["telar_components"]
+```
+
+`cargo telar new` writes both, with no group named.

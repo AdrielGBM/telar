@@ -2708,6 +2708,7 @@ name = "landing"
 version = "0.2.1"
 dependencies = [
  "telar",
+ "telar-components",
  "tracing-subscriber",
 ]
 
@@ -4941,6 +4942,7 @@ dependencies = [
  "pollster",
  "serde",
  "telar",
+ "telar-components",
  "telar-dynamic",
  "telar-platform-core",
  "telar-platform-headless",
@@ -5493,7 +5495,6 @@ dependencies = [
  "telar-renderer-web",
  "telar-services-core",
  "telar-theme-core",
- "telar-ui-components",
  "telar-ui-core",
  "telar-ui-tree",
  "toml",
@@ -5541,6 +5542,23 @@ dependencies = [
  "telar-renderer-assets",
  "telar-transpiler",
  "toml",
+]
+
+[[package]]
+name = "telar-components"
+version = "0.2.1"
+dependencies = [
+ "image",
+ "js-sys",
+ "telar",
+ "telar-renderer-dom",
+ "telar-ui-core",
+ "telar-ui-tree",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "web-sys",
+ "web-time",
 ]
 
 [[package]]
@@ -6037,33 +6055,6 @@ dependencies = [
  "telar-semantics-core",
  "thiserror 2.0.20",
  "toml",
-]
-
-[[package]]
-name = "telar-ui-components"
-version = "0.2.1"
-dependencies = [
- "image",
- "js-sys",
- "telar-geometry-core",
- "telar-layout-core",
- "telar-macros",
- "telar-motion-core",
- "telar-platform-core",
- "telar-platform-headless",
- "telar-reactive-core",
- "telar-renderer-core",
- "telar-renderer-dom",
- "telar-renderer-software",
- "telar-renderer-text",
- "telar-theme-core",
- "telar-ui-core",
- "telar-ui-tree",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "web-sys",
- "web-time",
 ]
 
 [[package]]

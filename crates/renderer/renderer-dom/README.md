@@ -37,7 +37,7 @@ It also checks that focus landing on a link inside a paragraph clears the box Te
 what Telar draws no ring for keeps the browser's `:focus-visible` outline.
 
 The [axe-core](https://github.com/dequelabs/axe-core) audit of the document real widgets render to through this
-backend lives with the catalogue, in `crates/ui/ui-components/src/audit_test.rs`: any WCAG 2.2 A/AA or
+backend lives with the catalogue, in `plugins/telar-components/src/audit_test.rs`: any WCAG 2.2 A/AA or
 best-practice violation fails it. The script comes from the dev shell, which names it in `TELAR_AXE_CORE` (a
 pinned npm tarball fetched by the flake), so run it inside `nix develop`. See
 [docs/accessibility.md](https://github.com/AdrielGBM/telar/blob/main/docs/accessibility.md#audits).

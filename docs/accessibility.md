@@ -150,7 +150,7 @@ a box under `a11y:hidden`.
 
 | Test | What it checks |
 | --- | --- |
-| `crates/ui/ui-components/src/audit_test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document. |
+| `plugins/telar-components/src/audit_test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document. |
 | `crates/platform/platform-desktop/src/accessibility_test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen, built from `ui-core` primitives in place of the catalogue's button, field and checkbox: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, and that the tree's focus follows the Tab order. |
 | `crates/renderer/renderer-dom/src/controls_test.rs` | A switch and a toggle button in the document: their role, `aria-checked` and `aria-pressed`, that each is a Tab stop, and that Space or Enter sent to the element is kept from the page, reaches the box through the platform and flips the state the next frame writes. `semantics_test.rs` checks that a box whose role changes drops the state attribute of the old one. |
 
@@ -161,7 +161,7 @@ hash in `flake.nix`. Run it in Firefox:
 
 ```sh
 nix develop -c nix shell nixpkgs#firefox nixpkgs#geckodriver -c sh -c \
-  'export GECKODRIVER=$(which geckodriver); unset CHROMEDRIVER; cargo test -p telar-ui-components --target wasm32-unknown-unknown --test audit'
+  'export GECKODRIVER=$(which geckodriver); unset CHROMEDRIVER; cargo test -p telar-components --target wasm32-unknown-unknown --test audit'
 ```
 
 Where the keyboard is shown on each target is in [keyboard.md](keyboard.md#what-shows-where-the-keyboard-is).

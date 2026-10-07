@@ -20,9 +20,10 @@ path = "src/main.rs"
 telar = { workspace = true, features = [
     "runtime",
     "svg",
-    "components",
     "navigate",
 ] }
+# Menus, dialogs and drawers draw over the page; steppers, accordions and reorderable lists are the rest.
+telar-components = { workspace = true, features = ["overlays", "advanced"] }
 # `demo_svgs.rs` builds its icons with `SvgData::from_str`, and the runtime parser behind it lives here now
 # rather than under a `telar` feature. The demo never reaches for a name in this crate — the dependency is
 # what turns the parser on.

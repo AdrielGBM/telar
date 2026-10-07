@@ -58,8 +58,8 @@ cargo telar init --target web --renderer dom   # dom | canvas | auto, browser on
 
 ```
 my-app/
-  Cargo.toml      # one target under [features], and the build profiles
-  telar.toml      # renderer backend, theme, catalogs, the dev window
+  Cargo.toml      # one target under [features], the widget catalogue, and the build profiles
+  telar.toml      # renderer backend, the components .rsx sees, theme, catalogs, the dev window
   src/main.rs     # fn main() { my_app::run(); }
   src/lib.rs      # telar::app!(…) — theme, startup hook, config, root
   src/theme.rs    # the design tokens every component reads
@@ -83,6 +83,7 @@ and `telar.toml` sits next to `Cargo.toml`:
 ```toml
 [telar]
 backend = "auto"
+prelude = ["telar_components"]
 
 [telar.dev.window]
 title = "my-app"
@@ -201,7 +202,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **Keyboard** — each focusable control declares the keys it keeps, so a browser build shares Tab and scrolling with the host page instead of fighting it for them. → [docs/keyboard.md](docs/keyboard.md)
 - **Internationalization** — translation catalogs baked at build time; `t!` validates keys and arguments at compile time.
 - **Two renderers** — a CPU rasterizer on `tiny-skia` and a GPU one on `wgpu`, behind the same drawing vocabulary. `desktop` and `android` bring both, and `backend = "auto"` picks per machine.
-- **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest. → `components`
+- **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest — in the plugin [`telar-components`](plugins/telar-components): add it with the groups you draw (`overlays`, `chrome`, `advanced`) and list it as a `prelude` in `telar.toml`. → [docs/targets.md](docs/targets.md#the-rest-of-the-features)
 - **Navigation** — a reactive page stack with animated transitions. → `navigate`
 - **Location** — one address per app on every target: browser history with scroll restoration, `--location` deep links remembered between runs, Android `ACTION_VIEW` and the back button. → [docs/location.md](docs/location.md)
 - **Surface title** — the window, tab, recents label or terminal title is derived from the app's title, the current route's title and the locale, and follows all three. → [docs/surface-title.md](docs/surface-title.md)
@@ -237,7 +238,7 @@ telar = "0.2.1"
 
 Everything behind it — the reactive graph, the layout engine, the renderers, the platform backends, the `.rsx` pipeline — is a separate `telar-*` crate. They are published because Cargo requires every dependency of a published crate to be published too, not because an application names them; the split is what lets a terminal build skip a GPU renderer. Reach for one directly only if you are writing a frontend or a tool against Telar's internals.
 
-Four exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you install rather than a dependency. [`telar-dynamic`](plugins/telar-dynamic) is a second dependency, for an application that decodes an asset at run time rather than baking it: the facade owns the seam and ships no implementation of it, so the decoders and transports live there, one feature each. [`telar-embed`](crates/embed/telar-embed) is a third, for hosting a separately-compiled Telar UI inside your own — or for being one. And [`telar-expression`](plugins/telar-expression) is a fourth, for an application whose users bind properties to formulas: a typed, pure expression language checked before it runs and bound to signals, which most applications never need and so the facade does not carry.
+Five exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you install rather than a dependency. [`telar-components`](plugins/telar-components) is a second dependency, for an application that draws the stock widgets: the facade carries the primitives they are built from and none of the widgets, so the catalogue is a plugin with no default features, one feature per group beyond the basics (`overlays`, `chrome`, `advanced`), and a `prelude = ["telar_components"]` line in `telar.toml` that lets `.rsx` call its tags. [`telar-dynamic`](plugins/telar-dynamic) is a third, for an application that decodes an asset at run time rather than baking it: the facade owns the seam and ships no implementation of it, so the decoders and transports live there, one feature each. [`telar-embed`](crates/embed/telar-embed) is a fourth, for hosting a separately-compiled Telar UI inside your own — or for being one. And [`telar-expression`](plugins/telar-expression) is a fifth, for an application whose users bind properties to formulas: a typed, pure expression language checked before it runs and bound to signals, which most applications never need and so the facade does not carry.
 
 <details>
 <summary><b>The crates behind the facade</b></summary>
@@ -250,12 +251,13 @@ Four exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you insta
 | [`telar-motion-core`](crates/motion/motion-core) | Tweens, springs, the frame ticker |
 | [`telar-theme-core`](crates/ui/theme-core) | Theme tokens, light/dark mode |
 | [`telar-semantics-core`](crates/semantics/semantics-core) | What a thing in an interface *is*, for screen readers, documents and terminals |
-| [`telar-ui-core`](crates/ui/ui-core) · [`telar-ui-tree`](crates/ui/ui-tree) · [`telar-ui-components`](crates/ui/ui-components) | Widget kernel, component tree, widget catalogue |
+| [`telar-ui-core`](crates/ui/ui-core) · [`telar-ui-tree`](crates/ui/ui-tree) | Widget kernel, component tree |
 | [`telar-renderer-core`](crates/renderer/renderer-core) | Draw commands, culling, dirty tracking |
 | [`telar-renderer-software`](crates/renderer/renderer-software) · [`telar-renderer-hardware`](crates/renderer/renderer-hardware) | CPU and wgpu backends |
 | [`telar-renderer-tui`](crates/renderer/renderer-tui) · [`telar-renderer-dom`](crates/renderer/renderer-dom) · [`telar-renderer-web`](crates/renderer/renderer-web) | Terminal cells, browser elements, browser canvas |
 | [`telar-renderer-text`](crates/renderer/renderer-text) · [`telar-renderer-assets`](crates/renderer/renderer-assets) | Text shaping and glyph atlas; SVG parsing and build-time asset baking |
-| [`telar-dynamic`](plugins/telar-dynamic) · [`telar-embed`](crates/embed/telar-embed) · [`telar-expression`](plugins/telar-expression) | Runtime asset decoders and transports; embedding a separately-compiled UI; a typed expression language bound to signals — the three crates here an application depends on directly |
+| [`telar-components`](plugins/telar-components) · [`telar-dynamic`](plugins/telar-dynamic) · [`telar-expression`](plugins/telar-expression) | The plugins: the widget catalogue; runtime asset decoders and transports; a typed expression language bound to signals — crates an application adds beside the facade, which nothing under `crates/` depends on |
+| [`telar-embed`](crates/embed/telar-embed) | Embedding a separately-compiled UI, or being one — a crate an application depends on directly |
 | [`telar-renderer-cache`](crates/renderer/renderer-cache) · [`telar-renderer-record`](crates/renderer/renderer-record) | The shared byte-budgeted cache; a backend that records instead of drawing |
 | [`telar-platform-core`](crates/platform/platform-core) and `telar-platform-{winit,desktop,android,tui,web,headless}` | Window/event abstraction and its backends |
 | [`telar-preferences-core`](crates/preferences/preferences-core) | The user's system preferences as reactive state, which theme, motion and plugins follow |

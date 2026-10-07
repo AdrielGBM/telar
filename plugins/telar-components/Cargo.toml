@@ -1,0 +1,77 @@
+[package]
+name = "telar-components"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "First-party widget catalogue for Telar: buttons, inputs, chips, accordions and more."
+keywords = ["telar", "ui", "gui", "widgets", "components"]
+categories = ["gui"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+# docs.rs builds with every group on, so the whole catalogue is on one page rather than only the widgets a build with no features carries.
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+#! Three groups rather than one knob per widget: they share `shared.rs` and `scrim.rs`, and the graph between
+#! them is what decides where a line can be drawn at all. `dropdown` stays in every build because `select` and
+#! `list` read its row styles; `scrim` travels with the two overlays that draw one.
+#!
+#! Nothing is on by default. The buttons, fields, selects, tabs, sliders and indicators are in every build, and an application names each group it draws beyond them.
+
+default = []
+
+## Anything that draws over the tree: menus, context menus, modals, drawers, tooltips and the scrim behind them.
+overlays = []
+
+## The window frame a desktop application draws itself — title bar, controls, resize edges. Inert anywhere
+## else, which is the whole reason it is nameable: a terminal or a document has no chrome to draw.
+chrome = []
+
+## Reorderable lists, accordions and steppers.
+advanced = []
+
+[dependencies]
+telar = { workspace = true, features = ["runtime"] }
+
+web-time = { workspace = true }
+
+[[test]]
+name = "reachable"
+path = "src/reachable_test.rs"
+
+[[test]]
+name = "widget_gallery"
+path = "src/widget_gallery_test.rs"
+
+[[test]]
+name = "audit"
+path = "src/audit_test.rs"
+
+[[test]]
+name = "strings"
+path = "src/strings_test.rs"
+
+[[test]]
+name = "strings_override"
+path = "src/strings_override_test.rs"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+image = { workspace = true, features = ["png"] }
+telar = { workspace = true, features = ["headless"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+js-sys.workspace = true
+renderer-dom.workspace = true
+ui-tree.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+# Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin in [workspace.dependencies]. The two move together.
+wasm-bindgen-test = "=0.3.77"
+web-sys = { workspace = true, features = ["CssStyleDeclaration", "Document", "Element", "HtmlElement", "HtmlHeadElement", "Node", "Window"] }
+
+[dev-dependencies]
+telar = { workspace = true, features = ["shaper"] }
+ui-core.workspace = true

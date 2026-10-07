@@ -35,7 +35,6 @@ mod layout_item;
 mod layout_leaf;
 mod layout_transition;
 mod lazy;
-mod line_gutter;
 mod link;
 mod mask;
 mod named_overlay;
@@ -72,7 +71,9 @@ mod text_fit;
 mod text_metrics;
 mod theme_provider;
 mod transform_origin;
-pub use text_metrics::{SINGLE_LINE_LEADING, single_line_box, use_text_metrics_generation};
+pub use text_metrics::{
+    SINGLE_LINE_LEADING, line_box, single_line_box, use_text_metrics_generation,
+};
 mod virtual_list;
 mod window_root;
 
@@ -113,9 +114,9 @@ pub use keyboard::{
 };
 pub use keynav::{KeyNav, KeyNavMove, key_nav_apply, key_nav_apply_grid};
 pub use layout_item::{Clip, ClipAxis, ClipPointer, ClippedItem, IntoClip, LayoutItem, box_item};
+pub use layout_leaf::LayoutLeaf;
 pub use layout_transition::{LayoutTransition, animate_layout};
 pub use lazy::Lazy;
-pub use line_gutter::LineGutter;
 pub use link::{
     AnchorRegistration, activate_box, activate_run, follow, follow_beside, follow_pressed,
     has_anchor, reader_moved, register_anchor, reveal_anchor,

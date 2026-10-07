@@ -53,7 +53,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     let (name, vis) = (&input.ident, &input.vis);
     let builder = format_ident!("{name}Builder");
     let required: Vec<&Prop> = props.iter().filter(|p| p.is_required()).collect();
-    // One marker per required prop, generated here rather than imported from a runtime crate: the deriving crate would have to name that crate, and `ui-components` cannot name `telar` without a cycle. Per prop rather than one shared marker because the name lands in the error, so `RowPropsBuilder<RowPropsMissingLabel>` says which prop was forgotten. Named after the struct too, because two props structs in one module are ordinary and a marker named only after the prop collided.
+    // One marker per required prop, generated here rather than imported from a runtime crate, which every deriving crate would then have to name. Per prop rather than one shared marker because the name lands in the error, so `RowPropsBuilder<RowPropsMissingLabel>` says which prop was forgotten. Named after the struct too, because two props structs in one module are ordinary and a marker named only after the prop collided.
     let markers: Vec<Ident> = required
         .iter()
         .map(|p| format_ident!("{name}Missing{}", pascal(&p.name)))

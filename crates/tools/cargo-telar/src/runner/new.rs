@@ -235,10 +235,9 @@ path = "src/main.rs"
 [dependencies]
 # `default-features = false` so this file is the only place a target is named: telar's own default is a
 # desktop window, and it would otherwise ride along into a build that asked for the terminal or a browser.
-telar = {{ version = "{TELAR_VERSION}", default-features = false, features = [
-    "runtime",
-    "components",
-] }}
+telar = {{ version = "{TELAR_VERSION}", default-features = false, features = ["runtime"] }}
+# The widget catalogue. Name the groups you draw beyond the basics: "overlays", "chrome", "advanced".
+telar-components = {{ version = "{TELAR_VERSION}", default-features = false }}
 
 [features]
 # The target this project builds for. Each one is complete on its own — swapping one word here, or
@@ -290,6 +289,8 @@ height = 700
         r#"[telar]
 # "auto" draws with the GPU where there is one and the CPU where there is not.
 backend = "auto"
+# Crates whose components every `.rsx` file sees without a `use`.
+prelude = ["telar_components"]
 {window}"#
     )
 }

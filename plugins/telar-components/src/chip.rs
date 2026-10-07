@@ -1,0 +1,126 @@
+//! [`chip`]: a compact pill, optionally with a status dot and a close affordance.
+
+use std::rc::Rc;
+
+use telar::{
+    AlignItems, Border, BorderRadius, Children, Color, Container, LayoutError, LayoutItem,
+    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, Text, box_item,
+    focus::Role,
+};
+
+use crate::shared;
+
+fn pad_x() -> f32 {
+    shared::spacing() * 1.25
+}
+fn pad_y() -> f32 {
+    shared::spacing() * 0.5
+}
+fn radius() -> f32 {
+    shared::radius() * 3.0
+}
+fn gap() -> f32 {
+    shared::spacing() * 0.75
+}
+/// A chip's label and its close glyph, as shares of the text around them.
+const TEXT_RATIO: f32 = 0.93;
+const CLOSE_RATIO: f32 = 0.85;
+fn dot_size() -> f32 {
+    shared::spacing() * 0.75
+}
+
+fn dot_box() -> LayoutStyle {
+    LayoutStyle::new().width(dot_size()).height(dot_size())
+}
+fn inner_row() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .gap(gap())
+}
+fn pill_box() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .padding_horizontal(pad_x())
+        .padding_vertical(pad_y())
+}
+
+/// A small outlined tag, quieter than `badge`'s solid fill: a bordered surface pill with normal ink text, an optional small accent dot when `color` is set, and an optional `×` affordance that fires `on_close`. Non-interactive unless `on_close` is set. High-level sugar over `StyledContainer`/`Container` + `Text`; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
+#[derive(Props)]
+pub struct ChipProps {
+    #[props(into, default)]
+    pub label: Reactive<String>,
+    /// Small leading accent dot colour. `Color::TRANSPARENT` (the default) means "unset": no dot is shown at all (not just an invisible one) — see `chip`'s doc. A closure (re-read every frame) so a theme token or `$signal` colour re-colours the dot live, like `button`'s `fill`.
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
+    /// When `Some`, a small `×` press target renders on the right and calls it on tap. `None` (the default) omits it entirely, leaving a non-interactive chip.
+    #[props(some, default)]
+    pub on_close: Option<Rc<dyn Fn()>>,
+}
+
+/// A compact pill, optionally with a status dot and a close affordance.
+pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let ChipProps {
+        label,
+        color,
+        on_close,
+    } = props;
+    let mut children: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(3);
+
+    // Presence is decided at build time — an unset colour means no dot, not an invisible one — while the shade is re-read every frame so a live theme colour tracks.
+    if color.get() != Color::TRANSPARENT {
+        let dot_color = color.clone();
+        let dot = StyledContainer::new(dot_box(), move |_r| dot_style(&dot_color), vec![])?
+            .styled_by(dot_box);
+        children.push(box_item(dot));
+    }
+
+    let label_widget = Text::declaring(
+        move || label.get(),
+        LayoutStyle::new(),
+        |t| shared::control_text(t, TEXT_RATIO),
+    )?;
+    children.push(box_item(label_widget));
+
+    if let Some(cb) = on_close {
+        let close_label = Text::declaring(
+            || "×".to_string(),
+            LayoutStyle::new(),
+            |t| shared::control_text(t, CLOSE_RATIO),
+        )?;
+        let close = StyledContainer::new(
+            LayoutStyle::new().flex_row(),
+            |_r| RectStyle::default(),
+            vec![box_item(close_label)],
+        )?
+        .control(Role::Button)
+        .on_press(move || cb());
+        children.push(box_item(close));
+    }
+
+    let row = Container::new(inner_row(), children)?.styled_by(inner_row);
+
+    let pill = StyledContainer::new(
+        pill_box(),
+        |_r| {
+            RectStyle::default()
+                .with_fill(shared::surface_alt())
+                .with_border(Border::uniform(shared::border(), 1.0))
+                .with_radius(BorderRadius::all(radius()))
+        },
+        vec![box_item(row)],
+    )?
+    .styled_by(pill_box);
+    Ok(box_item(pill))
+}
+
+fn dot_style(color: &Reactive<Color>) -> RectStyle {
+    RectStyle::default()
+        .with_fill(color.get())
+        .with_radius(BorderRadius::all(dot_size() / 2.0))
+}
+
+#[cfg(test)]
+#[path = "chip_test.rs"]
+mod tests;

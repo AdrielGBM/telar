@@ -39,7 +39,7 @@ members = [
     "crates/tools/telar-baker",
     "apps/sandbox",
     "apps/landing",
-    "crates/ui/ui-components",
+    "plugins/telar-components",
     "crates/i18n/i18n-core",
     "crates/navigate/navigate-core",
     "crates/reactive/reactive-local",
@@ -83,6 +83,7 @@ default-members = [
     "crates/tools/telar-macros",
     "crates/tools/telar-baker",
     "apps/sandbox",
+    "plugins/telar-components",
     "plugins/telar-dynamic",
     "crates/embed/telar-embed",
     "crates/devtools/telar-devtools",
@@ -162,6 +163,7 @@ services-core = { package = "telar-services-core", path = "crates/services/servi
 # so a default left on drags wgpu and a glyph shaper into a page that draws as a document and calls neither.
 telar = { path = "crates/telar", version = "0.2.1", default-features = false }
 telar-baker = { path = "crates/tools/telar-baker", version = "0.2.1" }
+telar-components = { path = "plugins/telar-components", version = "0.2.1" }
 telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.2.1" }
 telar-devtools = { path = "crates/devtools/telar-devtools", version = "0.2.1" }
 telar-dynamic = { path = "plugins/telar-dynamic", version = "0.2.1" }
@@ -170,9 +172,6 @@ telar-macros = { path = "crates/tools/telar-macros", version = "0.2.1" }
 telar-parser = { path = "crates/tools/telar-parser", version = "0.2.1" }
 telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.2.1", default-features = false }
 theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.2.1" }
-# `default-features = false` so `telar` says which groups of the catalogue it wants: with the defaults left on,
-# `telar/components-base` would carry the overlays and the window frame anyway and the groups would decide nothing.
-ui-components = { package = "telar-ui-components", path = "crates/ui/ui-components", version = "0.2.1", default-features = false }
 ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.2.1" }
 ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.2.1" }
 

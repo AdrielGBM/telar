@@ -2,6 +2,7 @@
 #![allow(clippy::all)]
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
+#[allow(unused_imports)] use telar_components::*;
 #[allow(unused_imports)] use crate::*;
 
 // A one-line `.rsx` code snippet in a dark pill. Snippets use single quotes for string

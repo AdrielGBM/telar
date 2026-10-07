@@ -62,6 +62,38 @@ fn the_telar_dependency_names_no_target_of_its_own() {
 }
 
 #[test]
+fn the_catalogue_is_its_own_dependency_with_no_group_named() {
+    let manifest = generated_manifest(Target::Desktop);
+    let dependencies = &manifest["dependencies"];
+    let telar_features: Vec<_> = dependencies["telar"]["features"]
+        .as_array()
+        .expect("features array")
+        .iter()
+        .filter_map(|f| f.as_str())
+        .collect();
+    assert_eq!(telar_features, ["runtime"]);
+    let components = &dependencies["telar-components"];
+    assert_eq!(components["version"].as_str(), Some(TELAR_VERSION));
+    assert_eq!(components["default-features"].as_bool(), Some(false));
+    assert!(
+        components.get("features").is_none(),
+        "the scaffold's page draws only buttons, which every build of the catalogue has"
+    );
+}
+
+#[test]
+fn every_rsx_file_sees_the_catalogue() {
+    for target in [Target::Desktop, Target::Tui, Target::Web, Target::Android] {
+        let config = toml::from_str::<toml::Table>(&config("my-app", target))
+            .expect("generated telar.toml is not valid TOML");
+        assert_eq!(
+            config["telar"]["prelude"].as_array().map(Vec::as_slice),
+            Some([toml::Value::from("telar_components")].as_slice())
+        );
+    }
+}
+
+#[test]
 fn the_generated_config_parses() {
     for target in [Target::Desktop, Target::Tui, Target::Web, Target::Android] {
         toml::from_str::<toml::Table>(&config("my-app", target))

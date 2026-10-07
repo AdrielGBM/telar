@@ -2,6 +2,7 @@
 #![allow(clippy::all)]
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
+#[allow(unused_imports)] use telar_components::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
 #[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
@@ -31,7 +32,7 @@ pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn 
 
     fn walk_project(out: Emitter<String>) {
         let names = [
-            "reactive-core", "layout-core", "ui-core", "ui-tree", "ui-components",
+            "reactive-core", "layout-core", "ui-core", "ui-tree", "telar-components",
             "renderer-core", "renderer-software", "renderer-hardware", "renderer-text",
             "platform-core", "platform-winit", "platform-desktop", "motion-core",
             "theme-core", "i18n-core", "navigate-core", "services-core", "geometry-core",

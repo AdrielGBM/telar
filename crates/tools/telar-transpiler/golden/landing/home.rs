@@ -2,6 +2,7 @@
 #![allow(clippy::all)]
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
+#[allow(unused_imports)] use telar_components::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::feature_card::{feature_card, FeatureCardProps};
 #[allow(unused_imports)] use crate::demo_images::{make_checker, make_gradient, make_radial_alpha};

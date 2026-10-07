@@ -18,7 +18,7 @@ fn slow_sum(n: u64) -> u64 {
 
 fn walk_project(out: Emitter<String>) {
     let names = [
-        "reactive-core", "layout-core", "ui-core", "ui-tree", "ui-components",
+        "reactive-core", "layout-core", "ui-core", "ui-tree", "telar-components",
         "renderer-core", "renderer-software", "renderer-hardware", "renderer-text",
         "platform-core", "platform-winit", "platform-desktop", "motion-core",
         "theme-core", "i18n-core", "navigate-core", "services-core", "geometry-core",

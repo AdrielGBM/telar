@@ -117,7 +117,7 @@ box around it should frame it.
 `crates/renderer/renderer-dom/src/keyboard_test.rs` checks this contract in a browser: which keys are
 prevented where, which boxes are Tab stops, that an unconsumed Tab never reaches the app, that a native focus
 move is reported, that focus leaving for the page or for a link inside a paragraph clears the app's, and which
-focused elements keep the browser's outline. `crates/ui/ui-components/src/audit_test.rs` checks that a
+focused elements keep the browser's outline. `plugins/telar-components/src/audit_test.rs` checks that a
 keyboard-focused control wears Telar's ring in the document (see [accessibility.md](accessibility.md#audits)).
 `crates/renderer/renderer-dom/src/controls_test.rs` sends Space and Enter to a switch and a toggle button
 written as boxes with a role, and checks that the page keeps neither, that the platform hands each to the

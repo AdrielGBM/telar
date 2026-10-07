@@ -1,13 +1,16 @@
 //! [`LayoutLeaf`]: the shared base for a widget that measures its own content and draws at its laid-out rect.
 
 use geometry_core::Rect;
-use layout_core::{LayoutError, LayoutStyle, NodeId};
+use layout_core::{LayoutError, LayoutStyle, MeasureInput, NodeId};
 use reactive_core::RwSignal;
 use ui_tree::RenderNode;
 
 use crate::context;
 
-pub(crate) struct LayoutLeaf {
+/// A layout node and the rect layout last gave it: what a widget that draws its own content stands on.
+///
+/// Public so a widget outside the kernel can be a leaf of its own rather than a composition of the kernel's, and be placed the way every kernel leaf is: through [`at_layout_position`](Self::at_layout_position), which is where a document backend learns that the box exists.
+pub struct LayoutLeaf {
     pub node: NodeId,
     pub rect: RwSignal<Rect>,
 }
@@ -18,7 +21,17 @@ impl LayoutLeaf {
         Ok(Self { node, rect })
     }
 
-    pub(crate) fn at_layout_position(&self, content: RenderNode) -> RenderNode {
+    /// A leaf sized by `measure`, which layout asks for a `(width, height)` in the space it offers. Layout only asks again once the node is dirty, so a leaf whose measure reads state calls [`mark_dirty`](crate::mark_dirty) on its node when that state changes.
+    pub fn measured(
+        layout_style: LayoutStyle,
+        measure: impl FnMut(MeasureInput) -> (f32, f32) + 'static,
+    ) -> Result<Self, LayoutError> {
+        let (node, rect) = context::new_measured_leaf(layout_style, Box::new(measure))?;
+        Ok(Self { node, rect })
+    }
+
+    /// `content`, drawn from the leaf's top-left corner, wherever layout put it.
+    pub fn at_layout_position(&self, content: RenderNode) -> RenderNode {
         self.at_layout_position_as(renderer_core::Semantics::group, content)
     }
 

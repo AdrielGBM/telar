@@ -260,7 +260,7 @@ fn build_source_link(
 
 /// The `.rsx` source behind a section, as a pushed detail page: the file name above the listing, in its own scroll viewport.
 ///
-/// The listing is one wrapped text block rather than a [`LineGutter`](telar::LineGutter) column: a gutter numbers *logical* lines, and with no monospace or no-wrap in `TextStyle` a long line soft-wraps, which would slide the numbers out of step with the code.
+/// The listing is one wrapped text block rather than a [`LineGutter`](telar_components::LineGutter) column: a gutter numbers *logical* lines, and with no monospace or no-wrap in `TextStyle` a long line soft-wraps, which would slide the numbers out of step with the code.
 struct SourcePage {
     scroll: LayoutScrollArea,
 }

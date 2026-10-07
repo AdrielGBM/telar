@@ -1,6 +1,6 @@
-//! The Telar facade: the one crate an application depends on.
+//! The Telar facade: the crate every application depends on.
 //!
-//! Re-exports the widget catalogue, the reactive primitives and the geometry types, and carries the runner that turns a mounted tree into a window.
+//! Re-exports the reactive primitives, the widget kernel and the geometry types, and carries the runner that turns a mounted tree into a window. The widget catalogue is not here: it is the `telar-components` plugin, which an application adds beside this crate.
 //!
 //! # Feature flags
 //!
@@ -101,7 +101,7 @@ pub use geometry_core::{Insets, ObjectFit, Point, Rect, Size, Transform};
 #[cfg(feature = "runtime")]
 pub use layout_core::{
     AlignItems, AvailableSpace, Direction, JustifyContent, LayoutError, LayoutStyle, Margin,
-    SizeDimension, TemplateTrack,
+    MeasureInput, SizeDimension, TemplateTrack,
 };
 #[cfg(feature = "runtime")]
 pub use prefs::UserPrefs;
@@ -122,8 +122,8 @@ pub use i18n_core::set_catalog;
 pub use i18n_core::{current_locale, negotiate_locale, set_locale, use_locale};
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    ConsumedKeys, Cursor, Event, FullscreenMode, Key, NamedKey, ScrollDelta, WindowCommand,
-    WindowConfig, WindowPosition, push_window_command, take_window_commands,
+    ConsumedKeys, Cursor, Event, FullscreenMode, Key, NamedKey, NumericValue, ScrollDelta,
+    WindowCommand, WindowConfig, WindowPosition, push_window_command, take_window_commands,
 };
 #[cfg(feature = "watch")]
 pub use watch::watch_path;
@@ -292,20 +292,21 @@ pub use ui_core::{
     Accessible, Axis, BuildFailure, COARSE_STEP, Canvas, Caret, ChildSlot, Children, Clip,
     ClipAxis, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM, DismissRegistration,
     DragAxis, DragStart, Edge, ErrorBoundary, EventResult, FINE_STEP, FixedLayer, Image, Inherited,
-    Input, IntoClip, KeyAnswer, KeyNav, KeyNavMove, LayoutItem, LayoutScrollArea, LayoutTransition,
-    Lazy, LineGutter, Mask, NodeId, NodeVec, Overlay, Path, PointerButtons, Presence, ReactiveList,
-    Rectangle, RenderNode, ScrollPage, ScrollViewport, ScrollbarStyle, SlotRequest, Slots,
-    StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea, TextRun, ThemeProvider,
-    TransformOrigin, Transition, Underline, VirtualList, WindowRoot, anchor_rect, animate_layout,
-    apply_move, box_item, box_transform, box_transform_about, close_overlay, compute_layout,
-    confirm_top, current_direction, declare, dismiss_depth, dismiss_top, drag_start, drag_travel,
-    exits_in_flight, focus, follow_theme, fragment, fragment_positional, inherited_text_style,
-    insertion_index, interactive_rects, kept, key_held, key_nav_apply, key_nav_apply_grid,
-    key_pressed, logical_border_radius, logical_border_widths, mark_dirty, modifiers,
-    new_container, new_leaf, observe_keyboard, observe_pointer, open_overlay, overlay_state,
-    pointer_buttons, provide_theme, register_transaction, relayout_if_dirty, remove_node,
-    requested_cursor, set_children, set_direction, set_display, set_min_height, set_overlay_host,
-    step_factor, track_layout, transform_pointer, undeclare, use_context, use_direction,
+    Input, IntoClip, KeyAnswer, KeyNav, KeyNavMove, LayoutItem, LayoutLeaf, LayoutScrollArea,
+    LayoutTransition, Lazy, Mask, NodeId, NodeVec, Overlay, Path, Placement, PointerButtons,
+    Presence, ReactiveList, Rectangle, RenderNode, ScrollPage, ScrollViewport, ScrollbarStyle,
+    SlotRequest, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
+    TextRun, ThemeProvider, TransformOrigin, Transition, Underline, VirtualList, WindowRoot,
+    anchor_rect, animate_layout, apply_move, box_item, box_transform, box_transform_about,
+    close_overlay, compute_layout, confirm_top, current_direction, declare, dismiss_depth,
+    dismiss_top, drag_start, drag_travel, exits_in_flight, focus, follow_theme, fragment,
+    fragment_positional, inherited_text_style, insertion_index, interactive_rects, kept, key_held,
+    key_nav_apply, key_nav_apply_grid, key_pressed, line_box, logical_border_radius,
+    logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
+    observe_pointer, open_overlay, overlay_state, overlay_viewport, pointer_buttons, provide_theme,
+    register_transaction, relayout_if_dirty, remove_node, requested_cursor, set_children,
+    set_direction, set_display, set_min_height, set_overlay_host, single_line_box, step_factor,
+    style_follows, track_layout, transform_pointer, undeclare, use_context, use_direction,
     use_dismiss_depth, visible_window,
 };
 #[cfg(feature = "async-assets")]
@@ -329,28 +330,6 @@ pub fn reset_layout_runtime() {
 pub use navigate_core::{
     NavHost, NavPage, NavTransition, Navigator, PagePolicy, SimplePage, TabHost, TabStacks,
 };
-
-#[cfg(feature = "components-advanced")]
-pub use ui_components::{
-    AccordionProps, ItemBuilder, ReorderGroup, ReorderZoneProps, ReorderableProps, Slot,
-    StepperProps, accordion, apply_zone_move, reorderable, stepper,
-};
-#[cfg(feature = "components-base")]
-pub use ui_components::{
-    BadgeProps, ButtonProps, CheckboxProps, ChipProps, GroupProps, HandleProps, HeadingProps,
-    ItemProps, ProgressProps, RadioProps, ScrubFieldProps, SectionProps, SelectProps,
-    SeparatorProps, SliderProps, SpinnerProps, SwatchesProps, TabsProps, TextFieldProps,
-    ToggleProps, badge, button, checkbox, chip, group, handle, heading, item, progress, radio,
-    scrub_field, section, select, separator, slider, spinner, swatches, tabs, text_field, toggle,
-};
-#[cfg(feature = "components-overlays")]
-pub use ui_components::{
-    ContextMenuProps, DrawerProps, MenuCustomProps, MenuEntry, MenuProps, MenuRowProps,
-    MenuSeparatorProps, MenuStyle, MenuSubProps, ModalProps, TooltipProps, context_menu, drawer,
-    menu, menu_custom, menu_row, menu_separator, menu_sub, modal, tooltip,
-};
-#[cfg(feature = "components-chrome")]
-pub use ui_components::{MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, window_frame};
 
 #[cfg(feature = "runtime")]
 /// Offers an event to the overlay registry first, returning whether an overlay consumed it.

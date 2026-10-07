@@ -83,6 +83,10 @@ fn run_default_frontend<A: App, D: crate::DevOverlay>(config: AppConfig, app: A,
     ),
     all(feature = "web-dom", target_arch = "wasm32")
 )))]
+#[allow(
+    clippy::extra_unused_type_parameters,
+    reason = "same signature as the frontend variants, so every caller names `D` whichever is compiled"
+)]
 fn run_default_frontend<A: App, D: crate::DevOverlay>(
     _config: AppConfig,
     _app: A,

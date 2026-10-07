@@ -333,7 +333,7 @@ mod from_a_screen {
         Ok(box_item(row))
     }
 
-    /// The same screen the document's axe audit runs over (`ui-components/src/audit_test.rs`), with `ui-core` primitives standing in for the catalogue's button, field and checkbox, so the two targets are held to one fixture.
+    /// The same screen the document's axe audit runs over (`plugins/telar-components/src/audit_test.rs`), with `ui-core` primitives standing in for the catalogue's button, field and checkbox, so the two targets are held to one fixture.
     fn screen() -> Result<Box<dyn LayoutItem>, LayoutError> {
         let heading = StyledContainer::new(
             LayoutStyle::new(),

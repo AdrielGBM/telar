@@ -1,0 +1,104 @@
+//! [`radio`]: one option of a group, selecting into a shared bound value.
+
+use std::rc::Rc;
+
+use telar::{
+    AlignItems, Border, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, box_item,
+    focus::Role, signal,
+};
+
+use crate::shared;
+
+/// One radio button in a group: an 18px ring that fills its centre dot (and accents its border) while the bound `selected` signal equals this button's `value`; tapping the row sets `selected` to `value` (and fires `on_select`). A radio *group* is several `radio`s sharing one `selected` signal with different `value`s. High-level sugar over the primitives (`box` + `on_press` + a reactive fill); lives in `telar-components`, not the kernel. `selected` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal, so it never matches — a lone default radio), `Some` is the shared group signal.
+#[derive(Props)]
+pub struct RadioProps {
+    /// The group's bound selection. `None` (the default) is uncontrolled — the widget makes its own `signal(0)`.
+    #[props(some, into, default)]
+    pub selected: Option<RwSignal<u32>>,
+    /// This button's value: it is selected when `selected` equals it, and a tap sets `selected` to it.
+    #[props(default)]
+    pub value: u32,
+    #[props(into, default)]
+    pub label: Reactive<String>,
+    /// Accent (the selected dot and border). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
+    #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
+    pub color: Reactive<Color>,
+    /// Fires with this button's `value` when it becomes selected.
+    #[props(some, default)]
+    pub on_select: Option<Rc<dyn Fn(u32)>>,
+}
+
+/// One option of a group, selecting into a shared bound value.
+pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let RadioProps {
+        selected,
+        value,
+        label,
+        color,
+        on_select,
+    } = props;
+    // Uncontrolled: own the selection so the widget is self-consistent when the caller binds no group signal.
+    let selected = selected.unwrap_or_else(|| signal(0u32));
+    // Shared across the dot and ring style closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is).
+
+    // The dot: an inner circle that paints the accent only while this value is selected, so selecting never reflows.
+    let dot_selected = selected;
+    let dot_color = color.clone();
+    let dot = StyledContainer::new(
+        LayoutStyle::new().width(10.0).height(10.0),
+        move |_r| {
+            let fill = if dot_selected.get() == value {
+                shared::resolve(&dot_color, shared::accent)
+            } else {
+                Color::TRANSPARENT
+            };
+            RectStyle::default()
+                .with_fill(fill)
+                .with_radius(BorderRadius::all(5.0))
+        },
+        vec![],
+    )?;
+
+    let ring_selected = selected;
+    let ring_color = color.clone();
+    let ring = StyledContainer::new(
+        LayoutStyle::new()
+            .flex_row()
+            .width(18.0)
+            .height(18.0)
+            .align_items(AlignItems::CENTER)
+            .justify_content(JustifyContent::CENTER),
+        move |_r| {
+            let stroke = if ring_selected.get() == value {
+                shared::resolve(&ring_color, shared::accent)
+            } else {
+                shared::border()
+            };
+            RectStyle::default()
+                .with_fill(shared::surface())
+                .with_border(Border::uniform(stroke, 1.5))
+                .with_radius(BorderRadius::all(9.0))
+        },
+        vec![box_item(dot)],
+    )?;
+
+    let select = selected;
+    let announced = selected;
+    shared::labelled_control(
+        box_item(ring),
+        label,
+        Role::Radio,
+        move || announced.get() == value,
+        move || {
+            select.set(value);
+            if let Some(cb) = &on_select {
+                cb(value);
+            }
+        },
+    )
+}
+
+#[cfg(test)]
+#[path = "radio_test.rs"]
+mod tests;

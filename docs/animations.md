@@ -69,7 +69,7 @@ still reports it inactive while paused — nothing schedules frames on its accou
 notice the scale move again, on whatever later frame happens for some other reason (an OS preference flipping
 back, for instance, always forces one via `Event::SystemPreferencesChanged`).
 
-**An indeterminate spinner is a `Repeat::Loop` too** (`telar_ui_components::spinner`, driven by
+**An indeterminate spinner is a `Repeat::Loop` too** (`telar_components::spinner`, driven by
 `motion_core::Keyframes` under `Repeat::Loop`), and it gets the same pause: reduced motion holds it at rest rather than spinning it
 forever off-screen-invisible-but-costly. This is a deliberate choice, not an oversight — unlike momentum, an
 indeterminate spinner's motion is decorative *as motion* (its job is "work is happening," which a still ring
