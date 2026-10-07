@@ -24,7 +24,7 @@ fn a_packaged_rsx_library_builds_as_a_read_only_dependency() {
     run_cli(&repo, &target_dir, &["package", "-p", FIXTURE, "--check"]);
     let library = unpack(&package_fixture(&repo, &target_dir), &run);
     let packaged = snapshot(&library);
-    set_tree_writable(&library, false);
+    let _read_only = ReadOnlyTree::new(&library);
 
     let consumer = run.join("consumer");
     write_consumer(&consumer, &repo, &library);
@@ -138,6 +138,22 @@ fn snapshot(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
         }
     }
     entries
+}
+
+/// Keeps a tree read-only while it lives and writable again once it drops, even when the test panics, so `cargo clean` and the next run can always remove it.
+struct ReadOnlyTree(PathBuf);
+
+impl ReadOnlyTree {
+    fn new(path: &Path) -> Self {
+        set_tree_writable(path, false);
+        Self(path.to_path_buf())
+    }
+}
+
+impl Drop for ReadOnlyTree {
+    fn drop(&mut self) {
+        set_tree_writable(&self.0, true);
+    }
 }
 
 /// Directories are made writable before what they hold and read-only after it, so a walk never meets a directory it cannot enter or change.
