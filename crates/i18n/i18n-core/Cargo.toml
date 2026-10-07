@@ -10,6 +10,14 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+[[test]]
+name = "override_installed"
+path = "src/override_installed_test.rs"
+
+[[test]]
+name = "override_uninstalled"
+path = "src/override_uninstalled_test.rs"
+
 [dependencies]
 reactive-core = { workspace = true }
 

@@ -108,14 +108,15 @@ pub struct Catalog {
 impl Catalog {
     /// Resolves `key` for `locale`, falling back to [`Catalog::default_locale`] when the key exists but has no message for the active locale. `None` only when the key is absent entirely.
     pub fn message(&self, key: &str, locale: &str) -> Option<&Message> {
-        let entry = self
-            .entries
+        self.message_in(key, locale)
+            .or_else(|| self.message_in(key, self.default_locale))
+    }
+
+    pub(crate) fn message_in(&self, key: &str, locale: &str) -> Option<&Message> {
+        self.entries
             .binary_search_by(|e| e.key.cmp(key))
             .ok()
-            .map(|i| &self.entries[i])?;
-        entry
-            .lookup(locale)
-            .or_else(|| entry.lookup(self.default_locale))
+            .and_then(|i| self.entries[i].lookup(locale))
     }
 
     /// Whether `key` exists in the catalog (in any locale). Used by the build-time `t!` validator.
