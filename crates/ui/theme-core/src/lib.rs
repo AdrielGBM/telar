@@ -22,7 +22,8 @@ mod density;
 mod mode;
 
 pub use context::{
-    ScopedTheme, Theme, ThemeTokens, nearest_theme, set_theme, use_theme, use_theme_tokens,
+    ScopedTheme, Theme, ThemeExtensions, ThemeTokens, nearest_theme, set_theme, use_theme,
+    use_theme_extension, use_theme_tokens,
 };
 pub use density::{ControlSize, control_scale, set_control_size, use_control_size};
 pub use mode::{

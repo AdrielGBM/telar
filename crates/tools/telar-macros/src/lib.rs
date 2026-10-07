@@ -77,6 +77,7 @@ pub fn derive_props(input: TokenStream) -> TokenStream {
 /// - `#[token(other)]` on a field: that field also answers `other`.
 /// - `#[theme(token = expr)]` on the struct: an expression, which may read `self`.
 /// - `#[theme(default(a, b))]` on the struct: keep the built-in, on purpose.
+/// - `#[theme(extension)]` on a field: the field's value is a plugin's own tokens, which that plugin reads with `use_theme_extension::<FieldType>()` wherever this theme is in force.
 #[proc_macro_derive(ThemeTokens, attributes(token, theme))]
 pub fn derive_theme_tokens(input: TokenStream) -> TokenStream {
     let parsed = match syn::parse::<syn::DeriveInput>(input) {

@@ -109,3 +109,33 @@ fn a_named_signal_type_decides_serde_before_the_value_is_probed() {
     let inferred: RwSignal<u8> = crate::hot_signal_auto!("t5::inferred", type RwSignal<_>, 3);
     assert_eq!(inferred.peek(), 3);
 }
+
+/// A plugin's tokens are not carried in the snapshot: they belong to the theme the restored mode re-installs, so they come back with it from the incoming library's own `setup`.
+#[test]
+fn a_theme_extension_follows_the_restored_mode() {
+    #[derive(Clone, Default)]
+    struct ChipTokens(f32);
+
+    #[derive(Clone)]
+    struct Chipped(f32);
+    impl theme_core::ThemeTokens for Chipped {
+        fn register_extensions(&self, extensions: &mut theme_core::ThemeExtensions) {
+            extensions.insert(ChipTokens(self.0));
+        }
+    }
+
+    fn setup() {
+        theme_core::register_mode("midnight", || theme_core::set_theme(Chipped(12.0)));
+        theme_core::register_mode("modern", || theme_core::set_theme(Chipped(4.0)));
+        theme_core::set_mode("modern");
+    }
+
+    setup();
+    theme_core::set_mode("midnight");
+    let blob = hot_snapshot_json();
+
+    setup();
+    assert_eq!(theme_core::use_theme_extension::<ChipTokens>().0, 4.0);
+    hot_restore_json(&blob);
+    assert_eq!(theme_core::use_theme_extension::<ChipTokens>().0, 12.0);
+}

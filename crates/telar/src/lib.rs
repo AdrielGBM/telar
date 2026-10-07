@@ -257,10 +257,11 @@ pub use surface::{
 pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    ControlSize, ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeTokens, active_mode,
-    control_scale, follow_system, is_dark, nearest_theme, register_mode, scheme_preference,
-    set_control_size, set_mode, set_scheme_preference, set_theme, use_control_size, use_mode,
-    use_resolved_scheme, use_scheme_preference, use_theme, use_theme_tokens,
+    ControlSize, ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions,
+    ThemeTokens, active_mode, control_scale, follow_system, is_dark, nearest_theme, register_mode,
+    scheme_preference, set_control_size, set_mode, set_scheme_preference, set_theme,
+    use_control_size, use_mode, use_resolved_scheme, use_scheme_preference, use_theme,
+    use_theme_extension, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;

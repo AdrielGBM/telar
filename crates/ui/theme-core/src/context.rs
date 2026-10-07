@@ -1,6 +1,7 @@
-//! The installed theme: setting one, and reading it back as either the app's own type or the token trait.
+//! The installed theme: setting one, and reading it back as the app's own type, the token trait, or a plugin's own tokens.
 
-use std::any::Any;
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -148,21 +149,45 @@ pub trait ThemeTokens: 'static {
     fn highlight_high(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.55, 0.20)
     }
+
+    /// Not a token: where a theme hands over the values of tokens a plugin declares for itself, each keyed by its type and read back with [`use_theme_extension`]. The derive fills it from the fields marked `#[theme(extension)]`; a theme that inserts nothing leaves every plugin on its own defaults.
+    fn register_extensions(&self, _extensions: &mut ThemeExtensions) {}
 }
 
-/// One theme behind the two views it is read through: the catalogue asks it questions through `ThemeTokens`, while `use_theme` hands the application its own type back. `Rc<dyn Any>` is all the downcast needs, which is why a theme does not implement a trait to supply it.
+/// The values a theme supplies for vocabularies it does not define, one per type: a plugin declares its own token struct and the application's theme carries an instance of it, so neither has to name the other's type.
+#[derive(Default)]
+pub struct ThemeExtensions(HashMap<TypeId, Rc<dyn Any>>);
+
+impl ThemeExtensions {
+    /// Supplies `value` to every [`use_theme_extension::<K>`](use_theme_extension) under this theme, replacing an earlier value of the same type.
+    pub fn insert<K: Default + Clone + 'static>(&mut self, value: K) {
+        self.0.insert(TypeId::of::<K>(), Rc::new(value));
+    }
+
+    fn get<K: Clone + 'static>(&self) -> Option<K> {
+        self.0.get(&TypeId::of::<K>())?.downcast_ref::<K>().cloned()
+    }
+}
+
+/// One theme behind the three views it is read through: the catalogue asks it questions through `ThemeTokens`, `use_theme` hands the application its own type back, and a plugin reads its own tokens out of the extensions. `Rc<dyn Any>` is all the downcast needs, which is why a theme does not implement a trait to supply it.
+///
+/// The extensions are collected here, once per installed value, so they are replaced exactly when the theme is: a mode switch, a [`ScopedTheme::set`] and a hot reload's re-run of `setup` each install a new `Installed`, and no reader sees one theme's tokens beside another's extensions.
 #[derive(Clone)]
 struct Installed {
     theme: Rc<dyn Any>,
     tokens: Rc<dyn ThemeTokens>,
+    extensions: Rc<ThemeExtensions>,
 }
 
 impl Installed {
     fn new<T: ThemeTokens + Clone + 'static>(theme: T) -> Self {
+        let mut extensions = ThemeExtensions::default();
+        theme.register_extensions(&mut extensions);
         let theme = Rc::new(theme);
         Self {
             theme: theme.clone(),
             tokens: theme,
+            extensions: Rc::new(extensions),
         }
     }
 }
@@ -279,6 +304,15 @@ pub fn use_theme_tokens() -> Rc<dyn ThemeTokens> {
         Some(installed) => installed.tokens,
         None => DEFAULT_TOKENS.with(Rc::clone),
     }
+}
+
+/// A plugin's own tokens as the theme in force supplies them, else `K::default()`.
+///
+/// Resolved like [`use_theme_tokens`]: the nearest provided theme, else the global one, and that theme only. A nested theme that supplies no `K` gives `K::default()` rather than an outer theme's `K`, so everything a component reads comes from one theme. Reads reactively, so a mode switch or a provider's [`set`](ScopedTheme::set) re-runs the caller.
+pub fn use_theme_extension<K: Default + Clone + 'static>() -> K {
+    in_force()
+        .and_then(|installed| installed.extensions.get::<K>())
+        .unwrap_or_default()
 }
 
 struct DefaultTokens;

@@ -33,6 +33,10 @@ In Rust:
 
 Every target resolves themes the same way: they are reactive state, read where a style is built.
 
+A plugin's own tokens, the fields a theme marks `#[theme(extension)]` (see [plugins](plugins.md#plugin-specific-tokens)),
+belong to the theme that carries them: under a subtree's theme a plugin reads that theme's value, or its own
+default when that theme supplies none, never the value of a theme further out.
+
 ## Components and their slots
 
 A component's `theme:` reaches what a call site nests inside it. The `children` placeholder builds its slot where

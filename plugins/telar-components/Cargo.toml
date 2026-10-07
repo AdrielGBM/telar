@@ -58,6 +58,10 @@ path = "src/strings_test.rs"
 name = "strings_override"
 path = "src/strings_override_test.rs"
 
+[[test]]
+name = "theme_extension"
+path = "src/theme_extension_test.rs"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 image = { workspace = true, features = ["png"] }
 telar = { workspace = true, features = ["headless"] }

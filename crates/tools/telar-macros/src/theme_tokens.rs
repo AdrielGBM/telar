@@ -1,4 +1,4 @@
-//! The `ThemeTokens` derive: forwarding a theme's fields to the catalogue's token trait.
+//! The `ThemeTokens` derive: forwarding a theme's fields to the catalogue's token trait, and registering the ones marked `#[theme(extension)]` as plugins' tokens.
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -46,8 +46,29 @@ fn parse_struct_attrs(input: &DeriveInput) -> syn::Result<Options> {
     Ok(options)
 }
 
-/// Token → the field expression answering it, from same-named fields and `#[token(...)]` aliases.
-fn parse_fields(input: &DeriveInput) -> syn::Result<HashMap<String, TokenStream2>> {
+#[derive(Default)]
+struct FieldMap {
+    /// Token → the field expression answering it, from same-named fields and `#[token(...)]` aliases.
+    answered: HashMap<String, TokenStream2>,
+    /// Fields marked `#[theme(extension)]`, each registered as its type's extension value.
+    extensions: Vec<Ident>,
+}
+
+fn is_extension(attr: &syn::Attribute) -> syn::Result<bool> {
+    let mut extension = false;
+    attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("extension") {
+            extension = true;
+            return Ok(());
+        }
+        Err(meta.error(
+            "a field takes `#[theme(extension)]`; a token is answered by a field's name or `#[token(...)]`",
+        ))
+    })?;
+    Ok(extension)
+}
+
+fn parse_fields(input: &DeriveInput) -> syn::Result<FieldMap> {
     let Data::Struct(data) = &input.data else {
         return Err(syn::Error::new(
             input.span(),
@@ -61,12 +82,17 @@ fn parse_fields(input: &DeriveInput) -> syn::Result<HashMap<String, TokenStream2
         ));
     };
 
-    let mut answered = HashMap::new();
+    let mut map = FieldMap::default();
     for field in &fields.named {
         let ident = field.ident.as_ref().expect("named");
         let name = ident.to_string();
         if is_token(&name) {
-            answered.insert(name, quote!(self.#ident));
+            map.answered.insert(name, quote!(self.#ident));
+        }
+        for attr in field.attrs.iter().filter(|a| a.path().is_ident("theme")) {
+            if is_extension(attr)? {
+                map.extensions.push(ident.clone());
+            }
         }
         for attr in field.attrs.iter().filter(|a| a.path().is_ident("token")) {
             for alias in attr.parse_args_with(Punctuated::<Ident, Token![,]>::parse_terminated)? {
@@ -77,11 +103,11 @@ fn parse_fields(input: &DeriveInput) -> syn::Result<HashMap<String, TokenStream2
                         format!("`{alias_name}` is not a ThemeTokens token"),
                     ));
                 }
-                answered.insert(alias_name, quote!(self.#ident));
+                map.answered.insert(alias_name, quote!(self.#ident));
             }
         }
     }
-    Ok(answered)
+    Ok(map)
 }
 
 fn return_type(token: &str) -> TokenStream2 {
@@ -111,7 +137,7 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
         }
         let body = match options.values.get(token) {
             Some(expr) => quote!(#expr),
-            None => match from_fields.get(token) {
+            None => match from_fields.answered.get(token) {
                 Some(field) => field.clone(),
                 None => {
                     if REQUIRED.contains(&token) {
@@ -142,6 +168,15 @@ pub fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
                 first = missing[0]
             ),
         ));
+    }
+
+    if !from_fields.extensions.is_empty() {
+        let fields = &from_fields.extensions;
+        methods.push(quote! {
+            fn register_extensions(&self, extensions: &mut ::telar::ThemeExtensions) {
+                #(extensions.insert(::core::clone::Clone::clone(&self.#fields));)*
+            }
+        });
     }
 
     Ok(quote! {

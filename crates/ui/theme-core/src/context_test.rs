@@ -205,3 +205,100 @@ fn a_typed_read_with_no_such_theme_anywhere_names_the_type() {
     ScopedTheme::new(Green).provide();
     let _ = use_theme::<Red>();
 }
+
+#[derive(Clone, Debug, PartialEq)]
+struct ChipTokens {
+    radius: f32,
+}
+
+impl Default for ChipTokens {
+    fn default() -> Self {
+        Self { radius: 2.0 }
+    }
+}
+
+#[derive(Clone)]
+struct Chipped(f32);
+impl ThemeTokens for Chipped {
+    fn register_extensions(&self, extensions: &mut ThemeExtensions) {
+        extensions.insert(ChipTokens { radius: self.0 });
+    }
+}
+
+fn chip_radius() -> f32 {
+    use_theme_extension::<ChipTokens>().radius
+}
+
+#[test]
+fn an_extension_no_theme_supplies_is_the_plugins_default() {
+    assert_eq!(chip_radius(), 2.0, "no theme installed at all");
+    set_theme(Blue);
+    assert_eq!(chip_radius(), 2.0, "a theme that supplies none");
+}
+
+#[test]
+fn an_extension_the_global_theme_supplies_is_read_back() {
+    set_theme(Chipped(9.0));
+    assert_eq!(chip_radius(), 9.0);
+    assert_eq!(
+        use_theme_extension::<String>(),
+        String::new(),
+        "keyed by type, so another type still defaults"
+    );
+}
+
+/// An extension belongs to its theme: a nested provider that supplies none gives the default rather than the outer theme's value, so one component never mixes two themes.
+#[test]
+fn an_extension_resolves_from_the_nearest_provider_only() {
+    set_theme(Chipped(1.0));
+    let _app = reactive_core::owner_scope();
+    ScopedTheme::new(Chipped(5.0)).provide();
+    assert_eq!(chip_radius(), 5.0, "the provider shadows the global theme");
+    {
+        let _nested = reactive_core::owner_scope();
+        ScopedTheme::new(Chipped(7.0)).provide();
+        assert_eq!(chip_radius(), 7.0, "the nearest provider wins");
+    }
+    {
+        let _library = reactive_core::owner_scope();
+        ScopedTheme::new(Green).provide();
+        assert_eq!(
+            chip_radius(),
+            2.0,
+            "a nearer theme without the extension does not inherit the outer one"
+        );
+    }
+    assert_eq!(chip_radius(), 5.0);
+}
+
+#[test]
+fn a_reader_re_runs_when_its_provider_or_mode_switches() {
+    use std::cell::RefCell;
+
+    crate::register_mode("compact", || set_theme(Chipped(3.0)));
+    crate::register_mode("roomy", || set_theme(Chipped(12.0)));
+    crate::set_mode("compact");
+
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let global_seen = Rc::clone(&seen);
+    reactive_core::effect(move || global_seen.borrow_mut().push(chip_radius()));
+    crate::set_mode("roomy");
+    assert_eq!(*seen.borrow(), vec![3.0, 12.0], "the mode switch re-ran it");
+
+    let scoped_seen = Rc::new(RefCell::new(Vec::new()));
+    let scoped = {
+        let _scope = reactive_core::owner_scope();
+        let scoped = ScopedTheme::new(Chipped(4.0));
+        scoped.provide();
+        let scoped_seen = Rc::clone(&scoped_seen);
+        reactive_core::effect(move || scoped_seen.borrow_mut().push(chip_radius()));
+        scoped
+    };
+    scoped.set(Chipped(6.0));
+    crate::set_mode("compact");
+    assert_eq!(
+        *scoped_seen.borrow(),
+        vec![4.0, 6.0],
+        "its own provider re-ran it, the global mode did not"
+    );
+}

@@ -104,7 +104,9 @@ fn the_shared_token_table_is_exactly_the_trait() {
         .items
         .iter()
         .filter_map(|item| match item {
-            syn::TraitItem::Fn(method) => Some(method.sig.ident.to_string()),
+            syn::TraitItem::Fn(method) if is_question(&method.sig) => {
+                Some(method.sig.ident.to_string())
+            }
             _ => None,
         })
         .collect();
@@ -114,4 +116,56 @@ fn the_shared_token_table_is_exactly_the_trait() {
     declared.sort();
     tabled.sort();
     assert_eq!(tabled, declared);
+}
+
+/// A token is a question asked of the theme alone, `fn x(&self) -> T`; a method taking anything more, like `register_extensions`, is not one.
+fn is_question(sig: &syn::Signature) -> bool {
+    sig.inputs.len() == 1 && !matches!(sig.output, syn::ReturnType::Default)
+}
+
+#[test]
+fn a_theme_without_extension_fields_registers_none() {
+    let out = expand_str(FULL).expect("valid");
+    assert!(
+        !out.contains("register_extensions"),
+        "the trait's empty default stands: {out}"
+    );
+}
+
+#[test]
+fn an_extension_field_is_registered_by_its_value() {
+    let out = expand_str(&FULL.replace(
+        "border: Color,",
+        "border: Color, #[theme(extension)] chips: ChipTokens, #[theme(extension)] charts: ChartTokens,",
+    ))
+    .expect("valid");
+    assert!(
+        out.contains(
+            "fn register_extensions (& self , extensions : & mut :: telar :: ThemeExtensions)"
+        ),
+        "got: {out}"
+    );
+    assert!(out.contains("clone (& self . chips)"), "got: {out}");
+    assert!(out.contains("clone (& self . charts)"), "got: {out}");
+}
+
+/// An extension field is not a token, so it neither answers one nor stops a same-named token field from answering it.
+#[test]
+fn an_extension_field_answers_no_token() {
+    let out = expand_str(&FULL.replace(
+        "border: Color,",
+        "border: Color, #[theme(extension)] chips: ChipTokens,",
+    ))
+    .expect("valid");
+    assert!(!out.contains("fn chips"), "got: {out}");
+}
+
+#[test]
+fn an_unknown_field_option_is_rejected() {
+    let err = expand_str(&FULL.replace("border: Color,", "#[theme(extensoin)] border: Color,"))
+        .expect_err("a misspelt option");
+    assert!(
+        err.to_string().contains("#[theme(extension)]"),
+        "got: {err}"
+    );
 }

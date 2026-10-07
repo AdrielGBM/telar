@@ -124,8 +124,58 @@ A plugin cannot name the application's theme type, so it reads the shared vocabu
 `telar::use_theme_tokens()` returns the installed `ThemeTokens`, whose methods (`primary()`, `on_primary()`,
 `surface()`, `border()`, `muted()`, `radius()`, `spacing()`, …) every theme answers, with built-in defaults for
 the ones it leaves out. Read it inside a reactive closure, as `pill` does, so a theme switch re-colours the
-component. The vocabulary is closed; a plugin that needs a token it lacks has to wait for the typed extension
-map, which does not exist yet.
+component. The vocabulary is closed; a token only one plugin needs is that plugin's own, below.
+
+### Plugin-specific tokens
+
+A plugin declares the tokens it needs beyond the shared vocabulary as a type of its own, with its built-in
+answers as `Default`, and reads it with `telar::use_theme_extension::<K>()`:
+
+```rust
+#[derive(Clone)]
+pub struct ChipTokens {
+    pub radius: f32,
+    pub gap: f32,
+}
+
+impl Default for ChipTokens {
+    fn default() -> Self {
+        Self { radius: 999.0, gap: 4.0 }
+    }
+}
+
+let radius = telar::use_theme_extension::<ChipTokens>().radius;
+```
+
+An application supplies it by giving its theme a field of that type marked `#[theme(extension)]`:
+
+```rust
+#[derive(Clone, telar::ThemeTokens)]
+pub struct AppTheme {
+    pub primary: telar::Color,
+    // …the shared tokens…
+    #[theme(extension)]
+    pub chips: telar_chips::ChipTokens,
+}
+```
+
+A hand-written theme does the same in `ThemeTokens::register_extensions`, calling `extensions.insert(value)` once
+per type. The rules:
+
+- **Absent means default.** With no theme installed, or a theme that supplies no `K`, the read is `K::default()`,
+  so the plugin works in an application that has never heard of it.
+- **One theme, not a merge.** The value comes from the theme in force, resolved exactly like
+  `use_theme_tokens()`: the nearest `theme:`/`ScopedTheme` provider, else the global theme. A nested theme that
+  supplies no `K` gives `K::default()`, not the outer theme's `K`, so a component never draws one theme's colours
+  with another's metrics.
+- **Reactive.** The read subscribes the caller like `use_theme_tokens()`: a mode switch, `set_theme`, or a
+  provider's `set` re-runs it. Read it inside the closure that builds the style.
+- **Hot reload.** Extension values are not serialised: they belong to the theme value, and the incoming library's
+  `setup` re-installs that theme (and the restored mode re-applies its variant), extensions included.
+
+A library's `.rsx` has no syntax for an extension: `$theme.x` stays the shared vocabulary. A `.rsx` library that
+needs its own tokens calls `use_theme_extension` from Rust, in a `[logic]` closure or a helper function, and
+reads it inside the closure that builds the style like any other theme read.
 
 ### Overridable strings
 
@@ -343,7 +393,8 @@ that dylib, so two rules follow from the old copy being unmapped (`dlclose`):
 - Depends on `telar` by that name, at the exact version it is released with; documented as such.
 - Components re-exported from `lib.rs` with their `Props` types; the crate docs show the `prelude` line.
 - A `style` prop run through `amend_surface` on the principal surface, where there is one.
-- Colours, radii and spacing from `use_theme_tokens()`, read in a reactive closure.
+- Colours, radii and spacing from `use_theme_tokens()`, read in a reactive closure; tokens only this plugin
+  needs from `use_theme_extension::<K>()`, with `K::default()` as the built-in answers.
 - Strings through `translate_with_override` (or `t!` in a library) under the crate name.
 - No thread-local with a destructor, no stored `&'static Catalog`.
 - For a `.rsx` library: `cargo telar package --check` passes, and `cargo telar publish --dry-run` succeeds.
