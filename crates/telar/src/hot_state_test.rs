@@ -78,3 +78,34 @@ fn following_the_system_adds_nothing_to_the_snapshot() {
     preferences_core::set_reduced_motion_override(None);
     assert!(!hot_snapshot_json().contains(REDUCED_MOTION_OVERRIDE_KEY));
 }
+
+/// The transpiler swaps `signal(` for this macro and keeps the author's arguments as written, so a formatter's trailing comma has to be as welcome here as in the call it replaced.
+#[test]
+fn a_trailing_comma_is_accepted_like_the_call_it_replaces() {
+    let s = crate::hot_signal_auto!("t4::trailing", 1i32 + 1,);
+    assert_eq!(s.peek(), 2);
+}
+
+/// `None` alone is an `Option<_>`, and the probe settles on serde before the annotation can say what fills it; written in, the type picks the plain signal a non-serde value needs.
+#[test]
+fn a_named_signal_type_decides_serde_before_the_value_is_probed() {
+    #[derive(Clone, Copy, PartialEq, Debug)]
+    enum NotSerde {
+        A,
+    }
+    let open: RwSignal<Option<NotSerde>> =
+        crate::hot_signal_auto!("t5::open", type RwSignal<Option<NotSerde>>, None);
+    open.set(Some(NotSerde::A));
+    assert_eq!(open.peek(), Some(NotSerde::A));
+
+    let nested = crate::hot_signal_auto!(
+        "t5::nested",
+        type reactive_core::RwSignal<Vec<(u8, Option<String>)>>,
+        Vec::new(),
+    );
+    assert!(nested.peek().is_empty());
+    assert!(hot_snapshot_json().contains("t5::nested"));
+
+    let inferred: RwSignal<u8> = crate::hot_signal_auto!("t5::inferred", type RwSignal<_>, 3);
+    assert_eq!(inferred.peek(), 3);
+}

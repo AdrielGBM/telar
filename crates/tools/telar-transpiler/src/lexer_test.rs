@@ -54,58 +54,16 @@ fn contains_ident_skips_literals_and_comments() {
 }
 
 #[test]
-fn replace_whole_word_leaves_literals_and_comments_intact() {
+fn ident_positions_finds_every_whole_word_outside_literals() {
+    let code = "count + \"count\" + counter + r#count // count\ncount";
     assert_eq!(
-        replace_whole_word("charging.get()", "charging", "c2"),
-        "c2.get()"
-    );
-    assert_eq!(
-        replace_whole_word("charging = \"battery-charging\"", "charging", "c2"),
-        "c2 = \"battery-charging\""
-    );
-    assert_eq!(
-        replace_whole_word("charging.set(0) // charging", "charging", "c2"),
-        "c2.set(0) // charging"
-    );
-    assert_eq!(
-        replace_whole_word("charging_glyph", "charging", "c2"),
-        "charging_glyph"
+        ident_positions(code, "count").collect::<Vec<_>>(),
+        [0, 30, 45]
     );
 }
 
 #[test]
-fn replace_whole_word_leaves_a_struct_literal_field_alone() {
-    // Regression: a field and the signal holding it share a name, and the clone rewrite renamed both, leaving a struct literal naming a field that does not exist.
-    assert_eq!(
-        replace_whole_word("Config { vim: vim.peek() }", "vim", "vim_rsx_mv"),
-        "Config { vim: vim_rsx_mv.peek() }"
-    );
-    assert_eq!(
-        replace_whole_word("C { a: 1, vim: vim.peek() }", "vim", "v2"),
-        "C { a: 1, vim: v2.peek() }"
-    );
-    assert_eq!(
-        replace_whole_word("let vim: bool = vim.peek();", "vim", "v2"),
-        "let v2: bool = v2.peek();"
-    );
-    assert_eq!(replace_whole_word("vim::set()", "vim", "v2"), "v2::set()");
-}
-
-#[test]
-fn replace_whole_word_leaves_a_field_of_the_same_name_alone() {
-    // Regression: `let tool = memo(move || store().tool.get())` renamed the field and produced `no field tool_rsx_mv` against generated code.
-    assert_eq!(
-        replace_whole_word("store().tool.get()", "tool", "tool_rsx_mv"),
-        "store().tool.get()"
-    );
-    assert_eq!(
-        replace_whole_word("tool.set(s.tool.get())", "tool", "t2"),
-        "t2.set(s.tool.get())"
-    );
-    assert_eq!(replace_whole_word("x.count()", "count", "c2"), "x.count()");
-    assert_eq!(
-        replace_whole_word("Config { ..base }", "base", "b2"),
-        "Config { ..b2 }"
-    );
-    assert_eq!(replace_whole_word("0..count", "count", "c2"), "0..c2");
+fn format_arg_positions_finds_only_names_in_argument_position_inside_strings() {
+    let code = "x(\"{x} {x:?} {:x$} {xy} x\", r\"{x}\")";
+    assert_eq!(format_arg_positions(code, "x"), [4, 8, 15, 31]);
 }

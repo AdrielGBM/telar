@@ -2766,3 +2766,144 @@ fn a_statement_with_hoisted_clones_maps_every_line_to_its_own_source_line() {
     assert_eq!(result.source_map[at("s_rsx_mv.get() * 2")], Some(4));
     assert_eq!(result.source_map[at("});")], Some(5));
 }
+
+fn transpile_logic(logic: &str, hot_reload: bool) -> String {
+    let src = format!("[logic]\n{logic}\n[view]\ntext \"x\"\n");
+    let document = telar_parser::parse(&src).unwrap();
+    let code = crate::codegen::transpile(crate::codegen::TranspileInput {
+        document: &document,
+        component_name: "demo",
+        theme_type: None,
+        assets: None,
+        hot_reload,
+        previews: true,
+    })
+    .unwrap()
+    .rust_code;
+    assert_logic_parses(&code);
+    code
+}
+
+// Regression: a struct literal written one field per line had its field names renamed with the binding (`compact_rsx_mv: compact_rsx_mv.peek()`), because the rename saw one line at a time and so never the `{` or `,` that made the name a field.
+#[test]
+fn a_struct_literal_split_over_lines_keeps_its_field_names() {
+    for hot_reload in [false, true] {
+        let code = transpile_logic(
+            "let compact = signal(false);\nlet inverted = signal(false);\nlet save = move || {\n    let value = Config {\n        compact: compact.peek(),\n        inverted: inverted.peek(),\n    };\n    persist(&value);\n};",
+            hot_reload,
+        );
+        assert!(
+            code.contains("        compact: compact_rsx_mv.peek(),\n")
+                && code.contains("        inverted: inverted_rsx_mv.peek(),\n"),
+            "{code}"
+        );
+        assert!(!code.contains("compact_rsx_mv:"), "{code}");
+    }
+}
+
+#[test]
+fn a_shorthand_field_is_spelled_out_before_its_value_is_renamed() {
+    let code = transpile_logic(
+        "let compact = signal(false);\nlet save = move || persist(&Config {\n    compact,\n    other: 1,\n});",
+        false,
+    );
+    assert!(
+        code.contains("let compact_rsx_mv = compact.clone();"),
+        "{code}"
+    );
+    assert!(
+        code.contains("        compact: compact_rsx_mv,\n"),
+        "{code}"
+    );
+}
+
+#[test]
+fn a_field_or_method_sharing_the_name_is_not_renamed() {
+    let code = transpile_logic(
+        "let tool = signal(0);\nlet t = memo(move || {\n    store().tool.get() + tool\n        .get()\n        .tool()\n});",
+        false,
+    );
+    assert!(
+        code.contains("store().tool.get() + tool_rsx_mv\n"),
+        "{code}"
+    );
+    assert!(code.contains("        .tool()\n"), "{code}");
+}
+
+#[test]
+fn a_closure_parameter_that_shadows_the_signal_is_left_alone() {
+    let code = transpile_logic(
+        "let count = signal(0);\nlet f = move |count: i32| {\n    count + 1\n};",
+        false,
+    );
+    assert!(!code.contains("count_rsx_mv"), "{code}");
+
+    let code = transpile_logic(
+        "let count = signal(0);\nlet f = move |n: i32| {\n    let g = |count: i32| count * 2;\n    g(n) + count.get()\n};",
+        false,
+    );
+    assert!(code.contains("let g = |count: i32| count * 2;"), "{code}");
+    assert!(code.contains("g(n) + count_rsx_mv.get()"), "{code}");
+}
+
+#[test]
+fn a_struct_pattern_names_fields_and_binds_its_own_names() {
+    let code = transpile_logic(
+        "let compact = signal(false);\nlet f = move |config: Config| {\n    let Config { compact: wide, .. } = config;\n    wide && compact.get()\n};\nlet g = move |config: Config| {\n    let Config { compact, .. } = config;\n    compact\n};",
+        false,
+    );
+    assert!(
+        code.contains("let Config { compact: wide, .. } = config;"),
+        "{code}"
+    );
+    assert!(code.contains("wide && compact_rsx_mv.get()"), "{code}");
+    assert!(
+        code.contains("let Config { compact, .. } = config;\n        compact\n"),
+        "{code}"
+    );
+}
+
+/// The author already cloned what the closure takes, so the closure reads those clones and the outer signals are never moved: nothing to clone or rename.
+#[test]
+fn bindings_the_statement_makes_itself_are_not_captures() {
+    let code = transpile_logic(
+        "let compact = signal(false);\nlet save = std::rc::Rc::new({\n    let compact = compact.clone();\n    move || {\n        let value = Config {\n            compact: compact.peek(),\n        };\n        persist(&value);\n    }\n});",
+        false,
+    );
+    assert!(!code.contains("compact_rsx_mv"), "{code}");
+}
+
+#[test]
+fn a_signal_a_format_string_captures_is_cloned_and_renamed_inside_the_string() {
+    for hot_reload in [false, true] {
+        let code = transpile_logic(
+            "let count = signal(0);\nlet label = memo(move || {\n    format!(\"{count:>3} / {{count}}\")\n});",
+            hot_reload,
+        );
+        assert!(code.contains("let count_rsx_mv = count.clone();"), "{code}");
+        assert!(
+            code.contains("format!(\"{count_rsx_mv:>3} / {{count}}\")"),
+            "{code}"
+        );
+    }
+}
+
+#[test]
+fn a_typed_signal_keeps_its_type_in_the_hot_form_on_its_own_line() {
+    let code = transpile_logic(
+        "enum Open { A }\nlet open: RwSignal<Option<Open>> = signal(None);\nlet count = signal::<u8>(\n    0,\n);\nlet plain = signal(1);",
+        true,
+    );
+    assert!(
+        code.contains("    let open: RwSignal<Option<Open>> = telar::hot_signal_auto!(\"demo::open\", type RwSignal<Option<Open>>, None);\n"),
+        "{code}"
+    );
+    assert!(
+        code.contains("    let count = telar::hot_signal_auto!(\"demo::count\", type telar::RwSignal<u8>, \n        0,\n    );\n"),
+        "{code}"
+    );
+    assert!(
+        code.contains("    let plain = telar::hot_signal_auto!(\"demo::plain\", 1);\n"),
+        "{code}"
+    );
+}

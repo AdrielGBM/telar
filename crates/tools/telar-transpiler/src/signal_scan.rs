@@ -159,28 +159,71 @@ pub fn scan_effects(logic_source: &str) -> Vec<String> {
 }
 
 /// Rewrites a `let NAME = signal(EXPR)` logic line into the keyed hot-reload form `let NAME = telar::hot_signal_auto!("<fn_name>::<NAME>", EXPR)` so `cargo telar dev` can snapshot and restore the value across dylib swaps. Returns `None` when the line is not a signal binding (memos are derived state and recompute from their sources, so they are left untouched).
+///
+/// A type the author wrote — `let open: RwSignal<Option<Open>> = signal(None)` or `signal::<Option<Open>>(None)` — goes into the macro as `type …`. The macro chooses between a serde-backed and a plain signal by probing the initial value's type, and `None` alone is an `Option<_>` that the probe resolves to serde before the annotation ever reaches it.
 pub fn hot_rewrite_signal_decl(line: &str, fn_name: &str) -> Option<String> {
     let indent_len = line.len() - line.trim_start().len();
     let (indent, trimmed) = line.split_at(indent_len);
     let rest = trimmed.strip_prefix("let ")?;
-    let (binding, expr) = rest.split_once('=')?;
-    let expr_trimmed = expr.trim_start();
-    let args = expr_trimmed.strip_prefix("signal(")?;
-    let name = binding
-        .trim()
-        .strip_prefix("mut ")
-        .unwrap_or(binding.trim())
-        .split(':')
-        .next()
-        .unwrap_or("")
-        .trim();
+    let assign = assignment_at(rest)?;
+    let (binding, expr) = (rest[..assign].trim(), rest[assign + 1..].trim_start());
+    let (value_type, args) = signal_call(expr)?;
+    let (pattern, annotation) = match binding.split_once(':') {
+        Some((pattern, annotation)) => (pattern.trim(), Some(annotation.trim())),
+        None => (binding, None),
+    };
+    let name = pattern.strip_prefix("mut ").unwrap_or(pattern).trim();
     if !is_ident(name) {
         return None;
     }
+    let signal_type = annotation
+        .map(str::to_string)
+        .or_else(|| value_type.map(|value| format!("telar::RwSignal<{value}>")));
+    let typed = signal_type.map_or(String::new(), |ty| format!("type {ty}, "));
     Some(format!(
-        "{indent}let {} = telar::hot_signal_auto!(\"{fn_name}::{name}\", {args}",
-        binding.trim()
+        "{indent}let {binding} = telar::hot_signal_auto!(\"{fn_name}::{name}\", {typed}{args}"
     ))
+}
+
+/// The byte index of a `let`'s own `=`: the first one outside the type's brackets, so `Iterator<Item = u8>` in an annotation does not end the pattern.
+fn assignment_at(rest: &str) -> Option<usize> {
+    let bytes = rest.as_bytes();
+    let mut depth = 0i32;
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'<' | b'(' | b'[' => depth += 1,
+            b'>' if i > 0 && bytes[i - 1] == b'-' => {}
+            b'>' | b')' | b']' => depth -= 1,
+            b'=' if depth == 0 && bytes.get(i + 1) != Some(&b'=') => return Some(i),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// `signal(ARGS` or `signal::<T>(ARGS`, as the turbofish type (if any) and everything after the opening parenthesis.
+fn signal_call(expr: &str) -> Option<(Option<&str>, &str)> {
+    if let Some(args) = expr.strip_prefix("signal(") {
+        return Some((None, args));
+    }
+    let generic = expr.strip_prefix("signal::<")?;
+    let bytes = generic.as_bytes();
+    let mut depth = 1i32;
+    for (i, &b) in bytes.iter().enumerate() {
+        match b {
+            b'<' => depth += 1,
+            b'>' if i > 0 && bytes[i - 1] == b'-' => {}
+            b'>' => {
+                depth -= 1;
+                if depth == 0 {
+                    let args = generic[i + 1..].trim_start().strip_prefix('(')?;
+                    return Some((Some(generic[..i].trim()), args));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 #[cfg(test)]

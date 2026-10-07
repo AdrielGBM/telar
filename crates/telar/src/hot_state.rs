@@ -110,6 +110,13 @@ pub mod probe {
     pub struct SerdeTag;
     pub struct PlainTag;
 
+    pub trait SignalValue {
+        type Value;
+    }
+    impl<T> SignalValue for RwSignal<T> {
+        type Value = T;
+    }
+
     pub trait SerdeKind {
         fn kind(&self) -> SerdeTag;
     }
@@ -147,9 +154,19 @@ pub mod probe {
 }
 
 /// Creates a hot-preserved signal when the value type is serde-able, else a plain signal. Emitted by the rsx transpiler for `[logic]` signal bindings in hot-reload builds.
+///
+/// `type RwSignal<T>,` before the value fixes `T` before the probe looks at it; without it a value whose type is only settled later (`None` for an `Option<NotSerde>`) is probed as `Option<_>`, which picks serde and then fails its bounds.
 #[macro_export]
 macro_rules! hot_signal_auto {
-    ($key:expr, $init:expr) => {{
+    ($key:expr, type $signal:ty, $init:expr $(,)?) => {{
+        #[allow(unused_imports)]
+        use $crate::probe::{PlainKind as _, SerdeKind as _};
+        let __rsx_hot_init: <$signal as $crate::probe::SignalValue>::Value = $init;
+        (&$crate::probe::Probe(&__rsx_hot_init))
+            .kind()
+            .make($key, __rsx_hot_init)
+    }};
+    ($key:expr, $init:expr $(,)?) => {{
         #[allow(unused_imports)]
         use $crate::probe::{PlainKind as _, SerdeKind as _};
         let __rsx_hot_init = $init;

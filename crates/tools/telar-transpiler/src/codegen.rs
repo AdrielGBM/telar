@@ -3,7 +3,7 @@
 use telar_parser::{RsxDocument, ViewNode};
 
 use crate::error::TranspileError;
-use crate::lexer::{contains_ident, literal_or_comment_end, replace_whole_word};
+use crate::lexer::{contains_ident, literal_or_comment_end};
 use crate::signal_scan::{scan_locals, scan_signals};
 use crate::source_map::{ExprSpan, ShadowBinding};
 use crate::style::generate_style_section;
@@ -395,44 +395,49 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
                 continue;
             }
             let end = statement_end(&logic_lines, j);
-            let first_move = (j..end).find(|k| {
-                !hoisted_uses.contains(k) && find_move_keyword(logic_lines[*k]).is_some()
-            });
-            let captured: Vec<&str> = first_move
-                .map(|m| {
-                    let from_closure = logic_lines[m..end].join("\n");
-                    signals
-                        .iter()
-                        .filter(|s| s.line_index < m && contains_ident(&from_closure, &s.name))
-                        .map(|s| s.name.as_str())
-                        .collect()
+            let kept: Vec<usize> = (j..end).filter(|k| !hoisted_uses.contains(k)).collect();
+            let statement = kept
+                .iter()
+                .map(|&k| {
+                    let line = logic_lines[k];
+                    input
+                        .hot_reload
+                        .then(|| crate::signal_scan::hot_rewrite_signal_decl(line, &fn_name))
+                        .flatten()
+                        .unwrap_or_else(|| line.to_string())
                 })
-                .unwrap_or_default();
-            for name in &captured {
-                code.push(&format!("    let {name}_rsx_mv = {name}.clone();\n"), None);
-            }
-            for (k, line) in logic_lines.iter().enumerate().take(end).skip(j) {
-                if hoisted_uses.contains(&k) {
-                    continue;
+                .collect::<Vec<_>>()
+                .join("\n");
+            let mut declared: Vec<&str> = Vec::new();
+            for s in signals.iter().filter(|s| s.line_index < j) {
+                if !declared.contains(&s.name.as_str()) {
+                    declared.push(&s.name);
                 }
+            }
+            let moved = if kept
+                .iter()
+                .any(|&k| find_move_keyword(logic_lines[k]).is_some())
+            {
+                crate::rust::moved_reads(&statement, &declared).unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            for name in declared
+                .iter()
+                .filter(|name| moved.iter().any(|read| read.name == **name))
+            {
+                code.push(
+                    &format!("    let {} = {name}.clone();\n", moved_name(name)),
+                    None,
+                );
+            }
+            let statement = rename_moved_reads(&statement, &moved);
+            for (&k, line) in kept.iter().zip(statement.split('\n')) {
                 if line.is_empty() {
                     code.push("\n", Some(logic_line_src(k)));
                     continue;
                 }
-                let mut emitted_line = line.to_string();
-                if input.hot_reload
-                    && let Some(rewritten) =
-                        crate::signal_scan::hot_rewrite_signal_decl(&emitted_line, &fn_name)
-                {
-                    emitted_line = rewritten;
-                }
-                if first_move.is_some_and(|m| k >= m) {
-                    for name in &captured {
-                        emitted_line =
-                            replace_whole_word(&emitted_line, name, &format!("{name}_rsx_mv"));
-                    }
-                }
-                code.push(&format!("    {emitted_line}\n"), Some(logic_line_src(k)));
+                code.push(&format!("    {line}\n"), Some(logic_line_src(k)));
             }
             j = end;
         }
@@ -604,6 +609,27 @@ fn statement_end(lines: &[&str], start: usize) -> usize {
         }
     }
     lines.len()
+}
+
+fn moved_name(name: &str) -> String {
+    format!("{name}_rsx_mv")
+}
+
+/// `statement` with each read a `move` captures pointed at the clone made for it, so the closure takes the clone and the original stays usable after it.
+fn rename_moved_reads(statement: &str, reads: &[crate::rust::MovedRead]) -> String {
+    let mut renamed = String::with_capacity(statement.len() + reads.len() * 16);
+    let mut copied = 0;
+    for read in reads {
+        renamed.push_str(&statement[copied..read.offset]);
+        if read.shorthand {
+            renamed.push_str(&read.name);
+            renamed.push_str(": ");
+        }
+        renamed.push_str(&moved_name(&read.name));
+        copied = read.offset + read.name.len();
+    }
+    renamed.push_str(&statement[copied..]);
+    renamed
 }
 
 /// Byte index of the first whole-word `move` keyword in `line`, or `None`.

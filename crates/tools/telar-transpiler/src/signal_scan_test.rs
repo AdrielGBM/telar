@@ -54,3 +54,50 @@ fn ignores_plain_let() {
     let s = scan_signals("let x = 5;");
     assert!(s.is_empty(), "a plain let declares no signal: {s:?}");
 }
+
+#[test]
+fn hot_rewrite_hands_the_macro_the_type_the_author_wrote() {
+    let rewrite = |line: &str| hot_rewrite_signal_decl(line, "c").unwrap();
+    assert_eq!(
+        rewrite("let open: RwSignal<Option<Open>> = signal(None);"),
+        "let open: RwSignal<Option<Open>> = telar::hot_signal_auto!(\"c::open\", type RwSignal<Option<Open>>, None);"
+    );
+    assert_eq!(
+        rewrite("    let mut rows: telar::RwSignal<Vec<(u8, Option<Row>)>> = signal(Vec::new());"),
+        "    let mut rows: telar::RwSignal<Vec<(u8, Option<Row>)>> = telar::hot_signal_auto!(\"c::rows\", type telar::RwSignal<Vec<(u8, Option<Row>)>>, Vec::new());"
+    );
+    assert_eq!(
+        rewrite("let it: RwSignal<Box<dyn Iterator<Item = u8>>> = signal(empty());"),
+        "let it: RwSignal<Box<dyn Iterator<Item = u8>>> = telar::hot_signal_auto!(\"c::it\", type RwSignal<Box<dyn Iterator<Item = u8>>>, empty());"
+    );
+    assert_eq!(
+        rewrite("let f: RwSignal<Box<dyn Fn() -> u8>> = signal(Box::new(|| 1));"),
+        "let f: RwSignal<Box<dyn Fn() -> u8>> = telar::hot_signal_auto!(\"c::f\", type RwSignal<Box<dyn Fn() -> u8>>, Box::new(|| 1));"
+    );
+    assert_eq!(
+        rewrite("let r: ReadSignal<u8> = signal(0);"),
+        "let r: ReadSignal<u8> = telar::hot_signal_auto!(\"c::r\", type ReadSignal<u8>, 0);",
+        "passed through as written, so a type `signal` cannot return fails in every flavour alike"
+    );
+}
+
+#[test]
+fn hot_rewrite_reads_the_type_from_a_turbofish() {
+    let rewrite = |line: &str| hot_rewrite_signal_decl(line, "c").unwrap();
+    assert_eq!(
+        rewrite("let open = signal::<Option<Open>>(None);"),
+        "let open = telar::hot_signal_auto!(\"c::open\", type telar::RwSignal<Option<Open>>, None);"
+    );
+    assert_eq!(
+        rewrite("let f = signal::<Box<dyn Fn() -> u8>>(\n"),
+        "let f = telar::hot_signal_auto!(\"c::f\", type telar::RwSignal<Box<dyn Fn() -> u8>>, \n"
+    );
+}
+
+#[test]
+fn hot_rewrite_leaves_an_unannotated_signal_untyped() {
+    assert_eq!(
+        hot_rewrite_signal_decl("let status = signal(", "c").unwrap(),
+        "let status = telar::hot_signal_auto!(\"c::status\", "
+    );
+}
