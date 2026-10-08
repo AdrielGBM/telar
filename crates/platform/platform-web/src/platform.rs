@@ -446,13 +446,17 @@ fn on_key(pressed: bool, owns_keyboard: bool, event: &web_sys::KeyboardEvent) {
     let modifiers = map::key_modifiers(event);
     let read = map::key_of(&event.key());
     let code = event.code();
-    let paired = KEYS.with(|keys| {
-        let mut keys = keys.borrow_mut();
-        match pressed {
-            true => read.map(|key| keys.press(code, key)),
-            false => keys.release(&code, read),
-        }
-    });
+    // A key with no physical key behind it — an on-screen keyboard's, an input method's, one a script dispatched — has nothing to pair by, and pairing it by the empty `code` read every later one as the first.
+    let paired = match code.is_empty() {
+        true => read,
+        false => KEYS.with(|keys| {
+            let mut keys = keys.borrow_mut();
+            match pressed {
+                true => read.map(|key| keys.press(code, key)),
+                false => keys.release(&code, read),
+            }
+        }),
+    };
     let Some(key) = paired else {
         return;
     };

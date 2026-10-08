@@ -512,3 +512,17 @@ async fn what_telar_draws_no_ring_for_keeps_the_browser_s() {
     next_frames().await;
     recorded();
 }
+
+/// A key a script dispatches has no physical key behind it, and neither does one from an on-screen keyboard or an input method: each is read as the key it is, never as a repeat of the last one that came without a key up.
+#[wasm_bindgen_test]
+async fn a_key_with_no_physical_key_is_read_as_itself() {
+    render(BUTTON);
+    next_frames().await;
+    recorded();
+    press_on_focus("ArrowDown");
+    assert!(press_on_focus(" "), "the button keeps the Space it is");
+    next_frames().await;
+    let events = recorded();
+    assert!(pressed(&events, NamedKey::ArrowDown), "{events:?}");
+    assert!(pressed(&events, NamedKey::Space), "{events:?}");
+}
