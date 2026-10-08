@@ -97,7 +97,7 @@ pub use app::App;
 #[cfg(feature = "runtime")]
 pub use app_config::AppConfig;
 #[cfg(feature = "runtime")]
-pub use platform_core::{AppCtx, RedrawWaker};
+pub use platform_core::{AccessNode, AppCtx, RedrawWaker};
 // For a backend author driving a handler by hand. An application implements `App` and names neither.
 #[cfg(feature = "runtime")]
 pub use app_runtime::{AppRuntime, LocalApp};
@@ -117,7 +117,7 @@ pub use runner::font_config::FontSetup;
 #[cfg(feature = "runtime")]
 pub use tree::{Frame, HotTree, LocalTree, UiTree};
 #[cfg(feature = "runtime")]
-pub use ui_tree::{DevAction, DevOverlay};
+pub use ui_tree::{DevAction, DevOverlay, OverlayResponse};
 // Named in the tree shims the `app!` macro exports, so it has to be reachable through the facade.
 #[cfg(feature = "runtime")]
 pub use ui_tree::SegmentNodeInfo;

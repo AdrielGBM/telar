@@ -470,6 +470,27 @@ where
         window.request_redraw();
     }
 
+    fn apply_dev_action(&mut self, action: DevAction, window: &W) {
+        match action {
+            DevAction::Redraw => window.request_redraw(),
+            DevAction::ToggleBackend => {
+                let next = match self.env.prefs.backend.unwrap_or(RendererBackend::Auto) {
+                    RendererBackend::Hardware => RendererBackend::Software,
+                    _ => RendererBackend::Hardware,
+                };
+                self.env.prefs.backend = Some(next);
+                self.env.save_prefs();
+                match next {
+                    RendererBackend::Software => self.pending_restart = true,
+                    // Straight to a background build, so the running renderer keeps presenting until the new one lands.
+                    _ => {
+                        self.start_renderer(window, RendererBackend::Hardware);
+                    }
+                }
+            }
+        }
+    }
+
     /// Rebuilds the renderer after a backend switch or a transparency change.
     fn apply_pending_restart(&mut self, window: &W) {
         if !self.pending_restart {
@@ -495,7 +516,7 @@ where
     ///
     /// What it is worth paying for is decided by **focus**, and that is the whole point: holding the GPU awake is insurance against the next frame arriving late, and a frame only arrives from somebody who is there. A window nobody is looking at will not be typed into, so it can sleep at once; a focused one is one key press away from needing the GPU, however long it has been still. [`IDLE_GRACE`] is only the backstop for the window left focused and abandoned.
     fn keepalive_due(&self) -> bool {
-        if self.dev.keepalive_interval().is_some() {
+        if self.dev.needs_frame() {
             return true;
         }
         self.pacer.renderer_keepalive
@@ -514,11 +535,7 @@ where
             return None;
         }
         // A keepalive blit carries no new content, so it runs at its own cadence. Enforced here rather than in `about_to_wait` because a submitted frame is itself a wakeup: its commit returns the next dispatch at once.
-        let keepalive_interval = self
-            .dev
-            .keepalive_interval()
-            .unwrap_or(HW_KEEPALIVE_INTERVAL);
-        if !has_content && now.duration_since(self.pacer.last_submit) < keepalive_interval {
+        if !has_content && now.duration_since(self.pacer.last_submit) < HW_KEEPALIVE_INTERVAL {
             return None;
         }
         Some(has_content)
@@ -713,6 +730,10 @@ where
         // The message owns its commands from here, so release the tree and dev-plugin borrows for the submit below.
         drop(frame_commands);
         drop(commands_ref);
+        if self.dev.wants_access() {
+            let nodes = self.app.access_snapshot(&self.frame_text);
+            self.dev.on_access(&nodes);
+        }
         FrameMsg {
             width,
             height,
@@ -861,7 +882,6 @@ where
         ) {
             self.pacer.last_input = web_time::Instant::now();
         }
-        // Matched once. As four sequential `if let`s it re-tested the same value each time, and the two that end the dispatch read as guards on the ones above them rather than exits.
         match &event {
             Event::ScaleFactorChanged { scale_factor } => self.scale_factor = *scale_factor as f32,
             Event::WindowResized { width, height } => self.report_surface_size(*width, *height),
@@ -908,32 +928,14 @@ where
                 }
                 return;
             }
-            Event::KeyPressed { key, modifiers } => match self.dev.on_key(key, *modifiers) {
-                DevAction::Redraw => window.request_redraw(),
-                DevAction::ToggleBackend => {
-                    let next = match self.env.prefs.backend.unwrap_or(RendererBackend::Auto) {
-                        RendererBackend::Hardware => RendererBackend::Software,
-                        _ => RendererBackend::Hardware,
-                    };
-                    self.env.prefs.backend = Some(next);
-                    self.env.save_prefs();
-                    match next {
-                        RendererBackend::Software => self.pending_restart = true,
-                        // Straight to a background build, so the running renderer keeps presenting until the new one lands.
-                        _ => {
-                            self.start_renderer(window, RendererBackend::Hardware);
-                        }
-                    }
-                }
-                DevAction::None => {}
-            },
-            Event::PointerPressed { x, y, .. }
-                if self.dev.on_pointer_pressed(*x as f32, *y as f32) =>
-            {
-                window.request_redraw();
-                return;
-            }
             _ => {}
+        }
+        let overlay = self.dev.on_event(&event);
+        if let Some(action) = overlay.action {
+            self.apply_dev_action(action, window);
+        }
+        if overlay.consumed {
+            return;
         }
         // A hot-reloaded app dylib links its own reactive-core copy, which the host's batch cannot reach; a handler's signal write would flush immediately and re-run a segment's effect while its widget is still borrowed for `on_event`, silently dropping that segment's subscriptions.
         self.app.begin_event_batch();
@@ -1031,15 +1033,10 @@ where
         {
             // Against `last_tick`, the clock `on_redraw` gates on: reporting a deadline the pass would decline wakes the loop early and it spins re-asking.
             Some(FRAME_BUDGET.saturating_sub(self.pacer.last_tick.elapsed()))
+        } else if self.keepalive_due() {
+            Some(HW_KEEPALIVE_INTERVAL)
         } else {
-            if let Some(interval) = self.dev.keepalive_interval() {
-                // The dev overlay drives its own cadence.
-                Some(interval)
-            } else if self.keepalive_due() {
-                Some(HW_KEEPALIVE_INTERVAL)
-            } else {
-                None
-            }
+            None
         }
     }
 

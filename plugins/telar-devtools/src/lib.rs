@@ -11,11 +11,11 @@ use std::time::Duration;
 use web_time::Instant;
 
 use geometry_core::Rect;
-use platform_core::{Key, ModifiersState};
+use platform_core::{Event, Key, ModifiersState};
 use renderer_core::{
     BlendMode, Border, BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle,
 };
-use ui_tree::{DevAction, DevOverlay, SegmentNodeInfo};
+use ui_tree::{DevAction, DevOverlay, OverlayResponse, SegmentNodeInfo};
 
 fn rect_command(rect: Rect, style: RectStyle) -> DrawCommand {
     DrawCommand::Rect {
@@ -57,7 +57,6 @@ const GRAY: Color = Color::rgba(0.5, 0.5, 0.5, 1.0);
 const GRAY_DIM: Color = Color::rgba(0.3, 0.3, 0.3, 1.0);
 
 const FPS_WINDOW: Duration = Duration::from_secs(1);
-const KEEPALIVE_INTERVAL: Duration = Duration::from_millis(1000);
 
 /// The dev overlay: an FPS counter, a node inspector and the build-error banner.
 pub struct DevTools {
@@ -373,29 +372,58 @@ impl DevOverlay for DevTools {
         Cow::Owned(cmds)
     }
 
-    fn keepalive_interval(&self) -> Option<Duration> {
-        Some(KEEPALIVE_INTERVAL)
+    // The FPS badge decays to zero only if frames keep coming while the app is idle.
+    fn needs_frame(&self) -> bool {
+        true
     }
 
-    fn on_key(&mut self, key: &Key, modifiers: ModifiersState) -> DevAction {
-        if modifiers.is_ctrl && modifiers.is_shift {
-            match key {
-                Key::Char('b' | 'B') => return DevAction::ToggleBackend,
-                Key::Char('d' | 'D') => {
-                    self.panel_open = !self.panel_open;
-                    return DevAction::Redraw;
+    fn on_event(&mut self, event: &Event) -> OverlayResponse {
+        match event {
+            Event::KeyPressed { key, modifiers } => OverlayResponse {
+                consumed: false,
+                action: self.shortcut(key, *modifiers),
+            },
+            Event::PointerPressed { x, y, .. } if self.press_at(*x as f32, *y as f32) => {
+                OverlayResponse {
+                    consumed: true,
+                    action: Some(DevAction::Redraw),
                 }
-                Key::Char('i' | 'I') => {
-                    self.inspector_open = !self.inspector_open;
-                    return DevAction::Redraw;
-                }
-                _ => {}
             }
+            _ => OverlayResponse::IGNORED,
         }
-        DevAction::None
     }
 
-    fn on_pointer_pressed(&mut self, x: f32, y: f32) -> bool {
+    fn set_build_error(&mut self, error: Option<String>) {
+        self.build_error = error;
+    }
+
+    fn on_tree(&mut self, nodes: &[SegmentNodeInfo]) {
+        self.node_count = nodes.len();
+        self.nodes.clear();
+        self.nodes.extend_from_slice(nodes);
+    }
+}
+
+impl DevTools {
+    fn shortcut(&mut self, key: &Key, modifiers: ModifiersState) -> Option<DevAction> {
+        if !(modifiers.is_ctrl && modifiers.is_shift) {
+            return None;
+        }
+        match key {
+            Key::Char('b' | 'B') => Some(DevAction::ToggleBackend),
+            Key::Char('d' | 'D') => {
+                self.panel_open = !self.panel_open;
+                Some(DevAction::Redraw)
+            }
+            Key::Char('i' | 'I') => {
+                self.inspector_open = !self.inspector_open;
+                Some(DevAction::Redraw)
+            }
+            _ => None,
+        }
+    }
+
+    fn press_at(&mut self, x: f32, y: f32) -> bool {
         if self.inspector_open && self.inspector_rect.contains(x, y) {
             let list_y = y - INSPECTOR_HEADER_HEIGHT;
             if list_y >= 0.0 {
@@ -424,16 +452,6 @@ impl DevOverlay for DevTools {
             return true;
         }
         false
-    }
-
-    fn set_build_error(&mut self, error: Option<String>) {
-        self.build_error = error;
-    }
-
-    fn on_tree(&mut self, nodes: &[SegmentNodeInfo]) {
-        self.node_count = nodes.len();
-        self.nodes.clear();
-        self.nodes.extend_from_slice(nodes);
     }
 }
 

@@ -1,14 +1,66 @@
 use super::*;
 
-fn open_panel(dev: &mut DevTools) {
-    dev.on_key(
-        &Key::Char('d'),
-        ModifiersState {
+fn chord(key: char) -> Event {
+    Event::KeyPressed {
+        key: Key::Char(key),
+        modifiers: ModifiersState {
             is_ctrl: true,
             is_shift: true,
             ..ModifiersState::default()
         },
+    }
+}
+
+fn press(x: f64, y: f64) -> Event {
+    Event::PointerPressed {
+        x,
+        y,
+        button: platform_core::PointerButton::Primary,
+        source: platform_core::PointerSource::Mouse,
+    }
+}
+
+fn open_panel(dev: &mut DevTools) {
+    dev.on_event(&chord('d'));
+}
+
+#[test]
+fn the_shortcuts_ask_the_runner_and_leave_the_key_to_the_app() {
+    let mut dev = DevTools::default();
+    assert_eq!(
+        dev.on_event(&chord('b')),
+        OverlayResponse {
+            consumed: false,
+            action: Some(DevAction::ToggleBackend),
+        }
     );
+    assert_eq!(
+        dev.on_event(&chord('i')).action,
+        Some(DevAction::Redraw),
+        "toggling the inspector redraws"
+    );
+    assert!(dev.inspector_open);
+    let plain = Event::KeyPressed {
+        key: Key::Char('i'),
+        modifiers: ModifiersState::default(),
+    };
+    assert_eq!(dev.on_event(&plain), OverlayResponse::IGNORED);
+}
+
+#[test]
+fn a_press_on_the_badge_is_kept_from_the_app_and_one_elsewhere_is_not() {
+    let mut dev = DevTools::default();
+    drop(dev.on_frame(&[], 800.0, 600.0, false));
+    assert_eq!(dev.on_event(&press(10.0, 10.0)), OverlayResponse::IGNORED);
+    let badge = dev.on_event(&press(750.0, 578.0));
+    assert!(badge.consumed, "the badge press is the overlay's");
+    assert_eq!(badge.action, Some(DevAction::Redraw));
+    assert!(dev.panel_open, "and it opens the panel");
+}
+
+#[test]
+fn the_fps_counter_keeps_frames_coming_while_the_app_is_idle() {
+    assert!(DevTools::default().needs_frame());
 }
 
 fn panel_text(dev: &mut DevTools) -> Vec<String> {

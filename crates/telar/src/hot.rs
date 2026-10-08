@@ -201,6 +201,14 @@ impl crate::app_runtime::AppRuntime for HotApp {
         unsafe { dispatch(event) }
     }
 
+    // The controls and their rects live in the dylib's registries, which no host-side reading can see, and the dylib exports no snapshot of its own yet.
+    fn access_snapshot(
+        &self,
+        _frame: &[renderer_core::DrawCommand],
+    ) -> Vec<platform_core::AccessNode> {
+        Vec::new()
+    }
+
     // A title bar's `on_press` pushes into the dylib's platform-core copy, so the host drains it across this boundary. A missing symbol degrades to an empty vec: window controls are inert until the dylib is rebuilt.
     fn drain_window_commands(&self) -> Vec<platform_core::WindowCommand> {
         let Ok(drain) = (unsafe {

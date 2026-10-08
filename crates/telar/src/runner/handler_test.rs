@@ -227,7 +227,7 @@ fn a_clean_tree_with_a_continuous_region_is_still_worth_a_frame() {
     );
 }
 
-fn run_a_pass(handler: &mut AppHandler<HeadlessWindow, ()>, window: &HeadlessWindow) {
+fn run_a_pass<D: DevOverlay>(handler: &mut AppHandler<HeadlessWindow, D>, window: &HeadlessWindow) {
     handler.new_events();
     handler.pacer.last_tick = web_time::Instant::now() - FRAME_BUDGET * 2;
     handler.on_redraw(window);
@@ -1008,5 +1008,243 @@ fn a_surface_opens_in_its_configured_family_and_follows_a_new_one() {
         drawn_family(&handler),
         renderer_core::FontFamily::Monospace,
         "a tree built again keeps what the app chose over what the surface was configured with"
+    );
+}
+
+/// A tree that counts the pointer presses that reach it.
+struct Heard(Rc<Cell<u32>>);
+
+impl ui_tree::Component for Heard {
+    fn view(&self) -> ui_tree::RenderNode {
+        ui_tree::RenderNode::group([])
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        if matches!(event, Event::PointerPressed { .. }) {
+            self.0.set(self.0.get() + 1);
+        }
+        EventResult::Ignored
+    }
+}
+
+struct Listening(Rc<Cell<u32>>);
+
+impl App for Listening {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        Box::new(Heard(Rc::clone(&self.0)))
+    }
+}
+
+/// An overlay that takes every press for itself and lets everything else through.
+#[derive(Default)]
+struct Shield {
+    seen: u32,
+}
+
+impl DevOverlay for Shield {
+    fn on_frame<'a>(
+        &mut self,
+        base: &'a [renderer_core::DrawCommand],
+        _window_w: f32,
+        _window_h: f32,
+        _tree_dirty: bool,
+    ) -> std::borrow::Cow<'a, [renderer_core::DrawCommand]> {
+        std::borrow::Cow::Borrowed(base)
+    }
+
+    fn on_event(&mut self, event: &Event) -> ui_tree::OverlayResponse {
+        self.seen += 1;
+        ui_tree::OverlayResponse {
+            consumed: matches!(event, Event::PointerPressed { .. }),
+            action: None,
+        }
+    }
+}
+
+fn overlaid<D: DevOverlay>(app: Box<dyn AppRuntime>) -> AppHandler<HeadlessWindow, D> {
+    build_app_handler::<HeadlessWindow, D>(
+        app,
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "overlay-test".to_string(),
+        SurfaceRenderer::builtin(),
+    )
+}
+
+fn press_at(x: f64, y: f64) -> Event {
+    Event::PointerPressed {
+        x,
+        y,
+        button: platform_core::PointerButton::Primary,
+        source: platform_core::PointerSource::Mouse,
+    }
+}
+
+/// The overlay sits over the app, so a press it claims is one the app must never also act on.
+#[test]
+fn a_press_the_overlay_consumes_never_reaches_the_tree() {
+    let heard = Rc::new(Cell::new(0));
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = overlaid::<Shield>(Box::new(LocalApp(Listening(Rc::clone(&heard)))));
+    handler.tree = Some(handler.app.mount());
+
+    handler.on_event(press_at(10.0, 10.0), &window);
+    assert_eq!(heard.get(), 0, "the overlay took the press");
+    handler.on_event(
+        Event::PointerMoved {
+            x: 10.0,
+            y: 10.0,
+            source: platform_core::PointerSource::Mouse,
+        },
+        &window,
+    );
+    assert_eq!(handler.dev.seen, 2, "the overlay sees every event first");
+
+    let mut bare = overlaid::<()>(Box::new(LocalApp(Listening(Rc::clone(&heard)))));
+    bare.tree = Some(bare.app.mount());
+    bare.on_event(press_at(10.0, 10.0), &window);
+    assert_eq!(heard.get(), 1, "with no overlay the press is the app's");
+}
+
+/// An overlay that wants idle frames, and optionally the accessibility tree.
+#[derive(Default)]
+struct Watching {
+    frames: u32,
+    reading: bool,
+    heard: Vec<String>,
+}
+
+impl DevOverlay for Watching {
+    fn on_frame<'a>(
+        &mut self,
+        base: &'a [renderer_core::DrawCommand],
+        _window_w: f32,
+        _window_h: f32,
+        _tree_dirty: bool,
+    ) -> std::borrow::Cow<'a, [renderer_core::DrawCommand]> {
+        self.frames += 1;
+        std::borrow::Cow::Borrowed(base)
+    }
+
+    fn needs_frame(&self) -> bool {
+        true
+    }
+
+    fn wants_access(&self) -> bool {
+        self.reading
+    }
+
+    fn on_access(&mut self, nodes: &[platform_core::AccessNode]) {
+        self.heard = nodes.iter().map(|n| n.name.clone()).collect();
+    }
+}
+
+/// An FPS readout has to fall to zero once the app stops drawing, which it can only do if the overlay is still handed frames.
+#[test]
+fn an_overlay_that_needs_frames_keeps_them_coming_while_the_app_is_idle() {
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = overlaid::<Watching>(Box::new(LocalApp(Unchanging)));
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    handler.about_to_wait();
+    run_a_pass(&mut handler, &window);
+    let settled = handler.dev.frames;
+
+    assert_eq!(
+        handler.about_to_wait(),
+        Some(HW_KEEPALIVE_INTERVAL),
+        "a clean tree still wakes the loop for the overlay"
+    );
+    handler.pacer.last_submit = web_time::Instant::now() - HW_KEEPALIVE_INTERVAL;
+    run_a_pass(&mut handler, &window);
+    assert_eq!(
+        handler.dev.frames,
+        settled + 1,
+        "and the wake composes a frame"
+    );
+}
+
+/// Counts the accessibility snapshots the runner asks the app's runtime for.
+struct Counted<A: App> {
+    app: LocalApp<A>,
+    snapshots: Rc<Cell<u32>>,
+}
+
+impl<A: App> AppRuntime for Counted<A> {
+    fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
+        self.app.mount()
+    }
+
+    fn clear_color(&self) -> Option<renderer_core::Color> {
+        self.app.clear_color()
+    }
+
+    fn window_config(&self) -> Option<platform_core::WindowConfig> {
+        self.app.window_config()
+    }
+
+    fn on_frame(&mut self, ctx: &mut platform_core::AppCtx) {
+        self.app.on_frame(ctx)
+    }
+
+    fn access_snapshot(
+        &self,
+        frame: &[renderer_core::DrawCommand],
+    ) -> Vec<platform_core::AccessNode> {
+        self.snapshots.set(self.snapshots.get() + 1);
+        self.app.access_snapshot(frame)
+    }
+}
+
+fn counted(snapshots: &Rc<Cell<u32>>) -> Box<dyn AppRuntime> {
+    Box::new(Counted {
+        app: LocalApp(Labelled),
+        snapshots: Rc::clone(snapshots),
+    })
+}
+
+#[test]
+fn an_overlay_that_asks_reads_the_window_as_a_screen_reader_would() {
+    crate::install_default_text_metrics();
+    let snapshots = Rc::new(Cell::new(0));
+    let window = HeadlessWindow::new(200, 40);
+    let mut handler = overlaid::<Watching>(counted(&snapshots));
+    handler.dev.reading = true;
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    run_a_pass(&mut handler, &window);
+
+    assert_eq!(snapshots.get(), 1);
+    assert!(
+        handler.dev.heard.iter().any(|name| name == "Configured"),
+        "the overlay hears the text the app drew: {:?}",
+        handler.dev.heard
+    );
+}
+
+/// Building the snapshot walks the focus registry and every drawn text, which a frame with no reader for it must not pay for.
+#[test]
+fn no_snapshot_is_built_unless_the_overlay_asks() {
+    crate::install_default_text_metrics();
+    let window = HeadlessWindow::new(200, 40);
+
+    let snapshots = Rc::new(Cell::new(0));
+    let mut bare = overlaid::<()>(counted(&snapshots));
+    bare.new_events();
+    assert!(bare.on_resume(&window));
+    run_a_pass(&mut bare, &window);
+    assert_eq!(snapshots.get(), 0, "`()` costs nothing");
+
+    let mut quiet = overlaid::<Watching>(counted(&snapshots));
+    quiet.new_events();
+    assert!(quiet.on_resume(&window));
+    run_a_pass(&mut quiet, &window);
+    assert!(quiet.dev.frames > 0, "precondition: a frame was composed");
+    assert_eq!(
+        snapshots.get(),
+        0,
+        "an overlay that does not ask is not handed one"
     );
 }

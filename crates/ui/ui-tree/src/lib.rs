@@ -12,7 +12,7 @@ mod tree;
 mod wheel;
 
 pub use component::{Component, EventResult};
-pub use dev::{DevAction, DevOverlay};
+pub use dev::{DevAction, DevOverlay, OverlayResponse};
 pub use element::{element_capture, set_element_capture};
 pub use overlay_dispatch::{
     OverlayContext, OverlayGuard, OverlaySink, dispatch_overlays, register_overlay,

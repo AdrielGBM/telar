@@ -3,17 +3,32 @@
 //! A runtime with no overlay compiled in runs `()` through the same trait, so the frame loop has one shape whether or not one is installed. It lives here, beside [`SegmentNodeInfo`], because the tree an inspector reads is what the seam is *about* — and because a crate implementing an overlay should not have to depend on the facade to do it.
 
 use std::borrow::Cow;
-use std::time::Duration;
 
 use crate::SegmentNodeInfo;
-use platform_core::{Key, ModifiersState};
+use platform_core::{AccessNode, Event};
 use renderer_core::DrawCommand;
 
 /// What a dev overlay asks the runner to do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DevAction {
-    None,
     Redraw,
     ToggleBackend,
+}
+
+/// An overlay's answer to one event: whether it kept the event from the tree, and what the runner should do about it.
+///
+/// Consuming does not redraw by itself; an overlay whose picture changed asks for [`DevAction::Redraw`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OverlayResponse {
+    pub consumed: bool,
+    pub action: Option<DevAction>,
+}
+
+impl OverlayResponse {
+    pub const IGNORED: Self = Self {
+        consumed: false,
+        action: None,
+    };
 }
 
 /// The dev overlay seam: `()` in a release build, the inspector and FPS counter in a dev one.
@@ -26,11 +41,26 @@ pub trait DevOverlay: Default + 'static {
         tree_dirty: bool,
     ) -> Cow<'a, [DrawCommand]>;
 
-    fn keepalive_interval(&self) -> Option<Duration>;
+    /// Sees every event bound for the tree before the tree does; a consumed one never reaches it.
+    fn on_event(&mut self, event: &Event) -> OverlayResponse {
+        let _ = event;
+        OverlayResponse::IGNORED
+    }
 
-    fn on_key(&mut self, key: &Key, modifiers: ModifiersState) -> DevAction;
+    /// Whether the overlay wants frames while the app is idle, which the runner then presents at its keepalive cadence.
+    fn needs_frame(&self) -> bool {
+        false
+    }
 
-    fn on_pointer_pressed(&mut self, x: f32, y: f32) -> bool;
+    /// Whether the runner should build an accessibility snapshot after this frame and hand it to [`on_access`](Self::on_access).
+    fn wants_access(&self) -> bool {
+        false
+    }
+
+    /// The window's accessibility nodes as a screen reader would be told them, after a frame for which [`wants_access`](Self::wants_access) said yes.
+    fn on_access(&mut self, nodes: &[AccessNode]) {
+        let _ = nodes;
+    }
 
     /// Sets (or clears with `None`) the build error banner shown over the app.
     fn set_build_error(&mut self, error: Option<String>) {
@@ -55,17 +85,5 @@ impl DevOverlay for () {
         _tree_dirty: bool,
     ) -> Cow<'a, [DrawCommand]> {
         Cow::Borrowed(base)
-    }
-
-    fn keepalive_interval(&self) -> Option<Duration> {
-        None
-    }
-
-    fn on_key(&mut self, _key: &Key, _modifiers: ModifiersState) -> DevAction {
-        DevAction::None
-    }
-
-    fn on_pointer_pressed(&mut self, _x: f32, _y: f32) -> bool {
-        false
     }
 }

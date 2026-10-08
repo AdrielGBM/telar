@@ -75,6 +75,14 @@ pub trait AppRuntime: 'static {
         ui_core::dispatch_overlays(event) == ui_core::EventResult::Handled
     }
 
+    /// Describes the window to a screen reader from the commands of the last frame, read against the focus and layout registries this application's widgets live in.
+    fn access_snapshot(
+        &self,
+        frame: &[renderer_core::DrawCommand],
+    ) -> Vec<platform_core::AccessNode> {
+        ui_core::accessibility::snapshot(frame)
+    }
+
     /// Drains the window-management commands a UI closure queued during dispatch — a title bar's drag, a close button — so the runner can apply them to the OS window.
     fn drain_window_commands(&self) -> Vec<WindowCommand> {
         platform_core::take_window_commands()
