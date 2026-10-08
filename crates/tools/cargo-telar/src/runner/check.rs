@@ -72,6 +72,7 @@ pub(crate) fn run_check_cmd(args: CheckArgs) {
 
     report.add_all_semantic();
     report.add_all_prelude_problems();
+    report.add_all_previews_include_problems();
 
     if !report.is_empty() {
         eprintln!();
@@ -126,6 +127,17 @@ impl diagnostics::Report {
             }
             if let Ok(problems) = telar_project::prelude_problems(&member) {
                 self.add_prelude_problems(&problems);
+            }
+        }
+    }
+
+    /// The `[telar.previews] include` entries each package cannot reach, on the `telar.toml` lines that declare them, rather than as the unresolved path inside what `app!` expands to.
+    fn add_all_previews_include_problems(&mut self) {
+        let dir = super::config::find_package_dir(&[]);
+        let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
+        for member in super::bake::member_dirs(&root) {
+            if let Ok(problems) = telar_project::previews_include_problems(&member) {
+                self.add_previews_include_problems(&problems);
             }
         }
     }

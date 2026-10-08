@@ -682,10 +682,20 @@ fn find_move_keyword(line: &str) -> Option<usize> {
 
 /// The `fixture:` header option of a `[preview]`, if it names one. Quoted or bare, both spellings reach the same path — `fixture:"mock_env"` and `fixture:mock_env` are the same request.
 fn preview_fixture(preview: &telar_parser::Preview) -> Option<String> {
+    preview_path_option(preview, "fixture")
+}
+
+/// The `decorator:` header option of a `[preview]`: a fn taking the preview's root as `Children`, which the entry wraps it in. Quoted or bare, like `fixture:`.
+fn preview_decorator(preview: &telar_parser::Preview) -> Option<String> {
+    preview_path_option(preview, "decorator")
+}
+
+/// The Rust path a `[preview]` header option names, quoted or bare.
+fn preview_path_option(preview: &telar_parser::Preview, key: &str) -> Option<String> {
     let value = preview
         .options
         .iter()
-        .find(|option| option.key == "fixture")?
+        .find(|option| option.key == key)?
         .value
         .trim()
         .trim_matches('"');
@@ -728,6 +738,9 @@ fn preview_entry(
     );
     if let Some(surface) = preview_surface(preview) {
         entry.push_str(&format!("\n        .surface({surface})"));
+    }
+    if let Some(decorator) = preview_decorator(preview) {
+        entry.push_str(&format!("\n        .decorate({decorator})"));
     }
     entry.push_str(",\n");
     entry

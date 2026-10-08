@@ -12,7 +12,9 @@ use std::collections::HashMap;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
-use telar_project::{PreludeDeclaration, PreludeEntry, PreludeProblem};
+use telar_project::{
+    EntryProblem, PreludeDeclaration, PreludeEntry, PreludeProblem, PreviewsIncludeProblem,
+};
 use telar_transpiler::{GeneratedSite, RsxSpan, SourceMap};
 
 /// A `help:`/`note:` rustc hung off a diagnostic. Dropping these used to cost the half of a type error that says what to do about it.
@@ -93,6 +95,13 @@ impl Report {
 
     /// Adds the `[telar] prelude` entries a package cannot reach, on the `telar.toml` lines that declare them.
     pub(crate) fn add_prelude_problems(&mut self, problems: &[PreludeProblem]) {
+        for problem in problems {
+            self.push(problem_frame(problem));
+        }
+    }
+
+    /// Adds the `[telar.previews] include` entries a package cannot reach, on the `telar.toml` lines that declare them.
+    pub(crate) fn add_previews_include_problems(&mut self, problems: &[PreviewsIncludeProblem]) {
         for problem in problems {
             self.push(problem_frame(problem));
         }
@@ -545,7 +554,7 @@ impl PackagePrelude {
     }
 }
 
-fn problem_frame(problem: &PreludeProblem) -> Projected {
+fn problem_frame<T>(problem: &EntryProblem<T>) -> Projected {
     Projected {
         source: problem.declaration.file.clone(),
         line: problem.declaration.line,

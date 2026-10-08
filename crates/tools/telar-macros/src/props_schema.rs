@@ -1,4 +1,4 @@
-//! The `PropsSchema` half of the `Props` derive: what the explorer shows of each prop, emitted only in a build with previews.
+//! The `PropsSchema` half of the `Props` derive: what the workshop shows of each prop, emitted only in a build with previews.
 
 use proc_macro2::{Literal, TokenStream as TokenStream2};
 use quote::{ToTokens, quote};
@@ -110,7 +110,7 @@ fn refinement(
     }
 }
 
-/// A number literal, negated or not: what a control's bounds are written as, checked here rather than when the explorer first opens.
+/// A number literal, negated or not: what a control's bounds are written as, checked here rather than when the workshop first opens.
 fn number(expr: &Expr) -> Result<f64, syn::Error> {
     let parsed = match expr {
         Expr::Lit(ExprLit {

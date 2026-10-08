@@ -5,7 +5,8 @@ use std::process::Command;
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
 use super::config::{
     WEB_PROFILE_TOML, backend_as_str, find_package_dir, has_web_profile, load_config,
-    manifest_has_telar, missing_devtools_note, moved_features_hint_for, resolve_package,
+    manifest_has_telar, missing_devtools_note, missing_workshop_note, moved_features_hint_for,
+    resolve_package,
 };
 
 struct Doctor {
@@ -168,6 +169,48 @@ pub(crate) fn run_doctor_cmd() -> ! {
         );
     } else if resolved.package.is_some() {
         doc.info("devtools overlay", &missing_devtools_note(&resolved.name()));
+    }
+    if telar_project::declares_optional_dependency(
+        &resolved.package_dir,
+        telar_project::WORKSHOP_PACKAGE,
+    ) {
+        doc.ok(
+            "preview workshop",
+            "`telar-workshop` is an optional dependency, which `cargo telar preview` turns on",
+        );
+    } else if resolved.package.is_some() {
+        doc.info("preview workshop", &missing_workshop_note(&resolved.name()));
+    }
+    match telar_project::previews_include_problems(&package_dir) {
+        Ok(problems) if !problems.is_empty() => {
+            for problem in problems {
+                let declaration = &problem.declaration;
+                doc.fail(
+                    "[telar.previews] include",
+                    &format!(
+                        "{}:{}: {} — {}",
+                        declaration.file.display(),
+                        declaration.line,
+                        problem.message,
+                        problem.help
+                    ),
+                );
+            }
+        }
+        Ok(_) => match telar_project::TelarManifest::load(&package_dir) {
+            Ok(manifest) if !manifest.telar.previews.include().is_empty() => {
+                let entries: Vec<String> = manifest
+                    .telar
+                    .previews
+                    .include()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect();
+                doc.ok("[telar.previews] include", &entries.join(", "));
+            }
+            _ => {}
+        },
+        Err(_) => {}
     }
     if resolved.targets_web() {
         if has_web_profile(&resolved.workspace_root) {

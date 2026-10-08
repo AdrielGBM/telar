@@ -1,0 +1,13 @@
+[telar]
+# "auto" draws with the GPU where there is one and the CPU where there is not.
+backend = "auto"
+# Crates whose components every `.rsx` file sees without a `use`.
+prelude = ["telar_components"]
+
+[telar.dev.window]
+title = "catalogue"
+width = 1000
+height = 700
+
+[telar.previews]
+include = ["telar-components"]

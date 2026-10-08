@@ -1,4 +1,4 @@
-//! The fallback preview host: every preview in one scrolling column, for a build with no explorer.
+//! The fallback preview host: every preview in one scrolling column, for a build with no workshop.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -10,12 +10,12 @@ use crate::{
     ScrollPage, Text, TextStyle, reset_layout_runtime,
 };
 
-use super::PreviewEntry;
 #[cfg(feature = "preview-headless")]
 use super::host::fail_duplicate_ids;
-use super::host::{Args, duplicate_ids, remounting};
+use super::host::{duplicate_ids, remounting, requested_preview};
+use super::{PreviewCtx, PreviewEntry};
 
-/// An app that renders previews instead of its own root.
+/// An app that renders previews instead of its own root: the page `cargo telar preview` falls back to when the package declares no workshop.
 ///
 /// Each preview is built inside its own [`crate::ErrorBoundary`], so one that fails or panics shows its error in place and the rest of the page keeps running, and is built again when an arg it read changes.
 pub struct PreviewApp {
@@ -42,7 +42,7 @@ fn failure_label(
 }
 
 impl PreviewApp {
-    /// A page of `entries`, in order. A debug build panics when two of them share an id, naming where each is written.
+    /// A page of `entries`, in order, or of the one [`requested_preview`] names by id when it is among them, otherwise of the requested component. A debug build panics when two of them share an id, naming where each is written.
     pub fn new(entries: Vec<PreviewEntry>) -> Self {
         if cfg!(debug_assertions)
             && let Some(duplicates) = duplicate_ids(&entries)
@@ -56,16 +56,16 @@ impl PreviewApp {
         reset_layout_runtime();
         let mut sections: Vec<Box<dyn LayoutItem>> = Vec::new();
 
-        // `cargo telar preview --component <name>` sets this to scope the window to one component.
-        let wanted = std::env::var("TELAR_PREVIEW_COMPONENT")
-            .ok()
-            .filter(|s| !s.is_empty());
+        let request = requested_preview();
+        let requested = request
+            .id
+            .as_deref()
+            .filter(|id| self.entries.iter().any(|entry| entry.id == *id));
 
-        for entry in self
-            .entries
-            .iter()
-            .filter(|e| wanted.as_deref().is_none_or(|w| e.component == w))
-        {
+        for entry in self.entries.iter().filter(|e| match requested {
+            Some(id) => e.id == id,
+            None => request.matches_component(e),
+        }) {
             let header_text = format!("[{}]  {}", entry.component, entry.name);
             let header = Text::new(
                 move || header_text.clone(),
@@ -77,7 +77,7 @@ impl PreviewApp {
             let entry = *entry;
             let record = failures.cloned();
             let canvas = remounting(
-                Args::for_entry(&entry).into(),
+                PreviewCtx::for_entry(&entry),
                 move |ctx| entry.build_root(ctx),
                 move |failure| failure_label(failure, record.as_ref()),
             )
@@ -242,3 +242,7 @@ fn sanitize(name: &str) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+#[path = "app_test.rs"]
+mod tests;

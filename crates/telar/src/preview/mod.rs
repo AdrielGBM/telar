@@ -2,28 +2,34 @@
 //!
 //! A preview is written in Rust with [`preview!`], which returns a [`Preview`] to go on configuring with its setters, or generated from a `[preview]` block in `.rsx`. Its body reads its inputs from the [`PreviewCtx`] it is handed: [`PreviewCtx::arg`] for a value handed to a prop at build, [`PreviewCtx::signal`] for one the tree reads as it runs. Each arg's type decides its control through [`PreviewArg`], refined by the prop of the same name.
 //!
-//! Everything here exists only under the `previews` feature, and items a crate declares for previews are gated with [`crate::__previews!`]. A crate lists every preview it carries from one fn at its root, which is how an application reaches a library's previews by name:
+//! Everything here exists only under the `previews` feature, and items a crate declares for previews are gated with [`crate::__previews!`]. A crate lists every preview it carries from one fn at its root, `telar_all_previews`, which is how an application reaches a library's previews by name, through `[telar.previews] include` in its `telar.toml`.
+//!
+//! `app!` and `rsx_modules!` define one that lists the crate's `.rsx` previews. A crate that also writes previews in Rust defines its own beside the macro call, which takes that one's place, and lists the `.rsx` ones in it through `telar_rsx_previews`:
 //!
 //! ```ignore
 //! telar::__previews! {
 //!     mod previews;
 //!
 //!     pub fn telar_all_previews() -> Vec<telar::preview::Preview> {
-//!         previews::previews()
+//!         [telar_rsx_previews(), previews::previews()].concat()
 //!     }
 //! }
 //! ```
+//!
+//! A crate with no `.rsx` and no macro call lists its Rust previews alone.
 //!
 //! What mounts previews and gives them controls is in [`host`].
 
 #[doc(hidden)]
 #[path = "probe.rs"]
 pub mod __probe;
+mod actions;
 mod arg;
 mod args;
 mod authoring;
 mod control;
 mod entry;
+mod globals;
 pub mod host;
 mod matrix;
 mod mount;
@@ -31,14 +37,12 @@ mod play;
 mod props;
 mod value;
 
-#[cfg(all(
-    any(feature = "preview", feature = "preview-headless"),
-    not(target_os = "android")
-))]
+#[cfg(not(target_os = "android"))]
 mod app;
 #[cfg(not(target_os = "android"))]
 mod runner;
 
+pub use actions::{ActionCall, ActionLog};
 pub use arg::PreviewArg;
 pub use args::{ArgBinding, ArgSpec};
 pub use authoring::IntoPreviewRoot;
@@ -46,6 +50,7 @@ pub use control::{ControlKind, NumberControl};
 pub use entry::{
     BuildFn, Decorator, Layout, PreviewCtx, PreviewEntry, PreviewEnv, PreviewSurface, SourceSpan,
 };
+pub use globals::Globals;
 pub use matrix::Matrix;
 pub use play::{Play, PlayError, PlayFn, PlayResult};
 pub use props::{HasPropsSchema, PropDefault, PropField, PropsSchema};

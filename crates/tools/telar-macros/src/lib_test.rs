@@ -676,3 +676,63 @@ fn a_library_never_installs_an_icon_notice() {
 
     assert_eq!(installer, None);
 }
+
+fn spaced(tokens: proc_macro2::TokenStream) -> String {
+    tokens.to_string()
+}
+
+/// A crate with Rust previews defines its own `telar_all_previews` beside the macro call, which only an item reached through a glob lets it shadow.
+#[test]
+fn the_rsx_table_is_a_default_a_crate_can_shadow() {
+    let consts = [quote::quote! { crate::card::CARD_PREVIEW_ENTRIES }];
+    let table = spaced(super::previews_table(true, &consts));
+    assert!(table.starts_with(":: telar :: __previews !"), "{table}");
+    assert!(table.contains("pub use __telar_previews :: * ;"), "{table}");
+    assert!(
+        table.contains("pub (crate) fn telar_rsx_previews ()"),
+        "{table}"
+    );
+    assert!(
+        table.contains("crate :: card :: CARD_PREVIEW_ENTRIES"),
+        "{table}"
+    );
+    assert!(table.contains("pub fn telar_all_previews ()"), "{table}");
+}
+
+/// A library compiled as a dependency is wired from its Plain artifact, which holds no `[preview]`, so its table names no const even when previews are on.
+#[test]
+fn a_flavour_without_previews_lists_no_rsx_preview() {
+    let consts = [quote::quote! { crate::card::CARD_PREVIEW_ENTRIES }];
+    let table = spaced(super::previews_table(false, &consts));
+    assert!(!table.contains("CARD_PREVIEW_ENTRIES"), "{table}");
+    assert!(table.contains("pub fn telar_all_previews ()"), "{table}");
+}
+
+#[test]
+fn an_application_lists_its_previews_then_each_included_crates() {
+    let includes = ["telar_components", "my_plugin"]
+        .map(|name| proc_macro2::Ident::new(name, proc_macro2::Span::call_site()));
+    let collected = spaced(super::app_previews_fn(&includes));
+    assert!(
+        collected.contains("[telar_all_previews () , :: telar_components :: telar_all_previews () , :: my_plugin :: telar_all_previews ()] . concat ()"),
+        "{collected}"
+    );
+}
+
+/// The workshop is named only under its own feature, and only for a package that declares it, so a package without it never sees a feature cfg it does not define.
+#[test]
+fn the_preview_shell_is_the_workshop_only_under_its_feature() {
+    let fallback = spaced(super::preview_shell(None));
+    assert_eq!(fallback, ":: telar :: preview :: host :: PreviewApp :: new");
+
+    let krate = proc_macro2::Ident::new("telar_workshop", proc_macro2::Span::call_site());
+    let shell = spaced(super::preview_shell(Some(&krate)));
+    assert!(
+        shell.contains("# [cfg (feature = \"telar-workshop\")] let shell = :: telar_workshop :: WorkshopApp :: new ;"),
+        "{shell}"
+    );
+    assert!(
+        shell.contains("# [cfg (not (feature = \"telar-workshop\"))] let shell = :: telar :: preview :: host :: PreviewApp :: new ;"),
+        "{shell}"
+    );
+}

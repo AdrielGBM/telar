@@ -10,6 +10,9 @@ use crate::cargo_manifest::{dependency_tables, read_manifest};
 /// The devtools overlay `cargo telar dev` turns on, as the application's `Cargo.toml` names it and as the feature of the same name.
 pub const DEVTOOLS_PACKAGE: &str = "telar-devtools";
 
+/// The workshop `cargo telar preview` turns on to show the previews in, as the application's `Cargo.toml` names it and as the feature of the same name.
+pub const WORKSHOP_PACKAGE: &str = "telar-workshop";
+
 /// Whether the package at `package_dir` declares `dependency` as an optional dependency that a feature of the same name turns on. A `Cargo.toml` that cannot be read declares nothing.
 ///
 /// The feature has to be one that turns the dependency on, or code gated on it would name a crate the build never compiled. Before the 2024 edition, Cargo gives an optional dependency an implicit feature of its own name unless some feature activates it as `dep:<name>`; from 2024 on, only an explicit feature exists, which is what `cargo add --optional` writes.

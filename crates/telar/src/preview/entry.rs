@@ -1,4 +1,4 @@
-//! [`PreviewEntry`]: everything the runner, the test harness and the explorer know about one preview.
+//! [`PreviewEntry`]: everything the runner, the test harness and the workshop know about one preview.
 
 use reactive_core::RwSignal;
 
@@ -7,17 +7,42 @@ use crate::{
 };
 
 use super::host::Args;
-use super::{ArgSpec, Matrix, PlayFn, PreviewArg, PropsSchema};
+use super::{ActionLog, ArgSpec, Globals, Matrix, PlayFn, PreviewArg, PropsSchema};
 
-/// What a preview's build fn is handed: the canvas it is built for, which it reads its args from.
+/// What a preview's build fn is handed: the canvas it is built for, which it reads its args from, logs its callbacks' calls to and takes its environment from.
 ///
-/// A host makes one from the canvas's [`Args`] with `PreviewCtx::from`, or with `PreviewCtx::default` for args held in memory only.
+/// A host makes one for an entry with [`PreviewCtx::for_entry`], or from the canvas's [`Args`] with `PreviewCtx::from`, and hands it the action log and the globals it shares with its panels through [`with_actions`](Self::with_actions) and [`with_globals`](Self::with_globals). `PreviewCtx::default` holds everything in memory only.
 #[derive(Clone, Debug, Default)]
 pub struct PreviewCtx {
     args: Args,
+    actions: ActionLog,
+    globals: Globals,
 }
 
 impl PreviewCtx {
+    /// The canvas `entry` mounts in: its args persisted under its id, a fresh action log, and globals seeded from its [`PreviewEnv`].
+    pub fn for_entry(entry: &PreviewEntry) -> Self {
+        Self::from(Args::for_entry(entry)).with_globals(Globals::seeded(&entry.env))
+    }
+
+    pub fn with_actions(self, actions: ActionLog) -> Self {
+        Self { actions, ..self }
+    }
+
+    pub fn with_globals(self, globals: Globals) -> Self {
+        Self { globals, ..self }
+    }
+
+    /// The log the preview's callbacks record their calls in.
+    pub fn actions(&self) -> ActionLog {
+        self.actions
+    }
+
+    /// The environment the canvas is given.
+    pub fn globals(&self) -> Globals {
+        self.globals
+    }
+
     /// The value `name`'s control holds, or `default`, in `default`'s own type, so a setter coerces it exactly as it would the literal.
     ///
     /// Reading an arg this way registers it as one whose change builds the preview again: a value handed to a prop once, at build, cannot follow a control any other way. Use [`Self::signal`] for a value the tree reads as it runs.
@@ -40,7 +65,11 @@ impl PreviewCtx {
 
 impl From<Args> for PreviewCtx {
     fn from(args: Args) -> Self {
-        Self { args }
+        Self {
+            args,
+            actions: ActionLog::new(),
+            globals: Globals::new(),
+        }
     }
 }
 
@@ -264,7 +293,7 @@ impl PreviewEntry {
         }
     }
 
-    /// Free-form labels the explorer filters by.
+    /// Free-form labels the workshop filters by.
     pub const fn tags(self, tags: &'static [&'static str]) -> Self {
         Self { tags, ..self }
     }

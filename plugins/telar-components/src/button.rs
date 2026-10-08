@@ -31,6 +31,7 @@ fn shell() -> LayoutStyle {
 /// A labelled, pressable button. This is the high-level convenience over the primitives (`box` + `on_press` + `hover` + a centred `text`); it lives in `telar-components`, not the kernel, so an app can drop it or ship its own. `fill`/`outline` are reactive colour closures (re-read every frame) so a button styled from a theme token re-colours when the theme switches.
 #[derive(Props)]
 pub struct ButtonProps {
+    /// The text on the button.
     #[props(into, default)]
     pub label: Reactive<String>,
     /// Filled variant colour. `Color::TRANSPARENT` (the default) means "unset" — the button keeps its theme-driven default fill. A closure so a theme token re-reads on every render.
@@ -39,8 +40,10 @@ pub struct ButtonProps {
     /// Outlined variant colour; `Color::TRANSPARENT` means unset. Takes precedence only when `fill` is unset.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub outline: Reactive<Color>,
+    /// Paints no surface of its own, so only the label shows.
     #[props(default = false)]
     pub ghost: bool,
+    /// Runs when the button is pressed.
     #[props(default = Rc::new(|| {}))]
     pub on_press: Rc<dyn Fn()>,
 }

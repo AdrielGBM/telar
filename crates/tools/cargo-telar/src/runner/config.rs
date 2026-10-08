@@ -427,6 +427,14 @@ pub(crate) fn missing_devtools_note(package: &str) -> String {
     )
 }
 
+/// What a package that declares no optional `telar-workshop` is told when `cargo telar preview` falls back to the page that lists every preview.
+pub(crate) fn missing_workshop_note(package: &str) -> String {
+    let workshop = telar_project::WORKSHOP_PACKAGE;
+    format!(
+        "`{package}` declares no optional `{workshop}` dependency, so previews open in a plain page instead of the workshop. Add it with `cargo add -p {package} {workshop} --optional`."
+    )
+}
+
 /// A `telar` feature that is a crate of its own now, and the feature groups of that crate it stood for.
 struct MovedFeature {
     feature: &'static str,

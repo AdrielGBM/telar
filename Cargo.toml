@@ -39,6 +39,7 @@ members = [
     "crates/tools/telar-baker",
     "apps/sandbox",
     "apps/landing",
+    "apps/catalogue",
     "plugins/telar-components",
     "plugins/telar-devtools",
     "crates/i18n/i18n-core",
@@ -54,6 +55,7 @@ members = [
     "plugins/telar-i18n",
     "crates/icons/icons-core",
     "plugins/telar-icons",
+    "plugins/telar-workshop",
 ]
 
 default-members = [
@@ -99,6 +101,7 @@ default-members = [
     "plugins/telar-i18n",
     "crates/icons/icons-core",
     "plugins/telar-icons",
+    "plugins/telar-workshop",
 ]
 
 [workspace.package]
@@ -183,6 +186,7 @@ telar-macros = { path = "crates/tools/telar-macros", version = "0.2.1" }
 telar-navigate = { path = "plugins/telar-navigate", version = "0.2.1" }
 telar-parser = { path = "crates/tools/telar-parser", version = "0.2.1" }
 telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.2.1", default-features = false }
+telar-workshop = { path = "plugins/telar-workshop", version = "0.2.1" }
 theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.2.1" }
 ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.2.1" }
 ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.2.1" }

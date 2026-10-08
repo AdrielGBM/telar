@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use super::*;
 
 /// A crate is named in `telar.toml` the way `Cargo.toml` names its package, and in generated code the way Rust names the crate.

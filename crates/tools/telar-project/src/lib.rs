@@ -10,6 +10,7 @@ mod assets;
 mod build;
 mod cargo_manifest;
 mod catalog;
+mod declared;
 mod dependencies;
 mod discovery;
 mod fonts;
@@ -20,6 +21,7 @@ pub mod naming;
 mod paths;
 mod prelude;
 mod prerender;
+mod previews;
 mod theme;
 pub mod theme_tokens;
 mod web;
@@ -41,7 +43,8 @@ pub use catalog::{
     CatalogEntry, CatalogIndex, CatalogSourceFile, I18N_CATALOG_PATH, I18N_MODULE,
     read_catalog_index,
 };
-pub use dependencies::{DEVTOOLS_PACKAGE, declares_optional_dependency};
+pub use declared::{DeclaredEntry, EntryProblem};
+pub use dependencies::{DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE, declares_optional_dependency};
 pub use discovery::{
     MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, MODULE_TREE_DIR, ModuleTree, SITE_DIR,
     assets_root, collect_files_by_ext, component_name, find_rsx_files, find_rsx_files_in_tree,
@@ -74,6 +77,11 @@ pub use prelude::{
 pub use prerender::{
     DEFAULT_SURFACE, PRERENDER_ENV, PageLocation, PageRequest, Preferences, PrerenderRequest,
     PrerenderState, PrerenderedPage, STATE_ELEMENT_ID, STATE_VERSION, Surface,
+};
+pub use previews::{
+    MATRIX_GLOBAL_AXES, MatrixAxes, MatrixValue, PreviewsInclude, PreviewsIncludeDeclaration,
+    PreviewsIncludeProblem, PreviewsSection, Viewport, previews_include_declarations,
+    previews_include_problems,
 };
 pub use theme::{normalize_theme_path, theme_type_in_config};
 pub use web::{OgImage, SchemeColors, ThemeColor, WebHost, is_absolute_url};

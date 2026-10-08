@@ -47,10 +47,10 @@ fn struct_and_field_docs_are_unindented_and_joined() {
 #[test]
 fn a_props_doc_attribute_wins_over_the_doc_comment() {
     let schema = schema_of(
-        "struct LabelProps { /// For rustdoc.\n #[props(doc = \"For the explorer.\")] text: String }",
+        "struct LabelProps { /// For rustdoc.\n #[props(doc = \"For the workshop.\")] text: String }",
     );
     assert!(
-        schema.contains(r#". doc ("For the explorer.")"#),
+        schema.contains(r#". doc ("For the workshop.")"#),
         "{schema}"
     );
     assert!(!schema.contains("For rustdoc."), "{schema}");

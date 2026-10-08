@@ -426,6 +426,32 @@ fn a_preview_fixture_runs_before_the_component_is_built() {
     );
 }
 
+/// A decorator wraps the preview's root, so the entry carries it rather than the build fn, and every host mounts the preview inside it.
+#[test]
+fn a_preview_decorator_wraps_its_entry() {
+    let src = "[view]\ntext \"x\"\n\n[preview \"Framed\" decorator:frames::card]\ndemo\n\n[preview \"Quoted\" decorator:\"frames::dark\"]\ndemo\n\n[preview \"Bare\"]\ndemo\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains(".decorate(frames::card)"),
+        "a bare path reaches the entry:\n{code}"
+    );
+    assert!(
+        code.contains(".decorate(frames::dark)"),
+        "and a quoted one the same way:\n{code}"
+    );
+    assert_eq!(
+        code.matches(".decorate(").count(),
+        2,
+        "a preview naming none is not decorated:\n{code}"
+    );
+    let framed = code.find("demo_preview_0").unwrap();
+    let quoted = code.find("demo_preview_1").unwrap();
+    assert!(
+        !code[framed..quoted].contains("frames::card"),
+        "the build fn is left bare:\n{code}"
+    );
+}
+
 /// `surface:WxH` turns a preview from a tree into a window: the entry carries the size the compositor would give it and, with `animate`, the enter transition its root plays. A size that does not parse is named where it was written rather than quietly falling back to a tree, which would answer a question the author never asked.
 #[test]
 fn a_preview_can_declare_the_surface_it_is() {

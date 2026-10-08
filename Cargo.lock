@@ -858,6 +858,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
+name = "catalogue"
+version = "0.2.1"
+dependencies = [
+ "telar",
+ "telar-components",
+ "telar-devtools",
+ "telar-workshop",
+]
+
+[[package]]
 name = "cc"
 version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6330,6 +6340,20 @@ dependencies = [
  "notify",
  "telar",
  "tracing",
+]
+
+[[package]]
+name = "telar-workshop"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "telar",
+ "telar-components",
+ "telar-devtools",
+ "telar-icons",
+ "telar-navigate",
+ "telar-theme-core",
 ]
 
 [[package]]

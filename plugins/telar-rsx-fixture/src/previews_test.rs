@@ -90,6 +90,12 @@ telar::__previews! {
         }
 
         #[test]
+        fn the_crates_own_list_shadows_the_rsx_only_one() {
+            assert!(telar_rsx_fixture::__telar_previews::telar_all_previews().is_empty());
+            assert_eq!(telar_all_previews().len(), 2);
+        }
+
+        #[test]
         fn a_preview_names_its_component_and_where_it_is_written() {
             let entry = entry("telar_rsx_fixture--tally--default");
             assert_eq!(entry.component, "tally");

@@ -1,0 +1,41 @@
+[package]
+name = "telar-workshop"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "The component workshop for Telar: browse an application's previews, render each in an isolated canvas and edit its args live."
+keywords = ["telar", "workshop", "preview", "components", "gui"]
+categories = ["gui", "development-tools"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+# A `[telar] library`: the icons its chrome names from Rust are baked into `.telar/`, which cargo leaves out of a package unless it is listed.
+include = [
+    "/README.md",
+    "/telar.toml",
+    "/src/**",
+    "!/src/**/.telar/modules-hot.rs",
+    "!/src/**/.telar/modules-preview.rs",
+    "!/src/**/.telar/modules-hot-preview.rs",
+    "/.telar/build/**",
+    "/.telar/build.json",
+    "/.telar/i18n.rs",
+    "/.telar/i18n.json",
+    "/.telar/assets.rs",
+    "/.telar/assets.json",
+    "/.telar/icons-library.json",
+]
+
+[dependencies]
+telar = { workspace = true, features = ["previews"] }
+telar-components = { workspace = true, features = ["workbench", "overlays"] }
+telar-devtools.workspace = true
+telar-navigate.workspace = true
+theme-core.workspace = true
+serde = { workspace = true, features = ["rc"] }
+telar-icons.workspace = true
+
+[dev-dependencies]
+telar = { workspace = true, features = ["headless", "dev", "testing"] }
+
+serde_json.workspace = true

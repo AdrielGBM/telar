@@ -14,8 +14,8 @@ pub use tally::{TallyProps, tally};
 telar::__previews! {
     mod previews;
 
-    /// Every preview this crate carries: the one fn an application collects a library's previews through.
+    /// Every preview this crate carries, its `.rsx` ones first: the one fn an application collects a library's previews through. Defining it here shadows the one `rsx_modules!` defines, which lists only the `.rsx` ones.
     pub fn telar_all_previews() -> Vec<telar::preview::PreviewEntry> {
-        previews::previews()
+        [telar_rsx_previews(), previews::previews()].concat()
     }
 }

@@ -135,3 +135,12 @@ pub use tooltip::{TooltipProps, tooltip};
 pub use tree_view::{SelectHandler, TrailingBuilder, TreeNode, TreeViewProps, tree_view};
 #[cfg(feature = "chrome")]
 pub use window_frame::{MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, window_frame};
+
+telar::__previews! {
+    mod previews;
+
+    /// Every preview this crate carries: the one fn an application collects a library's previews through.
+    pub fn telar_all_previews() -> Vec<telar::preview::PreviewEntry> {
+        previews::previews()
+    }
+}

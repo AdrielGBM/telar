@@ -4,11 +4,11 @@
 //!
 //! Every writer: the CLI's transpile, the macro's handshake, the editor's live mirror, the golden harness and a `build.rs` all read this key through [`resolve_prelude`], so a package cannot be transpiled against one set of crates by one of them and another by the next.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
 
-use crate::cargo_manifest::{dependency_tables, read_manifest};
+use crate::declared::{DeclaredEntry, EntryProblem, PackageDependencies, declarations};
 
 /// One `[telar] prelude` entry, as generated code spells it: a crate, or a path inside one, whose items are glob-imported into every `.rsx` of the package.
 ///
@@ -68,17 +68,9 @@ pub fn resolve_prelude(package_dir: &Path) -> Result<Vec<PreludeEntry>, crate::M
 }
 
 /// One `[telar] prelude` entry, and the `telar.toml` line that declares it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PreludeDeclaration {
-    pub entry: PreludeEntry,
-    pub file: PathBuf,
-    /// 1-based.
-    pub line: usize,
-    /// The character columns of the entry's string, quotes included, within [`Self::line`].
-    pub columns: (usize, usize),
-}
+pub type PreludeDeclaration = DeclaredEntry<PreludeEntry>;
 
-impl PreludeDeclaration {
+impl DeclaredEntry<PreludeEntry> {
     /// The crate the entry's path starts at, as Rust names it.
     pub fn root_crate(&self) -> &str {
         let path = self.entry.path();
@@ -87,47 +79,13 @@ impl PreludeDeclaration {
 }
 
 /// A `[telar] prelude` entry generated code would glob-import and the package cannot reach, said about the line that declares it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PreludeProblem {
-    pub declaration: PreludeDeclaration,
-    pub message: String,
-    pub help: String,
-}
+pub type PreludeProblem = EntryProblem<PreludeEntry>;
 
 /// The prelude [`resolve_prelude`] returns for `package_dir`, each entry paired with where it is written: the package's own `telar.toml`, or the workspace's when the package inherits it.
 pub fn prelude_declarations(
     package_dir: &Path,
 ) -> Result<Vec<PreludeDeclaration>, crate::ManifestError> {
-    crate::TelarManifest::load(package_dir)?;
-    for file in crate::TelarManifest::files(package_dir) {
-        let Ok(content) = std::fs::read_to_string(&file) else {
-            continue;
-        };
-        let spanned: SpannedManifest =
-            toml::from_str(&content).map_err(|e| crate::ManifestError::Invalid {
-                path: file.clone(),
-                message: e.to_string(),
-            })?;
-        let Some(prelude) = spanned.telar.and_then(|telar| telar.prelude) else {
-            continue;
-        };
-        return Ok(prelude
-            .iter()
-            .filter_map(|declared| {
-                let entry = PreludeEntry::parse(declared.get_ref()).ok()?;
-                let span = declared.span();
-                let line_start = content[..span.start].rfind('\n').map_or(0, |at| at + 1);
-                let column = |at: usize| content[line_start..at].chars().count();
-                Some(PreludeDeclaration {
-                    entry,
-                    file: file.clone(),
-                    line: content[..span.start].matches('\n').count() + 1,
-                    columns: (column(span.start), column(span.end)),
-                })
-            })
-            .collect());
-    }
-    Ok(Vec::new())
+    declarations(package_dir, |telar| telar.prelude, PreludeEntry::parse)
 }
 
 /// Every entry of `package_dir`'s prelude whose crate its `Cargo.toml` does not list under `[dependencies]`.
@@ -135,66 +93,24 @@ pub fn prelude_declarations(
 /// A crate generated code globs has to be one the package itself depends on: rustc otherwise reports an unresolved import against every generated file, none of which the author wrote, and the key that caused it goes unnamed. A `Cargo.toml` that cannot be read answers nothing rather than flagging every entry.
 pub fn prelude_problems(package_dir: &Path) -> Result<Vec<PreludeProblem>, crate::ManifestError> {
     let declarations = prelude_declarations(package_dir)?;
-    let Some(manifest) = read_manifest(package_dir) else {
+    let Some(dependencies) = PackageDependencies::read(package_dir) else {
         return Ok(Vec::new());
     };
-    let package = manifest
-        .get("package")
-        .and_then(|package| package.get("name"))
-        .and_then(toml::Value::as_str)
-        .unwrap_or("this package");
-    let normal = dependency_crates(&manifest, "dependencies");
     Ok(declarations
         .into_iter()
-        .filter(|declaration| {
-            let root = declaration.root_crate();
-            !normal.contains(root) && !ALWAYS_LINKED.contains(&root)
-        })
+        .filter(|declaration| !dependencies.reaches(declaration.root_crate()))
         .map(|declaration| {
             let root = declaration.root_crate().to_string();
-            let package_name = root.replace('_', "-");
-            let elsewhere = ["dev-dependencies", "build-dependencies"]
-                .into_iter()
-                .find(|table| dependency_crates(&manifest, table).contains(&root));
-            let help = match elsewhere {
-                Some(table) => format!(
-                    "`{root}` is under `[{table}]`, which a `.rsx` cannot reach: move it to `[dependencies]` (`cargo add {package_name}`)"
-                ),
-                None => format!(
-                    "add it with `cargo add -p {package} {package_name}`, or remove the entry"
-                ),
-            };
             PreludeProblem {
                 message: format!(
-                    "`[telar] prelude` entry `{}` names `{root}`, which is not a dependency of `{package}`",
-                    declaration.entry
+                    "`[telar] prelude` entry `{}` names `{root}`, which is not a dependency of `{}`",
+                    declaration.entry, dependencies.package
                 ),
-                help,
+                help: dependencies.missing_help(&root, "a `.rsx`"),
                 declaration,
             }
         })
         .collect())
-}
-
-/// Crates every Rust program can name without declaring them.
-const ALWAYS_LINKED: [&str; 3] = ["std", "core", "alloc"];
-
-/// The crate names Rust sees for one dependency table of `manifest`, its target-specific copies included. A renamed dependency is named by its key, which is what `package = "…"` exists to choose.
-fn dependency_crates(manifest: &toml::Table, table: &str) -> std::collections::HashSet<String> {
-    dependency_tables(manifest, table)
-        .flat_map(|dependencies| dependencies.keys())
-        .map(|key| key.replace('-', "_"))
-        .collect()
-}
-
-#[derive(Deserialize)]
-struct SpannedManifest {
-    telar: Option<SpannedTelar>,
-}
-
-#[derive(Deserialize)]
-struct SpannedTelar {
-    prelude: Option<Vec<toml::Spanned<String>>>,
 }
 
 /// The problems a single file's `prelude` has beyond what each entry checks on its own.
@@ -207,7 +123,7 @@ pub(crate) fn problems(entries: &[PreludeEntry]) -> Vec<String> {
         .collect()
 }
 
-fn is_plain_identifier(segment: &str) -> bool {
+pub(crate) fn is_plain_identifier(segment: &str) -> bool {
     let mut chars = segment.chars();
     let starts_well = chars
         .next()

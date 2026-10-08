@@ -5,8 +5,8 @@ use crate::{
     owner_scope,
 };
 
-use super::PreviewEntry;
-use super::host::{Args, duplicate_ids, fail_duplicate_ids};
+use super::host::{duplicate_ids, fail_duplicate_ids};
+use super::{PreviewCtx, PreviewEntry};
 
 /// The `cargo telar` dev-loop entry, for an app that wires its own runner instead of expanding [`crate::app!`] — a multi-surface host, or one on an out-of-tree backend, which reaches [`crate::run_with_platform`] or [`crate::run_multi_with_platform`] directly. `app!` generates a call to this; anything using `rsx_modules!` has to make it by hand, and until it does, `cargo telar preview`/`test` silently start the real application.
 ///
@@ -14,10 +14,14 @@ use super::host::{Args, duplicate_ids, fail_duplicate_ids};
 ///
 /// `setup` runs only on the dev path, never on the way to a normal start — a caller whose setup seeds a world that exists *for* previews must not pay for it, or change its own startup, every time the app launches. It is not optional on the dev path, because [`crate::use_theme`] panics when no theme is set: a `[preview]` reading one would otherwise fail for a reason that has nothing to do with the component under test.
 ///
-/// `entries` is a closure so a normal run pays nothing to build a list it will not read. `app!` passes its crate's `.rsx` previews, the `telar_all_preview_entries` that it and `rsx_modules!` emit; a runner wired by hand passes whatever list it builds, such as that one followed by the crate's own `telar_all_previews()`.
-pub fn dev_entry<F>(entries: F, config: AppConfig, setup: impl FnOnce()) -> bool
+/// `entries` is a closure so a normal run pays nothing to build a list it will not read. `app!` passes the crate's `telar_all_previews` followed by each `[telar.previews] include` crate's; a runner wired by hand passes whatever list it builds, usually its own `telar_all_previews`.
+///
+/// `shell` builds the app that shows the previews in a window under `cargo telar preview`: [`PreviewApp::new`](super::host::PreviewApp::new), or a workshop's. It reads the preview or component to open first, if any, from [`requested_preview`](super::host::requested_preview).
+pub fn dev_entry<F, S, A>(entries: F, config: AppConfig, setup: impl FnOnce(), shell: S) -> bool
 where
     F: Fn() -> Vec<PreviewEntry>,
+    S: FnOnce(Vec<PreviewEntry>) -> A,
+    A: crate::App + 'static,
 {
     let wanted = [
         "TELAR_PREVIEW_LIST",
@@ -54,14 +58,16 @@ where
         // Only a build with the feature can show a window; without it the caller starts its app as usual.
         #[cfg(feature = "preview")]
         {
-            crate::run_app_with_name(
-                config,
-                super::host::PreviewApp::new(entries()),
-                "telar-preview",
-            );
+            let entries = entries();
+            if let Some(duplicates) = duplicate_ids(&entries) {
+                eprintln!("{duplicates}");
+                std::process::exit(1);
+            }
+            crate::run_app_with_name(config, shell(entries), "telar-preview");
             return true;
         }
     }
+    let _ = shell;
     false
 }
 
@@ -90,7 +96,7 @@ pub fn try_run_test(entries: Vec<PreviewEntry>, config: AppConfig) -> ! {
         let outcome = catch_unwind(AssertUnwindSafe(|| -> Result<usize, LayoutError> {
             crate::reset_layout_runtime();
             ui_core::set_surface_size(geometry_core::Size::new(width, height));
-            let item = entry.build_root(&Args::for_entry(entry).into())?;
+            let item = entry.build_root(&PreviewCtx::for_entry(entry))?;
             let node = item.layout_node();
             compute_layout(
                 node,

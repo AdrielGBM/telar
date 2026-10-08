@@ -488,6 +488,37 @@ fn a_prelude_crate_that_is_not_a_dependency_is_one_error_on_its_telar_toml_line(
     assert!(!text.contains(".telar/"), "{text}");
 }
 
+/// An included crate the application does not depend on is said on the `telar.toml` line, rather than as an unresolved path inside what `app!` expands to.
+#[test]
+fn a_previews_include_that_is_not_a_dependency_is_an_error_on_its_telar_toml_line() {
+    let root = std::env::temp_dir().join(format!("telar_diag_include_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"app\"\n\n[dependencies]\ntelar = \"0.2\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("telar.toml"),
+        "[telar.previews]\ninclude = [\"telar-components\"]\n",
+    )
+    .unwrap();
+
+    let mut report = Report::default();
+    report.add_previews_include_problems(&telar_project::previews_include_problems(&root).unwrap());
+    let text = report.render(false);
+    std::fs::remove_dir_all(&root).ok();
+
+    assert!(report.has_errors(), "{text}");
+    assert!(
+        text.contains("error: `[telar.previews] include` entry `telar_components` is not a dependency of `app`"),
+        "{text}"
+    );
+    assert!(points_at(&text, "telar.toml:2"), "{text}");
+    assert!(text.contains("cargo add -p app telar-components"), "{text}");
+}
+
 /// A crate the package does depend on, and a path inside it that does not exist: only rustc can tell, and its answer still belongs on the key.
 #[test]
 fn a_prelude_path_that_does_not_resolve_is_reported_on_its_telar_toml_line() {

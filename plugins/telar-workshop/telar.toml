@@ -1,0 +1,5 @@
+[telar]
+library = true
+
+[telar.icons]
+iconify = "icons"

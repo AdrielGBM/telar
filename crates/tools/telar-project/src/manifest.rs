@@ -14,6 +14,7 @@ use crate::assets::{AssetKind, IdBaking};
 use crate::fonts::FontDeclaration;
 use crate::icons::{IconMode, IconsSection};
 use crate::prelude::PreludeEntry;
+use crate::previews::PreviewsSection;
 use crate::web::{OgImage, ThemeColor, WebHost};
 
 /// The file this describes, in the package root.
@@ -207,6 +208,9 @@ pub struct TelarSection {
     /// The faces this project ships, one entry per file. See [`FontDeclaration`].
     #[serde(default)]
     pub fonts: Vec<FontDeclaration>,
+    /// The crates whose previews `app!` lists after the package's own, and the viewports and matrices its previews name.
+    #[serde(default)]
+    pub previews: PreviewsSection,
     /// Where the ids of `telar-icons`' `icon` tag resolve and whether they are baked. `None` bakes nothing: every id is then left for a runtime source.
     pub icons: Option<IconsSection>,
     /// The pre-`[telar.i18n]` spelling of [`I18nSection::root`].
@@ -268,6 +272,7 @@ impl TelarManifest {
             .problems()
             .into_iter()
             .chain(manifest.telar.icons.iter().flat_map(IconsSection::problems))
+            .chain(manifest.telar.previews.problems())
             .collect();
         if !problems.is_empty() {
             return Err(ManifestError::Invalid {
@@ -315,6 +320,7 @@ impl TelarManifest {
             .flat_map(FontDeclaration::problems)
             .chain(crate::prelude::problems(manifest.telar.prelude()))
             .chain(manifest.telar.library_theme_problem())
+            .chain(manifest.telar.previews.file_problems())
             .collect();
         if !problems.is_empty() {
             return Err(ManifestError::Invalid {
@@ -369,6 +375,7 @@ impl TelarSection {
                 self.fonts
             },
             // Whole rather than merged: a package naming any source of its own is declaring where all of its icons come from.
+            previews: self.previews.over(base.previews),
             icons: self.icons.or(base.icons),
             locales: self.locales.or(base.locales),
             default_locale: self.default_locale.or(base.default_locale),

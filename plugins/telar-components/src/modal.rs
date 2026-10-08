@@ -61,6 +61,7 @@ pub struct ModalProps {
     /// Names this dialog, so anything can open it with `open_overlay(id)` without holding its signal. `""` (the default) leaves it unnamed. Ignored when `open` is bound — an explicit signal wins, so the two forms never disagree about which state is authoritative.
     #[props(default = "")]
     pub id: &'static str,
+    /// The dialog's heading, shown beside its Close affordance.
     #[props(into, default)]
     pub title: Reactive<String>,
     /// Runs after the modal sets `open = false` (scrim tap or Close), so a caller can react to dismissal.

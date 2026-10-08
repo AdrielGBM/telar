@@ -54,7 +54,7 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// In a build with previews it also implements `telar::preview::HasPropsSchema`, inside `telar::__previews!`: the struct's and each field's doc comment, type, default and setter flags, and the control a preview arg feeding the prop gets — its type's, unless the field says otherwise:
 ///
-/// - `#[props(doc = "…")]` — the prop's doc in the explorer, in place of its doc comment.
+/// - `#[props(doc = "…")]` — the prop's doc in the workshop, in place of its doc comment.
 /// - `#[props(control = …)]` — `range(min, max)` turns a number field into a slider, `step(step)` sets its increment, `multiline` grows a text field, and those three chain (`range(0, 1).step(0.1)`); they reach through an `Option` to the control it wraps and leave a control they do not fit as it was. `read_only` shows the value without a control.
 ///
 /// A props struct takes no generic parameters.
@@ -201,6 +201,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         rerun_stmts,
         preview_const_idents,
         flavour,
+        previews_include,
     } = match transpile_project(Invocation::App, Some(theme_type_str.as_str())) {
         Ok(o) => o,
         Err(err) => return err.into(),
@@ -215,7 +216,12 @@ pub fn app(input: TokenStream) -> TokenStream {
     let is_hot_reload = flavour.is_hot();
     let is_preview = flavour.has_previews();
 
-    let preview_fn = preview_entries_fn(is_preview, &preview_const_idents);
+    let preview_table = previews_table(is_preview, &preview_const_idents);
+    let app_previews = match is_preview {
+        true => app_previews_fn(&previews_include),
+        false => quote! {},
+    };
+    let shell = preview_shell(tooling_crate(telar_project::WORKSHOP_PACKAGE).as_ref());
 
     // The env-var dispatch lives in `telar::dev_entry` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
     //
@@ -223,16 +229,17 @@ pub fn app(input: TokenStream) -> TokenStream {
     let dev_entry_call = match is_preview {
         true => quote! {
             if ::telar::dev_entry(
-                telar_all_preview_entries,
+                __telar_app_previews,
                 ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
                 || #setup,
+                #shell,
             ) {
                 return;
             }
         },
         false => quote! {},
     };
-    let devtools = devtools_crate();
+    let devtools = tooling_crate(telar_project::DEVTOOLS_PACKAGE);
     let run_app = with_overlay(devtools.as_ref(), |overlay| {
         quote! {
             ::telar::run_app_with_devtools::<_, #overlay>(
@@ -292,9 +299,7 @@ pub fn app(input: TokenStream) -> TokenStream {
     let hot_export = if is_hot_reload {
         let body: TokenStream2 = if is_preview {
             quote! {
-                return ::std::boxed::Box::new(::telar::preview::host::PreviewApp::new(
-                    telar_all_preview_entries(),
-                ));
+                return ::std::boxed::Box::new((#shell)(__telar_app_previews()));
             }
         } else {
             quote! {
@@ -511,7 +516,8 @@ pub fn app(input: TokenStream) -> TokenStream {
     quote! {
         #rerun_stmts
         #include_stmts
-        #preview_fn
+        #preview_table
+        #app_previews
         #desktop_run
         #android_run
         #hot_export
@@ -523,21 +529,13 @@ pub fn app(input: TokenStream) -> TokenStream {
     .into()
 }
 
-/// The crate `telar-devtools` is named by in the package being expanded, when its `Cargo.toml` declares it as an optional dependency.
+/// The crate the tooling `package` (`telar-devtools`, `telar-workshop`) is named by in the package being expanded, when its `Cargo.toml` declares it as an optional dependency.
 ///
-/// A package that does not declare it must not see `cfg(feature = "telar-devtools")` at all: cargo checks every `feature` cfg against the package's own feature list, and would warn about one it never defined.
-fn devtools_crate() -> Option<Ident> {
+/// A package that does not declare it must not see `cfg(feature = "<package>")` at all: cargo checks every `feature` cfg against the package's own feature list, and would warn about one it never defined.
+fn tooling_crate(package: &str) -> Option<Ident> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
-    telar_project::declares_optional_dependency(
-        Path::new(&manifest_dir),
-        telar_project::DEVTOOLS_PACKAGE,
-    )
-    .then(|| {
-        Ident::new(
-            &telar_project::DEVTOOLS_PACKAGE.replace('-', "_"),
-            Span::call_site(),
-        )
-    })
+    telar_project::declares_optional_dependency(Path::new(&manifest_dir), package)
+        .then(|| Ident::new(&package.replace('-', "_"), Span::call_site()))
 }
 
 /// `runner` called with `telar-devtools`' overlay while the package's feature for it is on, and with none otherwise.
@@ -722,6 +720,8 @@ struct TranspileOutput {
     rerun_stmts: TokenStream2,
     preview_const_idents: Vec<TokenStream2>,
     flavour: telar_project::BuildFlavour,
+    /// The crates `[telar.previews] include` names, as Rust names them.
+    previews_include: Vec<Ident>,
 }
 
 /// The package an expansion compiles: where it is, what cargo calls it, and how it is wired.
@@ -1070,6 +1070,13 @@ fn wire_package(
         rerun_stmts,
         preview_const_idents,
         flavour,
+        previews_include: manifest
+            .telar
+            .previews
+            .include()
+            .iter()
+            .map(|entry| Ident::new(entry.crate_name(), Span::call_site()))
+            .collect(),
     })
 }
 
@@ -1093,11 +1100,12 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
         rerun_stmts,
         preview_const_idents,
         flavour,
+        ..
     } = match transpile_project(Invocation::Modules, theme_type_str.as_deref()) {
         Ok(o) => o,
         Err(err) => return err.into(),
     };
-    let preview_fn = preview_entries_fn(flavour.has_previews(), &preview_const_idents);
+    let preview_fn = previews_table(flavour.has_previews(), &preview_const_idents);
     quote! {
         #rerun_stmts
         #include_stmts
@@ -1110,20 +1118,57 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
 #[path = "lib_test.rs"]
 mod tests;
 
-/// The table `telar::dev_entry` reads, or nothing at all.
+/// The crate's `telar_all_previews`, listing its `.rsx` previews, inside `::telar::__previews!` so it exists exactly when the previews a crate writes in Rust do.
 ///
-/// Nothing at all is the normal case: a `[preview]` is emitted only for the flavours that ask for one (see `telar_project::BuildFlavour`), so in every other build there are no consts to name and no caller left to name them. Emitting an empty table instead would keep `telar::preview::PreviewEntry` in the surface of a crate that has no previews, and keep the shape alive for the next thing that decides to call it.
-fn preview_entries_fn(previews: bool, consts: &[TokenStream2]) -> TokenStream2 {
-    if !previews {
-        return quote! {};
-    }
+/// It is defined in a hidden module and glob-imported where the macro is called, so a crate with Rust previews defines its own `telar_all_previews` beside the call, which shadows this one, and lists the `.rsx` previews in it through `telar_rsx_previews()`. Only the flavours that emit `[preview]` blocks have consts to name, so a library compiled as a dependency lists none of its `.rsx` previews.
+fn previews_table(previews: bool, consts: &[TokenStream2]) -> TokenStream2 {
+    let consts = if previews { consts } else { &[] };
     quote! {
-        pub fn telar_all_preview_entries() -> ::std::vec::Vec<::telar::preview::PreviewEntry> {
-            let mut entries = ::std::vec::Vec::new();
-            #( entries.extend_from_slice(#consts); )*
-            entries
+        ::telar::__previews! {
+            #[doc(hidden)]
+            #[allow(dead_code)]
+            pub mod __telar_previews {
+                /// The previews this crate writes in `.rsx`.
+                pub(crate) fn telar_rsx_previews() -> ::std::vec::Vec<::telar::preview::PreviewEntry> {
+                    <[&[::telar::preview::PreviewEntry]]>::concat(&[#(#consts),*])
+                }
+
+                /// Every preview this crate carries, when it writes none in Rust.
+                pub fn telar_all_previews() -> ::std::vec::Vec<::telar::preview::PreviewEntry> {
+                    telar_rsx_previews()
+                }
+            }
+            #[doc(hidden)]
+            #[allow(unused_imports)]
+            pub use __telar_previews::*;
         }
     }
+}
+
+/// The list an application shows: its own `telar_all_previews()`, then each `[telar.previews] include` crate's, in order. A crate that defines none fails to compile on its own name.
+fn app_previews_fn(includes: &[Ident]) -> TokenStream2 {
+    quote! {
+        #[doc(hidden)]
+        fn __telar_app_previews() -> ::std::vec::Vec<::telar::preview::PreviewEntry> {
+            [telar_all_previews() #(, ::#includes::telar_all_previews())*].concat()
+        }
+    }
+}
+
+/// The constructor of the app `cargo telar preview` shows the previews in: the workshop's while the package's feature for it is on, and the fallback page otherwise.
+fn preview_shell(workshop: Option<&Ident>) -> TokenStream2 {
+    let fallback = quote! { ::telar::preview::host::PreviewApp::new };
+    let Some(krate) = workshop else {
+        return fallback;
+    };
+    let feature = telar_project::WORKSHOP_PACKAGE;
+    quote! {{
+        #[cfg(feature = #feature)]
+        let shell = ::#krate::WorkshopApp::new;
+        #[cfg(not(feature = #feature))]
+        let shell = #fallback;
+        shell
+    }}
 }
 
 /// The faces `[[telar.fonts]]` declares, as the `Vec<FontAsset>` a shaper loads: embedded, so a binary finds its faces wherever it is run from, and `include_bytes!` is also what makes cargo rebuild when a face changes.

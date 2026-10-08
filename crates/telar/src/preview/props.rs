@@ -2,7 +2,7 @@
 
 use super::ControlKind;
 
-/// A props struct the explorer can describe. `#[derive(Props)]` implements it in a build with previews, so naming it is how a preview points at its component's props: `.props(<ButtonProps as HasPropsSchema>::schema)`.
+/// A props struct the workshop can describe. `#[derive(Props)]` implements it in a build with previews, so naming it is how a preview points at its component's props: `.props(<ButtonProps as HasPropsSchema>::schema)`.
 pub trait HasPropsSchema {
     fn schema() -> &'static PropsSchema;
 }

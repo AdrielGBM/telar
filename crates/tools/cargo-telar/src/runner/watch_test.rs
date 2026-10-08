@@ -217,16 +217,49 @@ fn a_package_without_the_devtools_dependency_gets_no_feature() {
 }
 
 #[test]
-fn the_devtools_feature_rides_along_with_the_telar_ones() {
-    let features = with_devtools(HotMode::Dev.hot_features(), Some("sandbox/telar-devtools"));
+fn the_tooling_features_ride_along_with_the_telar_ones() {
+    let features = with_tooling(
+        HotMode::Preview.hot_features(),
+        &["sandbox/telar-devtools", "sandbox/telar-workshop"],
+    );
     assert_eq!(
         features,
-        ["telar/dev", "telar/hot-reload", "sandbox/telar-devtools"]
+        [
+            "telar/preview",
+            "telar/dev",
+            "telar/hot-reload",
+            "sandbox/telar-devtools",
+            "sandbox/telar-workshop"
+        ]
     );
     assert_eq!(
-        with_devtools(HotMode::Dev.features(), None),
+        with_tooling(HotMode::Dev.features(), &[]),
         HotMode::Dev.features()
     );
+}
+
+fn workshop_for(mode: HotMode, package: &str) -> Option<String> {
+    workshop_feature(
+        &mode,
+        &resolve_package(&["-p", package].map(str::to_string)),
+    )
+}
+
+/// A dev session never builds the workshop, and a package that does not declare it falls back to the plain page rather than naming a feature cargo would refuse.
+#[test]
+fn the_workshop_is_turned_on_only_by_a_preview_of_a_package_that_declares_it() {
+    assert_eq!(workshop_for(HotMode::Dev, "sandbox"), None);
+    assert_eq!(workshop_for(HotMode::Preview, "telar-components"), None);
+}
+
+#[test]
+fn the_fallback_hint_names_the_command_that_adds_the_workshop() {
+    let note = missing_workshop_note("app");
+    assert!(
+        note.contains("cargo add -p app telar-workshop --optional"),
+        "{note}"
+    );
+    assert_eq!(note.lines().count(), 1, "{note}");
 }
 
 /// `prelude` and `theme` change the Rust every `.rsx` becomes, and the loop used to watch neither file: an edit there did nothing until some unrelated source was saved.

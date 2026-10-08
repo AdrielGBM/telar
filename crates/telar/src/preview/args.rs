@@ -1,4 +1,4 @@
-//! The args a preview reads, and the state behind every control the explorer gives them.
+//! The args a preview reads, and the state behind every control the workshop gives them.
 
 use std::any::Any;
 use std::cell::{Cell, RefCell};

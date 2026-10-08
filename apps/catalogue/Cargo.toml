@@ -1,0 +1,32 @@
+[package]
+name = "catalogue"
+version = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+authors = { workspace = true }
+repository = { workspace = true }
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[[bin]]
+name = "catalogue"
+path = "src/main.rs"
+
+[features]
+default = ["desktop"]
+desktop = ["telar/desktop"]
+tui = ["telar/tui"]
+web = ["telar/web"]
+web-dom = ["telar/web-dom"]
+android = ["telar/android"]
+telar-devtools = ["dep:telar-devtools"]
+telar-workshop = ["dep:telar-workshop"]
+tooling = ["telar/dev", "telar/hot-reload", "telar/previews", "telar/preview", "telar/preview-headless"]
+
+[dependencies]
+telar = { workspace = true, features = ["runtime"] }
+telar-components = { workspace = true, features = ["overlays"] }
+telar-devtools = { workspace = true, optional = true }
+telar-workshop = { workspace = true, optional = true }

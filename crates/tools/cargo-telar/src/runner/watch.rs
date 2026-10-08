@@ -7,12 +7,12 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE};
+use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE};
 
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
     ResolvedPackage, TelarSection, WindowSection, backend_as_str, missing_devtools_note,
-    resolve_package, split_android_flag, warn_if_tooling_unlocked,
+    missing_workshop_note, resolve_package, split_android_flag, warn_if_tooling_unlocked,
 };
 use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
@@ -502,8 +502,21 @@ fn devtools_feature(resolved: &ResolvedPackage, config: &TelarSection) -> Option
     Some(format!("{package}/{DEVTOOLS_PACKAGE}"))
 }
 
-fn with_devtools<'a>(features: &[&'a str], devtools: Option<&'a str>) -> Vec<&'a str> {
-    features.iter().copied().chain(devtools).collect()
+/// The package's own feature for the workshop `cargo telar preview` shows the previews in. `None` in a dev session, and when the package declares no `telar-workshop`, which is said with the command that adds it: the previews then open in the plain page.
+fn workshop_feature(mode: &HotMode, resolved: &ResolvedPackage) -> Option<String> {
+    if !mode.is_preview() {
+        return None;
+    }
+    let package = resolved.name();
+    if !telar_project::declares_optional_dependency(&resolved.package_dir, WORKSHOP_PACKAGE) {
+        eprintln!("[cargo-telar] {}", missing_workshop_note(&package));
+        return None;
+    }
+    Some(format!("{package}/{WORKSHOP_PACKAGE}"))
+}
+
+fn with_tooling<'a>(features: &[&'a str], tooling: &[&'a str]) -> Vec<&'a str> {
+    features.iter().chain(tooling).copied().collect()
 }
 
 pub(crate) struct HotLoopOpts {
@@ -521,8 +534,12 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
 
     let (android, rest) = split_android_flag(args);
     let resolved = resolve_package(&rest);
-    let devtools = devtools_feature(&resolved, &config);
-    let features = with_devtools(mode.features(), devtools.as_deref());
+    let tooling_features: Vec<String> = devtools_feature(&resolved, &config)
+        .into_iter()
+        .chain(workshop_feature(&mode, &resolved))
+        .collect();
+    let tooling: Vec<&str> = tooling_features.iter().map(String::as_str).collect();
+    let features = with_tooling(mode.features(), &tooling);
     let backend_value = backend_as_str(config.backend.unwrap_or_default());
     let is_preview = mode.is_preview();
 
@@ -587,7 +604,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     );
 
     if hot_reload {
-        let hot_features = with_devtools(mode.hot_features(), devtools.as_deref());
+        let hot_features = with_tooling(mode.hot_features(), &tooling);
         let package_name = resolved.name();
         let lib_path = package_lib_path(&workspace_root, &package_name, profile);
         let bin_path = package_bin_path(&workspace_root, &package_name, profile);
