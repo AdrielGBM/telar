@@ -293,3 +293,30 @@ fn a_buffer_transpiles_as_the_saved_file_would() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A previews file is accepted beside the component it previews, and registers nothing the macro would wire to a module the tree never declares.
+#[test]
+fn a_previews_file_is_accepted_and_a_view_in_one_is_refused() {
+    let root = package("previews_file");
+    let src = root.join("src");
+    std::fs::write(src.join("card.rsx"), "[view]\ntext \"body\"\n").unwrap();
+    std::fs::write(
+        src.join("card.previews.rsx"),
+        "[previews \"Cards/Card\"]\nA card.\n\n[preview \"Default\" args(title:\"Hi\")]\ncard\n\n[play]\ncanvas.expect_text(\"Hi\")?;\n",
+    )
+    .unwrap();
+
+    let files = transpile_package(&options(&src, BuildFlavour::Preview)).unwrap();
+    let previews = files
+        .iter()
+        .find(|file| file.rel_out == std::path::Path::new("card.previews.rs"))
+        .expect("the previews file is transpiled");
+    assert!(previews.source.preview_names.is_empty());
+    assert!(!previews.source.rust_code.contains("fn "));
+
+    std::fs::write(src.join("card.previews.rsx"), "[view]\ncol\n").unwrap();
+    let error = transpile_package(&options(&src, BuildFlavour::Preview)).unwrap_err();
+    assert!(error.to_string().contains("no `[view]`"), "{error}");
+
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -26,6 +26,7 @@ fn document(style: StyleSection, nodes: Vec<ViewNode>) -> RsxDocument {
         logic: Default::default(),
         style,
         view: ViewSection { nodes },
+        previews_meta: None,
         previews: Vec::new(),
     }
 }

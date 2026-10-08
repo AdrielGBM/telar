@@ -924,9 +924,9 @@ pub(crate) fn module_root(
             "a `mod.rsx` is the directory's module, and a module is not callable: move the `[view]` to a `.rsx` of its own".into(),
         ));
     }
-    if !doc.previews.is_empty() {
+    if !doc.previews.is_empty() || doc.previews_meta.is_some() {
         return Err(TranspileError::Codegen(
-            "a `mod.rsx` has no view, so a `[preview]` here previews nothing: move it beside the component it renders".into(),
+            "a `mod.rsx` has no view, so a `[preview]` or `[previews]` here previews nothing: move it beside the component it renders".into(),
         ));
     }
     if !doc.style.classes.is_empty() {

@@ -1,8 +1,9 @@
-//! The `[view]` and `[preview]` zones, re-emitted from the AST at four spaces a level.
+//! The `[view]` and preview zones, re-emitted from the AST at four spaces a level.
 
-use crate::{Attr, Element, Preview, Value, ViewNode};
+use crate::{Attr, Element, Preview, PreviewsMeta, StyleProp, Value, ViewNode};
 
 use super::INDENT;
+use super::logic::format_rust_zone;
 
 pub(super) fn format_view_section(nodes: &[ViewNode]) -> String {
     let mut body = String::new();
@@ -154,26 +155,47 @@ pub(super) fn escape_rsx_string(s: &str) -> String {
     out
 }
 
-/// Re-emits an attribute in the form it was written in. One arm per [`Value`] variant, because the variant is the whole of what decides the spelling: guessing it back from the text is what used to turn a `t"…"` key into a plain literal and a `transition(…)` into a colon the parser reads as one token.
+/// Re-emits an attribute in the form it was written in.
 pub(super) fn format_attr(attr: &Attr) -> String {
-    match &attr.value {
-        Value::Flag => attr.key.clone(),
-        Value::Expr(text) => format!("{}:{text}", attr.key),
-        Value::Quoted(text) => format!("{}:\"{}\"", attr.key, escape_rsx_string(text)),
-        Value::Directive(text) => format!("{}({text})", attr.key),
+    format_key_value(&attr.key, &attr.value)
+}
+
+/// One arm per [`Value`] variant, because the variant is the whole of what decides the spelling: guessing it back from the text is what used to turn a `t"…"` key into a plain literal and a `transition(…)` into a colon the parser reads as one token.
+fn format_key_value(key: &str, value: &Value) -> String {
+    match value {
+        Value::Flag => key.to_string(),
+        Value::Expr(text) => format!("{key}:{text}"),
+        Value::Quoted(text) => format!("{key}:\"{}\"", escape_rsx_string(text)),
+        Value::Directive(text) => format!("{key}({text})"),
     }
 }
 
-/// Re-emits a `[preview "Name" key:value flag …]` section: the header (name plus options) followed by its body, formatted like a `[view]` tree.
-pub(super) fn format_preview_section(preview: &Preview) -> String {
-    let mut header = format!("[preview \"{}\"", preview.name);
-    for opt in &preview.options {
-        if opt.value.is_empty() {
-            header.push_str(&format!(" {}", opt.key));
-        } else {
-            header.push_str(&format!(" {}:{}", opt.key, opt.value));
-        }
+/// Re-emits a `[previews "Group/Title" …]` meta section: its header, then its prose verbatim.
+pub(super) fn format_previews_meta(meta: &PreviewsMeta) -> String {
+    let mut header = String::from("[previews");
+    if let Some(title) = &meta.title {
+        header.push_str(&format!(" \"{}\"", escape_rsx_string(title)));
     }
+    push_options(&mut header, &meta.options);
+    header.push(']');
+    match meta.body.is_empty() {
+        true => header,
+        false => format!("{header}\n{}", meta.body),
+    }
+}
+
+/// Re-emits a `[preview "Name" args(…) key:value flag …]` section: the header, its body formatted like a `[view]` tree, and its `[play]` zone.
+pub(super) fn format_preview_section(preview: &Preview) -> String {
+    let mut header = format!("[preview \"{}\"", escape_rsx_string(&preview.name));
+    if !preview.args.is_empty() {
+        let args: Vec<String> = preview
+            .args
+            .iter()
+            .map(|arg| format_key_value(&arg.name, &arg.default))
+            .collect();
+        header.push_str(&format!(" args({})", args.join(" ")));
+    }
+    push_options(&mut header, &preview.options);
     header.push(']');
 
     let mut body = String::new();
@@ -181,9 +203,23 @@ pub(super) fn format_preview_section(preview: &Preview) -> String {
         emit_node(node, 0, &mut body);
     }
     let body = body.trim_end();
-    if body.is_empty() {
-        header
-    } else {
-        format!("{header}\n{body}")
+    let mut out = match body.is_empty() {
+        true => header,
+        false => format!("{header}\n{body}"),
+    };
+    if let Some(play) = &preview.play {
+        out.push_str("\n\n");
+        out.push_str(&format_rust_zone("[play]", &play.source));
+    }
+    out
+}
+
+fn push_options(header: &mut String, options: &[StyleProp]) {
+    for opt in options {
+        if opt.value.is_empty() {
+            header.push_str(&format!(" {}", opt.key));
+        } else {
+            header.push_str(&format!(" {}:{}", opt.key, opt.value));
+        }
     }
 }

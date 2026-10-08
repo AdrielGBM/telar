@@ -3,6 +3,7 @@
 //! A `.rsx` file is reformatted section by section:
 //! - `[logic]` runs through `rustfmt`, so imports get reordered and long statements wrap exactly like a `.rs` file. The zone is statement-level Rust (`let` bindings live at its top level), which is not a valid item on its own, so it is wrapped in a synthetic `fn { ... }` before formatting and unwrapped afterwards.
 //! - `[style]` and `[view]` are re-emitted from the parsed AST in a canonical shape: 4-space indentation, single-space token separators, and one blank line between style classes.
+//! - The preview sections are re-emitted the same way: a `[previews]` header keeps its prose verbatim, a `[preview]` body is formatted like `[view]`, and a `[play]` zone runs through `rustfmt` like `[logic]`.
 //!
 //! Formatting is whole-document: the parsed AST is re-serialized and the backend returns it as a single replacement edit, so it never has to map edits back through the section line offsets.
 
@@ -14,7 +15,7 @@ use crate::{Section, header_section, parse};
 
 use logic::format_logic_section;
 use style::format_style_section;
-use view::{format_preview_section, format_view_section};
+use view::{format_preview_section, format_previews_meta, format_view_section};
 
 const INDENT: &str = "    ";
 
@@ -33,6 +34,9 @@ pub fn format_document(source: &str) -> Option<String> {
     }
     if present.contains(&Section::View) || !doc.view.nodes.is_empty() {
         sections.push(format_view_section(&doc.view.nodes));
+    }
+    if let Some(meta) = &doc.previews_meta {
+        sections.push(format_previews_meta(meta));
     }
     for preview in &doc.previews {
         sections.push(format_preview_section(preview));

@@ -464,67 +464,13 @@ fn parse_element_header(
 
         if let Some(colon) = colon_at {
             let key: String = chars[token_start..colon].iter().collect();
-            let val_start = colon + 1;
-            let is_closure_value = chars.get(val_start) == Some(&'|');
-
-            if is_closure_value {
-                // A closure holds spaces at depth 0, so a bare one would run to end of line and swallow the attributes after it. Parenthesised, it is one value like any other.
-                let key = key.trim();
-                return Err(ParseError {
-                    message: format!(
-                        "`{key}:|…| …` runs to end of line and would swallow the attributes after it — parenthesise it: `{key}:(|…| …)`"
-                    ),
-                    line,
-                });
-            }
-
-            let mut k = val_start;
-            if let Some((str_at, is_key)) = string_start(&chars, k) {
-                let (text, next, content_at) =
-                    read_string_value(&chars, str_at).ok_or_else(|| ParseError {
-                        message: "unterminated string literal in attribute value".to_string(),
-                        line,
-                    })?;
-                if is_key {
-                    // A value is a Rust expression, and `t!` is the macro the Rust side already uses: it validates the key against the catalogue at compile time. The content position keeps `t"…"`, because there the literal is the syntax.
-                    return Err(ParseError {
-                        message: format!(
-                            "`{0}:t\"{text}\"` is not a value — write the macro: `{0}:t!(\"{text}\")`",
-                            key.trim()
-                        ),
-                        line,
-                    });
-                }
-                element.attributes.push(Attr {
-                    key: key.trim().to_string(),
-                    value: Value::Quoted(text),
-                    value_start: content_start + byte_at(&chars, content_at),
-                });
-                i = next;
-                continue;
-            }
-            // A colon value runs to the next whitespace, but not one nested inside delimiters, so a computed value is read whole while a following attribute still starts after the depth-0 space. Unbalanced parens read to end of line, leaving the malformed expression for rustc to reject.
-            let mut depth = 0i32;
-            while k < len {
-                let c = chars[k];
-                if c.is_whitespace() && depth == 0 {
-                    break;
-                }
-                match c {
-                    '(' | '[' => depth += 1,
-                    ')' | ']' => depth -= 1,
-                    _ => {}
-                }
-                k += 1;
-            }
-            let value: String = chars[val_start..k].iter().collect();
-            check_hex_value(&value, line)?;
+            let (value, next, text_at) = read_colon_value(&chars, key.trim(), colon + 1, line)?;
             element.attributes.push(Attr {
                 key: key.trim().to_string(),
-                value: Value::Expr(value),
-                value_start: content_start + byte_at(&chars, val_start),
+                value,
+                value_start: content_start + byte_at(&chars, text_at),
             });
-            i = k;
+            i = next;
             continue;
         }
 
@@ -558,8 +504,50 @@ fn parse_element_header(
     Ok(element)
 }
 
+/// Reads the value of a `key:value` pair starting at `val_start`, just past the colon: a quoted string, or a Rust expression running to the next space at delimiter depth 0. Returns the value, the index past it, and the char index where its text begins. A value never runs past the end of `chars`, so a caller reading inside a delimiter passes the slice up to its closing one.
+pub(super) fn read_colon_value(
+    chars: &[char],
+    key: &str,
+    val_start: usize,
+    line: usize,
+) -> Result<(Value, usize, usize), ParseError> {
+    if chars.get(val_start) == Some(&'|') {
+        // A closure holds spaces at depth 0, so a bare one would run to end of line and swallow the attributes after it. Parenthesised, it is one value like any other.
+        return Err(ParseError {
+            message: format!(
+                "`{key}:|…| …` runs to end of line and would swallow the attributes after it — parenthesise it: `{key}:(|…| …)`"
+            ),
+            line,
+        });
+    }
+
+    if let Some((str_at, is_key)) = string_start(chars, val_start) {
+        let (text, next, content_at) =
+            read_string_value(chars, str_at).ok_or_else(|| ParseError {
+                message: "unterminated string literal in attribute value".to_string(),
+                line,
+            })?;
+        if is_key {
+            // A value is a Rust expression, and `t!` is the macro the Rust side already uses: it validates the key against the catalogue at compile time. The content position keeps `t"…"`, because there the literal is the syntax.
+            return Err(ParseError {
+                message: format!(
+                    "`{key}:t\"{text}\"` is not a value — write the macro: `{key}:t!(\"{text}\")`"
+                ),
+                line,
+            });
+        }
+        return Ok((Value::Quoted(text), next, content_at));
+    }
+
+    // Unbalanced delimiters read to the end, leaving the malformed expression for rustc to reject.
+    let k = value_end(chars, val_start);
+    let value: String = chars[val_start..k].iter().collect();
+    check_hex_value(&value, line)?;
+    Ok((Value::Expr(value), k, val_start))
+}
+
 /// Byte offset within the original `content` string of the char at index `idx` (sum of the UTF-8 widths of the preceding chars). Converts a `Vec<char>` index into a source byte offset.
-fn byte_at(chars: &[char], idx: usize) -> usize {
+pub(super) fn byte_at(chars: &[char], idx: usize) -> usize {
     chars[..idx].iter().map(|c| c.len_utf8()).sum()
 }
 
@@ -638,31 +626,63 @@ pub(super) fn read_string_value(chars: &[char], k: usize) -> Option<(String, usi
         None
     }
 }
+/// The one delimiter rule of every header scan: `(` `[` `{` nest and a `"…"` string is opaque, so a space inside either never ends a token and a bracket inside a string is text.
+#[derive(Default)]
+pub(super) struct Delimiters {
+    depth: i32,
+    in_str: bool,
+    escaped: bool,
+}
 
-/// Reads a balanced `( … )` group starting at `open` (which must be `(`). Returns the inner text with the outer parens stripped, plus the index past the closing `)`. Nested parens are balanced and parens inside a `"…"` string literal are ignored, so a closure body like `|| f(x)` is captured whole. `None` if unbalanced. Whether `content` leaves a bracket open, so the element header continues on the next line. String literals are skipped, since a bracket inside one is text rather than structure.
-fn unclosed_delimiters(content: &str) -> bool {
-    let (mut depth, mut in_str, mut escaped) = (0i32, false, false);
-    for c in content.chars() {
-        if in_str {
-            match (escaped, c) {
-                (true, _) => escaped = false,
-                (false, '\\') => escaped = true,
-                (false, '"') => in_str = false,
+impl Delimiters {
+    pub(super) fn feed(&mut self, c: char) {
+        if self.in_str {
+            match (self.escaped, c) {
+                (true, _) => self.escaped = false,
+                (false, '\\') => self.escaped = true,
+                (false, '"') => self.in_str = false,
                 _ => {}
             }
-            continue;
+            return;
         }
         match c {
-            '"' => in_str = true,
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth -= 1,
+            '"' => self.in_str = true,
+            '(' | '[' | '{' => self.depth += 1,
+            ')' | ']' | '}' => self.depth -= 1,
             _ => {}
         }
     }
-    depth > 0
+
+    pub(super) fn at_top_level(&self) -> bool {
+        self.depth <= 0 && !self.in_str
+    }
+
+    pub(super) fn is_open(&self) -> bool {
+        self.depth > 0
+    }
 }
 
-fn read_balanced_parens(chars: &[char], open: usize) -> Option<(String, usize)> {
+/// The index of the first whitespace at top level at or after `from`, or the end of `chars`: where a space-separated token starting at `from` ends.
+pub(super) fn value_end(chars: &[char], from: usize) -> usize {
+    let mut state = Delimiters::default();
+    for (offset, &c) in chars[from..].iter().enumerate() {
+        if c.is_whitespace() && state.at_top_level() {
+            return from + offset;
+        }
+        state.feed(c);
+    }
+    chars.len()
+}
+
+/// Whether `content` leaves a bracket open, so the element header continues on the next line.
+fn unclosed_delimiters(content: &str) -> bool {
+    let mut state = Delimiters::default();
+    content.chars().for_each(|c| state.feed(c));
+    state.is_open()
+}
+
+/// Reads a balanced `( … )` group starting at `open` (which must be `(`). Returns the inner text with the outer parens stripped, plus the index past the closing `)`. Nested parens are balanced and parens inside a `"…"` string literal are ignored, so a closure body like `|| f(x)` is captured whole. `None` if unbalanced.
+pub(super) fn read_balanced_parens(chars: &[char], open: usize) -> Option<(String, usize)> {
     debug_assert_eq!(chars.get(open), Some(&'('));
     let mut depth = 0usize;
     let mut in_str = false;

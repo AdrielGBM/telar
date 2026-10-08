@@ -109,7 +109,7 @@ fn migrate(
     let mut out = String::with_capacity(source.len());
     for zone in zones(source) {
         let body = match zone.section {
-            Section::View | Section::Preview => {
+            Section::View => {
                 let body = colonise(zone.body);
                 let body = i18n_macro(&body);
                 let body = read_theme(&body);
@@ -120,7 +120,7 @@ fn migrate(
                 true => shared_handlers(zone.body),
                 false => shared_handlers(&theme_calls(zone.body)),
             },
-            Section::None => zone.body.to_string(),
+            _ => zone.body.to_string(),
         };
         out.push_str(zone.header);
         out.push_str(&body);
@@ -132,7 +132,7 @@ fn migrate(
 fn escapes_needing_a_person(path: &Path, source: &str) -> Vec<(PathBuf, usize, String)> {
     let mut out = Vec::new();
     for zone in zones(source) {
-        if !matches!(zone.section, Section::View | Section::Preview) {
+        if zone.section != Section::View {
             continue;
         }
         let offset = source.len() - zone.body.len();

@@ -255,3 +255,11 @@ fn an_escape_that_needs_names_is_reported_rather_than_guessed() {
     );
     assert_eq!(found[1].1, 7);
 }
+
+#[test]
+fn a_play_zone_is_rust_and_a_previews_zone_is_prose() {
+    let source = "[view]\ncol\n\n[previews \"G/T\"]\nlabel(x) stays prose\n\n[preview \"A\"]\ncol\n\n[play]\nlet w = Widget::new(width(3));\nlet theme = 1;\n";
+    let out = migrated(source);
+    assert!(out.contains("label(x) stays prose"), "{out}");
+    assert!(out.contains("let w = Widget::new(width(3));"), "{out}");
+}

@@ -628,6 +628,18 @@ pub fn is_module_root(path: &Path) -> bool {
         .is_some_and(|name| name == MODULE_ROOT_FILENAME)
 }
 
+/// The suffix of a `.rsx` that holds only previews of a component written elsewhere: `checkbox.previews.rsx`.
+const PREVIEWS_FILE_SUFFIX: &str = ".previews.rsx";
+
+/// Whether `path` holds only previews: `[previews]` and `[preview]` sections, and no `[view]` of its own. Its stem is no identifier, so the module tree never declares it as a component.
+pub fn is_previews_file(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            name.len() > PREVIEWS_FILE_SUFFIX.len() && name.ends_with(PREVIEWS_FILE_SUFFIX)
+        })
+}
+
 /// The first `//!` or `#![…]` of a file that is about to be `include!`d, which rustc refuses there (`E0753`, and "an inner attribute is not permitted in this context"). Reported before the include is written, so the message names the file and the move instead of landing on generated code.
 fn leading_inner_attribute(path: &Path) -> Option<String> {
     let source = std::fs::read_to_string(path).ok()?;

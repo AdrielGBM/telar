@@ -1,4 +1,4 @@
-//! Shared `@class` / `$signal` / component-tag occurrence finders, powering document-highlight, references and rename. Style classes and signals are file-scoped, so a single source scan is complete. `[logic]` is skipped for `@class` (a `@` there is Rust, not a class). Returned ranges cover the name (after any sigil), so a rename replaces the name and leaves the sigil.
+//! Shared `@class` / `$signal` / component-tag occurrence finders, powering document-highlight, references and rename. Style classes and signals are file-scoped, so a single source scan is complete. `[logic]`, `[play]` and the `[previews]` prose are skipped for `@class` (a `@` there is Rust or prose, not a class). Returned ranges cover the name (after any sigil), so a rename replaces the name and leaves the sigil.
 
 use lsp_types::Range;
 use telar_transpiler::{is_builtin_tag, is_control_flow_keyword};
@@ -8,10 +8,7 @@ use crate::text::{ident_at, leading_token, name_range, utf16_to_byte};
 
 /// The class name under the cursor, if it sits on a `@name` token (on the `@` or anywhere in `name`).
 pub fn class_at(source: &str, line: u32, character: u32) -> Option<String> {
-    if matches!(
-        find_section_at(source, line),
-        Section::Logic | Section::Unknown
-    ) {
+    if find_section_at(source, line).is_verbatim() {
         return None;
     }
     let line_text = source.lines().nth(line as usize)?;
@@ -25,14 +22,11 @@ pub fn class_at(source: &str, line: u32, character: u32) -> Option<String> {
     None
 }
 
-/// Every `@name` occurrence's name-range across the document (skipping `[logic]`).
+/// Every `@name` occurrence's name-range across the document (skipping `[logic]`, `[play]` and prose).
 pub fn class_occurrences(source: &str, name: &str) -> Vec<Range> {
     let mut out = Vec::new();
     for (line_idx, line_text) in source.lines().enumerate() {
-        if matches!(
-            find_section_at(source, line_idx as u32),
-            Section::Logic | Section::Unknown
-        ) {
+        if find_section_at(source, line_idx as u32).is_verbatim() {
             continue;
         }
         for (name_start, token) in scan_class_tokens(line_text) {

@@ -592,3 +592,258 @@ fn a_value_with_open_delimiters_continues_onto_the_next_line() {
         "and an attribute after the closing paren is still an attribute"
     );
 }
+
+const PREVIEWS_EXAMPLE: &str = r#"[previews "Forms/Checkbox" layout:centered matrix:themes]
+Use `toggle` for a setting that applies at once, a checkbox for one confirmed with a button.
+
+[preview "Default"]
+checkbox label:"I agree to the terms"
+
+[preview "Bound" args(agree:false)]
+col gap:8
+    checkbox checked:$agree label:"I agree"
+    text "agree · {$agree}"
+
+[play]
+canvas.click(by_role(Role::CheckBox).named("I agree"))?;
+canvas.expect_text("agree · true")?;
+"#;
+
+fn parse_err(src: &str) -> ParseError {
+    parse(src).expect_err("the document should be refused")
+}
+
+#[test]
+fn parses_the_previews_meta_args_and_play() {
+    let doc = parse(PREVIEWS_EXAMPLE).unwrap();
+    assert!(
+        doc.view.nodes.is_empty(),
+        "a previews-only file has no view"
+    );
+
+    let meta = doc.previews_meta.expect("the meta section");
+    assert_eq!(meta.title.as_deref(), Some("Forms/Checkbox"));
+    assert_eq!(
+        meta.options,
+        vec![
+            StyleProp {
+                key: "layout".into(),
+                value: "centered".into(),
+            },
+            StyleProp {
+                key: "matrix".into(),
+                value: "themes".into(),
+            },
+        ]
+    );
+    assert_eq!(
+        meta.body,
+        "Use `toggle` for a setting that applies at once, a checkbox for one confirmed with a button."
+    );
+    assert_eq!(meta.line, 1);
+
+    assert_eq!(doc.previews.len(), 2);
+    let default = &doc.previews[0];
+    assert!(default.args.is_empty() && default.play.is_none());
+
+    let bound = &doc.previews[1];
+    assert_eq!(bound.name, "Bound");
+    assert!(bound.options.is_empty(), "`args(…)` is not an option");
+    assert_eq!(bound.args.len(), 1);
+    assert_eq!(bound.args[0].name, "agree");
+    assert_eq!(bound.args[0].default, Value::Expr("false".into()));
+    assert!(PREVIEWS_EXAMPLE[bound.args[0].default_start..].starts_with("false)]"));
+    let ViewNode::Element(col) = &bound.body[0] else {
+        panic!("the variant's body is view markup");
+    };
+    assert_eq!(col.children.len(), 2);
+
+    let play = bound.play.as_ref().expect("the play zone");
+    assert_eq!(play.line, 12);
+    assert_eq!(play.start_line, 13);
+    assert_eq!(
+        play.source,
+        "canvas.click(by_role(Role::CheckBox).named(\"I agree\"))?;\ncanvas.expect_text(\"agree · true\")?;"
+    );
+}
+
+#[test]
+fn an_args_default_reads_like_an_attribute_value() {
+    let src = "[view]\ncol\n\n[preview \"Labels\" args(label:\"I agree\" count:(1 + 2) tint:#3d78fa) args:none]\nbutton label:$label\n";
+    let doc = parse(src).unwrap();
+    let preview = &doc.previews[0];
+    let defaults: Vec<(&str, &Value)> = preview
+        .args
+        .iter()
+        .map(|arg| (arg.name.as_str(), &arg.default))
+        .collect();
+    assert_eq!(
+        defaults,
+        vec![
+            ("label", &Value::Quoted("I agree".into())),
+            ("count", &Value::Expr("(1 + 2)".into())),
+            ("tint", &Value::Expr("#3d78fa".into())),
+        ]
+    );
+    assert!(src[preview.args[0].default_start..].starts_with("I agree\""));
+    assert!(src[preview.args[1].default_start..].starts_with("(1 + 2)"));
+    assert_eq!(
+        preview.options,
+        vec![StyleProp {
+            key: "args".into(),
+            value: "none".into(),
+        }],
+        "the `args:none` opt-out stays an option"
+    );
+}
+
+#[test]
+fn a_header_option_keeps_the_spaces_inside_its_brackets() {
+    let src = "[previews matrix:(mode:[light dark] locale:[en ar]) group:\"A B\"]\n";
+    let meta = parse(src).unwrap().previews_meta.unwrap();
+    assert_eq!(meta.title, None, "the title is optional");
+    assert_eq!(
+        meta.options,
+        vec![
+            StyleProp {
+                key: "matrix".into(),
+                value: "(mode:[light dark] locale:[en ar])".into(),
+            },
+            StyleProp {
+                key: "group".into(),
+                value: "\"A B\"".into(),
+            },
+        ]
+    );
+    assert!(meta.body.is_empty());
+}
+
+#[test]
+fn previews_is_a_header_of_its_own() {
+    assert!(is_previews_header("[previews \"Forms/Checkbox\"]"));
+    assert!(is_previews_header("[previews]"));
+    assert!(!is_preview_header("[previews \"Forms/Checkbox\"]"));
+    assert!(!is_previews_header("[preview \"Default\"]"));
+    assert!(!is_previews_header("[previewsish]"));
+}
+
+#[test]
+fn a_previews_file_holds_previews_without_a_view() {
+    let src = "[logic]\nuse crate::checkbox::checkbox;\n\n[preview \"Default\"]\ncheckbox\n";
+    let doc = parse(src).unwrap();
+    assert!(doc.view.nodes.is_empty());
+    assert!(doc.previews_meta.is_none());
+    assert_eq!(doc.previews.len(), 1);
+    assert_eq!(doc.logic.source, "use crate::checkbox::checkbox;");
+}
+
+#[test]
+fn an_empty_play_zone_is_kept() {
+    let doc = parse("[preview \"A\"]\nbox\n[play]\n\n[preview \"B\"]\nbox\n").unwrap();
+    let play = doc.previews[0]
+        .play
+        .as_ref()
+        .expect("an empty [play] is still there");
+    assert!(play.source.is_empty());
+    assert_eq!(play.start_line, 0);
+    assert!(doc.previews[1].play.is_none());
+}
+
+#[test]
+fn misplaced_preview_sections_are_refused() {
+    let cases = [
+        ("[view]\ncol\n[play]\nlet x = 1;\n", 3, "[play]"),
+        (
+            "[preview \"A\"]\nbox\n[play]\na();\n[play]\nb();\n",
+            5,
+            "[play]",
+        ),
+        ("[preview \"A\"]\nbox\n[previews \"T\"]\n", 3, "[previews]"),
+        ("[previews \"T\"]\n[previews \"U\"]\n", 2, "[previews]"),
+    ];
+    for (src, line, names) in cases {
+        let error = parse_err(src);
+        assert_eq!(error.line, line, "{src:?}: {}", error.message);
+        assert!(error.message.contains(names), "{src:?}: {}", error.message);
+    }
+}
+
+#[test]
+fn malformed_preview_headers_are_refused() {
+    let cases = [
+        ("[previews \"T\" args(a:1)]\n", "belongs on a `[preview]`"),
+        ("[preview \"A\" args(agree)]\nbox\n", "`name:default`"),
+        ("[preview \"A\" args(agree:)]\nbox\n", "needs a default"),
+        ("[preview \"A\" args(a:1 a:2)]\nbox\n", "twice"),
+        (
+            "[preview \"A\" args(a:1) args(b:2)]\nbox\n",
+            "one `args(…)`",
+        ),
+        ("[preview \"A\" args(a:(1]\nbox\n", "unterminated"),
+        ("[preview \"A\" width(360)]\nbox\n", "`width:(…)`"),
+        ("[preview Default]\nbox\n", "quoted name"),
+        ("[preview width:360 \"A\"]\nbox\n", "quoted name"),
+    ];
+    for (src, needle) in cases {
+        let error = parse_err(src);
+        assert!(error.message.contains(needle), "{src:?}: {}", error.message);
+    }
+}
+
+#[test]
+fn a_line_knows_its_preview_section() {
+    let section = |line| find_section_at(PREVIEWS_EXAMPLE, line);
+    assert_eq!(section(0), Section::Previews);
+    assert_eq!(section(1), Section::Prose);
+    assert_eq!(section(3), Section::Preview);
+    assert_eq!(section(4), Section::View);
+    assert_eq!(section(8), Section::View);
+    assert_eq!(section(11), Section::Play);
+    assert_eq!(section(12), Section::Play);
+
+    let after_play = "[preview \"A\"]\nbox\n[play]\na();\n[preview \"B\"]\nbox\n";
+    assert_eq!(
+        find_section_at(after_play, 5),
+        Section::View,
+        "a preview after a play zone is markup again"
+    );
+    assert_eq!(section_opened_by("[preview \"B\"]"), Some(Section::View));
+    assert_eq!(section_opened_by("[previews]"), Some(Section::Prose));
+    assert_eq!(section_opened_by("[play]"), Some(Section::Play));
+    assert_eq!(section_opened_by("box"), None);
+}
+
+#[test]
+fn an_args_default_may_be_a_braced_struct_literal() {
+    let src = "[view]\ncol\n\n[preview \"A\" args(x:Foo{ a: 1 } y:(Bar { b: 2 }) n:2)]\nbox\n";
+    let preview = &parse(src).unwrap().previews[0];
+    assert_eq!(preview.args.len(), 3);
+    assert_eq!(preview.args[0].default, Value::Expr("Foo{ a: 1 }".into()));
+    assert_eq!(
+        preview.args[1].default,
+        Value::Expr("(Bar { b: 2 })".into())
+    );
+    assert_eq!(preview.args[2].default, Value::Expr("2".into()));
+}
+
+#[test]
+fn a_header_option_may_hold_braces() {
+    let src = "[view]\ncol\n\n[preview \"A\" matrix:{ a b } dark]\nbox\n";
+    let preview = &parse(src).unwrap().previews[0];
+    let options: Vec<(&str, &str)> = preview
+        .options
+        .iter()
+        .map(|o| (o.key.as_str(), o.value.as_str()))
+        .collect();
+    assert_eq!(options, vec![("matrix", "{ a b }"), ("dark", "")]);
+}
+
+#[test]
+fn a_view_attribute_value_with_braces_stays_one_token() {
+    let src = "[view]\nbox on_press:(|| f(Foo { a: 1 })) gap:8\n";
+    let doc = parse(src).unwrap();
+    let ViewNode::Element(el) = &doc.view.nodes[0] else {
+        panic!("an element");
+    };
+    assert_eq!(el.attributes.len(), 2);
+}

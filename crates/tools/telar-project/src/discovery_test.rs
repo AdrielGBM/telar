@@ -775,3 +775,24 @@ fn set_permissions(path: &Path, read_only: bool) {
     permissions.set_readonly(read_only);
     std::fs::set_permissions(path, permissions).unwrap();
 }
+
+#[test]
+fn a_previews_file_is_recognised_and_never_declared_as_a_component() {
+    assert!(is_previews_file(Path::new(
+        "src/forms/checkbox.previews.rsx"
+    )));
+    assert!(!is_previews_file(Path::new("src/forms/checkbox.rsx")));
+    assert!(!is_previews_file(Path::new("src/.previews.rsx")));
+    assert!(!is_previews_file(Path::new("src/previews.rsx")));
+
+    let root = std::env::temp_dir().join(format!("rsx_previews_file_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("checkbox.rsx"), "").unwrap();
+    std::fs::write(root.join("checkbox.previews.rsx"), "").unwrap();
+    let (out, _) = discover_rust_modules(&root, &root, &root.join("__generated"));
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(out.contains("pub mod checkbox;"), "{out}");
+    assert!(!out.contains("previews"), "{out}");
+}

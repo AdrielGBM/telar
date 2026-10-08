@@ -216,3 +216,57 @@ fn a_props_struct_with_inline_defaults_keeps_its_indentation() {
         "and formatting is idempotent"
     );
 }
+
+const PREVIEWS_EXAMPLE: &str = r#"[logic]
+use crate::checkbox::checkbox;
+
+[previews "Forms/Checkbox" layout:centered matrix:(mode:[light dark] locale:[en ar])]
+Use `toggle` for a setting that applies at once.
+
+    An indented line and the blank above it stay as written.
+
+[preview "Default"]
+checkbox label:"I agree to the terms"
+
+[preview "Bound" args(agree:false label:"I agree") args:none]
+col gap:8
+    checkbox checked:$agree label:$label
+    text "agree · {$agree}"
+
+[play]
+canvas.click(by_role(Role::CheckBox).named("I agree"))?;
+canvas.expect_text("agree · true")?;
+"#;
+
+#[test]
+fn preview_sections_survive_a_round_trip() {
+    let out = format_document(PREVIEWS_EXAMPLE).unwrap();
+    assert_eq!(out, PREVIEWS_EXAMPLE, "canonical source is a fixed point");
+}
+
+#[test]
+fn preview_headers_are_normalized_and_idempotent() {
+    let src = "[previews   \"T\"    layout:centered]\n\n\nProse.\n\n\n[preview  \"Bound\"   layout:centered args(  agree:false   label:r\"a\\b\"  )]\n        box\n            text \"x\"\n[play]\n\n\n[preview \"Name \\\"quoted\\\"\"]\nbox\n";
+    let once = format_document(src).unwrap();
+    let expected = "[previews \"T\" layout:centered]\nProse.\n\n[preview \"Bound\" args(agree:false label:\"a\\\\b\") layout:centered]\nbox\n    text \"x\"\n\n[play]\n\n[preview \"Name \\\"quoted\\\"\"]\nbox\n";
+    assert_eq!(once, expected);
+    assert_eq!(
+        format_document(&once).unwrap(),
+        once,
+        "re-formatting is a fixed point"
+    );
+}
+
+#[test]
+fn a_play_zone_is_formatted_like_logic() {
+    if find_rustfmt().is_none() {
+        return;
+    }
+    let src = "[preview \"A\"]\nbox\n\n[play]\ncanvas.click( by_role(Role::Button) )?;\n";
+    let out = format_document(src).unwrap();
+    assert!(
+        out.ends_with("[play]\ncanvas.click(by_role(Role::Button))?;\n"),
+        "rustfmt reaches the play zone:\n{out}"
+    );
+    assert_eq!(format_document(&out).unwrap(), out);
+}

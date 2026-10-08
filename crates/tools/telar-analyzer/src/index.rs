@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use lsp_types::{Location, Position, Range, SymbolInformation, SymbolKind, Uri};
-use telar_parser::{header_section, parse};
+use telar_parser::{parse, section_opened_by};
 use telar_transpiler::{is_builtin_tag, is_control_flow_keyword};
 
 use crate::position::Section;
@@ -173,7 +173,7 @@ fn scan_component_imports(source: &str) -> Vec<TagUse> {
     let mut out = Vec::new();
     let mut section = Section::Unknown;
     for (i, line) in source.lines().enumerate() {
-        if let Some(s) = header_section(line.trim()) {
+        if let Some(s) = section_opened_by(line.trim()) {
             section = s;
         }
         if !matches!(section, Section::Logic) || !line.trim_start().starts_with("use ") {
@@ -214,10 +214,10 @@ fn scan_tags(source: &str) -> Vec<TagUse> {
     let mut out = Vec::new();
     let mut section = Section::Unknown;
     for (i, line) in source.lines().enumerate() {
-        if let Some(s) = header_section(line.trim()) {
+        if let Some(s) = section_opened_by(line.trim()) {
             section = s;
         }
-        if !matches!(section, Section::View | Section::Preview) {
+        if section != Section::View {
             continue;
         }
         let Some((lead, token)) = leading_token(line) else {

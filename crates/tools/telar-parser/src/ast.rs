@@ -6,18 +6,56 @@ pub struct RsxDocument {
     pub logic: LogicZone,
     pub style: StyleSection,
     pub view: ViewSection,
+    /// The `[previews …]` meta section: at most one, before the first `[preview]`.
+    pub previews_meta: Option<PreviewsMeta>,
     pub previews: Vec<Preview>,
+}
+
+/// A `[previews "Group/Title" …]` section: what every preview in the file shares. Its prose body feeds the component's docs page.
+#[derive(Debug, Clone)]
+pub struct PreviewsMeta {
+    /// Where the explorer lists the component (`"Forms/Checkbox"`); `None` leaves that to the component's name.
+    pub title: Option<String>,
+    /// Header options (`layout:centered`, `matrix:themes`), kept raw: their meaning belongs to the transpiler. A bare flag carries an empty value.
+    pub options: Vec<StyleProp>,
+    /// The prose under the header, verbatim, without its leading and trailing blank lines.
+    pub body: String,
+    /// 1-based `.rsx` line of the `[previews …]` header.
+    pub line: usize,
 }
 
 /// A `[preview "Name" …]` section: a named, standalone view rendered by `cargo telar preview`. Its `body` is ordinary `[view]` markup (typically a single component call with literal props), so any component — including prop-taking ones — can be previewed.
 #[derive(Debug, Clone)]
 pub struct Preview {
     pub name: String,
-    /// Header options (`width:360`, `bg:surface`, `group:"…"`, `dark`); parsed for forward compatibility but not yet consumed by the runtime. A bare flag carries an empty value.
+    /// Header options (`width:360`, `bg:surface`, `args:none`, `dark`), kept raw: their meaning belongs to the transpiler. A bare flag carries an empty value.
     pub options: Vec<StyleProp>,
+    /// The `args(name:default …)` declarations: live, preview-scoped signals the body reads as `$name`.
+    pub args: Vec<ArgDecl>,
     pub body: Vec<ViewNode>,
+    /// The `[play]` zone written after the body.
+    pub play: Option<PlayZone>,
     /// 1-based `.rsx` line of the `[preview …]` header.
     pub line: usize,
+}
+
+/// One `name:default` declaration of a preview's `args(…)`. The default is read exactly like an attribute value: a quoted one is a string, anything else a Rust expression.
+#[derive(Debug, Clone)]
+pub struct ArgDecl {
+    pub name: String,
+    pub default: Value,
+    /// Byte offset in the source where the default's text begins, so a rustc error on it maps back to the header.
+    pub default_start: usize,
+}
+
+/// A `[play]` zone: verbatim Rust run against the preview it follows.
+#[derive(Debug, Clone)]
+pub struct PlayZone {
+    pub source: String,
+    /// 1-based `.rsx` line of the `[play]` header.
+    pub line: usize,
+    /// 1-based `.rsx` line of the first content line in `source` (0 when the zone is empty), which maps generated Rust back to the `.rsx` as [`LogicZone::start_line`] does.
+    pub start_line: usize,
 }
 
 /// The leading Rust verbatim zone, captured untouched up to the first section header.

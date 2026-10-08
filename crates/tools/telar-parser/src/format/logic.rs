@@ -10,16 +10,21 @@ use super::INDENT;
 pub(super) const WRAPPER_FN: &str = "__rsx_fmt_logic_wrapper";
 
 pub(super) fn format_logic_section(logic: &str) -> String {
-    let body = run_rustfmt_on_logic(logic).unwrap_or_else(|| logic.trim_end().to_string());
+    format_rust_zone("[logic]", logic)
+}
+
+/// Formats a zone of statement-level Rust under its `header`: `[logic]`, or a preview's `[play]`.
+pub(super) fn format_rust_zone(header: &str, source: &str) -> String {
+    let body = run_rustfmt_on_logic(source).unwrap_or_else(|| source.trim_end().to_string());
     let body = body.trim_end();
     if body.is_empty() {
-        "[logic]".to_string()
+        header.to_string()
     } else {
-        format!("[logic]\n{body}")
+        format!("{header}\n{body}")
     }
 }
 
-/// Reformats the logic zone with `rustfmt`. Returns `None` (so the caller keeps the source verbatim) when `rustfmt` is missing or rejects the input.
+/// Reformats a zone of statement-level Rust with `rustfmt`. Returns `None` (so the caller keeps the source verbatim) when `rustfmt` is missing or rejects the input.
 pub(super) fn run_rustfmt_on_logic(logic: &str) -> Option<String> {
     let logic = logic.trim_end();
     if logic.trim().is_empty() {

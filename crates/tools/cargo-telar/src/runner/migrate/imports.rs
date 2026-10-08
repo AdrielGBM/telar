@@ -34,7 +34,7 @@ pub(super) fn imports_for_tags(
 ) -> String {
     let mut wanted: Vec<&str> = Vec::new();
     for zone in zones(source) {
-        if !matches!(zone.section, Section::View | Section::Preview) {
+        if zone.section != Section::View {
             continue;
         }
         for line in zone.body.lines() {

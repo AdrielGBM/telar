@@ -76,6 +76,7 @@ pub(super) fn style_constants_to_logic(source: &str) -> String {
                     }
                 }
             }
+            Section::Prose => out.push_str(zone.body),
             _ => out.push_str(&replace_outside_strings(zone.body, |chunk| {
                 let mut chunk = chunk.to_string();
                 for (name, _, _) in &constants {
