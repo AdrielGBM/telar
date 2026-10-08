@@ -86,7 +86,7 @@ entry here. The app declares the crate as an optional dependency, which `cargo t
 
 ```toml
 [dependencies]
-telar-devtools = { version = "0.2.1", optional = true }
+telar-devtools = { version = "0.2.2", optional = true }
 
 [features]
 telar-devtools = ["dep:telar-devtools"]

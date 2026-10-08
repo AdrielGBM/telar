@@ -41,7 +41,7 @@ A `.rsx` library pins it with `=`:
 
 ```toml
 [dependencies]
-telar = { version = "=0.2.1", default-features = false, features = ["runtime"] }
+telar = { version = "=0.2.2", default-features = false, features = ["runtime"] }
 ```
 
 `cargo telar new --lib` writes that line with the version of the `cargo-telar` that ran. The pin matters more

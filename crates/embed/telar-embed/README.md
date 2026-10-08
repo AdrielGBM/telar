@@ -8,10 +8,10 @@ Not the same thing as hot reload, which is dev-only and swaps the *whole* window
 
 ```toml
 # In the guest
-telar-embed = "0.2.1"
+telar-embed = "0.2.2"
 
 # In the host
-telar-embed = { version = "0.2.1", features = ["host"] }
+telar-embed = { version = "0.2.2", features = ["host"] }
 ```
 
 The guest implements `EmbeddedApp` and calls `embed!` to export the shims; the host calls `load_embedded` and drives what it returns.

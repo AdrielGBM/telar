@@ -17,7 +17,7 @@ if($media.playing, mix($theme.accent, #ffffff, 20%), #888)
 **A calculator, too.** `calculate("2^3^2")` answers `512`, strictly enough that `2 + 3 firefox` is an error rather than `5`, and `format_number` prints the result without binary noise.
 
 ```toml
-telar-expression = "0.2.1"
+telar-expression = "0.2.2"
 ```
 
 Keep it on the same version as `telar` — the same lockstep `telar` and `telar-macros` already have, and for the same reason. `telar` does not re-export it: an application that binds properties to formulas names it as its own dependency.

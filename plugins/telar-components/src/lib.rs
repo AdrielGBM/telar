@@ -9,7 +9,7 @@
 //!
 //! ```toml
 //! # Cargo.toml
-//! telar-components = { version = "0.2.1", features = ["overlays"] }
+//! telar-components = { version = "0.2.2", features = ["overlays"] }
 //!
 //! # telar.toml
 //! [telar]

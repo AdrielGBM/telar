@@ -18,7 +18,7 @@ you draw beyond them:
 
 ```toml
 # Cargo.toml
-telar-components = { version = "0.2.1", features = ["overlays"] }
+telar-components = { version = "0.2.2", features = ["overlays"] }
 ```
 
 Then list it in the app's `telar.toml`, so every `.rsx` file sees its components without a `use`:

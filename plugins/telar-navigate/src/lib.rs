@@ -10,7 +10,7 @@
 //!
 //! ```toml
 //! # Cargo.toml
-//! telar-navigate = "0.2.1"
+//! telar-navigate = "0.2.2"
 //!
 //! # telar.toml
 //! [telar]

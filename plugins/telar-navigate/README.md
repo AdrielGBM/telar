@@ -12,7 +12,7 @@ its own; this crate is one, written against the same public API an application's
 
 ```toml
 # Cargo.toml
-telar-navigate = "0.2.1"
+telar-navigate = "0.2.2"
 ```
 
 Then list it in the app's `telar.toml`, so every `.rsx` file sees `Navigator` and the rest without a `use`:

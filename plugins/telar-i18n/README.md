@@ -13,7 +13,7 @@ against the same public API an application's own code uses.
 
 ```toml
 # Cargo.toml
-telar-i18n = "0.2.1"
+telar-i18n = "0.2.2"
 ```
 
 ## Plural rules

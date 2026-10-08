@@ -11,7 +11,7 @@ facade, and lists it as a `prelude` so every `.rsx` file can write `icon`:
 
 ```toml
 # Cargo.toml
-telar-icons = "0.2.1"
+telar-icons = "0.2.2"
 
 # telar.toml
 [telar]
