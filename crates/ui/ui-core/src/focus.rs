@@ -1,11 +1,11 @@
 //! Keyboard focus: which widget receives key events. A base primitive with no styling of its own — a focusable widget (e.g. [`crate::Input`]) requests focus on tap and consults it in `on_event`/`view`.
 //!
-//! Key events are broadcast to every widget (see `dispatch_container_event`), so focus is *self-filtering*: a widget handles a key only when [`is_focused`] holds for its id — there is no central router. Focus is a reactive signal, so a widget that reads [`current`]/[`is_focused`] inside its `view()` re-renders when focus moves (e.g. to show or hide its caret). State is per-surface (each surface owns its own focus via [`FocusContext`], activated by the runner), so focus never crosses windows; preserving focus across a hot-reload dylib swap is out of scope.
+//! Key events are broadcast to every widget (see `dispatch_container_event`), so focus is *self-filtering*: a widget handles a key only when [`is_key_target`] holds for its id — there is no central router. Focus is a reactive signal, so a widget that reads [`current`]/[`is_focused`] inside its `view()` re-renders when focus moves (e.g. to show or hide its caret). State is per-surface (each surface owns its own focus via [`FocusContext`], activated by the runner), so focus never crosses windows; preserving focus across a hot-reload dylib swap is out of scope.
 
 use std::rc::Rc;
 
 use layout_core::NodeId;
-use platform_core::{ConsumedKeys, Key, ModifiersState, NamedKey, NumericValue};
+use platform_core::{ConsumedKeys, Key, ModifiersState, NamedKey, NumericValue, Orientation};
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::Focusable;
 use rustc_hash::FxHashSet;
@@ -27,7 +27,7 @@ pub enum FocusKind {
 /// What a focusable *is*, for the reader that has to say it out loud — a separate question from [`FocusKind`], which asks what the widget does with a key.
 ///
 /// Defined in `platform-core` because it is the vocabulary the UI and the platform share, the same way [`Key`] is. Re-exported here because this is where it is *authored*: a widget declares its role at the moment it declares itself focusable, and the two are one call.
-pub use platform_core::Role;
+pub use platform_core::{Role, SetPosition};
 
 /// A cheap, `Copy` handle to a focusable widget's identity, so a caller that has moved the widget into a container (and no longer holds a reference to it) can still drive its focus — e.g. autofocus a hosted editor when its tab activates. Obtain one from the widget (see [`crate::TextArea::focus_handle`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,9 +88,14 @@ struct Entry {
     role: Role,
     /// Whether Tab stops here. `false` for a control that is driven some other way and still has to be announced: the rows of a menu answer to arrow keys, and putting each one in the tab order would make Tab walk a list the user opened precisely so as not to.
     tabbable: bool,
+    /// For a scroll area, whether its content can scroll now: it is a stop only then, and only while nothing inside it takes focus. See [`register_scroller`].
+    scrolls: Option<Rc<dyn Fn() -> bool>>,
     /// A checked state, for the controls that have one. A closure and not a flag, for the same reason "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to get the answer that is true then.
     toggled: Option<Rc<dyn Fn() -> bool>>,
     value: Option<Rc<dyn Fn() -> NumericValue>>,
+    orientation: Option<Orientation>,
+    outline: Outline,
+    active_descendant: Option<Rc<dyn Fn() -> Option<FocusId>>>,
     /// The surface that answers for this entry's keyboard while it holds focus. See [`delegate_keyboard`].
     keyboard: Option<KeyboardDelegate>,
 }
@@ -104,7 +109,7 @@ struct FocusState {
     focused: RwSignal<Option<FocusId>>,
     // A signal, not a plain flag: Tab onto the widget just clicked moves this without moving `focused`, and a ring that missed it would be stale exactly when the keyboard took over.
     pointer_focus: RwSignal<bool>,
-    // In tab order (registration order ≈ document order). Drives Tab and Shift-Tab.
+    // In registration order; Tab walks it in document order (see `in_document_order`).
     order: Vec<Entry>,
     // Regions that can hide their contents without unregistering them; consulted when stepping.
     scopes: Vec<Scope>,
@@ -116,6 +121,8 @@ struct FocusState {
     // The one request still waiting for its batch to settle, stamped so a request that lost to a later give, blur or request does not act when it is finally judged.
     deferred: Option<(u64, FocusId)>,
     requests: u64,
+    // Who the key being dispatched belongs to, fixed as its dispatch starts. See [`is_key_target`].
+    keystroke: Option<Option<FocusId>>,
 }
 
 impl FocusState {
@@ -132,6 +139,7 @@ impl FocusState {
             guard: None,
             deferred: None,
             requests: 0,
+            keystroke: None,
         }
     }
 
@@ -173,6 +181,38 @@ pub fn current() -> Option<FocusId> {
 /// Whether `id` currently holds focus.
 pub fn is_focused(id: FocusId) -> bool {
     current() == Some(id)
+}
+
+/// Whether the key being dispatched is `id`'s to handle: `id` held focus when the key arrived. Outside a key's dispatch, whether `id` holds focus now.
+///
+/// What a widget gates its keys on, rather than [`is_focused`]. Keys are offered to every widget in turn, so a handler that moves focus — `/` taking the caret to a search field — would otherwise hand the rest of that same keystroke to the widget it just focused, which then types the `/` it was summoned by.
+pub fn is_key_target(id: FocusId) -> bool {
+    key_target() == Some(id)
+}
+
+/// Who the key being dispatched belongs to, or who holds focus now outside a key's dispatch.
+fn key_target() -> Option<FocusId> {
+    with_focus_ref(|s| s.keystroke).unwrap_or_else(current)
+}
+
+/// Fixes [`is_key_target`] to whoever holds focus now, until the guard drops. `None` inside a dispatch that already fixed it, so the outermost walk decides.
+pub(crate) fn deliver_keystroke() -> Option<KeystrokeGuard> {
+    let held = focused_signal().peek();
+    with_focus(|s| match s.keystroke {
+        Some(_) => None,
+        None => {
+            s.keystroke = Some(held);
+            Some(KeystrokeGuard)
+        }
+    })
+}
+
+pub(crate) struct KeystrokeGuard;
+
+impl Drop for KeystrokeGuard {
+    fn drop(&mut self) {
+        with_focus(|s| s.keystroke = None);
+    }
 }
 
 // The three commands below `peek` the signal they write: an effect may well issue one ("focus the selected row's field"), and a reactive read would subscribe it to the focus it sets, taking focus straight back on the next change anywhere. Same rule as `ScrollViewport::reveal`.
@@ -234,7 +274,7 @@ fn give(id: FocusId, from_pointer: bool) {
     }
 }
 
-fn node_of(id: FocusId) -> Option<NodeId> {
+pub(crate) fn node_of(id: FocusId) -> Option<NodeId> {
     with_focus_ref(|s| s.entry(id).and_then(|e| e.node))
 }
 
@@ -316,8 +356,14 @@ pub fn blur_from_pointer(x: f32, y: f32) {
         return;
     }
     // Collected before the rects are asked for: reading layout under the focus borrow would hold one runtime across a call into another.
-    let nodes: Vec<NodeId> =
-        with_focus_ref(|s| s.order.iter().filter_map(|entry| entry.node).collect());
+    // A scroll area is not one: the keyboard reaches it, a press does not.
+    let nodes: Vec<NodeId> = with_focus_ref(|s| {
+        s.order
+            .iter()
+            .filter(|entry| entry.scrolls.is_none())
+            .filter_map(|entry| entry.node)
+            .collect()
+    });
     let on_a_focusable = nodes
         .into_iter()
         .any(|node| crate::input_region::pointable(node, x, y));
@@ -357,6 +403,19 @@ pub fn register_presented(id: FocusId, node: NodeId, role: Role) {
     register_node(id, FocusKind::Widget, Some(node), role, false);
 }
 
+/// Registers a scroll area as a stop of its own, so the keyboard can scroll it — but only while `scrolls` reads true and nothing reachable inside `node` takes focus.
+///
+/// A region that holds controls is scrolled by moving through them, and a stop of its own there would be one more Tab between the field above it and the first control in it. One that holds only text has nothing else the keyboard could reach it by.
+pub(crate) fn register_scroller(id: FocusId, node: NodeId, scrolls: impl Fn() -> bool + 'static) {
+    register_node(id, FocusKind::Widget, Some(node), Role::ScrollArea, true);
+    let scrolls: Rc<dyn Fn() -> bool> = Rc::new(scrolls);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.scrolls = Some(scrolls);
+        }
+    });
+}
+
 /// What a widget is taken to be when it has not said: the reading that matches what the keyboard does with it.
 fn default_role(kind: FocusKind) -> Role {
     match kind {
@@ -382,8 +441,12 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                 node,
                 role,
                 tabbable,
+                scrolls: None,
                 toggled: None,
                 value: None,
+                orientation: None,
+                outline: Outline::default(),
+                active_descendant: None,
                 keyboard: None,
             }),
         }
@@ -435,11 +498,11 @@ pub fn unregister(id: FocusId) {
     release(id);
 }
 
-/// Whether the focused widget takes keys as text. Reactive, like [`current`].
+/// Whether the focused widget takes keys as text — during a key's dispatch, the widget the key belongs to (see [`is_key_target`]). Reactive, like [`current`].
 ///
 /// The guard an app-level shortcut table needs: without it, typing into a field also runs the shortcuts that share its letters. Prefer [`text_entry_takes_key`], which lets through the presses no editor wants.
 pub fn text_entry_focused() -> bool {
-    match current() {
+    match key_target() {
         Some(id) => delegated(id, text_entry_focused)
             .unwrap_or_else(|| with_focus_ref(|s| s.text_entries.contains(&id))),
         None => false,
@@ -467,11 +530,11 @@ fn delegated<R>(id: FocusId, ask: impl FnOnce() -> R) -> Option<R> {
     Some(ask())
 }
 
-/// Whether the focused widget keeps `keys` for itself, as a control of its role uses them: a button acts on Enter, a slider on the arrows and nothing else. `false` with nothing focused. Reactive, like [`current`].
+/// Whether the focused widget — during a key's dispatch, the one the key belongs to — keeps `keys` for itself, as a control of its role uses them: a button acts on Enter, a slider on the arrows and nothing else. `false` with nothing focused. Reactive, like [`current`].
 ///
 /// What decides whether a key may go past focus to whatever would take it otherwise, such as the dismiss stack's Enter.
 pub fn focused_keeps(keys: ConsumedKeys) -> bool {
-    let Some(id) = current() else {
+    let Some(id) = key_target() else {
         return false;
     };
     delegated(id, || focused_keeps(keys)) == Some(true)
@@ -555,7 +618,7 @@ fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
 
 /// The tab order and the scopes, copied out from under the slot borrow — see [`step`] for why that matters.
 fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
-    with_focus_ref(|s| {
+    let (order, scopes) = with_focus_ref(|s| {
         let order: Vec<(FocusId, Option<NodeId>)> = s
             .order
             .iter()
@@ -568,7 +631,65 @@ fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
             .map(|sc| (sc.node, sc.showing.clone(), sc.traps))
             .collect();
         (order, scopes)
-    })
+    });
+    let idle = idle_scrollers(&scopes);
+    let order = order
+        .into_iter()
+        .filter(|(id, _)| !idle.contains(id))
+        .collect();
+    (in_document_order(order), scopes)
+}
+
+/// The stops in the order the document reads them, which is not the order they registered in: a list built before the field drawn above it registers first, and a branch rebuilt registers last. Content placed from elsewhere — a scroll's, an overlay's — reads where it is declared; a focus id with no node comes last.
+fn in_document_order(mut order: Vec<(FocusId, Option<NodeId>)>) -> Vec<(FocusId, Option<NodeId>)> {
+    // Roots rank by the first stop registered under each: separate roots have no order of their own to read.
+    let mut roots: Vec<NodeId> = Vec::new();
+    order.sort_by_cached_key(|(_, node)| {
+        node.map_or((usize::MAX, Vec::new()), |node| {
+            let (root, path) = crate::input_region::document_position(node);
+            let rank = roots
+                .iter()
+                .position(|&seen| seen == root)
+                .unwrap_or_else(|| {
+                    roots.push(root);
+                    roots.len() - 1
+                });
+            (rank, path)
+        })
+    });
+    order
+}
+
+/// The scroll areas that are no stop right now: their content fits, or something reachable inside them takes focus. See [`register_scroller`].
+fn idle_scrollers(scopes: &[ScopeView]) -> Vec<FocusId> {
+    type Scroller = (FocusId, NodeId, Rc<dyn Fn() -> bool>);
+    let (scrollers, holders) = with_focus_ref(|s| {
+        let scrollers: Vec<Scroller> = s
+            .order
+            .iter()
+            .filter_map(|e| Some((e.id, e.node?, e.scrolls.clone()?)))
+            .collect();
+        if scrollers.is_empty() {
+            return (scrollers, Vec::new());
+        }
+        let holders: Vec<NodeId> = s
+            .order
+            .iter()
+            .filter(|e| e.scrolls.is_none())
+            .filter_map(|e| e.node)
+            .collect();
+        (scrollers, holders)
+    });
+    scrollers
+        .into_iter()
+        .filter(|(_, node, scrolls)| {
+            !scrolls()
+                || holders.iter().any(|&held| {
+                    crate::input_region::is_inside(held, *node) && reachable(Some(held), scopes)
+                })
+        })
+        .map(|(id, _, _)| id)
+        .collect()
 }
 
 /// Declares that `id` carries an on/off state, and how to read it now. What the state is — checked, pressed, selected, expanded — is its role's [`Role::toggle_kind`].
@@ -593,6 +714,53 @@ pub fn set_value(id: FocusId, read: impl Fn() -> NumericValue + 'static) {
     });
 }
 
+/// Declares the axis `id` runs along: the bar of a splitter, the track of a slider.
+pub fn set_orientation(id: FocusId, orientation: Orientation) {
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.orientation = Some(orientation);
+        }
+    });
+}
+
+/// What a row of a hierarchy says beyond its on/off state: whether it is open, and where it sits.
+#[derive(Clone, Default)]
+struct Outline {
+    expanded: Option<Rc<dyn Fn() -> bool>>,
+    position: Option<SetPosition>,
+}
+
+/// Declares that `id` has rows under it, and how to read whether it shows them now.
+pub fn set_expanded(id: FocusId, state: impl Fn() -> bool + 'static) {
+    let state: Rc<dyn Fn() -> bool> = Rc::new(state);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.outline.expanded = Some(state);
+        }
+    });
+}
+
+/// Declares where `id` sits in its hierarchy and among its siblings.
+pub fn set_position(id: FocusId, position: SetPosition) {
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.outline.position = Some(position);
+        }
+    });
+}
+
+/// Declares that `container` keeps focus while a cursor walks the controls inside it, and how to read which one the cursor is on now: the row of a tree, the item of a toolbar. `None` while there is no cursor, or its control is not built.
+///
+/// What lets a reader announce the item the arrows moved to, which it otherwise never hears of: focus itself never moves.
+pub fn set_active_descendant(container: FocusId, read: impl Fn() -> Option<FocusId> + 'static) {
+    let read: Rc<dyn Fn() -> Option<FocusId>> = Rc::new(read);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(container) {
+            entry.active_descendant = Some(read);
+        }
+    });
+}
+
 /// One focusable as the accessibility layer sees it: where it is, what it is, and whether it is available.
 pub struct Exposed {
     pub id: FocusId,
@@ -604,9 +772,13 @@ pub struct Exposed {
     pub toggled: Option<bool>,
     /// Its numeric reading, for the controls that carry one.
     pub value: Option<NumericValue>,
+    pub orientation: Option<Orientation>,
+    /// Whether a tree row with rows under it shows them; `None` for a leaf and for every other control.
+    pub expanded: Option<bool>,
+    pub position: Option<SetPosition>,
 }
 
-/// The focusables a screen reader should be told about, in tab order.
+/// The focusables a screen reader should be told about, in the order they registered; a scroll area only while it is a stop of its own.
 ///
 /// Deliberately the same `reachable` the keyboard walks, so the two can never disagree about what is on screen — with one distinction Tab has no use for: a control kept out of reach by being *disabled* is reported as present and unavailable, where one inside a closed dialog is not reported at all.
 pub fn exposed() -> Vec<Exposed> {
@@ -618,11 +790,23 @@ pub fn exposed() -> Vec<Exposed> {
             Role,
             Option<Rc<dyn Fn() -> bool>>,
             Option<Rc<dyn Fn() -> NumericValue>>,
+            Option<Orientation>,
+            Outline,
         );
         let order: Vec<Row> = s
             .order
             .iter()
-            .map(|e| (e.id, e.node, e.role, e.toggled.clone(), e.value.clone()))
+            .map(|e| {
+                (
+                    e.id,
+                    e.node,
+                    e.role,
+                    e.toggled.clone(),
+                    e.value.clone(),
+                    e.orientation,
+                    e.outline.clone(),
+                )
+            })
             .collect();
         type ScopeRow = (NodeId, Rc<dyn Fn() -> bool>, bool, ScopeReason);
         let scopes: Vec<ScopeRow> = s
@@ -637,10 +821,12 @@ pub fn exposed() -> Vec<Exposed> {
         .filter(|(_, _, _, reason)| *reason == ScopeReason::NotShowing)
         .map(|(node, showing, traps, _)| (*node, showing.clone(), *traps))
         .collect();
+    let idle = idle_scrollers(&hiding);
 
     order
         .into_iter()
-        .filter_map(|(id, node, role, toggled, value)| {
+        .filter(|(id, ..)| !idle.contains(id))
+        .filter_map(|(id, node, role, toggled, value, orientation, outline)| {
             let node = node?;
             reachable(Some(node), &hiding).then(|| Exposed {
                 id,
@@ -653,6 +839,9 @@ pub fn exposed() -> Vec<Exposed> {
                 }),
                 toggled: toggled.as_ref().map(|read| read()),
                 value: value.as_ref().map(|read| read()),
+                orientation,
+                expanded: outline.expanded.as_ref().map(|read| read()),
+                position: outline.position,
             })
         })
         .collect()
@@ -711,10 +900,11 @@ pub fn focusable_of(id: FocusId, role: Role, declared: Option<ConsumedKeys>) -> 
 ///
 /// Taken as keyboard focus, so the ring shows. A box already focused is left alone: the move that reports it may be the echo of a tap that focused it first, and re-taking it would turn that tap's ring on.
 pub fn follow_box(box_id: u64) -> bool {
+    // A presented control never holds focus: the document focusing a tapped row must not take focus from the tree that drives it.
     let found = with_focus_ref(|s| {
         s.order
             .iter()
-            .find(|e| e.node.is_some_and(|node| u64::from(node) == box_id))
+            .find(|e| e.tabbable && e.node.is_some_and(|node| u64::from(node) == box_id))
             .map(|e| e.id)
     });
     let Some(id) = found else {
@@ -761,10 +951,42 @@ fn step(dir: isize) {
 #[path = "focus_test.rs"]
 mod tests;
 
+#[cfg(test)]
+#[path = "focus_order_test.rs"]
+mod order_tests;
+
 /// The checked state `id` declared, read now.
 ///
 /// `None` both for a control that carries no such state and for one nothing has registered. Reading it here rather than through [`exposed`] is what lets a widget put its own state on the box it draws: the reading happens inside `view()`, so the box re-emits when the state changes, which a snapshot taken afterwards could never do.
 pub fn toggled_state(id: FocusId) -> Option<bool> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.toggled.clone()))?;
     Some(read())
+}
+
+/// The number `id` declared, read now. Read inside `view()` for the same reason as [`toggled_state`].
+pub fn value_state(id: FocusId) -> Option<NumericValue> {
+    let read = with_focus(|s| s.entry(id).and_then(|e| e.value.clone()))?;
+    Some(read())
+}
+
+/// The axis `id` declared, if any.
+pub fn orientation_state(id: FocusId) -> Option<Orientation> {
+    with_focus(|s| s.entry(id).and_then(|e| e.orientation))
+}
+
+/// Whether `id` shows the rows under it, read now; `None` for a leaf and for anything that does not expand. Read inside `view()` for the same reason as [`toggled_state`].
+pub fn expanded_state(id: FocusId) -> Option<bool> {
+    let read = with_focus(|s| s.entry(id).and_then(|e| e.outline.expanded.clone()))?;
+    Some(read())
+}
+
+/// Where `id` said it sits, if it said.
+pub fn position_state(id: FocusId) -> Option<SetPosition> {
+    with_focus(|s| s.entry(id).and_then(|e| e.outline.position))
+}
+
+/// The control the cursor of `container` rests on, read now; `None` when it declared no cursor, or names a control no longer registered. Read inside `view()` for the same reason as [`toggled_state`].
+pub fn active_descendant_state(container: FocusId) -> Option<FocusId> {
+    let read = with_focus(|s| s.entry(container).and_then(|e| e.active_descendant.clone()))?;
+    read().filter(|item| is_registered(*item))
 }

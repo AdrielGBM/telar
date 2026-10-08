@@ -864,3 +864,53 @@ fn a_control_size_set_on_a_frame_reaches_only_the_readers_inside_it() {
     );
     theme_core::set_control_size(ControlSize::Regular);
 }
+
+#[test]
+fn a_modal_open_from_the_start_covers_its_frame_above_the_page() {
+    reset_layout_runtime();
+    let canvas = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), || {
+            let scrim = swatch(Color::BLACK, fill())?;
+            let modal = Overlay::toggleable(LayoutStyle::new(), vec![boxed(scrim)], || true)?;
+            let declared_in = Container::new(
+                LayoutStyle::new().width(40.0).height(20.0),
+                vec![boxed(modal)],
+            )?;
+            let page = swatch(Color::WHITE, LayoutStyle::new().height(30.0))?;
+            Ok(boxed(Container::new(
+                fill().flex_column(),
+                vec![boxed(page), boxed(declared_in)],
+            )?))
+        })
+        .unwrap(),
+    );
+    let window = Window::new(
+        SurfaceFrame::filling(
+            Rc::clone(&canvas),
+            LayoutStyle::new().width(FRAME.width).height(FRAME.height),
+        )
+        .unwrap(),
+        no_focusable(),
+        no_focusable(),
+        || {},
+    );
+
+    let drawn = window.frame();
+    assert_eq!(
+        fills(&drawn, Color::BLACK),
+        [(FRAME, Some(FRAME))],
+        "the scrim spans the frame's surface, not the 40×20 box it was declared in"
+    );
+    let order = |color: Color| {
+        drawn
+            .iter()
+            .position(|command| {
+                matches!(command, DrawCommand::Rect { style, .. } if style.fill == Some(color.into()))
+            })
+            .unwrap()
+    };
+    assert!(
+        order(Color::BLACK) > order(Color::WHITE),
+        "the modal is drawn above the page"
+    );
+}

@@ -198,6 +198,8 @@ pub(crate) fn dispatch_container_event(
     event: &Event,
 ) -> EventResult {
     let _dispatching = crate::disposal::dispatching();
+    let _keystroke = matches!(event, Event::KeyPressed { .. } | Event::KeyReleased { .. })
+        .then(crate::focus::deliver_keystroke);
     // Moves and releases broadcast to every child regardless of position, so a widget that armed a press inside its bounds still gets the release once the pointer has left (pointer capture). Each handler is guarded by its own armed state, so this never double-fires. Hit-testing below applies to presses and the wheel.
     if matches!(
         event,

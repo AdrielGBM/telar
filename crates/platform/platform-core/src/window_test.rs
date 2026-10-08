@@ -33,6 +33,10 @@ impl EventHandler<TestWindow> for TestHandler {
             lang: None,
             url: None,
             current: None,
+            orientation: None,
+            expanded: None,
+            position: None,
+            active_descendant: None,
         }]
     }
 }

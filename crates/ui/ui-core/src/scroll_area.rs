@@ -5,19 +5,21 @@ use std::rc::Rc;
 
 use geometry_core::{Insets, LayoutGrid, Rect};
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
-use platform_core::Event;
+use platform_core::{Event, Key, ModifiersState, NamedKey, ScrollDelta};
 use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::track_layout;
+use crate::focus::{self, FocusId};
 use crate::impl_leaf_widget;
 use crate::input_region::{InputHandle, Placement};
 use crate::kept::kept;
 use crate::layout_item::{LayoutItem, mount_item_segment};
 use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, occlude, offset_pointer, pointer_coords};
+use crate::styled_container::default_focus_ring;
 
 /// How a scroll area's bars are painted, and how wide they are.
 pub struct ScrollbarStyle {
@@ -857,6 +859,8 @@ pub struct LayoutScrollArea {
     arrival: RwSignal<Insets>,
     declared_arrival: RwSignal<Option<ArrivalRule>>,
     follows_arrival: bool,
+    // `None` once primary: the page scroll is the window's, scrolled with nothing focused rather than by a stop of its own.
+    focus: Option<FocusId>,
 }
 
 /// What a scroll's arrival margin is declared as.
@@ -991,6 +995,11 @@ impl LayoutScrollArea {
             Placement::Clip(Rc::new(move || Some(viewport.peek()))),
         );
 
+        let focus = focus::next_id();
+        focus::register_scroller(focus, leaf.node, move || {
+            overflows(viewport.peek(), content_rect_signal.peek())
+        });
+
         Ok(Self {
             leaf,
             core: ScrollCore::with_offsets(
@@ -1007,6 +1016,7 @@ impl LayoutScrollArea {
             arrival,
             declared_arrival: signal(None),
             follows_arrival: false,
+            focus: Some(focus),
         })
     }
 
@@ -1051,7 +1061,35 @@ impl LayoutScrollArea {
     /// Makes this the surface's primary scroll: the one that stands for the whole page. [`ScrollPage`](crate::ScrollPage) is the way in; a document maps this scroll onto its own and shows its own bar for it, and every other target is unchanged.
     pub(crate) fn into_primary(mut self) -> Self {
         self.core.primary = true;
+        if let Some(id) = self.focus.take() {
+            focus::unregister(id);
+        }
         self
+    }
+
+    /// Where a key held by this scroll moves its content, clamped to how far the content goes; `None` for a key that does not scroll.
+    fn keyed_offset(&self, key: &Key, modifiers: ModifiersState) -> Option<(f32, f32)> {
+        let viewport = self.leaf.rect.peek();
+        let content = self.core.content_rect_signal.peek();
+        let (x, y) = (self.core.scroll_x.peek(), self.core.scroll_y.peek());
+        let (_, line) = ScrollDelta::Lines { x: 0.0, y: 1.0 }.pixels();
+        let page = (viewport.height - line).max(line);
+        let max_y = (content.height - viewport.height).max(0.0);
+        let (to_x, to_y) = match key {
+            Key::Named(NamedKey::ArrowDown) => (x, y + line),
+            Key::Named(NamedKey::ArrowUp) => (x, y - line),
+            Key::Named(NamedKey::ArrowRight) => (x + line, y),
+            Key::Named(NamedKey::ArrowLeft) => (x - line, y),
+            Key::Named(NamedKey::PageDown) => (x, y + page),
+            Key::Named(NamedKey::PageUp) => (x, y - page),
+            Key::Named(NamedKey::Space) if modifiers.is_shift => (x, y - page),
+            Key::Named(NamedKey::Space) => (x, y + page),
+            Key::Named(NamedKey::Home) => (x, 0.0),
+            Key::Named(NamedKey::End) => (x, max_y),
+            _ => return None,
+        };
+        let max_x = (content.width - viewport.width).max(0.0);
+        Some((to_x.clamp(0.0, max_x), to_y.clamp(0.0, max_y)))
     }
 
     pub(crate) fn content_node(&self) -> NodeId {
@@ -1065,16 +1103,21 @@ impl Component for LayoutScrollArea {
     fn view(&self) -> RenderNode {
         // Its own box rather than `LayoutLeaf::at_layout_position`: the content is placed by the scroll offset, not by the leaf's placement, so the two must not both apply.
         let content = self.core.view(self.leaf.rect.get());
-        let element = crate::element::for_target(self.leaf.node, || {
-            crate::element::with_semantics_scrolled(
-                self.leaf.node,
-                renderer_core::Semantics::of(renderer_core::Role::ScrollArea),
-                self.core.take_command(),
-                self.core.primary,
-                self.arrival.get(),
-            )
-        });
-        RenderNode::element(element, [content])
+        let element =
+            crate::element::for_target(self.leaf.node, renderer_core::Role::ScrollArea, || {
+                crate::element::with_semantics_scrolled(
+                    self.leaf.node,
+                    renderer_core::Semantics::of(renderer_core::Role::ScrollArea),
+                    self.core.take_command(),
+                    self.core.primary,
+                    self.arrival.get(),
+                )
+            });
+        let ring = self
+            .focus
+            .filter(|id| focus::is_focus_visible(*id))
+            .map(|_| RenderNode::rect(self.leaf.rect.get(), default_focus_ring()));
+        RenderNode::element(element, std::iter::once(content).chain(ring))
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
@@ -1085,12 +1128,35 @@ impl Component for LayoutScrollArea {
             self.core.follow(*x, *y);
             return EventResult::Handled;
         }
+        if let Event::KeyPressed { key, modifiers } = event
+            && self.focus.is_some_and(focus::is_key_target)
+            && let Some((x, y)) = self.keyed_offset(key, *modifiers)
+        {
+            self.core.command(x, y);
+            return EventResult::Handled;
+        }
         self.core.on_event(event, self.leaf.rect.get())
     }
 
     fn debug_name(&self) -> &'static str {
         "ScrollArea"
     }
+}
+
+impl Drop for LayoutScrollArea {
+    fn drop(&mut self) {
+        if let Some(id) = self.focus {
+            focus::unregister(id);
+        }
+    }
+}
+
+/// Whether content of `content`'s size can scroll in a laid-out `viewport`, past the rounding a layout leaves between two boxes meant to be equal.
+fn overflows(viewport: Rect, content: Rect) -> bool {
+    const SLACK: f32 = 0.5;
+    viewport.width > 0.0
+        && viewport.height > 0.0
+        && (content.width - viewport.width > SLACK || content.height - viewport.height > SLACK)
 }
 
 #[cfg(test)]

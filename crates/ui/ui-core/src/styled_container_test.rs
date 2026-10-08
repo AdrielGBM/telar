@@ -2231,3 +2231,112 @@ fn declared_keys_follow_the_state_they_are_read_from() {
     let opened = keyboard_of(&card).expect("a control is focusable");
     assert!(opened.consumes.contains(ConsumedKeys::VERTICAL_ARROWS));
 }
+
+fn semantics_of(card: &StyledContainer) -> renderer_core::Semantics {
+    let was = ui_tree::set_element_capture(true);
+    let view = card.view();
+    ui_tree::set_element_capture(was);
+    match view {
+        RenderNode::Element { element, .. } => element.semantics.clone(),
+        _ => panic!("expected the box's element"),
+    }
+}
+
+/// A presented row is announced with its states but is no Tab stop, and a tap on it fires its press and leaves the keyboard where it was.
+#[test]
+fn a_presented_box_is_announced_but_a_tap_leaves_focus_alone() {
+    focus::clear();
+    let pressed = Rc::new(Cell::new(false));
+    let sink = pressed.clone();
+    let open = reactive_core::signal(false);
+    let place = focus::SetPosition {
+        level: 2,
+        position: 1,
+        size: 3,
+    };
+    let mut row = laid_out_box()
+        .presented(focus::Role::TreeItem)
+        .toggled(|| true)
+        .expanded(move || open.get())
+        .positioned(place)
+        .on_press(move || sink.set(true));
+    settle(&mut row);
+
+    let said = semantics_of(&row);
+    assert_eq!(said.role, focus::Role::TreeItem);
+    assert_eq!(said.toggled, Some(true));
+    assert_eq!(said.expanded, Some(false));
+    assert_eq!(said.position, Some(place));
+    assert_eq!(said.focusable.map(|f| f.tab_stop), Some(false));
+    open.set(true);
+    assert_eq!(semantics_of(&row).expanded, Some(true));
+
+    row.on_event(&press(50.0, 50.0, PointerSource::Mouse));
+    row.on_event(&release(50.0, 50.0, PointerSource::Mouse));
+    assert!(pressed.get(), "the tap still fires");
+    assert_eq!(focus::current(), None, "and takes no focus");
+    focus::focus_next();
+    assert_eq!(focus::current(), None, "nor is the box a Tab stop");
+}
+
+/// A tree keeps focus while its cursor walks the rows: the box says which row the cursor is on, by the row's element, and stops saying it once that row is gone.
+#[test]
+fn a_control_names_the_presented_box_its_cursor_rests_on() {
+    focus::clear();
+    reset_layout_runtime();
+    let row = || {
+        StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(20.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .presented(focus::Role::TreeItem)
+    };
+    let (first, second) = (row(), row());
+    let rows = [
+        (first.focus_id().unwrap(), first.layout_node()),
+        (second.focus_id().unwrap(), second.layout_node()),
+    ];
+    let cursor = reactive_core::signal(Some(0usize));
+    let gone = focus::next_id();
+    let on_gone = reactive_core::signal(false);
+    let tree = StyledContainer::new(
+        LayoutStyle::new().width(100.0).height(40.0).flex_column(),
+        |_r| RectStyle::default(),
+        vec![crate::box_item(first), crate::box_item(second)],
+    )
+    .unwrap()
+    .control(focus::Role::Tree)
+    .active_descendant(move || match on_gone.get() {
+        true => Some(gone),
+        false => cursor.get().map(|at| rows[at].0),
+    });
+
+    let element_of = |at: usize| Some(u64::from(rows[at].1));
+    assert_eq!(semantics_of(&tree).active_descendant, element_of(0));
+    cursor.set(Some(1));
+    assert_eq!(semantics_of(&tree).active_descendant, element_of(1));
+    cursor.set(None);
+    assert_eq!(semantics_of(&tree).active_descendant, None);
+    on_gone.set(true);
+    assert_eq!(
+        semantics_of(&tree).active_descendant,
+        None,
+        "a cursor on a row that is not registered names nothing"
+    );
+}
+
+/// The document focusing a tapped row reports it as focus moving there; the row is driven by the tree around it, so focus stays with the tree.
+#[test]
+fn the_document_focusing_a_presented_box_does_not_move_focus_to_it() {
+    focus::clear();
+    let row = laid_out_box().presented(focus::Role::TreeItem);
+    assert!(!focus::follow_box(u64::from(row.layout_node())));
+    assert_eq!(focus::current(), None);
+
+    let button = laid_out_box().control(focus::Role::Button);
+    assert!(focus::follow_box(u64::from(button.layout_node())));
+    assert_eq!(focus::current(), button.focus_id());
+    focus::clear();
+}

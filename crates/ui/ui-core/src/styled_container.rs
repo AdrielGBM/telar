@@ -7,7 +7,7 @@ use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
     ConsumedKeys, Cursor, Destination, Event, IntoDestination, Key, NamedKey, NumericValue,
-    PointerButton, PointerSource,
+    Orientation, PointerButton, PointerSource,
 };
 use reactive_core::{Effect, Reactive, RwSignal, effect, signal};
 use renderer_core::{BlendMode, Border, Declared, RectStyle};
@@ -150,6 +150,8 @@ struct Focusable {
     keys_need_focus: bool,
     // Set by `consumes_keys`; `None` keeps what the role keeps.
     consumes: Option<Box<dyn Fn() -> ConsumedKeys>>,
+    // Set by `presented`: something else holds the keyboard for this box, so a tap leaves focus where it is.
+    presented: bool,
 }
 
 /// The painted box every interactive widget is built on: state styles, gestures, focus and transforms.
@@ -268,6 +270,13 @@ impl StyledContainer {
         if let Some(id) = self.focusable.id {
             semantics.focused = focus::is_focused(id);
             semantics.toggled = focus::toggled_state(id);
+            semantics.value = focus::value_state(id);
+            semantics.orientation = focus::orientation_state(id);
+            semantics.expanded = focus::expanded_state(id);
+            semantics.position = focus::position_state(id);
+            semantics.active_descendant = focus::active_descendant_state(id)
+                .and_then(focus::node_of)
+                .map(u64::from);
             let declared = self.focusable.consumes.as_ref().map(|keys| keys());
             semantics.focusable = Some(focus::focusable_of(id, semantics.role, declared));
         }
@@ -416,7 +425,9 @@ impl StyledContainer {
             self.set_active(true);
         }
         let focused = match self.focusable.id {
-            Some(id) if primary && rect.contains(x as f32, y as f32) => {
+            Some(id)
+                if primary && !self.focusable.presented && rect.contains(x as f32, y as f32) =>
+            {
                 focus::request_from_pointer(id);
                 true
             }
@@ -615,6 +626,20 @@ impl StyledContainer {
         self
     }
 
+    /// Announces the box as a control of `role` that something else drives: the rows of a tree, walked with the arrows while the tree holds focus. It is no Tab stop, and a tap on it leaves focus where it is, but it carries [`toggled`](Self::toggled), [`expanded`](Self::expanded) and [`positioned`](Self::positioned) like any control.
+    pub fn presented(mut self, role: focus::Role) -> Self {
+        self.role = Some(role);
+        let id = *self.focusable.id.get_or_insert_with(focus::next_id);
+        focus::register_presented(id, self.node, role);
+        self.focusable.presented = true;
+        self
+    }
+
+    /// The focus id this box holds focus by, once it is focusable: what the presented parts of a control give focus back to when they are tapped.
+    pub fn focus_id(&self) -> Option<FocusId> {
+        self.focusable.id
+    }
+
     /// Declares that this control carries an on/off state, and how to read it: checked on a checkbox, radio or switch, pressed on a button (a toggle button), selected on a tab and expanded on a disclosure, as [`Role::toggle_kind`](renderer_core::Role::toggle_kind) says.
     ///
     /// Only meaningful after [`control`](Self::control), and only for the roles that have one; any other role ignores it. Without it a reader announces "checkbox" and stops — and a default of "unticked" would be worse, since it would be confidently wrong for half of them.
@@ -629,6 +654,38 @@ impl StyledContainer {
     pub fn valued(self, read: impl Fn() -> NumericValue + 'static) -> Self {
         if let Some(id) = self.focusable.id {
             focus::set_value(id, read);
+        }
+        self
+    }
+
+    /// Declares the axis this control runs along, so a reader hears a splitter's direction. Meaningful for [`Role::Splitter`](renderer_core::Role::Splitter) and the other roles with an axis.
+    pub fn oriented(self, orientation: Orientation) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_orientation(id, orientation);
+        }
+        self
+    }
+
+    /// Declares that this control has rows under it, and how to read whether it shows them: a branch of a tree. A leaf leaves it out, which is how a reader knows there is nothing to open.
+    pub fn expanded(self, state: impl Fn() -> bool + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_expanded(id, state);
+        }
+        self
+    }
+
+    /// Declares where this control sits in its hierarchy and among its siblings, for a reader that cannot count them: a row of a virtualised tree, whose neighbours may not be built.
+    pub fn positioned(self, position: focus::SetPosition) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_position(id, position);
+        }
+        self
+    }
+
+    /// Declares that this control keeps focus while a cursor walks the [`presented`](Self::presented) controls inside it, and how to read which one the cursor is on: the row of a tree, the item of a toolbar. A reader announces that one as the arrows reach it; `None` names none.
+    pub fn active_descendant(self, read: impl Fn() -> Option<FocusId> + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_active_descendant(id, read);
         }
         self
     }
@@ -1094,7 +1151,11 @@ impl StyledContainer {
                 }
                 None => crate::element::identity(self.node),
             },
-            _ => crate::element::for_target(self.node, || self.element()),
+            _ => crate::element::for_target(
+                self.node,
+                crate::element::role_of(self.role, self.press.is_set()),
+                || self.element(),
+            ),
         }
     }
 
@@ -1184,7 +1245,7 @@ impl StyledContainer {
             }
             Event::KeyPressed { key, modifiers } => {
                 if let Some(id) = self.focusable.id
-                    && focus::is_focused(id)
+                    && focus::is_key_target(id)
                     && matches!(key, Key::Named(NamedKey::Tab))
                 {
                     if modifiers.is_shift {
@@ -1198,7 +1259,7 @@ impl StyledContainer {
                 if self.focusable.activates
                     && self.on_key.is_none()
                     && let Some(id) = self.focusable.id
-                    && focus::is_focused(id)
+                    && focus::is_key_target(id)
                     && self.activated_by(key)
                     && self.press.activate()
                 {
@@ -1207,7 +1268,7 @@ impl StyledContainer {
                 // Not while a field has the caret: this is the app's shortcut table, which would otherwise fire on every letter typed. Nor from a subtree that is out of the layout flow: a key carries no position to miss the box with, so the chain is the only thing that can keep the shortcuts of a table nobody can see from firing.
                 if let Some(cb) = &self.on_key
                     && (!self.focusable.keys_need_focus
-                        || self.focusable.id.is_some_and(focus::is_focused))
+                        || self.focusable.id.is_some_and(focus::is_key_target))
                     && !focus::text_entry_takes_key(key, *modifiers)
                     && input_region::receives_input(self.node)
                     && cb(key)
@@ -1240,7 +1301,7 @@ impl Drop for StyledContainer {
 /// The ring a control wears when the keyboard is what reached it, unless it asked for one of its own.
 ///
 /// A ring and not a fill, because it answers a different question from hover or pressed — *where the keys are going*, not what the box is doing — and has to survive being layered over whichever of those won. Its radius is deliberately absent: the compositing path takes that from the box, since a ring sits on a shape it does not get to reshape.
-fn default_focus_ring() -> RectStyle {
+pub(crate) fn default_focus_ring() -> RectStyle {
     RectStyle::default().with_border(Border::uniform(use_theme_tokens().primary(), 2.0))
 }
 

@@ -122,14 +122,14 @@ impl LayoutItem for FixedLayer {
 
 impl Component for FixedLayer {
     fn view(&self) -> RenderNode {
-        let place = crate::element::for_target(self.place, || {
+        let place = crate::element::for_target(self.place, renderer_core::Role::Group, || {
             crate::element::with_semantics(self.place, Semantics::group())
         });
         // Its content is a root of its own, so a box hiding the place it was declared in does not hide it on its own.
         if tracks_hidden(self.place) {
             return RenderNode::element(place, []);
         }
-        let content = crate::element::for_target(self.content, || {
+        let content = crate::element::for_target(self.content, renderer_core::Role::Group, || {
             crate::element::fixed_in_place_of(self.content, self.place)
         });
         let boundaries = self.children.iter().map(|child| child.segment.boundary());

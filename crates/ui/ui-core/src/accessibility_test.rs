@@ -439,3 +439,243 @@ fn a_label_moved_into_place_by_a_matrix_names_its_control() {
         .expect("the button is exposed");
     assert_eq!(button.name, "Save");
 }
+
+/// A tree keeps focus while its cursor walks the rows, so the snapshot names the row the cursor is on; a cursor on something the snapshot does not carry names nothing.
+#[test]
+fn a_focused_tree_names_the_row_its_cursor_rests_on() {
+    reset_layout_runtime();
+    focus::clear();
+    let row = || {
+        StyledContainer::new(
+            LayoutStyle::new().width(100.0).height(20.0),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .presented(Role::TreeItem)
+    };
+    let (first, second) = (row(), row());
+    let rows = [first.focus_id().unwrap(), second.focus_id().unwrap()];
+    let elsewhere = focus::next_id();
+    focus::register_as(elsewhere, focus::FocusKind::Widget);
+    let cursor = reactive_core::signal(rows[1]);
+    let tree = StyledContainer::new(
+        LayoutStyle::new().flex_column(),
+        |_r| RectStyle::default(),
+        vec![box_item(first), box_item(second)],
+    )
+    .unwrap()
+    .control(Role::Tree)
+    .active_descendant(move || Some(cursor.get()));
+    let tree_id = tree.focus_id().unwrap();
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(tree)]).unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    focus::request(tree_id);
+
+    let tree_node = |nodes: &[AccessNode]| {
+        nodes
+            .iter()
+            .find(|n| n.role == Role::Tree)
+            .cloned()
+            .expect("the tree is exposed")
+    };
+    let nodes = snapshot(&[]);
+    let said = tree_node(&nodes);
+    assert!(said.focused, "focus stays on the tree");
+    assert_eq!(said.active_descendant, Some(rows[1]));
+    let read = platform_core::accessibility::transcript(&nodes);
+    assert!(
+        read.ends_with(", treeitem, focused") && !read.contains("tree, focused"),
+        "a reader says the row is focused, not the tree: {read:?}"
+    );
+
+    cursor.set(elsewhere);
+    assert_eq!(tree_node(&snapshot(&[])).active_descendant, None);
+    focus::clear();
+}
+
+/// A scroll area lays its content out as a root of its own and moves it by the scroll offset, so a control inside one is reported where it is drawn: in window space, the same space its label is read in.
+#[test]
+fn a_control_inside_a_scrolled_area_is_named_where_it_is_drawn() {
+    use crate::scroll_area::LayoutScrollArea;
+    reset_layout_runtime();
+    focus::clear();
+    let label = Text::new(
+        || "Save".to_string(),
+        LayoutStyle::new().width(40.0).height(16.0),
+        || TextStyle::new(12.0, renderer_core::Color::BLACK),
+    )
+    .unwrap();
+    let button = StyledContainer::new(
+        LayoutStyle::new().width(80.0).height(30.0),
+        |_r| RectStyle::default(),
+        vec![box_item(label)],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {});
+    let spacer = Container::new(LayoutStyle::new().height(300.0), vec![]).unwrap();
+    let content = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(spacer), box_item(button)],
+    )
+    .unwrap();
+    let (offset_x, offset_y) = (reactive_core::signal(0.0f32), reactive_core::signal(0.0f32));
+    let scroll = LayoutScrollArea::new_keeping(
+        LayoutStyle::new().width(200.0).height(100.0),
+        (offset_x, offset_y),
+        |_| Ok(box_item(content)),
+    )
+    .unwrap();
+    let header = Container::new(LayoutStyle::new().height(50.0), vec![]).unwrap();
+    let root = Container::new(
+        LayoutStyle::new().flex_column().padding_left(20.0),
+        vec![box_item(header), box_item(scroll)],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    offset_y.set(250.0);
+    let tree = ui_tree::ComponentList::new(root);
+
+    let nodes = snapshot(&tree.commands());
+    let button = nodes
+        .iter()
+        .find(|n| n.id.is_some())
+        .expect("the button is exposed");
+    assert_eq!(
+        button.name, "Save",
+        "the label it draws is inside it on screen"
+    );
+    assert_eq!(button.rect, rect(20.0, 100.0, 80.0, 30.0));
+}
+
+fn drawn_tab(caption: &'static str) -> StyledContainer {
+    let words = Text::new(
+        move || caption.to_string(),
+        LayoutStyle::new().width(50.0).height(20.0),
+        || TextStyle::new(12.0, renderer_core::Color::BLACK),
+    )
+    .unwrap();
+    StyledContainer::new(
+        LayoutStyle::new().padding_all(5.0),
+        |_r| RectStyle::default(),
+        vec![box_item(words)],
+    )
+    .unwrap()
+    .control(Role::Tab)
+}
+
+fn snapshot_of(root: Container) -> Vec<AccessNode> {
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    snapshot(&ui_tree::ComponentList::new(root).commands())
+}
+
+fn names_of(nodes: &[AccessNode], role: Role) -> Vec<&str> {
+    nodes
+        .iter()
+        .filter(|n| n.role == role)
+        .map(|n| n.name.as_str())
+        .collect()
+}
+
+fn read_on_its_own(nodes: &[AccessNode], name: &str) -> bool {
+    nodes.iter().any(|n| n.id.is_none() && n.name == name)
+}
+
+/// A named box with a role of its own names itself and never a control inside it: a tab list of one tab still leaves that tab its own name.
+#[test]
+fn a_named_group_does_not_rename_the_control_inside_it() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let list = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![box_item(drawn_tab("General"))],
+    )
+    .unwrap()
+    .role(Role::TabList)
+    .a11y_label(|| "Sections");
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(list)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_eq!(names_of(&nodes, Role::Tab), ["General"]);
+    assert!(
+        read_on_its_own(&nodes, "Sections"),
+        "the group's name is read on its own: {nodes:?}"
+    );
+}
+
+/// A named box with no role that only wraps a control is that control's name, the way a `<label>` around a field is: a widget built as a box around its control is named by naming the widget.
+#[test]
+fn a_named_wrapper_names_the_one_control_it_wraps() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let wrapper = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![box_item(drawn_tab("2"))],
+    )
+    .unwrap()
+    .a11y_label(|| "size");
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(wrapper)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_eq!(names_of(&nodes, Role::Tab), ["size 2"]);
+    assert!(!read_on_its_own(&nodes, "size"), "{nodes:?}");
+}
+
+/// A named box with no role that holds more than one control, or words beside its control, is a group of its own: its name is read on its own and renames none of them.
+#[test]
+fn a_named_box_holding_more_than_a_control_names_itself() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let pair = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![
+            box_item(drawn_tab("General")),
+            box_item(drawn_tab("Advanced")),
+        ],
+    )
+    .unwrap()
+    .a11y_label(|| "Sections");
+    let caption = Text::new(
+        || "Fixed layer".to_string(),
+        LayoutStyle::new().width(80.0).height(20.0),
+        || TextStyle::new(12.0, renderer_core::Color::BLACK),
+    )
+    .unwrap();
+    let bar = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![box_item(caption), box_item(drawn_tab("Tap"))],
+    )
+    .unwrap()
+    .a11y_label(|| "Fixed bar");
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(pair), box_item(bar)],
+    )
+    .unwrap();
+
+    let nodes = snapshot_of(root);
+    let mut tabs = names_of(&nodes, Role::Tab);
+    tabs.sort();
+    assert_eq!(tabs, ["Advanced", "General", "Tap"]);
+    assert!(read_on_its_own(&nodes, "Sections"), "{nodes:?}");
+    assert!(read_on_its_own(&nodes, "Fixed bar"), "{nodes:?}");
+}

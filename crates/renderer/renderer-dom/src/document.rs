@@ -12,8 +12,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use geometry_core::{Insets, Rect};
-use platform_core::Destination;
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
+use platform_core::{Destination, NumericValue, Orientation, SetPosition};
 use renderer_core::{
     BlendMode, Color, CurrentKind, DrawCommand, Element, Focusable, ImageData, Picture, Role,
     TextStyle, ToggleKind,
@@ -32,6 +32,9 @@ pub(crate) const RESET_ID: &str = "telar-reset";
 
 /// The `<style>` that gives the document scroller the primary scroll's arrival margin, so the browser's own scrolling into view stops short of the bars fixed over the page: a fragment followed before the app has loaded, focus moved by Tab, the keyboard paging.
 pub(crate) const ARRIVAL_ID: &str = "telar-arrival";
+
+/// What the `id` of a box a cursor rests on starts with, when no anchor names it already: what the box holding focus points at with `aria-activedescendant`.
+pub(crate) const DESCENDANT_ID_PREFIX: &str = "telar-box-";
 
 /// Where a box was told to be, beside where the browser put it. See `reconcile.rs`.
 pub(crate) const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
@@ -166,6 +169,17 @@ pub(crate) struct Described {
     pub toggled: Option<(ToggleKind, bool)>,
     /// What a link marked current is the current one of.
     pub current: Option<CurrentKind>,
+    pub value: Option<NumericValue>,
+    pub orientation: Option<Orientation>,
+    /// Whether a tree row with rows under it shows them, beside the selection its `toggled` carries.
+    pub expanded: Option<bool>,
+    pub position: Option<SetPosition>,
+    /// The box under this one that its cursor rests on, as the element says it. Written as nothing itself: it is resolved into [`active_descendant`](Self::active_descendant) once that box turns up inside this one.
+    pub descendant_box: Option<u64>,
+    /// The `id` of the element this one's cursor rests on, once that element is in the frame.
+    pub active_descendant: Option<String>,
+    /// Whether a box holding focus points at this one with `aria-activedescendant`, which takes an `id` to point at.
+    pub is_active_descendant: bool,
     pub disabled: bool,
     /// Part of the record even though it writes no attribute: a box that has just become the focused one is a box the reconcile has to act on, and comparing without it made the acting unreachable.
     pub focused: bool,
@@ -183,7 +197,7 @@ impl Described {
             true => (Some(self.label.clone().unwrap_or_default()), None),
             false => (None, self.label.clone()),
         };
-        // The browser walks Tab through the boxes Telar says are stops, in document order, which is the order Telar registers them in; everything else focusable takes focus only when Telar gives it.
+        // The browser walks Tab through the boxes Telar says are stops, in document order, which is the order Telar's own Tab walks them in; everything else focusable takes focus only when Telar gives it.
         let tabindex = match self.focusable {
             Some(focusable) if focusable.tab_stop => Some("0"),
             Some(_) => Some("-1"),
@@ -205,23 +219,59 @@ impl Described {
             ("target", self.opens_beside.then(|| "_blank".to_string())),
             ("rel", self.external.then(|| "noopener".to_string())),
             ("lang", self.lang.clone()),
-            ("id", self.anchor.clone()),
+            ("id", self.element_id(id)),
             ("aria-hidden", flag(self.hidden)),
             ("aria-checked", self.state_of(ToggleKind::Checked)),
             ("aria-pressed", self.state_of(ToggleKind::Pressed)),
             ("aria-selected", self.state_of(ToggleKind::Selected)),
-            ("aria-expanded", self.state_of(ToggleKind::Expanded)),
+            (
+                "aria-expanded",
+                self.state_of(ToggleKind::Expanded)
+                    .or_else(|| self.expanded.map(|open| open.to_string())),
+            ),
             (
                 "aria-current",
                 self.current
                     .map(|current| aria_current(current).to_string()),
             ),
+            ("aria-activedescendant", self.active_descendant.clone()),
+            ("aria-valuenow", self.value.map(|v| v.now.to_string())),
+            (
+                "aria-valuemin",
+                self.value
+                    .filter(|v| v.min.is_finite())
+                    .map(|v| v.min.to_string()),
+            ),
+            (
+                "aria-valuemax",
+                self.value
+                    .filter(|v| v.max.is_finite())
+                    .map(|v| v.max.to_string()),
+            ),
+            (
+                "aria-orientation",
+                self.orientation.map(|o| o.as_str().to_string()),
+            ),
+            ("aria-level", self.position.map(|p| p.level.to_string())),
+            (
+                "aria-posinset",
+                self.position.map(|p| p.position.to_string()),
+            ),
+            ("aria-setsize", self.position.map(|p| p.size.to_string())),
             ("aria-disabled", flag(self.disabled)),
             ("tabindex", tabindex.map(str::to_string)),
             (CONSUMED_KEYS_ATTRIBUTE, keys),
             (FOCUS_BOX_ATTRIBUTE, self.focusable.map(|_| id.to_string())),
         ]);
         attributes
+    }
+
+    /// The element's `id`: the anchor that reaches it, or, for a box a cursor rests on, one named after the box so it stays the same for as long as the box lives.
+    fn element_id(&self, id: u64) -> Option<String> {
+        self.anchor.clone().or_else(|| {
+            self.is_active_descendant
+                .then(|| format!("{DESCENDANT_ID_PREFIX}{id}"))
+        })
     }
 
     /// The value of the state attribute for `kind`: written only on the role that state belongs to, so a switch never carries `aria-pressed` and a toggle button never `aria-checked`.
@@ -735,7 +785,7 @@ impl Walk<'_> {
             paint::declare(&mut style, "transform-origin", "0 0");
             paint::declare(&mut style, "transform", &paint::matrix(matrix, at.x, at.y));
         }
-        let node = BoxNode {
+        let mut node = BoxNode {
             id: element.id.0,
             tag,
             role: element.semantics.role,
@@ -754,6 +804,7 @@ impl Walk<'_> {
                 pieces: Vec::new(),
             },
         };
+        self.point_cursor_at(&mut node);
         self.open.push(Open {
             node: Some(node),
             box_rect: element.rect,
@@ -768,6 +819,21 @@ impl Walk<'_> {
             picture: element.picture.is_some(),
             fixed_in_place_of,
         });
+    }
+
+    /// Points the box whose cursor rests on `node` at it, if one of the boxes it is inside says so. A cursor on a box the frame never draws, such as a row a long list did not build, points at nothing.
+    fn point_cursor_at(&mut self, node: &mut BoxNode) {
+        let Some(owner) = self
+            .open
+            .iter_mut()
+            .rev()
+            .filter_map(|open| open.node.as_mut())
+            .find(|owner| owner.described.descendant_box == Some(node.id))
+        else {
+            return;
+        };
+        node.described.is_active_descendant = true;
+        owner.described.active_descendant = node.described.element_id(node.id);
     }
 
     fn pop(&mut self) {
@@ -811,6 +877,7 @@ impl Walk<'_> {
                 pieces: open.pieces.into_iter().map(piece).collect(),
             }
         };
+        lend_name_to_control(&mut node);
         match fixed_in_place_of {
             Some(place) => self.layers.push((place, Box::new(node))),
             None => self.place(node),
@@ -831,6 +898,87 @@ impl Walk<'_> {
         } else {
             parent.boxes.push(node);
         }
+    }
+}
+
+/// What a named box holds, as the rule for lending its name needs it.
+#[derive(Default)]
+struct Held {
+    controls: usize,
+    beside_controls: bool,
+}
+
+/// Whether a box is gone from the page for a reader: `display:none`, or hidden by the application, except artwork nobody named, which `describe` hides on its own and which still counts as drawn.
+fn is_out_of_sight(node: &BoxNode) -> bool {
+    node.style.contains("display:none") || (node.described.hidden && node.tag != "svg")
+}
+
+fn survey(node: &BoxNode, in_control: bool, held: &mut Held) {
+    if is_out_of_sight(node) {
+        return;
+    }
+    let in_control = in_control || node.described.control;
+    if node.described.control {
+        held.controls += 1;
+    }
+    if !in_control {
+        let draws = match &node.content {
+            Content::Text { text, .. } => !text.trim().is_empty(),
+            Content::Drawing(_) => true,
+            Content::Children { pieces, .. } => {
+                pieces.iter().any(|piece| !piece.text.trim().is_empty())
+            }
+        };
+        held.beside_controls |= draws || node.tag == "img" || node.tag == "svg";
+    }
+    if let Content::Children { boxes, .. } = &node.content {
+        for child in boxes {
+            survey(child, in_control, held);
+        }
+    }
+}
+
+fn the_visible_control(node: &mut BoxNode) -> Option<&mut BoxNode> {
+    if is_out_of_sight(node) {
+        return None;
+    }
+    if node.described.control {
+        return Some(node);
+    }
+    let Content::Children { boxes, .. } = &mut node.content else {
+        return None;
+    };
+    boxes.iter_mut().find_map(the_visible_control)
+}
+
+/// Moves the name of a box that only wraps a control onto that control, by the rule [`Role::lends_name_to_control`] gives every target. A `group` label is not a name any field inside it has, so a wrapped control is otherwise unnamed.
+fn lend_name_to_control(wrapper: &mut BoxNode) {
+    if wrapper.tag != "div" || wrapper.described.label.is_none() || is_out_of_sight(wrapper) {
+        return;
+    }
+    let mut held = Held::default();
+    survey(wrapper, false, &mut held);
+    if !wrapper
+        .role
+        .lends_name_to_control(held.beside_controls, held.controls)
+    {
+        return;
+    }
+    let Some(label) = wrapper.described.label.take() else {
+        return;
+    };
+    wrapper.described.role = None;
+    if let Some(control) = the_visible_control(wrapper)
+        && control.described.label.is_none()
+    {
+        let own = match &control.content {
+            Content::Text { text, .. } if !text.trim().is_empty() => Some(text.trim()),
+            _ => None,
+        };
+        control.described.label = Some(match own {
+            Some(own) => format!("{label} {own}"),
+            None => label,
+        });
     }
 }
 
@@ -890,6 +1038,13 @@ fn describe(element: &Element, tag: &'static str) -> Described {
             .toggled
             .and_then(|on| Some((semantics.role.toggle_kind()?, on))),
         current: semantics.current_kind().filter(|_| link.is_some()),
+        value: semantics.value,
+        orientation: semantics.orientation,
+        expanded: semantics.expanded,
+        position: semantics.position,
+        descendant_box: semantics.active_descendant,
+        active_descendant: None,
+        is_active_descendant: false,
         disabled: semantics.disabled,
         focused: semantics.focused,
         control: semantics.role.is_control(),

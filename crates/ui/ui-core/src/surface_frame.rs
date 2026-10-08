@@ -172,7 +172,7 @@ impl Component for SurfaceFrame {
         let rect = self.leaf.rect.peek();
         self.canvas.set_placement(self.placement_now());
         let inside = |x: f64, y: f64| rect.contains(x as f32, y as f32);
-        let focused = || focus::is_focused(self.focus);
+        let focused = || focus::is_key_target(self.focus);
         match event {
             Event::PointerPressed { x, y, button, .. } if inside(*x, *y) => {
                 self.press(event, *x as f32, *y as f32, *button)

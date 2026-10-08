@@ -17,7 +17,7 @@ pub use surface_size::{
 
 pub use context::{
     Ancestors, LayoutContext, LayoutGuard, NodeRecording, ParentsContext, ParentsGuard,
-    RelayoutHook, absolute_rect, after_layout, ancestors, attach_overlay, compute_layout,
+    RelayoutHook, absolute_rect, after_layout, ancestors, attach_overlay, children, compute_layout,
     container_is_row, declared_css, detach_overlay, is_descendant_of, is_hidden,
     lay_out_against_surface, layout_passes, live_node_count, mark_dirty, measure_again,
     new_container, new_leaf, new_measured_leaf, on_relayout, overlay_viewport, parent,

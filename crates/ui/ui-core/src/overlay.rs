@@ -196,7 +196,7 @@ impl OverlaySink for OverlaySinkImpl {
 
 /// A portal layer: its content is laid out out-of-flow, filling the viewport, and hoisted to the top at compose time — drawn above everything and free of any ancestor clip/transform. A base primitive: unstyled; wrap content in a `box` for a scrim/panel, and position it with normal flex (`align`/`justify`).
 ///
-/// The content is a separate layout node **attached to the layout root** (the overlay host), not to the widget's DOM parent — so a portal declared deep in the tree (e.g. inside a reactive `if`) still covers the whole window instead of collapsing to its parent's box. The widget hands its DOM parent only a zero-size placeholder, so it never affects sibling layout. If no host has been laid out yet (a portal present at the very first frame), it falls back to laying the content out in place.
+/// The content is a separate layout node **attached to the layout root** (the overlay host), not to the widget's DOM parent — so a portal declared deep in the tree (e.g. inside a reactive `if`) still covers the whole window instead of collapsing to its parent's box. The widget hands its DOM parent only an empty placeholder, which takes no room in the flow, so it never affects sibling layout. A portal open before its surface has been laid out — built open, with its tree — waits for the host and is attached on the first layout pass.
 ///
 /// Positioned pointer events reach the content with priority via a thread-local overlay registry (see `ui_tree::overlay_dispatch`): a click on the overlay is routed here before the main tree walk and does not fall through to the content behind it, so a scrim that fills the viewport reads as a modal.
 ///
@@ -204,7 +204,7 @@ impl OverlaySink for OverlaySinkImpl {
 /// - [`Overlay::new`] — modal: blocks every click inside its content rect (a full-viewport scrim).
 /// - [`Overlay::anchored_click_through`] — positions the content next to a trigger widget (dropdowns, menus, tooltips) and takes no pointer, so clicks anywhere fall through to the tree behind.
 pub struct Overlay {
-    // Handed to the DOM parent: a 0×0 placeholder when portaled, the content itself otherwise.
+    // Handed to the DOM parent: an empty placeholder when portaled, the content itself otherwise.
     layout_node: NodeId,
     // The viewport-filling content node; `Some` and attached to the host only when portaled.
     portaled_content: Option<NodeId>,
@@ -306,9 +306,8 @@ impl Overlay {
         }
 
         if attach_overlay(content) {
-            // The DOM parent gets a 0×0 placeholder so the portal takes no space in the flow.
-            let (placeholder, _r) =
-                crate::context::new_leaf(LayoutStyle::new().width(0.0).height(0.0))?;
+            // An empty leaf takes no room in the flow, and left auto-sized it fills the space it is laid out in when the overlay is the root itself, which then hosts the portal.
+            let (placeholder, _r) = crate::context::new_leaf(LayoutStyle::new())?;
             input.link(content, placeholder, true);
             Ok(Overlay {
                 layout_node: placeholder,
@@ -321,7 +320,7 @@ impl Overlay {
                 _input: input,
             })
         } else {
-            // No host yet, so the content covers its parent rather than the viewport.
+            // Refused by a host that sits inside the content, so the content covers its parent rather than the viewport.
             Ok(Overlay {
                 layout_node: content,
                 portaled_content: None,
@@ -337,7 +336,7 @@ impl Overlay {
 }
 
 impl Overlay {
-    /// The node its content actually hangs from, which is the portaled one when it has a host and the in-tree node before that. What a caller asks for to reason about the content by ancestry — autofocusing what is inside it, say — since [`layout_node`](LayoutItem::layout_node) is a 0×0 placeholder once portaled.
+    /// The node its content actually hangs from, which is the portaled one unless the host refused it. What a caller asks for to reason about the content by ancestry — autofocusing what is inside it, say — since [`layout_node`](LayoutItem::layout_node) is an empty placeholder once portaled.
     pub fn content_node(&self) -> NodeId {
         self.portaled_content.unwrap_or(self.layout_node)
     }
@@ -348,7 +347,7 @@ impl LayoutItem for Overlay {
         self.layout_node
     }
 
-    /// Reached through the overlay registry ahead of the tree walk, so its in-tree node never covers its siblings, which matters on the first frame, when no host exists and the content is laid out in place.
+    /// Reached through the overlay registry ahead of the tree walk, so its in-tree node never covers its siblings, which matters when the host refused the content and it is laid out in place.
     fn occludes(&self) -> bool {
         false
     }

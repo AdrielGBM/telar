@@ -5,10 +5,10 @@
 //! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
 
 use accesskit::{
-    Action, ActionRequest, AriaCurrent, Node, NodeId, Rect as AkRect, Role as AkRole, Toggled,
-    TreeId, TreeInfo, TreeUpdate,
+    Action, ActionRequest, AriaCurrent, Node, NodeId, Orientation as AkOrientation, Rect as AkRect,
+    Role as AkRole, Toggled, TreeId, TreeInfo, TreeUpdate,
 };
-use platform_core::{AccessNode, CurrentKind, Role, ToggleKind};
+use platform_core::{AccessNode, CurrentKind, Orientation, Role, ToggleKind};
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
 const ROOT: NodeId = NodeId(0);
@@ -30,7 +30,7 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
     for (index, node) in nodes.iter().enumerate() {
         // Positional ids for the labels, which nothing addresses; a control keeps its focus id, so the same button stays the same node across frames and a reader is not told it appeared anew.
         let id = match node.id {
-            Some(focus_id) => NodeId(focus_id.wrapping_add(1 << 32)),
+            Some(focus_id) => control_id(focus_id),
             None => NodeId(index as u64 + 1),
         };
         let mut ak = Node::new(role_of(node.role));
@@ -71,6 +71,27 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
             ak.set_min_numeric_value(v.min);
             ak.set_max_numeric_value(v.max);
         }
+        if let Some(orientation) = node.orientation {
+            ak.set_orientation(match orientation {
+                Orientation::Horizontal => AkOrientation::Horizontal,
+                Orientation::Vertical => AkOrientation::Vertical,
+            });
+        }
+        if let Some(open) = node.expanded {
+            ak.set_expanded(open);
+        }
+        // AccessKit rejects a reference to a node the update does not carry.
+        if let Some(item) = node
+            .active_descendant
+            .filter(|item| nodes.iter().any(|other| other.id == Some(*item)))
+        {
+            ak.set_active_descendant(control_id(item));
+        }
+        // AccessKit counts from zero, and reads a set's size off a container this flat tree does not have, so only the level and the place are said.
+        if let Some(place) = node.position {
+            ak.set_level(place.level.saturating_sub(1) as usize);
+            ak.set_position_in_set(place.position.saturating_sub(1) as usize);
+        }
         children.push(id);
         updates.push((id, ak));
     }
@@ -83,6 +104,11 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         tree_id: TreeId::ROOT,
         focus,
     }
+}
+
+/// The node a control goes by, kept apart from the positional ids of labels.
+fn control_id(focus_id: u64) -> NodeId {
+    NodeId(focus_id.wrapping_add(1 << 32))
 }
 
 /// The on/off state, in the property AccessKit reads it from for this role: `toggled` is checked on a checkbox or switch and pressed on a button, while a tab is selected and a disclosure expanded.
@@ -114,6 +140,7 @@ fn role_of(role: Role) -> AkRole {
         Role::Radio => AkRole::RadioButton,
         Role::Switch => AkRole::Switch,
         Role::Tab => AkRole::Tab,
+        Role::TabList => AkRole::TabList,
         Role::TabPanel => AkRole::TabPanel,
         Role::MenuItem => AkRole::MenuItem,
         Role::Slider => AkRole::Slider,

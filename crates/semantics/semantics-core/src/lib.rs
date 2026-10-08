@@ -18,10 +18,14 @@ use std::sync::Arc;
 mod destination;
 mod keys;
 mod location;
+mod outline;
+mod reading;
 
 pub use destination::{CurrentKind, Destination, Uri};
 pub use keys::ConsumedKeys;
 pub use location::Location;
+pub use outline::SetPosition;
+pub use reading::{NumericValue, Orientation};
 
 /// What a box is.
 ///
@@ -76,6 +80,8 @@ pub enum Role {
     Radio,
     /// A checkbox that reads as a switch: on or off rather than ticked or not.
     Switch,
+    /// The row a set of [`Tab`](Self::Tab)s sits in, and what names the set.
+    TabList,
     /// Picks one of several panels.
     Tab,
     /// The panel a [`Tab`](Self::Tab) picks.
@@ -153,6 +159,15 @@ impl Role {
         )
     }
 
+    /// Whether a named box with this role lends its name to the control inside it, as `<label>` does for its field, rather than naming itself: it has no role of its own, holds exactly one control, and draws no words or artwork outside that control. Every target applies this one rule, so a wrapped control is named the same wherever it is read.
+    pub fn lends_name_to_control(
+        &self,
+        drew_beside_controls: bool,
+        controls_inside: usize,
+    ) -> bool {
+        *self == Self::Group && !drew_beside_controls && controls_inside == 1
+    }
+
     /// The name this role goes by in markup and in a stylesheet — the ARIA role, which is also what an application writes in `.rsx`.
     ///
     /// One table rather than one per target: a name that parses and a name that is announced must be the same word, or an author has learned two vocabularies for one idea.
@@ -179,6 +194,7 @@ impl Role {
             Self::CheckBox => "checkbox",
             Self::Radio => "radio",
             Self::Switch => "switch",
+            Self::TabList => "tablist",
             Self::Tab => "tab",
             Self::TabPanel => "tabpanel",
             Self::MenuItem => "menuitem",
@@ -206,7 +222,7 @@ impl Role {
         match self {
             Self::CheckBox | Self::Radio | Self::Switch => Some(ToggleKind::Checked),
             Self::Button => Some(ToggleKind::Pressed),
-            Self::Tab => Some(ToggleKind::Selected),
+            Self::Tab | Self::TreeItem => Some(ToggleKind::Selected),
             Self::Disclosure => Some(ToggleKind::Expanded),
             _ => None,
         }
@@ -243,6 +259,7 @@ impl Role {
             "checkbox" => Self::CheckBox,
             "radio" => Self::Radio,
             "switch" | "toggle" => Self::Switch,
+            "tablist" => Self::TabList,
             "tab" => Self::Tab,
             "tabpanel" => Self::TabPanel,
             "menuitem" => Self::MenuItem,
@@ -272,7 +289,7 @@ pub enum ToggleKind {
     Checked,
     /// A toggle button held down: a button that stays pressed until pressed again, such as bold in a toolbar.
     Pressed,
-    /// The tab whose panel is showing.
+    /// The tab whose panel is showing, or the chosen row of a tree.
     Selected,
     /// A disclosure whose content is showing.
     Expanded,
@@ -310,6 +327,16 @@ pub struct Semantics {
     pub anchor: Option<Arc<str>>,
     /// Whether a link is the current one of its set: the page being shown, the place on the page the reader is at. Read through [`current_kind`](Self::current_kind), since what it is the current one of is its destination's to say.
     pub current: bool,
+    /// Where a control that carries a number stands. `None` for the roles that carry none.
+    pub value: Option<NumericValue>,
+    /// The axis a splitter, slider or other oriented control runs along. `None` where the role has no axis or none was declared.
+    pub orientation: Option<Orientation>,
+    /// Whether a row that has rows under it shows them; apart from [`toggled`](Self::toggled) because a tree row is selected and expanded at once. `None` for a leaf and for every role that does not expand this way.
+    pub expanded: Option<bool>,
+    /// Where an item sits in its hierarchy and among its siblings. `None` where a reader can count that for itself.
+    pub position: Option<SetPosition>,
+    /// The box under this one, by its element id, that the keyboard's cursor rests on while focus stays here: the row of a tree, the item of a toolbar. `None` where there is no cursor, or its box is not built.
+    pub active_descendant: Option<u64>,
 }
 
 /// What an application said about a box, laid over what the widget derived.

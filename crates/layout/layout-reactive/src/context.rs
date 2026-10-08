@@ -406,6 +406,11 @@ pub fn parent(node: NodeId) -> Option<NodeId> {
     with_parents_ref(|p| p.get(&node).copied())
 }
 
+/// The nodes `node` holds, in layout order, a portalled overlay's content last among its host's; empty for a leaf or a freed node.
+pub fn children(node: NodeId) -> Vec<NodeId> {
+    with_runtime_ref(|rt| rt.engine.children(node))
+}
+
 /// `node` and everything above it, nearest first — and it ends even when the links form a cycle.
 ///
 /// Parent links are a map the runtime maintains, not a tree it owns, so a loop in them is reachable: an overlay attached under its own content closes one. Every climb then spins instead of answering, which costs the whole surface rather than the one node that is wrong — resolving a text's inherited style walks this on every build. Tortoise-and-hare ends the walk at the repeat, allocating nothing and costing one extra lookup per two steps, which is what lets the hot path use it.
@@ -578,7 +583,7 @@ pub fn live_node_count() -> usize {
     with_runtime_ref(|rt| rt.engine.node_count())
 }
 
-/// Pins the overlay host to `node` — the app's window-spanning root — so overlays always fill the viewport even when the app computes several independent layout roots (e.g. a shell with a separate sidebar root computed after the main one, which the auto-detection would otherwise pick as the host). Call it each relayout with the current main root (it survives hot-reload rebuilds, which mint a new root node). Once pinned, auto-detection no longer overrides the host. The area an overlay may occupy: the laid-out rect of the host its content is attached to, which is the window (or the surface) it will be composed into.
+/// The area an overlay may occupy: the laid-out rect of the host its content is attached to, which is the window (or the surface) it will be composed into.
 ///
 /// What a panel needs to stay on screen. Without it an anchored bubble is placed from its trigger alone and runs off whichever edge the trigger happens to be near — which is not a rare case but the common one, a tooltip on the rightmost button of a toolbar.
 pub fn overlay_viewport() -> Option<geometry_core::Rect> {
@@ -588,35 +593,31 @@ pub fn overlay_viewport() -> Option<geometry_core::Rect> {
     })
 }
 
-/// Pins the node overlays attach their content to, overriding the auto-detected one.
+/// Pins the overlay host to `node` — the app's window-spanning root — so overlays always fill the viewport even when the app computes several independent layout roots (e.g. a shell with a separate sidebar root computed after the main one, which the auto-detection would otherwise pick as the host). Call it each relayout with the current main root (it survives hot-reload rebuilds, which mint a new root node). Once pinned, auto-detection no longer overrides the host. Content waiting for a host is attached to it at once.
 pub fn set_overlay_host(node: NodeId) {
     with_runtime(|rt| {
         rt.overlay_host.pin(node);
+        rt.attach_waiting_overlays();
     });
 }
 
-/// Attaches `node` (an overlay's out-of-flow content) as an extra child of the current layout host — the top-level root computed against the window — so it fills the viewport regardless of where the `overlay` was declared in the tree. Returns `true` when attached; `false` when no host has been computed yet (the caller then falls back to normal in-tree layout). The host is marked dirty so the next frame lays the portal out.
+/// Attaches `node` (an overlay's out-of-flow content) as an extra child of the current layout host — the top-level root computed against the window — so it fills the viewport regardless of where the `overlay` was declared in the tree. The host is marked dirty so the next frame lays the portal out.
+///
+/// With no host yet — an overlay open while its tree is still being built, before the surface's first layout pass — the content waits and is attached as soon as a host is detected or pinned. Returns `false` only when the content is refused, because the host sits inside it.
 pub fn attach_overlay(node: NodeId) -> bool {
-    with_runtime(|rt| {
-        let Some(host) = rt.overlay_host.node() else {
-            return false;
-        };
-        // A host sitting inside the content it would carry closes a parent cycle, and no root is reachable from it.
-        if ancestors(host).any(|above| above == node) {
-            return false;
+    with_runtime(|rt| match rt.overlay_host.node() {
+        Some(host) => rt.attach_to_host(host, node),
+        None => {
+            rt.overlay_host.wait(node);
+            true
         }
-        if rt.engine.add_child(host, node).is_err() {
-            return false;
-        }
-        link_parent(node, host);
-        rt.engine.mark_dirty(host).ok();
-        true
     })
 }
 
-/// Detaches an overlay's content from the layout host (inverse of [`attach_overlay`]); the caller frees it afterwards with [`remove_node`]. A no-op if the host is gone.
+/// Detaches an overlay's content from the layout host (inverse of [`attach_overlay`]), or withdraws it while it still waits for one; the caller frees it afterwards with [`remove_node`]. A no-op if the host is gone.
 pub fn detach_overlay(node: NodeId) {
     with_runtime(|rt| {
+        rt.overlay_host.withdraw(node);
         // The host the overlay actually attached to, recorded at attach — not the current one: auto-detection may have moved the host to another root since, and taffy panics if `node` is not a child of what it is removed from.
         if let Some(host) = with_parents(|p| p.remove(&node)) {
             rt.engine.remove_child(host, node).ok();
@@ -633,6 +634,8 @@ struct OverlayHost {
     node: Option<NodeId>,
     /// Pinned by the app, so auto-detection must not override it. An app with several independent roots needs this: the window-spanning root is the host, not whichever root happened to be computed last.
     pinned: bool,
+    /// Content attached while there was no host, in the order it arrived. A tree is built before its surface's first layout pass, so an overlay open from the start would otherwise have nowhere to portal to.
+    waiting: Vec<NodeId>,
 }
 
 impl OverlayHost {
@@ -655,6 +658,23 @@ impl OverlayHost {
     fn offer(&mut self, root: NodeId, height: AvailableSpace, is_top_level: impl FnOnce() -> bool) {
         if !self.pinned && matches!(height, AvailableSpace::Definite(_)) && is_top_level() {
             self.node = Some(root);
+        }
+    }
+
+    fn wait(&mut self, content: NodeId) {
+        self.waiting.push(content);
+    }
+
+    fn withdraw(&mut self, content: NodeId) {
+        self.waiting.retain(|&waiting| waiting != content);
+    }
+
+    /// Lets go of whatever `freed` names. A freed host is forgotten rather than kept, since taffy hands its id back out: an overlay opened while the next tree builds waits for that tree's root instead of attaching to a stale id.
+    fn forget(&mut self, freed: &FxHashSet<NodeId>) {
+        self.waiting.retain(|waiting| !freed.contains(waiting));
+        if self.node.is_some_and(|host| freed.contains(&host)) {
+            self.node = None;
+            self.pinned = false;
         }
     }
 }
@@ -771,6 +791,7 @@ impl LayoutRuntime {
         self.overlay_host.offer(root, height, || {
             !stands_on_surface && with_parents_ref(|parents| !parents.contains_key(&root))
         });
+        self.attach_waiting_overlays();
         // A changed available space must re-run layout even when the node is clean.
         let is_space_changed = self.last_space.get(&root) != Some(&(width, height));
         if is_space_changed {
@@ -848,6 +869,28 @@ impl LayoutRuntime {
         Ok(self.settle(placed))
     }
 
+    fn attach_to_host(&mut self, host: NodeId, content: NodeId) -> bool {
+        // A host sitting inside the content it would carry closes a parent cycle, and no root is reachable from it.
+        if ancestors(host).any(|above| above == content) {
+            return false;
+        }
+        if self.engine.add_child(host, content).is_err() {
+            return false;
+        }
+        link_parent(content, host);
+        self.engine.mark_dirty(host).ok();
+        true
+    }
+
+    fn attach_waiting_overlays(&mut self) {
+        let Some(host) = self.overlay_host.node() else {
+            return;
+        };
+        for content in std::mem::take(&mut self.overlay_host.waiting) {
+            self.attach_to_host(host, content);
+        }
+    }
+
     /// Places `root`'s sticky subtrees again for a new view, from the layout it already has.
     fn set_sticky_view(&mut self, root: NodeId, view: Rect) -> Vec<Update> {
         if self.sticky_views.insert(root, view) == Some(view) {
@@ -923,6 +966,7 @@ impl LayoutRuntime {
             self.sticky_anchors.remove(&at);
             self.surface_roots.remove(&at);
         }
+        self.overlay_host.forget(&freed);
         // A freed id is handed out again, so an anchor left naming one would place whatever reuses it.
         for anchors in self.sticky_anchors.values_mut() {
             anchors.retain(|anchor| !freed.contains(&anchor.node()));

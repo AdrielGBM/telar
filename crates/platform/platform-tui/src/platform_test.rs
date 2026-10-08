@@ -31,6 +31,10 @@ fn label(name: &str) -> AccessNode {
         lang: None,
         url: None,
         current: None,
+        orientation: None,
+        expanded: None,
+        position: None,
+        active_descendant: None,
     }
 }
 

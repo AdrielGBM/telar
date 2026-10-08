@@ -287,6 +287,21 @@ pub(crate) fn is_inside(node: NodeId, ancestor: NodeId) -> bool {
     std::iter::successors(Some(node), |&at| logical_parent(at)).any(|at| at == ancestor)
 }
 
+/// Where `node` falls in document order: the root it hangs from, and its place among its siblings at each level below that root. Content linked to the box that declares it — a scroll's, an overlay's — is that box's first child.
+pub(crate) fn document_position(node: NodeId) -> (NodeId, Vec<usize>) {
+    let mut path = Vec::new();
+    let mut at = node;
+    while let Some(parent) = logical_parent(at) {
+        let place = layout_reactive::children(parent)
+            .iter()
+            .position(|&child| child == at);
+        path.push(place.unwrap_or(0));
+        at = parent;
+    }
+    path.reverse();
+    (at, path)
+}
+
 fn placement_at(node: NodeId, index: usize) -> Option<Placement> {
     with_input_ref(|r| {
         r.placements

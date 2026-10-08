@@ -168,6 +168,14 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-selected",
             "aria-expanded",
             "aria-current",
+            "aria-activedescendant",
+            "aria-valuenow",
+            "aria-valuemin",
+            "aria-valuemax",
+            "aria-orientation",
+            "aria-level",
+            "aria-posinset",
+            "aria-setsize",
             "aria-disabled",
             "tabindex",
             CONSUMED_KEYS_ATTRIBUTE,
@@ -238,6 +246,54 @@ fn a_state_is_the_attribute_its_role_carries_it_in() {
         state_attributes(Role::Slider, true),
         ("div", vec![]),
         "a role with no on/off state carries none"
+    );
+}
+
+/// A tree row writes its selection, whether it is open and where it sits; a leaf writes no `aria-expanded` at all, which is how a reader knows there is nothing to open.
+#[test]
+fn a_tree_row_writes_its_selection_its_openness_and_its_place() {
+    let attributes_of = |semantics: Semantics| {
+        let frame = describe_frame(
+            &[open(1, semantics), DrawCommand::PopElement],
+            None,
+            &mut Fixed,
+            false,
+        );
+        let node = only_box(&frame);
+        node.described
+            .attributes(node.id)
+            .into_iter()
+            .filter(|(name, _)| name.starts_with("aria-") || *name == "role")
+            .filter_map(|(name, value)| Some((name, value?)))
+            .collect::<Vec<_>>()
+    };
+    let branch = Semantics {
+        expanded: Some(false),
+        position: Some(platform_core::SetPosition {
+            level: 1,
+            position: 2,
+            size: 4,
+        }),
+        ..Semantics::of(Role::TreeItem).in_state(false, Some(true), false)
+    };
+    assert_eq!(
+        attributes_of(branch),
+        [
+            ("role", "treeitem".to_string()),
+            ("aria-selected", "true".to_string()),
+            ("aria-expanded", "false".to_string()),
+            ("aria-level", "1".to_string()),
+            ("aria-posinset", "2".to_string()),
+            ("aria-setsize", "4".to_string()),
+        ]
+    );
+    let leaf = Semantics::of(Role::TreeItem).in_state(false, Some(false), false);
+    assert_eq!(
+        attributes_of(leaf),
+        [
+            ("role", "treeitem".to_string()),
+            ("aria-selected", "false".to_string()),
+        ]
     );
 }
 
@@ -507,6 +563,7 @@ fn a_matrix_around_a_frame_at_the_corner_is_already_the_boxs_own() {
 #[test]
 fn the_workbench_roles_are_the_aria_roles_of_the_same_name() {
     for (role, aria) in [
+        (Role::TabList, "tablist"),
         (Role::Tree, "tree"),
         (Role::TreeItem, "treeitem"),
         (Role::Toolbar, "toolbar"),
@@ -517,4 +574,235 @@ fn the_workbench_roles_are_the_aria_roles_of_the_same_name() {
         assert_eq!(aria_role(role), Some(aria), "{role:?}");
         assert_eq!(tag_of(&role), "div", "{role:?}");
     }
+}
+
+#[test]
+fn a_splitter_writes_its_value_and_its_orientation() {
+    let semantics = Semantics {
+        value: Some(platform_core::NumericValue {
+            now: 240.0,
+            min: 180.0,
+            max: 400.0,
+        }),
+        orientation: Some(platform_core::Orientation::Vertical),
+        ..Semantics::of(Role::Splitter)
+    };
+    let frame = describe_frame(
+        &[open(1, semantics), DrawCommand::PopElement],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let node = only_box(&frame);
+    let written: Vec<_> = node
+        .described
+        .attributes(node.id)
+        .into_iter()
+        .filter(|(name, _)| name.starts_with("aria-value") || *name == "aria-orientation")
+        .filter_map(|(name, value)| Some((name, value?)))
+        .collect();
+    assert_eq!(
+        written,
+        vec![
+            ("aria-valuenow", "240".to_string()),
+            ("aria-valuemin", "180".to_string()),
+            ("aria-valuemax", "400".to_string()),
+            ("aria-orientation", "vertical".to_string()),
+        ]
+    );
+}
+
+fn attribute(node: &BoxNode, name: &str) -> Option<String> {
+    node.described
+        .attributes(node.id)
+        .into_iter()
+        .find(|(written, _)| *written == name)
+        .and_then(|(_, value)| value)
+}
+
+fn children(node: &BoxNode) -> &[BoxNode] {
+    match &node.content {
+        Content::Children { boxes, .. } => boxes,
+        _ => panic!("a box with boxes inside"),
+    }
+}
+
+/// A tree keeps focus while its cursor walks the rows: it points at the row the cursor is on by that row's `id`, which is named after the box when no anchor names it, and only that row is given one.
+#[test]
+fn a_container_points_at_the_row_its_cursor_rests_on() {
+    let tree = |cursor: u64, anchored: Option<&str>| {
+        let mut row = Semantics::of(Role::TreeItem);
+        row.anchor = anchored.map(Into::into);
+        describe_frame(
+            &[
+                open(
+                    1,
+                    Semantics {
+                        active_descendant: Some(cursor),
+                        ..Semantics::of(Role::Tree)
+                    },
+                ),
+                open(2, Semantics::of(Role::TreeItem)),
+                DrawCommand::PopElement,
+                open(3, Semantics::group()),
+                open(4, row),
+                DrawCommand::PopElement,
+                DrawCommand::PopElement,
+                DrawCommand::PopElement,
+            ],
+            None,
+            &mut Fixed,
+            false,
+        )
+    };
+
+    let frame = tree(4, None);
+    let root = only_box(&frame);
+    let first = &children(root)[0];
+    let nested = &children(&children(root)[1])[0];
+    assert_eq!(
+        attribute(root, "aria-activedescendant").as_deref(),
+        Some("telar-box-4")
+    );
+    assert_eq!(attribute(nested, "id").as_deref(), Some("telar-box-4"));
+    assert_eq!(
+        attribute(first, "id"),
+        None,
+        "a row the cursor is not on has no id"
+    );
+
+    let frame = tree(4, Some("docs"));
+    let root = only_box(&frame);
+    assert_eq!(
+        attribute(root, "aria-activedescendant").as_deref(),
+        Some("docs"),
+        "a row an anchor names is pointed at by that name"
+    );
+
+    let frame = tree(9, None);
+    assert_eq!(
+        attribute(only_box(&frame), "aria-activedescendant"),
+        None,
+        "a cursor on a row the frame did not draw points at nothing"
+    );
+}
+
+fn named(semantics: Semantics, label: &str) -> Semantics {
+    Semantics {
+        label: Some(label.into()),
+        ..semantics
+    }
+}
+
+/// A box with no role that only wraps a control is that control's name, the way `<label>` is around its field; the group would otherwise carry a name no field has.
+#[test]
+fn a_named_wrapper_names_the_one_control_it_wraps() {
+    let frame = describe_frame(
+        &[
+            open(1, named(Semantics::group(), "Speed")),
+            open(2, Semantics::of(Role::SpinButton)),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let wrapper = only_box(&frame);
+    let control = &children(wrapper)[0];
+    assert_eq!(attribute(wrapper, "aria-label"), None);
+    assert_eq!(attribute(wrapper, "role"), None);
+    assert_eq!(attribute(control, "aria-label").as_deref(), Some("Speed"));
+}
+
+/// A control hidden with `display:none` is still an element, and it is not one a reader would be sent to: only the visible control is counted and named.
+#[test]
+fn a_hidden_control_does_not_stop_a_wrapper_naming_the_visible_one() {
+    let hidden = Element::new(
+        ElementId(3),
+        Semantics::of(Role::TextInput),
+        "display:none;",
+        Rect::new(0.0, 0.0, 50.0, 20.0),
+    );
+    let frame = describe_frame(
+        &[
+            open(1, named(Semantics::group(), "Speed")),
+            open(2, Semantics::of(Role::SpinButton)),
+            DrawCommand::PopElement,
+            DrawCommand::PushElement {
+                element: Arc::new(hidden),
+            },
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let wrapper = only_box(&frame);
+    assert_eq!(attribute(wrapper, "aria-label"), None);
+    assert_eq!(
+        attribute(&children(wrapper)[0], "aria-label").as_deref(),
+        Some("Speed")
+    );
+    assert_eq!(attribute(&children(wrapper)[1], "aria-label"), None);
+}
+
+/// A tab list has a role of its own, and a box with a caption beside its button has words of its own: each names itself, and its control keeps its own name.
+#[test]
+fn a_named_box_with_a_role_or_content_of_its_own_names_itself() {
+    let list = describe_frame(
+        &[
+            open(1, named(Semantics::of(Role::TabList), "Sections")),
+            open(2, Semantics::of(Role::Tab)),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let list = only_box(&list);
+    assert_eq!(attribute(list, "aria-label").as_deref(), Some("Sections"));
+    assert_eq!(attribute(&children(list)[0], "aria-label"), None);
+
+    let bar = describe_frame(
+        &[
+            open(1, named(Semantics::group(), "Fixed bar")),
+            text("Fixed layer"),
+            open(2, Semantics::of(Role::Button)),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let bar = only_box(&bar);
+    assert_eq!(attribute(bar, "aria-label").as_deref(), Some("Fixed bar"));
+    assert_eq!(attribute(bar, "role").as_deref(), Some("group"));
+    assert_eq!(attribute(&children(bar)[0], "aria-label"), None);
+}
+
+/// A bound that is not a number is no bound: `-inf` is not a value `aria-valuemin` can take, and a field with no limit has none to state.
+#[test]
+fn an_unbounded_value_writes_no_bounds() {
+    let semantics = Semantics {
+        value: Some(platform_core::NumericValue {
+            now: 3.0,
+            min: f64::NEG_INFINITY,
+            max: f64::INFINITY,
+        }),
+        ..Semantics::of(Role::SpinButton)
+    };
+    let frame = describe_frame(
+        &[open(1, semantics), DrawCommand::PopElement],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let node = only_box(&frame);
+    assert_eq!(attribute(node, "aria-valuenow").as_deref(), Some("3"));
+    assert_eq!(attribute(node, "aria-valuemin"), None);
+    assert_eq!(attribute(node, "aria-valuemax"), None);
 }

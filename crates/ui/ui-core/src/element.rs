@@ -19,19 +19,29 @@ pub(crate) fn role_of(
     }
 }
 
-/// Built lazily: calling `document` eagerly would subscribe this view to whatever it reads, even when nothing here needs more than the box's identity.
-pub(crate) fn for_target(node: NodeId, document: impl FnOnce() -> Arc<Element>) -> Arc<Element> {
+/// Built lazily: calling `document` eagerly would subscribe this view to whatever it reads, even when nothing here needs more than the box's identity and `role`.
+///
+/// The role travels on every target because the accessibility snapshot reads it along the frame's element nesting: a named tab list names itself, where a named box with no role names the one control it wraps.
+pub(crate) fn for_target(
+    node: NodeId,
+    role: renderer_core::Role,
+    document: impl FnOnce() -> Arc<Element>,
+) -> Arc<Element> {
     if ui_tree::element_capture() {
         document()
     } else {
-        identity(node)
+        identity_as(node, role)
     }
 }
 
 pub(crate) fn identity(node: NodeId) -> Arc<Element> {
+    identity_as(node, renderer_core::Role::Group)
+}
+
+fn identity_as(node: NodeId, role: renderer_core::Role) -> Arc<Element> {
     Arc::new(Element::new(
         ElementId(node.into()),
-        Semantics::group(),
+        Semantics::of(role),
         "",
         Rect::default(),
     ))
@@ -104,6 +114,8 @@ fn element_of(node: NodeId, semantics: Semantics) -> Element {
 
 /// The shape most widgets need: they own a node, they draw children into it, and they have nothing to say about what it means beyond being a box.
 pub(crate) fn wrap(node: NodeId, content: ui_tree::RenderNode) -> ui_tree::RenderNode {
-    let element = for_target(node, || with_semantics(node, Semantics::group()));
+    let element = for_target(node, renderer_core::Role::Group, || {
+        with_semantics(node, Semantics::group())
+    });
     ui_tree::RenderNode::element(element, [content])
 }

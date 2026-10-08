@@ -88,7 +88,7 @@ fn every_control_but_a_link_keeps_something() {
     }
 }
 
-const ALL_ROLES: [Role; 38] = [
+const ALL_ROLES: [Role; 39] = [
     Role::Group,
     Role::Banner,
     Role::Navigation,
@@ -110,6 +110,7 @@ const ALL_ROLES: [Role; 38] = [
     Role::CheckBox,
     Role::Radio,
     Role::Switch,
+    Role::TabList,
     Role::Tab,
     Role::TabPanel,
     Role::MenuItem,
@@ -145,9 +146,11 @@ fn a_group_name_reads_as_every_key_in_it() {
 
 #[test]
 fn the_workbench_roles_keep_the_keys_that_walk_them() {
-    for role in [Role::Splitter, Role::Toolbar] {
-        assert_eq!(role.consumed_keys(), ConsumedKeys::ARROWS, "{role:?}");
-    }
+    assert_eq!(Role::Toolbar.consumed_keys(), ConsumedKeys::ARROWS);
+    assert_eq!(
+        Role::Splitter.consumed_keys(),
+        ConsumedKeys::ARROWS | ConsumedKeys::EDGES | ConsumedKeys::ENTER
+    );
     for role in [Role::Tree, Role::TreeItem] {
         let keys = role.consumed_keys();
         assert!(

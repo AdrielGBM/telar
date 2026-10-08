@@ -524,7 +524,7 @@ impl Component for Input {
                     EventResult::Ignored
                 }
             }
-            Event::KeyPressed { key, modifiers } if focus::is_focused(self.id) => {
+            Event::KeyPressed { key, modifiers } if focus::is_key_target(self.id) => {
                 if self.on_key.as_ref().is_some_and(|f| f(key, *modifiers)) {
                     return EventResult::Handled;
                 }

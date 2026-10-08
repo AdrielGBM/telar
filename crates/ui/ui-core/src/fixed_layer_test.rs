@@ -169,34 +169,37 @@ fn it_takes_the_pointer_over_its_own_boxes_and_nowhere_else() {
 fn its_focusables_keep_their_place_in_the_tab_order_and_do_not_trap_it() {
     reset_layout_runtime();
     set_surface_size(SURFACE);
-    let before = focus::next_id();
-    focus::register_as(before, focus::FocusKind::Widget);
-
-    let below = focus::next_id();
-    let inside = StyledContainer::new(
-        LayoutStyle::new().width(50.0).height(20.0),
-        |_r| renderer_core::RectStyle::default(),
-        vec![],
+    let control = || {
+        StyledContainer::new(
+            LayoutStyle::new().width(50.0).height(20.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_focus(|_| {})
+    };
+    let inside = control();
+    let inside_id = inside.focus_id();
+    let layer = FixedLayer::new(LayoutStyle::new(), vec![Box::new(inside)]).unwrap();
+    let (before, after) = (control(), control());
+    let (before_id, after_id) = (before.focus_id(), after.focus_id());
+    let _page = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![Box::new(before), Box::new(layer), Box::new(after)],
     )
-    .unwrap()
-    .on_focus(|_| {});
-    let _layer = FixedLayer::new(LayoutStyle::new(), vec![Box::new(inside)]).unwrap();
-    let above = focus::next_id();
+    .unwrap();
 
-    let after = focus::next_id();
-    focus::register_as(after, focus::FocusKind::Widget);
-
-    focus::request(before);
+    focus::request(before_id.unwrap());
     focus::focus_next();
-    let landed = focus::current().expect("something took focus");
-    assert!(
-        landed > below && landed < above,
-        "Tab goes from what comes before the layer into it"
+    assert_eq!(
+        focus::current(),
+        inside_id,
+        "Tab goes from what comes before the layer into it, though the layer's content registered first"
     );
     focus::focus_next();
     assert_eq!(
         focus::current(),
-        Some(after),
+        after_id,
         "and out of it to what comes after"
     );
 }

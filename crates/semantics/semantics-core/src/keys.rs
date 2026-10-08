@@ -132,7 +132,8 @@ impl Role {
             | Self::Tab
             | Self::Disclosure => K::ACTIVATION,
             Self::MenuItem | Self::ComboBox => K::ACTIVATION | K::VERTICAL_ARROWS | K::EDGES,
-            Self::Slider | Self::Splitter | Self::Toolbar => K::ARROWS,
+            Self::Slider | Self::Toolbar => K::ARROWS,
+            Self::Splitter => K::ARROWS | K::EDGES | K::ENTER,
             Self::Tree | Self::TreeItem => K::ARROWS | K::EDGES | K::ENTER | K::SPACE,
             Self::SpinButton => K::ARROWS | K::ENTER,
             Self::TextInput => K::ARROWS | K::EDGES | K::SPACE | K::ENTER | K::BACKSPACE,
@@ -155,6 +156,7 @@ impl Role {
             | Self::ListItem
             | Self::Drawing
             | Self::Dialog
+            | Self::TabList
             | Self::TabPanel
             | Self::ProgressBar
             | Self::Status

@@ -10,9 +10,10 @@ use geometry_core::Rect;
 use layout_core::NodeId;
 use platform_core::{AccessNode, CurrentKind, Role};
 use renderer_core::DrawCommand;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::focus;
+use crate::input_region::visible_rect;
 
 /// Whether the snapshot reads `command`, for a runner that keeps the last frame's reading between frames rather than the whole frame.
 ///
@@ -34,11 +35,13 @@ pub fn is_read(command: &DrawCommand) -> bool {
 ///
 /// `commands` is the frame the renderer is about to draw — the same list, so what is announced and what is painted are the same picture by construction rather than by agreement.
 pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
-    let reading = Reading::of(commands);
-    let controls: Vec<(focus::Exposed, Rect)> = focus::exposed()
+    let exposed = focus::exposed();
+    let control_nodes: FxHashSet<NodeId> = exposed.iter().map(|e| e.node).collect();
+    let reading = Reading::of(commands, &control_nodes);
+    let controls: Vec<(focus::Exposed, Rect)> = exposed
         .into_iter()
         .filter(|e| !reading.scope(e.node).hidden)
-        .filter_map(|e| layout_reactive::absolute_rect(e.node).map(|rect| (e, rect)))
+        .filter_map(|e| visible_rect(e.node).map(|rect| (e, rect)))
         .collect();
     let focused = focus::current();
 
@@ -59,9 +62,14 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 enabled: e.enabled,
                 toggled: e.toggled,
                 value: e.value,
+                orientation: e.orientation,
+                expanded: e.expanded,
+                position: e.position,
                 lang: reading.scope(e.node).lang.as_deref().map(str::to_string),
                 url: link.map(|(destination, _)| platform_core::address_of(destination)),
                 current: link.and_then(|(_, current)| *current),
+                active_descendant: focus::active_descendant_state(e.id)
+                    .filter(|item| controls.iter().any(|(c, _)| c.id == *item)),
             }
         })
         .collect();
@@ -72,7 +80,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
         .iter()
         .filter(|named| !is_control(named.node))
         .filter_map(|named| {
-            let rect = layout_reactive::absolute_rect(named.node)?;
+            let rect = visible_rect(named.node)?;
             // A named box that draws artwork and no words is a picture; anything else reads as the text it stands for.
             let role = if named.drew_art && !named.drew_text {
                 Role::Drawing
@@ -85,21 +93,30 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 role,
                 lang: named.lang.clone(),
                 url: None,
+                named_box: Some(NamedBox {
+                    node: named.node,
+                    wraps: wrapped_control(named, &controls),
+                }),
             })
         })
         .chain(reading.text.iter().cloned());
 
     for piece in pieces {
-        // The smallest control containing it, so a button inside a card is named by its own label.
-        let owner = controls
-            .iter()
-            .enumerate()
-            .filter(|(_, (_, bounds))| contains(*bounds, piece.rect))
-            .min_by(|(_, (_, a)), (_, (_, b))| area(*a).total_cmp(&area(*b)));
+        let owner = match &piece.named_box {
+            Some(NamedBox { wraps: Some(i), .. }) => Some(*i),
+            // The smallest control containing it, so a button inside a card is named by its own label.
+            _ => controls
+                .iter()
+                .enumerate()
+                .filter(|(_, (_, bounds))| contains(*bounds, piece.rect))
+                .filter(|(_, (control, _))| !piece.groups(control.node))
+                .min_by(|(_, (_, a)), (_, (_, b))| area(*a).total_cmp(&area(*b)))
+                .map(|(i, _)| i),
+        };
         match owner {
             // A control the application named is called that, whatever it draws.
-            Some((i, _)) if named_controls[i] && piece.url.is_none() => {}
-            Some((i, _)) if piece.url.is_none() => append(&mut nodes[i].name, &piece.text),
+            Some(i) if named_controls[i] && piece.url.is_none() => {}
+            Some(i) if piece.url.is_none() => append(&mut nodes[i].name, &piece.text),
             // Text belonging to no control is still content: a heading, a caption, the paragraph a dialog asks about. A link run is its own node wherever it sits.
             _ => nodes.push(AccessNode {
                 id: None,
@@ -110,9 +127,13 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 enabled: true,
                 toggled: None,
                 value: None,
+                orientation: None,
+                expanded: None,
+                position: None,
                 lang: piece.lang.as_deref().map(str::to_string),
                 url: piece.url,
                 current: None,
+                active_descendant: None,
             }),
         }
     }
@@ -137,6 +158,39 @@ struct Piece {
     lang: Option<Arc<str>>,
     /// Where a link run of a paragraph goes, as the address a reader announces.
     url: Option<String>,
+    /// The box the application named, for a piece that is one rather than a run of text.
+    named_box: Option<NamedBox>,
+}
+
+#[derive(Clone)]
+struct NamedBox {
+    node: NodeId,
+    /// The control, by its place among the snapshot's controls, that the box only wraps and whose name it therefore is.
+    wraps: Option<usize>,
+}
+
+impl Piece {
+    /// Whether this is a named box around the control at `node` that names a group the control is in, such as a tab list, and never the control itself.
+    fn groups(&self, node: NodeId) -> bool {
+        self.named_box
+            .as_ref()
+            .is_some_and(|named| crate::input_region::is_inside(node, named.node))
+    }
+}
+
+/// The control a named box is no more than a wrapper around, as `<label>` is around its field: the one control inside it, when the box has no role of its own and draws nothing beside that control. A box with a role, such as a tab list or a navigation, or one holding several controls or content of its own, names itself.
+fn wrapped_control(named: &Named, controls: &[(focus::Exposed, Rect)]) -> Option<usize> {
+    let inside: Vec<usize> = controls
+        .iter()
+        .enumerate()
+        .filter(|(_, (control, _))| crate::input_region::is_inside(control.node, named.node))
+        .map(|(i, _)| i)
+        .take(2)
+        .collect();
+    named
+        .role
+        .lends_name_to_control(named.drew_beside_controls, inside.len())
+        .then(|| inside[0])
 }
 
 /// What an element's ancestors said that reaches it.
@@ -151,8 +205,14 @@ struct Named {
     node: NodeId,
     label: Arc<str>,
     lang: Option<Arc<str>>,
+    /// What the box said it is; [`Role::Group`] for a box with no role of its own.
+    role: Role,
+    /// The named box this one sits in, by its place in [`Reading::named`].
+    enclosing: Option<usize>,
     drew_text: bool,
     drew_art: bool,
+    /// Whether it drew words or artwork outside every control inside it.
+    drew_beside_controls: bool,
 }
 
 /// One frame, as a reader meets it: the annotations resolved along its element nesting, with everything under a hidden box already gone.
@@ -166,12 +226,12 @@ struct Reading {
 }
 
 impl Reading {
-    fn of(commands: &[DrawCommand]) -> Self {
+    fn of(commands: &[DrawCommand], controls: &FxHashSet<NodeId>) -> Self {
         let mut reading = Self::default();
-        // The scope in force and the innermost named box, per open element.
-        let mut open: Vec<(Scope, Option<usize>)> = Vec::new();
+        // The scope in force, the innermost named box, and whether a control is open, per open element.
+        let mut open: Vec<(Scope, Option<usize>, bool)> = Vec::new();
         renderer_core::for_each_with_matrix(commands, |command, matrix| {
-            let (scope, named) = open.last().cloned().unwrap_or_default();
+            let (scope, named, in_control) = open.last().cloned().unwrap_or_default();
             match command {
                 DrawCommand::PushElement { element } => {
                     let node = NodeId::from(element.id.0);
@@ -191,15 +251,18 @@ impl Reading {
                                 node,
                                 label,
                                 lang: inner.lang.clone(),
+                                role: element.semantics.role,
+                                enclosing: named,
                                 drew_text: false,
                                 drew_art: false,
+                                drew_beside_controls: false,
                             });
                             Some(reading.named.len() - 1)
                         }
                         _ => named,
                     };
                     reading.scopes.insert(node, inner.clone());
-                    open.push((inner, named));
+                    open.push((inner, named, in_control || controls.contains(&node)));
                 }
                 DrawCommand::PopElement => {
                     open.pop();
@@ -212,12 +275,16 @@ impl Reading {
                     if let Some(i) = named {
                         reading.named[i].drew_text = true;
                     }
+                    if !in_control {
+                        reading.drew_beside_controls(named);
+                    }
                     reading.text.push(Piece {
                         text: text.to_string(),
                         rect: placed,
                         role: Role::Label,
                         lang: scope.lang.clone(),
                         url: None,
+                        named_box: None,
                     });
                     for span in spans.iter().flat_map(|spans| spans.iter()) {
                         let (Some(link), Some(words)) = (
@@ -232,6 +299,7 @@ impl Reading {
                             role: Role::Link,
                             lang: scope.lang.clone(),
                             url: Some(platform_core::address_of(link)),
+                            named_box: None,
                         });
                     }
                 }
@@ -239,11 +307,27 @@ impl Reading {
                     if let Some(i) = named {
                         reading.named[i].drew_art = true;
                     }
+                    if !in_control {
+                        reading.drew_beside_controls(named);
+                    }
                 }
                 _ => {}
             }
         });
         reading
+    }
+
+    /// Marks `innermost` and every named box around it as holding something besides its controls.
+    fn drew_beside_controls(&mut self, innermost: Option<usize>) {
+        let mut at = innermost;
+        while let Some(i) = at {
+            let named = &mut self.named[i];
+            if named.drew_beside_controls {
+                break;
+            }
+            named.drew_beside_controls = true;
+            at = named.enclosing;
+        }
     }
 
     /// What reaches `node`. A box the frame never drew says nothing, and nothing above it could either.

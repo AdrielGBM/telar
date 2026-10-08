@@ -15,6 +15,10 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         lang: None,
         url: None,
         current: None,
+        orientation: None,
+        expanded: None,
+        position: None,
+        active_descendant: None,
     }
 }
 
@@ -213,6 +217,54 @@ fn a_state_lands_where_its_role_is_read_from() {
         "a slider has no on/off state to say"
     );
     assert_eq!(slider.is_selected(), None);
+}
+
+/// A tree row is selected and expanded at once, and says how deep it is and where among its siblings, counted from zero as AccessKit counts.
+#[test]
+fn a_tree_row_says_it_is_chosen_open_and_where_it_sits() {
+    let row = AccessNode {
+        toggled: Some(true),
+        expanded: Some(true),
+        position: Some(platform_core::SetPosition {
+            level: 2,
+            position: 3,
+            size: 5,
+        }),
+        ..node(Some(4), Role::TreeItem, "Buttons")
+    };
+    let update = tree_update(&[row], "Explorer", None);
+    let ak = &update.nodes[0].1;
+    assert_eq!(ak.role(), AkRole::TreeItem);
+    assert_eq!(ak.is_selected(), Some(true));
+    assert_eq!(ak.is_expanded(), Some(true));
+    assert_eq!(ak.level(), Some(1));
+    assert_eq!(ak.position_in_set(), Some(2));
+
+    let leaf = AccessNode {
+        toggled: Some(false),
+        ..node(Some(5), Role::TreeItem, "Primary")
+    };
+    let update = tree_update(&[leaf], "Explorer", None);
+    let ak = &update.nodes[0].1;
+    assert_eq!(ak.is_expanded(), None, "a leaf is neither open nor shut");
+    assert_eq!(ak.is_selected(), Some(false));
+}
+
+/// A tree keeps focus while its cursor walks the rows, so the row the cursor is on is named to the reader as the tree's active descendant; one that names a row the update does not carry names nothing.
+#[test]
+fn a_focused_tree_names_the_row_its_cursor_is_on() {
+    let tree = AccessNode {
+        focused: true,
+        active_descendant: Some(5),
+        ..node(Some(3), Role::Tree, "Files")
+    };
+    let row = node(Some(5), Role::TreeItem, "docs");
+    let update = tree_update(&[tree.clone(), row], "Explorer", None);
+    assert_eq!(update.nodes[0].1.active_descendant(), Some(control_id(5)));
+    assert_eq!(update.focus, control_id(3), "focus stays on the tree");
+
+    let update = tree_update(&[tree], "Explorer", None);
+    assert_eq!(update.nodes[0].1.active_descendant(), None);
 }
 
 mod from_a_screen {
@@ -654,6 +706,7 @@ fn the_workbench_roles_are_published_as_the_roles_a_reader_knows_them_by() {
     for (role, expected) in [
         (Role::Tree, AkRole::Tree),
         (Role::TreeItem, AkRole::TreeItem),
+        (Role::TabList, AkRole::TabList),
         (Role::Toolbar, AkRole::Toolbar),
         (Role::Splitter, AkRole::Splitter),
         (Role::Status, AkRole::Status),
@@ -662,4 +715,38 @@ fn the_workbench_roles_are_published_as_the_roles_a_reader_knows_them_by() {
         let update = tree_update(&[node(Some(1), role, "Item")], "Workbench", None);
         assert_eq!(update.nodes[0].1.role(), expected, "{role:?}");
     }
+}
+
+#[test]
+fn a_splitter_publishes_its_value_and_its_orientation() {
+    let splitter = AccessNode {
+        value: Some(platform_core::NumericValue {
+            now: 240.0,
+            min: 180.0,
+            max: 400.0,
+        }),
+        orientation: Some(Orientation::Vertical),
+        ..node(Some(1), Role::Splitter, "Sidebar")
+    };
+    let published = tree_update(&[splitter], "Splitter", None).nodes[0]
+        .1
+        .clone();
+    assert_eq!(published.role(), AkRole::Splitter);
+    assert_eq!(published.numeric_value(), Some(240.0));
+    assert_eq!(published.min_numeric_value(), Some(180.0));
+    assert_eq!(published.max_numeric_value(), Some(400.0));
+    assert_eq!(
+        published.orientation(),
+        Some(accesskit::Orientation::Vertical)
+    );
+
+    let bar = AccessNode {
+        orientation: Some(Orientation::Horizontal),
+        ..node(Some(2), Role::Splitter, "Panels")
+    };
+    let published = tree_update(&[bar], "Splitter", None).nodes[0].1.clone();
+    assert_eq!(
+        published.orientation(),
+        Some(accesskit::Orientation::Horizontal)
+    );
 }

@@ -618,3 +618,63 @@ fn a_field_shows_what_was_typed_whatever_case_it_inherits() {
     assert_eq!(style.text_case, renderer_core::TextCase::AsWritten);
     assert!(style.decoration.is_drawn(), "the rest still inherits");
 }
+
+/// A key belongs to whoever held focus when it arrived. A control before the field that hands it the caret on `/` without claiming the key — a handler answering `()` — must not have the field type the `/` it was summoned by, nor anything after it.
+#[test]
+fn a_key_that_moves_focus_to_a_field_is_not_typed_into_it() {
+    use crate::layout_item::box_item;
+    use crate::styled_container::StyledContainer;
+    reset_layout_runtime();
+    focus::clear();
+    let value = signal(String::new());
+    let field = Input::new(value, LayoutStyle::new().width(200.0).height(20.0), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .unwrap();
+    let field_focus = field.focus_id();
+    let list = StyledContainer::new(
+        LayoutStyle::new().width(200.0).height(100.0),
+        |_| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(focus::Role::Tree)
+    .on_focused_key(move |key: &Key| {
+        if matches!(key, Key::Char('/')) {
+            focus::request(field_focus);
+        }
+    });
+    let list_focus = list.focus_id().expect("a control is focusable");
+    let root = crate::container::Container::new(
+        LayoutStyle::new().flex_column().width(200.0).height(200.0),
+        vec![box_item(list), box_item(field)],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    let mut tree = ui_tree::ComponentList::new(root);
+    focus::request(list_focus);
+
+    tree.on_event(&key(Key::Char('/')));
+    assert!(
+        focus::is_focused(field_focus),
+        "the list handed the field the caret"
+    );
+    assert_eq!(
+        value.get(),
+        "",
+        "the key that did it was the list's, not the field's"
+    );
+    assert!(
+        !focus::is_key_target(list_focus),
+        "outside a key's dispatch, the key target is whoever holds focus now"
+    );
+
+    tree.on_event(&key(Key::Char('/')));
+    assert_eq!(value.get(), "/", "the next one is typed");
+    focus::clear();
+}

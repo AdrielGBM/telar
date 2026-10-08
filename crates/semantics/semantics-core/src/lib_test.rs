@@ -18,6 +18,7 @@ fn a_role_reads_back_as_the_name_it_was_written_with() {
         "checkbox",
         "radio",
         "switch",
+        "tablist",
         "tab",
         "tabpanel",
         "menuitem",
@@ -84,6 +85,11 @@ fn the_role_says_what_its_on_off_state_is() {
         "a button with a state is a toggle button, pressed rather than checked"
     );
     assert_eq!(Role::Tab.toggle_kind(), Some(ToggleKind::Selected));
+    assert_eq!(
+        Role::TreeItem.toggle_kind(),
+        Some(ToggleKind::Selected),
+        "a tree row's on/off state is being the chosen one; whether it is open is a state of its own"
+    );
     assert_eq!(Role::Disclosure.toggle_kind(), Some(ToggleKind::Expanded));
     for role in [Role::Link, Role::Slider, Role::Navigation, Role::Group] {
         assert_eq!(role.toggle_kind(), None, "{role:?} has no on/off state");
@@ -164,4 +170,85 @@ fn only_a_link_with_somewhere_to_go_is_current() {
             .current_kind(),
         None
     );
+}
+
+#[test]
+fn a_tree_row_carries_its_openness_and_its_place_beside_its_selection() {
+    let row = Semantics {
+        toggled: Some(true),
+        expanded: Some(false),
+        position: Some(SetPosition {
+            level: 2,
+            position: 3,
+            size: 7,
+        }),
+        ..Semantics::of(Role::TreeItem)
+    };
+    assert_ne!(
+        row,
+        Semantics {
+            expanded: Some(true),
+            ..row.clone()
+        },
+        "opening a row is a change a target has to act on"
+    );
+    assert_eq!(
+        Semantics::default().expanded,
+        None,
+        "a box says nothing about being open until it can be"
+    );
+    assert_eq!(Semantics::default().position, None);
+}
+
+#[test]
+fn a_reading_is_compared_by_its_numbers() {
+    let reading = |now: f64| NumericValue {
+        now,
+        min: 0.0,
+        max: 10.0,
+    };
+    let with = |now: f64| Semantics {
+        value: Some(reading(now)),
+        orientation: Some(Orientation::Vertical),
+        ..Semantics::of(Role::Splitter)
+    };
+    assert_eq!(with(4.0), with(4.0));
+    assert_ne!(with(4.0), with(5.0));
+    assert_ne!(with(4.0), Semantics::of(Role::Splitter));
+    assert_eq!(Orientation::Vertical.as_str(), "vertical");
+    assert_eq!(Orientation::Horizontal.as_str(), "horizontal");
+}
+
+#[test]
+fn the_box_a_cursor_rests_on_is_part_of_what_a_container_says() {
+    let on = |row: Option<u64>| Semantics {
+        active_descendant: row,
+        ..Semantics::of(Role::Tree)
+    };
+    assert_eq!(Semantics::default().active_descendant, None);
+    assert_ne!(
+        on(Some(4)),
+        on(Some(5)),
+        "a cursor moving to another row is a change a target has to act on"
+    );
+    assert_ne!(on(Some(4)), on(None));
+    assert_eq!(
+        on(Some(4))
+            .annotated(&Annotation {
+                label: Some("Files".into()),
+                ..Annotation::default()
+            })
+            .active_descendant,
+        Some(4),
+        "naming the container keeps where its cursor is"
+    );
+}
+
+#[test]
+fn only_a_role_less_box_around_exactly_one_control_lends_its_name() {
+    assert!(Role::Group.lends_name_to_control(false, 1));
+    assert!(!Role::Group.lends_name_to_control(true, 1));
+    assert!(!Role::Group.lends_name_to_control(false, 0));
+    assert!(!Role::Group.lends_name_to_control(false, 2));
+    assert!(!Role::TabList.lends_name_to_control(false, 1));
 }

@@ -15,6 +15,10 @@ fn node(role: Role, name: &str) -> AccessNode {
         lang: None,
         url: None,
         current: None,
+        orientation: None,
+        expanded: None,
+        position: None,
+        active_descendant: None,
     }
 }
 
@@ -76,6 +80,26 @@ fn a_state_is_read_in_the_words_of_its_role() {
     );
 }
 
+/// A tree row says whether it is the chosen one and, apart from that, whether it is open; a leaf says neither.
+#[test]
+fn a_tree_row_is_read_as_selected_and_open_or_shut() {
+    let row = |name: &str, selected: bool, expanded: Option<bool>| {
+        let mut node = node(Role::TreeItem, name);
+        node.toggled = Some(selected);
+        node.expanded = expanded;
+        node
+    };
+    let nodes = [
+        row("Inputs", false, Some(true)),
+        row("Button", true, Some(false)),
+        row("Primary", false, None),
+    ];
+    assert_eq!(
+        transcript(&nodes),
+        "Inputs, treeitem, expanded\nButton, treeitem, selected, collapsed\nPrimary, treeitem"
+    );
+}
+
 /// The link to where the reader is says so after its role, before whether it is focused, whatever it is the current one of.
 #[test]
 fn a_current_link_says_so() {
@@ -95,5 +119,31 @@ fn a_current_link_says_so() {
     assert_eq!(
         transcript(&nodes),
         "Home, link, current, focused\nDesktop, link, current\nSimulation, link\nEN, link, current"
+    );
+}
+
+/// A tree keeps focus while its cursor walks the rows, and a reader says the row the cursor is on rather than the tree around it.
+#[test]
+fn focus_is_read_on_the_row_a_focused_tree_s_cursor_rests_on() {
+    let row = |id: u64, name: &str| {
+        let mut node = node(Role::TreeItem, name);
+        node.id = Some(id);
+        node
+    };
+    let mut tree = node(Role::Tree, "Files");
+    tree.id = Some(1);
+    tree.focused = true;
+    tree.active_descendant = Some(3);
+    let nodes = [tree.clone(), row(2, "src"), row(3, "docs")];
+    assert_eq!(
+        transcript(&nodes),
+        "Files, tree\nsrc, treeitem\ndocs, treeitem, focused"
+    );
+
+    tree.active_descendant = Some(9);
+    assert_eq!(
+        transcript(&[tree, row(2, "src")]),
+        "Files, tree, focused\nsrc, treeitem",
+        "a cursor on a row that is not built leaves focus on the tree"
     );
 }

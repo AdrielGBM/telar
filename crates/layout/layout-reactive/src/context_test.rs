@@ -734,6 +734,96 @@ fn attached_overlay_fills_host_viewport_not_its_small_parent() {
     relayout_if_dirty();
 }
 
+fn viewport_filling_content() -> (NodeId, RwSignal<Rect>) {
+    let (inner, inner_rect) = new_leaf(
+        LayoutStyle::new()
+            .width(SizeDimension::Percent(1.0))
+            .height(SizeDimension::Percent(1.0)),
+    )
+    .unwrap();
+    let content = new_container(LayoutStyle::new().absolute_fill(), &[inner]).unwrap();
+    (content, inner_rect)
+}
+
+#[test]
+fn an_overlay_opened_before_any_host_waits_for_the_first_layout_pass() {
+    reset_layout_runtime();
+    let (content, inner_rect) = viewport_filling_content();
+    assert!(
+        attach_overlay(content),
+        "an overlay built open, with its tree, is taken rather than left in the flow"
+    );
+    assert_eq!(parent(content), None, "there is no host to hang from yet");
+
+    let (small, _) = new_leaf(LayoutStyle::new().width(50.0).height(50.0)).unwrap();
+    let root = new_container(LayoutStyle::new().flex_column(), &[small]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(800.0),
+        AvailableSpace::Definite(600.0),
+    )
+    .unwrap();
+
+    assert_eq!(parent(content), Some(root));
+    assert_eq!(inner_rect.get(), Rect::new(0.0, 0.0, 800.0, 600.0));
+}
+
+#[test]
+fn a_pinned_host_takes_the_overlays_waiting_for_one() {
+    reset_layout_runtime();
+    let (content, _) = viewport_filling_content();
+    assert!(attach_overlay(content));
+    let layer = new_container(LayoutStyle::new().absolute_fill(), &[]).unwrap();
+
+    set_overlay_host(layer);
+
+    assert_eq!(parent(content), Some(layer));
+}
+
+#[test]
+fn an_overlay_closed_while_waiting_is_never_attached() {
+    reset_layout_runtime();
+    let (content, _) = viewport_filling_content();
+    assert!(attach_overlay(content));
+    detach_overlay(content);
+
+    let root = new_container(LayoutStyle::new(), &[]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(800.0),
+        AvailableSpace::Definite(600.0),
+    )
+    .unwrap();
+
+    assert_eq!(parent(content), None);
+}
+
+#[test]
+fn a_freed_host_is_forgotten_so_the_next_tree_hosts_its_own_overlays() {
+    reset_layout_runtime();
+    let old = new_container(LayoutStyle::new(), &[]).unwrap();
+    compute_layout(
+        old,
+        AvailableSpace::Definite(800.0),
+        AvailableSpace::Definite(600.0),
+    )
+    .unwrap();
+    remove_node(old);
+
+    let (content, _) = viewport_filling_content();
+    assert!(attach_overlay(content));
+    assert_eq!(parent(content), None, "the freed root hosts nothing");
+    let root = new_container(LayoutStyle::new(), &[]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(800.0),
+        AvailableSpace::Definite(600.0),
+    )
+    .unwrap();
+
+    assert_eq!(parent(content), Some(root));
+}
+
 // Reproduces the sandbox shell's coordinate trap: a `[sidebar | content]` window root, then the `content` computed AGAIN as its own root (for scroll-height measurement) — which rewrites the content subtree's rect signals to content-local coords. `absolute_rect` must still report a trigger's WINDOW-absolute position (past the sidebar), so a portaled dropdown anchors correctly instead of landing over the sidebar.
 #[test]
 fn absolute_rect_stays_window_absolute_across_a_separate_content_root() {

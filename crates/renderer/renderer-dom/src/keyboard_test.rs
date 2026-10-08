@@ -513,6 +513,37 @@ async fn what_telar_draws_no_ring_for_keeps_the_browser_s() {
     recorded();
 }
 
+/// Presses the mouse down on `target` and reports whether its default action — focusing what it lands on — was refused.
+fn mouse_down(target: &web_sys::HtmlElement) -> bool {
+    let init = web_sys::MouseEventInit::new();
+    init.set_bubbles(true);
+    init.set_cancelable(true);
+    let event = web_sys::MouseEvent::new_with_mouse_event_init_dict("mousedown", &init)
+        .expect("a mouse event");
+    target.dispatch_event(&event).expect("dispatched");
+    event.default_prevented()
+}
+
+/// A press on a box that is no stop — a tree's row, a toolbar's item — leaves the document's focus with the control that drives it, so the keys after it are read against that control and not the row. A synthetic press focuses nothing itself; what is checked is that the default which would focus the row is refused, and the one that would focus a stop is not.
+#[wasm_bindgen_test]
+fn a_press_on_a_row_leaves_the_keyboard_with_the_control_that_holds_it() {
+    render(BUTTON);
+    assert!(
+        mouse_down(&element(MENU_ROW)),
+        "the row does not take the keyboard from the control"
+    );
+    assert!(
+        !mouse_down(&element(SLIDER)),
+        "a stop is focused by a press"
+    );
+    render(MENU_ROW);
+    assert!(
+        !mouse_down(&element(MENU_ROW)),
+        "a row Telar gave focus to keeps it"
+    );
+    render(0);
+}
+
 /// A key a script dispatches has no physical key behind it, and neither does one from an on-screen keyboard or an input method: each is read as the key it is, never as a repeat of the last one that came without a key up.
 #[wasm_bindgen_test]
 async fn a_key_with_no_physical_key_is_read_as_itself() {

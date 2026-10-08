@@ -53,7 +53,7 @@ impl Component for Mask {
             RenderNode::group(self.source.iter().map(|c| c.segment.boundary())),
             RenderNode::group(self.content.iter().map(|c| c.segment.boundary())),
         );
-        let element = crate::element::for_target(self.node, || {
+        let element = crate::element::for_target(self.node, renderer_core::Role::Drawing, || {
             crate::element::with_semantics(self.node, renderer_core::Semantics::drawing())
         });
         RenderNode::element(element, [masked])

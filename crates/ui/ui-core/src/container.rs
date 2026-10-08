@@ -135,8 +135,8 @@ impl Component for Container {
             None => RenderNode::group(self.children.iter().map(|c| c.segment.boundary())),
         };
         // A transparent box still owns a layout node, and its children are laid out by it, so attaching them to its parent would put them in the wrong flow.
-        let element = crate::element::for_target(self.node, || {
-            let role = crate::element::role_of(self.role, self.press.is_set());
+        let role = crate::element::role_of(self.role, self.press.is_set());
+        let element = crate::element::for_target(self.node, role, || {
             crate::element::with_semantics(self.node, renderer_core::Semantics::of(role))
         });
         RenderNode::element(element, [content])

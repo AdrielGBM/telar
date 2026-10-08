@@ -829,6 +829,7 @@ pub const ROLE_VALUES: &[(&str, &str)] = &[
     ("radio", "Radio"),
     ("switch", "Switch"),
     ("toggle", "Switch"),
+    ("tablist", "TabList"),
     ("tab", "Tab"),
     ("tabpanel", "TabPanel"),
     ("menuitem", "MenuItem"),

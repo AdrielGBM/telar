@@ -271,7 +271,7 @@ fn overlay_receives_tap_and_blocks_background() {
     );
 }
 
-// The portaled path, where `content_rect` is driven to the viewport by a later relayout: the page is laid out first (registering the host), and only then does the modal open. The test above covers the in-place fallback, where the overlay is built before any host exists.
+// The portaled path, where `content_rect` is driven to the viewport by a later relayout: the page is laid out first (registering the host), and only then does the modal open. The test above covers an overlay built before any host exists, which waits and is attached on the first layout pass.
 #[test]
 fn portaled_overlay_blocks_background() {
     use crate::context::relayout_if_dirty;
@@ -421,4 +421,80 @@ fn anchored_content_tracks_trigger() {
     let rect = overlay.anchored_barrier();
     assert_eq!((rect.x, rect.y), (200.0, 130.0 + ANCHOR_GAP));
     assert_eq!((rect.width, rect.height), (120.0, 60.0));
+}
+
+fn fills_in_order(
+    commands: &[renderer_core::DrawCommand],
+    color: renderer_core::Color,
+) -> Vec<(usize, Rect)> {
+    commands
+        .iter()
+        .enumerate()
+        .filter_map(|(at, command)| match command {
+            renderer_core::DrawCommand::Rect { rect, style, .. }
+                if style.fill == Some(color.into()) =>
+            {
+                Some((at, *rect))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_modal_open_from_the_start_covers_the_window_above_the_tree() {
+    use crate::{StyledContainer, WindowRoot, relayout_if_dirty};
+    use renderer_core::{Color, RectStyle, ShapeStyle};
+
+    reset_layout_runtime();
+    let swatch = |color: Color, style: LayoutStyle| {
+        StyledContainer::new(
+            style,
+            move |_| RectStyle::default().with_fill(color),
+            vec![],
+        )
+        .unwrap()
+    };
+    let fill = || {
+        LayoutStyle::new()
+            .width(layout_core::SizeDimension::Percent(1.0))
+            .height(layout_core::SizeDimension::Percent(1.0))
+    };
+    let scrim = swatch(Color::BLACK, fill());
+    let modal = Overlay::toggleable(LayoutStyle::new(), vec![Box::new(scrim)], || true).unwrap();
+    let declared_in = Container::new(
+        LayoutStyle::new().width(120.0).height(60.0),
+        vec![Box::new(modal)],
+    )
+    .unwrap();
+    let page = Container::new(
+        LayoutStyle::new().flex_column().flex_grow(1.0),
+        vec![
+            Box::new(swatch(Color::WHITE, LayoutStyle::new().height(40.0))),
+            Box::new(declared_in),
+        ],
+    )
+    .unwrap();
+    crate::set_surface_size(geometry_core::Size::new(400.0, 300.0));
+    let mut tree = ComponentList::new(WindowRoot::wrapping(Box::new(page)).unwrap());
+    tree.on_event(&Event::WindowResized {
+        width: 400,
+        height: 300,
+    });
+    relayout_if_dirty();
+
+    let commands = tree.commands().clone();
+    let scrims = fills_in_order(&commands, Color::BLACK);
+    assert_eq!(
+        scrims.iter().map(|(_, rect)| *rect).collect::<Vec<_>>(),
+        [Rect::new(0.0, 0.0, 400.0, 300.0)],
+        "the scrim spans the window, not the 120×60 box it was declared in"
+    );
+    let (page_at, _) = fills_in_order(&commands, Color::WHITE)[0];
+    assert!(scrims[0].0 > page_at, "the modal is drawn above the tree");
+    assert_eq!(
+        crate::dispatch_overlays(&press(350.0, 250.0)),
+        EventResult::Handled,
+        "and blocks the whole window, far from where it was declared"
+    );
 }

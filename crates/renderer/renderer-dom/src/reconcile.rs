@@ -850,11 +850,40 @@ fn follow_focus(host: &web_sys::HtmlElement) -> Option<FocusFollower> {
         )
         .ok()?;
     }
+    let pressed = Closure::<dyn FnMut(web_sys::Event)>::new(move |event: web_sys::Event| {
+        if presses_a_box_that_takes_no_focus(&event) {
+            event.prevent_default();
+        }
+    });
+    // Not passive: refusing the focus a press would give is the press's default action.
+    host.add_event_listener_with_callback("mousedown", pressed.as_ref().unchecked_ref())
+        .ok()?;
     Some(FocusFollower {
         host: host.clone(),
         into,
         out,
+        pressed,
     })
+}
+
+/// Whether a press lands on a box the document must not focus: one that is no Tab stop and does not hold the keyboard now, such as a tree's row or a toolbar's item, whose control keeps the keyboard while the cursor moves inside it.
+///
+/// Left to the browser, the press would focus the item while Telar's focus stays on its control, and the keys after it would be read against the item's declared keys rather than the control's.
+fn presses_a_box_that_takes_no_focus(event: &web_sys::Event) -> bool {
+    let Some(target) = event
+        .target()
+        .and_then(|target| target.dyn_into::<web_sys::Element>().ok())
+    else {
+        return false;
+    };
+    let Ok(Some(pressed)) = target.closest(&format!("[{FOCUS_BOX_ATTRIBUTE}]")) else {
+        return false;
+    };
+    let focused = pressed
+        .owner_document()
+        .and_then(|document| document.active_element())
+        .is_some_and(|active| active.is_same_node(Some(pressed.as_ref())));
+    pressed.get_attribute("tabindex").as_deref() == Some("-1") && !focused
 }
 
 /// Whether `element` is one of the two places Telar parks the document's focus itself: the host, while no box holds the keyboard, and the entry a field is typed through.
@@ -879,11 +908,16 @@ struct FocusFollower {
     host: web_sys::HtmlElement,
     into: Closure<dyn FnMut(web_sys::Event)>,
     out: Closure<dyn FnMut(web_sys::Event)>,
+    pressed: Closure<dyn FnMut(web_sys::Event)>,
 }
 
 impl Drop for FocusFollower {
     fn drop(&mut self) {
-        for (name, closure) in [("focusin", &self.into), ("focusout", &self.out)] {
+        for (name, closure) in [
+            ("focusin", &self.into),
+            ("focusout", &self.out),
+            ("mousedown", &self.pressed),
+        ] {
             let _ = self
                 .host
                 .remove_event_listener_with_callback(name, closure.as_ref().unchecked_ref());
