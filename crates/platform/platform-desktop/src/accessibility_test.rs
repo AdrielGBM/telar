@@ -648,3 +648,18 @@ mod from_a_screen {
         );
     }
 }
+
+#[test]
+fn the_workbench_roles_are_published_as_the_roles_a_reader_knows_them_by() {
+    for (role, expected) in [
+        (Role::Tree, AkRole::Tree),
+        (Role::TreeItem, AkRole::TreeItem),
+        (Role::Toolbar, AkRole::Toolbar),
+        (Role::Splitter, AkRole::Splitter),
+        (Role::Status, AkRole::Status),
+        (Role::Log, AkRole::Log),
+    ] {
+        let update = tree_update(&[node(Some(1), role, "Item")], "Workbench", None);
+        assert_eq!(update.nodes[0].1.role(), expected, "{role:?}");
+    }
+}

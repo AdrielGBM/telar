@@ -132,7 +132,8 @@ impl Role {
             | Self::Tab
             | Self::Disclosure => K::ACTIVATION,
             Self::MenuItem | Self::ComboBox => K::ACTIVATION | K::VERTICAL_ARROWS | K::EDGES,
-            Self::Slider => K::ARROWS,
+            Self::Slider | Self::Splitter | Self::Toolbar => K::ARROWS,
+            Self::Tree | Self::TreeItem => K::ARROWS | K::EDGES | K::ENTER | K::SPACE,
             Self::SpinButton => K::ARROWS | K::ENTER,
             Self::TextInput => K::ARROWS | K::EDGES | K::SPACE | K::ENTER | K::BACKSPACE,
             Self::MultilineTextInput => {
@@ -156,6 +157,8 @@ impl Role {
             | Self::Dialog
             | Self::TabPanel
             | Self::ProgressBar
+            | Self::Status
+            | Self::Log
             | Self::Label => K::EMPTY,
             // A document activates a link on Enter by itself and scrolls on Space, and a link keeping either would take that from it.
             Self::Link => K::EMPTY,

@@ -96,6 +96,18 @@ pub enum Role {
     Disclosure,
     /// How far along something is.
     ProgressBar,
+    /// A hierarchy of rows that expand and collapse, such as a file or component tree. Its rows are [`TreeItem`](Self::TreeItem)s.
+    Tree,
+    /// A row of a [`Tree`](Self::Tree): chosen, and expanded or collapsed when it has children.
+    TreeItem,
+    /// A row of controls that is one Tab stop and is walked with the arrows.
+    Toolbar,
+    /// The draggable divider between two panes, moved with the arrows as well as by pointer.
+    Splitter,
+    /// Text that reports the application's state and is announced when it changes without taking focus: "Saved", "3 results".
+    Status,
+    /// A feed of entries added over time, newest last, announced as they arrive without taking focus: a console, a build output.
+    Log,
     /// Not a control at all: text the interface is showing. Never focusable — it is here because a reader given only the buttons cannot say what the buttons are for.
     Label,
 }
@@ -136,6 +148,8 @@ impl Role {
                 | Self::MultilineTextInput
                 | Self::ComboBox
                 | Self::Disclosure
+                | Self::TreeItem
+                | Self::Splitter
         )
     }
 
@@ -175,6 +189,12 @@ impl Role {
             Self::ComboBox => "combobox",
             Self::Disclosure => "button",
             Self::ProgressBar => "progressbar",
+            Self::Tree => "tree",
+            Self::TreeItem => "treeitem",
+            Self::Toolbar => "toolbar",
+            Self::Splitter => "separator",
+            Self::Status => "status",
+            Self::Log => "log",
             Self::Label => "label",
         }
     }
@@ -233,6 +253,12 @@ impl Role {
             "combobox" | "select" => Self::ComboBox,
             "disclosure" | "accordion" => Self::Disclosure,
             "progressbar" | "progress" => Self::ProgressBar,
+            "tree" => Self::Tree,
+            "treeitem" => Self::TreeItem,
+            "toolbar" => Self::Toolbar,
+            "splitter" | "separator" => Self::Splitter,
+            "status" => Self::Status,
+            "log" => Self::Log,
             "label" | "text" => Self::Label,
             _ => return None,
         })

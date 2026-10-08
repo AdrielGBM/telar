@@ -71,10 +71,9 @@ fn a_scroller_keeps_what_scrolls() {
 
 #[test]
 fn what_is_only_read_keeps_nothing() {
-    for role in ALL_ROLES
-        .into_iter()
-        .filter(|role| !role.is_control() && *role != Role::ScrollArea)
-    {
+    for role in ALL_ROLES.into_iter().filter(|role| {
+        !role.is_control() && !matches!(role, Role::ScrollArea | Role::Tree | Role::Toolbar)
+    }) {
         assert!(role.consumed_keys().is_empty(), "{role:?}");
     }
 }
@@ -89,7 +88,7 @@ fn every_control_but_a_link_keeps_something() {
     }
 }
 
-const ALL_ROLES: [Role; 32] = [
+const ALL_ROLES: [Role; 38] = [
     Role::Group,
     Role::Banner,
     Role::Navigation,
@@ -121,6 +120,12 @@ const ALL_ROLES: [Role; 32] = [
     Role::ComboBox,
     Role::Disclosure,
     Role::ProgressBar,
+    Role::Tree,
+    Role::TreeItem,
+    Role::Toolbar,
+    Role::Splitter,
+    Role::Status,
+    Role::Log,
     Role::Label,
 ];
 
@@ -136,4 +141,22 @@ fn a_group_name_reads_as_every_key_in_it() {
     );
     assert_eq!(ConsumedKeys::named("none"), Some(ConsumedKeys::EMPTY));
     assert_eq!(ConsumedKeys::named("sideways"), None);
+}
+
+#[test]
+fn the_workbench_roles_keep_the_keys_that_walk_them() {
+    for role in [Role::Splitter, Role::Toolbar] {
+        assert_eq!(role.consumed_keys(), ConsumedKeys::ARROWS, "{role:?}");
+    }
+    for role in [Role::Tree, Role::TreeItem] {
+        let keys = role.consumed_keys();
+        assert!(
+            keys.contains(ConsumedKeys::ARROWS | ConsumedKeys::EDGES | ConsumedKeys::ENTER),
+            "{role:?}"
+        );
+        assert!(!keys.contains(ConsumedKeys::TAB), "{role:?}");
+    }
+    for role in [Role::Status, Role::Log] {
+        assert!(role.consumed_keys().is_empty(), "{role:?}");
+    }
 }

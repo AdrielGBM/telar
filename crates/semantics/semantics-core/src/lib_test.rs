@@ -25,6 +25,12 @@ fn a_role_reads_back_as_the_name_it_was_written_with() {
         "spinbutton",
         "combobox",
         "progressbar",
+        "tree",
+        "treeitem",
+        "toolbar",
+        "separator",
+        "status",
+        "log",
         "label",
         "group",
     ] {

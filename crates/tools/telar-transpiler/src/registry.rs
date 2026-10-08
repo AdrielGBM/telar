@@ -836,6 +836,13 @@ pub const ROLE_VALUES: &[(&str, &str)] = &[
     ("spinbutton", "SpinButton"),
     ("progressbar", "ProgressBar"),
     ("progress", "ProgressBar"),
+    ("tree", "Tree"),
+    ("treeitem", "TreeItem"),
+    ("toolbar", "Toolbar"),
+    ("splitter", "Splitter"),
+    ("separator", "Splitter"),
+    ("status", "Status"),
+    ("log", "Log"),
     ("label", "Label"),
 ];
 

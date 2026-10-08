@@ -502,3 +502,19 @@ fn a_matrix_around_a_frame_at_the_corner_is_already_the_boxs_own() {
         node.style
     );
 }
+
+/// `status` and `log` are live regions by their own definition, so the role alone makes a reader announce what changes in them.
+#[test]
+fn the_workbench_roles_are_the_aria_roles_of_the_same_name() {
+    for (role, aria) in [
+        (Role::Tree, "tree"),
+        (Role::TreeItem, "treeitem"),
+        (Role::Toolbar, "toolbar"),
+        (Role::Splitter, "separator"),
+        (Role::Status, "status"),
+        (Role::Log, "log"),
+    ] {
+        assert_eq!(aria_role(role), Some(aria), "{role:?}");
+        assert_eq!(tag_of(&role), "div", "{role:?}");
+    }
+}
