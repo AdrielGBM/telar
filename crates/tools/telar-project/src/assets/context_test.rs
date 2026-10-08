@@ -206,3 +206,59 @@ fn a_literal_reaches_the_component_as_written_where_icons_are_not_configured() {
     assert_eq!(context.literal_id("icon", "name", "home"), None);
     assert_eq!(context.literal_id("icon", "size", "24"), None);
 }
+
+#[test]
+fn a_baked_id_named_from_rust_carries_its_initializer() {
+    let root = package("rust_id", "[telar.icons]\nsvg = \"icons\"\n");
+    let mut home = icon("mdi:home");
+    home.monochrome = true;
+    bake(&root, &[home, icon("mdi:gear")]);
+    let baked = AssetContext::load(&root, VERSION)
+        .baked_id(icon_kind(), "mdi:home")
+        .unwrap();
+    assert_eq!(
+        baked,
+        BakedId {
+            id: "mdi:home".to_string(),
+            monochrome: true,
+            data_ty: "SvgData",
+            init_expr: "SvgData::from_baked_vector((24.0, 24.0), vec![])".to_string(),
+        }
+    );
+}
+
+#[test]
+fn a_bare_name_named_from_rust_is_read_in_the_default_set() {
+    let root = package(
+        "rust_bare",
+        "[telar.icons]\nsvg = \"icons\"\ndefault_set = \"mdi\"\n",
+    );
+    bake(&root, &[icon("mdi:home")]);
+    let baked = AssetContext::load(&root, VERSION)
+        .baked_id(icon_kind(), "home")
+        .unwrap();
+    assert_eq!(baked.id, "mdi:home");
+}
+
+#[test]
+fn an_id_named_from_rust_and_missing_from_the_artifact_names_the_call_and_the_bake() {
+    let root = package("rust_missing", "[telar.icons]\nsvg = \"icons\"\n");
+    bake(&root, &[icon("mdi:home")]);
+    let message = AssetContext::load(&root, VERSION)
+        .baked_id(icon_kind(), "mdi:account")
+        .unwrap_err();
+    assert!(message.contains("`icon!(\"mdi:account\")`"), "{message}");
+    assert!(message.contains("cargo telar bake"), "{message}");
+    assert!(!message.starts_with("rsx:"), "{message}");
+}
+
+#[test]
+fn an_id_named_from_rust_where_nothing_is_baked_names_the_section() {
+    for manifest in ["", "[telar.icons]\nmode = \"runtime\"\nsvg = \"icons\"\n"] {
+        let root = package("rust_unconfigured", manifest);
+        let message = AssetContext::load(&root, VERSION)
+            .baked_id(icon_kind(), "mdi:home")
+            .unwrap_err();
+        assert!(message.contains("[telar.icons]"), "{message}");
+    }
+}

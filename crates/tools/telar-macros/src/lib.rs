@@ -1,4 +1,4 @@
-//! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, plus the `Props`, `PreviewArg` and `ThemeTokens` derives, the `t!` catalogue lookup and the names and location behind `telar::preview::preview!`.
+//! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, plus the `Props`, `PreviewArg` and `ThemeTokens` derives, the `t!` catalogue lookup, the baked id behind a plugin's `icon!`, and the names and location behind `telar::preview::preview!`.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
@@ -8,6 +8,7 @@ use quote::{ToTokens, quote};
 use std::path::{Path, PathBuf};
 
 mod app_input;
+mod baked_id;
 mod component;
 mod preview_arg;
 mod preview_id;
@@ -102,6 +103,16 @@ pub fn derive_preview_arg(input: TokenStream) -> TokenStream {
         Err(e) => return e.to_compile_error().into(),
     };
     match preview_arg::expand(parsed) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// An id of a component-named asset kind baked into the calling crate, as the value its component accepts: `__baked_id!(icon, "mdi:home", ::telar)` expands to `("mdi:home", Arc<SvgData>, monochrome)` with the data inlined from `.telar/assets.rs`, or to a `compile_error!` on the literal when the artifact does not hold it. Reached through a plugin's own macro, such as `telar_icons::icon!`, which passes the path its crate reaches `telar` by.
+#[doc(hidden)]
+#[proc_macro]
+pub fn __baked_id(input: TokenStream) -> TokenStream {
+    match syn::parse::<baked_id::BakedIdInput>(input).and_then(baked_id::expand) {
         Ok(tokens) => tokens.into(),
         Err(e) => e.to_compile_error().into(),
     }

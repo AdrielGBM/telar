@@ -9,6 +9,22 @@ categories = ["gui"]
 readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
+# A `[telar] library`: the baked icons its widgets name from Rust ship in `.telar/`, which cargo leaves out of a package unless it is listed.
+include = [
+    "/README.md",
+    "/telar.toml",
+    "/src/**",
+    "!/src/**/.telar/modules-hot.rs",
+    "!/src/**/.telar/modules-preview.rs",
+    "!/src/**/.telar/modules-hot-preview.rs",
+    "/.telar/build/**",
+    "/.telar/build.json",
+    "/.telar/i18n.rs",
+    "/.telar/i18n.json",
+    "/.telar/assets.rs",
+    "/.telar/assets.json",
+    "/.telar/icons-library.json",
+]
 
 # docs.rs builds with every group on, so the whole catalogue is on one page rather than only the widgets a build with no features carries.
 [package.metadata.docs.rs]

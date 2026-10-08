@@ -10,7 +10,7 @@
 //! Adding a kind — fonts, shaders, audio — is an entry in [`ASSET_KINDS`](telar_project::ASSET_KINDS) plus
 //! one [`Baker`] impl here; nothing in the transpiler, the macro, or a CLI needs to change to pick it up.
 //!
-//! A kind a plugin's component names by id rather than by path — `icon name:"mdi:home"` — also needs its ids
+//! A kind a plugin's component names by id rather than by path — `icon name:"mdi:home"` in `.rsx`, or `icon!("mdi:home")` in Rust — also needs its ids
 //! resolved into bytes before a [`Baker`] sees them. That resolver lives here too, because it runs inside the CLI
 //! and the CLI loads no plugin code: the icons `[telar.icons]` configures resolve through `telar-icons-core`'s
 //! sources, are judged against the package's licence policy, and are recorded in `.telar/icons.json` with the
@@ -27,6 +27,7 @@ mod icon_dependencies;
 mod icons;
 mod ids;
 mod image;
+mod macro_ids;
 mod package;
 mod svg;
 mod web_image;

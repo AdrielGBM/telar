@@ -421,6 +421,9 @@ pub use runner::{run_app_with_devtools, run_app_with_name};
 
 // Always present, like `Props`: an enum derives it in every build, and the impl it expands to is gated behind `__previews!`.
 pub use telar_macros::{PreviewArg, Props, ThemeTokens, app, component, rsx_modules, t};
+// Reached only through a plugin's own macro naming a baked asset by id, such as `telar_icons::icon!`.
+#[doc(hidden)]
+pub use telar_macros::__baked_id;
 
 #[cfg(all(feature = "previews", not(target_os = "android")))]
 pub use preview::host::{dev_entry, try_run_test};

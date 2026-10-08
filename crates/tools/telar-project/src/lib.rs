@@ -27,9 +27,9 @@ mod web;
 pub use assets::{
     ASSET_ARTIFACT_FORMAT, ASSET_KINDS, ASSETS_INDEX_FILENAME, ASSETS_MODULE,
     ASSETS_SOURCE_FILENAME, ArtifactHandshake, AssetContext, AssetEntry, AssetIndex, AssetKind,
-    BakedAsset, ComponentAsset, GeneratedAssets, IdBaking, asset_kind_for_component,
-    asset_kind_for_id, asset_kind_for_tag, check_artifact, content_hash, generate_assets,
-    read_index, static_name_for_path, write_generated,
+    BakedAsset, BakedId, ComponentAsset, GeneratedAssets, IdBaking, asset_kind_for_component,
+    asset_kind_for_id, asset_kind_for_tag, baked_init_expr, check_artifact, content_hash,
+    generate_assets, read_index, static_name_for_path, write_generated,
 };
 pub use build::{
     BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildFlavour, BuildIndex, clear_build_failure,

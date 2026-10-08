@@ -16,6 +16,7 @@ use telar_project::{
 use crate::icon_dependencies::IconDependency;
 use crate::icons::{Recording, read_icon_record, resolve_with};
 use crate::ids::{IdRef, collect_id_refs};
+use crate::macro_ids::{collect_macro_ids, rust_files};
 
 /// What baking one package turned up. Warnings and errors are collected rather than printed so each caller renders them where its user is looking — a terminal for the CLI, the LSP log for the analyzer. A warning is not fatal: a package with one unreadable asset still bakes the rest.
 #[derive(Debug, Clone, Default)]
@@ -28,9 +29,9 @@ pub struct BakeReport {
     pub errors: Vec<String>,
 }
 
-/// Bakes every asset `package_dir`'s `.rsx` files reference, writing `<package_dir>/.telar/assets.{json,rs}`. `None` when the package holds no `.rsx` and ships no icon of the crates it is built with, so a crate with nothing to bake never grows a `.telar/`.
+/// Bakes every asset `package_dir`'s `.rsx` files reference, writing `<package_dir>/.telar/assets.{json,rs}`. `None` when the package holds no `.rsx`, names no id from its Rust, has no artifact to empty and ships no icon of the crates it is built with, so a crate with nothing to bake never grows a `.telar/`.
 ///
-/// That is every `src:"…"` file, and every literal id given to a component-named kind's prop where the package bakes that kind: the icons `[telar.icons]` resolves, judged against its licence policy and recorded beside the artifact.
+/// That is every `src:"…"` file, and every literal id where the package bakes its kind: given to the kind's prop in `.rsx`, or named by the macro of the kind's component, `icon!("mdi:home")`, in any of the package's `.rs` files or in the Rust its `.rsx` writes. For icons, that is what `[telar.icons]` resolves, judged against its licence policy and recorded beside the artifact.
 ///
 /// `telar_version` is the version of `telar` the *project* resolves — see [`telar_project::resolve_telar_version`]. Writing this binary's own version here would hand the macro a mismatch it cannot act on.
 ///
@@ -41,7 +42,7 @@ pub fn bake_package(package_dir: &Path, producer: &str, telar_version: &str) -> 
 
 /// [`bake_package`], told the crates the package is built with, as [`DependencyGraph::icon_dependencies`](crate::DependencyGraph::icon_dependencies) finds them, so its notice lists their icons beside its own. `None` keeps the ones the last bake recorded, for a caller that cannot ask cargo every time it bakes, such as the editor.
 ///
-/// A package with no `.rsx` bakes nothing of its own, and still writes the notice of what the crates it is built with baked, since it ships their icons.
+/// A package that names no asset of its own still writes the notice of what the crates it is built with baked, since it ships their icons.
 pub fn bake_package_with(
     package_dir: &Path,
     producer: &str,
@@ -54,7 +55,23 @@ pub fn bake_package_with(
         library: manifest.telar.library,
         dependencies,
     };
-    if rsx_files.is_empty() {
+    let id_kinds: Vec<(&'static AssetKind, IdBaking)> = ASSET_KINDS
+        .iter()
+        .map(|kind| (kind, manifest.telar.id_baking(kind)))
+        .filter(|(_, baking)| *baking != IdBaking::Off)
+        .collect();
+    let id_kind_list: Vec<&'static AssetKind> = id_kinds.iter().map(|(kind, _)| *kind).collect();
+    let mut id_refs: Vec<IdRef> = Vec::new();
+    if !id_kind_list.is_empty() {
+        for file in rust_files(package_dir) {
+            if let Ok(source) = std::fs::read_to_string(&file) {
+                collect_macro_ids(&source, &file, 1, &id_kind_list, &mut id_refs);
+            }
+        }
+    }
+    let telar_dir = package_dir.join(".telar");
+    let previous_index = telar_project::read_index(&telar_dir).ok().flatten();
+    if rsx_files.is_empty() && id_refs.is_empty() && previous_index.is_none() {
         if dependencies.is_none_or(<[IconDependency]>::is_empty)
             && read_icon_record(package_dir).is_none()
         {
@@ -79,16 +96,8 @@ pub fn bake_package_with(
         });
     }
 
-    let id_kinds: Vec<(&'static AssetKind, IdBaking)> = ASSET_KINDS
-        .iter()
-        .map(|kind| (kind, manifest.telar.id_baking(kind)))
-        .filter(|(_, baking)| *baking != IdBaking::Off)
-        .collect();
-    let id_kind_list: Vec<&'static AssetKind> = id_kinds.iter().map(|(kind, _)| *kind).collect();
-
     let mut report = BakeReport::default();
     let mut refs: Vec<(&'static AssetKind, String)> = Vec::new();
-    let mut id_refs: Vec<IdRef> = Vec::new();
     for rsx in &rsx_files {
         let Ok(source) = std::fs::read_to_string(rsx) else {
             continue;
@@ -97,12 +106,10 @@ pub fn bake_package_with(
             continue;
         };
         collect_asset_refs(&doc, &mut refs);
-        collect_id_refs(&doc, rsx, &id_kind_list, &mut id_refs);
+        collect_id_refs(&doc, &source, rsx, &id_kind_list, &mut id_refs);
     }
 
     let assets_root = assets_root(package_dir);
-    let telar_dir = package_dir.join(".telar");
-    let previous_index = telar_project::read_index(&telar_dir).ok().flatten();
     let previous = Previous {
         // An entry baked in another format is not an expression this one can reuse, however unchanged its file.
         index: previous_index
@@ -240,7 +247,7 @@ fn bake_one(
                 .entries
                 .iter()
                 .find(|e| e.path == path && e.kind == kind.id && e.hash == hash)?;
-            init_expr_for_static(source, &entry.static_name)
+            telar_project::baked_init_expr(source, &entry.static_name)
         });
 
     let init_expr = match cached_expr {
@@ -271,15 +278,6 @@ fn bake_one(
         init_expr,
         monochrome,
     })
-}
-
-/// The Rust expression a previous bake already wrote for `static_name`, reused so an asset whose content hash is unchanged is never re-decoded through `usvg`/`resvg`/`image` on every bake. Parses the exact single-line shape [`telar_project::generate_assets`] emits for one entry — brittle to that shape changing, which is exactly what bumping `ASSET_ARTIFACT_FORMAT` is for.
-fn init_expr_for_static(source: &str, static_name: &str) -> Option<String> {
-    let marker = format!("pub static {static_name}: ");
-    let line = source.lines().find(|line| line.starts_with(&marker))?;
-    let start = line.find("Arc::new(")? + "Arc::new(".len();
-    let end = line.rfind("));")?;
-    (start <= end).then(|| line[start..end].to_string())
 }
 
 /// Every `kind.attr` reference an `.rsx` document's view (and its `[preview]` bodies) makes to a static, quoted asset path. Mirrors `telar-analyzer`'s `document_links` walk, minus the LSP-only concerns: a dynamic `src:$signal`/`src:expr` names no file to bake, so only `Value::Quoted` is collected.

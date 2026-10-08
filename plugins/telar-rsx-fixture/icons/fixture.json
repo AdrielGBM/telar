@@ -2,12 +2,23 @@
   "prefix": "fixture",
   "info": {
     "name": "Fixture Icons",
-    "author": { "name": "Telar" },
-    "license": { "title": "MIT", "spdx": "MIT", "url": "https://opensource.org/licenses/MIT" }
+    "author": {
+      "name": "Telar"
+    },
+    "license": {
+      "title": "MIT",
+      "spdx": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    }
   },
   "width": 16,
   "height": 16,
   "icons": {
-    "dot": { "body": "<circle cx=\"8\" cy=\"8\" r=\"4\" fill=\"currentColor\"/>" }
+    "dot": {
+      "body": "<circle cx=\"8\" cy=\"8\" r=\"4\" fill=\"currentColor\"/>"
+    },
+    "square": {
+      "body": "<rect x=\"3\" y=\"3\" width=\"10\" height=\"10\" fill=\"currentColor\"/>"
+    }
   }
 }

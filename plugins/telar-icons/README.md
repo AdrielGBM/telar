@@ -64,10 +64,11 @@ to `RuntimeIcons::with_default_set` (see below), since `telar.toml` is not there
 ## Baked by default
 
 Icons are a format here, not a service. `cargo telar bake`, which every `cargo telar` build command runs first,
-collects every literal `icon name:"…"` in the package's `.rsx`, resolves those ids and nothing else, and bakes
-them into the package's artifact as it bakes a `svg src:"…"`. The application carries only the icons it draws
-and needs no network or icon set to run. A `name:` given a signal or an expression cannot be baked, and is an
-error naming the two ways out: choose between literal ids with `if`/`match`, or use runtime mode.
+collects every literal `icon name:"…"` in the package's `.rsx` and every `icon!("…")` its Rust writes (see
+[From Rust](#from-rust)), resolves those ids and nothing else, and bakes them into the package's artifact as it
+bakes a `svg src:"…"`. The application carries only the icons it draws and needs no network or icon set to run.
+A `name:` given a signal or an expression cannot be baked, and is an error naming the two ways out: choose
+between literal ids with `if`/`match`, or use runtime mode.
 
 The sources, asked in this order so your own SVG can redraw a set's icon under its name:
 
@@ -76,6 +77,31 @@ The sources, asked in this order so your own SVG can redraw a set's icon under i
 | `svg = "icons"` | Your own SVGs, `icons/<set>/<name>.svg` |
 | `iconify = "node_modules"` | Iconify JSON sets: `@iconify/json`, `@iconify-json/<set>` packages, or `<set>.json` files |
 | `provider = "https://icons.example.com"` | An Iconify-compatible API the bake fetches from; nothing is fetched unless you name one |
+
+### From Rust
+
+Rust names a baked icon with `icon!`, which is the `IconName` the `icon` tag, or any widget taking one, draws:
+
+```rust
+use telar_icons::{IconProps, icon};
+
+let search = icon(IconProps::props().name(telar_icons::icon!("lucide:search")).build(), Children::default())?;
+```
+
+The bake finds every `icon!("…")` in the crate's `.rs` files, and in the Rust its `.rsx` writes (the logic zone, `[play]`, a `let` or an expression in `[view]`), and bakes those ids as it bakes an `icon name:"…"`, through the crate's own `[telar.icons]`. The call reads the baked artwork from the crate's artifact as it compiles, so an id the bake did not resolve is a compile error on the literal, naming the bake, rather than an empty box at run time. Call it as `icon!` or by its path, `telar_icons::icon!`: the bake looks for that name, and only a string literal names an id. A string given where an `IconName` is taken, `"lucide:search"`, is still an id for a runtime source to resolve.
+
+This works in a crate written wholly in Rust, such as a widget library. Make it a `[telar] library` with a source of its own, so its artifact and the record of its icons ship in its package (see [Icons from libraries](#icons-from-libraries)):
+
+```toml
+# telar.toml
+[telar]
+library = true
+
+[telar.icons]
+iconify = "icons"   # icons/lucide.json: the Iconify set, or only the icons the crate draws
+```
+
+`cargo telar package --check` then names the `include` its `Cargo.toml` needs. A test calling `icon!` is scanned too, so the icons only tests draw ship in the record as well.
 
 ## Licences
 

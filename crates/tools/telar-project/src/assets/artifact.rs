@@ -212,6 +212,15 @@ pub fn generate_assets(
     })
 }
 
+/// The initializer [`generate_assets`] wrote for `static_name` in `source`, the generated module: what a bake reuses for an asset whose content is unchanged, and what a macro naming one baked asset inlines. It parses the exact single-line shape written above, which is what bumping [`ASSET_ARTIFACT_FORMAT`] guards.
+pub fn baked_init_expr(source: &str, static_name: &str) -> Option<String> {
+    let marker = format!("pub static {static_name}: ");
+    let line = source.lines().find(|line| line.starts_with(&marker))?;
+    let start = line.find("Arc::new(")? + "Arc::new(".len();
+    let end = line.rfind("));")?;
+    (start <= end).then(|| line[start..end].to_string())
+}
+
 /// Reads `<telar_dir>/assets.json`. `Ok(None)` when the file doesn't exist — a project that bakes nothing,
 /// or one that hasn't run `cargo telar bake` yet. A malformed file is `Err`, not `Ok(None)`: a caller reacts
 /// to "never baked" and "baked something unreadable" differently, so the two must not look the same.

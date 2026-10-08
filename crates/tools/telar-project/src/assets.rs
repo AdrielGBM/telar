@@ -7,10 +7,11 @@ mod context;
 
 pub use artifact::{
     ASSET_ARTIFACT_FORMAT, ASSETS_INDEX_FILENAME, ASSETS_MODULE, ASSETS_SOURCE_FILENAME,
-    ArtifactHandshake, AssetEntry, AssetIndex, BakedAsset, GeneratedAssets, check_artifact,
-    content_hash, generate_assets, read_index, static_name_for_path, write_generated,
+    ArtifactHandshake, AssetEntry, AssetIndex, BakedAsset, GeneratedAssets, baked_init_expr,
+    check_artifact, content_hash, generate_assets, read_index, static_name_for_path,
+    write_generated,
 };
-pub use context::AssetContext;
+pub use context::{AssetContext, BakedId};
 
 /// One kind of external asset a widget's `src:` attribute can resolve to.
 pub struct AssetKind {

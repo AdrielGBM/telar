@@ -1,6 +1,6 @@
 //! The end-to-end proof that a `[telar] library` builds from the package it publishes: `plugins/telar-rsx-fixture` passes `cargo telar package --check`, is packaged by cargo, unpacked read-only, and compiled as a dependency of a generated application that the CLI transpiles while never running on the library.
 //!
-//! The application overrides one of the library's strings from a catalog it never installs by hand, names a theme of its own, ships the licence notice of the icon the library baked, and draws the library's component headlessly, once with the Plain flavour and once with the features `cargo telar dev` and `cargo telar preview` turn on. Afterwards the unpacked library has to be byte-for-byte what cargo packaged.
+//! The application overrides one of the library's strings from a catalog it never installs by hand, names a theme of its own, ships the licence notice of the icons the library baked, draws the library's `.rsx` component headlessly and the icon its Rust names with `telar_icons::icon!`, once with the Plain flavour and once with the features `cargo telar dev` and `cargo telar preview` turn on. Afterwards the unpacked library has to be byte-for-byte what cargo packaged.
 //!
 //! It compiles a few hundred crates into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p cargo-telar --test rsx_library -- --ignored`. Every cargo it starts runs offline, so the registry has to hold what `Cargo.lock` names first (`cargo fetch`).
 
@@ -59,7 +59,7 @@ fn assert_notice_credits_the_library(consumer: &Path) {
     );
     assert!(notice.contains("fixture — Fixture Icons\n"), "{notice}");
     assert!(notice.contains("  Licence: MIT"), "{notice}");
-    assert!(notice.contains("  Icons: dot\n"), "{notice}");
+    assert!(notice.contains("  Icons: dot, square\n"), "{notice}");
 }
 
 fn repo_root() -> PathBuf {
@@ -370,10 +370,19 @@ fn the_library_component_draws_with_the_application_catalog_and_theme() {
 }
 
 #[test]
-fn the_binary_carries_the_notice_of_the_icon_the_library_baked() {
+fn the_binary_carries_the_notice_of_the_icons_the_library_baked() {
     let notice = telar_icons::licenses().expect("the application compiled its notice in");
     assert!(notice.starts_with("Icons in telar-rsx-fixture\n"), "{notice}");
     assert!(notice.contains("fixture — Fixture Icons\n"), "{notice}");
-    assert!(notice.contains("  Icons: dot\n"), "{notice}");
+    assert!(notice.contains("  Icons: dot, square\n"), "{notice}");
+}
+
+#[test]
+fn the_icon_the_library_names_from_rust_draws_from_its_shipped_artifact() {
+    reset_layout_runtime();
+    let marker = telar_rsx_fixture::marker(Children::default()).expect("the marker lays out");
+    let tree = mount(WindowRoot::new(marker), 64, 64);
+    let commands = tree.commands();
+    assert!(commands.iter().any(|command| matches!(command, DrawCommand::Path { .. })), "{commands:?}");
 }
 "#;

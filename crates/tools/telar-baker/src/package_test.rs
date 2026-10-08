@@ -26,7 +26,7 @@ fn init_expr_round_trips_a_real_baked_entry() {
     let static_name = telar_project::static_name_for_path("badge.svg");
 
     assert_eq!(
-        init_expr_for_static(&generated.source, &static_name).as_deref(),
+        telar_project::baked_init_expr(&generated.source, &static_name).as_deref(),
         Some(expected.as_str())
     );
 }
@@ -34,7 +34,7 @@ fn init_expr_round_trips_a_real_baked_entry() {
 #[test]
 fn init_expr_is_none_for_a_static_the_source_never_declared() {
     assert!(
-        init_expr_for_static("", "ASSET_MISSING").is_none(),
+        telar_project::baked_init_expr("", "ASSET_MISSING").is_none(),
         "a static the source never declared has no initialiser"
     );
 }
