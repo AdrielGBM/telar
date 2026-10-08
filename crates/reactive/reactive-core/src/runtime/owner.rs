@@ -83,6 +83,20 @@ pub fn owner_scope() -> OwnerGuard {
     })
 }
 
+/// Opens a fresh owner with no parent, belonging to the active surface, and makes it current until the guard drops.
+///
+/// For what lives exactly as long as a surface, wherever the call happens: a surface nested in another tree is built from inside some component's scope, and as that scope's child its content would be freed with the component rather than with the surface, and would read the context the component's ancestors provide as though it were its own. [`dispose_surface`] frees it with the surface's other roots.
+pub fn root_scope() -> OwnerGuard {
+    let surface = current_surface();
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let id = rt.owners.insert(OwnerEntry::new(None, surface));
+        let depth = rt.owner_stack.len();
+        rt.owner_stack.push(id);
+        OwnerGuard { id, depth }
+    })
+}
+
 /// Restores the owner scope that was active before [`owner_scope`], truncating to the recorded depth so an unwind through open inner scopes still lands the stack where it started.
 #[must_use = "the owner scope is only active while this guard is alive"]
 pub struct OwnerGuard {

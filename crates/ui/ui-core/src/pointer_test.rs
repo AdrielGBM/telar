@@ -397,3 +397,18 @@ fn an_ungated_box_over_a_pressable_sibling_takes_the_press() {
     );
     assert_eq!(presses, 0);
 }
+
+/// Where a scroll gesture ended is a point like any other, so it lands in the space a subtree is mapped into; a scroll area that started its fling there would otherwise hear it at the window's coordinates.
+#[test]
+fn a_scroll_end_is_mapped_like_the_scroll_before_it() {
+    let at = |event: Option<Event>| match event {
+        Some(Event::ScrollEnded { x, y }) => Some((x, y)),
+        _ => None,
+    };
+    let ended = Event::ScrollEnded { x: 70.0, y: 90.0 };
+    assert_eq!(
+        at(transform_pointer(&ended, [2.0, 0.0, 0.0, 2.0, 30.0, 50.0])),
+        Some((20.0, 20.0))
+    );
+    assert_eq!(at(offset_pointer(&ended, 10.0, 40.0)), Some((60.0, 50.0)));
+}

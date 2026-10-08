@@ -25,7 +25,10 @@ pub use context::{
     ScopedTheme, Theme, ThemeExtensions, ThemeTokens, nearest_theme, set_theme, use_theme,
     use_theme_extension, use_theme_tokens,
 };
-pub use density::{ControlSize, control_scale, set_control_size, use_control_size};
+pub use density::{
+    ControlSize, ControlSizeContext, ControlSizeGuard, control_scale, current_control_size,
+    set_control_size, set_surface_control_size, use_control_size, use_surface_control_size,
+};
 pub use mode::{
     ResolvedScheme, SchemePreference, active_mode, follow_system, is_dark, register_mode,
     scheme_preference, set_mode, set_scheme_preference, use_mode, use_resolved_scheme,

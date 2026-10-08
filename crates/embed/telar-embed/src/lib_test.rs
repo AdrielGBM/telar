@@ -76,13 +76,13 @@ fn the_export_macro_builds_a_vtable_at_the_current_abi() {
 #[test]
 fn a_guest_records_the_modifiers_it_is_handed() {
     let mut inst = EmbedInstance::new(Box::new(Stub::new()));
-    let _g = inst.surface.enter();
+    let _g = inst.canvas.enter();
     assert_eq!(ui_core::modifiers(), ModifiersState::default());
     drop(_g);
 
     inst.on_event(&Event::ModifiersChanged { modifiers: shift() });
 
-    let _g = inst.surface.enter();
+    let _g = inst.canvas.enter();
     assert!(
         ui_core::modifiers().is_shift,
         "a shift-drag inside a guest is indistinguishable from a plain one without this"
@@ -94,7 +94,7 @@ fn an_overlay_event_reaches_the_registry_too() {
     let inst = EmbedInstance::new(Box::new(Stub::new()));
     inst.dispatch_overlays(&Event::ModifiersChanged { modifiers: shift() });
 
-    let _g = inst.surface.enter();
+    let _g = inst.canvas.enter();
     assert!(
         ui_core::modifiers().is_shift,
         "an overlay event reaches the shared registry"
@@ -110,14 +110,14 @@ fn a_press_answers_for_one_frame_and_end_frame_closes_it() {
     });
 
     {
-        let _g = inst.surface.enter();
+        let _g = inst.canvas.enter();
         assert!(
             ui_core::key_pressed(&Key::Char('c')),
             "the press answers for the frame it arrived in"
         );
     }
     inst.end_frame();
-    let _g = inst.surface.enter();
+    let _g = inst.canvas.enter();
     assert!(
         !ui_core::key_pressed(&Key::Char('c')),
         "without end_frame the press answers forever, not for its frame"

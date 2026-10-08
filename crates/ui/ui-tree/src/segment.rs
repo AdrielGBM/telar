@@ -2,7 +2,7 @@
 //!
 //! Today the whole app is one effect that re-runs `app.root().view()` — recursing every component — on any tracked signal, so a single hover/animation costs O(tree). A `Segment` instead mounts a component with its OWN effect that flattens only that component's `view()` into its own command buffer. A parent references a child via `RenderNode::Boundary` (a cheap `Rc` clone) instead of calling `child.view()`, so the parent's effect never re-runs the child, and a child's signal change re-runs only the child. The flat command list is composed lazily at collect time.
 
-use std::cell::{Cell, Ref, RefCell};
+use std::cell::{Cell, OnceCell, Ref, RefCell};
 use std::rc::Rc;
 
 use geometry_core::Rect;
@@ -52,6 +52,18 @@ pub struct Segment {
     child_slots: Rc<RefCell<ChildSlots>>,
     // Set by the effect when this segment's output changes; cleared when composed.
     is_dirty: Rc<Cell<bool>>,
+    /// Set once a [`SegmentRoot`] composes this segment. Wherever such a segment is spliced it goes in as its root's whole frame, so what it hoists stays inside the box it is drawn in: a nested surface's dialog covers that surface, not the window around it.
+    composition: OnceCell<Composition>,
+}
+
+/// A composition root's frame, kept on the segment so every reader shares one copy: its own [`SegmentRoot`] and any parent that splices it.
+#[derive(Default)]
+struct Composition {
+    commands: RefCell<Vec<DrawCommand>>,
+    valid: Cell<bool>,
+    generation: Cell<u64>,
+    /// Set when `commands` is rebuilt and cleared when a parent splices it. Whichever reader composes first clears the dirty flags, so a parent that did not still has to learn that its copy is stale.
+    unspliced: Cell<bool>,
 }
 
 /// A node emitted by [`Segment::walk`]: one mounted component, with its pre-order id, widget name, nesting depth, and the bounding rect of its own draw commands unioned with all descendants'.
@@ -131,6 +143,7 @@ impl Segment {
             own_commands,
             child_slots,
             is_dirty,
+            composition: OnceCell::new(),
         })
     }
 
@@ -326,14 +339,53 @@ pub(crate) fn compose_into(
     let mut si = 0;
     for (i, (cmd, own)) in own_commands.iter().enumerate() {
         while si < slots.len() && slots[si].0 == i {
-            compose_into(&slots[si].1, strata, enclosing.max(slots[si].2));
+            splice(&slots[si].1, strata, enclosing.max(slots[si].2));
             si += 1;
         }
         strata[enclosing.max(*own).index()].push(cmd.clone());
     }
     while si < slots.len() {
-        compose_into(&slots[si].1, strata, enclosing.max(slots[si].2));
+        splice(&slots[si].1, strata, enclosing.max(slots[si].2));
         si += 1;
+    }
+}
+
+fn splice(child: &Segment, strata: &mut [Vec<DrawCommand>; Stratum::COUNT], at: Stratum) {
+    match child.composition.get() {
+        Some(composition) => {
+            strata[at.index()].extend(child.composed().iter().cloned());
+            composition.unspliced.set(false);
+        }
+        None => compose_into(child, strata, at),
+    }
+}
+
+impl Segment {
+    /// This composition root's frame: its page, then its fixed layers, then its overlays. Recomposed only when something under it changed since the last read, whoever read it.
+    fn composed(&self) -> Ref<'_, Vec<DrawCommand>> {
+        let composition = self
+            .composition
+            .get()
+            .expect("only a composition root has a frame of its own");
+        if !composition.valid.get() || any_dirty(self) {
+            let mut cached = composition.commands.borrow_mut();
+            cached.clear();
+            // Hoisted content is routed aside during compose, then appended so it draws on top of, and outside any clip of, the main tree: the fixed layers, then the overlays over them.
+            let mut strata: [Vec<DrawCommand>; Stratum::COUNT] = Default::default();
+            strata[Stratum::Page.index()] = std::mem::take(&mut *cached);
+            compose_into(self, &mut strata, Stratum::Page);
+            let [page, fixed, overlay] = strata;
+            *cached = page;
+            cached.extend(fixed);
+            cached.extend(overlay);
+            drop(cached);
+            composition
+                .generation
+                .set(composition.generation.get().wrapping_add(1));
+            composition.valid.set(true);
+            composition.unspliced.set(true);
+        }
+        composition.commands.borrow()
     }
 }
 
@@ -345,16 +397,23 @@ fn any_dirty(seg: &Segment) -> bool {
     seg.child_slots
         .borrow()
         .iter()
-        .any(|(_, child, _)| any_dirty(child))
+        .any(|(_, child, _)| stale_for_parent(child))
+}
+
+fn stale_for_parent(child: &Segment) -> bool {
+    match child.composition.get() {
+        Some(composition) => {
+            composition.unspliced.get() || !composition.valid.get() || any_dirty(child)
+        }
+        None => any_dirty(child),
+    }
 }
 
 /// Top-level holder for a segment tree (analog of `ComponentList`): exposes the composed commands. Change detection uses per-segment dirty flags (shared across the hot-reload boundary) rather than a thread-local generation, which would be duplicated per side.
+///
+/// Its root becomes a composition root: another tree can splice it through [`boundary`](Self::boundary), and draws it as this root's whole frame, sharing the one composed copy with [`commands`](Self::commands).
 pub struct SegmentRoot {
     root: Rc<Segment>,
-    cached: RefCell<Vec<DrawCommand>>,
-    // Consumers use it for an O(1) "did content change" test.
-    compose_generation: Cell<u64>,
-    cache_valid: Cell<bool>,
 }
 
 impl SegmentRoot {
@@ -363,16 +422,13 @@ impl SegmentRoot {
     }
 
     pub fn from_segment(root: Rc<Segment>) -> Self {
-        SegmentRoot {
-            root,
-            cached: RefCell::new(Vec::new()),
-            compose_generation: Cell::new(0),
-            cache_valid: Cell::new(false),
-        }
+        root.composition.get_or_init(Composition::default);
+        SegmentRoot { root }
     }
 
+    /// Increments whenever the composed commands are rebuilt, whoever asked for them; consumers use it for an O(1) "did content change" test.
     pub fn generation(&self) -> u64 {
-        self.compose_generation.get()
+        self.composition().generation.get()
     }
 
     /// Emits the whole segment tree in pre-order for the devtools inspector. See [`Segment::walk`].
@@ -382,27 +438,23 @@ impl SegmentRoot {
 
     /// Whether any segment changed since the last `commands()` (which clears the dirty flags).
     pub fn is_dirty(&self) -> bool {
-        !self.cache_valid.get() || any_dirty(&self.root)
+        !self.composition().valid.get() || any_dirty(&self.root)
     }
 
     pub fn commands(&self) -> Ref<'_, Vec<DrawCommand>> {
-        if !self.cache_valid.get() || any_dirty(&self.root) {
-            let mut cached = self.cached.borrow_mut();
-            cached.clear();
-            // Hoisted content is routed aside during compose, then appended so it draws on top of, and outside any clip of, the main tree: the fixed layers, then the overlays over them.
-            let mut strata: [Vec<DrawCommand>; Stratum::COUNT] = Default::default();
-            strata[Stratum::Page.index()] = std::mem::take(&mut *cached);
-            compose_into(&self.root, &mut strata, Stratum::Page); // clears dirty flags as it walks
-            let [page, fixed, overlay] = strata;
-            *cached = page;
-            cached.extend(fixed);
-            cached.extend(overlay);
-            drop(cached);
-            self.compose_generation
-                .set(self.compose_generation.get().wrapping_add(1));
-            self.cache_valid.set(true);
-        }
-        self.cached.borrow()
+        self.root.composed()
+    }
+
+    /// This tree as a child of another tree's `view()`. The parent draws it as one block in the stratum it sits in — this tree's overlays on top of its own page and under whatever clip the parent put around it — and recomposes when this tree changes.
+    pub fn boundary(&self) -> RenderNode {
+        self.root.boundary()
+    }
+
+    fn composition(&self) -> &Composition {
+        self.root
+            .composition
+            .get()
+            .expect("a segment root is a composition root from construction")
     }
 }
 

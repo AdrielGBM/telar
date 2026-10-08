@@ -11,7 +11,7 @@ use std::rc::Rc;
 use telar::gpu::wgpu;
 use telar::{
     Color, Component, Event, EventResult, LayoutItem, LayoutStyle, NodeId, PointerButton,
-    PointerSource, Rect, RectStyle, RenderNode, ShapeStyle, TextureUi,
+    PointerSource, Rect, RectStyle, RenderNode, ShapeStyle, Size, TextureUi,
 };
 
 const APP: [u8; 4] = [40, 90, 200, 255];
@@ -184,7 +184,7 @@ fn telar_draws_into_the_application_picture_and_takes_the_pointer_with_it() {
 
     let bigger = app_texture(&gpu, 640, 360);
     ui.resize(bigger.clone(), 1.0);
-    assert_eq!(ui.logical_size(), (640.0, 360.0));
+    assert_eq!(ui.logical_size(), Size::new(640.0, 360.0));
     ui.render().expect("render after resize");
     let pixels = read_back(&gpu, &bigger);
     let corner = ((10 * 640 + 10) * 4) as usize;

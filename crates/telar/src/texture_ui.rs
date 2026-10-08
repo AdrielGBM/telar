@@ -12,18 +12,13 @@
 //!
 //! The application drives it. There is no event loop and no window: [`render`](TextureUi::render) composes one frame when asked, and [`on_event`](TextureUi::on_event) takes events the application forwards, mapped back through [`place_in`](TextureUi::place_in) into the texture's own coordinates.
 
-use std::rc::Rc;
-
-use geometry_core::{Rect, Transform};
-use layout_core::{AvailableSpace, LayoutError, LayoutStyle, SizeDimension};
+use geometry_core::{Rect, Size, Transform};
+use layout_core::LayoutError;
 use platform_core::Event;
 use renderer_core::{Color, FontFamily, RenderBackend, RendererError};
 use renderer_hardware::HardwareRenderer;
 use renderer_hardware::gpu::wgpu;
-use ui_core::{
-    Component, ComponentList, EventResult, LayoutItem, NodeId, RenderNode, Surface, compute_layout,
-    mark_dirty, new_container,
-};
+use ui_core::{EventResult, LayoutItem, SurfaceCanvas};
 
 /// Why a [`TextureUi`] could not be built.
 #[derive(Debug)]
@@ -57,56 +52,32 @@ impl From<RendererError> for TextureUiError {
     }
 }
 
-/// The content plus the box it fills. The box exists because "this UI is 320×180" has to be true whatever the content's own style says: a percent-sized parent turns the target's pixel size into a definite box the content stretches into, exactly as a window root does for a windowed tree.
-struct Root {
-    content: Box<dyn LayoutItem>,
-}
-
-impl Component for Root {
-    fn view(&self) -> RenderNode {
-        self.content.view()
-    }
-
-    fn on_event(&mut self, event: &Event) -> EventResult {
-        self.content.on_event(event)
-    }
-
-    fn debug_name(&self) -> &'static str {
-        "TextureUiRoot"
-    }
-}
-
 /// A Telar UI composed into an application-owned texture. See the module documentation.
 pub struct TextureUi {
     renderer: HardwareRenderer<platform_headless::HeadlessWindow>,
-    tree: ComponentList,
-    root: NodeId,
+    canvas: SurfaceCanvas,
     width: u32,
     height: u32,
-    scale: f32,
+    pixel_ratio: f32,
     clear_color: Color,
-    // Maps a point in the texture to a point in the window, so `on_event` can send the pointer the other way. Identity until the application says where it is showing the texture.
-    placement: Transform,
-    // Declared last so it drops last: the tree and its content release their state while this surface's layout, overlay and focus worlds still exist.
-    surface: Rc<Surface>,
 }
 
 impl TextureUi {
     /// Builds a UI that composes into `target`.
     ///
-    /// `build` runs with this UI's surface active, so the content's layout nodes, overlays and effects are allocated in *its* world rather than in whatever surface happened to be active.
+    /// `build` runs with this UI's surface active, so the content's layout nodes, overlays and effects are allocated in *its* world rather than in whatever surface happened to be active. What it creates lives as long as this UI, not as long as the scope `new` was called in.
     ///
-    /// `scale` is the target's device-pixel ratio: the tree is laid out at `target size / scale` logical pixels and drawn at the target's pixel size. Pass `1.0` for a target whose pixels *are* its layout units — a 320×180 sprite, say.
+    /// `pixel_ratio` is the target's device-pixel ratio: the tree is laid out at `target size / pixel_ratio` logical pixels and drawn at the target's pixel size. Pass `1.0` for a target whose pixels *are* its layout units — a 320×180 sprite, say.
     ///
     /// Requirements on `target`: it must come from the device Telar lends ([`gpu::shared`](crate::gpu::shared)) and carry `RENDER_ATTACHMENT` usage; its format decides the format this renderer's pipelines are built against, so it must be renderable and blendable. The application keeps ownership in every sense that matters — it decides the size, the format and when the contents change; Telar only draws into it when asked.
     pub fn new(
         target: wgpu::Texture,
-        scale: f32,
+        pixel_ratio: f32,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, TextureUiError> {
         Self::with_fonts(
             target,
-            scale,
+            pixel_ratio,
             crate::runner::font_config::FontSetup::default(),
             build,
         )
@@ -119,7 +90,7 @@ impl TextureUi {
     /// The faces join the one font database every shaper is built from, so they stay loaded for the rest of the process and a window already drawing takes them too. The *family*, though, is this surface's own — the root of its text cascade, changed later with [`set_font_family`](crate::set_font_family) inside it — so a pixel face here and a different one in the window around it are two configurations rather than one process-wide setting they would have to share.
     pub fn with_fonts(
         target: wgpu::Texture,
-        scale: f32,
+        pixel_ratio: f32,
         fonts: crate::runner::font_config::FontSetup,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, TextureUiError> {
@@ -134,36 +105,20 @@ impl TextureUi {
             crate::runner::offscreen_hardware_font_config(fonts),
         )?;
 
-        let surface = Surface::new();
-        let (tree, root) = {
-            let _g = surface.enter();
+        let pixel_ratio = pixel_ratio.max(f32::MIN_POSITIVE);
+        let canvas = SurfaceCanvas::new(logical_size(width, height, pixel_ratio), || {
             ui_core::open_surface_font_family(family.map(FontFamily::from));
-            let logical = scale.max(f32::MIN_POSITIVE);
-            ui_core::set_surface_size(geometry_core::Size::new(
-                width as f32 / logical,
-                height as f32 / logical,
-            ));
-            let content = build()?;
-            let root = new_container(
-                LayoutStyle::new()
-                    .width(SizeDimension::Percent(1.0))
-                    .height(SizeDimension::Percent(1.0)),
-                &[content.layout_node()],
-            )?;
-            (ComponentList::new(Root { content }), root)
-        };
+            build()
+        })?;
 
-        let mut ui = Self {
+        let ui = Self {
             renderer,
-            tree,
-            root,
+            canvas,
             width,
             height,
-            scale: scale.max(f32::MIN_POSITIVE),
+            pixel_ratio,
             // Telar's own target is cleared to transparency so the composed frame carries only what the tree drew; the application's texture then keeps everything the frame left uncovered. A `LoadOp::Load` here instead would read a multisample target the resolve already discarded.
             clear_color: Color::TRANSPARENT,
-            placement: Transform::IDENTITY,
-            surface,
         };
         ui.lay_out();
         Ok(ui)
@@ -179,10 +134,10 @@ impl TextureUi {
     /// Points the UI at a new texture and re-lays the tree out — how an application resizes it.
     ///
     /// The new texture must match the format of the one this UI was built with; a different format needs a new [`TextureUi`], because the render pipelines bake it in.
-    pub fn resize(&mut self, target: wgpu::Texture, scale: f32) {
+    pub fn resize(&mut self, target: wgpu::Texture, pixel_ratio: f32) {
         self.width = target.width();
         self.height = target.height();
-        self.scale = scale.max(f32::MIN_POSITIVE);
+        self.pixel_ratio = pixel_ratio.max(f32::MIN_POSITIVE);
         self.renderer.compose_into(target);
         self.lay_out();
     }
@@ -191,20 +146,20 @@ impl TextureUi {
     ///
     /// Only the application knows this: it is the one that decided where to draw the texture and how to fit it. Without it the pointer arrives in window coordinates and hit-testing drifts from the picture by exactly the offset and zoom of the placement.
     pub fn place_in(&mut self, dest: Rect) {
-        let (w, h) = self.logical_size();
-        self.placement = Transform {
-            a: dest.width / w.max(f32::MIN_POSITIVE),
-            b: 0.0,
-            c: 0.0,
-            d: dest.height / h.max(f32::MIN_POSITIVE),
-            e: dest.x,
-            f: dest.y,
-        };
+        let size = self.logical_size();
+        let fit = Transform::scale_around(
+            dest.width / size.width.max(f32::MIN_POSITIVE),
+            dest.height / size.height.max(f32::MIN_POSITIVE),
+            0.0,
+            0.0,
+        );
+        self.canvas
+            .set_placement(fit.then(Transform::translate(dest.x, dest.y)));
     }
 
     /// [`place_in`](Self::place_in) for a placement the application composed itself — a rotation, a flip, a transform it already holds. Maps a point in the UI's logical space to a point in the window.
     pub fn set_placement(&mut self, placement: Transform) {
-        self.placement = placement;
+        self.canvas.set_placement(placement);
     }
 
     /// Activates this UI's world — its layout tree, overlay registry, focus and services — for as long as the guard lives.
@@ -212,33 +167,24 @@ impl TextureUi {
     /// Anything that touches those has to happen inside it: they are this UI's, and outside it the ambient ones a window tree uses are what answer. Building a widget to hand to this tree, reading a node's rect, opening one of its overlays.
     #[must_use = "the UI's world is only active while this guard is alive"]
     pub fn enter(&self) -> ui_core::SurfaceGuard {
-        self.surface.enter()
+        self.canvas.enter()
     }
 
-    /// The UI's logical size: the target's pixels divided by its scale, which is the box the tree lays out against and the space [`on_event`](Self::on_event) delivers pointers in.
-    pub fn logical_size(&self) -> (f32, f32) {
-        (
-            self.width as f32 / self.scale,
-            self.height as f32 / self.scale,
-        )
+    /// The UI's logical size: the target's pixels divided by its pixel ratio, which is the box the tree lays out against and the space [`on_event`](Self::on_event) delivers pointers in. Reactive.
+    pub fn logical_size(&self) -> Size {
+        self.canvas.size()
     }
 
     /// Whether the composition changed since the last [`render`](Self::render) — the gate an application uses to skip re-composing a frame that would come out identical.
     pub fn is_dirty(&self) -> bool {
-        self.tree.is_dirty()
+        self.canvas.is_dirty()
     }
 
     /// Routes an event into the UI, mapping pointer coordinates back through the placement.
     ///
     /// `true` means the UI consumed it and the application should not act on it as well. Non-pointer events (keys, focus) pass through untransformed; the application decides which of them this UI should see at all, which is the only honest answer when several trees share one window's keyboard.
     pub fn on_event(&mut self, event: &Event) -> bool {
-        let _g = self.surface.enter();
-        let mapped = ui_core::transform_pointer(event, self.placement.to_array());
-        let event = mapped.as_ref().unwrap_or(event);
-        // Overlays first and in their own batch, exactly as the runner does: a modal has to refuse the event to the content behind it, and its handlers' signal writes must flush after the walk.
-        let consumed =
-            reactive_core::batch(|| ui_core::dispatch_overlays(event) == EventResult::Handled);
-        consumed || self.tree.on_event(event) == EventResult::Handled
+        self.canvas.dispatch(event) == EventResult::Handled
     }
 
     /// Composes one frame and blends it into the application's texture.
@@ -247,41 +193,23 @@ impl TextureUi {
     ///
     /// Animations and background work are not advanced here. The motion engine and the task registry are per-thread, and a windowed application's runner already drives them for every tree on that thread; a windowless one drives them itself, with [`motion::tick`](crate::motion) and [`drain_tasks`](crate::drain_tasks), exactly as it drives this.
     pub fn render(&mut self) -> Result<(), RendererError> {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         // A reactive change (a list gaining an item, a panel opening) mutates the layout tree without recomputing it; the runner does the same before composing a window frame.
-        ui_core::relayout_if_dirty();
-        let generation = self.tree.generation();
+        self.canvas.relayout_if_dirty();
+        let generation = self.canvas.generation();
         self.renderer
-            .begin_frame(self.width, self.height, self.scale, generation)?;
-        let commands = self.tree.commands();
+            .begin_frame(self.width, self.height, self.pixel_ratio, generation)?;
+        let commands = self.canvas.frame_commands();
         self.renderer
             .render_frame(&commands, Some(self.clear_color))
     }
 
-    fn lay_out(&mut self) {
-        let _g = self.surface.enter();
-        let (w, h) = (
-            self.width as f32 / self.scale,
-            self.height as f32 / self.scale,
-        );
-        ui_core::set_surface_size(geometry_core::Size::new(w, h));
-        let _ = mark_dirty(self.root);
-        let _ = compute_layout(
-            self.root,
-            AvailableSpace::Definite(w),
-            AvailableSpace::Definite(h),
-        );
-        // Content that lays itself out on resize — a scroll viewport, a shell that repositions its panels — learns its new box the same way a windowed tree does, because that is the idiom it was written to.
-        self.tree.on_event(&Event::WindowResized {
-            width: w.round().max(0.0) as u32,
-            height: h.round().max(0.0) as u32,
-        });
+    fn lay_out(&self) {
+        self.canvas
+            .resize(logical_size(self.width, self.height, self.pixel_ratio));
     }
 }
 
-impl Drop for TextureUi {
-    fn drop(&mut self) {
-        // Background work this UI started must not outlive it: its completion callbacks close over this surface's state. Scoped to this surface so a sibling tree's tasks are left running.
-        reactive_core::cancel_tasks_for(self.surface.handle());
-    }
+fn logical_size(width: u32, height: u32, pixel_ratio: f32) -> Size {
+    Size::new(width as f32 / pixel_ratio, height as f32 / pixel_ratio)
 }

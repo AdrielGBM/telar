@@ -25,7 +25,7 @@ pub use owner::{
     OwnerGuard, OwnerId, PanicCatch, PanicPayload, context_provided_here, current_owner,
     dispose_owner, dispose_surface, dispose_surface_owners, find_context, in_surface_world,
     live_effect_count, live_owner_count, live_signal_count, on_cleanup, owner_scope, owner_within,
-    provide_context, set_panic_catch, with_context, with_owner,
+    provide_context, root_scope, set_panic_catch, with_context, with_owner,
 };
 pub(crate) use signals::{
     claim_transaction, create_signal_storage, notify_signal, release_transaction, set_signal_value,

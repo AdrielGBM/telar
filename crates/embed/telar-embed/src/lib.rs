@@ -20,11 +20,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use web_time::Instant;
 
-use geometry_core::Rect;
-use layout_core::AvailableSpace;
+use geometry_core::{Rect, Size, Transform};
 use platform_core::{Event, SystemPreferences, WindowCommand};
-use renderer_core::{BorderRadius, Color, DrawCommand};
-use ui_core::{ComponentList, EventResult, NodeId, Surface, compute_layout, mark_dirty};
+use renderer_core::{Color, DrawCommand};
+use ui_core::{EventResult, NodeId, SurfaceCanvas, composite_surface};
 use ui_tree::{Component, RenderNode};
 
 use platform_core::AppCtx;
@@ -52,20 +51,16 @@ pub fn composite(rect: Rect, image_salt: u64, mut commands: DrawList) -> RenderN
             }
         }
     }
-    RenderNode::clip(
-        rect,
-        BorderRadius::zero(),
-        [RenderNode::translate(
-            rect.x,
-            rect.y,
-            commands.into_iter().map(RenderNode::Primitive),
-        )],
+    composite_surface(
+        Transform::translate(rect.x, rect.y),
+        Size::new(rect.width, rect.height),
+        commands.into_iter().map(RenderNode::Primitive),
     )
 }
 
 /// An embeddable rsx UI a host can drive as a guest. The generic union of "build a view tree, render it, handle events, run per-frame background work, and present a title/icon" — no app-specific semantics. A concrete app (or an adapter over one) implements this; the [`embed!`](crate::embed) macro exports it.
 ///
-/// Lifecycle the driver enforces: [`build`](Self::build) runs once, inside the guest's freshly-entered [`Surface`], so the content's layout nodes land in *this* surface's world; afterwards [`layout_root`](Self::layout_root) is the node the driver sizes to the host's sub-rect.
+/// Lifecycle the driver enforces: [`build`](Self::build) runs once, inside the guest's freshly-entered [`Surface`](ui_core::Surface), so the content's layout nodes land in *this* surface's world; afterwards [`layout_root`](Self::layout_root) is the node the driver sizes to the host's sub-rect.
 pub trait EmbeddedApp: 'static {
     /// Build the content's layout tree. Called once by the driver with the guest's surface active, so nodes are allocated in this surface's layout world. [`layout_root`](Self::layout_root) must be valid after it.
     ///
@@ -122,52 +117,36 @@ impl Component for EmbeddedComponent {
     }
 }
 
-/// The dylib-side guest driver: a headless single-surface runtime (no window, no renderer) that the host drives across the FFI boundary. Owns the guest's [`Surface`] and its [`ComponentList`]; every method enters the surface first, so all work touches this guest's thread-local worlds, not the host's.
+/// The dylib-side guest driver: a headless single-surface runtime (no window, no renderer) that the host drives across the FFI boundary. A [`SurfaceCanvas`] over the guest's content, so every method works in this guest's thread-local worlds, not the host's.
 ///
 /// The host holds this only as an opaque `*mut EmbedInstance` (it never dereferences it — every call goes through an exported shim so the code runs in the dylib). Constructed by [`__embed_create`].
 pub struct EmbedInstance {
     embedded: Rc<RefCell<Box<dyn EmbeddedApp>>>,
-    tree: ComponentList,
-    root: NodeId,
-    size: (f32, f32),
+    canvas: SurfaceCanvas,
     task_waker_installed: bool,
-    // Declared last so it drops last: the content and segment tree free their state while this surface's worlds still exist.
-    surface: Rc<Surface>,
 }
 
 impl EmbedInstance {
     /// Build the guest: allocate its surface, build the content tree inside it, and mount the segment tree.
     pub fn new(embedded: Box<dyn EmbeddedApp>) -> Self {
-        let surface = Surface::new();
         let embedded = Rc::new(RefCell::new(embedded));
-        let (root, tree) = {
-            let _g = surface.enter();
+        let canvas = SurfaceCanvas::with_root(Size::new(0.0, 0.0), || {
             embedded.borrow_mut().build();
             let root = embedded.borrow().layout_root();
-            let tree = ComponentList::new(EmbeddedComponent(Rc::clone(&embedded)));
-            (root, tree)
-        };
+            Ok((EmbeddedComponent(Rc::clone(&embedded)), root))
+        })
+        .expect("an embedded app's build reports no layout error");
         Self {
-            surface,
             embedded,
-            tree,
-            root,
-            size: (0.0, 0.0),
+            canvas,
             task_waker_installed: false,
         }
     }
 
     /// Lay the content out to the host-assigned sub-rect size, which is this guest's surface size, then let it re-lay-out its own scroll viewports.
     pub fn relayout(&mut self, width: f32, height: f32) {
-        let _g = self.surface.enter();
-        self.size = (width, height);
-        ui_core::set_surface_size(geometry_core::Size::new(width, height));
-        let _ = mark_dirty(self.root);
-        let _ = compute_layout(
-            self.root,
-            AvailableSpace::Definite(width),
-            AvailableSpace::Definite(height),
-        );
+        self.canvas.lay_out(Size::new(width, height));
+        let _g = self.canvas.enter();
         // So a signal the content writes flushes after the `borrow_mut` is released; a synchronous flush would re-run the segment's `view()`, which borrows the same `RefCell`.
         let embedded = &self.embedded;
         reactive_core::batch(|| embedded.borrow_mut().relayout_viewports());
@@ -175,57 +154,53 @@ impl EmbedInstance {
 
     /// Re-lay-out only what the guest's own reactive changes dirtied (a list grew, a panel toggled), at the last size given to [`relayout`](Self::relayout). Driven every frame by the host — the analog of the runner calling `App::relayout` (`ui_core::relayout_if_dirty`) on an in-process app.
     pub fn relayout_dirty(&self) {
-        let _g = self.surface.enter();
-        ui_core::relayout_if_dirty();
+        self.canvas.relayout_if_dirty();
     }
 
     /// The guest's current frame as a flat, self-contained command list. The host translates it into the guest's sub-rect and splices it into its own frame.
     pub fn paint(&self) -> DrawList {
-        let _g = self.surface.enter();
-        self.tree.commands().clone()
+        self.canvas.frame_commands().clone()
     }
 
     /// The content generation; unchanged between two reads means [`paint`](Self::paint) would return the same commands, so the host can skip re-fetching (mirrors the host renderer's idle-blit gate).
     pub fn generation(&self) -> u64 {
-        let _g = self.surface.enter();
-        self.tree.generation()
+        self.canvas.generation()
     }
 
     /// Whether an animation is still in flight in this guest's motion engine.
     pub fn motion_active(&self) -> bool {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         motion_core::has_active()
     }
 
     /// Dispatch an event to the content (already in local coordinates). Self-batches in the guest's runtime.
     pub fn on_event(&mut self, event: &Event) -> bool {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         // A cdylib carries its own copy of every `thread_local` in ui-core, so observing on the host's side left the guest's widgets reading a permanently empty registry. `HotTree::on_event` carries these for the same reason.
         ui_core::observe_keyboard(event);
         ui_core::observe_pointer(event);
-        self.tree.on_event(event) == EventResult::Handled
+        self.canvas.dispatch_tree(event) == EventResult::Handled
     }
 
     /// Route a positioned event to the guest's overlay layer (modals/dropdowns) with priority; `true` means an overlay consumed it and the host should not fall through to the content.
     ///
     /// The host calls this before [`on_event`](Self::on_event) and stops when it returns `true`, so the registries are fed here too — otherwise an event an overlay consumes never reaches them at all.
     pub fn dispatch_overlays(&self, event: &Event) -> bool {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         ui_core::observe_keyboard(event);
         ui_core::observe_pointer(event);
-        // So an overlay handler's signal writes flush after dispatch rather than mid-walk.
-        reactive_core::batch(|| ui_core::dispatch_overlays(event) == EventResult::Handled)
+        self.canvas.dispatch_overlays(event) == EventResult::Handled
     }
 
     /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event) observes on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose widgets asked.
     pub fn end_frame(&self) {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         ui_core::end_keyboard_frame();
     }
 
     /// Advance the guest's motion engine and flush its runtime so animations progress and re-render.
     pub fn motion_tick(&self, now: Instant) {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         reactive_core::begin_batch();
         motion_core::tick(now);
         reactive_core::end_batch();
@@ -233,19 +208,18 @@ impl EmbedInstance {
 
     /// Drain window-management commands the guest's UI enqueued (its title bar drag/minimize/close).
     pub fn drain_window_commands(&self) -> WindowCommands {
-        let _g = self.surface.enter();
-        platform_core::take_window_commands()
+        self.canvas.take_window_commands()
     }
 
     /// Write the user's system preferences into the guest's own copy of the store, which its views, its theme's `follow_system` and its motion engine read.
     pub fn set_system_preferences(&self, preferences: &SystemPreferences) {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         preferences_core::set_system_preferences(preferences.clone());
     }
 
     /// Run the guest's per-frame background-work hook, forwarding the host's `ctx` (so a guest worker thread can wake the host loop via `ctx.redraw_waker()`, just as an in-process app does).
     pub fn on_frame(&mut self, ctx: &mut AppCtx) {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         // The guest links its own reactive-core copy, so `spawn_task` inside it registers in a runtime the host cannot reach. Both halves of the bridge are wired here rather than through new FFI symbols.
         if !self.task_waker_installed
             && let Some(waker) = ctx.redraw_waker()
@@ -261,40 +235,33 @@ impl EmbedInstance {
 
     /// Autofocus/announce the content becoming visible; re-render so a focus change shows this frame.
     pub fn activate(&mut self) {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         let embedded = &self.embedded;
         reactive_core::batch(|| embedded.borrow_mut().activate());
     }
 
     pub fn clear_color(&self) -> Option<Color> {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         self.embedded.borrow().clear_color()
     }
 
     pub fn title(&self) -> String {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         self.embedded.borrow().title()
     }
 
     pub fn icon(&self) -> Option<Vec<u8>> {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         self.embedded.borrow().icon()
     }
 
     pub fn id(&self) -> String {
-        let _g = self.surface.enter();
+        let _g = self.canvas.enter();
         self.embedded.borrow().id()
     }
 }
 
 // The `embed!` macro exports one thin `#[no_mangle]` wrapper per method, each forwarding to one of these. `#[doc(hidden)]`: public only because the expansion lands in the guest crate.
-
-impl Drop for EmbedInstance {
-    fn drop(&mut self) {
-        // Callbacks close over this surface's state, so its work must not outlive it. Scoped to this instance, because two instances of one guest dylib share a task registry and a blanket reset would cancel both.
-        reactive_core::cancel_tasks_for(self.surface.handle());
-    }
-}
 
 /// Build a guest instance and leak it to a raw pointer the host owns (freed via [`__embed_destroy`]).
 #[doc(hidden)]

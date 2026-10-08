@@ -9,6 +9,8 @@ pub use reactive_local::reentry;
 mod runtime;
 mod signal;
 mod source;
+#[macro_use]
+mod surface_scoped;
 mod transaction;
 #[macro_use]
 mod task;
@@ -22,11 +24,13 @@ pub use runtime::{
     SurfaceHandle, after_settle, batch, begin_batch, context_provided_here, current_owner,
     current_surface, dispose_owner, dispose_surface, dispose_surface_owners, end_batch,
     find_context, in_surface_world, live_effect_count, live_owner_count, live_signal_count,
-    on_cleanup, owner_scope, owner_within, provide_context, reset_runtime, set_current_surface,
-    set_flush_notify, set_panic_catch, set_surface_enter_hook, with_context, with_owner,
+    on_cleanup, owner_scope, owner_within, provide_context, reset_runtime, root_scope,
+    set_current_surface, set_flush_notify, set_panic_catch, set_surface_enter_hook, with_context,
+    with_owner,
 };
 pub use signal::{ReadSignal, RwSignal, signal};
 pub use source::{Source, derive, derive_pair};
+pub use surface_scoped::SurfaceScoped;
 pub use task::{
     Emitter, Task, cancel_tasks_for, drain_tasks, reset_tasks, set_task_waker, spawn_stream,
     spawn_task,

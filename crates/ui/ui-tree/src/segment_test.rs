@@ -370,3 +370,68 @@ fn a_fixed_layer_hoists_its_child_segments() {
     let xs: Vec<f32> = root.commands().iter().map(cmd_x).collect();
     assert_eq!(xs, vec![1.0, 9.0, 14.0]);
 }
+
+struct Framed {
+    inner: Rc<SegmentRoot>,
+}
+impl Component for Framed {
+    fn view(&self) -> RenderNode {
+        RenderNode::group([
+            rect(1.0),
+            RenderNode::clip(
+                Rect::new(0.0, 0.0, 50.0, 50.0),
+                renderer_core::BorderRadius::zero(),
+                [self.inner.boundary()],
+            ),
+            RenderNode::overlay([rect(8.0)]),
+            rect(2.0),
+        ])
+    }
+}
+
+/// A tree spliced into another is drawn as its own whole frame where it sits: its overlay lands on top of its own page and inside the clip around it, rather than being hoisted to the top of the outer frame.
+#[test]
+fn a_spliced_root_keeps_its_overlays_inside_its_own_block() {
+    let inner = Rc::new(SegmentRoot::mount(WithOverlay));
+    let outer = SegmentRoot::mount(Framed {
+        inner: Rc::clone(&inner),
+    });
+    let commands = outer.commands();
+    let order: Vec<String> = commands
+        .iter()
+        .map(|command| match command {
+            DrawCommand::PushClip { .. } => "push".to_string(),
+            DrawCommand::PopClip => "pop".to_string(),
+            other => cmd_x(other).to_string(),
+        })
+        .collect();
+    assert_eq!(order, ["1", "push", "1", "3", "2", "pop", "2", "8"]);
+}
+
+/// Two readers share one composition root: the outer tree and the inner tree's own handle. Whichever composes a change first clears the dirty flags, and the other must still see that its copy is stale.
+#[test]
+fn a_spliced_root_composed_by_its_own_reader_first_still_dirties_the_outer_tree() {
+    let x = signal(0.0f32);
+    let inner = Rc::new(SegmentRoot::mount(Leaf { x }));
+    let outer = SegmentRoot::mount(Framed {
+        inner: Rc::clone(&inner),
+    });
+    let _ = outer.commands();
+    assert!(!outer.is_dirty());
+
+    x.set(20.0);
+    let inner_generation = inner.generation();
+    assert_eq!(cmd_x(&inner.commands()[0]), 20.0);
+    assert_ne!(inner.generation(), inner_generation);
+    assert!(
+        outer.is_dirty(),
+        "the inner tree recomposed under the outer one, which still draws the old frame"
+    );
+    let xs: Vec<f32> = outer.commands().iter().map(cmd_x).collect();
+    assert!(
+        xs.contains(&20.0),
+        "the outer frame picked up the change: {xs:?}"
+    );
+    assert!(!outer.is_dirty());
+    assert!(!inner.is_dirty());
+}

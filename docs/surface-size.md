@@ -188,7 +188,7 @@ crossed, and none for each pixel of the resize.
 | Android | the same winit path | logical pixels |
 | Terminal | the terminal's `Resize`, as columns × rows | whole cells × the cell size the layout uses (8 × 16 by default). `width / layout_grid().x` is the column count |
 | Headless | the size the window was created with, then each size from `HeadlessPlatform::with_resizes` | logical pixels |
-| `TextureUi` | the texture's size divided by its scale | logical pixels |
+| `TextureUi` | the texture's size divided by its pixel ratio | logical pixels |
 | Embedded app (`telar-embed`) | the area the host gives the guest | logical pixels |
 
 A breakpoint written once works on every target. On the default terminal grid, the width `640` is 80

@@ -203,23 +203,53 @@ pub fn set_theme<T: ThemeTokens + Clone + 'static>(theme: T) {
 }
 
 /// A theme for one subtree, switchable in place: once [provided](Self::provide) to an owner, every read under that owner — including in effects, measures and handlers that re-enter it later — resolves this theme instead of the global one, and [`set`](Self::set) re-runs only the readers that resolved it.
+///
+/// A scope may also hold no theme of its own and resolve the global one, shadowing any provider above it: see [`follow_global`](Self::follow_global).
 #[derive(Clone, Copy)]
-pub struct ScopedTheme(RwSignal<Installed>);
+pub struct ScopedTheme(RwSignal<Option<Installed>>);
 
 impl ScopedTheme {
     /// A scoped theme belonging to the current owner, which is what frees it.
     pub fn new<T: ThemeTokens + Clone + 'static>(theme: T) -> Self {
-        Self(signal(Installed::new(theme)))
+        Self(signal(Some(Installed::new(theme))))
+    }
+
+    /// A scope that resolves whatever [`set_theme`] installs, as if no provider stood above it, until [`set`](Self::set) gives it a theme of its own. For a subtree that has to stay switchable between the application's theme and another one without being rebuilt.
+    pub fn follow_global() -> Self {
+        Self(signal(None))
     }
 
     /// Swaps the theme, re-running whatever resolved this one.
     pub fn set<T: ThemeTokens + Clone + 'static>(&self, theme: T) {
-        self.0.set(Installed::new(theme));
+        self.0.set(Some(Installed::new(theme)));
+    }
+
+    /// Drops the scope's own theme, so it resolves the global one again, as [`follow_global`](Self::follow_global) made it.
+    pub fn clear(&self) {
+        if self.0.peek_with(Option::is_some) {
+            self.0.set(None);
+        }
+    }
+
+    /// Whether the scope resolves the global theme rather than one of its own. Reactive.
+    pub fn follows_global(&self) -> bool {
+        self.0.with(Option::is_none)
     }
 
     /// This theme's tokens, read reactively.
     pub fn tokens(&self) -> Rc<dyn ThemeTokens> {
-        self.0.with(|installed| Rc::clone(&installed.tokens))
+        match self.resolved() {
+            Some(installed) => installed.tokens,
+            None => DEFAULT_TOKENS.with(Rc::clone),
+        }
+    }
+
+    /// The theme this scope stands for, subscribing the caller to it and, while it follows the global theme, to that.
+    fn resolved(&self) -> Option<Installed> {
+        match self.0.get() {
+            Some(installed) => Some(installed),
+            None => THEME.with(|s| s.get()),
+        }
     }
 
     /// Makes this the theme of everything built under the current owner, shadowing any provided above it.
@@ -245,7 +275,7 @@ pub fn nearest_theme() -> Option<ScopedTheme> {
 /// The theme in force here, subscribing the caller to exactly that one.
 fn in_force() -> Option<Installed> {
     match nearest_theme() {
-        Some(scoped) => Some(scoped.0.get()),
+        Some(scoped) => scoped.resolved(),
         None => THEME.with(|s| s.get()),
     }
 }
@@ -277,13 +307,10 @@ impl<T: Clone + 'static> Theme<T> {
     }
 }
 
-/// The theme in force as the application's own type: the nearest [`ScopedTheme`] above the current owner that holds a `T`, else the global theme, walking past providers of other types. Reads reactively, so a switch re-runs the caller; panics if no provider or the global theme holds a `T`.
+/// The theme in force as the application's own type: the nearest [`ScopedTheme`] above the current owner that holds a `T`, else the global theme, walking past providers of other types. A provider that [follows the global theme](ScopedTheme::follow_global) holds whatever the global theme holds. Reads reactively, so a switch re-runs the caller; panics if no provider or the global theme holds a `T`.
 pub fn use_theme<T: Clone + 'static>() -> T {
     let scoped = reactive_core::find_context::<Provided, _>(|provided| {
-        provided
-            .0
-            .0
-            .with(|installed| installed.theme.downcast_ref::<T>().cloned())
+        provided.0.resolved()?.theme.downcast_ref::<T>().cloned()
     });
     if let Some(theme) = scoped {
         return theme;

@@ -102,6 +102,37 @@ fn a_surface_disposes_the_owner_roots_stamped_with_it() {
     assert!(alive(elsewhere), "another surface's owners are untouched");
 }
 
+#[test]
+fn a_root_scope_opened_inside_another_belongs_to_its_surface_and_not_to_that_scope() {
+    let surface = SurfaceHandle(42);
+    let outer = owner_scope();
+    provide_context(7u8);
+    let (held, saw_context) = {
+        let previous = crate::set_current_surface(surface);
+        let scope = root_scope();
+        let held = create_signal_storage(1i32);
+        let saw_context = with_context::<u8, _>(|_| ()).is_some();
+        drop(scope);
+        crate::set_current_surface(previous);
+        (held, saw_context)
+    };
+    assert!(
+        !saw_context,
+        "a root scope reads nothing its caller's scope provides"
+    );
+
+    let outer_id = outer.id();
+    drop(outer);
+    dispose_owner(outer_id);
+    assert!(
+        alive(held),
+        "disposing the caller's scope leaves the surface's root alone"
+    );
+
+    dispose_surface_owners(surface);
+    assert!(!alive(held), "the surface takes its root scope with it");
+}
+
 /// The allocation shape the frame budget guards. An owner that holds nothing must cost its struct and no more, or a list render turns into thousands of allocations for owners that never hold anything.
 #[test]
 fn an_owner_that_holds_nothing_allocates_nothing() {

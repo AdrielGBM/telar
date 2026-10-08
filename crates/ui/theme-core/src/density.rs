@@ -5,10 +5,10 @@
 //! So this scales the bases instead. A control size does not say "a small button is 24px tall"; it says the unit everything is derived from is smaller here, and each component's own proportions carry that through unchanged. One value to thread, N interpretations, and none of them written down twice.
 //!
 //! It is a signal like the theme, so a change re-runs the paint closures that read it — and, through `StyledContainer::styled_by`, re-resolves the layout styles derived from it too.
+//!
+//! The value is the thread's unless the active surface carries one of its own, which is how a canvas shows a dense variant beside the regular chrome around it.
 
-use reactive_core::{RwSignal, detached, signal};
-
-/// How large the controls in this part of the tree are, in the sense SwiftUI's `controlSize` means: a preference the *container* expresses and each control interprets, not a size any one of them is given.
+/// How large the controls in this part of the tree are, as a preference the *container* expresses and each control interprets, not a size any one of them is given.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ControlSize {
     /// Dense chrome — a toolbar, an inspector, a status bar.
@@ -32,20 +32,35 @@ impl ControlSize {
     }
 }
 
-thread_local! {
-    // `ManuallyDrop` for the same reason the theme signals are: no TLS destructor, cleanup goes through the runtime being dropped.
-    static CONTROL_SIZE: RwSignal<ControlSize> =
-        detached(|| signal(ControlSize::Regular));
+reactive_core::surface_scoped! {
+    /// The active surface's own control size, in place of the thread's while it has one.
+    scoped control_size: ControlSize = ControlSize::Regular;
+    context ControlSizeContext, ControlSizeGuard;
 }
 
-/// Sets the ambient control size. Reactive: everything that read it re-runs, so a switch re-spaces the controls already on screen rather than waiting for whatever rebuilds them.
+/// Sets the ambient control size of every surface without one of its own. Reactive: everything that read it re-runs, so a switch re-spaces the controls already on screen rather than waiting for whatever rebuilds them.
 pub fn set_control_size(size: ControlSize) {
-    CONTROL_SIZE.with(|s| s.set(size));
+    control_size().set(size);
 }
 
-/// The ambient control size, subscribing the caller.
+/// Gives the active surface a control size of its own, or with `None` hands it back to the thread's [`set_control_size`].
+pub fn set_surface_control_size(size: Option<ControlSize>) {
+    control_size().set_surface(size.as_ref());
+}
+
+/// Reactive read of the active surface's own control size, `None` where it follows the thread's.
+pub fn use_surface_control_size() -> Option<ControlSize> {
+    control_size().surface()
+}
+
+/// The control size in force on the active surface, subscribing the caller.
 pub fn use_control_size() -> ControlSize {
-    CONTROL_SIZE.with(|s| s.get())
+    control_size().get()
+}
+
+/// Non-reactive read of the control size in force on the active surface, for event handlers and the layout pass.
+pub fn current_control_size() -> ControlSize {
+    control_size().peek()
 }
 
 /// The factor the catalogue's metric bases carry here — [`use_control_size`] resolved to a number, which is the only form a component ever needs it in.

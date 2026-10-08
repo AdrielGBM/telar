@@ -1147,3 +1147,41 @@ fn a_leaf_measured_again_is_placed_by_what_it_learned_in_the_same_pass() {
     .unwrap();
     assert_eq!(rect.peek().width, 200.0);
 }
+
+#[test]
+fn a_relayout_hook_runs_after_the_roots_are_laid_out_until_its_handle_drops() {
+    use std::cell::RefCell;
+
+    reset_layout_runtime();
+    let (leaf, rect) = new_leaf(
+        LayoutStyle::new()
+            .width(SizeDimension::Percent(1.0))
+            .height(10.0),
+    )
+    .unwrap();
+    let root = new_container(LayoutStyle::new().width(100.0).height(10.0), &[leaf]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(10.0),
+    )
+    .unwrap();
+
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let hook = on_relayout({
+        let seen = Rc::clone(&seen);
+        move || seen.borrow_mut().push(rect.peek().width)
+    });
+
+    set_layout_style(root, LayoutStyle::new().width(60.0).height(10.0)).unwrap();
+    relayout_if_dirty();
+    assert_eq!(
+        *seen.borrow(),
+        [60.0],
+        "the hook ran once, and after the pass that gave the leaf its new box"
+    );
+
+    drop(hook);
+    relayout_if_dirty();
+    assert_eq!(seen.borrow().len(), 1, "a dropped hook no longer runs");
+}

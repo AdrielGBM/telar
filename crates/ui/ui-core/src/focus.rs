@@ -91,7 +91,11 @@ struct Entry {
     /// A checked state, for the controls that have one. A closure and not a flag, for the same reason "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to get the answer that is true then.
     toggled: Option<Rc<dyn Fn() -> bool>>,
     value: Option<Rc<dyn Fn() -> NumericValue>>,
+    /// The surface that answers for this entry's keyboard while it holds focus. See [`delegate_keyboard`].
+    keyboard: Option<KeyboardDelegate>,
 }
+
+type KeyboardDelegate = Rc<dyn Fn() -> Option<crate::SurfaceGuard>>;
 
 /// Per-surface keyboard-focus state: the id allocator, the focused-widget signal, and the tab order.
 struct FocusState {
@@ -129,6 +133,14 @@ impl FocusState {
             deferred: None,
             requests: 0,
         }
+    }
+
+    fn entry(&self, id: FocusId) -> Option<&Entry> {
+        self.order.iter().find(|e| e.id == id)
+    }
+
+    fn entry_mut(&mut self, id: FocusId) -> Option<&mut Entry> {
+        self.order.iter_mut().find(|e| e.id == id)
     }
 }
 
@@ -223,7 +235,7 @@ fn give(id: FocusId, from_pointer: bool) {
 }
 
 fn node_of(id: FocusId) -> Option<NodeId> {
-    with_focus_ref(|s| s.order.iter().find(|e| e.id == id).and_then(|e| e.node))
+    with_focus_ref(|s| s.entry(id).and_then(|e| e.node))
 }
 
 /// Whether `id` holds focus *and* should show it. Reactive, like [`current`].
@@ -355,7 +367,7 @@ fn default_role(kind: FocusKind) -> Role {
 
 fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role, tabbable: bool) {
     with_focus(|s| {
-        match s.order.iter_mut().find(|e| e.id == id) {
+        match s.entry_mut(id) {
             // Re-registering only adds knowledge: a widget that learns its node later keeps its place.
             Some(existing) => {
                 existing.node = existing.node.or(node);
@@ -372,6 +384,7 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                 tabbable,
                 toggled: None,
                 value: None,
+                keyboard: None,
             }),
         }
         if kind == FocusKind::TextEntry {
@@ -427,9 +440,31 @@ pub fn unregister(id: FocusId) {
 /// The guard an app-level shortcut table needs: without it, typing into a field also runs the shortcuts that share its letters. Prefer [`text_entry_takes_key`], which lets through the presses no editor wants.
 pub fn text_entry_focused() -> bool {
     match current() {
-        Some(id) => with_focus_ref(|s| s.text_entries.contains(&id)),
+        Some(id) => delegated(id, text_entry_focused)
+            .unwrap_or_else(|| with_focus_ref(|s| s.text_entries.contains(&id))),
         None => false,
     }
+}
+
+/// Hands the keyboard questions about `id` on to another surface while `id` holds focus: whether a text entry has the keys, and which keys are kept, are answered by whatever holds focus in the surface `enter` activates.
+///
+/// A nested surface's frame is the case. It holds focus here while a field inside it has the caret, and a shortcut table here asking whether somebody is typing has to hear about that field, not about the frame.
+pub(crate) fn delegate_keyboard(
+    id: FocusId,
+    enter: impl Fn() -> Option<crate::SurfaceGuard> + 'static,
+) {
+    let enter: KeyboardDelegate = Rc::new(enter);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.keyboard = Some(enter);
+        }
+    });
+}
+
+fn delegated<R>(id: FocusId, ask: impl FnOnce() -> R) -> Option<R> {
+    let enter = with_focus_ref(|s| s.entry(id).and_then(|e| e.keyboard.clone()))?;
+    let _inside = enter()?;
+    Some(ask())
 }
 
 /// Whether the focused widget keeps `keys` for itself, as a control of its role uses them: a button acts on Enter, a slider on the arrows and nothing else. `false` with nothing focused. Reactive, like [`current`].
@@ -439,12 +474,11 @@ pub fn focused_keeps(keys: ConsumedKeys) -> bool {
     let Some(id) = current() else {
         return false;
     };
-    with_focus_ref(|s| {
-        s.order
-            .iter()
-            .find(|entry| entry.id == id)
-            .is_some_and(|entry| entry.role.consumed_keys().contains(keys))
-    })
+    delegated(id, || focused_keeps(keys)) == Some(true)
+        || with_focus_ref(|s| {
+            s.entry(id)
+                .is_some_and(|entry| entry.role.consumed_keys().contains(keys))
+        })
 }
 
 /// Whether a focused text entry would take this press as text — the guard for a global shortcut handler.
@@ -543,7 +577,7 @@ fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
 pub fn set_toggled(id: FocusId, state: impl Fn() -> bool + 'static) {
     let state: Rc<dyn Fn() -> bool> = Rc::new(state);
     with_focus(|s| {
-        if let Some(entry) = s.order.iter_mut().find(|e| e.id == id) {
+        if let Some(entry) = s.entry_mut(id) {
             entry.toggled = Some(state);
         }
     });
@@ -553,7 +587,7 @@ pub fn set_toggled(id: FocusId, state: impl Fn() -> bool + 'static) {
 pub fn set_value(id: FocusId, read: impl Fn() -> NumericValue + 'static) {
     let read: Rc<dyn Fn() -> NumericValue> = Rc::new(read);
     with_focus(|s| {
-        if let Some(entry) = s.order.iter_mut().find(|e| e.id == id) {
+        if let Some(entry) = s.entry_mut(id) {
             entry.value = Some(read);
         }
     });
@@ -647,11 +681,7 @@ pub fn focus_first_in(node: NodeId) -> bool {
 /// `declared` is the widget's own set for the state it is in; `None` takes `role`'s. A control out of reach keeps nothing, and one inside a modal that holds focus keeps Tab as well, because stepping inside the trap is Telar's and a host walking its own order would leave it. Reactive, like [`current`]: the box re-emits when a scope it sits in opens or closes.
 pub fn focusable_of(id: FocusId, role: Role, declared: Option<ConsumedKeys>) -> Focusable {
     let (entry, scopes) = with_focus_ref(|s| {
-        let entry = s
-            .order
-            .iter()
-            .find(|e| e.id == id)
-            .map(|e| (e.node, e.tabbable));
+        let entry = s.entry(id).map(|e| (e.node, e.tabbable));
         let scopes: Vec<ScopeView> = s
             .scopes
             .iter()
@@ -735,11 +765,6 @@ mod tests;
 ///
 /// `None` both for a control that carries no such state and for one nothing has registered. Reading it here rather than through [`exposed`] is what lets a widget put its own state on the box it draws: the reading happens inside `view()`, so the box re-emits when the state changes, which a snapshot taken afterwards could never do.
 pub fn toggled_state(id: FocusId) -> Option<bool> {
-    let read = with_focus(|s| {
-        s.order
-            .iter()
-            .find(|e| e.id == id)
-            .and_then(|e| e.toggled.clone())
-    })?;
+    let read = with_focus(|s| s.entry(id).and_then(|e| e.toggled.clone()))?;
     Some(read())
 }

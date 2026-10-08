@@ -170,6 +170,13 @@ pub fn transform_pointer(event: &Event, matrix: [f32; 6]) -> Option<Event> {
                 y: local_y,
             })
         }
+        Event::ScrollEnded { x, y } => {
+            let (local_x, local_y) = apply(*x, *y);
+            Some(Event::ScrollEnded {
+                x: local_x,
+                y: local_y,
+            })
+        }
         _ => None,
     }
 }

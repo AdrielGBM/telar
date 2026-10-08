@@ -302,3 +302,40 @@ fn a_reader_re_runs_when_its_provider_or_mode_switches() {
         "its own provider re-ran it, the global mode did not"
     );
 }
+
+#[test]
+fn a_scope_following_the_global_theme_shadows_providers_above_it_and_can_switch_in_place() {
+    use std::cell::RefCell;
+
+    set_theme(Blue);
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let _outside = reactive_core::owner_scope();
+    ScopedTheme::new(Red).provide();
+    let scoped = {
+        let _inside = reactive_core::owner_scope();
+        let scoped = ScopedTheme::follow_global();
+        scoped.provide();
+        assert_eq!(
+            use_theme::<Blue>().primary(),
+            BLUE,
+            "use_theme reads the global theme through it"
+        );
+        let seen = Rc::clone(&seen);
+        reactive_core::effect(move || seen.borrow_mut().push(use_theme_tokens().primary()));
+        scoped
+    };
+    assert!(scoped.follows_global());
+
+    set_theme(Green);
+    scoped.set(Red);
+    set_theme(Blue);
+    scoped.clear();
+    set_theme(Green);
+
+    assert_eq!(
+        *seen.borrow(),
+        vec![BLUE, GREEN, RED, BLUE, GREEN],
+        "the global theme, a global switch, its own theme (deaf to the global one), then the global one again"
+    );
+    THEME.with(|s| s.set(None));
+}

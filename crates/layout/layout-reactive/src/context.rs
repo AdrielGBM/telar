@@ -2,6 +2,7 @@
 
 use std::cell::RefCell;
 use std::mem::ManuallyDrop;
+use std::rc::Rc;
 
 use geometry_core::Rect;
 use layout_core::{
@@ -183,7 +184,7 @@ pub fn compute_layout(
     width: AvailableSpace,
     height: AvailableSpace,
 ) -> Result<(), LayoutError> {
-    // Reconciled here rather than in `set_direction`, so the flip reaches every surface on the thread; the size is the active surface's own, reconciled on the same pass so a resize and the layout answering it agree.
+    // Reconciled here rather than in `set_direction`, so a thread-wide flip reaches every surface without an override of its own; the size is the active surface's own, reconciled on the same pass so a resize and the layout answering it agree.
     let direction = crate::direction::current_direction();
     let surface = crate::surface_size::surface_size();
     with_runtime(|rt| {
@@ -270,6 +271,50 @@ pub fn relayout_if_dirty() {
     });
     for (root, width, height) in roots {
         let _ = compute_layout(root, width, height);
+    }
+    let hooks: Vec<Rc<dyn Fn()>> = with_runtime_ref(|rt| {
+        rt.relayout_hooks
+            .iter()
+            .map(|(_, hook)| Rc::clone(hook))
+            .collect()
+    });
+    for hook in hooks {
+        hook();
+    }
+}
+
+/// Runs `hook` after every [`relayout_if_dirty`] on the active surface, once that surface's own roots are laid out, until the returned handle drops.
+///
+/// How a surface drawn inside this one's tree keeps up: nothing else lays it out each frame, and it has to come after this surface's pass, which is what gives it its box.
+pub fn on_relayout(hook: impl Fn() + 'static) -> RelayoutHook {
+    let id = with_runtime(|rt| {
+        let id = rt.next_relayout_hook;
+        rt.next_relayout_hook += 1;
+        rt.relayout_hooks.push((id, Rc::new(hook)));
+        id
+    });
+    RelayoutHook {
+        id,
+        surface: reactive_core::current_surface(),
+    }
+}
+
+/// A hook registered with [`on_relayout`], withdrawn from the surface it was registered on when dropped, whichever surface is active then.
+#[must_use = "the hook is withdrawn as soon as this handle drops"]
+pub struct RelayoutHook {
+    id: u64,
+    surface: SurfaceHandle,
+}
+
+impl Drop for RelayoutHook {
+    fn drop(&mut self) {
+        let _entered = self.surface.enter();
+        // A surface torn down first took its hooks with it, and the world active now is not this hook's.
+        if reactive_core::current_surface() != self.surface {
+            return;
+        }
+        let id = self.id;
+        with_runtime(|rt| rt.relayout_hooks.retain(|(hook, _)| *hook != id));
     }
 }
 
@@ -638,6 +683,9 @@ struct LayoutRuntime {
     sticky_anchors: FxHashMap<NodeId, Vec<StickyAnchor>>,
     /// The roots laid out against the surface. See [`lay_out_against_surface`].
     surface_roots: FxHashSet<NodeId>,
+    /// What runs after each [`relayout_if_dirty`], keyed by the handle that withdraws it. See [`on_relayout`].
+    relayout_hooks: Vec<(u64, Rc<dyn Fn()>)>,
+    next_relayout_hook: u64,
     /// A generation per node whose [`declared_css`] something read, bumped by [`restyle`] when that CSS changes. Minted on first read, like `abs_pos_signals`: only a document backend reads it.
     css_reads: FxHashMap<NodeId, RwSignal<u64>>,
     /// A generation per node whose display something tracked, bumped by [`restyle`] when the node is hidden or shown. Minted on first read, like `css_reads`. See [`track_display_none`].
@@ -662,6 +710,8 @@ impl LayoutRuntime {
             sticky_views: FxHashMap::default(),
             sticky_anchors: FxHashMap::default(),
             surface_roots: FxHashSet::default(),
+            relayout_hooks: Vec::new(),
+            next_relayout_hook: 0,
             css_reads: FxHashMap::default(),
             display_reads: FxHashMap::default(),
             #[cfg(debug_assertions)]

@@ -1,9 +1,10 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use super::*;
 
 fn reset() {
-    STACK.with(|s| s.borrow_mut().clear());
+    with_stack(|s| s.entries.clear());
+    publish_depth();
 }
 
 #[test]

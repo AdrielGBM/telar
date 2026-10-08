@@ -1,32 +1,38 @@
-//! The active writing-direction signal — the reactive source that drives live LTR/RTL switching.
+//! The writing direction: a thread-wide value every surface lays out against, and a per-surface override that takes its place on the surface that sets one.
 //!
-//! Mirrors `theme-core`'s active-mode store and `i18n-core`'s active-locale store: a thread-local `RwSignal`, a setter, and a reactive getter. Unlike those two, the value is not read by the widgets themselves — [`compute_layout`](crate::compute_layout) reconciles each surface's layout engine with it before laying out, so a flip re-resolves the existing nodes rather than rebuilding any part of the tree. That is also what makes it reach every surface on the thread, not just whichever one was active at the call.
+//! The value is not read by the widgets themselves — [`compute_layout`](crate::compute_layout) reconciles each surface's layout engine with it before laying out, so a flip re-resolves the existing nodes rather than rebuilding any part of the tree. The override is per surface rather than per subtree for the same reason: one layout engine resolves one direction for its whole tree.
 
 use layout_core::Direction;
-use reactive_core::{RwSignal, detached, signal};
 
-thread_local! {
-    static DIRECTION: RwSignal<Direction> =
-        detached(|| signal(Direction::Ltr));
+reactive_core::surface_scoped! {
+    /// The active surface's own writing direction, in place of the thread's while it has one.
+    scoped direction: Direction = Direction::Ltr;
+    context DirectionContext, DirectionGuard;
 }
 
-/// Sets the writing direction every surface lays out against, taking effect on the next layout pass.
+/// Sets the writing direction every surface without an override of its own lays out against, taking effect on the next layout pass.
 pub fn set_direction(direction: Direction) {
-    DIRECTION.with(|s| {
-        if s.peek() != direction {
-            s.set(direction);
-        }
-    });
+    self::direction().set(direction);
 }
 
-/// Reactive read of the active direction — subscribes the caller, for the rare widget that has to mirror something layout cannot flip on its own (a chevron glyph, a directional icon).
+/// Gives the active surface a writing direction of its own, or with `None` hands it back to the thread's [`set_direction`]. Takes effect on the surface's next layout pass.
+pub fn set_surface_direction(direction: Option<Direction>) {
+    self::direction().set_surface(direction.as_ref());
+}
+
+/// Reactive read of the active surface's own direction, `None` where it follows the thread's.
+pub fn use_surface_direction() -> Option<Direction> {
+    direction().surface()
+}
+
+/// Reactive read of the direction in force on the active surface — subscribes the caller, for the rare widget that has to mirror something layout cannot flip on its own (a chevron glyph, a directional icon).
 pub fn use_direction() -> Direction {
-    DIRECTION.with(|s| s.get())
+    direction().get()
 }
 
-/// Non-reactive read of the active direction, for the layout pass and event handlers.
+/// Non-reactive read of the direction in force on the active surface, for the layout pass and event handlers.
 pub fn current_direction() -> Direction {
-    DIRECTION.with(|s| s.peek())
+    direction().peek()
 }
 
 #[cfg(test)]
