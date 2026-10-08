@@ -1,9 +1,9 @@
 //! [`tabs`]: a row of pills selecting one index.
 
 use telar::{
-    AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Text,
-    TextStyle, box_item, focus::Role, signal,
+    Accessible, AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError,
+    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
+    Text, TextStyle, box_item, focus::Role, signal,
 };
 
 use crate::shared;
@@ -44,6 +44,9 @@ pub struct TabsProps {
     /// Accent (active tab fill). `Color::TRANSPARENT` (the default) means "unset": falls back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
+    /// What a reader calls the set of tabs: "Settings sections". `None` (the default) leaves the list unnamed.
+    #[props(some, into, default)]
+    pub label: Option<Reactive<String>>,
 }
 
 /// A row of pills selecting one index.
@@ -52,6 +55,7 @@ pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>
         items,
         selected,
         color,
+        label,
     } = props;
     // Uncontrolled: own the index so the bar still tracks the active tab when the caller binds no signal.
     let selected = selected.unwrap_or_else(|| signal(0u32));
@@ -84,8 +88,13 @@ pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>
         tab_items.push(box_item(tab));
     }
 
-    let row = Container::new(bar(), tab_items)?.styled_by(bar);
-    Ok(box_item(row))
+    let row = Container::new(bar(), tab_items)?
+        .styled_by(bar)
+        .role(Role::TabList);
+    Ok(match label {
+        Some(label) => box_item(row.a11y_label(move || label.get())),
+        None => box_item(row),
+    })
 }
 
 /// The tab pill's paint: the active tab fills with the accent (a touch darker on hover); an inactive tab blends in until hovered, when it lifts to a faint accent wash.

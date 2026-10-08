@@ -14,6 +14,8 @@ repository = { workspace = true }
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
 renderer-core = { workspace = true }
+telar = { workspace = true, features = ["runtime"] }
+telar-components.workspace = true
 ui-tree = { workspace = true }
 
 web-time = { workspace = true }

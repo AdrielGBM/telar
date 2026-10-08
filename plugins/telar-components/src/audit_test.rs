@@ -1,4 +1,4 @@
-//! The document real widgets render to, audited the way an accessibility review would: axe-core's WCAG A/AA and best-practice rules, run over buttons, links, a field, a checkbox, a switch and a toggle button, a paragraph with a link in it and the boxes an application named, gave a language or hid. Needs a browser and the dev shell's `TELAR_AXE_CORE`, so it runs under `wasm-bindgen-test` rather than `cargo test`.
+//! The document real widgets render to, audited the way an accessibility review would: axe-core's WCAG A/AA and best-practice rules, run over buttons, links, a field, a checkbox, a switch and a toggle button, a named tab list, a paragraph with a link in it and the boxes an application named, gave a language or hid; with `workbench`, a tree, a toolbar and a split pane too. Needs a browser and the dev shell's `TELAR_AXE_CORE`, so it runs under `wasm-bindgen-test` rather than `cargo test`.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -7,10 +7,13 @@ use std::cell::RefCell;
 use renderer_dom::{CanvasTextMetrics, DomRenderer};
 use telar::{
     Accessible, Children, Color, ComponentList, Container, Event, LayoutError, LayoutItem,
-    LayoutStyle, Location, RectStyle, RenderBackend, Role, Size, StyledContainer, Text, TextRun,
-    TextStyle, WindowRoot, box_item, external, focus,
+    LayoutStyle, Location, Reactive, RectStyle, RenderBackend, Role, Size, Slots, StyledContainer,
+    Text, TextRun, TextStyle, WindowRoot, box_item, external, focus,
 };
-use telar_components::{ButtonProps, CheckboxProps, TextFieldProps, button, checkbox, text_field};
+use telar_components::{
+    ButtonProps, CheckboxProps, ItemProps, ScrubFieldProps, SelectProps, TabsProps, TextFieldProps,
+    button, checkbox, item, scrub_field, select, tabs, text_field,
+};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -93,6 +96,33 @@ fn stateful_control(
 /// One of everything an application builds most of its screens from.
 ///
 /// `platform-desktop/src/accessibility_test.rs` builds the same screen from `ui-core` primitives standing in for the catalogue's button, field and checkbox, so a change here is mirrored there.
+/// A scrub field and a select, each in a box the application named: the box is the only name either control has.
+fn labelled_fields() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+    let speed = scrub_field(
+        ScrubFieldProps::props().label("X").build(),
+        Children::default(),
+    )?;
+    let speed = Container::new(LayoutStyle::new(), vec![speed])?.a11y_label(|| "Speed");
+    let sizes = Children::new(|| {
+        let mut slots = Slots::new();
+        for label in ["Small", "Large"] {
+            slots.push(
+                None,
+                item(
+                    ItemProps::props()
+                        .label(Reactive::of(move || label.to_string()))
+                        .build(),
+                    Children::default(),
+                )?,
+            );
+        }
+        Ok(slots)
+    });
+    let size = select(SelectProps::props().build(), sizes)?;
+    let size = Container::new(LayoutStyle::new(), vec![size])?.a11y_label(|| "Size");
+    Ok(vec![box_item(speed), box_item(size)])
+}
+
 fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let heading = StyledContainer::new(
         LayoutStyle::new(),
@@ -147,24 +177,111 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
         vec![],
     )?
     .a11y_hidden();
+    let sections = tabs(
+        TabsProps::props()
+            .items(vec!["General", "Advanced"])
+            .label("Sections")
+            .build(),
+        Children::default(),
+    )?;
+    let mut controls = vec![
+        box_item(heading),
+        save,
+        source,
+        about,
+        name,
+        subscribe,
+        calm,
+        bold,
+        box_item(paragraph),
+        box_item(word),
+        box_item(greeting),
+        box_item(decoration),
+        sections,
+    ];
+    controls.extend(labelled_fields()?);
+    #[cfg(feature = "workbench")]
+    controls.extend([tree()?, tools()?, split()?]);
     let column = Container::new(
         LayoutStyle::new().flex_column().gap(12.0).padding_all(16.0),
-        vec![
-            box_item(heading),
-            save,
-            source,
-            about,
-            name,
-            subscribe,
-            calm,
-            bold,
-            box_item(paragraph),
-            box_item(word),
-            box_item(greeting),
-            box_item(decoration),
-        ],
+        controls,
     )?;
     Ok(box_item(column))
+}
+
+/// A tree with an open branch, a selected row and a badge, in a box of its own height: a tree fills the height it is given and scrolls inside it.
+#[cfg(feature = "workbench")]
+fn tree() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    use telar_components::{TreeNode, TreeViewProps, tree_view};
+    let items = vec![
+        TreeNode::new("inputs", "Inputs").with_children([
+            TreeNode::new("button", "Button").with_badge("3"),
+            TreeNode::new("checkbox", "Checkbox"),
+        ]),
+        TreeNode::new("about", "About"),
+    ];
+    let tree = tree_view(
+        TreeViewProps::props()
+            .items(items)
+            .expanded(telar::signal(["inputs".into()].into_iter().collect()))
+            .selected(telar::signal(Some("button".into())))
+            .label("Components")
+            .build(),
+        Children::default(),
+    )?;
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_column().height(140.0),
+        vec![tree],
+    )?))
+}
+
+/// A toolbar of two icon buttons, one of them a toggle.
+#[cfg(feature = "workbench")]
+fn tools() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    use telar_components::{IconButtonProps, ToolbarProps, icon_button, toolbar};
+    let children = Children::new(|| {
+        let mut slots = telar::Slots::new();
+        slots.push(
+            None,
+            icon_button(
+                IconButtonProps::props()
+                    .icon("lucide:bold")
+                    .label("Bold")
+                    .pressed(true)
+                    .build(),
+                Children::default(),
+            )?,
+        );
+        slots.push(
+            None,
+            icon_button(
+                IconButtonProps::props()
+                    .icon("lucide:search")
+                    .label("Find")
+                    .build(),
+                Children::default(),
+            )?,
+        );
+        Ok(slots)
+    });
+    toolbar(ToolbarProps::props().label("Formatting").build(), children)
+}
+
+/// Two panes and the splitter between them, in a box of their own size.
+#[cfg(feature = "workbench")]
+fn split() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    use telar_components::{SplitPaneProps, split_pane};
+    let mut slots = telar::Slots::new();
+    slots.push(None, box_item(words("Outline")?));
+    slots.push(None, box_item(words("Preview")?));
+    let split = split_pane(
+        SplitPaneProps::props().default_size(120.0).build(),
+        Children::from(slots),
+    )?;
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_row().height(60.0),
+        vec![split],
+    )?))
 }
 
 fn mount() {
@@ -327,4 +444,151 @@ fn the_keyboard_s_box_wears_telar_s_ring() {
     );
     focus::clear();
     render();
+}
+
+/// The rows reach the document as tree items that say they are chosen, open and where they sit, and a focused tree adds no violations.
+#[cfg(feature = "workbench")]
+#[wasm_bindgen_test]
+async fn a_tree_s_rows_carry_their_state_into_the_document() {
+    focus::request(focusable(Role::Tree).id);
+    let host = render();
+    let chosen = host
+        .query_selector(r#"[role="treeitem"][aria-selected="true"]"#)
+        .expect("a valid selector")
+        .expect("the selected row is in the document");
+    assert_eq!(chosen.get_attribute("aria-level").as_deref(), Some("2"));
+    assert_eq!(chosen.get_attribute("aria-posinset").as_deref(), Some("1"));
+    assert_eq!(chosen.get_attribute("aria-setsize").as_deref(), Some("2"));
+    assert!(
+        host.query_selector(r#"[role="treeitem"][aria-expanded="true"]"#)
+            .expect("a valid selector")
+            .is_some(),
+        "the open branch says so"
+    );
+    assert_clean(&host, "with the tree focused").await;
+    focus::clear();
+}
+
+/// The element the box of `role` points a reader at with `aria-activedescendant`, which has to be inside it.
+#[cfg(feature = "workbench")]
+fn pointed_at(host: &web_sys::HtmlElement, role: &str) -> web_sys::Element {
+    let container = host
+        .query_selector(&format!(r#"[role="{role}"]"#))
+        .expect("a valid selector")
+        .unwrap_or_else(|| panic!("a {role} is in the document"));
+    let id = container
+        .get_attribute("aria-activedescendant")
+        .unwrap_or_else(|| panic!("the focused {role} points at its cursor"));
+    let item = document()
+        .get_element_by_id(&id)
+        .unwrap_or_else(|| panic!("`{id}` names an element"));
+    assert!(
+        container.contains(Some(item.as_ref())),
+        "the {role} points inside itself"
+    );
+    item
+}
+
+/// A focused tree keeps the document's focus and points a reader at the row its cursor is on, and moving the cursor moves what it points at.
+#[cfg(feature = "workbench")]
+#[wasm_bindgen_test]
+async fn a_focused_tree_points_a_reader_at_its_cursor_row() {
+    let tree = focusable(Role::Tree);
+    focus::request(tree.id);
+    let host = render();
+    let row = pointed_at(&host, "tree");
+    assert_eq!(row.get_attribute("role").as_deref(), Some("treeitem"));
+    assert_eq!(row.get_attribute("aria-selected").as_deref(), Some("true"));
+
+    PAGE.with(|page| {
+        let mut page = page.borrow_mut();
+        let page = page.as_mut().expect("mounted");
+        page.tree.on_event(&Event::KeyPressed {
+            key: telar::Key::Named(telar::NamedKey::ArrowDown),
+            modifiers: telar::ModifiersState::default(),
+        });
+    });
+    let host = render();
+    let next = pointed_at(&host, "tree");
+    assert_ne!(
+        next.id(),
+        row.id(),
+        "the arrow moved what the tree points at"
+    );
+    assert!(
+        row.get_attribute("id").is_none(),
+        "and the row it left has no id to point at"
+    );
+    assert_clean(&host, "with the tree's cursor on a row").await;
+    focus::clear();
+}
+
+/// A focused toolbar points a reader at the item its cursor is on, and its toggle says it is pressed.
+#[cfg(feature = "workbench")]
+#[wasm_bindgen_test]
+async fn a_focused_toolbar_points_a_reader_at_its_cursor_item() {
+    focus::request(focusable(Role::Toolbar).id);
+    let host = render();
+    let item = pointed_at(&host, "toolbar");
+    assert_eq!(item.get_attribute("aria-label").as_deref(), Some("Bold"));
+    assert_eq!(item.get_attribute("aria-pressed").as_deref(), Some("true"));
+    assert_clean(&host, "with the toolbar focused").await;
+    focus::clear();
+}
+
+/// The splitter is named even when the application gave it no name.
+#[cfg(feature = "workbench")]
+#[wasm_bindgen_test]
+fn the_splitter_has_a_name() {
+    focus::clear();
+    let host = render();
+    let splitter = host
+        .query_selector(r#"[role="separator"]"#)
+        .expect("a valid selector")
+        .expect("the splitter is in the document");
+    assert_eq!(
+        splitter.get_attribute("aria-label").as_deref(),
+        Some("Resize")
+    );
+}
+
+/// The tabs sit in a tab list, named as the application named it.
+#[wasm_bindgen_test]
+fn the_tabs_sit_in_a_named_tab_list() {
+    focus::clear();
+    let host = render();
+    let list = host
+        .query_selector(r#"[role="tablist"]"#)
+        .expect("a valid selector")
+        .expect("the tab list is in the document");
+    assert_eq!(
+        list.get_attribute("aria-label").as_deref(),
+        Some("Sections")
+    );
+    assert_eq!(
+        list.query_selector_all(r#"[role="tab"]"#)
+            .expect("a valid selector")
+            .length(),
+        2
+    );
+}
+
+/// A box the application named around a scrub field or a select names the control inside, which is where a reader looks for it.
+#[wasm_bindgen_test]
+fn a_named_box_around_a_field_names_the_field() {
+    focus::clear();
+    let host = render();
+    for (role, name) in [("spinbutton", "Speed"), ("combobox", "Size")] {
+        let control = host
+            .query_selector(&format!(r#"[role="{role}"]"#))
+            .expect("a valid selector")
+            .unwrap_or_else(|| panic!("the {role} is in the document"));
+        assert_eq!(control.get_attribute("aria-label").as_deref(), Some(name));
+    }
+    let groups = host
+        .query_selector_all(
+            r#"[role="group"][aria-label="Speed"], [role="group"][aria-label="Size"]"#,
+        )
+        .expect("a valid selector");
+    assert_eq!(groups.length(), 0, "the wrapper does not name itself too");
 }

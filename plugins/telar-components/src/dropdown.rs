@@ -205,6 +205,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         } else {
             Role::Button
         })
+        .expanded(move || open.get())
         .on_focus(move |now| trigger_focused.set(now))
         .on_key(on_key)
         .consumes_keys(move || {

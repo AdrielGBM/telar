@@ -6,15 +6,14 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use std::time::Duration;
 use telar::{
     AlignItems, Children, Color, Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
     Margin, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Text, TextWrap,
     box_item, focus::Role, use_context,
 };
-use web_time::Instant;
 
 use crate::shared;
+use crate::type_ahead::TypeAhead;
 
 /// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them read as secondary without becoming a second colour a theme has to answer for.
 const HINT_RATIO: f32 = 0.9;
@@ -36,7 +35,7 @@ struct ListState {
     rows: RefCell<Vec<Row>>,
     /// A cursor asked for before there was anything to put it on. Opening with the down arrow happens in a key handler, and the rows are built on the flush after it returns, so the request has to wait for them.
     seed: Cell<bool>,
-    search: RefCell<Search>,
+    search: RefCell<TypeAhead>,
     /// Set while the list is being walked for what its rows *say* rather than for the rows. See [`ListContext::declare`].
     declaring: Cell<bool>,
 }
@@ -46,16 +45,6 @@ struct Row {
     reachable: Reactive<bool>,
     /// What type-ahead matches against, for the same reason a closure: a row whose label tracks a signal is findable by what it says now. Empty for a piece that is not a destination, and for a row written with markup children instead of a label — there is no text to match, so nothing claims to match it.
     label: Reactive<String>,
-}
-
-/// How long a pause ends a type-ahead query. Past it the next character starts a fresh search rather than extending one the user has stopped thinking about — the same second every native list allows.
-const SEARCH_TIMEOUT: Duration = Duration::from_millis(1000);
-
-/// The type-ahead query and when it was last typed into.
-#[derive(Default)]
-struct Search {
-    query: String,
-    typed_at: Option<Instant>,
 }
 
 impl ListContext {
@@ -72,7 +61,7 @@ impl ListContext {
             color,
             rows: RefCell::new(Vec::new()),
             seed: Cell::new(false),
-            search: RefCell::new(Search::default()),
+            search: RefCell::new(TypeAhead::default()),
             declaring: Cell::new(false),
         }))
     }
@@ -111,7 +100,7 @@ impl ListContext {
     pub(crate) fn begin(&self) {
         self.0.rows.borrow_mut().clear();
         // A fresh open is a fresh search: a query left over from the last one would make the first keystroke land somewhere the user never typed towards.
-        *self.0.search.borrow_mut() = Search::default();
+        *self.0.search.borrow_mut() = TypeAhead::default();
     }
 
     /// Registers a row and hands it the index it will commit. Called by each piece as it builds itself, so the order is the order they are written in.
@@ -174,58 +163,19 @@ impl ListContext {
 
     /// Whether a type-ahead query is still running, which is what makes a space a character rather than a key.
     pub(crate) fn is_searching(&self) -> bool {
-        let search = self.0.search.borrow();
-        !search.query.is_empty()
-            && search
-                .typed_at
-                .is_some_and(|t| t.elapsed() < SEARCH_TIMEOUT)
+        self.0.search.borrow().is_searching()
     }
 
-    /// Extends the type-ahead query with `c` and returns the row it now names, or `None` when nothing matches.
-    ///
-    /// Two behaviours that look like special cases and are the whole feature. **A repeated character cycles**: `d`, `d`, `d` walks the rows starting with *d* rather than searching for "ddd", which no label has, and it is the only way to reach the second of two rows sharing a first letter. **A refined query holds still**: typing `de` after `d` may keep the row `d` landed on, because the user is narrowing towards it rather than asking for the next one. That is why a one-character needle skips the current row and a longer one does not.
+    /// Extends the type-ahead query with `c` and returns the row it now names, or `None` when nothing matches. See [`TypeAhead::extend`] for why a repeated letter cycles and a refined query holds still.
     pub(crate) fn type_ahead(&self, c: char, from: Option<u32>) -> Option<u32> {
-        let query = self.extend_query(c);
-        // Read off the query rather than off `c`, which is still in the case the user typed it in.
-        let first = query.chars().next()?;
-        let repeated = query.chars().count() > 1 && query.chars().all(|q| q == first);
-        let needle: &str = if repeated {
-            &query[..first.len_utf8()]
-        } else {
-            &query
-        };
-        let skip_current = needle.chars().count() == 1;
-
+        let needle = self.0.search.borrow_mut().extend(c);
         let rows = self.0.rows.borrow();
-        let n = rows.len();
-        if n == 0 {
-            return None;
-        }
-        // From wherever the cursor is, once round: a search that found nothing must not spin, and one that wraps has to reach the rows above where it started.
-        let start = from.unwrap_or(0) as usize;
-        (0..n).find_map(|k| {
-            let i = (start + k) % n;
-            if skip_current && Some(i as u32) == from {
-                return None;
-            }
-            let row = &rows[i];
-            (row.reachable.get() && row.label.get().to_lowercase().starts_with(needle))
-                .then_some(i as u32)
-        })
-    }
-
-    /// Appends `c` to the query, starting a new one if the last keystroke has gone stale. Lowercased on the way in so the match is case-insensitive without lowercasing the needle once per row.
-    fn extend_query(&self, c: char) -> String {
-        let mut search = self.0.search.borrow_mut();
-        if search
-            .typed_at
-            .is_none_or(|t| t.elapsed() >= SEARCH_TIMEOUT)
-        {
-            search.query.clear();
-        }
-        search.query.extend(c.to_lowercase());
-        search.typed_at = Some(Instant::now());
-        search.query.clone()
+        needle
+            .find(from.map(|i| i as usize), rows.len(), |i| {
+                let row = &rows[i];
+                row.reachable.get().then(|| row.label.get())
+            })
+            .map(|i| i as u32)
     }
 }
 

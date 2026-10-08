@@ -5740,6 +5740,7 @@ dependencies = [
  "image",
  "js-sys",
  "telar",
+ "telar-icons",
  "telar-renderer-dom",
  "telar-ui-core",
  "telar-ui-tree",
@@ -5754,6 +5755,8 @@ dependencies = [
 name = "telar-devtools"
 version = "0.2.1"
 dependencies = [
+ "telar",
+ "telar-components",
  "telar-geometry-core",
  "telar-platform-core",
  "telar-renderer-core",

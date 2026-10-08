@@ -5,6 +5,7 @@
 //! - `overlays`: menus, context menus, modals, drawers and tooltips, and the scrim behind them.
 //! - `chrome`: the window frame a desktop application draws itself.
 //! - `advanced`: reorderable lists, accordions and steppers.
+//! - `workbench`: split panes, trees, toolbars, icon buttons and key caps, with the `icons` and `overlays` they build on.
 //!
 //! ```toml
 //! # Cargo.toml
@@ -37,6 +38,10 @@ mod handle;
 #[cfg(test)]
 mod harness;
 mod heading;
+#[cfg(feature = "workbench")]
+mod icon_button;
+#[cfg(feature = "workbench")]
+mod kbd;
 mod line_gutter;
 mod list;
 #[cfg(feature = "overlays")]
@@ -57,6 +62,8 @@ mod select;
 mod shared;
 mod slider;
 mod spinner;
+#[cfg(feature = "workbench")]
+mod split_pane;
 #[cfg(feature = "advanced")]
 mod stepper;
 mod strings;
@@ -66,8 +73,13 @@ mod tabs;
 mod test_support;
 mod text_field;
 mod toggle;
+#[cfg(feature = "workbench")]
+mod toolbar;
 #[cfg(feature = "overlays")]
 mod tooltip;
+#[cfg(feature = "workbench")]
+mod tree_view;
+mod type_ahead;
 #[cfg(feature = "chrome")]
 mod window_frame;
 
@@ -86,6 +98,10 @@ pub use context_menu::{
 pub use drawer::{DrawerProps, drawer};
 pub use handle::{HandleProps, ToPoint, ToValue, handle};
 pub use heading::{HeadingProps, heading};
+#[cfg(feature = "workbench")]
+pub use icon_button::{IconButtonProps, icon_button};
+#[cfg(feature = "workbench")]
+pub use kbd::{KbdProps, kbd};
 pub use line_gutter::LineGutter;
 pub use list::{GroupProps, ItemProps, SeparatorProps, group, item, separator};
 #[cfg(feature = "overlays")]
@@ -103,13 +119,19 @@ pub use section::{SectionProps, section};
 pub use select::{SelectProps, select};
 pub use slider::{SliderProps, slider};
 pub use spinner::{SpinnerProps, spinner};
+#[cfg(feature = "workbench")]
+pub use split_pane::{SizedPane, SplitDirection, SplitPaneProps, split_pane};
 #[cfg(feature = "advanced")]
 pub use stepper::{StepperProps, stepper};
 pub use swatches::{SwatchesProps, swatches};
 pub use tabs::{TabsProps, tabs};
 pub use text_field::{TextFieldProps, text_field};
 pub use toggle::{ToggleProps, toggle};
+#[cfg(feature = "workbench")]
+pub use toolbar::{ToolbarProps, toolbar};
 #[cfg(feature = "overlays")]
 pub use tooltip::{TooltipProps, tooltip};
+#[cfg(feature = "workbench")]
+pub use tree_view::{SelectHandler, TrailingBuilder, TreeNode, TreeViewProps, tree_view};
 #[cfg(feature = "chrome")]
 pub use window_frame::{MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, window_frame};

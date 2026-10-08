@@ -5,11 +5,13 @@ use telar::i18n::{Catalog, Entry, Message, translate_with_override};
 const NAMESPACE: &str = "telar_components";
 
 pub(crate) const CLOSE: &str = "close";
+pub(crate) const RESIZE: &str = "resize";
 pub(crate) const SELECT: &str = "select";
 
 static CATALOG: Catalog = Catalog {
     locales: &["ar", "en", "es"],
     default_locale: "en",
+    // Sorted by key: a lookup is a binary search, and an entry out of order is never found.
     entries: &[
         Entry {
             key: CLOSE,
@@ -17,6 +19,14 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("إغلاق")),
                 ("en", Message::Plain("Close")),
                 ("es", Message::Plain("Cerrar")),
+            ],
+        },
+        Entry {
+            key: RESIZE,
+            messages: &[
+                ("ar", Message::Plain("تغيير الحجم")),
+                ("en", Message::Plain("Resize")),
+                ("es", Message::Plain("Redimensionar")),
             ],
         },
         Entry {

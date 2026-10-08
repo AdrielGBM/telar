@@ -5,6 +5,12 @@
 //! Kept out of `telar` because it is 400 lines of chrome no shipping application draws, and because a seam whose only implementation lives inside the crate that defines it is a seam nobody can be shown how to use.
 #![warn(rustdoc::broken_intra_doc_links)]
 
+mod workbench;
+pub use workbench::{
+    WORKBENCH_CONTROL_SIZE, WORKBENCH_GRID, WORKBENCH_RADIUS, WORKBENCH_TEXT_SIZE, WorkbenchTheme,
+    WorkbenchTokens, use_workbench_tokens, workbench_scope, workbench_theme,
+};
+
 use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::time::Duration;

@@ -49,8 +49,15 @@ chrome = []
 ## Reorderable lists, accordions and steppers.
 advanced = []
 
+## The pieces a tool's own window is built from: split panes, trees, toolbars, icon buttons and key caps.
+workbench = ["icons", "overlays"]
+
+## Draws `icon:"set:name"` ids through `telar-icons`. Without it, icon buttons fall back to Unicode glyphs.
+icons = ["dep:telar-icons"]
+
 [dependencies]
 telar = { workspace = true, features = ["runtime"] }
+telar-icons = { workspace = true, optional = true }
 
 web-time = { workspace = true }
 

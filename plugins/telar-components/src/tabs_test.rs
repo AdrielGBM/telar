@@ -87,3 +87,35 @@ fn pressing_the_last_tab_sets_selected_index() {
         "pressing the last (second) tab sets selected to its index"
     );
 }
+
+/// The bar is the tab list its tabs belong to, named when the caller names it, and naming it does not rename a tab.
+#[test]
+fn the_bar_is_a_tab_list_a_reader_can_name() {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let item = tabs(
+        TabsProps::props()
+            .items(vec!["General", "Advanced"])
+            .label("Settings sections")
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    lay_out(item.layout_node());
+    let tree = ComponentList::new(item);
+    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+
+    let mut tabs: Vec<_> = nodes
+        .iter()
+        .filter(|node| node.role == Role::Tab)
+        .map(|node| node.name.as_str())
+        .collect();
+    tabs.sort();
+    assert_eq!(tabs, ["Advanced", "General"]);
+    assert!(
+        nodes
+            .iter()
+            .any(|node| node.id.is_none() && node.name == "Settings sections"),
+        "the list's name is read: {nodes:?}"
+    );
+}
