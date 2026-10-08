@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Prints the name of every publishable workspace crate whose telar.toml declares `library = true`, one per line.
 #
-# Those ship a transpiled artifact that `cargo publish` alone would refuse as uncommitted, so they are
-# published with `cargo telar publish`; everything else goes through plain `cargo publish`.
+# The per-crate sweep of publish-crates.sh publishes these one at a time with `cargo telar publish -p`, since their package carries a gitignored transpiled artifact that `cargo publish` alone would refuse as uncommitted; every other crate it retries goes through `cargo publish -p`.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."

@@ -9,7 +9,7 @@ use super::*;
 
 const VERSION: &str = "1.0.0";
 
-fn library(name: &str) -> Library {
+fn library(name: &str) -> Member {
     let dir =
         std::env::temp_dir().join(format!("cargo_telar_library_{name}_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -17,9 +17,10 @@ fn library(name: &str) -> Library {
     write(&dir, "telar.toml", "[telar]\nlibrary = true\n");
     write(&dir, "src/lib.rs", "telar::rsx_modules!();\n");
     write(&dir, "src/badge.rsx", "[view]\ntext \"badge\"\n");
-    Library {
+    Member {
         name: name.to_string(),
         dir,
+        library: true,
     }
 }
 
@@ -29,14 +30,14 @@ fn write(dir: &Path, file: &str, content: &str) {
     std::fs::write(path, content).unwrap();
 }
 
-fn transpiled(name: &str) -> Library {
+fn transpiled(name: &str) -> Member {
     let library = library(name);
     assert!(transpile_member(&library.dir, "test", VERSION));
     library
 }
 
 /// A crate of its own, depending on nothing, so `cargo package --list` answers without a registry. `include` is the manifest's, or none at all.
-fn packageable(name: &str, include: Option<&[String]>) -> Library {
+fn packageable(name: &str, include: Option<&[String]>) -> Member {
     let library = transpiled(name);
     let include = include
         .map(|entries| {
@@ -204,44 +205,93 @@ fn workspace(name: &str) -> PathBuf {
     write(
         &root,
         "Cargo.toml",
-        "[workspace]\nmembers = [\"app\", \"kit\"]\n",
+        "[workspace]\nmembers = [\"app\", \"kit\", \"fixture\"]\nresolver = \"3\"\n",
     );
-    for member in ["app", "kit"] {
+    for (member, extra) in [("app", ""), ("kit", ""), ("fixture", "publish = false\n")] {
         write(
             &root,
             &format!("{member}/Cargo.toml"),
-            &format!("[package]\nname = \"{member}\"\nversion = \"0.1.0\"\n"),
+            &format!(
+                "[package]\nname = \"{member}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n{extra}"
+            ),
         );
+        write(&root, &format!("{member}/src/lib.rs"), "");
     }
     write(&root, "kit/telar.toml", "[telar]\nlibrary = true\n");
+    write(&root, "fixture/telar.toml", "[telar]\nlibrary = true\n");
     root
 }
 
+fn members_of(
+    root: &Path,
+    shipment: Shipment,
+    package: Option<&str>,
+    workspace: bool,
+) -> Result<Vec<Member>, String> {
+    let packages = workspace_packages_in(root)?;
+    select_members(root, root, &packages, shipment, package, workspace)
+}
+
+/// One cargo call has to hold a plain crate and the library it depends on, or the plain crate is verified against a registry that may not have the library at all.
 #[test]
-fn the_workspace_flag_selects_every_library_member_and_nothing_else() {
+fn the_workspace_flag_selects_every_publishable_member_and_marks_the_libraries() {
     let root = workspace("all");
-    let selected = select_libraries(&root, &root, None, true);
+    let published = members_of(&root, Shipment::Publish, None, true);
+    let packaged = members_of(&root, Shipment::Package, None, true);
     let _ = std::fs::remove_dir_all(&root);
-    let names: Vec<String> = selected.unwrap().into_iter().map(|l| l.name).collect();
-    assert_eq!(names, ["kit"]);
+
+    let published: Vec<(String, bool)> = published
+        .unwrap()
+        .into_iter()
+        .map(|member| (member.name, member.library))
+        .collect();
+    assert_eq!(
+        published,
+        [("app".to_string(), false), ("kit".to_string(), true)]
+    );
+    let packaged: Vec<String> = packaged.unwrap().into_iter().map(|m| m.name).collect();
+    assert_eq!(packaged, ["app", "kit"]);
 }
 
 #[test]
 fn a_named_package_has_to_be_a_library() {
     let root = workspace("named");
-    let kit = select_libraries(&root, &root, Some("kit"), false);
-    let app = select_libraries(&root, &root, Some("app"), false);
-    let unknown = select_libraries(&root, &root, Some("nope"), false);
-    let here = select_libraries(&root.join("app"), &root, None, false);
-    let virtual_root = select_libraries(&root, &root, None, false);
+    let kit = members_of(&root, Shipment::Publish, Some("kit"), false);
+    let app = members_of(&root, Shipment::Publish, Some("app"), false);
+    let unknown = members_of(&root, Shipment::Publish, Some("nope"), false);
+    let packages = workspace_packages_in(&root).unwrap();
+    let here = select_members(
+        &root.join("app"),
+        &root,
+        &packages,
+        Shipment::Publish,
+        None,
+        false,
+    );
+    let virtual_root = members_of(&root, Shipment::Publish, None, false);
     let _ = std::fs::remove_dir_all(&root);
 
-    assert_eq!(kit.unwrap()[0].name, "kit");
+    let kit = kit.unwrap();
+    assert_eq!(kit.len(), 1);
+    assert_eq!(kit[0].name, "kit");
+    assert!(kit[0].library);
     let app = app.unwrap_err();
     assert!(app.contains("library = true"), "{app}");
     assert!(unknown.unwrap_err().contains("no package named `nope`"));
     assert!(here.unwrap_err().contains("library = true"));
     assert!(virtual_root.unwrap_err().contains("--workspace"));
+}
+
+#[test]
+fn a_named_library_that_forbids_publishing_can_be_packaged_and_not_published() {
+    let root = workspace("forbidden");
+    let packaged = members_of(&root, Shipment::Package, Some("fixture"), false);
+    let published = members_of(&root, Shipment::Publish, Some("fixture"), false);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(packaged.unwrap()[0].name, "fixture");
+    let error = published.unwrap_err();
+    assert!(error.contains("`fixture` cannot be published"), "{error}");
 }
 
 #[test]
@@ -299,15 +349,11 @@ fn the_publish_command_takes_the_package_selection_and_a_dry_run() {
 #[test]
 fn publish_forwards_its_arguments_and_adds_allow_dirty() {
     let root = Path::new("/ws");
-    let libraries = [library("kit_a"), library("kit_b")];
+    let members = [named("kit_a", true), named("kit_b", true)];
     let forwarded = publish_args(true, vec!["--registry".into(), "mine".into()]);
-    let args = cargo_invocation(Shipment::Publish, root, &libraries, &forwarded);
+    let args = cargo_invocation(Shipment::Publish, root, &members, &forwarded);
     assert_eq!(args[..2], ["publish", "--allow-dirty"]);
-    assert!(args.windows(2).any(|w| w == ["-p", "kit_a"]));
-    assert!(args.windows(2).any(|w| w == ["-p", "kit_b"]));
     assert_eq!(args[args.len() - 3..], ["--dry-run", "--registry", "mine"]);
-    let _ = std::fs::remove_dir_all(&libraries[0].dir);
-    let _ = std::fs::remove_dir_all(&libraries[1].dir);
 
     let once = publish_args(true, vec!["--dry-run".into()]);
     assert_eq!(once, ["--dry-run"]);
@@ -373,38 +419,65 @@ fn git_sees_a_committed_artifact_as_clean_and_an_edited_source_as_dirty() {
     assert_eq!(edited, ["src/lib.rs"]);
 }
 
-#[test]
-fn metadata_names_the_packages_whose_publish_is_false_or_empty() {
-    let metadata = r#"{"packages":[
-        {"name":"open","publish":null},
-        {"name":"closed","publish":[]},
-        {"name":"private","publish":["my-registry"]}
-    ]}"#;
-    let names: Vec<String> = unpublishable_names(metadata).into_iter().collect();
-    assert_eq!(names, ["closed"]);
-    assert!(unpublishable_names("not json").is_empty());
+fn named(name: &str, library: bool) -> Member {
+    Member {
+        name: name.to_string(),
+        dir: PathBuf::from(name),
+        library,
+    }
 }
 
 #[test]
-fn publishing_the_workspace_skips_what_forbids_it_and_a_named_one_is_refused() {
-    let named = |name: &str| Library {
+fn the_cargo_call_names_every_member_libraries_and_plain_crates_alike() {
+    let members = [
+        named("telar", false),
+        named("components", true),
+        named("devtools", false),
+        named("workshop", true),
+    ];
+    let args = cargo_invocation(Shipment::Publish, Path::new("/ws"), &members, &[]);
+    assert_eq!(args[..3], ["publish", "--allow-dirty", "--manifest-path"]);
+    assert_eq!(
+        args[4..],
+        [
+            "-p",
+            "telar",
+            "-p",
+            "components",
+            "-p",
+            "devtools",
+            "-p",
+            "workshop",
+        ]
+    );
+}
+
+#[test]
+fn metadata_lists_each_package_with_its_directory_and_whether_it_may_be_published() {
+    let metadata = r#"{"packages":[
+        {"name":"open","publish":null,"manifest_path":"/ws/open/Cargo.toml"},
+        {"name":"closed","publish":[],"manifest_path":"/ws/closed/Cargo.toml"},
+        {"name":"private","publish":["my-registry"],"manifest_path":"/ws/private/Cargo.toml"}
+    ]}"#;
+    let package = |name: &str, publishable: bool| WorkspacePackage {
         name: name.to_string(),
-        dir: PathBuf::from(name),
+        dir: Path::new("/ws").join(name),
+        publishable,
     };
-    let closed: BTreeSet<String> = ["fixture".to_string()].into();
-
-    let (kept, skipped) =
-        publishable(vec![named("kit"), named("fixture")], &closed, false).unwrap();
-    assert_eq!(kept, [named("kit")]);
-    assert_eq!(skipped, ["fixture"]);
-
-    let error = publishable(vec![named("fixture")], &closed, true).unwrap_err();
-    assert!(error.contains("`fixture` cannot be published"), "{error}");
-    assert!(publishable(vec![named("kit")], &closed, true).is_ok());
+    assert_eq!(
+        workspace_packages(metadata).unwrap(),
+        [
+            package("open", true),
+            package("closed", false),
+            package("private", true)
+        ]
+    );
+    assert!(workspace_packages("not json").is_err());
+    assert!(workspace_packages(r#"{"packages":[{"name":"lost"}]}"#).is_err());
 }
 
 /// A library whose `.rsx` draws one icon from an Iconify set of its own, baked.
-fn icon_library(name: &str) -> Library {
+fn icon_library(name: &str) -> Member {
     let library = library(name);
     write(
         &library.dir,

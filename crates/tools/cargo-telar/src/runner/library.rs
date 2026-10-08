@@ -1,6 +1,8 @@
-//! `cargo telar package` and `cargo telar publish`: shipping a `[telar] library` together with the artifact a dependency is compiled from.
+//! `cargo telar package` and `cargo telar publish`: shipping workspace crates, each `[telar] library` among them together with the artifact a dependency is compiled from.
 //!
 //! A library compiled as a dependency is wired read-only from the Plain artifact its package carries, and nothing the consumer runs can produce a missing one or refresh a stale one. So the artifact has to be checked where it can still be fixed: here, against the exact files `cargo package` would put in the `.crate`.
+//!
+//! Cargo verifies each package of a multi-package call against the other packages of that same call and resolves every other dependency from the registry, so a workspace ships in one call: a plain crate depending on a library, or a library depending on a plain crate, only builds against the in-tree version of the other.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -8,16 +10,26 @@ use std::process::Command;
 
 use telar_project::BuildFlavour;
 
-use super::bake::{bake_workspace, member_dirs};
+use super::bake::bake_workspace;
 use super::cli::{PackageArgs, PublishArgs};
 use super::config::{find_package_dir, read_package_manifest_in};
 use super::transpile::transpile_workspace;
 
-/// A workspace member that declares `library = true`.
+/// A workspace package as `cargo metadata --no-deps` reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Library {
+pub(super) struct WorkspacePackage {
     pub(super) name: String,
     pub(super) dir: PathBuf,
+    /// False when `package.publish` is `false` or an empty registry list.
+    pub(super) publishable: bool,
+}
+
+/// A workspace member an invocation ships; a `library` one declares `library = true` and has its artifact checked before cargo runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct Member {
+    pub(super) name: String,
+    pub(super) dir: PathBuf,
+    pub(super) library: bool,
 }
 
 /// The cargo command a release pipeline ends in.
@@ -75,22 +87,34 @@ pub(super) fn publish_args(dry_run: bool, mut cargo_args: Vec<String>) -> Vec<St
     cargo_args
 }
 
-/// Names of the packages in `metadata` (`cargo metadata --no-deps` output) that `package.publish` forbids publishing: `false` or an empty registry list.
-pub(super) fn unpublishable_names(metadata: &str) -> BTreeSet<String> {
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(metadata) else {
-        return BTreeSet::new();
-    };
-    value["packages"]
+/// The packages of `metadata`, the output of `cargo metadata --no-deps`, in workspace order.
+pub(super) fn workspace_packages(metadata: &str) -> Result<Vec<WorkspacePackage>, String> {
+    let value: serde_json::Value = serde_json::from_str(metadata)
+        .map_err(|e| format!("`cargo metadata` printed something that is not its JSON: {e}"))?;
+    let packages = value["packages"]
         .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|package| package["publish"].as_array().is_some_and(Vec::is_empty))
-        .filter_map(|package| package["name"].as_str().map(str::to_string))
+        .ok_or("`cargo metadata` printed no `packages` list")?;
+    packages
+        .iter()
+        .map(|package| {
+            let name = package["name"]
+                .as_str()
+                .ok_or("`cargo metadata` printed a package without a name")?;
+            let dir = package["manifest_path"]
+                .as_str()
+                .and_then(|manifest| Path::new(manifest).parent())
+                .ok_or_else(|| format!("`cargo metadata` printed no manifest path for `{name}`"))?;
+            Ok(WorkspacePackage {
+                name: name.to_string(),
+                dir: dir.to_path_buf(),
+                publishable: !package["publish"].as_array().is_some_and(Vec::is_empty),
+            })
+        })
         .collect()
 }
 
-fn unpublishable_in(workspace_root: &Path) -> BTreeSet<String> {
-    Command::new("cargo")
+fn workspace_packages_in(workspace_root: &Path) -> Result<Vec<WorkspacePackage>, String> {
+    let output = Command::new("cargo")
         .args([
             "metadata",
             "--format-version",
@@ -100,31 +124,18 @@ fn unpublishable_in(workspace_root: &Path) -> BTreeSet<String> {
         ])
         .arg(workspace_root.join("Cargo.toml"))
         .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .map(|output| unpublishable_names(&String::from_utf8_lossy(&output.stdout)))
-        .unwrap_or_default()
-}
-
-/// What `cargo publish` can be asked for out of `libraries`: with `--workspace` those that forbid publishing are left out, and a library named with `-p` that forbids it is an error.
-pub(super) fn publishable(
-    libraries: Vec<Library>,
-    unpublishable: &BTreeSet<String>,
-    named: bool,
-) -> Result<(Vec<Library>, Vec<String>), String> {
-    let (kept, skipped): (Vec<Library>, Vec<Library>) = libraries
-        .into_iter()
-        .partition(|library| !unpublishable.contains(&library.name));
-    if named && let Some(library) = skipped.first() {
+        .map_err(|e| format!("could not run `cargo metadata`: {e}"))?;
+    if !output.status.success() {
         return Err(format!(
-            "`{}` cannot be published: `package.publish` is false or an empty list in its Cargo.toml",
-            library.name
+            "`cargo metadata` failed for {}:\n{}",
+            workspace_root.display(),
+            String::from_utf8_lossy(&output.stderr).trim_end()
         ));
     }
-    Ok((kept, skipped.into_iter().map(|l| l.name).collect()))
+    workspace_packages(&String::from_utf8_lossy(&output.stdout))
 }
 
-/// Bakes and transpiles the selected libraries, refuses any that is not ready to ship, then runs `cargo package` or `cargo publish` over all of them at once, so cargo orders them by their dependencies on each other. With `check_only` it stops after the readiness verdict.
+/// Bakes and transpiles the workspace when a library is among the selected members, refuses any library that is not ready to ship, then runs `cargo package` or `cargo publish` over every selected member at once, so cargo orders them by their dependencies on each other and verifies each against the in-tree versions of the rest. With `check_only` it stops after the libraries' readiness verdict.
 fn ship(
     shipment: Shipment,
     package: Option<&str>,
@@ -134,39 +145,35 @@ fn ship(
 ) {
     let here = find_package_dir(&[]);
     let workspace_root = telar_project::find_workspace_root(&here).unwrap_or_else(|| here.clone());
-    let libraries = select_libraries(&here, &workspace_root, package, workspace)
-        .unwrap_or_else(|message| fail(&message));
-    let mut any_skipped = false;
-    let libraries = if shipment == Shipment::Publish {
-        let (kept, skipped) = publishable(
-            libraries,
-            &unpublishable_in(&workspace_root),
-            package.is_some(),
-        )
-        .unwrap_or_else(|message| fail(&message));
-        if !skipped.is_empty() {
-            any_skipped = true;
-            eprintln!(
-                "[cargo-telar] skipping {} (`package.publish` forbids publishing)",
-                skipped.join(", ")
-            );
-        }
-        kept
-    } else {
-        libraries
-    };
+    let packages = workspace_packages_in(&workspace_root).unwrap_or_else(|message| fail(&message));
+    let members = select_members(
+        &here,
+        &workspace_root,
+        &packages,
+        shipment,
+        package,
+        workspace,
+    )
+    .unwrap_or_else(|message| fail(&message));
     let verb = shipment.subcommand();
-    if libraries.is_empty() {
-        if any_skipped {
-            eprintln!("[cargo-telar] every selected library forbids publishing; nothing to {verb}");
-        } else {
-            eprintln!(
-                "[cargo-telar] no workspace member declares `library = true`; nothing to {verb}"
-            );
-        }
+    if members.is_empty() {
+        eprintln!("[cargo-telar] every workspace member forbids publishing; nothing to {verb}");
         return;
     }
+    let libraries: Vec<&Member> = members.iter().filter(|member| member.library).collect();
+    if !libraries.is_empty() {
+        check_libraries(&workspace_root, &libraries, verb);
+    } else if check_only {
+        eprintln!("[cargo-telar] no selected member declares `library = true`; nothing to check");
+    }
+    if check_only {
+        return;
+    }
+    run_cargo(shipment, &workspace_root, &members, cargo_args);
+}
 
+/// Bakes and transpiles the workspace, then exits non-zero after naming every one of `libraries` whose package would not carry an artifact that answers for its sources.
+fn check_libraries(workspace_root: &Path, libraries: &[&Member], verb: &str) {
     if !bake_workspace() {
         fail(
             "the bake reported errors, so no library can ship an artifact that answers for its sources; fix the errors above and run this again",
@@ -177,11 +184,11 @@ fn ship(
             "the transpile failed, so no library can ship an artifact that answers for its sources; fix the errors above and run this again",
         );
     }
-    let telar_version = telar_project::resolve_telar_version(&workspace_root)
+    let telar_version = telar_project::resolve_telar_version(workspace_root)
         .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
 
     let mut ready = true;
-    for library in &libraries {
+    for library in libraries {
         let problems = readiness(library, &telar_version);
         if problems.is_empty() {
             eprintln!("[cargo-telar] {}: ready to {verb}", library.name);
@@ -200,71 +207,73 @@ fn ship(
     if !ready {
         std::process::exit(1);
     }
-    if check_only {
-        return;
-    }
-    run_cargo(shipment, &workspace_root, &libraries, cargo_args);
 }
 
-/// The libraries a `cargo telar package` or `publish` invocation names: every library member for `--workspace`, the member called `package`, or else the package `here` is in.
-pub(super) fn select_libraries(
+/// The members a `cargo telar package` or `publish` invocation ships, out of the workspace's `packages`.
+///
+/// `--workspace` takes every member that may be published, libraries and plain crates alike, since only one cargo call holding all of them can verify each against the others. Otherwise it is the library called `package`, or else the package `here` is in; a member that is not a library is an error, and so is publishing one that forbids it.
+pub(super) fn select_members(
     here: &Path,
     workspace_root: &Path,
+    packages: &[WorkspacePackage],
+    shipment: Shipment,
     package: Option<&str>,
     workspace: bool,
-) -> Result<Vec<Library>, String> {
-    let members: Vec<Library> = member_dirs(workspace_root)
-        .into_iter()
-        .filter_map(|dir| {
-            let name = read_package_manifest_in(&dir)?.name;
-            Some(Library { name, dir })
-        })
-        .collect();
+) -> Result<Vec<Member>, String> {
     if workspace {
-        let mut libraries = Vec::new();
-        for member in members {
-            if is_library(&member.dir)? {
-                libraries.push(member);
-            }
-        }
-        return Ok(libraries);
+        return packages
+            .iter()
+            .filter(|package| package.publishable)
+            .map(|package| {
+                Ok(Member {
+                    name: package.name.clone(),
+                    dir: package.dir.clone(),
+                    library: is_library(&package.dir)?,
+                })
+            })
+            .collect();
     }
-    let selected = match package {
-        Some(name) => members
-            .into_iter()
-            .find(|member| member.name == name)
-            .ok_or_else(|| {
-                format!(
-                    "no package named `{name}` in the workspace at {}",
-                    workspace_root.display()
-                )
-            })?,
+    let name = match package {
+        Some(name) => name.to_string(),
         None => {
-            let name = read_package_manifest_in(here)
+            read_package_manifest_in(here)
                 .ok_or_else(|| {
                     format!(
                         "{} is not a package: run this in a library's directory, or pass `-p <name>` or `--workspace`",
                         here.display()
                     )
                 })?
-                .name;
-            Library {
-                name,
-                dir: here.to_path_buf(),
-            }
+                .name
         }
     };
+    let selected = packages
+        .iter()
+        .find(|package| package.name == name)
+        .ok_or_else(|| {
+            format!(
+                "no package named `{name}` in the workspace at {}",
+                workspace_root.display()
+            )
+        })?;
     if !is_library(&selected.dir)? {
         return Err(format!(
-            "`{}` is not a telar library, so nothing ships a transpiled artifact for it. A package other crates depend on declares it in {}:\n    [telar]\n    library = true",
-            selected.name,
+            "`{name}` is not a telar library, so nothing ships a transpiled artifact for it. A package other crates depend on declares it in {}:\n    [telar]\n    library = true",
             selected
                 .dir
                 .join(telar_project::MANIFEST_FILENAME)
                 .display()
         ));
     }
-    Ok(vec![selected])
+    if shipment == Shipment::Publish && !selected.publishable {
+        return Err(format!(
+            "`{name}` cannot be published: `package.publish` is false or an empty list in its Cargo.toml"
+        ));
+    }
+    Ok(vec![Member {
+        name,
+        dir: selected.dir.clone(),
+        library: true,
+    }])
 }
 
 fn is_library(dir: &Path) -> Result<bool, String> {
@@ -276,7 +285,7 @@ fn is_library(dir: &Path) -> Result<bool, String> {
 /// Everything that keeps `library` from being packaged as it stands, each phrased with what fixes it. Empty when the package would carry a complete artifact that answers for its sources.
 ///
 /// The artifact is checked in a copy holding exactly the files `cargo package` lists, so what is judged is what would ship, not what happens to be on disk beside it. When the list misses a file, the copy cannot answer anything the missing file would not explain, so the package directory itself is checked instead and both problems are reported.
-fn readiness(library: &Library, telar_version: &str) -> Vec<String> {
+fn readiness(library: &Member, telar_version: &str) -> Vec<String> {
     let listed = match packaged_files(&library.dir) {
         Ok(listed) => listed,
         Err(message) => return vec![message],
@@ -332,7 +341,7 @@ pub(super) fn packaged_files(dir: &Path) -> Result<BTreeSet<String>, String> {
 }
 
 /// The problem with `library`'s `include`, when `listed` leaves out a file a build compiling it as a dependency reads, with the entries that would put each one back.
-pub(super) fn missing_from_package(library: &Library, listed: &BTreeSet<String>) -> Option<String> {
+pub(super) fn missing_from_package(library: &Member, listed: &BTreeSet<String>) -> Option<String> {
     let missing: Vec<String> = telar_project::library_files(&library.dir)
         .into_iter()
         .filter(|file| !listed.contains(file))
@@ -595,38 +604,39 @@ fn asset_problems(package_dir: &Path, telar_dir: &Path, telar_version: &str) -> 
     problems
 }
 
-/// Runs `cargo package` or `cargo publish` over `libraries`, after refusing sources that are not committed the way cargo itself would.
+/// Runs `cargo package` or `cargo publish` over every one of `members` in one call, after refusing sources that are not committed the way cargo itself would.
 ///
-/// Cargo refuses a package holding any file git does not have committed, and the gitignored `.telar/` the package has to carry is exactly that, so it is asked to allow a dirty tree and the check is made here instead, over every packaged source git does not ignore.
-fn run_cargo(
-    shipment: Shipment,
-    workspace_root: &Path,
-    libraries: &[Library],
-    cargo_args: &[String],
-) {
+/// Cargo refuses a package holding any file git does not have committed, and the gitignored `.telar/` a library has to carry is exactly that, so cargo is asked to allow a dirty tree and the check is made here instead, for plain crates and libraries alike, over every packaged source git does not ignore.
+fn run_cargo(shipment: Shipment, workspace_root: &Path, members: &[Member], cargo_args: &[String]) {
     let verb = shipment.subcommand();
     if !cargo_args.iter().any(|arg| arg == "--allow-dirty") {
-        for library in libraries {
-            let listed = packaged_files(&library.dir).unwrap_or_else(|message| fail(&message));
-            let dirty = uncommitted(&library.dir, &listed);
+        let mut dirty_members = Vec::new();
+        for member in members {
+            let listed = packaged_files(&member.dir).unwrap_or_else(|message| fail(&message));
+            let dirty = uncommitted(&member.dir, &listed);
             if !dirty.is_empty() {
-                fail(&format!(
-                    "{} file(s) of `{}` have changes not yet committed to git:\n{}\nCommit them, or {verb} them anyway with `cargo telar {verb} -p {} -- --allow-dirty`.",
+                dirty_members.push(format!(
+                    "{} file(s) of `{}` have changes not yet committed to git:\n{}",
                     dirty.len(),
-                    library.name,
-                    listing(&dirty),
-                    library.name
+                    member.name,
+                    listing(&dirty)
                 ));
             }
         }
+        if !dirty_members.is_empty() {
+            fail(&format!(
+                "{}\nCommit them, or {verb} anyway by passing `-- --allow-dirty` to `cargo telar {verb}`.",
+                dirty_members.join("\n")
+            ));
+        }
     }
-    let names: Vec<&str> = libraries.iter().map(|l| l.name.as_str()).collect();
+    let names: Vec<&str> = members.iter().map(|member| member.name.as_str()).collect();
     eprintln!("[cargo-telar] cargo {verb} -p {}", names.join(" -p "));
     let status = Command::new("cargo")
         .args(cargo_invocation(
             shipment,
             workspace_root,
-            libraries,
+            members,
             cargo_args,
         ))
         .status();
@@ -637,11 +647,11 @@ fn run_cargo(
     }
 }
 
-/// The arguments of the cargo call that ships `libraries`: always `--allow-dirty`, since the committed-sources check has already been made, then the caller's own arguments.
+/// The arguments of the cargo call that ships `members`: always `--allow-dirty`, since the committed-sources check has already been made, a `-p` for each member, then the caller's own arguments.
 pub(super) fn cargo_invocation(
     shipment: Shipment,
     workspace_root: &Path,
-    libraries: &[Library],
+    members: &[Member],
     cargo_args: &[String],
 ) -> Vec<String> {
     let mut args = vec![
@@ -650,9 +660,9 @@ pub(super) fn cargo_invocation(
         "--manifest-path".to_string(),
         workspace_root.join("Cargo.toml").display().to_string(),
     ];
-    for library in libraries {
+    for member in members {
         args.push("-p".to_string());
-        args.push(library.name.clone());
+        args.push(member.name.clone());
     }
     args.extend(
         cargo_args

@@ -70,12 +70,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # A `[telar] library` is compiled as a dependency from the transpiled `.rsx` its package carries, and nothing a consumer runs can produce it. `cargo telar publish` transpiles and bakes every member declaring `library = true`, fails if the files cargo would ship leave part of that artifact out or no longer answer for the sources, and publishes with the gitignored artifact allowed. Every other crate goes through plain `cargo publish`, so the two together cover each crate once.
+      # One cargo call for every publishable crate, because cargo verifies each package of a call against the other packages of that call and takes every other dependency from the registry: split in two, a plain crate depending on a `[telar] library` (or a library depending on a plain crate) is built against a registry version that is older than the tree or absent. `cargo telar publish --workspace` first transpiles and bakes, fails if the files cargo would ship leave part of a library's artifact out or no longer answer for its sources, and checks that every crate's packaged sources are committed; then each crate is verified once, against the in-tree versions of the others, plain or library.
       - run: cargo run -q -p cargo-telar -- publish --workspace --dry-run
-      - run: |
-          excludes=()
-          while read -r name; do excludes+=(--exclude "$name"); done < <(.github/scripts/library-crates.sh)
-          cargo publish --workspace --dry-run "${excludes[@]}"
 
   check-android:
     runs-on: ubuntu-latest

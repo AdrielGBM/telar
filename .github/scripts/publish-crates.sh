@@ -61,9 +61,8 @@ attempt() {
   cargo publish "$@" $PUBLISH_ARGS 2>&1 | tee -a "$LOG"
 }
 
-# A `[telar] library` is published through `cargo telar publish`, which transpiles it, checks that its package
-# carries an artifact answering for its sources, and allows the gitignored artifact `cargo publish` would refuse.
-attempt_library() {
+# `cargo telar publish` transpiles, checks that each `[telar] library` it ships carries an artifact answering for its sources, and allows the gitignored artifact `cargo publish` would refuse; with `--workspace` it ships every publishable crate in one cargo call.
+attempt_telar() {
   # shellcheck disable=SC2086
   cargo run -q -p cargo-telar -- publish "$@" -- $PUBLISH_ARGS 2>&1 | tee -a "$LOG"
 }
@@ -87,19 +86,10 @@ if [[ ${#pending[@]} -eq 0 ]]; then
 fi
 
 echo "${#pending[@]} of ${#crates[@]} crates need publishing."
-echo "==> cargo publish --workspace"
-# Tried whole-workspace first because cargo resolves the publish order itself; the sweep below can only
-# approximate that order by retrying what failed.
-excludes=()
-for name in "${library_names[@]}"; do excludes+=(--exclude "$name"); done
-attempt --workspace "${excludes[@]}" ||
+echo "==> cargo telar publish --workspace"
+# Tried whole-workspace first, in one call, because cargo resolves the publish order itself and verifies each crate against the in-tree versions of the others, libraries and plain crates alike; the sweep below can only approximate that order by retrying what failed.
+attempt_telar --workspace ||
   echo "Workspace publish stopped early — sweeping the remainder one crate at a time."
-# Libraries go in one call so cargo orders them among themselves; the sweep below retries any that stop short.
-if ((${#library_names[@]} > 0)); then
-  echo "==> cargo telar publish --workspace"
-  attempt_library --workspace ||
-    echo "Library publish stopped early — sweeping the remainder one crate at a time."
-fi
 
 for ((round = 1; round <= ROUNDS; round++)); do
   mapfile -t pending < <(missing)
@@ -112,7 +102,7 @@ for ((round = 1; round <= ROUNDS; round++)); do
     read -r name version <<<"$entry"
     echo "--> $name $version"
     if is_library "$name"; then
-      attempt_library -p "$name" && progressed=1
+      attempt_telar -p "$name" && progressed=1
     else
       attempt -p "$name" && progressed=1
     fi

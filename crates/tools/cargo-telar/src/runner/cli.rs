@@ -35,9 +35,9 @@ pub(crate) enum TelarCommand {
     Bake,
     /// Transpile every `.rsx` into `.telar/build/`, so a project build wires the result instead of producing it
     Transpile,
-    /// Package a `[telar] library` with the transpiled artifact a dependency is compiled from, after checking that the package carries all of it and that it answers for the sources
+    /// Package a `[telar] library` with the transpiled artifact a dependency is compiled from, after checking that the package carries all of it and that it answers for the sources; `--workspace` packages every publishable member in one cargo call
     Package(PackageArgs),
-    /// Publish a `[telar] library` with the transpiled artifact a dependency is compiled from, after the same checks as `package`; the gitignored artifact does not make `cargo publish` refuse it
+    /// Publish a `[telar] library` with the transpiled artifact a dependency is compiled from, after the same checks as `package`; the gitignored artifact does not make `cargo publish` refuse it, and `--workspace` publishes every publishable member in one cargo call
     Publish(PublishArgs),
     /// Check the development environment
     Doctor,
@@ -86,13 +86,13 @@ pub(crate) struct InitArgs {
     pub(crate) lib: bool,
 }
 
-/// A library is compiled as a dependency from the artifact it ships, so packaging one is transpiling it, checking what `cargo package` would carry, and only then packaging.
+/// A library is compiled as a dependency from the artifact it ships, so packaging one is transpiling it, checking what `cargo package` would carry, and only then packaging. `--workspace` hands every publishable member to one `cargo package`, so each is verified against the in-tree versions of the others, plain crates and libraries alike.
 #[derive(clap::Args)]
 pub(crate) struct PackageArgs {
     /// Library to package; defaults to the package in the current directory
     #[arg(short = 'p', long, conflicts_with = "workspace")]
     pub(crate) package: Option<String>,
-    /// Every workspace member whose `telar.toml` declares `library = true`
+    /// Every workspace member that may be published, in one cargo call; the libraries among them are checked first
     #[arg(long)]
     pub(crate) workspace: bool,
     /// Only check that each library is ready to package, and exit non-zero when one is not
@@ -103,13 +103,13 @@ pub(crate) struct PackageArgs {
     pub(crate) cargo_args: Vec<String>,
 }
 
-/// Publishing a library is packaging it, then uploading what was checked: the same selection, transpile and readiness checks as `package`, then `cargo publish --allow-dirty` over the selected libraries, which cargo orders by their dependencies on each other.
+/// Publishing a library is packaging it, then uploading what was checked: the same selection, transpile and readiness checks as `package`, then one `cargo publish --allow-dirty` over every selected member, which cargo orders by their dependencies on each other and verifies each against the in-tree versions of the rest.
 #[derive(clap::Args)]
 pub(crate) struct PublishArgs {
     /// Library to publish; defaults to the package in the current directory
     #[arg(short = 'p', long, conflicts_with = "workspace")]
     pub(crate) package: Option<String>,
-    /// Every workspace member whose `telar.toml` declares `library = true`
+    /// Every workspace member that may be published, in one cargo call; the libraries among them are checked first
     #[arg(long)]
     pub(crate) workspace: bool,
     /// Run every check and cargo's own, without uploading

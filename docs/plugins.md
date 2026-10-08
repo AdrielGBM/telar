@@ -359,21 +359,27 @@ cargo telar publish --dry-run    # every check, and cargo's own, without uploadi
 cargo telar publish
 ```
 
-Each takes `-p <name>` for one library, or `--workspace` for every workspace member whose `telar.toml` says
-`library = true`; the default is the package in the current directory. Arguments after `--` go to cargo
-(`cargo telar publish -- --registry my-registry`). `publish` skips a library whose `Cargo.toml` says
-`publish = false`.
+Each takes `-p <name>` for one library, or `--workspace` for every workspace member that may be published, plain
+crates and libraries alike; the default is the package in the current directory. Arguments after `--` go to cargo
+(`cargo telar publish -- --registry my-registry`). `--workspace` leaves out a member whose `Cargo.toml` says
+`publish = false`, and `publish -p` refuses one.
 
-Both transpile and bake first, then check that the package carries the whole artifact and that the artifact
-answers for the sources on disk. Cargo leaves every dot-directory out of a package unless `include` names it,
-and `.telar/` is one, so a library on cargo's defaults publishes a crate no build can compile. The `include`
+`--workspace` ships everything in one cargo call. Cargo verifies each package of a call against the other packages
+of that same call and takes every other dependency from the registry, so a plain crate that depends on a library,
+or a library that depends on a plain crate, only builds against the in-tree version of the other when both are in
+the call. Cargo orders them by their dependencies on each other.
+
+When a library is among what they ship, both transpile and bake first, then check that each library's package
+carries the whole artifact and that the artifact answers for the sources on disk. Cargo leaves every
+dot-directory out of a package unless `include` names it, and `.telar/` is one, so a library on cargo's defaults publishes a crate no build can compile. The `include`
 list is the exact one `cargo telar new --lib` writes: `telar.toml`, `src/**` minus the module trees of the
 hot-reload and preview flavours, and the Plain flavour's generated directory, index, baked catalog, baked
 assets and icon record under `.telar/`. The icon record also has to answer for the icons the artifact baked. `package --check` names what to add when the list falls behind. `telar_project::library_include()` is where the list is defined.
 
 Cargo refuses a package with uncommitted files, and the gitignored `.telar/` is exactly that, so `package` and
 `publish` call cargo with `--allow-dirty` after checking that no packaged source git tracks has uncommitted
-changes. The artifact is exempt, since every transpile regenerates it.
+changes, in every crate they ship, plain or library. A library's artifact is exempt, since every transpile
+regenerates it.
 
 ### No `build.rs`, and the git-dependency policy
 
