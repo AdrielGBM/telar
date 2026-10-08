@@ -112,7 +112,7 @@ fn chrome() -> (Box<dyn Component>, telar::RwSignal<i32>) {
 #[test]
 fn asking_an_unchanged_tree_for_its_frame_allocates_nothing() {
     let (root, _ticks) = chrome();
-    let tree = LocalTree::new(root);
+    let tree = LocalTree::new(|| root);
     let _ = tree.frame();
 
     let cost = measure(|| {
@@ -140,7 +140,7 @@ fn advance(tree: &LocalTree, ticks: &telar::RwSignal<i32>, value: i32) {
 #[test]
 fn a_changing_frame_costs_the_same_every_time() {
     let (root, ticks) = chrome();
-    let tree = LocalTree::new(root);
+    let tree = LocalTree::new(|| root);
 
     // Every pair leaves the tree on ODD, so both measured frames are the same transition, ODD -> EVEN.
     for _ in 0..16 {

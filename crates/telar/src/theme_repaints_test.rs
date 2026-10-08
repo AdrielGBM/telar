@@ -68,7 +68,7 @@ fn a_themed_box() -> LocalTree {
         RectStyle::default().with_fill(use_theme_tokens().surface_alt())
     })
     .unwrap();
-    LocalTree::new(Box::new(Root(box_item(boxed))))
+    LocalTree::new(|| Box::new(Root(box_item(boxed))))
 }
 
 fn following_the_system() {
@@ -272,7 +272,7 @@ fn sibling_subtrees_in_one_window_keep_their_own_themes() {
         vec![Box::new(bar), Box::new(card)],
     )
     .unwrap();
-    let mut tree = LocalTree::new(Box::new(telar::WindowRoot::new(box_item(window))));
+    let mut tree = LocalTree::new(|| Box::new(telar::WindowRoot::new(box_item(window))));
     tree.on_event(&platform_core::Event::WindowResized {
         width: 200,
         height: 100,

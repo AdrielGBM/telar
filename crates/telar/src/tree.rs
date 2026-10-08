@@ -8,6 +8,7 @@ use std::cell::Ref;
 use std::ops::Deref;
 
 use platform_core::Event;
+use reactive_core::{OwnerId, dispose_owner, owner_scope};
 use renderer_core::DrawCommand;
 use ui_core::{Component, ComponentList, EventResult};
 use ui_tree::SegmentNodeInfo;
@@ -49,34 +50,59 @@ pub trait UiTree {
     fn end_frame(&self) {}
 }
 
+/// A [`ComponentList`] that owns everything its root's build made, so dropping it frees the whole tree: the effects and signals the build created, and the widgets those effects keep alive, focus registrations with them.
+///
+/// A [`ComponentList`] alone frees nothing it did not create: a mounted tree lives as long as the owner it was built under. Without an owner of its own, a remount left the previous tree running in the surface's root owner until the surface closed.
+struct OwnedTree {
+    list: ComponentList,
+    owner: OwnerId,
+}
+
+impl OwnedTree {
+    fn mount(build: impl FnOnce() -> Box<dyn Component>) -> Self {
+        let scope = owner_scope();
+        let list = ComponentList::new(build());
+        let owner = scope.id();
+        drop(scope);
+        Self { list, owner }
+    }
+}
+
+impl Drop for OwnedTree {
+    fn drop(&mut self) {
+        dispose_owner(self.owner);
+    }
+}
+
 /// A tree mounted in this process, on top of a [`ComponentList`].
-pub struct LocalTree(ComponentList);
+pub struct LocalTree(OwnedTree);
 
 impl LocalTree {
-    pub fn new(root: Box<dyn Component>) -> Self {
-        Self(ComponentList::new(root))
+    /// Builds the root with `build` and mounts it, owning what the build made: dropping the tree frees all of it.
+    pub fn new(build: impl FnOnce() -> Box<dyn Component>) -> Self {
+        Self(OwnedTree::mount(build))
     }
 }
 
 impl UiTree for LocalTree {
     fn on_event(&mut self, event: &Event) -> EventResult {
-        self.0.on_event(event)
+        self.0.list.on_event(event)
     }
 
     fn frame(&self) -> Frame<'_> {
-        Frame::Borrowed(self.0.commands())
+        Frame::Borrowed(self.0.list.commands())
     }
 
     fn is_dirty(&self) -> bool {
-        self.0.is_dirty()
+        self.0.list.is_dirty()
     }
 
     fn generation(&self) -> u64 {
-        self.0.generation()
+        self.0.list.generation()
     }
 
     fn walk(&self, out: &mut Vec<SegmentNodeInfo>) {
-        self.0.walk_tree(out);
+        self.0.list.walk_tree(out);
     }
 }
 
@@ -84,7 +110,7 @@ impl UiTree for LocalTree {
 ///
 /// The runner must drop its tree *before* replacing the app, so this instance is freed while its dylib is still mapped; `AppHandler`'s reload path already does that for the same reason effect closures require it.
 pub struct HotTree {
-    tree: ComponentList,
+    tree: OwnedTree,
 }
 
 impl HotTree {
@@ -93,7 +119,7 @@ impl HotTree {
     /// # Safety The returned pointer must be freed with [`HotTree::release`], from this same dylib, before it is unloaded.
     pub fn mount(app: &dyn crate::app::App) -> *mut HotTree {
         Box::into_raw(Box::new(HotTree {
-            tree: ComponentList::new(app.root()),
+            tree: OwnedTree::mount(|| app.root()),
         }))
     }
 
@@ -108,7 +134,7 @@ impl HotTree {
         // The input registries are read by widgets, and in hot mode those widgets live **here** — so this is where the reading has to be fed. The runner also observes, but on the host side of the boundary, and a `cdylib` carries its own copy of every `thread_local` in `ui-core`: the host was filling one registry while the app read another, empty one. Nothing failed loudly. `modifiers()` answered "no modifiers" and `pointer_buttons()` answered "nothing held", confidently, for the entire life of a `cargo telar dev` session — so a ⇧-click was a plain click and a right-drag was a left-drag, and every gesture built on either silently did the wrong thing while its own tests passed.
         ui_core::observe_keyboard(event);
         ui_core::observe_pointer(event);
-        this.tree.on_event(event) == EventResult::Handled
+        this.tree.list.on_event(event) == EventResult::Handled
     }
 
     /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event) observes on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose widgets asked.
@@ -124,26 +150,26 @@ impl HotTree {
     /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
     pub unsafe fn paint(ptr: *mut HotTree) -> Vec<DrawCommand> {
         let this = unsafe { &*ptr };
-        this.tree.commands().clone()
+        this.tree.list.commands().clone()
     }
 
     /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
     pub unsafe fn is_dirty(ptr: *mut HotTree) -> bool {
         let this = unsafe { &*ptr };
-        this.tree.is_dirty()
+        this.tree.list.is_dirty()
     }
 
     /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
     pub unsafe fn generation(ptr: *mut HotTree) -> u64 {
         let this = unsafe { &*ptr };
-        this.tree.generation()
+        this.tree.list.generation()
     }
 
     /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
     pub unsafe fn walk(ptr: *mut HotTree) -> Vec<SegmentNodeInfo> {
         let this = unsafe { &*ptr };
         let mut out = Vec::new();
-        this.tree.walk_tree(&mut out);
+        this.tree.list.walk_tree(&mut out);
         out
     }
 }

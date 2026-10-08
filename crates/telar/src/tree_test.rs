@@ -65,3 +65,62 @@ fn the_hot_tree_feeds_the_registries_its_own_widgets_read() {
     ui_core::reset_keyboard();
     ui_core::reset_pointer();
 }
+
+/// A button inside a box, its focus id handed out as the tree is built.
+fn panel_with_a_button(
+    id: std::rc::Rc<std::cell::Cell<Option<ui_core::focus::FocusId>>>,
+) -> Box<dyn Component> {
+    let button = ui_core::StyledContainer::new(
+        layout_core::LayoutStyle::new().width(40.0).height(20.0),
+        |_| renderer_core::RectStyle::default(),
+        vec![],
+    )
+    .expect("a box builds")
+    .control(ui_core::focus::Role::Button)
+    .on_press(|| {});
+    id.set(button.focus_id());
+    Box::new(
+        ui_core::Container::new(
+            layout_core::LayoutStyle::new(),
+            vec![ui_core::box_item(button)],
+        )
+        .expect("a box builds"),
+    )
+}
+
+/// What a mounted tree built is the tree's: dropping it — a remount, a window closing — leaves no control of it in the tab order, however deep it sat. A tree that only held its root left every nested control registered and every effect of the old tree running.
+#[test]
+fn dropping_a_mounted_tree_frees_the_controls_it_built() {
+    ui_core::reset_layout_runtime();
+    let id = std::rc::Rc::new(std::cell::Cell::new(None));
+    let tree = LocalTree::new({
+        let id = id.clone();
+        move || panel_with_a_button(id)
+    });
+    let button = id.get().expect("the button is focusable");
+    assert!(ui_core::focus::is_registered(button));
+
+    drop(tree);
+    assert!(
+        !ui_core::focus::is_registered(button),
+        "the button left the tab order with its tree"
+    );
+}
+
+#[test]
+fn releasing_a_hot_tree_frees_the_controls_it_built() {
+    struct Panel(std::rc::Rc<std::cell::Cell<Option<ui_core::focus::FocusId>>>);
+    impl crate::app::App for Panel {
+        fn root(&self) -> Box<dyn Component> {
+            ui_core::reset_layout_runtime();
+            panel_with_a_button(self.0.clone())
+        }
+    }
+    let id = std::rc::Rc::new(std::cell::Cell::new(None));
+    let tree = HotTree::mount(&Panel(id.clone()));
+    let button = id.get().expect("the button is focusable");
+    assert!(ui_core::focus::is_registered(button));
+
+    unsafe { HotTree::release(tree) };
+    assert!(!ui_core::focus::is_registered(button));
+}

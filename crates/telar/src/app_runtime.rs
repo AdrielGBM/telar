@@ -141,7 +141,7 @@ pub struct LocalApp<A: App>(pub A);
 
 impl<A: App> AppRuntime for LocalApp<A> {
     fn mount(&mut self) -> Box<dyn UiTree> {
-        Box::new(LocalTree::new(self.0.root()))
+        Box::new(LocalTree::new(|| self.0.root()))
     }
 
     fn clear_color(&self) -> Option<Color> {

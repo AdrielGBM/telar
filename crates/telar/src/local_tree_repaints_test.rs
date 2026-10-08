@@ -55,7 +55,7 @@ fn a_changed_signal_repaints_without_being_told_to() {
         || TextStyle::new(14.0, Color::BLACK),
     )
     .unwrap();
-    let tree = LocalTree::new(Box::new(Root(box_item(text))));
+    let tree = LocalTree::new(|| Box::new(Root(box_item(text))));
 
     assert_eq!(drawn_text(&tree), "before");
     label.set("after".to_string());
@@ -74,7 +74,7 @@ fn a_resize_repaints_without_being_told_to() {
         || RectStyle::default().with_fill(Color::BLACK),
     )
     .unwrap();
-    let mut tree = LocalTree::new(Box::new(WindowRoot::new(box_item(boxed))));
+    let mut tree = LocalTree::new(|| Box::new(WindowRoot::new(box_item(boxed))));
 
     tree.on_event(&platform_core::Event::WindowResized {
         width: 400,
