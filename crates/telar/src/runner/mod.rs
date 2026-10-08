@@ -51,6 +51,18 @@ fn resolved_window<A: crate::app::App + ?Sized>(
     app.window_config().unwrap_or(from_config)
 }
 
+#[cfg(any(
+    all(
+        feature = "desktop-bare",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ),
+    target_os = "android"
+))]
+pub(crate) fn overlay_disabled() -> bool {
+    std::env::var("TELAR_DEVTOOLS").as_deref() == Ok("0")
+}
+
 const FRAME_BUDGET: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);
 
 // Long, because what it guards against is somebody walking away from a window they left open, and what it must not do is punish somebody who paused to read: a screen being read produces no frames, so timing this from the last frame slept while they were still there.
@@ -63,7 +75,7 @@ const HW_KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_sec
 const COMMAND_BUF_POOL_CAP: usize = 3;
 
 #[cfg(all(feature = "android-bare", target_os = "android"))]
-pub use android::run_android_app_with_name;
+pub use android::{run_android_app_with_devtools, run_android_app_with_name};
 #[cfg(all(
     feature = "desktop-bare",
     not(target_os = "android"),

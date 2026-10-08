@@ -195,6 +195,7 @@ jobs:
               echo '[patch.crates-io]'
               echo "telar = { path = \"$GITHUB_WORKSPACE/crates/telar\" }"
               echo "telar-components = { path = \"$GITHUB_WORKSPACE/plugins/telar-components\" }"
+              echo "telar-devtools = { path = \"$GITHUB_WORKSPACE/plugins/telar-devtools\" }"
             } >> "$dir/Cargo.toml"
             # Resolving alone validates every `telar/<feature>` the manifest names, including the three
             # targets this project did not start on — a renamed feature fails here, compiling nothing.
@@ -204,6 +205,10 @@ jobs:
                 CARGO_TARGET_DIR="$scaffold_target" cargo check --manifest-path "$dir/Cargo.toml"
                 ;;
             esac
+            # The runner `telar::app!` emits when `cargo telar dev` turns the overlay on, which no other job compiles.
+            if [[ "$target" == desktop ]]; then
+              CARGO_TARGET_DIR="$scaffold_target" cargo check --manifest-path "$dir/Cargo.toml" --features telar-devtools,telar/dev
+            fi
             echo "::endgroup::"
           done
       # The library scaffold's `include` is what decides whether its published crate carries the artifact a dependency is compiled from, so the scaffold has to pass the same check a library member does.
@@ -254,9 +259,9 @@ jobs:
       - run: cargo test --workspace --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
         env:
           TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
-      # `headless` and `dev` are enabled by no workspace member, so the offscreen rasteriser and the devtools
-      # overlay are never compiled by the line above — while the first ships in out-of-tree apps and the
-      # second is what every `cargo telar dev` session runs.
+      # `headless` and `dev` are enabled by no workspace member, so the offscreen rasteriser and the dev host
+      # are never compiled by the line above — while the first ships in out-of-tree apps and the second is
+      # what every `cargo telar dev` session runs, with the overlay seam it installs `telar-devtools` through.
       - run: cargo test -p telar --features headless,dev
         env:
           TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}

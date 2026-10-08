@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::cargo_manifest::{dependency_tables, read_manifest};
+
 /// One `[telar] prelude` entry, as generated code spells it: a crate, or a path inside one, whose items are glob-imported into every `.rsx` of the package.
 ///
 /// Only constructed through [`PreludeEntry::parse`], so an entry that exists is one that can be emitted as `use <path>::*;` without producing Rust that does not parse.
@@ -133,10 +135,7 @@ pub fn prelude_declarations(
 /// A crate generated code globs has to be one the package itself depends on: rustc otherwise reports an unresolved import against every generated file, none of which the author wrote, and the key that caused it goes unnamed. A `Cargo.toml` that cannot be read answers nothing rather than flagging every entry.
 pub fn prelude_problems(package_dir: &Path) -> Result<Vec<PreludeProblem>, crate::ManifestError> {
     let declarations = prelude_declarations(package_dir)?;
-    let Some(manifest) = std::fs::read_to_string(package_dir.join("Cargo.toml"))
-        .ok()
-        .and_then(|content| content.parse::<toml::Table>().ok())
-    else {
+    let Some(manifest) = read_manifest(package_dir) else {
         return Ok(Vec::new());
     };
     let package = manifest
@@ -182,16 +181,7 @@ const ALWAYS_LINKED: [&str; 3] = ["std", "core", "alloc"];
 
 /// The crate names Rust sees for one dependency table of `manifest`, its target-specific copies included. A renamed dependency is named by its key, which is what `package = "…"` exists to choose.
 fn dependency_crates(manifest: &toml::Table, table: &str) -> std::collections::HashSet<String> {
-    let targets = manifest
-        .get("target")
-        .and_then(toml::Value::as_table)
-        .into_iter()
-        .flat_map(|targets| targets.values())
-        .filter_map(|target| target.get(table));
-    std::iter::once(manifest.get(table))
-        .flatten()
-        .chain(targets)
-        .filter_map(toml::Value::as_table)
+    dependency_tables(manifest, table)
         .flat_map(|dependencies| dependencies.keys())
         .map(|key| key.replace('-', "_"))
         .collect()

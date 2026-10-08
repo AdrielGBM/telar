@@ -30,6 +30,7 @@ telar-dynamic = { workspace = true, features = ["svg"] }
 telar-navigate = { workspace = true }
 
 serde = { workspace = true }
+telar-devtools = { workspace = true, optional = true }
 
 # Only `main.rs` initialises a subscriber, and there is no `main.rs` on wasm — left unconditional, this pulled a terminal log formatter, `ansi` included, into every page build.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -50,6 +51,7 @@ android = ["telar/android"]
 web = ["telar/web"]
 # The browser drawing as a document alone: no GPU, no shaper, and no faces to carry for one.
 web-dom = ["telar/web-dom"]
+telar-devtools = ["dep:telar-devtools"]
 
 [dev-dependencies]
 platform-core = { workspace = true }

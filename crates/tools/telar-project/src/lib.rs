@@ -8,7 +8,9 @@
 
 mod assets;
 mod build;
+mod cargo_manifest;
 mod catalog;
+mod dependencies;
 mod discovery;
 mod fonts;
 mod icons;
@@ -39,6 +41,7 @@ pub use catalog::{
     CatalogEntry, CatalogIndex, CatalogSourceFile, I18N_CATALOG_PATH, I18N_MODULE,
     read_catalog_index,
 };
+pub use dependencies::{DEVTOOLS_PACKAGE, declares_optional_dependency};
 pub use discovery::{
     MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, MODULE_TREE_DIR, ModuleTree, SITE_DIR,
     assets_root, collect_files_by_ext, component_name, find_rsx_files, find_rsx_files_in_tree,

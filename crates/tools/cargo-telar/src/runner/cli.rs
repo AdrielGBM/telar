@@ -179,7 +179,7 @@ pub(crate) struct HotArgs {
 pub(crate) struct DevArgs {
     #[command(flatten)]
     pub(crate) hot: HotArgs,
-    /// Devtools overlay
+    /// Devtools overlay: `on` builds the package's optional `telar-devtools` in, `off` leaves it out
     #[arg(long, value_enum)]
     pub(crate) devtools: Option<DevtoolsArg>,
 }

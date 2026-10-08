@@ -16,11 +16,17 @@ design: a plugin is a component crate that happens to be somebody else's.
 
 ## Where a plugin lives
 
-`plugins/` holds only crates an application author adds to their own `Cargo.toml`. A crate that a `telar`
-feature pulls in and compiles into the target is core and lives in `crates/`, even when it is opt-in;
-`crates/tools/` is host-side tooling. Nothing under `crates/` may depend on `plugins/`, and
-`.github/scripts/check-layering.sh` fails the build when something does. A plugin you write outside this repo
-has no such constraint beyond the next two sections.
+`plugins/` holds every crate built on top of the facade: the ones an application author adds to their own
+`Cargo.toml`, and the ones the tooling adds on its own. `telar-devtools` is one of the latter: an application
+declares it as an optional dependency (`cargo telar new` writes it), `cargo telar dev` turns its feature on,
+and `telar::app!` installs its overlay only under that feature, so no shipping build compiles it.
+
+`crates/` holds `telar`, the kernel crates behind it, and host-side tooling in `crates/tools/`. A crate that a
+`telar` feature pulls in and compiles into the target is core and lives there, even when it is opt-in.
+Nothing under `crates/` may depend on `plugins/`, in any dependency kind, and
+`.github/scripts/check-layering.sh` fails the build when something does: the facade never names a plugin,
+and a plugin reaches an application through the application's own manifest. A plugin you write outside this
+repo has no such constraint beyond the next two sections.
 
 ## Versioning: in lockstep with `telar`
 

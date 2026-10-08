@@ -2880,6 +2880,7 @@ version = "0.2.1"
 dependencies = [
  "telar",
  "telar-components",
+ "telar-devtools",
  "tracing-subscriber",
 ]
 
@@ -5120,6 +5121,7 @@ dependencies = [
  "serde",
  "telar",
  "telar-components",
+ "telar-devtools",
  "telar-dynamic",
  "telar-navigate",
  "telar-platform-core",
@@ -5646,7 +5648,6 @@ dependencies = [
  "serde",
  "serde_json",
  "telar",
- "telar-devtools",
  "telar-geometry-core",
  "telar-i18n-core",
  "telar-layout-core",

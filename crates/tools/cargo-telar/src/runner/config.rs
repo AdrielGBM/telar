@@ -419,6 +419,14 @@ pub(crate) fn warn_if_tooling_unlocked(args: &[String], injected: &[&str]) {
     }
 }
 
+/// What a package that declares no optional `telar-devtools` is told: the overlay is the application's own dependency, never `telar`'s, so nothing else would explain why a dev session runs without it.
+pub(crate) fn missing_devtools_note(package: &str) -> String {
+    let devtools = telar_project::DEVTOOLS_PACKAGE;
+    format!(
+        "`{package}` declares no optional `{devtools}` dependency, so no devtools overlay is built in. Add it with `cargo add -p {package} {devtools} --optional`."
+    )
+}
+
 /// A `telar` feature that is a crate of its own now, and the feature groups of that crate it stood for.
 struct MovedFeature {
     feature: &'static str,

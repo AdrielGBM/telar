@@ -47,14 +47,14 @@ fn run_desktop_with_overlay<A: App, D: DevOverlay>(config: AppConfig, app: A, ap
     }
 }
 
-/// Starts an application on the desktop backend, under whatever overlay this build carries.
+/// Starts an application on the desktop backend, with no overlay.
 pub fn run_desktop_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
-    run_desktop_app_with_devtools::<A, crate::DefaultDevTools>(config, app, app_name)
+    run_desktop_app_with_devtools::<A, ()>(config, app, app_name)
 }
 
-/// The same, drawing `D` over the application instead of the overlay this build ships.
+/// The same, drawing `D` over the application.
 ///
-/// `D` is any [`DevOverlay`]: it is handed the frame's draw commands and returns what to draw in their place, so an inspector of your own — a layout ruler, a state dump, an in-house profiler — composes over the tree exactly as [`telar_devtools::DevTools`](https://docs.rs/telar-devtools) does. `()` installs none.
+/// `D` is any [`DevOverlay`]: it is handed the frame's draw commands and returns what to draw in their place, so an inspector of your own — a layout ruler, a state dump, an in-house profiler — composes over the tree exactly as the overlay of [`telar-devtools`](https://docs.rs/telar-devtools) does. `()` installs none.
 ///
 /// `TELAR_DEVTOOLS=0` still turns it off, whichever overlay it is: the variable means *no overlay on this run*, not *not that one*.
 pub fn run_desktop_app_with_devtools<A: App, D: DevOverlay>(
@@ -62,7 +62,7 @@ pub fn run_desktop_app_with_devtools<A: App, D: DevOverlay>(
     app: A,
     app_name: &str,
 ) {
-    if std::env::var("TELAR_DEVTOOLS").as_deref() == Ok("0") {
+    if super::overlay_disabled() {
         run_desktop_with_overlay::<A, ()>(config, app, app_name);
     } else {
         run_desktop_with_overlay::<A, D>(config, app, app_name);

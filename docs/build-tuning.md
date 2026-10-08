@@ -68,7 +68,7 @@ not defined` — `cargo telar doctor` reports `[profile.web]` as missing (and na
 ## Lock what `cargo telar` turns on
 
 `dev`, `preview`, `check` and `test` turn some of `telar`'s features on from the command line — `telar/dev`
-brings in `telar-devtools`, for one. Cargo.lock only pins what a feature of the workspace reaches, so name
+brings in `libloading`, for one. Cargo.lock only pins what a feature of the workspace reaches, so name
 them once under `[features]` in your app's `Cargo.toml`:
 
 ```toml
@@ -78,8 +78,23 @@ tooling = ["telar/dev", "telar/hot-reload", "telar/previews", "telar/preview", "
 
 No build turns `tooling` on; it is there for the lockfile. Without it those dependencies are resolved against
 whatever copy of the crates.io index the machine last fetched, so after a `telar` upgrade `cargo telar dev`
-can fail with `failed to select a version for the requirement telar-devtools` until something refreshes that
+can fail with `failed to select a version for the requirement …` until something refreshes that
 copy. `cargo telar` warns when no member of the workspace names them.
+
+`cargo telar dev` also turns on one feature of your app's own: `telar-devtools`, the overlay. It needs no
+entry here. The app declares the crate as an optional dependency, which `cargo telar new` writes:
+
+```toml
+[dependencies]
+telar-devtools = { version = "0.2.1", optional = true }
+
+[features]
+telar-devtools = ["dep:telar-devtools"]
+```
+
+Cargo.lock pins an optional dependency a member declares whether or not a build enables it, and only
+`cargo telar dev` and `cargo telar preview` enable this one. Without the declaration the session runs without
+the overlay and says so; `cargo telar dev --devtools off` leaves it out of the build even when it is declared.
 
 ## Do not set `panic = "abort"` on `[profile.dev]` or `[profile.release]`
 

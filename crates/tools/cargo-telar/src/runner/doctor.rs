@@ -5,7 +5,7 @@ use std::process::Command;
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
 use super::config::{
     WEB_PROFILE_TOML, backend_as_str, find_package_dir, has_web_profile, load_config,
-    manifest_has_telar, moved_features_hint_for, resolve_package,
+    manifest_has_telar, missing_devtools_note, moved_features_hint_for, resolve_package,
 };
 
 struct Doctor {
@@ -158,6 +158,17 @@ pub(crate) fn run_doctor_cmd() -> ! {
         doc.warn("moved telar features", &hint.replace('\n', "\n      "));
     }
     let resolved = resolve_package(&[]);
+    if telar_project::declares_optional_dependency(
+        &resolved.package_dir,
+        telar_project::DEVTOOLS_PACKAGE,
+    ) {
+        doc.ok(
+            "devtools overlay",
+            "`telar-devtools` is an optional dependency, which `cargo telar dev` and `cargo telar preview` turn on",
+        );
+    } else if resolved.package.is_some() {
+        doc.info("devtools overlay", &missing_devtools_note(&resolved.name()));
+    }
     if resolved.targets_web() {
         if has_web_profile(&resolved.workspace_root) {
             doc.ok("[profile.web]", "present");

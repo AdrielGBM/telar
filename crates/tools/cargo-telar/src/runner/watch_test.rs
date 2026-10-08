@@ -182,6 +182,53 @@ fn every_feature_the_loop_injects_is_one_a_project_can_lock() {
     }
 }
 
+fn devtools_for(package: &str, devtools: Option<bool>) -> Option<String> {
+    let resolved = resolve_package(&["-p", package].map(str::to_string));
+    let mut config = TelarSection::default();
+    config.dev.devtools = devtools;
+    devtools_feature(&resolved, &config)
+}
+
+/// The overlay is the application's own optional dependency now, so the loop turns on the application's feature rather than one of `telar`'s.
+#[test]
+fn the_dev_loop_turns_on_the_devtools_an_app_declares() {
+    for app in ["sandbox", "landing"] {
+        assert_eq!(
+            devtools_for(app, None),
+            Some(format!("{app}/telar-devtools"))
+        );
+        assert_eq!(
+            devtools_for(app, Some(true)),
+            Some(format!("{app}/telar-devtools"))
+        );
+    }
+}
+
+/// `--devtools off` used to compile the overlay and hide it at runtime; now it is not compiled at all.
+#[test]
+fn devtools_off_leaves_the_overlay_out_of_the_build() {
+    assert_eq!(devtools_for("sandbox", Some(false)), None);
+}
+
+/// Naming a feature the package does not have is a cargo error, so a package without the dependency builds as it always did.
+#[test]
+fn a_package_without_the_devtools_dependency_gets_no_feature() {
+    assert_eq!(devtools_for("telar-components", None), None);
+}
+
+#[test]
+fn the_devtools_feature_rides_along_with_the_telar_ones() {
+    let features = with_devtools(HotMode::Dev.hot_features(), Some("sandbox/telar-devtools"));
+    assert_eq!(
+        features,
+        ["telar/dev", "telar/hot-reload", "sandbox/telar-devtools"]
+    );
+    assert_eq!(
+        with_devtools(HotMode::Dev.features(), None),
+        HotMode::Dev.features()
+    );
+}
+
 /// `prelude` and `theme` change the Rust every `.rsx` becomes, and the loop used to watch neither file: an edit there did nothing until some unrelated source was saved.
 #[test]
 fn every_telar_toml_a_member_reads_is_watched_through_its_directory() {

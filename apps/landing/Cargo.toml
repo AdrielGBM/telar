@@ -17,6 +17,7 @@ path = "src/main.rs"
 # The workspace turns telar's default features off, so the frontend is this app's `default` to name.
 telar = { workspace = true, features = ["runtime"] }
 telar-components = { workspace = true }
+telar-devtools = { workspace = true, optional = true }
 
 # Only `main.rs` initialises a subscriber, and there is no `main.rs` on wasm — left unconditional, this pulled a terminal log formatter, `ansi` included, into every page build.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -30,6 +31,7 @@ desktop = ["telar/desktop"]
 web = ["telar/web"]
 # The browser drawing as a document alone: no GPU and no glyph shaper, which is most of a page's weight.
 web-dom = ["telar/web-dom"]
+telar-devtools = ["dep:telar-devtools"]
 
 [package.metadata.android]
 package = "com.example.telar.landing"

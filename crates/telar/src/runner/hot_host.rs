@@ -11,8 +11,23 @@ use crate::prefs::UserPrefs;
 
 use super::handler::build_app_handler;
 
-/// Runs the dev host: a window whose application comes from a dylib and is swapped on each rebuild.
-pub fn run_hot_reload_host(
+/// Runs the dev host: a window whose application comes from a dylib and is swapped on each rebuild, with `D` drawn over it.
+///
+/// `D` lives in the host and survives every swap. `telar::app!` names `telar-devtools` here when the application declares it, and `()` otherwise. `TELAR_DEVTOOLS=0` installs no overlay, whichever `D` is.
+pub fn run_hot_reload_host<D: ui_tree::DevOverlay>(
+    lib_path: &str,
+    hot_port: &str,
+    config: crate::app_config::AppConfig,
+    app_name: &str,
+) {
+    if super::overlay_disabled() {
+        run_hot_reload_host_with::<()>(lib_path, hot_port, config, app_name);
+    } else {
+        run_hot_reload_host_with::<D>(lib_path, hot_port, config, app_name);
+    }
+}
+
+fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     lib_path: &str,
     hot_port: &str,
     config: crate::app_config::AppConfig,
@@ -56,7 +71,7 @@ pub fn run_hot_reload_host(
         window = custom;
     }
     // Share the one field literal with `run_with_platform` (via build_app_handler); only the hot-reload receiver differs from a normal single-window handler.
-    let mut handler = build_app_handler::<WinitWindow, crate::DefaultDevTools>(
+    let mut handler = build_app_handler::<WinitWindow, D>(
         Box::new(initial_app),
         paths,
         crate::runner::font_config::FontSetup {

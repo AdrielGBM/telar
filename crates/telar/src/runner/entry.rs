@@ -12,8 +12,10 @@ use crate::app_config::AppConfig;
 /// This is what [`telar::app!`](telar_macros::app)'s generated `run()` calls, so a `.rsx` app reaches every frontend from one entry point and one source tree.
 ///
 /// A build with `prerender`, started by `cargo telar build --prerender`, writes the page it was asked for instead and exits (see `docs/prerender.md`).
+///
+/// It draws no overlay. An application that declares `telar-devtools` as an optional dependency gets one through [`run_app_with_devtools`], which `telar::app!` names once `cargo telar dev` or `cargo telar preview` turns that feature on.
 pub fn run_app_with_name<A: App>(config: AppConfig, app: A, app_name: &str) {
-    run_app_with_devtools::<A, crate::DefaultDevTools>(config, app, app_name)
+    run_app_with_devtools::<A, ()>(config, app, app_name)
 }
 
 /// The same, with a devtools overlay of your own drawn over the application.

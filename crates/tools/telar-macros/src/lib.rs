@@ -154,29 +154,40 @@ pub fn app(input: TokenStream) -> TokenStream {
         },
         false => quote! {},
     };
+    let devtools = devtools_crate();
+    let run_app = with_overlay(devtools.as_ref(), |overlay| {
+        quote! {
+            ::telar::run_app_with_devtools::<_, #overlay>(
+                ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
+                #app_expr,
+                env!("CARGO_PKG_NAME"),
+            )
+        }
+    });
     let run_tail = quote! {
         #dev_entry_call
         #setup
-        ::telar::run_app_with_name(
-            ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
-            #app_expr,
-            env!("CARGO_PKG_NAME"),
-        )
+        #run_app
     };
 
     let hot_reload_prefix = if is_hot_reload {
+        let run_host = with_overlay(devtools.as_ref(), |overlay| {
+            quote! {
+                ::telar::run_hot_reload_host::<#overlay>(
+                    &lib_path,
+                    &hot_port,
+                    ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
+                    env!("CARGO_PKG_NAME"),
+                )
+            }
+        });
         quote! {
             if let (::std::result::Result::Ok(lib_path), ::std::result::Result::Ok(hot_port)) = (
                 ::std::env::var("TELAR_HOT_LIB"),
                 ::std::env::var("TELAR_HOT_PORT"),
             ) {
                 #setup
-                ::telar::run_hot_reload_host(
-                    &lib_path,
-                    &hot_port,
-                    ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
-                    env!("CARGO_PKG_NAME"),
-                );
+                #run_host
                 return;
             }
         }
@@ -400,17 +411,22 @@ pub fn app(input: TokenStream) -> TokenStream {
         quote! {}
     };
 
+    let run_android = with_overlay(devtools.as_ref(), |overlay| {
+        quote! {
+            ::telar::run_android_app_with_devtools::<_, #overlay>(
+                ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
+                #app_expr,
+                env!("CARGO_PKG_NAME"),
+                android_app,
+            )
+        }
+    });
     let android_run = quote! {
         #[cfg(target_os = "android")]
         #[unsafe(no_mangle)]
         fn android_main(android_app: ::telar::AndroidApp) {
             #setup
-            ::telar::run_android_app_with_name(
-                ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
-                #app_expr,
-                env!("CARGO_PKG_NAME"),
-                android_app,
-            );
+            #run_android
         }
     };
 
@@ -427,6 +443,42 @@ pub fn app(input: TokenStream) -> TokenStream {
         #hot_motion_symbols
     }
     .into()
+}
+
+/// The crate `telar-devtools` is named by in the package being expanded, when its `Cargo.toml` declares it as an optional dependency.
+///
+/// A package that does not declare it must not see `cfg(feature = "telar-devtools")` at all: cargo checks every `feature` cfg against the package's own feature list, and would warn about one it never defined.
+fn devtools_crate() -> Option<Ident> {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
+    telar_project::declares_optional_dependency(
+        Path::new(&manifest_dir),
+        telar_project::DEVTOOLS_PACKAGE,
+    )
+    .then(|| {
+        Ident::new(
+            &telar_project::DEVTOOLS_PACKAGE.replace('-', "_"),
+            Span::call_site(),
+        )
+    })
+}
+
+/// `runner` called with `telar-devtools`' overlay while the package's feature for it is on, and with none otherwise.
+fn with_overlay(
+    devtools: Option<&Ident>,
+    runner: impl Fn(TokenStream2) -> TokenStream2,
+) -> TokenStream2 {
+    let without = runner(quote! { () });
+    let Some(krate) = devtools else {
+        return quote! { #without; };
+    };
+    let feature = telar_project::DEVTOOLS_PACKAGE;
+    let with = runner(quote! { ::#krate::DevTools });
+    quote! {
+        #[cfg(feature = #feature)]
+        #with;
+        #[cfg(not(feature = #feature))]
+        #without;
+    }
 }
 
 /// Which shape `cargo telar` asked this build to be, as a feature.

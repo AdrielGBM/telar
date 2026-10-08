@@ -27,15 +27,30 @@ fn bridge_debug_props_to_env() {
 }
 
 #[cfg(feature = "runtime")]
-/// Starts an application on the Android backend.
+/// Starts an application on the Android backend, with no overlay.
 pub fn run_android_app_with_name<A: App>(
     config: AppConfig,
     app: A,
     app_name: &str,
     android_app: platform_android::AndroidApp,
 ) {
+    run_android_app_with_devtools::<A, ()>(config, app, app_name, android_app);
+}
+
+#[cfg(feature = "runtime")]
+/// The same, drawing `D` over the application.
+pub fn run_android_app_with_devtools<A: App, D: DevOverlay>(
+    config: AppConfig,
+    app: A,
+    app_name: &str,
+    android_app: platform_android::AndroidApp,
+) {
     bridge_debug_props_to_env();
-    run_android_with_overlay::<A, crate::DefaultDevTools>(config, app, app_name, android_app);
+    if super::overlay_disabled() {
+        run_android_with_overlay::<A, ()>(config, app, app_name, android_app);
+    } else {
+        run_android_with_overlay::<A, D>(config, app, app_name, android_app);
+    }
 }
 
 /// Builds the Android platform and paths provider, then hands over to the one shared boot sequence.

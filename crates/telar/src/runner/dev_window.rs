@@ -31,15 +31,15 @@ pub(super) fn apply_dev_window_overrides(config: &mut platform_core::WindowConfi
     if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_TITLE") {
         config.title = v;
     }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_WIDTH") {
-        if let Ok(n) = v.parse() {
-            config.width = n;
-        }
+    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_WIDTH")
+        && let Ok(n) = v.parse()
+    {
+        config.width = n;
     }
-    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_HEIGHT") {
-        if let Ok(n) = v.parse() {
-            config.height = n;
-        }
+    if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_HEIGHT")
+        && let Ok(n) = v.parse()
+    {
+        config.height = n;
     }
     if let Ok(v) = std::env::var("TELAR_DEV_WINDOW_DECORATIONS") {
         config.has_decorations = v == "1";

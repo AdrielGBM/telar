@@ -304,6 +304,9 @@ path = "src/main.rs"
 telar = {{ version = "{TELAR_VERSION}", default-features = false, features = ["runtime"] }}
 # The widget catalogue. Name the groups you draw beyond the basics: "overlays", "chrome", "advanced".
 telar-components = {{ version = "{TELAR_VERSION}", default-features = false }}
+# The devtools overlay: an FPS counter, a node inspector and the build-error banner. Optional, so only
+# `cargo telar dev` and `cargo telar preview` compile it, by turning on the `telar-devtools` feature below.
+telar-devtools = {{ version = "{TELAR_VERSION}", optional = true }}
 
 [features]
 # The target this project builds for. Each one is complete on its own — swapping one word here, or
@@ -314,6 +317,7 @@ tui = ["telar/tui"]
 web = ["telar/web"]
 web-dom = ["telar/web-dom"]
 android = ["telar/android"]
+telar-devtools = ["dep:telar-devtools"]
 # Never turned on by a build: `cargo telar` names these on the command line for its own commands, and this entry is what lets Cargo.lock pin what they bring in.
 {tooling}
 

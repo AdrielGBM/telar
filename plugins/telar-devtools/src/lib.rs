@@ -407,7 +407,6 @@ impl DevOverlay for DevTools {
             return true;
         }
 
-        // Canvas click with inspector open: select the deepest node under the cursor.
         if self.inspector_open {
             let clicked = self
                 .nodes

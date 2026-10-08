@@ -7,12 +7,12 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use telar_project::ASSET_KINDS;
+use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE};
 
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
-    TelarSection, WindowSection, backend_as_str, resolve_package, split_android_flag,
-    warn_if_tooling_unlocked,
+    ResolvedPackage, TelarSection, WindowSection, backend_as_str, missing_devtools_note,
+    resolve_package, split_android_flag, warn_if_tooling_unlocked,
 };
 use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
@@ -489,6 +489,23 @@ impl HotMode {
     }
 }
 
+/// The package's own feature for the devtools overlay, qualified so it reaches the package from a workspace root too. `None` when the session turned the overlay off, or when the package declares no `telar-devtools` to turn on, which is said with the command that adds it.
+fn devtools_feature(resolved: &ResolvedPackage, config: &TelarSection) -> Option<String> {
+    if config.dev.devtools == Some(false) {
+        return None;
+    }
+    let package = resolved.name();
+    if !telar_project::declares_optional_dependency(&resolved.package_dir, DEVTOOLS_PACKAGE) {
+        eprintln!("[cargo-telar] {}", missing_devtools_note(&package));
+        return None;
+    }
+    Some(format!("{package}/{DEVTOOLS_PACKAGE}"))
+}
+
+fn with_devtools<'a>(features: &[&'a str], devtools: Option<&'a str>) -> Vec<&'a str> {
+    features.iter().copied().chain(devtools).collect()
+}
+
 pub(crate) struct HotLoopOpts {
     pub(crate) args: Vec<String>,
     pub(crate) config: TelarSection,
@@ -503,16 +520,18 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     } = opts;
 
     let (android, rest) = split_android_flag(args);
-    let features = mode.features();
+    let resolved = resolve_package(&rest);
+    let devtools = devtools_feature(&resolved, &config);
+    let features = with_devtools(mode.features(), devtools.as_deref());
     let backend_value = backend_as_str(config.backend.unwrap_or_default());
     let is_preview = mode.is_preview();
 
     if android {
-        warn_if_tooling_unlocked(&rest, features);
+        warn_if_tooling_unlocked(&rest, mode.features());
         // `cargo apk run --lib` crashes on UID parsing when launching; work around by doing build → adb install → adb shell am start manually.
         let mut build_args = vec!["apk".to_string(), "build".to_string(), "--lib".to_string()];
         build_args.extend(rest.iter().cloned());
-        for feature in features {
+        for feature in &features {
             inject_feature(&mut build_args, feature);
         }
 
@@ -543,11 +562,10 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
 
     let mut cargo_args = vec!["run".to_string()];
     cargo_args.extend(rest.clone());
-    for feature in features {
+    for feature in &features {
         inject_feature(&mut cargo_args, feature);
     }
 
-    let resolved = resolve_package(&rest);
     let workspace_root = resolved.workspace_root.clone();
     let profile = profile_of(&rest);
 
@@ -564,19 +582,19 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         if hot_reload {
             mode.hot_features()
         } else {
-            features
+            mode.features()
         },
     );
 
     if hot_reload {
-        let hot_features = mode.hot_features();
+        let hot_features = with_devtools(mode.hot_features(), devtools.as_deref());
         let package_name = resolved.name();
         let lib_path = package_lib_path(&workspace_root, &package_name, profile);
         let bin_path = package_bin_path(&workspace_root, &package_name, profile);
 
         let mut build_args = vec!["build".to_string()];
         build_args.extend(rest.clone());
-        for feature in hot_features {
+        for feature in &hot_features {
             inject_feature(&mut build_args, feature);
         }
         with_json_messages(&mut build_args);
@@ -596,7 +614,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         }
 
         if bin_path.exists() && lib_path.exists() {
-            let lib_build_args = make_lib_build_args(&rest, hot_features);
+            let lib_build_args = make_lib_build_args(&rest, &hot_features);
 
             watch_and_hot_reload(
                 lib_build_args,

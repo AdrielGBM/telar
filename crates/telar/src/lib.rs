@@ -83,19 +83,6 @@ pub use platform_core::{AppCtx, RedrawWaker};
 // For a backend author driving a handler by hand. An application implements `App` and names neither.
 #[cfg(feature = "runtime")]
 pub use app_runtime::{AppRuntime, LocalApp};
-// The faces a surface loads and the family it shapes in — what an `AppConfig` carries, as one value, for the seams that take it directly.
-#[cfg(feature = "runtime")]
-pub use runner::font_config::FontSetup;
-#[cfg(feature = "runtime")]
-pub use ui_tree::{DevAction, DevOverlay};
-
-/// The overlay [`run_app_with_name`] installs: the one `cargo telar dev` ships, or none at all.
-///
-/// A type alias rather than a runtime choice so a build without `dev` monomorphises the frame loop over `()` and the overlay costs it nothing — not a branch, not a vtable. Name [`run_app_with_devtools`] to install your own instead.
-#[cfg(all(feature = "runtime", feature = "dev"))]
-pub type DefaultDevTools = telar_devtools::DevTools;
-#[cfg(all(feature = "runtime", not(feature = "dev")))]
-pub type DefaultDevTools = ();
 #[cfg(feature = "runtime")]
 pub use geometry_core::{Insets, ObjectFit, Point, Rect, Size, Transform};
 #[cfg(feature = "runtime")]
@@ -106,8 +93,13 @@ pub use layout_core::{
 #[cfg(feature = "runtime")]
 pub use prefs::UserPrefs;
 pub use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
+// The faces a surface loads and the family it shapes in — what an `AppConfig` carries, as one value, for the seams that take it directly.
+#[cfg(feature = "runtime")]
+pub use runner::font_config::FontSetup;
 #[cfg(feature = "runtime")]
 pub use tree::{Frame, HotTree, LocalTree, UiTree};
+#[cfg(feature = "runtime")]
+pub use ui_tree::{DevAction, DevOverlay};
 // Named in the tree shims the `app!` macro exports, so it has to be reachable through the facade.
 #[cfg(feature = "runtime")]
 pub use ui_tree::SegmentNodeInfo;
@@ -388,8 +380,6 @@ pub use platform_android::AndroidApp;
 pub use runner::build_surface_handler;
 #[cfg(all(feature = "prerender", not(target_arch = "wasm32")))]
 pub use runner::prerender_page;
-#[cfg(all(feature = "android-bare", target_os = "android"))]
-pub use runner::run_android_app_with_name;
 #[cfg(all(
     feature = "desktop-bare",
     feature = "dev",
@@ -412,6 +402,8 @@ pub use runner::{SurfaceWindow, run_with_platform_and_renderer};
     not(target_arch = "wasm32")
 ))]
 pub use runner::{open_window, run_app_windowed, run_desktop_app_with_name};
+#[cfg(all(feature = "android-bare", target_os = "android"))]
+pub use runner::{run_android_app_with_devtools, run_android_app_with_name};
 // The frontend an app actually starts on. Not gated on `desktop`: choosing between the frontends a build has is the whole point of it, and a terminal-only build has no window to open.
 #[cfg(all(feature = "runtime", feature = "tui", not(target_os = "android")))]
 pub use runner::{TuiOptions, run_tui_app_with_name};
