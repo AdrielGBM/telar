@@ -69,10 +69,28 @@ pub mod window;
 pub use config::RendererBackend;
 
 #[cfg(feature = "previews")]
-mod preview_runner;
+pub mod preview;
 
+/// Keeps items that exist only for previews — preview tables, props metadata, preview-only builder methods — in a crate's source while compiling them only when `telar/previews` is on, so a dependency carries its previews to an app that asks for them and costs every other build nothing.
 #[cfg(feature = "previews")]
-pub use preview_runner::{PreviewEntry, PreviewSurface};
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __previews {
+    ($($item:tt)*) => {
+        $($item)*
+    };
+}
+
+#[cfg(not(feature = "previews"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __previews {
+    ($($item:tt)*) => {};
+}
+
+#[cfg(test)]
+#[path = "previews_gate_test.rs"]
+mod previews_gate_tests;
 
 #[cfg(feature = "runtime")]
 pub use app::App;
@@ -334,18 +352,8 @@ pub fn dispatch_overlays(event: &Event) -> bool {
     ui_core::dispatch_overlays(event) == EventResult::Handled
 }
 
-#[cfg(all(
-    any(feature = "preview", feature = "preview-headless"),
-    not(target_os = "android")
-))]
-mod preview;
-#[cfg(all(
-    any(feature = "preview", feature = "preview-headless"),
-    not(target_os = "android")
-))]
-pub use preview::PreviewApp;
 #[cfg(all(feature = "preview-headless", not(target_os = "android")))]
-pub use preview::run_preview_png;
+pub use preview::host::run_preview_png;
 #[cfg(feature = "headless")]
 pub use raster::rasterize;
 
@@ -410,7 +418,8 @@ pub use runner::{TuiOptions, run_tui_app_with_name};
 #[cfg(all(feature = "runtime", not(target_os = "android")))]
 pub use runner::{run_app_with_devtools, run_app_with_name};
 
-pub use telar_macros::{Props, ThemeTokens, app, component, rsx_modules, t};
+// Always present, like `Props`: an enum derives it in every build, and the impl it expands to is gated behind `__previews!`.
+pub use telar_macros::{PreviewArg, Props, ThemeTokens, app, component, rsx_modules, t};
 
 #[cfg(all(feature = "previews", not(target_os = "android")))]
-pub use preview_runner::{dev_entry, try_run_test};
+pub use preview::host::{dev_entry, try_run_test};

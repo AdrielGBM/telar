@@ -2,6 +2,15 @@
 
 use telar_macros::Props;
 
+// The derive names its schema through `::telar`, which this test cannot depend on, so this crate stands in for a `telar` built without previews.
+extern crate self as telar;
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __previews {
+    ($($item:tt)*) => {};
+}
+
 #[derive(Props)]
 struct LabelProps {
     #[props(into)]

@@ -4,9 +4,10 @@
 
 use std::process::Command;
 
+use telar::preview::{PreviewCtx, PreviewEntry};
 use telar::{
-    AppConfig, Color, FontAsset, LayoutError, LayoutItem, LayoutStyle, PreviewEntry, Text,
-    TextStyle, font_families, font_family_available, try_run_test,
+    AppConfig, Color, FontAsset, LayoutError, LayoutItem, LayoutStyle, Text, TextStyle,
+    font_families, font_family_available, try_run_test,
 };
 
 const CHILD_MARKER: &str = "TELAR_PREVIEW_HARNESS_CHILD";
@@ -14,7 +15,7 @@ const DECLARED_FAMILY: &str = "Preview Harness Face";
 const DECLARED_FACE: &[u8] =
     include_bytes!("../../renderer/renderer-text/test-fonts/TelarTest.ttf");
 
-fn labelled() -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn labelled(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     assert!(
         font_family_available(DECLARED_FAMILY),
         "the face the app config declares was not loaded before the preview was built"
@@ -36,12 +37,12 @@ fn labelled() -> Result<Box<dyn LayoutItem>, LayoutError> {
 #[test]
 fn a_preview_with_text_renders_without_an_installed_measurer() {
     if std::env::var_os(CHILD_MARKER).is_some() {
-        let entry = PreviewEntry {
-            component_name: "Labelled",
-            preview_name: "default",
-            build: labelled,
-            surface: None,
-        };
+        let entry = PreviewEntry::new(
+            "harness--labelled--default",
+            "labelled",
+            "default",
+            labelled,
+        );
         let config = AppConfig::default()
             .with_fonts([FontAsset::embedded(DECLARED_FACE).named(DECLARED_FAMILY)]);
         try_run_test(vec![entry], config);
@@ -62,4 +63,45 @@ fn a_preview_with_text_renders_without_an_installed_measurer() {
         "the harness failed a preview with text:\n{stdout}\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+const DUPLICATE_MARKER: &str = "TELAR_PREVIEW_HARNESS_DUPLICATE_CHILD";
+
+fn plain(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    Ok(Box::new(telar::Container::new(
+        LayoutStyle::new(),
+        Vec::new(),
+    )?))
+}
+
+#[test]
+fn previews_that_share_an_id_fail_the_run() {
+    if std::env::var_os(DUPLICATE_MARKER).is_some() {
+        let entries = vec![
+            PreviewEntry::new("harness--plain--twice", "plain", "Twice", plain)
+                .location("/a.rs", 1),
+            PreviewEntry::new("harness--plain--twice", "plain", "twice", plain)
+                .location("/b.rs", 2),
+        ];
+        try_run_test(entries, AppConfig::default());
+    }
+
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "previews_that_share_an_id_fail_the_run",
+            "--nocapture",
+        ])
+        .env(DUPLICATE_MARKER, "1")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success(), "{stdout}");
+    assert!(
+        stdout.contains(
+            "FAIL  preview id `harness--plain--twice` names 2 previews (/a.rs:1, /b.rs:2)"
+        ),
+        "{stdout}"
+    );
+    assert!(stdout.contains("2 passed, 1 failed"), "{stdout}");
 }

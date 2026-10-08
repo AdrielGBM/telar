@@ -1,8 +1,12 @@
 [logic]
+/// A feature highlighted on the landing page.
 #[derive(Default)]
 pub struct Props {
+    /// Glyph shown above the title.
     pub icon: &'static str,
+    /// Short heading, one line.
     pub title: &'static str,
+    /// Supporting sentence; wraps when long.
     pub body: &'static str,
 }
 

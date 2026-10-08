@@ -33,13 +33,14 @@ pub fn code_line(props: CodeLineProps, children: Children) -> Result<Box<dyn Lay
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn code_line_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn code_line_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = code_line(CodeLineProps::props().code("box fill:primary radius:8 width:120 height:80").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const CODE_LINE_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "code_line", preview_name: "Code line", build: code_line_preview_0, surface: None },
+pub const CODE_LINE_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--code_line--code-line"), "code_line", "Code line", code_line_preview_0)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/code_line.rsx"), 13),
 ];

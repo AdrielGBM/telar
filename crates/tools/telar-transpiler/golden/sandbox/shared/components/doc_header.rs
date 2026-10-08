@@ -49,13 +49,14 @@ pub fn doc_header(props: DocHeaderProps, children: Children) -> Result<Box<dyn L
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn doc_header_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn doc_header_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Layout").desc("Flexbox rows and columns with gaps, padding, alignment and growth.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const DOC_HEADER_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "doc_header", preview_name: "Doc header", build: doc_header_preview_0, surface: None },
+pub const DOC_HEADER_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--doc_header--doc-header"), "doc_header", "Doc header", doc_header_preview_0)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/doc_header.rsx"), 15),
 ];

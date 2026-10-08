@@ -1,4 +1,4 @@
-//! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, plus the `Props` and `ThemeTokens` derives and the `t!` catalogue lookup.
+//! The proc macros: `app!` and `rsx_modules!`, which transpile a project's `.rsx` at build time, plus the `Props`, `PreviewArg` and `ThemeTokens` derives, the `t!` catalogue lookup and the names and location behind `telar::preview::preview!`.
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
@@ -9,8 +9,13 @@ use std::path::{Path, PathBuf};
 
 mod app_input;
 mod component;
+mod preview_arg;
+mod preview_id;
+mod preview_source;
 mod props;
+mod props_schema;
 mod t_macro;
+mod text;
 mod theme_tokens;
 use app_input::{AppInput, preview_const_ident};
 
@@ -44,10 +49,20 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 /// - `#[props(default = expr)]` — omitting it yields `expr`.
 ///
 /// - `#[props(into)]` — the setter takes `impl Into<T>` instead of `T`, which is what lets a prop declared `Reactive<T>` accept a literal, a signal or a memo. Opt-in, because a generic parameter leaves a literal's type unconstrained: `.size(20.0)` would infer `f64` and ask for `f32: From<f64>`.
+/// - `#[props(some)]` — the field is an `Option` and the setter takes what it holds.
+///
+/// In a build with previews it also implements `telar::preview::HasPropsSchema`, inside `telar::__previews!`: the struct's and each field's doc comment, type, default and setter flags, and the control a preview arg feeding the prop gets — its type's, unless the field says otherwise:
+///
+/// - `#[props(doc = "…")]` — the prop's doc in the explorer, in place of its doc comment.
+/// - `#[props(control = …)]` — `range(min, max)` turns a number field into a slider, `step(step)` sets its increment, `multiline` grows a text field, and those three chain (`range(0, 1).step(0.1)`); they reach through an `Option` to the control it wraps and leave a control they do not fit as it was. `read_only` shows the value without a control.
+///
+/// A props struct takes no generic parameters.
 ///
 /// Forgetting a required prop is caught where it was forgotten:
 ///
 /// ```compile_fail
+/// # extern crate self as telar;
+/// # #[macro_export] macro_rules! __previews { ($($item:tt)*) => {}; }
 /// use telar_macros::Props;
 /// #[derive(Props)]
 /// struct RowProps {
@@ -55,8 +70,10 @@ pub fn component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///     #[props(default)]
 ///     muted: bool,
 /// }
+/// # fn main() {
 /// // No `.label(…)`, so this builder still holds `RowPropsMissing` and has no `build`.
 /// let _ = RowProps::props().muted(true).build();
+/// # }
 /// ```
 #[proc_macro_derive(Props, attributes(props))]
 pub fn derive_props(input: TokenStream) -> TokenStream {
@@ -67,6 +84,56 @@ pub fn derive_props(input: TokenStream) -> TokenStream {
     match props::expand(parsed) {
         Ok(tokens) => tokens.into(),
         Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// Implements `telar::preview::PreviewArg` for an enum whose variants have no fields, so a preview arg of its type is edited with a choice control listing the variants in declaration order (as segments when there are four or fewer).
+///
+/// The impl is wrapped in `telar::__previews!`, so the derive costs nothing in a build without previews and the enum needs no `cfg` of its own.
+///
+/// ```ignore
+/// #[derive(Clone, Copy, telar::PreviewArg)]
+/// pub enum ButtonSize { Small, Medium, Large }
+/// ```
+#[proc_macro_derive(PreviewArg)]
+pub fn derive_preview_arg(input: TokenStream) -> TokenStream {
+    let parsed = match syn::parse::<syn::DeriveInput>(input) {
+        Ok(parsed) => parsed,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    match preview_arg::expand(parsed) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// The id and the component name `telar::preview::preview!` gives a Rust preview, both from its tag: `r#type, "Primary"` expands to `(concat!(env!("CARGO_CRATE_NAME"), "--type--primary"), "type")`, slugged as a `.rsx` preview's id is. Reached only through that macro.
+#[doc(hidden)]
+#[proc_macro]
+pub fn __preview_names(input: TokenStream) -> TokenStream {
+    match preview_id::expand(input.into()) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// The absolute path of the file the given tokens are written in, as the same expression a `.rsx` preview records its file with. Reached only through `telar::preview::preview!`, which hands it the preview's name.
+#[doc(hidden)]
+#[proc_macro]
+pub fn __preview_file_of(input: TokenStream) -> TokenStream {
+    preview_source::file_of(input).into()
+}
+
+/// The source text of a Rust preview's body as written, dedented, or as `stringify!` prints it where the body has no source of its own. Reached only through `telar::preview::preview!`.
+#[doc(hidden)]
+#[proc_macro]
+pub fn __preview_source(input: TokenStream) -> TokenStream {
+    match preview_source::written(input.clone()) {
+        Some(text) => quote! { #text }.into(),
+        None => {
+            let input = TokenStream2::from(input);
+            quote! { ::core::stringify!(#input) }.into()
+        }
     }
 }
 
@@ -214,9 +281,9 @@ pub fn app(input: TokenStream) -> TokenStream {
     let hot_export = if is_hot_reload {
         let body: TokenStream2 = if is_preview {
             quote! {
-                return ::std::boxed::Box::new(::telar::PreviewApp {
-                    entries: telar_all_preview_entries(),
-                });
+                return ::std::boxed::Box::new(::telar::preview::host::PreviewApp::new(
+                    telar_all_preview_entries(),
+                ));
             }
         } else {
             quote! {
@@ -1034,13 +1101,13 @@ mod tests;
 
 /// The table `telar::dev_entry` reads, or nothing at all.
 ///
-/// Nothing at all is the normal case: a `[preview]` is emitted only for the flavours that ask for one (see `telar_project::BuildFlavour`), so in every other build there are no consts to name and no caller left to name them. Emitting an empty table instead would keep `telar::PreviewEntry` in the surface of a crate that has no previews, and keep the shape alive for the next thing that decides to call it.
+/// Nothing at all is the normal case: a `[preview]` is emitted only for the flavours that ask for one (see `telar_project::BuildFlavour`), so in every other build there are no consts to name and no caller left to name them. Emitting an empty table instead would keep `telar::preview::PreviewEntry` in the surface of a crate that has no previews, and keep the shape alive for the next thing that decides to call it.
 fn preview_entries_fn(previews: bool, consts: &[TokenStream2]) -> TokenStream2 {
     if !previews {
         return quote! {};
     }
     quote! {
-        pub fn telar_all_preview_entries() -> ::std::vec::Vec<::telar::PreviewEntry> {
+        pub fn telar_all_preview_entries() -> ::std::vec::Vec<::telar::preview::PreviewEntry> {
             let mut entries = ::std::vec::Vec::new();
             #( entries.extend_from_slice(#consts); )*
             entries

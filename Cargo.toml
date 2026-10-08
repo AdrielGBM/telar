@@ -200,6 +200,7 @@ lsp-types = "0.97"
 notify = "8.2.0"
 # Held at 0.4 rather than 1.x because `rfd` 0.17 pins that, and a second copy buys nothing.
 pollster = "0.4"
+prettyplease = "0.3.0"
 proc-macro2 = "1.0.107"
 raw-window-handle = "0.6"
 rustc-hash = "2.1.2"

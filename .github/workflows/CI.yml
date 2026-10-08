@@ -265,6 +265,8 @@ jobs:
       - run: cargo test -p telar --features headless,dev
         env:
           TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
+      # The workspace run has `telar/previews` on through `telar`'s own dev-dependencies, so it only ever sees a library's Rust previews present; built alone, the fixture proves they compile to nothing without the feature.
+      - run: cargo test -p telar-rsx-fixture --test previews
       # Same reason, for the half of `telar-embed` only a host enables: nothing in this workspace loads a
       # plugin, so the loader compiles nowhere else.
       - run: cargo test -p telar-embed --all-features

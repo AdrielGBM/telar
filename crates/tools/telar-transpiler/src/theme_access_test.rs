@@ -12,6 +12,7 @@ fn transpiled(source: &str, theme_type: Option<&str>, library: bool) -> Transpil
         library,
         hot_reload: false,
         previews: true,
+        rsx_path: None,
     })
     .expect("the fixture transpiles");
     if let Err(e) = syn::parse_file(&out.rust_code) {

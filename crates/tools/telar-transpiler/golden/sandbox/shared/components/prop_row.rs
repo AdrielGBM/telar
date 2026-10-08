@@ -50,13 +50,14 @@ pub fn prop_row(props: PropRowProps, children: Children) -> Result<Box<dyn Layou
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn prop_row_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn prop_row_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = prop_row(PropRowProps::props().name("align").values("start · center · end · stretch").about("Cross-axis alignment of children.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const PROP_ROW_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "prop_row", preview_name: "Prop row", build: prop_row_preview_0, surface: None },
+pub const PROP_ROW_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--prop_row--prop-row"), "prop_row", "Prop row", prop_row_preview_0)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/prop_row.rsx"), 16),
 ];

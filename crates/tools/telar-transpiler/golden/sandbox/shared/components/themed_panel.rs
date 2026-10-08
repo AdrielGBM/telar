@@ -45,7 +45,7 @@ pub fn themed_panel(props: ThemedPanelProps, children: Children) -> Result<Box<d
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn themed_panel_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn themed_panel_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
@@ -77,6 +77,7 @@ pub fn themed_panel_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(Box::new(__node_0))
 }
 
-pub const THEMED_PANEL_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "themed_panel", preview_name: "Themed panel", build: themed_panel_preview_0, surface: None },
+pub const THEMED_PANEL_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--themed_panel--themed-panel"), "themed_panel", "Themed panel", themed_panel_preview_0)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/themed_panel.rsx"), 21),
 ];

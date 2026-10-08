@@ -432,13 +432,12 @@ fn a_preview_can_declare_the_surface_it_is() {
     let src = "[view]\ntext \"x\"\n\n[preview \"Float\" surface:360x240 animate]\ndemo\n\n[preview \"Tree\"]\ndemo\n";
     let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
     assert!(
-        code.contains(
-            "surface: Some(::telar::PreviewSurface { width: 360.0, height: 240.0, animate: true })"
-        ),
+        code.contains(".surface(::telar::preview::PreviewSurface::new(360.0, 240.0).animated())"),
         "the size and the transition reach the entry:\n{code}"
     );
-    assert!(
-        code.contains("build: demo_preview_1, surface: None"),
+    assert_eq!(
+        code.matches(".surface(").count(),
+        1,
         "and a preview that declares none is still a tree:\n{code}"
     );
 
@@ -530,6 +529,28 @@ fn a_comma_inside_a_comment_or_string_does_not_split_a_props_field() {
             "field `{field}` must survive the split:\n{code}"
         );
     }
+}
+
+/// A prop's description is read off the derive's `#[doc]`, so a `///` above a field has to reach the generated struct, in order, ahead of the attributes that follow it.
+#[test]
+fn a_props_field_keeps_its_doc_lines() {
+    let src = "[logic]\n/// What the card shows.\npub struct Props {\n    /// The heading.\n    /// Shown in bold.\n    #[props(into)]\n    pub title: String,\n    // Not a doc.\n    pub tail: bool = false,\n}\n[view]\ntext \"hi\"\n";
+    let out = transpile_source(src, "card", None, None).unwrap();
+    let code = &out.rust_code;
+    assert!(
+        code.contains("/// What the card shows.\n#[derive(::telar::Props)]"),
+        "the struct's doc survives:\n{code}"
+    );
+    assert!(
+        code.contains(
+            "    /// The heading.\n    /// Shown in bold.\n    #[props(into)]\n    pub title: String,"
+        ),
+        "the field's docs precede its attributes:\n{code}"
+    );
+    assert!(
+        !code.contains("Not a doc"),
+        "a plain comment is not a doc:\n{code}"
+    );
 }
 
 #[test]
@@ -632,7 +653,7 @@ fn preview_section_generates_build_fn_and_entry() {
     let out = transpile_source(src, "demo", None, None).unwrap();
     let code = &out.rust_code;
     assert!(
-        code.contains("pub fn demo_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError>"),
+        code.contains("pub fn demo_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError>"),
         "missing preview build fn:\n{code}"
     );
     assert!(
@@ -640,11 +661,44 @@ fn preview_section_generates_build_fn_and_entry() {
         "preview body should call the component:\n{code}"
     );
     assert!(
-        code.contains("build: demo_preview_0"),
+        code.contains("\"demo\", \"Default\", demo_preview_0)"),
         "entry should point at the preview fn:\n{code}"
     );
-    assert!(code.contains("preview_name: \"Default\""), "{code}");
+    assert!(
+        code.contains("concat!(env!(\"CARGO_CRATE_NAME\"), \"--demo--default\")"),
+        "the id is the crate, the component and the slugged name:\n{code}"
+    );
+    assert!(
+        code.contains(".location(\"\", 6)"),
+        "with no package the entry records only its line:\n{code}"
+    );
     assert_eq!(out.preview_names, vec!["Default".to_string()]);
+}
+
+/// An id names one preview for as long as its name stays the same, so two names that slug alike are refused on the later one rather than numbered by their order in the file.
+#[test]
+fn previews_whose_names_slug_alike_are_refused() {
+    let src =
+        "[view]\ntext \"x\"\n\n[preview \"Long body\"]\ndemo\n\n[preview \"long-body\"]\ndemo\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains("--demo--long-body\"), \"demo\", \"Long body\", demo_preview_0)"),
+        "the first keeps its id:\n{code}"
+    );
+    assert!(
+        code.contains("compile_error!(\"[preview \\\"long-body\\\"] has the same id as [preview \\\"Long body\\\"] on line 4"),
+        "the second is refused, naming the first:\n{code}"
+    );
+}
+
+#[test]
+fn a_preview_name_with_no_letter_or_digit_is_refused() {
+    let src = "[view]\ntext \"x\"\n\n[preview \"— · —\"]\ndemo\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains("needs a letter or digit in its name to form its id"),
+        "{code}"
+    );
 }
 
 #[test]
@@ -2780,6 +2834,7 @@ fn transpile_logic(logic: &str, hot_reload: bool) -> String {
         library: false,
         hot_reload,
         previews: true,
+        rsx_path: None,
     })
     .unwrap()
     .rust_code;

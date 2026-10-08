@@ -40,7 +40,7 @@ pub fn example(props: ExampleProps, children: Children) -> Result<Box<dyn Layout
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn example_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
@@ -91,6 +91,7 @@ pub fn example_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(Box::new(__node_0))
 }
 
-pub const EXAMPLE_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "example", preview_name: "Example", build: example_preview_0, surface: None },
+pub const EXAMPLE_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--example--example"), "example", "Example", example_preview_0)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/example.rsx"), 17),
 ];

@@ -49,13 +49,14 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "feature_card", preview_name: "Feature card", build: feature_card_preview_0, surface: None },
+pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--feature-card"), "feature_card", "Feature card", feature_card_preview_0)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/feature_card.rsx"), 15),
 ];

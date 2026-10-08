@@ -5,12 +5,16 @@
 #[allow(unused_imports)] use telar_components::*;
 #[allow(unused_imports)] use crate::*;
 
+/// A feature highlighted on the landing page.
 #[derive(::telar::Props)]
 pub struct FeatureCardProps {
+    /// Glyph shown above the title.
     #[props(default)]
     pub icon: &'static str,
+    /// Short heading, one line.
     #[props(default)]
     pub title: &'static str,
+    /// Supporting sentence; wraps when long.
     #[props(default)]
     pub body: &'static str,
 }
@@ -48,7 +52,7 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
@@ -56,14 +60,16 @@ pub fn feature_card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn feature_card_preview_1() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn feature_card_preview_1(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __node_0 = feature_card(FeatureCardProps::props().icon("📱").title("Cross-platform").body("One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.").build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "feature_card", preview_name: "Fast", build: feature_card_preview_0, surface: None },
-    ::telar::PreviewEntry { component_name: "feature_card", preview_name: "Long body", build: feature_card_preview_1, surface: None },
+pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--fast"), "feature_card", "Fast", feature_card_preview_0)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 19),
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--long-body"), "feature_card", "Long body", feature_card_preview_1)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 22),
 ];

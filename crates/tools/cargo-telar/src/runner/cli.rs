@@ -191,7 +191,7 @@ pub(crate) struct PreviewArgs {
     /// Preview a specific component by name
     #[arg(long, conflicts_with = "list")]
     pub(crate) component: Option<String>,
-    /// List all available previews and exit
+    /// List every preview by its id and exit
     #[arg(long)]
     pub(crate) list: bool,
     /// Render every preview to a PNG in this directory and exit, with no window

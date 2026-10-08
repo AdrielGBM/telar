@@ -537,13 +537,14 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn home_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn home_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     let __node_0 = home(HomeProps::props().build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
-pub const HOME_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "home", preview_name: "Landing — full page", build: home_preview_0, surface: None },
+pub const HOME_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--home--landing-full-page"), "home", "Landing — full page", home_preview_0)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/home.rsx"), 149),
 ];

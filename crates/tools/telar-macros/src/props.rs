@@ -1,20 +1,25 @@
 //! The `Props` derive: a typed builder whose `build()` exists only once every required prop is set.
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote};
+use quote::{ToTokens, format_ident, quote};
 use syn::spanned::Spanned;
-use syn::{Data, DeriveInput, Expr, Fields, Ident, Type};
+use syn::{Data, DeriveInput, Expr, ExprLit, Fields, Ident, Lit, Type};
 
-/// One prop, and the only two things the builder needs to know about it: whether omitting it is legal, and whether its setter coerces.
-struct Prop {
-    name: Ident,
-    ty: Type,
+use crate::props_schema::{self, Control};
+
+/// One prop: whether omitting it is legal and whether its setter coerces, for the builder, and its doc and control, for the schema.
+pub struct Prop {
+    pub name: Ident,
+    pub ty: Type,
     /// `None` for a required prop. `Some(None)` for `#[props(default)]`, `Some(Some(expr))` for `#[props(default = expr)]`.
-    default: Option<Option<Expr>>,
+    pub default: Option<Option<Expr>>,
     /// `#[props(into)]`: the setter takes `impl Into<T>` rather than `T`.
-    into: bool,
+    pub into: bool,
     /// `#[props(some)]`: the field is `Option<Inner>` and the setter takes the `Inner`, wrapping it. What makes "this prop was given" the callee's business rather than the caller's.
-    some: bool,
+    pub some: bool,
+    /// `#[props(doc = …)]`, or else the field's doc comment.
+    pub doc: TokenStream2,
+    pub control: Option<Control>,
 }
 
 impl Prop {
@@ -166,6 +171,8 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         quote! { #field: ::core::clone::Clone::clone(&self.#field) }
     });
 
+    let schema = props_schema::expand(name, &props_schema::doc_of(&input.attrs), &props);
+
     Ok(quote! {
         #(
             /// Stands in for a required prop that has not been set, and names it in the error when `build` turns out not to exist.
@@ -201,6 +208,8 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
                 #name { #(#cloned),* }
             }
         }
+
+        #schema
     })
 }
 
@@ -227,49 +236,58 @@ fn collect(input: &DeriveInput) -> Result<Vec<Prop>, syn::Error> {
         ));
     };
 
-    named
-        .named
-        .iter()
-        .map(|field| {
-            let (default, into, some) = read_attrs(field)?;
-            Ok(Prop {
-                name: field.ident.clone().expect("named fields have idents"),
-                ty: field.ty.clone(),
-                default,
-                into,
-                some,
-            })
-        })
-        .collect()
+    // The builder's slots and markers name the struct without its parameters, and a static schema cannot depend on them either.
+    if !input.generics.params.is_empty() {
+        return Err(syn::Error::new(
+            input.generics.span(),
+            "a props struct takes no generic parameters: a tag names one props type, and its builder and schema are written for that one type",
+        ));
+    }
+
+    named.named.iter().map(read_prop).collect()
 }
 
-/// Reads `#[props(…)]`: `default`, `default = expr`, `into`, in any combination. No attribute at all means a required prop whose setter takes its type exactly.
-type Attrs = (Option<Option<Expr>>, bool, bool);
-
-fn read_attrs(field: &syn::Field) -> Result<Attrs, syn::Error> {
-    let Some(attr) = field.attrs.iter().find(|a| a.path().is_ident("props")) else {
-        return Ok((None, false, false));
-    };
-    let (mut default, mut into, mut some) = (None, false, false);
-    attr.parse_nested_meta(|meta| {
-        if meta.path.is_ident("into") {
-            into = true;
-            return Ok(());
-        }
-        if meta.path.is_ident("some") {
-            some = true;
-            return Ok(());
-        }
-        if !meta.path.is_ident("default") {
-            return Err(meta.error("the prop attributes are `default`, `into` and `some`"));
-        }
-        default = Some(match meta.input.peek(syn::Token![=]) {
-            true => Some(meta.value()?.parse::<Expr>()?),
-            false => None,
-        });
-        Ok(())
-    })?;
-    Ok((default, into, some))
+/// Reads a field and its `#[props(…)]`: `default`, `default = expr`, `into`, `some`, `doc = "…"` and `control = …`, in any combination and across any number of attributes. No attribute at all means a required prop whose setter takes its type exactly.
+fn read_prop(field: &syn::Field) -> Result<Prop, syn::Error> {
+    let (mut default, mut into, mut some, mut doc, mut control) = (None, false, false, None, None);
+    for attr in field.attrs.iter().filter(|a| a.path().is_ident("props")) {
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("into") {
+                into = true;
+            } else if meta.path.is_ident("some") {
+                some = true;
+            } else if meta.path.is_ident("default") {
+                default = Some(match meta.input.peek(syn::Token![=]) {
+                    true => Some(meta.value()?.parse::<Expr>()?),
+                    false => None,
+                });
+            } else if meta.path.is_ident("doc") {
+                doc = Some(match meta.value()?.parse::<Expr>()? {
+                    Expr::Lit(ExprLit {
+                        lit: Lit::Str(text),
+                        ..
+                    }) => text.value().trim().to_token_stream(),
+                    computed => computed.to_token_stream(),
+                });
+            } else if meta.path.is_ident("control") {
+                control = Some(Control::parse(&meta.value()?.parse::<Expr>()?)?);
+            } else {
+                return Err(meta.error(
+                    "the prop attributes are `default`, `into`, `some`, `doc` and `control`",
+                ));
+            }
+            Ok(())
+        })?;
+    }
+    Ok(Prop {
+        name: field.ident.clone().expect("named fields have idents"),
+        ty: field.ty.clone(),
+        default,
+        into,
+        some,
+        doc: doc.unwrap_or_else(|| props_schema::doc_of(&field.attrs)),
+        control,
+    })
 }
 
 /// `on_press` -> `OnPress`, so a marker type reads as a type rather than as a field name.

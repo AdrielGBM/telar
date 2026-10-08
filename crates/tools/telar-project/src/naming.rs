@@ -70,6 +70,62 @@ pub fn preview_entries_const_name(stem: &str) -> String {
     )
 }
 
+/// The name part of a preview id: `"Landing — full page"` -> `landing-full-page`. Letters and digits are kept, lowercased; every run of anything else becomes one `-`, and none leads or trails.
+pub fn preview_slug(name: &str) -> String {
+    let mut slug = String::with_capacity(name.len());
+    let mut gap = false;
+    for c in name.chars() {
+        if c.is_alphanumeric() {
+            if gap && !slug.is_empty() {
+                slug.push('-');
+            }
+            gap = false;
+            slug.extend(c.to_lowercase());
+        } else {
+            gap = true;
+        }
+    }
+    slug
+}
+
+/// Why a preview has no id.
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PreviewIdError {
+    /// The name slugs to nothing.
+    NoLetterOrDigit { name: String },
+}
+
+impl std::fmt::Display for PreviewIdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoLetterOrDigit { name } => write!(
+                f,
+                "preview \"{name}\" needs a letter or digit in its name to form its id"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for PreviewIdError {}
+
+/// The `--<component>--<slug(name)>` that follows the crate name in a preview's id, the same for a `.rsx` preview and a Rust one.
+pub fn preview_id_suffix(component: &str, name: &str) -> Result<String, PreviewIdError> {
+    let slug = preview_slug(name);
+    if slug.is_empty() {
+        return Err(PreviewIdError::NoLetterOrDigit {
+            name: name.to_string(),
+        });
+    }
+    Ok(format!("--{component}--{slug}"))
+}
+
+/// The Rust expression a preview entry records its file with: `CARGO_MANIFEST_DIR` joined to `package_path`, the file's path relative to its package, so every preview names its file absolutely and the same way.
+pub fn preview_file_expr(package_path: &str) -> String {
+    let path = format!("/{}", package_path.trim_start_matches('/'));
+    format!("concat!(env!(\"CARGO_MANIFEST_DIR\"), {path:?})")
+}
+
 /// Whether `b` may appear inside a Rust identifier.
 pub fn is_ident_byte(b: u8) -> bool {
     b == b'_' || b.is_ascii_alphanumeric()

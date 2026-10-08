@@ -55,6 +55,18 @@ name = "preview_harness"
 path = "src/preview_harness_test.rs"
 
 [[test]]
+name = "preview_args"
+path = "src/preview_args_test.rs"
+
+[[test]]
+name = "preview_rust"
+path = "src/preview_rust_test.rs"
+
+[[test]]
+name = "props_schema"
+path = "src/props_schema_test.rs"
+
+[[test]]
 name = "prerender_flow"
 path = "src/prerender_flow_test.rs"
 

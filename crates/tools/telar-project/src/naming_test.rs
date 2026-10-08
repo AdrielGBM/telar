@@ -78,3 +78,61 @@ fn pascal_single_word() {
     assert_eq!(to_pascal_case("primary"), "Primary");
     assert_eq!(to_pascal_case("card"), "Card");
 }
+
+#[test]
+fn preview_slug_lowercases_and_joins_words_with_one_hyphen() {
+    assert_eq!(preview_slug("Landing — full page"), "landing-full-page");
+    assert_eq!(preview_slug("Counting presses"), "counting-presses");
+    assert_eq!(preview_slug("snake_case/and.dots"), "snake-case-and-dots");
+}
+
+#[test]
+fn preview_slug_trims_separators_at_either_end() {
+    assert_eq!(preview_slug("  (Default)  "), "default");
+    assert_eq!(preview_slug("--x--"), "x");
+}
+
+#[test]
+fn preview_slug_keeps_letters_beyond_ascii() {
+    assert_eq!(preview_slug("Größe 2"), "größe-2");
+}
+
+#[test]
+fn preview_slug_of_a_name_with_no_letters_is_empty() {
+    assert_eq!(preview_slug("— · —"), "");
+}
+
+#[test]
+fn preview_id_suffix_names_the_component_and_the_slug() {
+    assert_eq!(
+        preview_id_suffix("button", "Primary — large"),
+        Ok("--button--primary-large".to_string())
+    );
+}
+
+#[test]
+fn preview_id_suffix_refuses_a_name_with_nothing_to_slug() {
+    let err = preview_id_suffix("button", "—").unwrap_err();
+    assert_eq!(
+        err,
+        PreviewIdError::NoLetterOrDigit {
+            name: "—".to_string()
+        }
+    );
+    assert_eq!(
+        err.to_string(),
+        "preview \"—\" needs a letter or digit in its name to form its id"
+    );
+}
+
+#[test]
+fn preview_file_expr_joins_the_manifest_dir_and_the_package_path() {
+    assert_eq!(
+        preview_file_expr("src/card.rsx"),
+        r#"concat!(env!("CARGO_MANIFEST_DIR"), "/src/card.rsx")"#
+    );
+    assert_eq!(
+        preview_file_expr("/src/card.rsx"),
+        preview_file_expr("src/card.rsx")
+    );
+}

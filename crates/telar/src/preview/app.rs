@@ -1,43 +1,58 @@
-//! The preview host: rendering one component's `[preview]` blocks in isolation.
+//! The fallback preview host: every preview in one scrolling column, for a build with no explorer.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[cfg(feature = "preview-headless")]
 use crate::AppConfig;
 use crate::{
-    App, Color, Component, Container, LayoutError, LayoutItem, LayoutStyle, PreviewEntry,
+    App, BuildFailure, Color, Component, Container, LayoutError, LayoutItem, LayoutStyle,
     ScrollPage, Text, TextStyle, reset_layout_runtime,
 };
 
-/// An app that renders one component's `[preview]` blocks instead of its own root.
+use super::PreviewEntry;
+#[cfg(feature = "preview-headless")]
+use super::host::fail_duplicate_ids;
+use super::host::{Args, duplicate_ids, remounting};
+
+/// An app that renders previews instead of its own root.
+///
+/// Each preview is built inside its own [`crate::ErrorBoundary`], so one that fails or panics shows its error in place and the rest of the page keeps running, and is built again when an arg it read changes.
 pub struct PreviewApp {
-    pub entries: Vec<PreviewEntry>,
+    entries: Vec<PreviewEntry>,
 }
 
-/// A tree preview is dropped into the page as it is; a surface preview is first given the two things a compositor would give it — a definite size to lay out against, and the root that plays its enter transition.
-///
-/// The size goes on a box *around* the root rather than on the root itself: [`WindowRoot::wrapping`] fills its parent by design (that is how a surface's content stretches to its window), so it needs a parent with a size.
-fn mounted(
-    content: Box<dyn LayoutItem>,
-    surface: Option<crate::PreviewSurface>,
+/// The failures a page's boundaries caught, for a caller that has to report them rather than only show them.
+type Failures = Rc<RefCell<Vec<String>>>;
+
+fn failure_label(
+    failure: BuildFailure,
+    record: Option<&Failures>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let Some(surface) = surface else {
-        return Ok(content);
-    };
-    let root = crate::WindowRoot::wrapping(content)?;
-    let root = if surface.animate {
-        root.animate_in()
-    } else {
-        root
-    };
-    Ok(Box::new(Container::new(
-        LayoutStyle::new()
-            .width(surface.width)
-            .height(surface.height),
-        vec![Box::new(root) as Box<dyn LayoutItem>],
+    let message = failure.to_string();
+    if let Some(record) = record {
+        record.borrow_mut().push(message.clone());
+    }
+    let message = format!("Error: {message}");
+    Ok(Box::new(Text::new(
+        move || message.clone(),
+        LayoutStyle::new(),
+        || TextStyle::new(12.0, Color::rgba(0.9, 0.2, 0.2, 1.0)),
     )?))
 }
 
-impl App for PreviewApp {
-    fn root(&self) -> Box<dyn Component> {
+impl PreviewApp {
+    /// A page of `entries`, in order. A debug build panics when two of them share an id, naming where each is written.
+    pub fn new(entries: Vec<PreviewEntry>) -> Self {
+        if cfg!(debug_assertions)
+            && let Some(duplicates) = duplicate_ids(&entries)
+        {
+            panic!("{duplicates}");
+        }
+        Self { entries }
+    }
+
+    fn page(&self, failures: Option<&Failures>) -> Box<dyn Component> {
         reset_layout_runtime();
         let mut sections: Vec<Box<dyn LayoutItem>> = Vec::new();
 
@@ -49,9 +64,9 @@ impl App for PreviewApp {
         for entry in self
             .entries
             .iter()
-            .filter(|e| wanted.as_deref().is_none_or(|w| e.component_name == w))
+            .filter(|e| wanted.as_deref().is_none_or(|w| e.component == w))
         {
-            let header_text = format!("[{}]  {}", entry.component_name, entry.preview_name);
+            let header_text = format!("[{}]  {}", entry.component, entry.name);
             let header = Text::new(
                 move || header_text.clone(),
                 LayoutStyle::new().padding_all(8.0),
@@ -59,24 +74,21 @@ impl App for PreviewApp {
             )
             .unwrap();
 
-            let mut children: Vec<Box<dyn LayoutItem>> = vec![Box::new(header)];
-            match (entry.build)().and_then(|widget| mounted(widget, entry.surface)) {
-                Ok(widget) => children.push(widget),
-                Err(err) => {
-                    let msg = format!("Error: {err}");
-                    let label = Text::new(
-                        move || msg.clone(),
-                        LayoutStyle::new(),
-                        || TextStyle::new(12.0, Color::rgba(0.9, 0.2, 0.2, 1.0)),
-                    )
-                    .unwrap();
-                    children.push(Box::new(label));
-                }
-            }
+            let entry = *entry;
+            let record = failures.cloned();
+            let canvas = remounting(
+                Args::for_entry(&entry).into(),
+                move |ctx| entry.build_root(ctx),
+                move |failure| failure_label(failure, record.as_ref()),
+            )
+            .unwrap();
 
             let section = Container::new(
                 LayoutStyle::new().flex_column().gap(8.0).padding_all(16.0),
-                children,
+                vec![
+                    Box::new(header) as Box<dyn LayoutItem>,
+                    Box::new(canvas) as Box<dyn LayoutItem>,
+                ],
             )
             .unwrap();
             sections.push(Box::new(section));
@@ -93,18 +105,46 @@ impl App for PreviewApp {
     }
 
     /// A page light enough to read dark ink on, or dark enough to read light ink on — decided by the installed theme rather than fixed, because a component drawn for a dark surface is invisible on a light page and that reads as a broken preview rather than as a mismatched background. `ThemeTokens` has no page-background token to ask for directly, so the ink's own lightness is the proxy.
-    fn clear_color(&self) -> Option<Color> {
+    fn page_color() -> Color {
         let ink = crate::use_theme_tokens().ink();
         let light_ink = ink.r * 0.299 + ink.g * 0.587 + ink.b * 0.114 > 0.5;
-        Some(if light_ink {
+        if light_ink {
             Color::rgba(0.12, 0.12, 0.15, 1.0)
         } else {
             Color::rgba(0.96, 0.96, 0.98, 1.0)
-        })
+        }
     }
 }
 
-/// Renders every `[preview]` entry to its own PNG under `out_dir` on the headless backend, then exits.
+impl App for PreviewApp {
+    fn root(&self) -> Box<dyn Component> {
+        self.page(None)
+    }
+
+    fn clear_color(&self) -> Option<Color> {
+        Some(Self::page_color())
+    }
+}
+
+/// [`PreviewApp`] for one PNG, keeping what its boundary caught so a preview that failed is reported as a failure rather than written as a picture of its error.
+#[cfg(feature = "preview-headless")]
+struct PngApp {
+    page: PreviewApp,
+    failures: Failures,
+}
+
+#[cfg(feature = "preview-headless")]
+impl App for PngApp {
+    fn root(&self) -> Box<dyn Component> {
+        self.page.page(Some(&self.failures))
+    }
+
+    fn clear_color(&self) -> Option<Color> {
+        Some(PreviewApp::page_color())
+    }
+}
+
+/// Renders every preview to its own PNG under `out_dir`, named by its id, on the headless backend, then exits.
 ///
 /// The third answer, and the one an out-of-tree backend wants: [`crate::try_run_test`] proves a component builds and lays out but never draws a pixel, and the preview window draws but needs a desktop window a shell has no way to open. Each entry gets its own file rather than one page of all of them, so a name identifies a preview and a golden-image run can compare them one at a time.
 #[cfg(feature = "preview-headless")]
@@ -119,24 +159,23 @@ pub fn run_preview_png(
         eprintln!("cannot write previews to {}: {e}", out_dir.display());
         std::process::exit(1);
     }
-    let width = (config.window.width as u32).max(1);
-    let height = (config.window.height as u32).max(1);
+    let width = config.window.width.max(1);
+    let height = config.window.height.max(1);
     println!("rendering {} preview component(s)", entries.len());
 
-    let (mut written, mut failed) = (0usize, 0usize);
+    let (mut written, mut failed) = (0usize, fail_duplicate_ids(&entries));
     for entry in entries {
-        let label = format!("{}::{}", entry.component_name, entry.preview_name);
-        let file = out_dir.join(format!(
-            "{}.png",
-            sanitize(&format!("{}-{}", entry.component_name, entry.preview_name))
-        ));
+        let label = entry.id;
+        let file = out_dir.join(format!("{}.png", sanitize(entry.id)));
         let sink: platform_headless::FrameSink = Arc::new(Mutex::new(None));
         // The headless platform paces at a real 60fps, so a handful of frames lets an enter transition settle — a preview captured on the first frame shows every animation at its start value.
         let platform = platform_headless::HeadlessPlatform::new(width, height)
             .with_frames(PREVIEW_FRAMES)
             .capture_into(sink.clone());
-        let app = PreviewApp {
-            entries: vec![entry],
+        let failures = Failures::default();
+        let app = PngApp {
+            page: PreviewApp::new(vec![entry]),
+            failures: Rc::clone(&failures),
         };
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             crate::run_with_platform::<_, _, ()>(
@@ -160,6 +199,11 @@ pub fn run_preview_png(
                 continue;
             }
         };
+        if let Some(failure) = failures.borrow().first() {
+            println!("  FAIL  {label}  {failure}");
+            failed += 1;
+            continue;
+        }
         let Some(pixels) = pixels else {
             println!("  FAIL  {label}  no frame captured");
             failed += 1;

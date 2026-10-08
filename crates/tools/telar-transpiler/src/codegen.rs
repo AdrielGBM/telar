@@ -10,7 +10,9 @@ use crate::style::generate_style_section;
 use crate::tag_errors::glob_import;
 use crate::theme_access::ThemeAccess;
 use crate::view::ViewGen;
-use telar_project::naming::{preview_entries_const_name, to_pascal_case, to_snake_case};
+use telar_project::naming::{
+    preview_entries_const_name, preview_file_expr, preview_slug, to_pascal_case, to_snake_case,
+};
 use telar_project::{AssetContext, PreludeEntry};
 
 /// A parsed `Props` field: its name, its type, and any inline default expression (the `name: Type = expr` sugar). Whether it is `Option<...>` is no longer anyone's business here — the builder's `some` attribute answers that in the callee's own declaration.
@@ -18,6 +20,8 @@ struct ParsedField {
     name: String,
     ty: String,
     default: Option<String>,
+    /// Doc lines the author wrote above the field, carried through verbatim so the derive can read them as `#[doc]`.
+    docs: String,
     /// Attribute lines the author wrote above the field, carried through verbatim.
     attrs: String,
 }
@@ -102,7 +106,7 @@ fn hoisted_use_lines(logic: &str) -> Vec<usize> {
     hoisted
 }
 
-/// Extracts a `Props` field from a `[pub] name: Type[ = default]` chunk, skipping comment lines. The author's `#[props(…)]` with their inline `= expr` folded in, since the derive reads one such attribute per field and a prop carrying both otherwise loses the default.
+/// The author's `#[props(…)]` with their inline `= expr` folded in, so a prop carrying both keeps one attribute that holds its default.
 fn merged_attrs(attrs: &str, default: Option<&str>) -> String {
     let Some(expr) = default else {
         return attrs.to_string();
@@ -121,7 +125,16 @@ fn merged_attrs(attrs: &str, default: Option<&str>) -> String {
         .collect()
 }
 
+/// Extracts a `Props` field from a `[pub] name: Type[ = default]` chunk, keeping its `///` lines and skipping other comments.
 fn parse_field(chunk: &str) -> Option<ParsedField> {
+    let docs: String = chunk
+        .lines()
+        .filter(|l| {
+            let t = l.trim_start();
+            t.starts_with("///") && !t.starts_with("////")
+        })
+        .map(|l| format!("    {}\n", l.trim()))
+        .collect();
     let attrs: String = chunk
         .lines()
         .filter(|l| l.trim_start().starts_with("#["))
@@ -151,6 +164,7 @@ fn parse_field(chunk: &str) -> Option<ParsedField> {
         name: name.to_string(),
         ty: ty.to_string(),
         default,
+        docs,
         attrs,
     })
 }
@@ -175,6 +189,8 @@ pub(crate) struct TranspileInput<'a> {
     ///
     /// An argument for the same reason [`Self::hot_reload`] is one: it decides what the generated Rust *is*, so the artifact records which way it was written and a build wanting the other one re-transpiles rather than wiring the wrong shape.
     pub previews: bool,
+    /// The `.rsx` file's path relative to its package root, `/`-separated, which each preview entry records as where it is written. `None` when no package anchors this transpile.
+    pub rsx_path: Option<&'a str>,
 }
 
 /// The generated Rust source for one `.rsx` file.
@@ -211,6 +227,7 @@ pub fn transpile_source(
         library: false,
         hot_reload: false,
         previews: true,
+        rsx_path: None,
     })
 }
 
@@ -504,7 +521,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
             code.push("\n", None);
             code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
             code.push(
-                &format!("pub fn {pfn}() -> Result<Box<dyn LayoutItem>, LayoutError> {{\n"),
+                &format!("pub fn {pfn}(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {{\n"),
                 None,
             );
             push_theme_binding(&mut code, theme_type);
@@ -543,19 +560,19 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         code.push("\n", None);
         let const_name = preview_entries_const_name(&fn_name);
         code.push(
-            &format!("pub const {const_name}: &[::telar::PreviewEntry] = &[\n"),
+            &format!("pub const {const_name}: &[::telar::preview::PreviewEntry] = &[\n"),
             None,
         );
+        let file = match input.rsx_path {
+            Some(path) => preview_file_expr(path),
+            None => "\"\"".to_string(),
+        };
         for (i, preview) in doc.previews.iter().enumerate() {
-            let pfn = format!("{fn_name}_preview_{i}");
-            code.push(
-                &format!(
-                    "    ::telar::PreviewEntry {{ component_name: \"{fn_name}\", preview_name: \"{}\", build: {pfn}, surface: {} }},\n",
-                    preview.name.replace('"', "\\\""),
-                    preview_surface(preview)
-                ),
-                None,
-            );
+            let entry = match preview_id_suffix(&fn_name, &doc.previews, i) {
+                Ok(suffix) => preview_entry(&fn_name, i, preview, &suffix, &file),
+                Err(message) => format!("    compile_error!({message:?}),\n"),
+            };
+            code.push(&entry, None);
         }
         code.push("];\n", None);
     }
@@ -663,7 +680,7 @@ fn find_move_keyword(line: &str) -> Option<usize> {
     None
 }
 
-/// Whether any node in the view tree is a `children` slot placeholder, so the component function must take a `Slots` argument. Recurses through element children and `if`/`for` branches. The `fixture:` header option of a `[preview]`, if it names one. Quoted or bare, both spellings reach the same path — `fixture:"mock_env"` and `fixture:mock_env` are the same request.
+/// The `fixture:` header option of a `[preview]`, if it names one. Quoted or bare, both spellings reach the same path — `fixture:"mock_env"` and `fixture:mock_env` are the same request.
 fn preview_fixture(preview: &telar_parser::Preview) -> Option<String> {
     let value = preview
         .options
@@ -675,37 +692,78 @@ fn preview_fixture(preview: &telar_parser::Preview) -> Option<String> {
     (!value.is_empty()).then(|| value.to_string())
 }
 
-/// The `surface:WxH` header option of a `[preview]`, as the `Option<PreviewSurface>` its entry carries.
+/// The `--<component>--<slug(name)>` that follows the crate name in the id of the `index`th preview, or why the preview cannot have one: an id names exactly one preview for as long as its name stays the same, so a name that slugs to nothing, or to what an earlier preview's already did, is refused rather than numbered.
+fn preview_id_suffix(
+    component: &str,
+    previews: &[telar_parser::Preview],
+    index: usize,
+) -> Result<String, String> {
+    let name = &previews[index].name;
+    let suffix = telar_project::naming::preview_id_suffix(component, name)
+        .map_err(|error| error.to_string())?;
+    let slug = preview_slug(name);
+    if let Some(earlier) = previews[..index]
+        .iter()
+        .find(|earlier| preview_slug(&earlier.name) == slug)
+    {
+        return Err(format!(
+            "[preview \"{name}\"] has the same id as [preview \"{}\"] on line {}: `{component}--{slug}`; rename one of them",
+            earlier.name, earlier.line
+        ));
+    }
+    Ok(suffix)
+}
+
+/// One element of the `{STEM}_PREVIEW_ENTRIES` table. `file` is the Rust expression for the `.rsx` path the entry records.
+fn preview_entry(
+    component: &str,
+    index: usize,
+    preview: &telar_parser::Preview,
+    id_suffix: &str,
+    file: &str,
+) -> String {
+    let mut entry = format!(
+        "    ::telar::preview::PreviewEntry::new(concat!(env!(\"CARGO_CRATE_NAME\"), {id_suffix:?}), {component:?}, {:?}, {component}_preview_{index})\n        .location({file}, {})",
+        preview.name, preview.line
+    );
+    if let Some(surface) = preview_surface(preview) {
+        entry.push_str(&format!("\n        .surface({surface})"));
+    }
+    entry.push_str(",\n");
+    entry
+}
+
+/// The `surface:WxH` header option of a `[preview]`, as the `PreviewSurface` its entry carries, or `None` when the preview is a tree.
 ///
 /// `[preview "Float" surface:360x240]` renders the component the way the runner mounts a surface — inside a box of that size, under the root that plays the enter transition — instead of as one more widget in the page's column. The bare `animate` flag beside it asks for that transition to run, which is how a preview shows what opening the surface looks like rather than only what it settles to.
-fn preview_surface(preview: &telar_parser::Preview) -> String {
-    let Some(size) = preview
+fn preview_surface(preview: &telar_parser::Preview) -> Option<String> {
+    let size = preview
         .options
         .iter()
         .find(|option| option.key == "surface")
-        .map(|option| option.value.trim().trim_matches('"'))
-    else {
-        return "None".to_string();
-    };
+        .map(|option| option.value.trim().trim_matches('"'))?;
     let Some((width, height)) = size
         .split_once(['x', 'X'])
         .and_then(|(w, h)| Some((w.trim().parse::<f32>().ok()?, h.trim().parse::<f32>().ok()?)))
     else {
         // Falling back to a tree would answer a question the author did not ask.
-        return format!(
+        return Some(format!(
             "compile_error!(\"[preview] surface: expects WIDTHxHEIGHT, e.g. surface:360x240 (got {})\")",
             size.replace('"', "'")
-        );
+        ));
     };
     let animate = preview
         .options
         .iter()
         .any(|option| option.key == "animate" && option.value.is_empty());
-    format!(
-        "Some(::telar::PreviewSurface {{ width: {width:?}, height: {height:?}, animate: {animate} }})"
-    )
+    let surface = format!("::telar::preview::PreviewSurface::new({width:?}, {height:?})");
+    Some(match animate {
+        true => format!("{surface}.animated()"),
+        false => surface,
+    })
 }
 
+/// Whether any node in the view tree is a `children` slot placeholder, so the component function must take a `Slots` argument. Recurses through element children and `if`/`for` branches.
 fn view_uses_slot(nodes: &[ViewNode]) -> bool {
     nodes.iter().any(node_uses_slot)
 }
@@ -847,6 +905,11 @@ fn extract_props_struct(logic: &str, fn_name: &str) -> ExtractedProps {
     for f in &parsed {
         // A `#[props(into)]` the author wrote is the one thing this cannot infer. `= expr` is merged rather than dropped: the derive reads one `#[props]` per field, so a prop with both went out as required.
         let written = merged_attrs(&f.attrs, f.default.as_deref());
+        for line in f.docs.lines() {
+            struct_out.push_str(line);
+            struct_out.push('\n');
+            origins.push(None);
+        }
         match (&f.default, derived_default, f.attrs.contains("#[props(")) {
             (_, _, true) => {}
             (Some(expr), _, _) => {

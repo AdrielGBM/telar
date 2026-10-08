@@ -172,6 +172,7 @@ fn generate(
     if telar_project::is_previews_file(rsx_path) {
         return previews_file(document);
     }
+    let package_path = package_relative_path(rsx_path, options.src_dir);
     transpile(TranspileInput {
         document,
         component_name: &telar_project::component_name(rsx_path),
@@ -181,6 +182,7 @@ fn generate(
         library: options.library,
         hot_reload: options.flavour.is_hot(),
         previews: options.flavour.has_previews(),
+        rsx_path: package_path.as_deref(),
     })
 }
 
@@ -199,6 +201,14 @@ fn previews_file(document: &telar_parser::RsxDocument) -> Result<TranspiledSourc
         expr_spans: Vec::new(),
         shadows: Vec::new(),
     })
+}
+
+/// `rsx_path` relative to the package root that holds `src_dir`, `/`-separated whatever the host's separator, or `None` when it lies outside that package.
+#[cfg(feature = "transpile")]
+fn package_relative_path(rsx_path: &Path, src_dir: &Path) -> Option<String> {
+    let relative = rsx_path.strip_prefix(src_dir.parent()?).ok()?;
+    let parts: Option<Vec<&str>> = relative.iter().map(|part| part.to_str()).collect();
+    Some(parts?.join("/"))
 }
 
 #[cfg(feature = "transpile")]

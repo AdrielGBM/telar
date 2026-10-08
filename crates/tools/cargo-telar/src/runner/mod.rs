@@ -193,7 +193,7 @@ fn run_preview_cmd(args: PreviewArgs) {
         release,
         no_hot_reload,
     } = hot;
-    // Makes the generated entrypoint print "component\tpreview" lines and exit instead of opening a window.
+    // Makes the generated entrypoint print one preview id per line and exit instead of opening a window.
     if list {
         run_preview_once(&common, release, "previews", "TELAR_PREVIEW_LIST", "1");
     }

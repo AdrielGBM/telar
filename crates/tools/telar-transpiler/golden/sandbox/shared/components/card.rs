@@ -33,7 +33,7 @@ pub fn card(props: CardProps, children: Children) -> Result<Box<dyn LayoutItem>,
 }
 
 #[allow(dead_code, unused_variables, unused_mut)]
-pub fn card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub fn card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __node_0 = {
@@ -82,6 +82,7 @@ pub fn card_preview_0() -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(Box::new(__node_0))
 }
 
-pub const CARD_PREVIEW_ENTRIES: &[::telar::PreviewEntry] = &[
-    ::telar::PreviewEntry { component_name: "card", preview_name: "Card", build: card_preview_0, surface: None },
+pub const CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--card--card"), "card", "Card", card_preview_0)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/card.rsx"), 17),
 ];

@@ -4197,6 +4197,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
 
 [[package]]
+name = "prettyplease"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bfe0f4c752e450fc2faf62654f1c134747922825d5b04ca717b8874f41a40c0"
+dependencies = [
+ "proc-macro2",
+ "syn 3.0.5",
+]
+
+[[package]]
 name = "proc-macro-api"
 version = "0.0.0"
 source = "git+https://github.com/rust-lang/rust-analyzer?rev=5c156cdfb047ea171ba255dcdcd86236d98a389e#5c156cdfb047ea171ba255dcdcd86236d98a389e"
@@ -5885,6 +5895,7 @@ dependencies = [
 name = "telar-macros"
 version = "0.2.1"
 dependencies = [
+ "prettyplease",
  "proc-macro2",
  "quote",
  "syn 3.0.5",

@@ -548,6 +548,7 @@
 547	.
 548	.
 549	.
+550	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1411..1418	5020	`PRIMARY`
