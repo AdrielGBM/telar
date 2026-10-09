@@ -3,8 +3,10 @@
 use lsp_types::Range;
 use telar_transpiler::{is_builtin_tag, is_control_flow_keyword};
 
+use crate::analysis::preview_header::{self, TokenKind};
 use crate::position::{Section, find_section_at};
 use crate::text::{ident_at, leading_token, name_range, utf16_to_byte};
+use telar_parser::{header_section, section_opened_by};
 
 /// The class name under the cursor, if it sits on a `@name` token (on the `@` or anywhere in `name`).
 pub fn class_at(source: &str, line: u32, character: u32) -> Option<String> {
@@ -90,40 +92,72 @@ pub fn component_at_range(source: &str, line: u32, character: u32) -> Option<Ran
     Some(name_range(line, line_text, lead, token.len()))
 }
 
-/// The signal name under the cursor: a `$name` in `[view]`, or a `name` in `[logic]` declared as a signal/memo. A signal is file-scoped (`[logic]` declaration + uses, `$name` in `[view]`).
-///
-/// NOTE: the `[logic]` side is a whole-word scan, not a rust-analyzer-precise resolve — robust for the usual distinct signal names, but it would also touch a same-named local in `[logic]`.
-pub fn signal_at(source: &str, line: u32, character: u32) -> Option<String> {
-    let line_text = source.lines().nth(line as usize)?;
-    let name = match find_section_at(source, line) {
-        Section::View => {
-            let cursor = utf16_to_byte(line_text, character);
-            dollar_idents(line_text)
-                .into_iter()
-                .find(|(pos, n)| cursor >= *pos && cursor <= *pos + 1 + n.len())
-                .map(|(_, n)| n)?
-        }
-        Section::Logic => ident_at(line_text, character)?.1.to_string(),
-        _ => return None,
-    };
-    is_declared_signal(source, &name).then_some(name)
+/// A signal a `$name` can read: file-scoped when declared in `[logic]`, local to one preview when declared by that preview's `args(…)`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Signal {
+    pub name: String,
+    preview: Option<usize>,
 }
 
-/// Every occurrence of signal `name`: whole-word in `[logic]` (declaration + uses) and `$name` (the name range, past the `$`) in `[view]`/`[preview]`.
-pub fn signal_occurrences(source: &str, name: &str) -> Vec<Range> {
+/// The signal under the cursor: a `$name` in `[view]` or a preview body, a `name` in `[logic]` declared as a signal/memo, or an `args(…)` name in a preview header. An arg shadows a `[logic]` signal of the same name inside its own preview.
+///
+/// NOTE: the `[logic]` side is a whole-word scan, not a rust-analyzer-precise resolve — robust for the usual distinct signal names, but it would also touch a same-named local in `[logic]`.
+pub fn signal_at(source: &str, line: u32, character: u32) -> Option<Signal> {
+    let line_text = source.lines().nth(line as usize)?;
+    let scopes = preview_scopes(source);
+    let scope = scopes.get(line as usize).copied().flatten();
+    match find_section_at(source, line) {
+        Section::View => {
+            let cursor = utf16_to_byte(line_text, character);
+            let name = dollar_idents(line_text)
+                .into_iter()
+                .find(|(pos, n)| cursor >= *pos && cursor <= *pos + 1 + n.len())
+                .map(|(_, n)| n)?;
+            resolve_read(source, scope, name)
+        }
+        Section::Logic => {
+            let name = ident_at(line_text, character)?.1.to_string();
+            is_declared_signal(source, &name).then_some(Signal {
+                name,
+                preview: None,
+            })
+        }
+        Section::Preview => {
+            let (start, len) = arg_name_at(line_text, utf16_to_byte(line_text, character))?;
+            Some(Signal {
+                name: line_text[start..start + len].to_string(),
+                preview: scope,
+            })
+        }
+        _ => None,
+    }
+}
+
+/// Every occurrence of `signal`. A `[logic]` signal: whole-word in `[logic]` (declaration + uses) and `$name` in `[view]` and the preview bodies that do not declare an arg of that name. An arg: its name in the header and `$name` in that preview's body. Ranges cover the name, past the `$`.
+pub fn signal_occurrences(source: &str, signal: &Signal) -> Vec<Range> {
+    let scopes = preview_scopes(source);
+    let name = signal.name.as_str();
     let mut out = Vec::new();
     for (i, line) in source.lines().enumerate() {
         let li = i as u32;
+        let scope = scopes[i];
         match find_section_at(source, li) {
-            Section::Logic => {
+            Section::Logic if signal.preview.is_none() => {
                 for (start, len) in whole_word_positions(line, name) {
                     out.push(name_range(li, line, start, len));
                 }
             }
-            Section::View => {
+            Section::View if reads_signal(source, scope, signal) => {
                 for (pos, n) in dollar_idents(line) {
                     if n == name {
                         out.push(name_range(li, line, pos + 1, name.len()));
+                    }
+                }
+            }
+            Section::Preview if signal.preview == Some(i) => {
+                for (start, len) in arg_names(line) {
+                    if &line[start..start + len] == name {
+                        out.push(name_range(li, line, start, len));
                     }
                 }
             }
@@ -148,7 +182,75 @@ pub fn signal_occurrence_at(source: &str, line: u32, character: u32) -> Option<R
             let (start, word) = ident_at(line_text, character)?;
             Some(name_range(line, line_text, start, word.len()))
         }
+        Section::Preview => {
+            let (start, len) = arg_name_at(line_text, utf16_to_byte(line_text, character))?;
+            Some(name_range(line, line_text, start, len))
+        }
         _ => None,
+    }
+}
+
+/// The header line of the `[preview …]` each line belongs to, `None` outside one. Everything up to the next header is the preview's body.
+fn preview_scopes(source: &str) -> Vec<Option<usize>> {
+    let mut current = None;
+    source
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            let trimmed = line.trim();
+            if header_section(trimmed).is_some() {
+                current = None;
+            } else if section_opened_by(trimmed) == Some(Section::View) {
+                current = Some(i);
+            } else if section_opened_by(trimmed).is_some() {
+                current = None;
+            }
+            current
+        })
+        .collect()
+}
+
+/// The byte spans of the names `args(…)` declares on a preview header line.
+fn arg_names(line: &str) -> Vec<(usize, usize)> {
+    preview_header::header_tokens(line)
+        .into_iter()
+        .filter(|token| token.kind == TokenKind::ArgName)
+        .map(|token| (token.start, token.len))
+        .collect()
+}
+
+fn arg_name_at(line: &str, cursor: usize) -> Option<(usize, usize)> {
+    arg_names(line)
+        .into_iter()
+        .find(|(start, len)| cursor >= *start && cursor <= start + len)
+}
+
+fn declares_arg(source: &str, header: usize, name: &str) -> bool {
+    source.lines().nth(header).is_some_and(|line| {
+        arg_names(line)
+            .into_iter()
+            .any(|(start, len)| &line[start..start + len] == name)
+    })
+}
+
+fn resolve_read(source: &str, scope: Option<usize>, name: String) -> Option<Signal> {
+    if let Some(header) = scope.filter(|header| declares_arg(source, *header, &name)) {
+        return Some(Signal {
+            name,
+            preview: Some(header),
+        });
+    }
+    is_declared_signal(source, &name).then_some(Signal {
+        name,
+        preview: None,
+    })
+}
+
+/// Whether a `$name` on a line of `scope` reads `signal`: the preview's own arg, or a `[logic]` signal no arg of that preview shadows.
+fn reads_signal(source: &str, scope: Option<usize>, signal: &Signal) -> bool {
+    match signal.preview {
+        Some(header) => scope == Some(header),
+        None => !scope.is_some_and(|header| declares_arg(source, header, &signal.name)),
     }
 }
 

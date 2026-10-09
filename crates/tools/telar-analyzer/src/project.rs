@@ -14,6 +14,8 @@ pub struct ProjectInfo {
     pub library: bool,
     /// Every key the project's baked catalog defines, or empty when it has no translations.
     pub i18n_keys: HashSet<String>,
+    /// `[telar.previews]`: the matrices and viewports a preview header may name.
+    pub previews: telar_project::PreviewsSection,
 }
 
 impl ProjectInfo {
@@ -65,9 +67,9 @@ impl ProjectInfo {
             .unwrap_or_default();
         let component_root =
             telar_project::find_workspace_root(&root).unwrap_or_else(|| root.clone());
-        let library = telar_project::TelarManifest::load_or_default(&root)
-            .telar
-            .library;
+        let telar_project::TelarSection {
+            library, previews, ..
+        } = telar_project::TelarManifest::load_or_default(&root).telar;
         Some(Self {
             root,
             component_root,
@@ -75,8 +77,26 @@ impl ProjectInfo {
             theme_fields,
             library,
             i18n_keys,
+            previews,
         })
     }
+}
+
+/// The name `CARGO_CRATE_NAME` gives the library of the package at `package_root`, which is what the generated preview ids start with: its `[lib] name` or else its package name, with `-` spelled `_`.
+pub fn crate_name(package_root: &Path) -> Option<String> {
+    let manifest: toml::Table = std::fs::read_to_string(package_root.join("Cargo.toml"))
+        .ok()?
+        .parse()
+        .ok()?;
+    let named = |table: &str| {
+        manifest
+            .get(table)
+            .and_then(|table| table.get("name"))
+            .and_then(toml::Value::as_str)
+    };
+    named("lib")
+        .or_else(|| named("package"))
+        .map(|name| name.replace('-', "_"))
 }
 
 fn scan_project_theme_fields(root: &Path, type_name: &str) -> HashSet<String> {

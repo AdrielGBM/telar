@@ -4,13 +4,13 @@
 
 use lsp_types::{Position, Range, SelectionRange};
 
-use telar_parser::{header_section, is_preview_header};
+use telar_parser::section_opened_by;
 
 use crate::text::{byte_to_utf16, ident_at, name_range, utf16_len};
 
-/// Whether a trimmed line opens a section: the fixed `[logic]`/`[style]`/`[view]` headers plus the parameterized `[preview "Name" …]` header (so a preview is its own selectable section and never gets swept into the preceding `[view]` block).
+/// Whether a trimmed line opens a section: the fixed headers (`[logic]`, `[style]`, `[view]`, `[play]`) plus the parameterized `[preview "Name" …]` and `[previews …]` ones, so a preview, a play zone and the meta prose are each their own selectable section and never get swept into the block above them.
 fn is_section_header(trimmed: &str) -> bool {
-    header_section(trimmed).is_some() || is_preview_header(trimmed)
+    section_opened_by(trimmed).is_some()
 }
 
 /// One `SelectionRange` hierarchy per requested position (LSP sends a batch).

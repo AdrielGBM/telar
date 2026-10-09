@@ -28,3 +28,14 @@ fn a_layer_hovers_the_type_it_builds_and_what_it_is_for() {
     assert!(text.starts_with("`layer` → `FixedLayer::new()`"), "{text}");
     assert!(text.contains("Tab order"), "{text}");
 }
+
+#[test]
+fn a_preview_option_hovers_what_it_does() {
+    let src = "[view]\ncol\n\n[preview \"A\" layout:centered args(on:true)]\ncol\n";
+    let layout = hover_text(src, 3, 15).expect("hover over `layout`");
+    assert!(layout.starts_with("`layout` — preview option"), "{layout}");
+    assert!(layout.contains("centered"), "{layout}");
+    let args = hover_text(src, 3, 31).expect("hover over `args`");
+    assert!(args.contains("signals"), "{args}");
+    assert!(hover_text(src, 3, 23).is_none(), "a value says nothing");
+}

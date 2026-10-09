@@ -1,16 +1,21 @@
 //! Completion: what may be written at the cursor, decided from the `.rsx` section it is in.
 
 use crate::analysis::occurrences::declared_signals;
+use crate::analysis::preview_header::{self, HeaderKind, Place, TokenKind};
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
-use lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, Documentation};
+use crate::text::utf16_to_byte;
+use lsp_types::{
+    Command, CompletionItem, CompletionItemKind, CompletionItemLabelDetails, Documentation,
+    InsertTextFormat, MarkupContent, MarkupKind,
+};
 use std::collections::HashSet;
 use std::path::Path;
-use telar_parser::RsxDocument;
+use telar_parser::{Preview, RsxDocument, ViewNode};
 use telar_project::naming::to_pascal_case;
-use telar_transpiler::{color_attr_keys, color_keywords, is_control_flow_keyword};
+use telar_transpiler::{color_attr_keys, color_keywords, is_builtin_tag, is_control_flow_keyword};
 
-/// What may be written at the cursor: an element name, an attribute key, a colour, a class, a signal or the name after `$theme.`.
+/// What may be written at the cursor: an element name, an attribute key, a colour, a class, a signal, the name after `$theme.`, or a preview header's option, its value, or an inline matrix's axis or value.
 #[derive(Debug, PartialEq, Eq)]
 pub enum CompletionKind {
     ElementName,
@@ -19,16 +24,28 @@ pub enum CompletionKind {
     StyleClass,
     SignalRef,
     ThemeToken,
+    PreviewOption(HeaderKind),
+    PreviewOptionValue(String),
+    MatrixAxis,
+    MatrixAxisValue(String),
 }
 
-/// What kind of completion the cursor is in, decided from the `.rsx` section around it.
+/// What kind of completion the cursor is in, decided from the `.rsx` section around it. A preview header is read from its own line, so one still being typed, with no closing `]` yet, is completed as one.
 pub fn completion_context(source: &str, line: u32, character: u32) -> Option<CompletionKind> {
+    let line_text = source.lines().nth(line as usize).unwrap_or("");
+    let prefix = &line_text[..utf16_to_byte(line_text, character)];
+    if let Some((kind, place)) = preview_header::place_at_end(prefix) {
+        return match place {
+            Place::OptionKey => Some(CompletionKind::PreviewOption(kind)),
+            Place::OptionValue(key) => Some(CompletionKind::PreviewOptionValue(key)),
+            Place::MatrixAxis => Some(CompletionKind::MatrixAxis),
+            Place::MatrixAxisValue(axis) => Some(CompletionKind::MatrixAxisValue(axis)),
+            Place::ArgName | Place::ArgValue | Place::Elsewhere => None,
+        };
+    }
     if find_section_at(source, line) != Section::View {
         return None;
     }
-
-    let line_text = source.lines().nth(line as usize).unwrap_or("");
-    let prefix = &line_text[..character.min(line_text.len() as u32) as usize];
 
     let string = string_state(prefix);
     if string != StringState::Text && ends_in_theme_read(prefix) {
@@ -120,7 +137,7 @@ fn ends_in_theme_read(prefix: &str) -> bool {
         .is_some_and(|before| !before.ends_with(is_ident))
 }
 
-/// The built-in tags, the components the `[telar] prelude` crates export, and the `.rsx` components discoverable from `dir`. A name is offered once: a built-in shadows a component of the same name, and a prelude component's entry carries more than a bare `.rsx` stem.
+/// The built-in tags, the components the `[telar] prelude` crates export, and the `.rsx` components discoverable from `dir` — not a `*.previews.rsx` or a `mod.rsx`, which declare none. A name is offered once: a built-in shadows a component of the same name, and a prelude component's entry carries more than a bare `.rsx` stem.
 pub fn element_name_items(dir: Option<&Path>, prelude: &[PreludeComponent]) -> Vec<CompletionItem> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut items: Vec<CompletionItem> = Vec::new();
@@ -142,7 +159,13 @@ pub fn element_name_items(dir: Option<&Path>, prelude: &[PreludeComponent]) -> V
     }
 
     if let Some(dir) = dir {
-        for path in telar_project::find_rsx_files_in_tree(dir) {
+        let declares_a_component = |path: &Path| {
+            !telar_project::is_previews_file(path) && !telar_project::is_module_root(path)
+        };
+        for path in telar_project::find_rsx_files_in_tree(dir)
+            .into_iter()
+            .filter(|path| declares_a_component(path))
+        {
             if let Some(stem) = path.file_stem().and_then(|s| s.to_str())
                 && seen.insert(stem.to_string())
             {
@@ -311,9 +334,13 @@ pub fn style_class_items(doc: &RsxDocument) -> Vec<CompletionItem> {
         .collect()
 }
 
-/// Signals/memos declared in `[logic]`, offered after a `$` in `[view]`. `insert_text` drops the `$` (the trigger char is already typed), so completing leaves a single `$name`.
-pub fn signal_items(source: &str) -> Vec<CompletionItem> {
-    declared_signals(source)
+/// The signals a `$` may read on 0-based `line`, offered after it. A preview builds in a fn of its own, out of reach of the component's `[logic]`, so in a preview's body these are the names its `args(…)` declares; anywhere else, the signals and memos `[logic]` declares. `insert_text` drops the `$` (the trigger char is already typed), so completing leaves a single `$name`.
+pub fn signal_items(source: &str, doc: &RsxDocument, line: u32) -> Vec<CompletionItem> {
+    let names = match preview_at(doc, line) {
+        Some(preview) => preview.args.iter().map(|arg| arg.name.clone()).collect(),
+        None => declared_signals(source),
+    };
+    names
         .into_iter()
         .map(|name| CompletionItem {
             label: format!("${name}"),
@@ -322,6 +349,244 @@ pub fn signal_items(source: &str) -> Vec<CompletionItem> {
             ..Default::default()
         })
         .collect()
+}
+
+/// The preview whose header or body holds 0-based `line`.
+fn preview_at(doc: &RsxDocument, line: u32) -> Option<&Preview> {
+    doc.previews
+        .iter()
+        .rev()
+        .find(|preview| preview.line <= line as usize + 1)
+}
+
+/// The options a preview header takes, and on a variant, `args(…)`.
+pub fn preview_option_items(kind: HeaderKind) -> Vec<CompletionItem> {
+    let mut items: Vec<CompletionItem> = preview_header::options()
+        .map(|option| {
+            let mut item = snippet_item(option.key, option.snippet, option.doc);
+            if option.snippet.ends_with(':') {
+                item.command = Some(trigger_suggest());
+            }
+            item
+        })
+        .collect();
+    if kind == HeaderKind::Variant {
+        items.push(snippet_item(
+            "args(…)",
+            "args(${1:name}:${2:default})",
+            preview_header::ARGS_DECL_DOC,
+        ));
+    }
+    items
+}
+
+/// The values an option takes that can be listed: a layout, a direction, `none` for `args:`, and the matrices a preview may name.
+pub fn preview_option_value_items(key: &str, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
+    match key {
+        "layout" => word_items(&[
+            ("padded", "The preview with room around it."),
+            (
+                "centered",
+                "The preview at its own size, in the middle of the canvas.",
+            ),
+            ("fullscreen", "The preview filling the canvas."),
+        ]),
+        "dir" => direction_items(),
+        "args" => word_items(&[(
+            "none",
+            "Keeps the root's literal attributes fixed rather than turning each into an arg.",
+        )]),
+        "matrix" => matrix_items(project),
+        _ => Vec::new(),
+    }
+}
+
+/// The matrices a preview may name: the package's `[telar.previews.matrices]`, the built-in `themes` unless the package names its own, and the axes written out.
+fn matrix_items(project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
+    let previews = project.map(|project| &project.previews);
+    let names: Vec<&String> = previews
+        .and_then(|previews| previews.matrices.as_ref())
+        .map(|matrices| matrices.keys().collect())
+        .unwrap_or_default();
+    let read = previews
+        .and_then(|previews| previews.named_matrices().ok())
+        .unwrap_or_default();
+    let mut items: Vec<CompletionItem> = names
+        .iter()
+        .map(|name| {
+            let axes = read.get(name.as_str()).map(|axes| {
+                axes.iter()
+                    .map(|axis| axis.name())
+                    .collect::<Vec<_>>()
+                    .join(" × ")
+            });
+            CompletionItem {
+                label: name.to_string(),
+                kind: Some(CompletionItemKind::ENUM_MEMBER),
+                label_details: Some(CompletionItemLabelDetails {
+                    detail: axes.map(|axes| format!(" {axes}")),
+                    description: Some("telar.toml".to_string()),
+                }),
+                ..Default::default()
+            }
+        })
+        .collect();
+    if !names.iter().any(|name| name.as_str() == BUILT_IN_THEMES) {
+        items.push(CompletionItem {
+            label: BUILT_IN_THEMES.to_string(),
+            kind: Some(CompletionItemKind::ENUM_MEMBER),
+            label_details: Some(CompletionItemLabelDetails {
+                detail: Some(" mode".to_string()),
+                description: Some("built in".to_string()),
+            }),
+            documentation: Some(markdown(
+                "Every registered mode, side by side. A matrix the package names `themes` takes its place.",
+            )),
+            ..Default::default()
+        });
+    }
+    items.push(snippet_item(
+        "(…)",
+        "(${1:mode}:[${2:light dark}])",
+        "The matrix's axes written out, the first outermost: `matrix:(mode:[light dark] size:[12 16])`.",
+    ));
+    items
+}
+
+/// The matrix every package can name without declaring it.
+const BUILT_IN_THEMES: &str = "themes";
+
+/// The axes an inline matrix may vary on the header at 0-based `line`: the environment's, then each arg the preview has — the names its `args(…)` declares and the attributes of the component call it renders.
+pub fn matrix_axis_items(doc: &RsxDocument, line: u32, line_text: &str) -> Vec<CompletionItem> {
+    let mut items: Vec<CompletionItem> = telar_project::MATRIX_GLOBAL_AXES
+        .iter()
+        .map(|axis| axis_item(axis, "environment"))
+        .collect();
+    let mut seen: HashSet<String> = telar_project::MATRIX_GLOBAL_AXES
+        .iter()
+        .map(|axis| axis.to_string())
+        .collect();
+    let declared = preview_header::header_tokens(line_text)
+        .into_iter()
+        .filter(|token| token.kind == TokenKind::ArgName)
+        .map(|token| line_text[token.start..token.start + token.len].to_string());
+    let rendered = doc
+        .previews
+        .iter()
+        .find(|preview| preview.line == line as usize + 1)
+        .and_then(|preview| root_component(&preview.body))
+        .into_iter()
+        .flat_map(|root| &root.attributes)
+        .filter(|attr| {
+            attr.key != "slot" && !attr.value.text().contains('$') && !attr.value.is_closure()
+        })
+        .map(|attr| attr.key.clone());
+    for name in declared.chain(rendered) {
+        if seen.insert(name.clone()) {
+            items.push(axis_item(&name, "arg"));
+        }
+    }
+    items
+}
+
+/// The component call a preview renders, when its body is that one call: the call whose attributes are the preview's implicit args.
+fn root_component(body: &[ViewNode]) -> Option<&telar_parser::Element> {
+    let mut nodes = body
+        .iter()
+        .filter(|node| !matches!(node, ViewNode::Comment(_)));
+    match (nodes.next(), nodes.next()) {
+        (Some(ViewNode::Element(element)), None) if !is_builtin_tag(&element.tag) => Some(element),
+        _ => None,
+    }
+}
+
+fn axis_item(name: &str, description: &str) -> CompletionItem {
+    CompletionItem {
+        label: name.to_string(),
+        kind: Some(CompletionItemKind::PROPERTY),
+        label_details: Some(CompletionItemLabelDetails {
+            detail: None,
+            description: Some(description.to_string()),
+        }),
+        insert_text: Some(format!("{name}:[$1]")),
+        insert_text_format: Some(InsertTextFormat::SNIPPET),
+        command: Some(trigger_suggest()),
+        ..Default::default()
+    }
+}
+
+/// The values of an inline matrix axis that can be listed: a direction, a control size, or a viewport the package names.
+pub fn matrix_axis_value_items(axis: &str, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
+    match axis {
+        "dir" => direction_items(),
+        "control_size" => word_items(&[
+            ("mini", "The smallest control size."),
+            ("small", "A size below the regular one."),
+            ("regular", "The default control size."),
+            ("large", "A size above the regular one."),
+        ]),
+        "viewport" => project
+            .and_then(|project| project.previews.viewports.as_ref())
+            .into_iter()
+            .flatten()
+            .map(|(name, size)| CompletionItem {
+                label: name.clone(),
+                kind: Some(CompletionItemKind::ENUM_MEMBER),
+                label_details: Some(CompletionItemLabelDetails {
+                    detail: Some(format!(" {}x{}", size.width, size.height)),
+                    description: Some("telar.toml".to_string()),
+                }),
+                ..Default::default()
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn direction_items() -> Vec<CompletionItem> {
+    word_items(&[
+        ("ltr", "Left to right."),
+        ("rtl", "Right to left, whatever the locale's own direction."),
+    ])
+}
+
+fn word_items(words: &[(&str, &str)]) -> Vec<CompletionItem> {
+    words
+        .iter()
+        .map(|(word, doc)| CompletionItem {
+            label: word.to_string(),
+            kind: Some(CompletionItemKind::ENUM_MEMBER),
+            documentation: Some(markdown(doc)),
+            ..Default::default()
+        })
+        .collect()
+}
+
+fn snippet_item(label: &str, snippet: &str, doc: &str) -> CompletionItem {
+    CompletionItem {
+        label: label.to_string(),
+        kind: Some(CompletionItemKind::PROPERTY),
+        documentation: Some(markdown(doc)),
+        insert_text: Some(snippet.to_string()),
+        insert_text_format: Some(InsertTextFormat::SNIPPET),
+        ..Default::default()
+    }
+}
+
+fn markdown(text: &str) -> Documentation {
+    Documentation::MarkupContent(MarkupContent {
+        kind: MarkupKind::Markdown,
+        value: text.to_string(),
+    })
+}
+
+/// Opens the list again once a key and its colon are in, so the values follow without another keystroke.
+fn trigger_suggest() -> Command {
+    Command {
+        title: "Suggest".to_string(),
+        command: "editor.action.triggerSuggest".to_string(),
+        arguments: None,
+    }
 }
 
 #[cfg(test)]

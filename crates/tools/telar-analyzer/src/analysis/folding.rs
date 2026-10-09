@@ -1,9 +1,9 @@
 //! `textDocument/foldingRange`: collapsible regions for `.rsx`.
 //!
-//! Two kinds, derived straight from the source text (so it works even when the document does not parse): **section folds** collapse each `[logic]`/`[style]`/`[view]`/`[preview …]` block, and **indentation folds** collapse nested `[view]` elements and multi-line `[style]` classes.
+//! Two kinds, derived straight from the source text (so it works even when the document does not parse): **section folds** collapse each `[logic]`/`[style]`/`[view]`/`[previews …]`/`[preview …]`/`[play]` block, and **indentation folds** collapse nested `[view]` elements and multi-line `[style]` classes.
 
 use lsp_types::{FoldingRange, FoldingRangeKind};
-use telar_parser::{header_section, is_preview_header};
+use telar_parser::section_opened_by;
 
 /// The foldable regions: each section, and each indentation block inside it.
 pub fn folding_ranges(source: &str) -> Vec<FoldingRange> {
@@ -14,10 +14,9 @@ pub fn folding_ranges(source: &str) -> Vec<FoldingRange> {
     ranges
 }
 
-/// Whether a line is a section header (`[logic]`/`[style]`/`[view]` or a `[preview …]`).
+/// Whether a line is a section header: a fixed one (`[logic]`, `[style]`, `[view]`, `[play]`), a `[preview …]` or the `[previews …]` meta section.
 fn is_header(line: &str) -> bool {
-    let t = line.trim();
-    header_section(t).is_some() || is_preview_header(t)
+    section_opened_by(line.trim()).is_some()
 }
 
 /// One fold per section: from its header line to the last non-blank line before the next header.

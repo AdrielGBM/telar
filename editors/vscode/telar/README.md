@@ -12,6 +12,7 @@ The extension talks to `telar-analyzer`, a language server that embeds rust-anal
 - **Rename and find references** — component tags and signals, across the workspace
 - **Formatting** — whole document or selection
 - **Inlay hints, code lenses, code actions, document links and folding ranges**
+- **Previews** — `▶ Open in workshop` above each `[preview]` and `▶ Run play` above each `[play]`, each run in a terminal in the package; completion and hover for header options, `args(…)` and the matrices `telar.toml` names
 - **Semantic highlighting** and color swatches for theme values
 - **Workspace symbols** — components and `@classes` across the project
 
@@ -29,7 +30,7 @@ A Rust toolchain on `PATH`. The server discovers the sysroot through `rustc` and
 
 | Command                    | Description                                |
 | -------------------------- | ------------------------------------------ |
-| `Telar: Preview component` | Renders the component under the cursor     |
+| `Telar: Preview component` | Opens the workshop on the file's component |
 | `Telar: Show server log`   | Opens the language server's output channel |
 
 ## How the server is found

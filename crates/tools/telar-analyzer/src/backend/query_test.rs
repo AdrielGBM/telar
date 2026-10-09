@@ -43,3 +43,43 @@ fn a_line_with_no_component_call_maps_nowhere() {
         "a line with no component call maps nowhere"
     );
 }
+
+/// The indent a verbatim line is given depends on where its zone lands, so the column shift is read off the two lines rather than assumed.
+#[test]
+fn a_logic_cursor_lands_on_the_same_text_in_the_generated_fn() {
+    let rsx = "[logic]\nlet count = signal(0i32);\n\n[view]\ntext \"{$count}\"\n";
+    let out = transpile_source(rsx, "demo", None, None).unwrap();
+    let map = SourceMap::new(out.source_map.clone(), out.expr_spans.clone());
+    let offset = generated_offset(
+        Section::Logic,
+        rsx,
+        &out.rust_code,
+        &map,
+        Position::new(1, 4),
+    )
+    .expect("a [logic] line is mapped");
+    assert!(out.rust_code[offset..].starts_with("count = signal"));
+}
+
+#[test]
+fn a_play_cursor_maps_through_the_line_map_like_logic() {
+    let rsx = "[view]\ncol\n\n[preview \"A\"]\ncol\n\n[play]\ncanvas.expect_text(\"x\")?;\n";
+    let generated = "pub fn demo_play_0(canvas: &mut Play) -> PlayResult {\n        canvas.expect_text(\"x\")?;\n}\n";
+    let map = SourceMap::new(vec![None, Some(7), None], Vec::new());
+    let offset = generated_offset(Section::Play, rsx, generated, &map, Position::new(7, 7))
+        .expect("a [play] line the output maps is mapped");
+    assert!(generated[offset..].starts_with("expect_text"));
+
+    let unmapped = SourceMap::new(vec![None, None, None], Vec::new());
+    assert!(
+        generated_offset(
+            Section::Play,
+            rsx,
+            generated,
+            &unmapped,
+            Position::new(7, 7)
+        )
+        .is_none(),
+        "a play the output does not carry maps nowhere"
+    );
+}

@@ -23,3 +23,13 @@ fn preview_section_is_foldable() {
     let folds = folding_ranges(src);
     assert!(has(&folds, 3, 5), "[preview] section:\n{folds:?}");
 }
+
+#[test]
+fn the_previews_meta_section_and_a_play_zone_fold_on_their_own() {
+    let src = "[view]\ncol\n    text \"x\"\n[previews \"Forms/Box\"]\nOne line of prose.\nAnd another.\n[preview \"A\"]\nbox\n    text \"a\"\n[play]\ncanvas.click(by_role(Role::Button))?;\ncanvas.expect_text(\"a\")?;\n";
+    let folds = folding_ranges(src);
+    assert!(has(&folds, 0, 2), "[view] stops at [previews]:\n{folds:?}");
+    assert!(has(&folds, 3, 5), "[previews] prose:\n{folds:?}");
+    assert!(has(&folds, 6, 8), "[preview] stops at [play]:\n{folds:?}");
+    assert!(has(&folds, 9, 11), "[play]:\n{folds:?}");
+}

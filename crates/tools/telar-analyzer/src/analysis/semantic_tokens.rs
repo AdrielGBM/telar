@@ -1,8 +1,9 @@
-//! `textDocument/semanticTokens/full`: parse-aware highlighting that TextMate (regex) can't do — it distinguishes **component** tags from **built-in** tags, marks `@class` references and `$signal` reads, so the semantics of the `.rsx` read at a glance. Coexists with the TextMate grammar (which stays the fallback for everything else).
+//! `textDocument/semanticTokens/full`: parse-aware highlighting that TextMate (regex) can't do — it distinguishes **component** tags from **built-in** tags, marks `@class` references, `$signal` reads and the option keys and `args(…)` names of a preview header, so the semantics of the `.rsx` read at a glance. Coexists with the TextMate grammar (which stays the fallback for everything else).
 
 use lsp_types::{SemanticToken, SemanticTokenType};
 use telar_transpiler::{is_builtin_tag, is_control_flow_keyword};
 
+use crate::analysis::preview_header::{self, TokenKind};
 use crate::position::{Section, find_section_at};
 use crate::text::{byte_to_utf16, leading_token};
 
@@ -12,7 +13,8 @@ pub fn token_types() -> Vec<SemanticTokenType> {
         SemanticTokenType::KEYWORD,  // 0 — built-in tag (col, text, box, …)
         SemanticTokenType::FUNCTION, // 1 — component tag (another .rsx)
         SemanticTokenType::CLASS,    // 2 — @class (def or ref)
-        SemanticTokenType::VARIABLE, // 3 — $signal read
+        SemanticTokenType::VARIABLE, // 3 — $signal read, or a name `args(…)` declares
+        SemanticTokenType::PROPERTY, // 4 — a preview header's option key or matrix axis
     ]
 }
 
@@ -20,6 +22,7 @@ const TAG_BUILTIN: u32 = 0;
 const TAG_COMPONENT: u32 = 1;
 const CLASS: u32 = 2;
 const SIGNAL: u32 = 3;
+const OPTION: u32 = 4;
 
 /// The document's tokens, delta-encoded as the LSP wants them.
 pub fn semantic_tokens(source: &str) -> Vec<SemanticToken> {
@@ -56,6 +59,7 @@ fn raw_tokens(source: &str) -> Vec<(u32, u32, u32, u32)> {
             // `find_section_at` reports `[preview]` bodies as `View`, so they're covered here too.
             Section::View => view_tokens(line, li, &mut raw),
             Section::Style => style_tokens(line, li, &mut raw),
+            Section::Preview | Section::Previews => header_tokens(line, li, &mut raw),
             _ => {}
         }
     }
@@ -81,6 +85,16 @@ fn view_tokens(line: &str, li: u32, raw: &mut Vec<(u32, u32, u32, u32)>) {
     }
     for (start, len) in sigil_tokens(line, b'$') {
         push(raw, li, line, start, len, SIGNAL);
+    }
+}
+
+fn header_tokens(line: &str, li: u32, raw: &mut Vec<(u32, u32, u32, u32)>) {
+    for token in preview_header::header_tokens(line) {
+        let ty = match token.kind {
+            TokenKind::ArgName => SIGNAL,
+            TokenKind::OptionKey | TokenKind::MatrixAxis => OPTION,
+        };
+        push(raw, li, line, token.start, token.len, ty);
     }
 }
 

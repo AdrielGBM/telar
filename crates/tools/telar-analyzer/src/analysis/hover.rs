@@ -1,18 +1,23 @@
-//! Hover: what a tag, a colour or a class says about itself.
+//! Hover: what a tag, a colour, a class or a preview header's option says about itself.
 
 use crate::analysis::color::{hex_string, parse_hex, rgba};
+use crate::analysis::preview_header::{self, TokenKind};
 use crate::analysis::util::{ViewToken, view_token_at};
 use crate::project::ProjectInfo;
+use crate::text::utf16_to_byte;
 use lsp_types::{Hover, HoverContents, MarkupContent, MarkupKind};
 use telar_transpiler::{ValueKind, keyword_color_rgba};
 
-/// What the token under the cursor says about itself, for tags, colours and classes.
+/// What the token under the cursor says about itself, for tags, colours, classes and preview header options.
 pub fn hover_info(
     source: &str,
     line: u32,
     character: u32,
     project: Option<&ProjectInfo>,
 ) -> Option<Hover> {
+    if let Some(hover) = hover_preview_option(source, line, character) {
+        return Some(hover);
+    }
     match view_token_at(source, line, character)? {
         ViewToken::ColorValue(value) => hover_color(value, project),
         ViewToken::Attr { tag, key } => hover_attr(tag, key),
@@ -20,6 +25,21 @@ pub fn hover_info(
         // A style class already shows its own definition through goto-definition; there is no tooltip for it.
         ViewToken::Class(_) => None,
     }
+}
+
+/// What a preview header's option key, or its `args`, does.
+fn hover_preview_option(source: &str, line: u32, character: u32) -> Option<Hover> {
+    let line_text = source.lines().nth(line as usize)?;
+    let (token, key) = preview_header::token_at(line_text, utf16_to_byte(line_text, character))?;
+    if token.kind != TokenKind::OptionKey {
+        return None;
+    }
+    let declares = line_text[token.start + token.len..].starts_with('(');
+    let doc = match declares {
+        true => preview_header::ARGS_DECL_DOC,
+        false => preview_header::option(key)?.doc,
+    };
+    Some(make_hover(format!("`{key}` — preview option\n\n{doc}")))
 }
 
 fn hover_color(value: &str, project: Option<&ProjectInfo>) -> Option<Hover> {

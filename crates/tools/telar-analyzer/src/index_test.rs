@@ -13,7 +13,8 @@ fn abs(unix: &str) -> PathBuf {
 fn indexes_stem_classes_and_tags() {
     let src = "[style]\n@card\n    width: 240\n[view]\ncol @card\n    feature_card icon:\"x\"\n";
     let entry = index_source(&abs("/x/src/home.rsx"), src).unwrap();
-    assert_eq!(entry.stem, "home");
+    assert_eq!(entry.component, "home");
+    assert!(!entry.previews_only);
     assert_eq!(entry.classes, vec![("card".to_string(), 1)]);
     assert_eq!(entry.tags.len(), 1);
     assert_eq!(entry.tags[0].name, "feature_card");
@@ -70,4 +71,41 @@ fn a_use_line_that_imports_nothing_of_its_own_name_is_not_one() {
             "`{line}` is not a component import"
         );
     }
+}
+
+/// A previews file declares no component of its own: it is the one it is named after that it previews, and it moves with that one's rename.
+#[test]
+fn a_previews_file_is_not_a_component_but_previews_one() {
+    let mut idx = WorkspaceIndex {
+        root: abs("/x"),
+        files: HashMap::new(),
+    };
+    idx.update(&abs("/x/src/tally.rsx"), "[view]\ncol\n");
+    idx.update(
+        &abs("/x/src/tally.previews.rsx"),
+        "[previews \"Fixture/Tally\"]\nProse.\n\n[preview \"A\"]\ntally label:\"x\"\n",
+    );
+
+    let refs = idx.component_references("tally");
+    let markers = refs
+        .iter()
+        .filter(|loc| loc.range.start == loc.range.end)
+        .count();
+    assert_eq!(markers, 1, "only tally.rsx defines it: {refs:?}");
+    assert_eq!(
+        refs.len(),
+        2,
+        "the defining file and the tag the preview renders"
+    );
+
+    let previews = idx.previews_files("tally");
+    assert_eq!(previews.len(), 1);
+    assert!(previews[0].as_str().ends_with("tally.previews.rsx"));
+
+    let syms = idx.symbols("tally");
+    assert_eq!(
+        syms.iter().filter(|s| s.kind == SymbolKind::MODULE).count(),
+        1,
+        "{syms:?}"
+    );
 }

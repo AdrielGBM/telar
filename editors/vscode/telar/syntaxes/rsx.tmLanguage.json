@@ -10,7 +10,13 @@
       "include": "#section-logic"
     },
     {
+      "include": "#section-previews"
+    },
+    {
       "include": "#section-preview"
+    },
+    {
+      "include": "#section-play"
     },
     {
       "include": "#section-style"
@@ -31,12 +37,12 @@
       "name": "comment.line.double-slash.rsx"
     },
     "section-header": {
-      "match": "^\\[(logic|style|view|preview)\\b",
+      "match": "^\\[(logic|style|view|preview|previews|play)\\b",
       "name": "keyword.control.section.rsx"
     },
     "section-logic": {
       "begin": "^\\[logic\\]$",
-      "end": "^(?=\\[(?:style|view)\\]|\\[preview\\b)",
+      "end": "^(?=\\[(?:style|view|play)\\]|\\[previews?\\b)",
       "beginCaptures": {
         "0": {
           "name": "keyword.control.section.rsx"
@@ -49,12 +55,45 @@
         }
       ]
     },
-    "section-preview": {
-      "begin": "^(\\[preview)\\b",
-      "end": "^(?=\\[(?:logic|style|view)\\]|\\[preview\\b)",
+    "section-previews": {
+      "begin": "^(\\[previews)\\b(.*)$",
+      "end": "^(?=\\[(?:logic|style|view|play)\\]|\\[previews?\\b)",
       "beginCaptures": {
         "1": {
           "name": "keyword.control.section.rsx"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#preview-header"
+            }
+          ]
+        }
+      },
+      "contentName": "comment.block.documentation.previews.rsx",
+      "patterns": [
+        {
+          "include": "#prose-code"
+        }
+      ]
+    },
+    "prose-code": {
+      "match": "`[^`]*`",
+      "name": "markup.inline.raw.string.rsx"
+    },
+    "section-preview": {
+      "begin": "^(\\[preview)\\b(.*)$",
+      "end": "^(?=\\[(?:logic|style|view|play)\\]|\\[previews?\\b)",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.section.rsx"
+        },
+        "2": {
+          "patterns": [
+            {
+              "include": "#preview-header"
+            }
+          ]
         }
       },
       "patterns": [
@@ -66,9 +105,160 @@
         }
       ]
     },
+    "preview-header": {
+      "patterns": [
+        {
+          "include": "#view-string"
+        },
+        {
+          "include": "#preview-args"
+        },
+        {
+          "include": "#preview-option"
+        },
+        {
+          "include": "#preview-key"
+        },
+        {
+          "include": "#preview-flag"
+        },
+        {
+          "include": "#preview-value"
+        },
+        {
+          "include": "#preview-size"
+        },
+        {
+          "include": "#view-color"
+        },
+        {
+          "include": "#view-number"
+        },
+        {
+          "include": "#view-path"
+        },
+        {
+          "include": "#preview-header-end"
+        }
+      ]
+    },
+    "preview-args": {
+      "begin": "\\b(args)(\\()",
+      "end": "\\)",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.args.rsx"
+        },
+        "2": {
+          "name": "punctuation.section.parens.begin.rsx"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.parens.end.rsx"
+        }
+      },
+      "name": "meta.preview.args.rsx",
+      "patterns": [
+        {
+          "include": "#view-string"
+        },
+        {
+          "include": "#preview-arg-name"
+        },
+        {
+          "include": "#preview-parens"
+        },
+        {
+          "include": "#preview-value"
+        },
+        {
+          "include": "#view-color"
+        },
+        {
+          "include": "#view-number"
+        },
+        {
+          "include": "#view-path"
+        }
+      ]
+    },
+    "preview-arg-name": {
+      "match": "\\b([A-Za-z_]\\w*)(:)(?!:)",
+      "captures": {
+        "1": {
+          "name": "variable.parameter.rsx"
+        }
+      }
+    },
+    "preview-parens": {
+      "begin": "\\(",
+      "end": "\\)",
+      "patterns": [
+        {
+          "include": "#view-string"
+        },
+        {
+          "include": "#preview-parens"
+        },
+        {
+          "include": "#view-number"
+        },
+        {
+          "include": "#view-path"
+        }
+      ]
+    },
+    "preview-option": {
+      "match": "\\b(layout|viewport|bg|mode|locale|dir|tags|matrix|decorator|fixture|surface|args)(:)",
+      "captures": {
+        "1": {
+          "name": "support.type.property-name.rsx"
+        }
+      }
+    },
+    "preview-key": {
+      "match": "\\b([A-Za-z_][\\w-]*)(:)(?!:)",
+      "captures": {
+        "1": {
+          "name": "entity.other.attribute-name.rsx"
+        }
+      }
+    },
+    "preview-flag": {
+      "match": "\\banimate\\b",
+      "name": "support.type.property-name.rsx"
+    },
+    "preview-value": {
+      "match": "\\b(padded|centered|fullscreen|ltr|rtl|none|true|false)\\b",
+      "name": "constant.language.rsx"
+    },
+    "preview-size": {
+      "match": "\\b\\d+[xX]\\d+\\b",
+      "name": "constant.numeric.rsx"
+    },
+    "preview-header-end": {
+      "match": "\\]\\s*$",
+      "name": "keyword.control.section.rsx"
+    },
+    "section-play": {
+      "begin": "^\\[play\\]\\s*$",
+      "end": "^(?=\\[(?:logic|style|view|play)\\]|\\[previews?\\b)",
+      "beginCaptures": {
+        "0": {
+          "name": "keyword.control.section.rsx"
+        }
+      },
+      "contentName": "meta.embedded.block.rust",
+      "patterns": [
+        {
+          "include": "source.rust"
+        }
+      ]
+    },
     "section-style": {
       "begin": "^\\[style\\]$",
-      "end": "^(?=\\[(?:logic|view)\\]|\\[preview\\b)",
+      "end": "^(?=\\[(?:logic|view|play)\\]|\\[previews?\\b)",
       "beginCaptures": {
         "0": {
           "name": "keyword.control.section.rsx"
@@ -107,7 +297,7 @@
     },
     "section-view": {
       "begin": "^\\[view\\]$",
-      "end": "^(?=\\[(?:logic|style)\\]|\\[preview\\b)",
+      "end": "^(?=\\[(?:logic|style|play)\\]|\\[previews?\\b)",
       "beginCaptures": {
         "0": {
           "name": "keyword.control.section.rsx"

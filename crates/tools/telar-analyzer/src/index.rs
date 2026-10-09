@@ -1,6 +1,6 @@
 //! Persistent, incremental `.rsx` symbol index for the workspace.
 //!
-//! `workspace/symbol` and cross-file component `references`/`rename` used to re-read and re-parse every `.rsx` on each query. This caches the per-file facts they need — the component (file stem), its `[style]` `@classes`, and every component `<tag>` usage — and refreshes only the file that changed (the live buffer on each edit, disk on a watched-file event). One scan on first query; O(1) updates after.
+//! `workspace/symbol` and cross-file component `references`/`rename` used to re-read and re-parse every `.rsx` on each query. This caches the per-file facts they need — the component (file stem, or the one a `*.previews.rsx` previews), its `[style]` `@classes`, and every component `<tag>` usage — and refreshes only the file that changed (the live buffer on each edit, disk on a watched-file event). One scan on first query; O(1) updates after.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -21,8 +21,10 @@ pub struct TagUse {
 /// The indexed facts of one `.rsx` file.
 pub struct IndexedFile {
     pub uri: Uri,
-    /// The component name — the file stem.
-    pub stem: String,
+    /// The component the file declares — its stem — or, for a `*.previews.rsx`, which declares none, the component it previews.
+    pub component: String,
+    /// Whether the file is a `*.previews.rsx`.
+    pub previews_only: bool,
     /// The file name (e.g. `card.rsx`), used as the symbol container.
     pub container: Option<String>,
     /// `(class name, 0-based line)` for every `[style]` `@class`.
@@ -86,9 +88,9 @@ impl WorkspaceIndex {
 
         let mut out = Vec::new();
         for entry in self.files.values() {
-            if matches(&entry.stem) {
+            if !entry.previews_only && matches(&entry.component) {
                 out.push(symbol(
-                    &entry.stem,
+                    &entry.component,
                     SymbolKind::MODULE,
                     &entry.uri,
                     0,
@@ -110,11 +112,20 @@ impl WorkspaceIndex {
         out
     }
 
+    /// The `*.previews.rsx` files that preview component `name`, which are named after it.
+    pub fn previews_files(&self, name: &str) -> Vec<Uri> {
+        self.files
+            .values()
+            .filter(|entry| entry.previews_only && entry.component == name)
+            .map(|entry| entry.uri.clone())
+            .collect()
+    }
+
     /// Cross-file references to component `name`: its defining file (a `(0,0)` marker, the file itself) plus every `<name>` markup tag.
     pub fn component_references(&self, name: &str) -> Vec<Location> {
         let mut out = Vec::new();
         for entry in self.files.values() {
-            if entry.stem == name {
+            if !entry.previews_only && entry.component == name {
                 let at = Position {
                     line: 0,
                     character: 0,
@@ -143,7 +154,6 @@ fn index_source(path: &Path, source: &str) -> Option<IndexedFile> {
         return None;
     }
     let uri = crate::uri::from_path(path)?;
-    let stem = path.file_stem().and_then(|s| s.to_str())?.to_string();
     let container = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -158,7 +168,8 @@ fn index_source(path: &Path, source: &str) -> Option<IndexedFile> {
 
     Some(IndexedFile {
         uri,
-        stem,
+        component: telar_project::component_name(path),
+        previews_only: telar_project::is_previews_file(path),
         container,
         classes,
         tags: scan_tags(source),

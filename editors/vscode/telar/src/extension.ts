@@ -53,7 +53,6 @@ export async function activate(
     }),
   );
 
-  // The "▶ Preview" code lens runs `cargo telar preview --component <name>` in the file's crate.
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "telar.preview",
@@ -64,17 +63,49 @@ export async function activate(
             : (uri ?? vscode.window.activeTextEditor?.document.uri);
         if (!target) return;
         const filePath = target.fsPath;
-        const component = path.basename(filePath, ".rsx");
+        const component = path
+          .basename(filePath, ".rsx")
+          .replace(/\.previews$/, "");
         const cwd = findCrateDir(filePath) ?? path.dirname(filePath);
-        const terminal = vscode.window.createTerminal({
-          name: "rsx preview",
+        runInTerminal(
+          "Telar workshop",
           cwd,
-        });
-        terminal.show();
-        terminal.sendText(`cargo telar preview --component ${component}`);
+          `cargo telar preview --component ${component}`,
+        );
+      },
+    ),
+    vscode.commands.registerCommand(
+      "telar.openInWorkshop",
+      (packageDir?: string, id?: string) => {
+        if (!packageDir || !id || !PREVIEW_ID.test(id)) return;
+        runInTerminal(
+          "Telar workshop",
+          packageDir,
+          `cargo telar preview ${id}`,
+        );
+      },
+    ),
+    vscode.commands.registerCommand(
+      "telar.runPlay",
+      (packageDir?: string, id?: string) => {
+        if (!packageDir || !id || !PREVIEW_ID.test(id)) return;
+        runInTerminal(
+          "Telar play",
+          packageDir,
+          `cargo telar test --preview ${id}`,
+        );
       },
     ),
   );
+}
+
+// A preview lens passes an id built from a crate name and slugs alone, so anything else is refused rather than handed to a shell.
+const PREVIEW_ID = /^[\p{L}\p{N}_-]+$/u;
+
+function runInTerminal(name: string, cwd: string, command: string): void {
+  const terminal = vscode.window.createTerminal({ name, cwd });
+  terminal.show();
+  terminal.sendText(command);
 }
 
 const BUILD_MARKER = `${path.sep}.telar${path.sep}build${path.sep}`;

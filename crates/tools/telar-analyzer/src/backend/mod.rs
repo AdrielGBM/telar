@@ -11,6 +11,7 @@ use tokio::sync::RwLock;
 
 use crate::analysis::completions::{
     CompletionKind, attribute_key_items, color_items, completion_context, element_name_items,
+    matrix_axis_items, matrix_axis_value_items, preview_option_items, preview_option_value_items,
     signal_items, style_class_items, theme_items,
 };
 use crate::analysis::definition::goto_definition;
@@ -461,7 +462,9 @@ impl Backend {
             let parsed = store.get(uri)?;
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
-            let context = completion_context(&parsed.source, pos.line, pos.character);
+            // The live text, not the last good parse: the cursor sits on what is being typed, which is often what keeps the buffer from parsing.
+            let live = store.latest_source(uri).unwrap_or(&parsed.source);
+            let context = completion_context(live, pos.line, pos.character);
             // A component's props are the props struct's own business, so the key position is a question for rust-analyzer, which answers with names, types and doc comments. The registry can only answer for the tags it defines.
             let component_props =
                 matches!(&context, Some(CompletionKind::AttributeKey(tag)) if !is_builtin_tag(tag));
@@ -485,8 +488,22 @@ impl Backend {
                 CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
                 CompletionKind::ColorValue => color_items(project.as_ref()),
                 CompletionKind::StyleClass => style_class_items(&parsed.document),
-                CompletionKind::SignalRef => signal_items(&parsed.source),
+                CompletionKind::SignalRef => {
+                    signal_items(&parsed.source, &parsed.document, pos.line)
+                }
                 CompletionKind::ThemeToken => theme_items(project.as_ref()),
+                CompletionKind::PreviewOption(kind) => preview_option_items(kind),
+                CompletionKind::PreviewOptionValue(key) => {
+                    preview_option_value_items(&key, project.as_ref())
+                }
+                CompletionKind::MatrixAxis => matrix_axis_items(
+                    &parsed.document,
+                    pos.line,
+                    nth_line(live, pos.line as usize).unwrap_or(""),
+                ),
+                CompletionKind::MatrixAxisValue(axis) => {
+                    matrix_axis_value_items(&axis, project.as_ref())
+                }
             });
             (
                 parsed.source.clone(),
@@ -784,12 +801,14 @@ impl Backend {
         (!actions.is_empty()).then_some(actions)
     }
 
-    /// `textDocument/codeLens`: a "▶ Preview" lens over each `[preview …]` section.
+    /// `textDocument/codeLens`: "▶ Open in workshop" over each `[preview …]` section and "▶ Run play" over each `[play]`.
     pub async fn code_lens(&self, params: CodeLensParams) -> Option<Vec<CodeLens>> {
         let uri = &params.text_document.uri;
+        let host = crate::uri::to_path(uri)
+            .and_then(|path| crate::analysis::lens::PreviewHost::discover(&path))?;
         let store = self.store.read().await;
         let parsed = store.get(uri)?;
-        Some(crate::analysis::lens::code_lenses(&parsed.document, uri))
+        Some(crate::analysis::lens::code_lenses(&parsed.document, &host))
     }
 
     /// `textDocument/documentLink`: clickable links for `img src:"…"` asset paths that exist on disk.
@@ -809,7 +828,7 @@ impl Backend {
         ))
     }
 
-    /// `textDocument/inlayHint`: type/parameter hints from the embedded analyzer, mapped back onto the `[logic]` zone. `[view]`-origin hints are dropped (the generated builder has no line-stable column correspondence), so hints appear only where the mapping is exact.
+    /// `textDocument/inlayHint`: type/parameter hints from the embedded analyzer, mapped back onto the `[logic]` and `[play]` zones. `[view]`-origin hints are dropped (the generated builder has no line-stable column correspondence), so hints appear only where the mapping is exact.
     pub async fn inlay_hint(&self, params: InlayHintParams) -> Option<Vec<InlayHint>> {
         let uri = &params.text_document.uri;
         let file_path = crate::uri::to_path(uri)?;
@@ -835,7 +854,10 @@ impl Backend {
                 continue;
             };
             let rsx_line = *rsx_line;
-            if find_section_at(&source, rsx_line) != Section::Logic {
+            if !matches!(
+                find_section_at(&source, rsx_line),
+                Section::Logic | Section::Play
+            ) {
                 continue;
             }
             let gen_line_text = nth_line(&target.code, raw.line as usize).unwrap_or("");
@@ -859,7 +881,7 @@ impl Backend {
         Some(out)
     }
 
-    /// `textDocument/documentHighlight`: every occurrence of the symbol under the cursor — `@class` and `$signal` natively, or a Rust identifier in `[logic]`/`[view]` via the embedded analyzer (refs landing in this file).
+    /// `textDocument/documentHighlight`: every occurrence of the symbol under the cursor — `@class` and `$signal` natively, or a Rust identifier in `[logic]`/`[play]`/`[view]` via the embedded analyzer (refs landing in this file).
     pub async fn document_highlight(
         &self,
         params: DocumentHighlightParams,
@@ -907,7 +929,7 @@ impl Backend {
         )
     }
 
-    /// `textDocument/references`: every use of the symbol under the cursor — `@class`/`$signal` (file-scoped) and component tags (cross-file) natively, or a Rust identifier in `[logic]`/`[view]` via the embedded analyzer.
+    /// `textDocument/references`: every use of the symbol under the cursor — `@class`/`$signal` (file-scoped) and component tags (cross-file) natively, or a Rust identifier in `[logic]`/`[play]`/`[view]` via the embedded analyzer.
     pub async fn references(&self, params: ReferenceParams) -> Option<Vec<Location>> {
         let uri = &params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
@@ -959,7 +981,6 @@ impl Backend {
                 .await?;
             return (!locations.is_empty()).then_some(locations);
         }
-        // Rust symbol in `[logic]`/`[view]` → analyzer find-all-references, reverse-mapped.
         let rsx_path = file_path?;
         let (locations, _) = self
             .rust_reference_locations(uri, rsx_path, source, theme, pos)
@@ -967,7 +988,7 @@ impl Backend {
         (!locations.is_empty()).then_some(locations)
     }
 
-    /// `textDocument/prepareRename`: confirm the cursor is on a renameable symbol — `@class`, `$signal`, a component tag, or a Rust identifier in `[logic]`/`[view]` — and return the range to edit.
+    /// `textDocument/prepareRename`: confirm the cursor is on a renameable symbol — `@class`, `$signal`, a component tag, or a Rust identifier in `[logic]`/`[play]`/`[view]` — and return the range to edit.
     pub async fn prepare_rename(
         &self,
         params: TextDocumentPositionParams,
@@ -992,7 +1013,7 @@ impl Backend {
             crate::analysis::occurrences::component_at_range(&source, pos.line, pos.character)?
         } else if matches!(
             find_section_at(&source, pos.line),
-            Section::Logic | Section::View
+            Section::Logic | Section::Play | Section::View
         ) {
             // Rust identifier under the cursor; rename verifies the analyzer resolves it (else no edit).
             let line_text = source.lines().nth(pos.line as usize)?;
@@ -1013,7 +1034,7 @@ impl Backend {
             format!("telar-analyzer: rename cancelled — {why}"),
         );
     }
-    /// `textDocument/rename`: rewrite every occurrence of the symbol under the cursor. `@class`/`$signal` are single-file text rewrites; a component tag renames its `.rsx` file + markup usages + Rust references (cross-file); a Rust identifier in `[logic]`/`[view]` is renamed via the analyzer's find-all-references, reverse-mapped onto the `.rsx` (and any real `.rs` files).
+    /// `textDocument/rename`: rewrite every occurrence of the symbol under the cursor. `@class`/`$signal` are single-file text rewrites; a component tag renames its `.rsx` file + markup usages + Rust references (cross-file); a Rust identifier in `[logic]`/`[play]`/`[view]` is renamed via the analyzer's find-all-references, reverse-mapped onto the `.rsx` (and any real `.rs` files).
     pub async fn rename(&self, params: RenameParams) -> Option<WorkspaceEdit> {
         let uri = &params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
@@ -1069,10 +1090,9 @@ impl Backend {
             return self.rename_component(&name, &new_name, uri, theme).await;
         }
 
-        // Rust identifier in `[logic]`/`[view]` → analyzer rename, reverse-mapped per file.
         if matches!(
             find_section_at(&source, pos.line),
-            Section::Logic | Section::View
+            Section::Logic | Section::Play | Section::View
         ) {
             let rsx_path = file_path?;
             let Some((locations, unmapped)) = self
@@ -1152,7 +1172,7 @@ impl Backend {
             store.latest_source(uri).cloned()
         }?;
         let mut data = crate::analysis::semantic_tokens::semantic_tokens(&source);
-        // Our four types were mapped onto the advertised legend at `initialize`; the editor decodes against that one, not ours.
+        // Our types were mapped onto the advertised legend at `initialize`; the editor decodes against that one, not ours.
         if let Ok(map) = self.token_types.lock()
             && let Some(map) = map.as_ref()
         {

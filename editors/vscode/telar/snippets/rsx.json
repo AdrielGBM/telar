@@ -11,7 +11,7 @@
       "    ${0}",
       "",
       "[preview \"${1:Default}\"]",
-      "${TM_FILENAME_BASE}"
+      "${TM_FILENAME_BASE/\\.previews$//}"
     ],
     "description": "Scaffold a full .rsx component (logic / style / view / preview)"
   },
@@ -43,9 +43,37 @@
     "prefix": "preview",
     "body": [
       "[preview \"${1:Name}\"]",
-      "${0:${TM_FILENAME_BASE}}"
+      "${0:${TM_FILENAME_BASE/\\.previews$//}}"
     ],
     "description": "A [preview] section"
+  },
+  "Preview with args": {
+    "prefix": "preview-args",
+    "body": [
+      "[preview \"${1:Name}\" args(${2:name}:${3:default})]",
+      "${TM_FILENAME_BASE/\\.previews$//} ${2}:\\$${2}$0"
+    ],
+    "description": "A [preview] whose args(…) declares live signals, read in the body as $name"
+  },
+  "Previews meta section": {
+    "prefix": "previews",
+    "body": [
+      "[previews \"${1:Group}/${2:Title}\" layout:${3|centered,padded,fullscreen|}]",
+      "${4:What the component is for, shown on its docs page.}",
+      "",
+      "[preview \"${5:Default}\"]",
+      "${0:${TM_FILENAME_BASE/\\.previews$//}}"
+    ],
+    "description": "The [previews] meta section every preview of the file shares, with its docs prose"
+  },
+  "Play zone": {
+    "prefix": "play",
+    "body": [
+      "[play]",
+      "canvas.${1|click,hover,expect,expect_focused|}(by_role(Role::${2:Button})${3:.named(\"${4:Save}\")})?;",
+      "canvas.expect_text(\"${5:text}\")?;$0"
+    ],
+    "description": "A [play] zone: Rust run against the preview above it"
   },
   "Style class": {
     "prefix": "class",

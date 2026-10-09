@@ -31,3 +31,24 @@ fn delta_encoding_is_monotonic() {
     // First token carries an absolute line; subsequent deltas are non-negative by construction.
     assert!(!toks.is_empty(), "the document has tokens to encode");
 }
+
+#[test]
+fn a_preview_header_marks_its_options_and_args() {
+    let src = "[view]\ncol\n[previews \"Forms/Box\" layout:centered]\nProse.\n[preview \"A\" args(agree:false) matrix:(dir:[ltr rtl])]\nbox\n";
+    let raw = raw_tokens(src);
+    let at = |line: u32, text: &str| {
+        let col = src.lines().nth(line as usize).unwrap().find(text).unwrap() as u32;
+        raw.iter()
+            .find(|&&(l, c, _, _)| l == line && c == col)
+            .map(|&(_, _, len, ty)| (len, ty))
+    };
+    assert_eq!(at(2, "layout"), Some((6, OPTION)), "{raw:?}");
+    assert_eq!(at(4, "args"), Some((4, OPTION)), "{raw:?}");
+    assert_eq!(at(4, "agree"), Some((5, SIGNAL)), "{raw:?}");
+    assert_eq!(at(4, "matrix"), Some((6, OPTION)), "{raw:?}");
+    assert_eq!(at(4, "dir"), Some((3, OPTION)), "{raw:?}");
+    assert!(
+        !raw.iter().any(|&(l, _, _, _)| l == 3),
+        "prose is not markup: {raw:?}"
+    );
+}

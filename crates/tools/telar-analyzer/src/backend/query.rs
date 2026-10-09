@@ -6,17 +6,14 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use lsp_types::*;
-use telar_transpiler::SourceMap;
+use telar_transpiler::{SourceMap, nth_line};
 
 use crate::position::{Section, find_section_at};
 use crate::ra::{Analyzer, RefTarget};
 use crate::text::byte_offset;
 
 use super::Backend;
-use super::mapping::reverse_map_rust_refs;
-
-/// `[logic]` lines are emitted verbatim under a fixed function-body indent, so an `.rsx` column maps to the generated column by adding this.
-const LOGIC_INDENT: u32 = 4;
+use super::mapping::{leading_ws_utf16, reverse_map_rust_refs};
 
 /// Past this, a query is slow enough to be worth a line in the output without spamming it.
 const SLOW_QUERY: u128 = 1000;
@@ -72,6 +69,7 @@ impl Backend {
         if elapsed > SLOW_QUERY {
             let section = match section {
                 Section::Logic => "[logic]",
+                Section::Play => "[play]",
                 _ => "[view]",
             };
             self.outgoing().log_message(
@@ -189,7 +187,7 @@ fn symbol_at(source: &str, pos: Position) -> Option<String> {
 }
 /// Where the `.rsx` cursor lands inside the generated module, or `None` when no Rust sits under it.
 ///
-/// `[logic]` is emitted verbatim, so the line map places it and the column only shifts by the body indent. `[view]` has no lines of its own in the output — only the verbatim expressions the transpiler copied — so it resolves through the expression-span map, and a cursor outside every span yields `None`, which is what leaves native element/attribute completion in charge. The offset is a UTF-8 char boundary by construction: the fragment is byte-identical in source and output, and the cursor resolves on a boundary.
+/// `[logic]` and `[play]` are emitted verbatim, so the line map places them and the column only shifts by the indent the output gives the line, which differs with where the zone lands: a component fn body, module level, a play fn. `[view]` has no lines of its own in the output — only the verbatim expressions the transpiler copied — so it resolves through the expression-span map, and a cursor outside every span yields `None`, which is what leaves native element/attribute completion in charge. The offset is a UTF-8 char boundary by construction: the fragment is byte-identical in source and output, and the cursor resolves on a boundary.
 pub(crate) fn generated_offset(
     section: Section,
     source: &str,
@@ -198,10 +196,12 @@ pub(crate) fn generated_offset(
     pos: Position,
 ) -> Option<usize> {
     match section {
-        Section::Logic => {
+        Section::Logic | Section::Play => {
             // First generated line that originated from this `.rsx` line.
-            let gen_line = map.lines.iter().position(|m| *m == Some(pos.line))? as u32;
-            byte_offset(generated, gen_line, pos.character + LOGIC_INDENT)
+            let gen_line = map.lines.iter().position(|m| *m == Some(pos.line))?;
+            let indent = leading_ws_utf16(nth_line(generated, gen_line)?)
+                .saturating_sub(leading_ws_utf16(nth_line(source, pos.line as usize)?));
+            byte_offset(generated, gen_line as u32, pos.character + indent)
         }
         Section::View => {
             let rsx_byte = byte_offset(source, pos.line, pos.character)?;

@@ -10,7 +10,7 @@ use telar_project::naming::{to_pascal_case, to_snake_case};
 use super::Backend;
 
 impl Backend {
-    /// Renames a component (`<feature_card>` → `<new_name>`): the defining `.rsx` file, every markup usage (native cross-file scan), and every hand-written Rust reference to the generated `fn` / `Props` (via the embedded analyzer). Returns a `document_changes` edit so the file rename rides along with the text edits. `None` if the new name is not a valid identifier or no defining file is found.
+    /// Renames a component (`<feature_card>` → `<new_name>`): the defining `.rsx` file and any `*.previews.rsx` named after it, every markup usage (native cross-file scan), and every hand-written Rust reference to the generated `fn` / `Props` (via the embedded analyzer). Returns a `document_changes` edit so the file rename rides along with the text edits. `None` if the new name is not a valid identifier or no defining file is found.
     ///
     /// Three kinds of occurrence, because a component name lives in three places: the tag in `[view]`, the module segment of the `use` line that imports it (both from the workspace `.rsx` index — the segment is a file name, which rust-analyzer never sees change), and the generated `fn`/`Props` in real Rust, which is rust-analyzer's own rename mapped back through the source map.
     pub(crate) async fn rename_component(
@@ -35,8 +35,10 @@ impl Backend {
 
         // Markup usages + the defining file, from the workspace `.rsx` index.
         let old = old_name.to_string();
-        let refs = self
-            .with_index(root.clone(), move |idx| idx.component_references(&old))
+        let (refs, previews_files) = self
+            .with_index(root.clone(), move |idx| {
+                (idx.component_references(&old), idx.previews_files(&old))
+            })
             .await?;
 
         // `lsp_types::Uri` hashes and compares by `as_str()` alone; the `Cell` inside fluent-uri's parse data is an authority offset that takes no part in either.
@@ -83,14 +85,17 @@ impl Backend {
             .collect();
         let new_def_path = def_path.with_file_name(format!("{new_name}.rsx"));
         let new_def_uri = crate::uri::from_path(&new_def_path)?;
-        ops.push(DocumentChangeOperation::Op(ResourceOp::Rename(
-            RenameFile {
-                old_uri: def_uri,
-                new_uri: new_def_uri,
-                options: None,
-                annotation_id: None,
-            },
-        )));
+        ops.push(rename_file(def_uri, new_def_uri));
+        // A previews file is named after the component it previews, which is what its ids and its entry table are named by.
+        for old_uri in previews_files {
+            let Some(old_path) = crate::uri::to_path(&old_uri) else {
+                continue;
+            };
+            let new_path = old_path.with_file_name(format!("{new_name}.previews.rsx"));
+            if let Some(new_uri) = crate::uri::from_path(&new_path) {
+                ops.push(rename_file(old_uri, new_uri));
+            }
+        }
 
         Some(WorkspaceEdit {
             changes: None,
@@ -185,4 +190,13 @@ impl Backend {
         }
         edits
     }
+}
+
+fn rename_file(old_uri: Uri, new_uri: Uri) -> DocumentChangeOperation {
+    DocumentChangeOperation::Op(ResourceOp::Rename(RenameFile {
+        old_uri,
+        new_uri,
+        options: None,
+        annotation_id: None,
+    }))
 }

@@ -92,3 +92,53 @@ fn block_groups_a_parent_with_its_children() {
     let (start, end) = block_bounds(&lines, 5);
     assert_eq!((start, end), (5, 6));
 }
+
+const WITH_META: &str = "[view]\ncol\n    text \"Hi\"\n[previews \"Forms/Box\"]\nProse about the box.\n[preview \"Default\"]\nbox\n[play]\ncanvas.expect_text(\"Hi\")?;\n";
+
+#[test]
+fn the_meta_prose_is_its_own_section() {
+    let lines: Vec<&str> = WITH_META.lines().collect();
+    let c = chain(&selection_for(
+        &lines,
+        Position {
+            line: 4,
+            character: 2,
+        },
+    ));
+    assert!(
+        c.iter().any(|&(start, end)| start == (3, 0) && end.0 == 4),
+        "expected the [previews] section to span lines 3..4: {c:?}"
+    );
+    let view = chain(&selection_for(
+        &lines,
+        Position {
+            line: 2,
+            character: 4,
+        },
+    ));
+    assert!(
+        view.iter()
+            .any(|&(start, end)| start == (0, 0) && end.0 == 2),
+        "the [view] section ends before [previews]: {view:?}"
+    );
+}
+
+#[test]
+fn a_play_zone_is_its_own_section() {
+    let lines: Vec<&str> = WITH_META.lines().collect();
+    let c = chain(&selection_for(
+        &lines,
+        Position {
+            line: 8,
+            character: 0,
+        },
+    ));
+    assert!(
+        c.iter().any(|&(start, end)| start == (7, 0) && end.0 == 8),
+        "expected the [play] section to span lines 7..8: {c:?}"
+    );
+    assert!(
+        !c.iter().any(|&(start, _)| start.0 == 5),
+        "no level reaches back into the preview above: {c:?}"
+    );
+}
