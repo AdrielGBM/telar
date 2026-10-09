@@ -10,4 +10,4 @@ width = 1000
 height = 700
 
 [telar.previews]
-include = ["telar-components"]
+include = ["telar-components", "telar-navigate"]

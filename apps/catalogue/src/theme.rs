@@ -1,4 +1,4 @@
-use telar::{Color, ThemeTokens, use_theme};
+use telar::{Color, ColorScheme, ThemeTokens, register_mode_theme, set_mode_scheme, use_theme};
 
 /// The application's design tokens. Every component reads these, so a restyle happens here and nowhere else.
 #[derive(Clone, ThemeTokens)]
@@ -32,7 +32,7 @@ impl AppTheme {
             surface_alt: Color::rgba(0.96, 0.97, 0.99, 1.0),
             border: Color::rgba(0.86, 0.87, 0.93, 1.0),
             ink: Color::rgba(0.09, 0.10, 0.18, 1.0),
-            muted: Color::rgba(0.46, 0.48, 0.58, 1.0),
+            muted: Color::rgba(0.38, 0.40, 0.50, 1.0),
             scrollbar: Color::rgba(0.66, 0.68, 0.76, 1.0),
             success: Color::rgba(0.18, 0.69, 0.45, 1.0),
             warning: Color::rgba(0.90, 0.62, 0.16, 1.0),
@@ -74,4 +74,15 @@ impl AppTheme {
 /// The active theme, read reactively: a component calling this re-runs when the theme changes.
 pub fn theme() -> AppTheme {
     use_theme::<AppTheme>()
+}
+
+/// Registers both variants as modes, so `set_mode` switches between them and a preview's `themes` matrix renders each.
+pub fn register_modes() {
+    for (mode, variant, scheme) in [
+        ("light", AppTheme::light(), ColorScheme::Light),
+        ("dark", AppTheme::dark(), ColorScheme::Dark),
+    ] {
+        register_mode_theme(mode, variant);
+        set_mode_scheme(mode, scheme);
+    }
 }

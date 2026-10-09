@@ -10,7 +10,7 @@ const TRANSITION_MS: u64 = 220;
 /// How a [`NavHost`](crate::NavHost) animates the incoming page when navigation changes the current route, and how a [`TabHost`](crate::TabHost) animates the incoming tab when one is selected.
 ///
 /// The animation is one-sided — it moves only the incoming page over the host background — so it never needs two pages laid out at once (which a flex container would stack, not overlap). The outgoing page is hidden immediately; the incoming one animates from an offset/transparent start to its resting identity.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, telar::PreviewArg)]
 pub enum NavTransition {
     /// Instant swap (no animation). The default.
     #[default]

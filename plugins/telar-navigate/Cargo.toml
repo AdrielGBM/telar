@@ -12,3 +12,6 @@ repository = { workspace = true }
 
 [dependencies]
 telar = { workspace = true, features = ["runtime"] }
+
+[dev-dependencies]
+telar = { workspace = true, features = ["previews"] }

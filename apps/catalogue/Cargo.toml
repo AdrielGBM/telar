@@ -27,6 +27,7 @@ tooling = ["telar/dev", "telar/hot-reload", "telar/previews", "telar/preview", "
 
 [dependencies]
 telar = { workspace = true, features = ["runtime"] }
-telar-components = { workspace = true, features = ["overlays"] }
+telar-components = { workspace = true, features = ["advanced", "chrome", "overlays", "workbench"] }
 telar-devtools = { workspace = true, optional = true }
+telar-navigate.workspace = true
 telar-workshop = { workspace = true, optional = true }

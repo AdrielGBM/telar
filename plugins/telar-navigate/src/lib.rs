@@ -37,3 +37,12 @@ pub use page::{NavPage, PagePolicy, SimplePage};
 pub use tabs::{TabHost, TabStacks};
 pub use telar::{Location, Route};
 pub use transition::NavTransition;
+
+telar::__previews! {
+    mod previews;
+
+    /// Every preview this crate carries: the one fn an application collects a library's previews through.
+    pub fn telar_all_previews() -> Vec<telar::preview::PreviewEntry> {
+        previews::previews()
+    }
+}

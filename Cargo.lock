@@ -874,6 +874,7 @@ dependencies = [
  "telar",
  "telar-components",
  "telar-devtools",
+ "telar-navigate",
  "telar-workshop",
 ]
 
