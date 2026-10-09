@@ -34,8 +34,7 @@ telar-navigate.workspace = true
 theme-core.workspace = true
 serde = { workspace = true, features = ["rc"] }
 telar-icons.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 telar = { workspace = true, features = ["headless", "dev", "testing"] }
-
-serde_json.workspace = true

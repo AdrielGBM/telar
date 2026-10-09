@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use super::*;
@@ -382,4 +382,30 @@ fn has_subscribers_follows_what_the_readers_read_now() {
         !watched.has_subscribers(),
         "a disposed reader does not count"
     );
+}
+
+#[test]
+fn set_if_changed_writes_only_a_different_value() {
+    let value = signal(1);
+    assert!(!value.set_if_changed(1), "an equal value reports no change");
+    assert!(
+        value.set_if_changed(2),
+        "a different value reports a change"
+    );
+    assert_eq!(value.get(), 2);
+}
+
+#[test]
+fn set_if_changed_notifies_only_on_change() {
+    let value = signal(1);
+    let runs = Rc::new(Cell::new(0));
+    let seen = runs.clone();
+    effect(move || {
+        value.get();
+        seen.set(seen.get() + 1);
+    });
+    value.set_if_changed(1);
+    assert_eq!(runs.get(), 1, "an equal write does not rerun subscribers");
+    value.set_if_changed(2);
+    assert_eq!(runs.get(), 2, "a different write reruns subscribers");
 }

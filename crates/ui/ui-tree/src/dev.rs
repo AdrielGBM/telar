@@ -52,6 +52,13 @@ pub trait DevOverlay: Default + 'static {
         false
     }
 
+    /// Whether the overlay's own picture changed since its last [`on_frame`](Self::on_frame), asked before the runner decides whether a frame is due.
+    ///
+    /// A changed overlay makes that frame one with new content even when the tree beneath it is unchanged: without it a still app re-presents the frame the renderer retained, and the overlay's change waits for the app's next one.
+    fn is_dirty(&self) -> bool {
+        false
+    }
+
     /// Whether the runner should build an accessibility snapshot after this frame and hand it to [`on_access`](Self::on_access).
     fn wants_access(&self) -> bool {
         false

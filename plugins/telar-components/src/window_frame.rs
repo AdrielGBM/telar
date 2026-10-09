@@ -6,8 +6,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Rect, RectStyle,
-    RwSignal, ShapeStyle, SizeDimension, StyledContainer, Text, TextStyle, box_item, track_layout,
+    AlignItems, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Reactive, Rect,
+    RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer, Text, TextStyle, box_item,
+    track_layout,
 };
 
 use crate::shared;
@@ -23,13 +24,15 @@ pub struct WindowControls {
     pub maximize: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone)]
 /// How a window frame is painted: its card, its title strip and its resize grip.
+///
+/// Colours are read each time the frame paints, so one that follows a theme restyles the frame on a mode switch without rebuilding it. Set them with the builder methods, which take a plain [`Color`], a signal or a [`Reactive::of`] derivation alike.
 pub struct SurfaceFrameStyle {
-    pub background: Color,
-    pub title_bar: Color,
-    pub title_text: Color,
-    pub close: Color,
+    pub background: Reactive<Color>,
+    pub title_bar: Reactive<Color>,
+    pub title_text: Reactive<Color>,
+    pub close: Reactive<Color>,
     pub radius: f32,
     pub font_size: f32,
     /// The controls beside close. Default is none, which is the frame as it was.
@@ -39,8 +42,8 @@ pub struct SurfaceFrameStyle {
     /// Fill behind minimize/maximize under the pointer, and behind close — which is usually the louder of the two, since closing is the one control that cannot be undone.
     ///
     /// Both default to transparent, i.e. no hover feedback, because a panel whose only control is a ✕ in the corner of a translucent surface has nothing to highlight against. A real window title bar sets them.
-    pub control_hover: Color,
-    pub close_hover: Color,
+    pub control_hover: Reactive<Color>,
+    pub close_hover: Reactive<Color>,
 }
 
 /// The smallest a frame will ask to become. A window dragged to nothing is a window the user cannot get hold of again — its own grip goes with it.
@@ -56,13 +59,13 @@ type DeferredRect = Rc<RefCell<Option<RwSignal<Rect>>>>;
 ///
 /// The arithmetic is the whole of it. `on_drag` reports where the pointer is **inside the grip**, so the grip's own laid-out origin has to be added back to reach surface space — and then the grab offset, the distance from the pointer to the corner when the drag began, has to come off it, or the corner jumps to the cursor the instant it is touched. The offset is latched once per drag rather than recomputed, because the card it was measured against is resizing underneath the gesture.
 fn resize_grip(
-    color: Color,
+    color: Reactive<Color>,
     card_rect: DeferredRect,
     resize: Rc<dyn Fn(f32, f32)>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let grip = StyledContainer::new(
         LayoutStyle::new().width(GRIP_SIZE).height(GRIP_SIZE),
-        move |_| RectStyle::filled(color, 2.0),
+        move |_| RectStyle::filled(color.get(), 2.0),
         vec![],
     )?;
     let grip_rect = track_layout(grip.layout_node());
@@ -106,21 +109,29 @@ pub fn window_frame(
     resize: Option<Rc<dyn Fn(f32, f32)>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let title = title.into();
-    let title_color = style.title_text;
+    let title_color = style.title_text.clone();
     let font_size = style.font_size;
     let title_label = box_item(Text::declaring(
         move || title.clone(),
         LayoutStyle::new(),
-        move |inherited| shared::in_family_of(TextStyle::new(font_size, title_color), inherited),
+        move |inherited| {
+            shared::in_family_of(TextStyle::new(font_size, title_color.get()), inherited)
+        },
     )?);
 
-    let close_color = style.close;
+    let close_color = style.close.clone();
+    let close_glyph_color = close_color.clone();
     let close_label = box_item(Text::declaring(
         || "\u{2715}".to_string(),
         LayoutStyle::new(),
-        move |inherited| shared::in_family_of(TextStyle::new(font_size, close_color), inherited),
+        move |inherited| {
+            shared::in_family_of(
+                TextStyle::new(font_size, close_glyph_color.get()),
+                inherited,
+            )
+        },
     )?);
-    let close_hover = style.close_hover;
+    let close_hover = style.close_hover.clone();
     let close_button = box_item(
         StyledContainer::new(
             LayoutStyle::new()
@@ -131,20 +142,22 @@ pub fn window_frame(
             |_| RectStyle::default(),
             vec![close_label],
         )?
-        .hover_style(move |_| RectStyle::default().with_fill(close_hover))
+        .hover_style(move |_| RectStyle::default().with_fill(close_hover.get()))
         .on_press(move || close()),
     );
 
     // The same shape as the close button beside them, so a frame with three controls reads as one strip rather than a button and two additions.
-    let control_hover = style.control_hover;
+    let control_hover = style.control_hover.clone();
     let control_button = |glyph: &'static str,
                           command: telar::WindowCommand|
      -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let glyph_color = close_color.clone();
+        let hover = control_hover.clone();
         let label = box_item(Text::declaring(
             move || glyph.to_string(),
             LayoutStyle::new(),
             move |inherited| {
-                shared::in_family_of(TextStyle::new(font_size, close_color), inherited)
+                shared::in_family_of(TextStyle::new(font_size, glyph_color.get()), inherited)
             },
         )?);
         Ok(box_item(
@@ -157,7 +170,7 @@ pub fn window_frame(
                 |_| RectStyle::default(),
                 vec![label],
             )?
-            .hover_style(move |_| RectStyle::default().with_fill(control_hover))
+            .hover_style(move |_| RectStyle::default().with_fill(hover.get()))
             .on_press(move || telar::push_window_command(command.clone())),
         ))
     };
@@ -194,7 +207,7 @@ pub fn window_frame(
         },
     )?);
 
-    let title_bar_color = style.title_bar;
+    let title_bar_color = style.title_bar.clone();
     let drag_moves = style.controls.drag;
     let title_strip = StyledContainer::new(
         LayoutStyle::new()
@@ -204,7 +217,7 @@ pub fn window_frame(
             .width(SizeDimension::Percent(1.0))
             .padding_horizontal(12.0)
             .padding_vertical(8.0),
-        move |_| RectStyle::filled(title_bar_color, 0.0),
+        move |_| RectStyle::filled(title_bar_color.get(), 0.0),
         vec![label_group, controls],
     )?;
     // The strip is what a user grabs to move the window, so the drag lives here and not on the card: the body is content, and dragging content is a selection everywhere else.
@@ -240,38 +253,70 @@ pub fn window_frame(
                 .padding_horizontal(4.0)
                 .padding_bottom(4.0),
             |_| RectStyle::default(),
-            vec![resize_grip(style.close, card_rect.clone(), resize)?],
+            vec![resize_grip(style.close.clone(), card_rect.clone(), resize)?],
         )?));
     }
 
-    let background = style.background;
+    let background = style.background.clone();
     let radius = style.radius;
     let card = StyledContainer::new(
         LayoutStyle::new()
             .flex_column()
             .width(SizeDimension::Percent(1.0))
             .height(SizeDimension::Percent(1.0)),
-        move |_| RectStyle::filled(background, radius),
+        move |_| RectStyle::filled(background.get(), radius),
         children,
     )?;
     *card_rect.borrow_mut() = track_layout(card.layout_node());
     Ok(box_item(card))
 }
 
+impl SurfaceFrameStyle {
+    pub fn background(mut self, color: impl Into<Reactive<Color>>) -> Self {
+        self.background = color.into();
+        self
+    }
+
+    pub fn title_bar(mut self, color: impl Into<Reactive<Color>>) -> Self {
+        self.title_bar = color.into();
+        self
+    }
+
+    pub fn title_text(mut self, color: impl Into<Reactive<Color>>) -> Self {
+        self.title_text = color.into();
+        self
+    }
+
+    pub fn close(mut self, color: impl Into<Reactive<Color>>) -> Self {
+        self.close = color.into();
+        self
+    }
+
+    pub fn control_hover(mut self, color: impl Into<Reactive<Color>>) -> Self {
+        self.control_hover = color.into();
+        self
+    }
+
+    pub fn close_hover(mut self, color: impl Into<Reactive<Color>>) -> Self {
+        self.close_hover = color.into();
+        self
+    }
+}
+
 /// A frame with no colours of its own and no controls — what a caller fills in. Exists so adding a field to this struct does not break every construction of it.
 impl Default for SurfaceFrameStyle {
     fn default() -> Self {
         Self {
-            background: Color::TRANSPARENT,
-            title_bar: Color::TRANSPARENT,
-            title_text: Color::TRANSPARENT,
-            close: Color::TRANSPARENT,
+            background: Color::TRANSPARENT.into(),
+            title_bar: Color::TRANSPARENT.into(),
+            title_text: Color::TRANSPARENT.into(),
+            close: Color::TRANSPARENT.into(),
             radius: 0.0,
             font_size: 14.0,
             controls: WindowControls::default(),
             body_inset: 12.0,
-            control_hover: Color::TRANSPARENT,
-            close_hover: Color::TRANSPARENT,
+            control_hover: Color::TRANSPARENT.into(),
+            close_hover: Color::TRANSPARENT.into(),
         }
     }
 }

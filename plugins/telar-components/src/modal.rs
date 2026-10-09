@@ -4,9 +4,9 @@ use std::rc::Rc;
 #[cfg(test)]
 use telar::Slots;
 use telar::{
-    AlignItems, Border, BorderRadius, Children, Color, Container, JustifyContent, LayoutError,
-    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    Text, box_item, focus::Role,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, JustifyContent,
+    LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
+    StyledContainer, Text, box_item, focus::Role,
 };
 
 use crate::heading::heading_style;
@@ -102,6 +102,7 @@ fn build_open_modal(
     color: Reactive<Color>,
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let name = title.clone();
     let heading = Text::declaring(move || title.get(), LayoutStyle::new(), heading_style)?;
 
     let close_label = Text::declaring(
@@ -140,6 +141,8 @@ fn build_open_modal(
         dialog_children,
     )?
     .styled_by(card)
+    .role(Role::Dialog)
+    .a11y_label(move || name.get())
     // Swallow taps on the card so only the scrim (or Close) dismisses.
     .on_press(|| {});
 

@@ -5,11 +5,13 @@ use std::rc::Rc;
 
 use reactive_core::{RwSignal, effect, signal};
 
-use crate::{Color, ControlSize, Direction, Size, SurfaceCanvas};
+use crate::{
+    Color, ControlSize, Direction, Insets, LayoutError, LayoutItem, Size, SurfaceCanvas, SurfaceEnv,
+};
 
 use super::PreviewEnv;
 
-/// The environment of one canvas: its mode, locale, direction, viewport, background and control size. `None` leaves the canvas with whatever the host around it has.
+/// The environment of one canvas: its mode, locale, direction, viewport, safe area, background, control size and high contrast. `None` leaves the canvas with whatever the host around it has.
 ///
 /// A cheap `Copy` handle over one signal per setting, so a toolbar writes the same signals a canvas reads. A preview's own [`PreviewEnv`] seeds them, and acts only as their default: [`seed`](Self::seed) sets what it names and leaves the rest as the host had them. The signals belong to the owner that was active when the globals were made.
 #[derive(Clone, Copy)]
@@ -18,8 +20,10 @@ pub struct Globals {
     locale: RwSignal<Option<String>>,
     direction: RwSignal<Option<Direction>>,
     viewport: RwSignal<Option<Size>>,
+    safe_area: RwSignal<Insets>,
     background: RwSignal<Option<Color>>,
     control_size: RwSignal<Option<ControlSize>>,
+    high_contrast: RwSignal<Option<bool>>,
 }
 
 impl Globals {
@@ -30,8 +34,10 @@ impl Globals {
             locale: signal(None),
             direction: signal(None),
             viewport: signal(None),
+            safe_area: signal(Insets::default()),
             background: signal(None),
             control_size: signal(None),
+            high_contrast: signal(None),
         }
     }
 
@@ -59,6 +65,9 @@ impl Globals {
         if let Some(background) = env.background {
             self.background.set(Some(background));
         }
+        if let Some(high) = env.high_contrast {
+            self.high_contrast.set(Some(high));
+        }
     }
 
     /// A mode registered with `register_mode`, by id.
@@ -80,6 +89,11 @@ impl Globals {
         self.viewport
     }
 
+    /// How far in from each edge the system keeps the canvas for itself, as a device's notch and home indicator do. Zero keeps nothing.
+    pub fn safe_area(&self) -> RwSignal<Insets> {
+        self.safe_area
+    }
+
     pub fn background(&self) -> RwSignal<Option<Color>> {
         self.background
     }
@@ -88,10 +102,37 @@ impl Globals {
         self.control_size
     }
 
-    /// Keeps `canvas`'s direction, locale, control size and, while one is set, size in step with these globals, for as long as the current owner lives.
+    /// `Some(true)` for more contrast, `Some(false)` for the regular palette.
+    pub fn high_contrast(&self) -> RwSignal<Option<bool>> {
+        self.high_contrast
+    }
+
+    /// The environment the globals hold now, as a canvas is built in it.
+    pub fn env(&self) -> SurfaceEnv {
+        SurfaceEnv {
+            mode: self.mode.peek(),
+            locale: self.locale.peek(),
+            direction: self.direction.peek(),
+            control_size: self.control_size.peek(),
+            high_contrast: self.high_contrast.peek(),
+            safe_area: self.safe_area.peek(),
+        }
+    }
+
+    /// Builds `build`'s content on a new canvas of `size` already in this environment, so what the content reads of it while building is the canvas's and not the host's, and keeps the canvas's mode, direction, locale, control size, high contrast, safe area and, while one is set, size in step with these globals for as long as the current owner lives.
     ///
-    /// The mode and the background are left to the host: they are drawn around the canvas rather than set on it.
-    pub fn bind(&self, canvas: &Rc<SurfaceCanvas>) {
+    /// The background is left to the host: it is drawn around the canvas rather than set on it.
+    pub fn canvas(
+        &self,
+        size: Size,
+        build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
+    ) -> Result<Rc<SurfaceCanvas>, LayoutError> {
+        let canvas = Rc::new(SurfaceCanvas::new_in(size, &self.env(), build)?);
+        self.bind(&canvas);
+        Ok(canvas)
+    }
+
+    fn bind(&self, canvas: &Rc<SurfaceCanvas>) {
         let follow = |apply: Box<dyn Fn(&SurfaceCanvas)>| {
             let canvas = Rc::downgrade(canvas);
             effect(move || {
@@ -101,12 +142,18 @@ impl Globals {
             });
         };
         let Self {
+            mode,
             direction,
             locale,
             control_size,
+            high_contrast,
             viewport,
+            safe_area,
             ..
         } = *self;
+        follow(Box::new(move |canvas| {
+            canvas.set_mode(mode.get().as_deref())
+        }));
         follow(Box::new(move |canvas| {
             canvas.set_direction(direction.get())
         }));
@@ -115,6 +162,12 @@ impl Globals {
         }));
         follow(Box::new(move |canvas| {
             canvas.set_control_size(control_size.get())
+        }));
+        follow(Box::new(move |canvas| {
+            canvas.set_high_contrast(high_contrast.get())
+        }));
+        follow(Box::new(move |canvas| {
+            canvas.set_safe_area(safe_area.get())
         }));
         follow(Box::new(move |canvas| {
             if let Some(size) = viewport.get() {
@@ -143,8 +196,10 @@ impl fmt::Debug for Globals {
             .field("locale", &self.locale.peek())
             .field("direction", &self.direction.peek())
             .field("viewport", &self.viewport.peek())
+            .field("safe_area", &self.safe_area.peek())
             .field("background", &self.background.peek())
             .field("control_size", &self.control_size.peek())
+            .field("high_contrast", &self.high_contrast.peek())
             .finish()
     }
 }

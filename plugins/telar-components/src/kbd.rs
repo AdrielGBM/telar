@@ -35,13 +35,14 @@ pub fn kbd(props: KbdProps, _children: Children) -> Result<Box<dyn LayoutItem>, 
         },
         |(position, key): &(usize, String)| (*position, key.clone()),
         |(_, key)| cap(display_name(&key, cfg!(target_os = "macos"))),
-    )?;
+    )?
+    .a11y_hidden();
     let row = StyledContainer::new(
         LayoutStyle::new().flex_row(),
         |_| RectStyle::default(),
         vec![box_item(caps)],
     )?
-    .a11y_label(move || spoken.get());
+    .a11y_label(move || spoken_chord(&spoken.get()));
     Ok(box_item(row))
 }
 
@@ -72,6 +73,15 @@ fn cap(label: String) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?
     .styled_by(style);
     Ok(box_item(cap))
+}
+
+/// What a reader is told a chord is: its keys by the names their caps show, joined as they are pressed.
+pub(crate) fn spoken_chord(chord: &str) -> String {
+    split_chord(chord)
+        .iter()
+        .map(|key| display_name(key, cfg!(target_os = "macos")))
+        .collect::<Vec<_>>()
+        .join("+")
 }
 
 pub(crate) fn split_chord(chord: &str) -> Vec<String> {

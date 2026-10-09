@@ -22,6 +22,7 @@ mod paths;
 mod prelude;
 mod prerender;
 mod previews;
+pub mod protocol;
 mod theme;
 pub mod theme_tokens;
 mod web;
@@ -29,9 +30,10 @@ mod web;
 pub use assets::{
     ASSET_ARTIFACT_FORMAT, ASSET_KINDS, ASSETS_INDEX_FILENAME, ASSETS_MODULE,
     ASSETS_SOURCE_FILENAME, ArtifactHandshake, AssetContext, AssetEntry, AssetIndex, AssetKind,
-    BakedAsset, BakedId, ComponentAsset, GeneratedAssets, IdBaking, asset_kind_for_component,
-    asset_kind_for_id, asset_kind_for_tag, baked_init_expr, check_artifact, content_hash,
-    generate_assets, read_index, static_name_for_path, write_generated,
+    BakedAsset, BakedId, ComponentAsset, GeneratedAssets, IdBaking, IdProp,
+    asset_kind_for_component, asset_kind_for_id, asset_kind_for_tag, baked_init_expr,
+    check_artifact, content_hash, generate_assets, read_index, static_name_for_path,
+    write_generated,
 };
 pub use build::{
     BUILD_ARTIFACT_FORMAT, BuildEntry, BuildFailure, BuildFlavour, BuildIndex, clear_build_failure,
@@ -48,7 +50,7 @@ pub use dependencies::{DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE, declares_optional_dep
 pub use discovery::{
     MODULE_CHILDREN_FILENAME, MODULE_ROOT_FILENAME, MODULE_TREE_DIR, ModuleTree, SITE_DIR,
     assets_root, collect_files_by_ext, component_name, find_rsx_files, find_rsx_files_in_tree,
-    invokes_placement_macro, is_generated_output, is_module_root, is_previews_file,
+    invokes_placement_macro, is_generated_output, is_module_root, is_previews_file, module_name,
     placement_sites, prune_stale_generated, prune_stale_sites, relative_output_path,
     site_include_path, source_for_generated, stray_placement_files,
 };
@@ -79,9 +81,9 @@ pub use prerender::{
     PrerenderState, PrerenderedPage, STATE_ELEMENT_ID, STATE_VERSION, Surface,
 };
 pub use previews::{
-    MATRIX_GLOBAL_AXES, MatrixAxes, MatrixValue, PreviewsInclude, PreviewsIncludeDeclaration,
-    PreviewsIncludeProblem, PreviewsSection, Viewport, previews_include_declarations,
-    previews_include_problems,
+    MATRIX_GLOBAL_AXES, MatrixAxes, MatrixAxis, MatrixControlSize, MatrixDirection, MatrixValue,
+    PreviewsInclude, PreviewsIncludeDeclaration, PreviewsIncludeProblem, PreviewsSection, Viewport,
+    is_preview_name, previews_include_declarations, previews_include_problems,
 };
 pub use theme::{normalize_theme_path, theme_type_in_config};
 pub use web::{OgImage, SchemeColors, ThemeColor, WebHost, is_absolute_url};

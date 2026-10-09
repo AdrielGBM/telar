@@ -5,6 +5,7 @@ fn transpiled(source: &str, theme_type: Option<&str>, library: bool) -> Transpil
     let document = telar_parser::parse(source).expect("the fixture parses");
     let out = transpile(TranspileInput {
         document: &document,
+        source,
         component_name: "kit",
         theme_type,
         assets: None,

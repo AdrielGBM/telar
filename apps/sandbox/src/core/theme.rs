@@ -1,6 +1,6 @@
 //! The sandbox's themes, and the modes the sidebar switches between.
 
-use telar::{Color, ThemeTokens, register_mode, set_theme, use_theme};
+use telar::{Color, ColorScheme, ThemeTokens, register_mode_theme, set_mode_scheme, use_theme};
 
 /// Mode id applied on first launch (and the fallback when a restored/unknown id has no variant).
 pub const DEFAULT_MODE: &str = "modern";
@@ -119,10 +119,11 @@ impl SandboxTheme {
     }
 }
 
-/// Registers every theme variant under its mode id. Called from the `app!` setup closure (and any test that switches themes via the sidebar buttons) so `set_mode("pastel")` installs the matching `SandboxTheme`.
+/// Registers every theme variant under its mode id. Called from the `app!` setup closure (and any test that switches themes via the sidebar buttons) so `set_mode("pastel")` installs the matching `SandboxTheme`, and a canvas shown in one of these modes takes its variant without installing it.
 pub fn register_modes() {
     for mode in ["modern", "pastel", "midnight"] {
-        register_mode(mode, move || set_theme(SandboxTheme::by_mode(mode)));
+        register_mode_theme(mode, SandboxTheme::by_mode(mode));
+        set_mode_scheme(mode, if mode == "midnight" { ColorScheme::Dark } else { ColorScheme::Light });
     }
 }
 

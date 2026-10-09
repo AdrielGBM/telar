@@ -1,5 +1,5 @@
 use super::*;
-use crate::harness::moved;
+use telar::testing::moved;
 use telar::{
     AvailableSpace, ComponentList, DrawCommand, LineHeight, compute_layout, new_container,
     relayout_if_dirty,

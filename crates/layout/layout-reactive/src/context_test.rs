@@ -1275,3 +1275,22 @@ fn a_relayout_hook_runs_after_the_roots_are_laid_out_until_its_handle_drops() {
     relayout_if_dirty();
     assert_eq!(seen.borrow().len(), 1, "a dropped hook no longer runs");
 }
+
+#[test]
+fn the_box_model_reads_the_active_surfaces_layout() {
+    reset_layout_runtime();
+    let (leaf, _) = new_leaf(LayoutStyle::new().padding_all(5.0).gap(2.0)).unwrap();
+    compute_layout(
+        leaf,
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+
+    let model = box_model(leaf).unwrap();
+    assert_eq!(model.padding, geometry_core::Insets::all(5.0));
+    assert_eq!(model.gap, geometry_core::Size::new(2.0, 2.0));
+
+    remove_node(leaf);
+    assert_eq!(box_model(leaf), None, "a freed node answers None");
+}

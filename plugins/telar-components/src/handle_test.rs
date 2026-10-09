@@ -1,9 +1,9 @@
+use telar::testing::{hold, key_with, lay_out, moved, named, press, release, route};
 use telar::{
     ComponentList, Key, NamedKey, RectStyle, RwSignal, StyledContainer, Transaction, signal,
 };
 
 use super::*;
-use crate::harness::{hold, key_with, lay_out, moved, named, press, release, route};
 use crate::test_support::fresh_layout_runtime;
 
 struct Canvas {

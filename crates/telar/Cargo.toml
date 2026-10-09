@@ -55,12 +55,20 @@ name = "preview_harness"
 path = "src/preview_harness_test.rs"
 
 [[test]]
+name = "preview_actions"
+path = "src/preview_actions_test.rs"
+
+[[test]]
 name = "preview_args"
 path = "src/preview_args_test.rs"
 
 [[test]]
 name = "preview_rust"
 path = "src/preview_rust_test.rs"
+
+[[test]]
+name = "preview_snapshot"
+path = "src/preview_snapshot_test.rs"
 
 [[test]]
 name = "props_schema"
@@ -267,6 +275,7 @@ dev = [
     "platform-core/dylib",
     "dep:libloading",
     "dep:serde_json",
+    "dep:telar-project",
 ]
 
 ## The dylib half of that loop, which only `cargo telar dev` turns on and only for a package that can produce
@@ -289,8 +298,8 @@ hot-reload = ["dev", "desktop-bare", "telar-macros/hot-reload"]
 ## Carries no frontend of its own: `cargo telar test` builds and lays a preview out without drawing it, and a
 ## terminal application must not acquire a window on the way to being tested. It does carry the shaper,
 ## because laying text out needs a measurer and nothing else in the build is guaranteed to bring one; a
-## terminal build still measures in cells.
-previews = ["runtime", "shaper", "telar-macros/preview"]
+## terminal build still measures in cells. It carries `testing` too, because a preview's play drives its canvas with the same events a test does.
+previews = ["runtime", "shaper", "testing", "dep:telar-project", "telar-macros/preview"]
 
 ## The preview host that renders those blocks in a window. Injected by `cargo telar preview`.
 preview = ["previews", "desktop-bare"]
@@ -301,6 +310,16 @@ preview = ["previews", "desktop-bare"]
 ## never told to emit — `run_preview_png` was reachable only by setting a feature and an environment variable
 ## by hand, and rendered nothing when you did.
 preview-headless = ["previews", "headless"]
+
+## Comparing previews against the pictures and draw-command text kept beside them, which is what `cargo telar test` checks snapshots with. Draws on the CPU rasterizer and sets text in the faces the package declares alone.
+preview-snapshots = [
+    "previews",
+    "headless",
+    "dep:renderer-record",
+    "dep:tiny-skia",
+    "dep:similar",
+    "dep:serde_json",
+]
 
 ## Test helpers an out-of-tree application needs to assert on what its tree drew, plus the GPU gate that
 ## keeps a pixel test from passing having asserted nothing.
@@ -388,6 +407,9 @@ tracing = { workspace = true, optional = true }
 web-time = { workspace = true }
 # Always on: `app!` and `rsx_modules!` install an application's baked catalog as its binary loads, before any runner, test or hot-reload factory runs.
 ctor = { version = "0.10.1", default-features = false }
+renderer-record = { workspace = true, optional = true }
+tiny-skia = { workspace = true, optional = true }
+similar = { version = "3.2.0", optional = true }
 
 
 # Excludes wasm as well as Android: `not(target_os = "android")` is true on wasm32, which would drag winit
@@ -408,6 +430,11 @@ renderer-record = { workspace = true }
 # ships in every binary. Nothing here covers an asset transport any more: `src/http_assets_test.rs` moved to
 # `telar-dynamic` along with the transport it exercises.
 telar = { path = ".", features = ["testing", "prerender", "previews"] }
+tiny-skia.workspace = true
+
+# The snapshot tests draw on the CPU rasterizer, which a browser build of the tests has no use for.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+telar = { path = ".", features = ["preview-snapshots"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

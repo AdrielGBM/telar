@@ -2,8 +2,8 @@
 
 use std::rc::Rc;
 use telar::{
-    Border, BorderRadius, Children, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive,
-    RectStyle, RwSignal, ShapeStyle, StyledContainer, Transform, box_item, box_transform,
+    Accessible, Border, BorderRadius, Children, Color, LayoutError, LayoutItem, LayoutStyle, Props,
+    Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Transform, box_item, box_transform,
     focus::Role, signal,
 };
 
@@ -134,6 +134,10 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
     .styled_by(move || track_box(width))
     // A slider you can reach but not move is not operable. One step per press, or a twentieth of the range when the caller named none — the granularity a continuous value has to invent for a keyboard.
     .control(Role::Slider)
+    .a11y_label({
+        let label = label.clone();
+        move || label.get()
+    })
     .valued({
         let value = announced_value;
         move || telar::NumericValue {

@@ -63,3 +63,42 @@ fn modifier_names_become_symbols_on_macos_only() {
 fn each_key_is_drawn_on_a_cap_of_its_own() {
     assert_eq!(texts("Ctrl+K"), ["Ctrl", "K"]);
 }
+
+#[test]
+fn a_chord_is_spoken_by_the_names_on_its_caps() {
+    assert_eq!(spoken_chord("Shift+Alt+P"), "Shift+Alt+P");
+    assert_eq!(spoken_chord(" Ctrl + K "), "Ctrl+K");
+    let command = if cfg!(target_os = "macos") {
+        "⌘"
+    } else {
+        "Ctrl"
+    };
+    assert_eq!(spoken_chord("Mod+K"), format!("{command}+K"));
+}
+
+#[test]
+fn a_reader_hears_the_chord_once_and_not_each_cap() {
+    crate::test_support::fresh_layout_runtime();
+    let caps = kbd(
+        KbdProps::props().chord("Shift+P").build(),
+        Children::default(),
+    )
+    .unwrap();
+    let root = Container::new(
+        LayoutStyle::new().flex_column().width(300.0).height(100.0),
+        vec![caps],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(300.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(box_item(root));
+    let read: Vec<String> = ui_core::accessibility::snapshot(&tree.commands())
+        .into_iter()
+        .map(|node| node.name)
+        .collect();
+    assert_eq!(read, ["Shift+P"]);
+}

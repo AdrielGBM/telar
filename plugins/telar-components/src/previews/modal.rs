@@ -1,9 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, PreviewEntry, preview};
-use telar::{
-    Children, Color, Container, LayoutError, LayoutStyle, Slots, Text, box_item,
-};
+use telar::preview::{Layout, Matrix, PreviewEntry, preview};
+use telar::{Children, Color, Container, LayoutError, LayoutStyle, Slots, Text, box_item};
 
 use crate::button::{ButtonProps, button};
 use crate::modal::{ModalProps, modal};
@@ -47,6 +45,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Overlays/Modal")
         .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes"))
         .tags(&["stateful"]),
     ]
 }

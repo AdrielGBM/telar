@@ -34,6 +34,9 @@ impl Deref for Frame<'_> {
 pub trait UiTree {
     fn on_event(&mut self, event: &Event) -> EventResult;
 
+    /// Hands the tree a move the overlay layer took, with everything in it covered; see [`ui_core::covered`].
+    fn on_covered_event(&mut self, event: &Event);
+
     /// The composed draw commands for this frame.
     fn frame(&self) -> Frame<'_>;
 
@@ -89,6 +92,10 @@ impl UiTree for LocalTree {
         self.0.list.on_event(event)
     }
 
+    fn on_covered_event(&mut self, event: &Event) {
+        ui_core::covered(|| self.0.list.on_event(event));
+    }
+
     fn frame(&self) -> Frame<'_> {
         Frame::Borrowed(self.0.list.commands())
     }
@@ -135,6 +142,14 @@ impl HotTree {
         ui_core::observe_keyboard(event);
         ui_core::observe_pointer(event);
         this.tree.list.on_event(event) == EventResult::Handled
+    }
+
+    /// [`on_event`](Self::on_event) for a move the overlay layer took, with everything in the tree covered; see [`ui_core::covered`].
+    ///
+    /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
+    pub unsafe fn on_covered_event(ptr: *mut HotTree, event: &Event) {
+        let this = unsafe { &mut *ptr };
+        ui_core::covered(|| this.tree.list.on_event(event));
     }
 
     /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event) observes on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose widgets asked.

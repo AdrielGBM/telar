@@ -48,15 +48,21 @@ pub fn doc_header(props: DocHeaderProps, children: Children) -> Result<Box<dyn L
     Ok(Box::new(__col_0))
 }
 
+::telar::__previews! {
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn doc_header_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let __node_0 = doc_header(DocHeaderProps::props().kicker("FOUNDATIONS").title("Layout").desc("Flexbox rows and columns with gaps, padding, alignment and growth.").build(), Children::default())?;
+    let __node_0 = doc_header(DocHeaderProps::props().kicker(::telar::__preview_arg!(__preview, "kicker", "FOUNDATIONS")).title(::telar::__preview_arg!(__preview, "title", "Layout")).desc(::telar::__preview_arg!(__preview, "desc", "Flexbox rows and columns with gaps, padding, alignment and growth.")).__preview_actions(&__preview.actions()).build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
 pub const DOC_HEADER_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--doc_header--doc-header"), "doc_header", "Doc header", doc_header_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/doc_header.rsx"), 15),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/doc_header.rsx"), 15)
+        .source("[preview \"Doc header\"]\ndoc_header kicker:\"FOUNDATIONS\" title:\"Layout\" desc:\"Flexbox rows and columns with gaps, padding, alignment and growth.\"", &[::telar::preview::SourceSpan::new(0, 143, 15)])
+        .props(<DocHeaderProps as ::telar::preview::HasPropsSchema>::schema)
+        .args(&[::telar::preview::ArgSpec::new("kicker").default("\"FOUNDATIONS\""), ::telar::preview::ArgSpec::new("title").default("\"Layout\""), ::telar::preview::ArgSpec::new("desc").default("\"Flexbox rows and columns with gaps, padding, alignment and growth.\"")]),
 ];
+}

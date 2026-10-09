@@ -284,14 +284,14 @@
 283	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1800..1813	5225	`system_scheme`
-1884..1891	5938	`reduced`
-1961..1969	6646	`contrast`
-2035..2042	7349	`locales`
-2124..2134	8073	`negotiated`
-2422..2431	11004	`safe_area`
-2906..2912	14971	`chosen`
-2939..2945	15001	`scheme`
-3055..3119	15627	`|| telar::set_scheme_preference(telar::SchemePreference::System)`
-3174..3237	15872	`|| telar::set_scheme_preference(telar::SchemePreference::Light)`
-3291..3353	16115	`|| telar::set_scheme_preference(telar::SchemePreference::Dark)`
+1807..1820	5232	`system_scheme`
+1891..1898	5945	`reduced`
+1968..1976	6653	`contrast`
+2042..2049	7356	`locales`
+2131..2141	8080	`negotiated`
+2436..2445	11018	`safe_area`
+2920..2926	14985	`chosen`
+2953..2959	15015	`scheme`
+3069..3133	15641	`|| telar::set_scheme_preference(telar::SchemePreference::System)`
+3188..3251	15886	`|| telar::set_scheme_preference(telar::SchemePreference::Light)`
+3305..3367	16129	`|| telar::set_scheme_preference(telar::SchemePreference::Dark)`

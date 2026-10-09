@@ -45,6 +45,31 @@ pub struct ComponentAsset {
     pub tag: &'static str,
     /// The `[telar.<section>]` table that configures this kind, read by [`crate::TelarSection::id_baking`].
     pub section: &'static str,
+    /// The props of other components that take an id of this kind and draw it through [`Self::tag`], such as `icon_button icon:"lucide:x"`. Listed here because the bake reads `.rsx` before anything is compiled, so a prop's type cannot say it; one left out reaches its component as the bare id, which a baked-only package cannot draw.
+    ///
+    /// Only a literal given to a carrier is an id: anything else is left as written, because a carrier also takes what the component's own macro builds, `icon_button icon:icon!("lucide:x")`, whose id the bake reads from the Rust.
+    pub carriers: &'static [IdProp],
+}
+
+/// A component's prop that takes an id of a component-named kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdProp {
+    pub tag: &'static str,
+    pub prop: &'static str,
+}
+
+impl ComponentAsset {
+    /// Whether `prop` on `tag` is one of [`Self::carriers`].
+    pub fn carries(&self, tag: &str, prop: &str) -> bool {
+        self.carriers
+            .iter()
+            .any(|carrier| carrier.tag == tag && carrier.prop == prop)
+    }
+
+    /// Whether `prop` on `tag` takes an id of this kind, given the attribute its own component takes it by.
+    fn takes_id(&self, attr: &str, tag: &str, prop: &str) -> bool {
+        (self.tag == tag && attr == prop) || self.carries(tag, prop)
+    }
 }
 
 /// What a package does with the ids its `.rsx` gives a component-named kind's prop.
@@ -100,6 +125,10 @@ pub const ASSET_KINDS: &[AssetKind] = &[
         component: Some(ComponentAsset {
             tag: "icon",
             section: "icons",
+            carriers: &[IdProp {
+                tag: "icon_button",
+                prop: "icon",
+            }],
         }),
     },
 ];
@@ -109,11 +138,12 @@ pub fn asset_kind_for_tag(tag: &str) -> Option<&'static AssetKind> {
     ASSET_KINDS.iter().find(|kind| kind.tags.contains(&tag))
 }
 
-/// The component-named kind whose id `prop` carries on the component `tag`, whether or not the package bakes it.
+/// The component-named kind whose id `prop` carries on the component `tag`, whether or not the package bakes it: the kind's own component's prop, or one of its [`ComponentAsset::carriers`].
 pub fn asset_kind_for_component(tag: &str, prop: &str) -> Option<&'static AssetKind> {
-    ASSET_KINDS
-        .iter()
-        .find(|kind| kind.attr == prop && kind.component.is_some_and(|c| c.tag == tag))
+    ASSET_KINDS.iter().find(|kind| {
+        kind.component
+            .is_some_and(|component| component.takes_id(kind.attr, tag, prop))
+    })
 }
 
 /// The asset kind identified by [`AssetKind::id`], or `None` if `id` names no registered kind.

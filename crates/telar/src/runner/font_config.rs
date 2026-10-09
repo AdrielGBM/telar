@@ -102,5 +102,6 @@ pub(super) fn build_software_renderer_config(
         font: build_font_config(fonts, system),
         transparent,
         retains_presented_contents,
+        synchronous_shadows: false,
     }
 }

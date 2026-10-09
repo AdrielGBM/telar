@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use telar::preview::PreviewEntry;
-use telar_components::TreeNode;
+use telar_components::{TreeNode, fuzzy_match};
 
 /// The tree of `entries` whose title, name or tags match `query`, grouped by title path, with `badge` naming what a preview's row carries. An empty query keeps every preview.
 pub(super) fn tree(
@@ -16,6 +16,25 @@ pub(super) fn tree(
         insert(&mut root, "", &segments(entry), *entry);
     }
     root.iter().map(|group| group.node(&badge)).collect()
+}
+
+/// The previews `query` keeps, in the order the sidebar lists them: by title path, each group's subgroups before its own previews.
+pub(crate) fn listed(entries: &[PreviewEntry], query: &str) -> Vec<PreviewEntry> {
+    let mut ids = Vec::new();
+    collect_leaves(&tree(entries, query, |_| None), &mut ids);
+    ids.iter()
+        .filter_map(|id| entries.iter().find(|entry| *entry.id == **id).copied())
+        .collect()
+}
+
+fn collect_leaves(nodes: &[TreeNode], ids: &mut Vec<Arc<str>>) {
+    for node in nodes {
+        if node.is_branch() {
+            collect_leaves(&node.children, ids);
+        } else {
+            ids.push(node.id.clone());
+        }
+    }
 }
 
 /// The id of every group `entries` are listed under.
@@ -38,16 +57,8 @@ fn matches(query: &str, entry: &PreviewEntry) -> bool {
         [entry.title, entry.name]
             .into_iter()
             .chain(entry.tags.iter().copied())
-            .any(|field| is_subsequence(token, field))
+            .any(|field| fuzzy_match(token, field).is_some())
     })
-}
-
-fn is_subsequence(needle: &str, haystack: &str) -> bool {
-    let mut haystack = haystack.chars().flat_map(char::to_lowercase);
-    needle
-        .chars()
-        .flat_map(char::to_lowercase)
-        .all(|wanted| haystack.any(|found| found == wanted))
 }
 
 fn segments(entry: &PreviewEntry) -> Vec<&'static str> {

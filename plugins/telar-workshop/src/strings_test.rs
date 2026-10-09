@@ -6,7 +6,6 @@ fn every_string_has_an_english_default() {
         (WORKSHOP, "Workshop"),
         (SEARCH, "Search previews"),
         (VIEW_CANVAS, "Canvas"),
-        (VIEW_MATRIX, "Matrix"),
         (VIEW_DOCS, "Docs"),
         (PREVIEWS, "Previews"),
         (NO_MATCHES, "No matches"),
@@ -38,6 +37,15 @@ fn every_string_has_an_english_default() {
         (UNSET, "Unset"),
         (RESIZE_PANELS, "Resize the panels"),
         (RESIZE_SIDEBAR, "Resize the sidebar"),
+        (ACTIONS, "Actions"),
+        (CLEAR_ACTIONS, "Clear"),
+        (COLUMN_TYPE, "Type"),
+        (FILTER_ACTIONS, "Filter actions"),
+        (NO_ACTIONS, "No actions yet"),
+        (NO_MATCHING_ACTIONS, "No actions match the filter"),
+        (OPEN_IN_CANVAS, "Open in canvas"),
+        (PROPS, "Props"),
+        (REQUIRED, "Required"),
     ] {
         assert_eq!(text(key), english);
     }
@@ -45,14 +53,12 @@ fn every_string_has_an_english_default() {
 
 #[test]
 fn a_message_naming_an_arg_puts_the_arg_in() {
-    assert_eq!(text_naming(RESET_ARG, "label"), "Reset label");
-    assert_eq!(text_naming(UNSET_ARG, "note"), "Unset note");
+    assert_eq!(text_with(RESET_ARG, "label"), "Reset label");
+    assert_eq!(text_with(UNSET_ARG, "note"), "Unset note");
+    assert_eq!(text_with(SOURCE_OF, "Primary"), "Source of Primary");
 }
 
 #[test]
 fn the_catalog_is_sorted_so_a_lookup_finds_every_key() {
-    let keys: Vec<&str> = CATALOG.entries.iter().map(|entry| entry.key).collect();
-    let mut sorted = keys.clone();
-    sorted.sort_unstable();
-    assert_eq!(keys, sorted);
+    CATALOG.assert_sorted();
 }

@@ -147,11 +147,12 @@ pub fn bake_package_with(
                 .iter()
                 .filter(|reference| reference.kind.id == kind.id && reference.literal.is_none())
             {
-                let message = AssetContext::dynamic_id_message(kind);
+                let message =
+                    AssetContext::dynamic_id_message(kind, &reference.tag, &reference.prop);
                 report.errors.push(format!(
                     "{}: `{}:{}` — {}",
                     reference.location(package_dir),
-                    kind.attr,
+                    reference.prop,
                     reference.written,
                     message.trim_start_matches("rsx: ")
                 ));

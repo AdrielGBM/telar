@@ -99,6 +99,7 @@ fn a_release_names_the_key_its_physical_press_produced() {
             backslash,
             ElementState::Pressed,
             Some(Key::Char('\\')),
+            None,
             modifiers
         ),
         SurfaceIntent::Event(Event::KeyPressed {
@@ -111,6 +112,7 @@ fn a_release_names_the_key_its_physical_press_produced() {
         backslash,
         ElementState::Released,
         Some(Key::Char('º')),
+        None,
         modifiers,
     );
     assert_eq!(released_as(released), Some(Key::Char('\\')));
@@ -127,6 +129,7 @@ fn losing_focus_forgets_what_was_down() {
         backslash,
         ElementState::Pressed,
         Some(Key::Char('\\')),
+        None,
         modifiers,
     );
     map_window_event(
@@ -142,7 +145,34 @@ fn losing_focus_forgets_what_was_down() {
         backslash,
         ElementState::Released,
         Some(Key::Char('º')),
+        None,
         modifiers,
     );
     assert_eq!(released_as(released), Some(Key::Char('º')));
+}
+
+/// Option+T types `†` on macOS, so the logical key says nothing about which key was held; the key without modifiers is what a shortcut can match.
+#[test]
+fn a_press_carries_the_key_the_layout_makes_without_modifiers() {
+    let mut keys = KeyPairing::default();
+    let option = platform_core::ModifiersState {
+        is_alt: true,
+        ..Default::default()
+    };
+    let pressed = paired_key_event(
+        &mut keys,
+        PhysicalKey::Code(winit::keyboard::KeyCode::KeyT),
+        ElementState::Pressed,
+        Some(Key::Char('†')),
+        Some(Key::Char('t')),
+        option,
+    );
+    assert!(matches!(
+        pressed,
+        SurfaceIntent::Event(Event::KeyPressed {
+            key: Key::Char('†'),
+            unmodified: Some(Key::Char('t')),
+            ..
+        })
+    ));
 }

@@ -116,9 +116,11 @@ pub enum Event {
     ScaleFactorChanged {
         scale_factor: f64,
     },
+    /// A key going down. `key` is what the layout made of it under the modifiers held, so Option+T on macOS is `†`; `unmodified` is what it makes of the same physical key with none applied, `t` there, which is what a shortcut matches on. `None` where the backend cannot tell, and `key` is then all there is.
     KeyPressed {
         key: Key,
         modifiers: ModifiersState,
+        unmodified: Option<Key>,
     },
     /// A key coming up. `key` is the one its press reported, not what the layout would make of the physical key under the modifiers held now: a backend with a physical key to go on pairs the two through [`KeyPairing`](crate::KeyPairing).
     KeyReleased {

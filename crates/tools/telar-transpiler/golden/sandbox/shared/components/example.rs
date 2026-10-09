@@ -39,6 +39,8 @@ pub fn example(props: ExampleProps, children: Children) -> Result<Box<dyn Layout
     Ok(Box::new(__col_0))
 }
 
+::telar::__previews! {
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
@@ -86,12 +88,16 @@ pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box
             }
             }
         );
-        example(ExampleProps::props().title("justify — distribute along the main axis").build(), __deferred)?
+        example(ExampleProps::props().title(::telar::__preview_arg!(__preview, "title", "justify — distribute along the main axis")).__preview_actions(&__preview.actions()).build(), __deferred)?
     };
     Ok(Box::new(__node_0))
 }
 
 pub const EXAMPLE_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--example--example"), "example", "Example", example_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/example.rsx"), 17),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/example.rsx"), 17)
+        .source("[preview \"Example\"]\nexample title:\"justify — distribute along the main axis\"\n    card gap:10\n        text \"The demo and its code snippet stack here.\" font_size:13 color:$theme.muted\n    code_line code:\"row justify:between\"", &[::telar::preview::SourceSpan::new(0, 224, 17)])
+        .props(<ExampleProps as ::telar::preview::HasPropsSchema>::schema)
+        .args(&[::telar::preview::ArgSpec::new("title").default("\"justify — distribute along the main axis\"")]),
 ];
+}

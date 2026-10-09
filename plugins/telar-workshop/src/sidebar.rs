@@ -8,24 +8,26 @@ use std::rc::Rc;
 use telar::focus::{self, Role};
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Input, Key, LayoutError, LayoutItem,
+    Accessible, AlignItems, BorderRadius, Children, Input, Key, LayoutError, LayoutItem,
     LayoutStyle, Memo, NamedKey, NodeId, Reactive, ReactiveList, RectStyle, StyledContainer, Text,
     box_item, effect, memo, single_line_box, use_theme_tokens,
 };
 use telar_components::{TreeNode, TreeViewProps, tree_view};
-use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, WORKBENCH_TEXT_SIZE, use_workbench_tokens};
+use telar_devtools::{
+    WORKBENCH_GRID, WORKBENCH_RADIUS, WORKBENCH_TEXT_SIZE, workbench_card, workbench_muted,
+};
 
 use crate::state::WorkshopState;
 use crate::strings::{self, CLEAR_SEARCH, NO_MATCHES, NO_PREVIEWS, PREVIEWS, SEARCH};
 
-pub(crate) use model::group_ids;
+pub(crate) use model::{group_ids, listed};
 
 /// What fills the sidebar pane the shell sizes.
 pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let heading = Text::declaring(
         || strings::text(PREVIEWS),
         LayoutStyle::new().padding_all(WORKBENCH_GRID),
-        |text| text.with_color(use_workbench_tokens().text_muted),
+        workbench_muted,
     )?;
     let panel = Rc::new(Panel::new(state));
     panel.reveal_matches();
@@ -151,12 +153,7 @@ fn search_field(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .padding_horizontal(WORKBENCH_GRID)
             .padding_vertical(WORKBENCH_GRID / 2.0)
             .bordered(),
-        |_| {
-            let tokens = use_workbench_tokens();
-            RectStyle::default()
-                .with_border(Border::uniform(tokens.border_subtle, 1.0))
-                .with_radius(BorderRadius::all(WORKBENCH_RADIUS))
-        },
+        |_| workbench_card(),
         vec![box_item(input)],
     )?
     .frames_focus_of(focus);
@@ -174,7 +171,6 @@ fn search_field(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 fn empty(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     panel.tree.set(None);
-    let muted = |text: telar::TextStyle| text.with_color(use_workbench_tokens().text_muted);
     let message_key = if panel.state.entries().is_empty() {
         NO_PREVIEWS
     } else {
@@ -183,7 +179,7 @@ fn empty(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let message = Text::declaring(
         move || strings::text(message_key),
         LayoutStyle::new(),
-        muted,
+        workbench_muted,
     )?;
     let mut children = vec![box_item(message)];
     if !panel.state.entries().is_empty() {

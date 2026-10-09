@@ -188,7 +188,10 @@ pub(crate) struct DevArgs {
 pub(crate) struct PreviewArgs {
     #[command(flatten)]
     pub(crate) hot: HotArgs,
-    /// Preview a specific component by name
+    /// The preview to open, by the id `--list` prints, or a link the workshop copied. With the package's workshop already open, it moves there instead of opening another
+    #[arg(value_name = "ID|LINK", conflicts_with_all = ["list", "png"])]
+    pub(crate) preview: Option<String>,
+    /// Narrow the workshop's sidebar to the previews whose title matches this
     #[arg(long, conflicts_with = "list")]
     pub(crate) component: Option<String>,
     /// List every preview by its id and exit

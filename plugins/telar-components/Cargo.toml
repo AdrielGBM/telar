@@ -31,15 +31,14 @@ include = [
 all-features = true
 
 [features]
-#! Three groups rather than one knob per widget: they share `shared.rs` and `scrim.rs`, and the graph between
-#! them is what decides where a line can be drawn at all. `dropdown` stays in every build because `select` and
-#! `list` read its row styles; `scrim` travels with the two overlays that draw one.
+#! Four groups rather than one knob per widget: they share `shared.rs` and `scrim.rs`, and the graph between them is what decides where a line can be drawn at all. `dropdown` stays in every build because `select` and `list` read its row styles; `scrim` travels with the two overlays that draw one.
 #!
 #! Nothing is on by default. The buttons, fields, selects, tabs, sliders and indicators are in every build, and an application names each group it draws beyond them.
 
 default = []
 
-## Anything that draws over the tree: menus, context menus, modals, drawers, tooltips and the scrim behind them.
+## Anything that draws over the tree: menus, context menus, modals, drawers, tooltips, the command palette and the key
+## caps its rows show, toasts, and the scrim behind them.
 overlays = []
 
 ## The window frame a desktop application draws itself — title bar, controls, resize edges. Inert anywhere
@@ -49,7 +48,7 @@ chrome = []
 ## Reorderable lists, accordions and steppers.
 advanced = []
 
-## The pieces a tool's own window is built from: split panes, trees, toolbars, icon buttons and key caps.
+## The pieces a tool's own window is built from: split panes, trees, toolbars, icon buttons, a colour picker and a code view.
 workbench = ["icons", "overlays"]
 
 ## Draws `icon:"set:name"` ids through `telar-icons`. Without it, icon buttons fall back to Unicode glyphs.
@@ -85,6 +84,10 @@ path = "src/strings_override_test.rs"
 name = "theme_extension"
 path = "src/theme_extension_test.rs"
 
+[[test]]
+name = "play"
+path = "src/play_test.rs"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 image = { workspace = true, features = ["png"] }
 telar = { workspace = true, features = ["headless"] }
@@ -100,5 +103,5 @@ wasm-bindgen-test = "=0.3.77"
 web-sys = { workspace = true, features = ["CssStyleDeclaration", "Document", "Element", "HtmlElement", "HtmlHeadElement", "Node", "Window"] }
 
 [dev-dependencies]
-telar = { workspace = true, features = ["shaper"] }
+telar = { workspace = true, features = ["previews", "shaper", "testing"] }
 ui-core.workspace = true

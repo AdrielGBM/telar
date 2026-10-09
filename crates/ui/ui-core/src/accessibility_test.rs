@@ -679,3 +679,133 @@ fn a_named_box_holding_more_than_a_control_names_itself() {
     assert!(read_on_its_own(&nodes, "Sections"), "{nodes:?}");
     assert!(read_on_its_own(&nodes, "Fixed bar"), "{nodes:?}");
 }
+
+fn image_at(rect: Rect) -> DrawCommand {
+    DrawCommand::Image {
+        data: Arc::new(renderer_core::ImageData::new(vec![0; 4], 1, 1)),
+        rect,
+        raster: renderer_core::Raster::Smooth,
+        fill: renderer_core::ImageFill::Stretch,
+    }
+}
+
+/// Each box says whether a reader skips it, what it is called and what language it is in, resolved along the frame's nesting: hiding reaches everything inside, and a skipped box is called nothing whatever it was named.
+#[test]
+fn a_frame_reading_says_what_each_box_is_called_and_whether_it_is_skipped() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let named = letter("A").a11y_label(|| "Alpha");
+    let hidden_named = letter("B").a11y_label(|| "Beta");
+    let (named_node, hidden_named_node) = (named.layout_node(), hidden_named.layout_node());
+    let hidden = Container::new(LayoutStyle::new(), vec![box_item(hidden_named)])
+        .unwrap()
+        .a11y_hidden();
+    let hidden_node = hidden.layout_node();
+    let page = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(named), box_item(hidden)],
+    )
+    .unwrap()
+    .a11y_lang(|| "en");
+    let page_node = page.layout_node();
+
+    let reading = FrameReading::of(&[
+        open(page_node, rect(0.0, 0.0, 100.0, 40.0)),
+        open(named_node, rect(0.0, 0.0, 10.0, 16.0)),
+        text_at("A", rect(0.0, 0.0, 10.0, 16.0)),
+        DrawCommand::PopElement,
+        open(hidden_node, rect(0.0, 20.0, 10.0, 16.0)),
+        open(hidden_named_node, rect(0.0, 20.0, 10.0, 16.0)),
+        text_at("B", rect(0.0, 20.0, 10.0, 16.0)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+    ]);
+
+    let named = reading.get(named_node).expect("drawn");
+    assert!(!named.skipped);
+    assert_eq!(named.name.as_deref(), Some("Alpha"));
+    assert_eq!(named.lang.as_deref(), Some("en"));
+    assert!(reading.skips(hidden_node));
+    assert!(reading.skips(hidden_named_node), "hiding takes the subtree");
+    assert_eq!(reading.get(hidden_named_node).unwrap().name, None);
+    assert!(!reading.skips(page_node));
+    assert_eq!(reading.boxes().count(), 4);
+    assert!(reading.get(NodeId::from(u64::MAX)).is_none());
+}
+
+/// Each picture says whether a reader skips it and what it hears for it: the name of a box that draws only it, nothing under a box that also draws words, and nothing at all once hidden.
+#[test]
+fn a_frame_reading_says_which_pictures_are_read_and_by_what_name() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let logo = letter("").a11y_label(|| "Company logo");
+    let captioned = letter("").a11y_label(|| "Card");
+    let ornament = letter("").a11y_hidden();
+    let bare = letter("");
+    let nodes = [
+        logo.layout_node(),
+        captioned.layout_node(),
+        ornament.layout_node(),
+        bare.layout_node(),
+    ];
+    let button = StyledContainer::new(
+        LayoutStyle::new().width(30.0).height(30.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {})
+    .a11y_label(|| "Close");
+    let button_node = button.layout_node();
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(button)]).unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+
+    let square = rect(0.0, 0.0, 10.0, 10.0);
+    let mut frame = Vec::new();
+    for node in nodes {
+        frame.push(open(node, square));
+        frame.push(image_at(square));
+        if node == nodes[1] {
+            frame.push(text_at("Caption", square));
+        }
+        frame.push(DrawCommand::PopElement);
+    }
+    frame.push(image_at(square));
+    frame.push(open(button_node, rect(0.0, 0.0, 30.0, 30.0)));
+    frame.push(image_at(square));
+    frame.push(DrawCommand::PopElement);
+    let reading = FrameReading::of(&frame);
+
+    let art = reading.artwork();
+    assert_eq!(art.len(), 6);
+    assert!(
+        art.iter()
+            .all(|art| matches!(frame[art.index], DrawCommand::Image { .. }))
+    );
+    let [logo, captioned, ornament, bare, outside, in_button] = art else {
+        unreachable!()
+    };
+    assert_eq!(logo.node, Some(nodes[0]));
+    assert_eq!(logo.name.as_deref(), Some("Company logo"));
+    assert!(!logo.skipped);
+    assert_eq!(
+        captioned.name, None,
+        "the card's name is its words', not the picture's"
+    );
+    assert!(ornament.skipped);
+    assert_eq!(ornament.name, None);
+    assert!(!bare.skipped && bare.name.is_none() && !bare.in_control);
+    assert_eq!(outside.node, None);
+    assert!(!outside.skipped && !outside.in_control);
+    assert!(in_button.in_control);
+    assert_eq!(in_button.node, Some(button_node));
+}

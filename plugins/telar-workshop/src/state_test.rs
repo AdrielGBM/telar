@@ -8,6 +8,7 @@ use telar::{
 };
 
 use super::*;
+use crate::settings::{CanvasSize, Zoom};
 
 fn body(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(Text::new(
@@ -51,7 +52,7 @@ fn the_hot_signal_keys_are_stable() {
     assert_eq!(keys::PANEL_SIZE, "@workshop/panel.size");
     assert_eq!(keys::PANEL_COLLAPSED, "@workshop/panel.collapsed");
     assert_eq!(keys::PANEL_POSITION, "@workshop/panel.position");
-    assert_eq!(keys::CANVAS_VIEWPORT, "@workshop/canvas.viewport");
+    assert_eq!(keys::CANVAS_SETTINGS, "@workshop/canvas.settings");
 }
 
 #[test]
@@ -68,7 +69,7 @@ fn a_snapshot_carries_every_key() {
         keys::PANEL_SIZE,
         keys::PANEL_COLLAPSED,
         keys::PANEL_POSITION,
-        keys::CANVAS_VIEWPORT,
+        keys::CANVAS_SETTINGS,
     ] {
         assert!(snapshot.contains_key(key), "{key} is not in {snapshot:?}");
     }
@@ -153,16 +154,30 @@ fn a_restored_set_of_open_groups_wins() {
 }
 
 #[test]
-fn the_viewport_starts_unset_and_is_restored() {
+fn the_canvas_settings_start_at_their_defaults_and_are_restored_whole() {
     assert_eq!(
         WorkshopState::new(entries(), &PreviewRequest::default())
-            .viewport()
+            .canvas_settings()
             .peek(),
-        None
+        CanvasSettings::default()
     );
-    restore(&[(keys::CANVAS_VIEWPORT, "[320.0,480.0]")]);
+    restore(&[(
+        keys::CANVAS_SETTINGS,
+        r#"{"locale":"ar","size":{"custom":{"width":320.0,"height":480.0}},"zoom":{"percent":50}}"#,
+    )]);
     let state = WorkshopState::new(entries(), &PreviewRequest::default());
-    assert_eq!(state.viewport().peek(), Some((320.0, 480.0)));
+    assert_eq!(
+        state.canvas_settings().peek(),
+        CanvasSettings {
+            locale: Some("ar".into()),
+            size: CanvasSize::Custom {
+                width: 320.0,
+                height: 480.0
+            },
+            zoom: Zoom::Percent(50),
+            ..CanvasSettings::default()
+        }
+    );
 }
 
 #[test]

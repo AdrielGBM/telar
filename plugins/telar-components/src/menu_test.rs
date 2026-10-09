@@ -1,13 +1,13 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use telar::testing::{named, press, release, route};
 use telar::{
     AvailableSpace, ComponentList, Event, LayoutStyle, compute_layout, dispatch_overlays,
     relayout_if_dirty,
 };
 
 use super::*;
-use crate::harness::{press, release, route};
 
 // Mirrors the runner: the overlay registry first, then the tree only if no overlay consumed the event.
 
@@ -81,13 +81,6 @@ fn builds_and_lays_out() {
     let _ = tree.commands();
 }
 
-fn key(named: telar::NamedKey) -> Event {
-    Event::KeyPressed {
-        key: telar::Key::Named(named),
-        modifiers: telar::ModifiersState::default(),
-    }
-}
-
 /// A menu was reachable by mouse and by nothing else: the trigger took no focus, so Tab passed it by, and the panel answered to no key at all. Radix gives arrows, Home/End and Escape away for free; here every one of them was absent, which is the difference between a control a keyboard user can operate and one they cannot.
 #[test]
 fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
@@ -120,10 +113,10 @@ fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
         "the trigger joined the tab order"
     );
 
-    route(&mut tree, &key(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::ArrowDown));
     relayout_if_dirty();
-    route(&mut tree, &key(NamedKey::ArrowDown));
-    route(&mut tree, &key(NamedKey::Enter));
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::Enter));
     assert_eq!(seen.get(), Some(1), "the highlighted row is what commits");
 }
 
@@ -154,12 +147,12 @@ fn escape_closes_a_menu_whose_trigger_holds_focus() {
     let mut tree = ComponentList::new(item);
 
     telar::focus::focus_next();
-    route(&mut tree, &key(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::ArrowDown));
     relayout_if_dirty();
-    route(&mut tree, &key(NamedKey::Escape));
+    route(&mut tree, &named(NamedKey::Escape));
     relayout_if_dirty();
 
-    route(&mut tree, &key(NamedKey::Enter));
+    route(&mut tree, &named(NamedKey::Enter));
     assert_eq!(seen.get(), None, "Escape shut it before Enter could pick");
 }
 
@@ -266,11 +259,11 @@ fn the_keyboard_steps_over_what_it_cannot_commit() {
     let mut tree = ComponentList::new(item);
 
     telar::focus::focus_next();
-    route(&mut tree, &key(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::ArrowDown));
     relayout_if_dirty();
     // One step down from "Rename" is "Delete" at index 4: the disabled row, the rule and the heading are all passed over rather than stopped on.
-    route(&mut tree, &key(NamedKey::ArrowDown));
-    route(&mut tree, &key(NamedKey::Enter));
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::Enter));
     assert_eq!(
         seen.get(),
         Some(4),
@@ -333,6 +326,7 @@ fn char_key(c: char) -> Event {
     Event::KeyPressed {
         key: telar::Key::Char(c),
         modifiers: telar::ModifiersState::default(),
+        unmodified: None,
     }
 }
 
@@ -391,13 +385,13 @@ fn typed_pick(typed: &str) -> Option<u32> {
     let mut tree = ComponentList::new(typeahead_menu(seen.clone()));
 
     telar::focus::focus_next();
-    route(&mut tree, &key(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::ArrowDown));
     // The rows are built on this flush, so nothing can be searched until it has run.
     relayout_if_dirty();
     for c in typed.chars() {
         route(&mut tree, &char_key(c));
     }
-    route(&mut tree, &key(NamedKey::Enter));
+    route(&mut tree, &named(NamedKey::Enter));
 
     drop(scope);
     drop(tree);
@@ -444,16 +438,19 @@ fn a_modified_character_is_not_a_search() {
     let mut tree = ComponentList::new(typeahead_menu(seen.clone()));
 
     telar::focus::focus_next();
-    route(&mut tree, &key(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::ArrowDown));
     relayout_if_dirty();
-    telar::observe_keyboard(&Event::ModifiersChanged {
-        modifiers: telar::ModifiersState {
-            is_ctrl: true,
-            ..Default::default()
-        },
-    });
-    route(&mut tree, &char_key('d'));
-    route(&mut tree, &key(NamedKey::Enter));
+    route(
+        &mut tree,
+        &telar::testing::key_with(
+            telar::Key::Char('d'),
+            telar::ModifiersState {
+                is_ctrl: true,
+                ..Default::default()
+            },
+        ),
+    );
+    route(&mut tree, &named(NamedKey::Enter));
     ui_core::reset_keyboard();
 
     assert_eq!(

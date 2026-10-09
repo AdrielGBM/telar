@@ -37,7 +37,7 @@ fn run_desktop_with_overlay<A: App, D: DevOverlay>(config: AppConfig, app: A, ap
         app,
         app_name,
         super::host::SurfaceRenderer::builtin(),
-        Some(super::location::LocationBinding::remembered(Box::new(
+        Some(super::location::LocationBinding::for_window(Box::new(
             platform_core::ArgumentLocation::from_env(),
         ))),
         None,

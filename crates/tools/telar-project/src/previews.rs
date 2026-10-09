@@ -22,17 +22,88 @@ pub struct PreviewsSection {
     pub matrices: Option<BTreeMap<String, MatrixAxes>>,
 }
 
-/// One matrix: the values of each axis, by axis name. A key in [`MATRIX_GLOBAL_AXES`] varies the canvas's environment; any other key names an arg.
+/// One matrix as `telar.toml` writes it: the values of each axis, by axis name. A key in [`MATRIX_GLOBAL_AXES`] varies the canvas's environment; any other key names an arg. Read through [`PreviewsSection::named_matrices`].
 pub type MatrixAxes = BTreeMap<String, Vec<MatrixValue>>;
 
-/// The axes a matrix varies the canvas's environment along, rather than an arg.
+/// The axes a matrix varies the canvas's environment along, rather than an arg, in the order a matrix lists them.
 pub const MATRIX_GLOBAL_AXES: [&str; 5] = ["mode", "locale", "dir", "viewport", "control_size"];
 
-/// The values `dir` takes.
-const DIRECTIONS: [&str; 2] = ["ltr", "rtl"];
+/// One axis of a named matrix, read and checked.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MatrixAxis {
+    /// Mode ids.
+    Mode(Vec<String>),
+    /// BCP 47 language tags.
+    Locale(Vec<String>),
+    Dir(Vec<MatrixDirection>),
+    /// Each a size like `"390x844"` or a name in `[telar.previews.viewports]`.
+    Viewport(Vec<String>),
+    ControlSize(Vec<MatrixControlSize>),
+    /// An arg, by name, and each value in the text form a preview's arg values are written in: a bool, a number, `#ff8800`, a choice such as `Primary`, or text in quotes, `'"Save"'`.
+    Arg {
+        name: String,
+        values: Vec<String>,
+    },
+}
 
-/// The values `control_size` takes.
-const CONTROL_SIZES: [&str; 4] = ["mini", "small", "regular", "large"];
+impl MatrixAxis {
+    /// The key the axis is written under.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Mode(_) => "mode",
+            Self::Locale(_) => "locale",
+            Self::Dir(_) => "dir",
+            Self::Viewport(_) => "viewport",
+            Self::ControlSize(_) => "control_size",
+            Self::Arg { name, .. } => name,
+        }
+    }
+}
+
+/// A value of a matrix's `dir` axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatrixDirection {
+    Ltr,
+    Rtl,
+}
+
+impl MatrixDirection {
+    const WORDS: [(&str, Self); 2] = [("ltr", Self::Ltr), ("rtl", Self::Rtl)];
+
+    /// The direction `word` names: `ltr` or `rtl`.
+    pub fn parse(word: &str) -> Option<Self> {
+        Self::WORDS
+            .iter()
+            .find(|(held, _)| *held == word)
+            .map(|(_, direction)| *direction)
+    }
+}
+
+/// A value of a matrix's `control_size` axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatrixControlSize {
+    Mini,
+    Small,
+    Regular,
+    Large,
+}
+
+impl MatrixControlSize {
+    const WORDS: [(&str, Self); 4] = [
+        ("mini", Self::Mini),
+        ("small", Self::Small),
+        ("regular", Self::Regular),
+        ("large", Self::Large),
+    ];
+
+    /// The control size `word` names: `mini`, `small`, `regular` or `large`.
+    pub fn parse(word: &str) -> Option<Self> {
+        Self::WORDS
+            .iter()
+            .find(|(held, _)| *held == word)
+            .map(|(_, size)| *size)
+    }
+}
 
 /// One value of a matrix axis, as `telar.toml` writes it.
 #[derive(Deserialize, Debug, Clone, PartialEq)]
@@ -149,7 +220,7 @@ impl PreviewsSection {
             self.viewports
                 .iter()
                 .flatten()
-                .filter(|(name, _)| !is_name(name))
+                .filter(|(name, _)| !is_preview_name(name))
                 .map(|(name, _)| {
                     format!(
                         "`[telar.previews.viewports]` name \"{name}\" is not a name: use letters, digits, `_` and `-`"
@@ -161,30 +232,56 @@ impl PreviewsSection {
 
     /// What the table, inherited keys included, gets wrong: each matrix against the axes it may vary and the viewports it may name.
     pub(crate) fn problems(&self) -> Vec<String> {
+        self.named_matrices().err().unwrap_or_default()
+    }
+
+    /// Every named matrix, by name, with its axes read and checked, or every problem found in them. A manifest [`crate::TelarManifest::load`] returned has none.
+    ///
+    /// The global axes come first, in [`MATRIX_GLOBAL_AXES`] order, then the args by name: a TOML table keeps no order serde can see, and an order fixed here keeps a cell's id the same however the keys are written.
+    pub fn named_matrices(&self) -> Result<BTreeMap<String, Vec<MatrixAxis>>, Vec<String>> {
         let viewports = self.viewports.clone().unwrap_or_default();
-        self.matrices
-            .iter()
-            .flatten()
-            .flat_map(|(name, axes)| matrix_problems(name, axes, &viewports))
-            .collect()
+        let mut matrices = BTreeMap::new();
+        let mut problems = Vec::new();
+        for (name, axes) in self.matrices.iter().flatten() {
+            match parse_matrix(name, axes, &viewports) {
+                Ok(axes) => {
+                    matrices.insert(name.clone(), axes);
+                }
+                Err(found) => problems.extend(found),
+            }
+        }
+        if problems.is_empty() {
+            Ok(matrices)
+        } else {
+            Err(problems)
+        }
     }
 }
 
-fn is_name(name: &str) -> bool {
+/// Whether `name` is a name as `[telar.previews]` writes one: letters, digits, `_` and `-`.
+pub fn is_preview_name(name: &str) -> bool {
     !name.is_empty()
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
-fn matrix_problems(
+/// Where `axis` falls in a matrix: the global axes in [`MATRIX_GLOBAL_AXES`] order, then the args.
+fn axis_rank(axis: &str) -> usize {
+    MATRIX_GLOBAL_AXES
+        .iter()
+        .position(|global| *global == axis)
+        .unwrap_or(MATRIX_GLOBAL_AXES.len())
+}
+
+fn parse_matrix(
     name: &str,
     axes: &MatrixAxes,
     viewports: &BTreeMap<String, Viewport>,
-) -> Vec<String> {
+) -> Result<Vec<MatrixAxis>, Vec<String>> {
     let at = format!("`[telar.previews.matrices] {name}`");
     let mut problems = Vec::new();
-    if !is_name(name) {
+    if !is_preview_name(name) {
         problems.push(format!(
             "{at} is not a name: use letters, digits, `_` and `-`"
         ));
@@ -194,66 +291,136 @@ fn matrix_problems(
             "{at} varies nothing: give it an axis, like `mode = [\"light\", \"dark\"]`"
         ));
     }
-    for (axis, values) in axes {
-        let at = format!("{at} axis `{axis}`");
-        if values.is_empty() {
-            problems.push(format!("{at} lists no values"));
+    let mut ordered: Vec<_> = axes.iter().collect();
+    ordered.sort_by_key(|(axis, _)| axis_rank(axis));
+    let mut parsed = Vec::new();
+    for (axis, values) in ordered {
+        match parse_axis(&format!("{at} axis `{axis}`"), axis, values, viewports) {
+            Ok(axis) => parsed.push(axis),
+            Err(found) => problems.extend(found),
         }
-        let mut seen = Vec::new();
-        for value in values {
-            if seen.contains(&value) {
-                problems.push(format!("{at} lists `{value}` more than once"));
-            }
-            seen.push(value);
+    }
+    if problems.is_empty() {
+        Ok(parsed)
+    } else {
+        Err(problems)
+    }
+}
+
+fn parse_axis(
+    at: &str,
+    axis: &str,
+    values: &[MatrixValue],
+    viewports: &BTreeMap<String, Viewport>,
+) -> Result<MatrixAxis, Vec<String>> {
+    let mut problems = Vec::new();
+    if values.is_empty() {
+        problems.push(format!("{at} lists no values"));
+    }
+    for (index, value) in values.iter().enumerate() {
+        if values[..index].contains(value) {
+            problems.push(format!("{at} lists `{value}` more than once"));
         }
-        if !MATRIX_GLOBAL_AXES.contains(&axis.as_str()) && !is_plain_identifier(axis) {
+    }
+    let problems_of = &mut problems;
+    let parsed = match axis {
+        "mode" => MatrixAxis::Mode(read_each(at, values, problems_of, named_text)),
+        "locale" => MatrixAxis::Locale(read_each(at, values, problems_of, named_text)),
+        "dir" => MatrixAxis::Dir(read_each(at, values, problems_of, |value| {
+            word(value, &MatrixDirection::WORDS)
+        })),
+        "viewport" => MatrixAxis::Viewport(read_each(at, values, problems_of, |value| {
+            viewport_text(value, viewports)
+        })),
+        "control_size" => MatrixAxis::ControlSize(read_each(at, values, problems_of, |value| {
+            word(value, &MatrixControlSize::WORDS)
+        })),
+        _ if is_plain_identifier(axis) => MatrixAxis::Arg {
+            name: axis.to_string(),
+            values: values.iter().map(arg_text).collect(),
+        },
+        _ => {
             problems.push(format!(
                 "{at} is neither one of {} nor an arg name",
                 MATRIX_GLOBAL_AXES.join(", ")
             ));
+            return Err(problems);
         }
-        problems.extend(
-            values
-                .iter()
-                .filter_map(|value| global_value_problem(axis, value, viewports))
-                .map(|problem| format!("{at}: {problem}")),
-        );
+    };
+    if problems.is_empty() {
+        Ok(parsed)
+    } else {
+        Err(problems)
     }
-    problems
 }
 
-/// Why `value` cannot be a value of the global axis `axis`. An arg axis takes any value its arg's type parses, which only the preview knows.
-fn global_value_problem(
-    axis: &str,
+fn read_each<T>(
+    at: &str,
+    values: &[MatrixValue],
+    problems: &mut Vec<String>,
+    read: impl Fn(&MatrixValue) -> Result<T, String>,
+) -> Vec<T> {
+    values
+        .iter()
+        .filter_map(|value| {
+            read(value)
+                .map_err(|problem| problems.push(format!("{at}: {problem}")))
+                .ok()
+        })
+        .collect()
+}
+
+fn text(value: &MatrixValue) -> Result<&str, String> {
+    match value {
+        MatrixValue::Text(text) => Ok(text.trim()),
+        _ => Err(format!("`{value}` is not a string")),
+    }
+}
+
+fn named_text(value: &MatrixValue) -> Result<String, String> {
+    match text(value)? {
+        "" => Err("an empty string names nothing".to_string()),
+        text => Ok(text.to_string()),
+    }
+}
+
+fn viewport_text(
     value: &MatrixValue,
     viewports: &BTreeMap<String, Viewport>,
-) -> Option<String> {
-    let text = match value {
-        MatrixValue::Text(text) => text.as_str(),
-        _ if MATRIX_GLOBAL_AXES.contains(&axis) => {
-            return Some(format!("`{value}` is not a string"));
+) -> Result<String, String> {
+    let text = text(value)?;
+    if Viewport::parse(text).is_some() || viewports.contains_key(text) {
+        Ok(text.to_string())
+    } else {
+        Err(format!(
+            "\"{text}\" is neither a size like \"390x844\" nor a name in `[telar.previews.viewports]`"
+        ))
+    }
+}
+
+fn word<T: Copy>(value: &MatrixValue, words: &[(&str, T)]) -> Result<T, String> {
+    let text = text(value)?;
+    words
+        .iter()
+        .find(|(word, _)| *word == text)
+        .map(|(_, value)| *value)
+        .ok_or_else(|| {
+            let allowed: Vec<&str> = words.iter().map(|(word, _)| *word).collect();
+            format!("\"{text}\" is not one of {}", allowed.join(", "))
+        })
+}
+
+/// `value` in the text form a preview's arg values are written in. A string is taken as already in it, since only the arg's type can tell a choice from text.
+fn arg_text(value: &MatrixValue) -> String {
+    match value {
+        MatrixValue::Float(value) if value.is_nan() => "+NaN".to_string(),
+        MatrixValue::Float(value) if value.is_infinite() => {
+            if *value > 0.0 { "+inf" } else { "-inf" }.to_string()
         }
-        _ => return None,
-    };
-    let allowed: &[&str] = match axis {
-        "dir" => &DIRECTIONS,
-        "control_size" => &CONTROL_SIZES,
-        "viewport" => {
-            return (Viewport::parse(text).is_none() && !viewports.contains_key(text)).then(|| {
-                format!(
-                    "\"{text}\" is neither a size like \"390x844\" nor a name in `[telar.previews.viewports]`"
-                )
-            });
-        }
-        "mode" | "locale" => {
-            return text
-                .trim()
-                .is_empty()
-                .then(|| "an empty string names nothing".to_string());
-        }
-        _ => return None,
-    };
-    (!allowed.contains(&text)).then(|| format!("\"{text}\" is not one of {}", allowed.join(", ")))
+        MatrixValue::Float(value) => format!("{value:?}"),
+        MatrixValue::Text(text) => text.clone(),
+        value => value.to_string(),
+    }
 }
 
 /// One `[telar.previews] include` entry, and the `telar.toml` line that declares it.

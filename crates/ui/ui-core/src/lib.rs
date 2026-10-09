@@ -112,7 +112,7 @@ pub use input_region::{interactive_rects, visible_rect};
 pub use kept::kept;
 pub use keyboard::{
     end_frame as end_keyboard_frame, key_held, key_pressed, modifiers, observe as observe_keyboard,
-    reset as reset_keyboard,
+    reset as reset_keyboard, shortcut_key,
 };
 pub use keynav::{KeyNav, KeyNavMove, key_nav_apply, key_nav_apply_grid};
 pub use layout_item::{Clip, ClipAxis, ClipPointer, ClippedItem, IntoClip, LayoutItem, box_item};
@@ -129,7 +129,7 @@ pub use overlay::{Overlay, Placement, anchor_rect};
 pub use page_anchor::PageAnchor;
 pub use path::Path;
 pub use pointer::{
-    PointerButtons, observe_pointer, pointer_buttons, reset_pointer, transform_pointer,
+    PointerButtons, covered, observe_pointer, pointer_buttons, reset_pointer, transform_pointer,
 };
 pub use presence::{Presence, Transition, exits_in_flight};
 pub use reactive_list::ReactiveList;
@@ -146,7 +146,7 @@ pub use slots::{Children, SlotRequest, Slots, use_context};
 pub use step::{COARSE_STEP, FINE_STEP, step_factor};
 pub use styled_container::{KeyAnswer, StyledContainer, box_transform, style_follows};
 pub use surface::{DEFAULT_SCRIM, Edge, SurfaceScaffold, SurfaceTransition};
-pub use surface_canvas::{SurfaceCanvas, composite_surface};
+pub use surface_canvas::{SurfaceCanvas, SurfaceEnv, composite_surface};
 pub use surface_context::{Surface, SurfaceGuard};
 pub use surface_font::{open_surface_font_family, set_font_family, use_font_family};
 pub use surface_frame::SurfaceFrame;

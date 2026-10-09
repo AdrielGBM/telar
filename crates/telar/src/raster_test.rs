@@ -1,6 +1,6 @@
 use super::*;
 use geometry_core::Rect;
-use renderer_core::{RectStyle, ShapeStyle};
+use renderer_core::{RectStyle, Shadow, ShapeStyle};
 use std::sync::Arc;
 
 fn red_square(size: f32) -> Vec<DrawCommand> {
@@ -185,4 +185,83 @@ fn a_blended_layer_lands_the_formula_on_known_pixels() {
             "{blend:?}: the backdrop outside the layer is untouched"
         );
     }
+}
+
+fn shadowed_card(x: f32, shadow_color: Color) -> Vec<DrawCommand> {
+    vec![DrawCommand::Rect {
+        rect: Rect::new(x, 60.0, 200.0, 200.0),
+        style: Arc::new(
+            RectStyle::default()
+                .with_fill(Color::WHITE)
+                .with_shadow(Shadow {
+                    color: shadow_color,
+                    blur_radius: 40.0,
+                    offset_x: 0.0,
+                    offset_y: 0.0,
+                    spread: 0.0,
+                }),
+        ),
+    }]
+}
+
+fn on_a_fresh_thread<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::spawn(work).join().expect("render thread")
+}
+
+fn red_excess(pixels: &[u8]) -> u64 {
+    pixels
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|px| u64::from(px[0].saturating_sub(px[2])))
+        .sum()
+}
+
+#[test]
+fn a_large_shadow_is_in_the_first_render() {
+    let pixels = on_a_fresh_thread(|| {
+        let commands = shadowed_card(60.0, Color::rgba(1.0, 0.0, 0.0, 1.0));
+        rasterize(&commands, 320, 320, 1.0, Some(Color::BLACK)).expect("pixels")
+    });
+    assert!(
+        red_excess(&pixels) > 0,
+        "a shadow past the background-blur threshold must be blurred before the first picture is read"
+    );
+}
+
+#[test]
+fn a_shadow_does_not_leak_into_an_unrelated_frame() {
+    on_a_fresh_thread(|| {
+        let red = shadowed_card(60.0, Color::rgba(1.0, 0.0, 0.0, 1.0));
+        let green = shadowed_card(40.0, Color::rgba(0.0, 1.0, 0.0, 1.0));
+        rasterize(&red, 320, 320, 1.0, Some(Color::BLACK)).expect("red");
+        let after_red = rasterize(&green, 320, 320, 1.0, Some(Color::BLACK)).expect("green");
+        let fresh = on_a_fresh_thread(move || {
+            rasterize(&green, 320, 320, 1.0, Some(Color::BLACK)).expect("green")
+        });
+        assert_eq!(after_red, fresh);
+        assert_eq!(red_excess(&after_red), 0, "the red shadow must not remain");
+    });
+}
+
+#[test]
+fn consecutive_frames_are_each_a_full_redraw() {
+    on_a_fresh_thread(|| {
+        let a = shadowed_card(60.0, Color::rgba(1.0, 0.0, 0.0, 1.0));
+        let b = red_square(8.0);
+        rasterize(&a, 320, 320, 1.0, Some(Color::BLACK)).expect("a");
+        let after_a = rasterize(&b, 320, 320, 1.0, Some(Color::BLACK)).expect("b");
+        let fresh_b =
+            on_a_fresh_thread(move || rasterize(&b, 320, 320, 1.0, Some(Color::BLACK)).expect("b"));
+        assert_eq!(after_a, fresh_b);
+    });
+}
+
+#[test]
+fn an_empty_frame_after_a_drawn_one_is_blank() {
+    on_a_fresh_thread(|| {
+        rasterize(&red_square(8.0), 16, 16, 1.0, None).expect("drawn");
+        let blank = rasterize(&[], 16, 16, 1.0, None).expect("blank");
+        assert!(blank.iter().all(|byte| *byte == 0));
+    });
 }

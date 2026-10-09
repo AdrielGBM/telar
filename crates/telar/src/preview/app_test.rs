@@ -36,7 +36,7 @@ fn the_page_keeps_each_preview_at_its_content_height_one_under_another() {
         PreviewEntry::new("demo--box--a", "box", "A", filling_swatch),
         PreviewEntry::new("demo--box--b", "box", "B", filling_swatch),
     ]);
-    let mut tree = ComponentList::new(app.page(None));
+    let mut tree = ComponentList::new(app.page());
     tree.on_event(&Event::WindowResized {
         width: 800,
         height: HEIGHT as u32,

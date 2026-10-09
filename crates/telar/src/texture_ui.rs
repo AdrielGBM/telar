@@ -191,7 +191,7 @@ impl TextureUi {
     ///
     /// Blends, rather than replaces: whatever the application drew there survives wherever the UI did not paint. Call it after the application has filled the texture for this frame, and again whenever it refills it — Telar draws when asked and never on its own.
     ///
-    /// Animations and background work are not advanced here. The motion engine and the task registry are per-thread, and a windowed application's runner already drives them for every tree on that thread; a windowless one drives them itself, with [`motion::tick`](crate::motion) and [`drain_tasks`](crate::drain_tasks), exactly as it drives this.
+    /// Animations, timers and background work are not advanced here. The motion engine and the timer and task registries are per-thread, and a windowed application's runner already drives them for every tree on that thread; a windowless one drives them itself, with [`motion::tick`](crate::motion), [`fire_timers`](crate::fire_timers) and [`drain_tasks`](crate::drain_tasks), exactly as it drives this.
     pub fn render(&mut self) -> Result<(), RendererError> {
         let _g = self.canvas.enter();
         // A reactive change (a list gaining an item, a panel opening) mutates the layout tree without recomputing it; the runner does the same before composing a window frame.

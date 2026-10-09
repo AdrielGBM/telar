@@ -132,8 +132,13 @@ where
 {
     fn plan_frame(&mut self, commands: &[DrawCommand], clear_color: Option<Color>) -> FrameAction {
         let shadows = self.poll_pending_shadows();
+        let forced = std::mem::take(&mut self.redraw_in_full);
         let clear_color_changed = clear_color != self.prev_clear_color;
-        if shadows.is_empty() && !clear_color_changed && commands == self.prev_commands.as_slice() {
+        if shadows.is_empty()
+            && !forced
+            && !clear_color_changed
+            && commands == self.prev_commands.as_slice()
+        {
             return FrameAction::Present(FrameOp::NoChange);
         }
 
@@ -156,7 +161,7 @@ where
 
         let full = FrameAction::Render(FramePlan::full(input_hash));
         // Every pixel is cleared to it, so this is the one change no region can bound.
-        if clear_color_changed {
+        if forced || clear_color_changed {
             return full;
         }
         let (width, height) = (self.width, self.height);
@@ -471,6 +476,7 @@ where
         layer_boxes: &[Option<LayerBox>],
     ) {
         let mut skipped_layers: usize = 0;
+        let synchronous_shadows = self.config.synchronous_shadows;
 
         for (index, cmd) in commands.iter().enumerate() {
             #[cfg(test)]
@@ -523,6 +529,7 @@ where
                             &mut c.shadow_cache,
                             &mut c.pending_shadows,
                             &mut c.recent_shadow,
+                            synchronous_shadows,
                             canvas.blur_scratch,
                         );
                     });
@@ -552,6 +559,7 @@ where
                             &mut c.text_shadow_cache,
                             &mut c.pending_text_shadows,
                             &mut c.recent_text_shadow,
+                            synchronous_shadows,
                         );
                     });
                 }
@@ -605,6 +613,7 @@ where
                             &mut c.path_shadow_cache,
                             &mut c.pending_path_shadows,
                             &mut c.recent_path_shadow,
+                            synchronous_shadows,
                         );
                     });
                 }

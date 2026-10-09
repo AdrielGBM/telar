@@ -1,9 +1,9 @@
 //! The workbench theme: the one look the workshop and the overlay share, light and dark, applied to a subtree without touching the application's own theme.
 
 use telar::{
-    Color, ColorScheme, ControlSize, Declared, FontFamily, LayoutError, LayoutItem, ScopedTheme,
-    ThemeProvider, ThemeTokens, follow_theme, provide_theme, use_resolved_scheme,
-    use_theme_extension,
+    Border, BorderRadius, Color, ColorScheme, ControlSize, Declared, FontFamily, LayoutError,
+    LayoutItem, LayoutStyle, RectStyle, ScopedTheme, TextStyle, ThemeProvider, ThemeTokens,
+    follow_theme, provide_theme, use_resolved_scheme, use_theme_extension,
 };
 
 pub const WORKBENCH_TEXT_SIZE: f32 = 13.0;
@@ -177,6 +177,34 @@ pub fn workbench_scope(
     child: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
 ) -> Result<ThemeProvider, LayoutError> {
     provide_theme(workbench_theme(), child)
+}
+
+/// The outline every workbench card, field and frame shares: a one-pixel subtle border on the workbench radius. The caller adds the fill, if any.
+pub fn workbench_card() -> RectStyle {
+    RectStyle::default()
+        .with_border(Border::uniform(use_workbench_tokens().border_subtle, 1.0))
+        .with_radius(BorderRadius::all(WORKBENCH_RADIUS))
+}
+
+/// Text that steps back: hints, empty states and secondary details.
+pub fn workbench_muted(text: TextStyle) -> TextStyle {
+    text.with_color(use_workbench_tokens().text_muted)
+}
+
+/// Code, values and measurements, in the workbench's monospace face and size.
+pub fn workbench_mono(text: TextStyle) -> TextStyle {
+    let tokens = use_workbench_tokens();
+    text.with_font_family(tokens.mono_family)
+        .with_font_size(tokens.mono_size)
+}
+
+/// A column that takes the space its parent leaves and may shrink below its content either way, so a scroll area or a list inside it bounds its own overflow.
+pub fn workbench_fill() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_column()
+        .flex_grow(1.0)
+        .min_width(0.0)
+        .min_height(0.0)
 }
 
 #[cfg(test)]

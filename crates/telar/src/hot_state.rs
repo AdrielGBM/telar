@@ -47,6 +47,7 @@ where
 const THEME_MODE_KEY: &str = "@telar/theme.mode";
 const SCHEME_PREFERENCE_KEY: &str = "@telar/theme.scheme";
 const REDUCED_MOTION_OVERRIDE_KEY: &str = "@telar/motion.reduced";
+const HIGH_CONTRAST_OVERRIDE_KEY: &str = "@telar/contrast.high";
 
 /// Serializes every registered hot signal into a JSON map. Runs inside the outgoing dylib via its `_rsx_hot_snapshot` export, while the old tree (and thus its signals) is still alive.
 #[cfg(any(feature = "dev", feature = "prerender"))]
@@ -67,6 +68,9 @@ pub fn hot_snapshot_json() -> String {
     // Carried only while set: absent means the outgoing library followed the system, which an incoming one already does.
     if let Some(reduced) = preferences_core::reduced_motion_override() {
         map.insert(REDUCED_MOTION_OVERRIDE_KEY.to_string(), reduced.to_string());
+    }
+    if let Some(high) = preferences_core::high_contrast_override() {
+        map.insert(HIGH_CONTRAST_OVERRIDE_KEY.to_string(), high.to_string());
     }
     serde_json::to_string(&map).unwrap_or_default()
 }
@@ -94,6 +98,12 @@ pub(crate) fn restore(map: impl IntoIterator<Item = (String, String)>) {
         .and_then(|word| word.parse().ok())
     {
         preferences_core::set_reduced_motion_override(Some(reduced));
+    }
+    if let Some(high) = map
+        .remove(HIGH_CONTRAST_OVERRIDE_KEY)
+        .and_then(|word| word.parse().ok())
+    {
+        preferences_core::set_high_contrast_override(Some(high));
     }
     if let Some(mode) = map.remove(THEME_MODE_KEY) {
         theme_core::set_mode(mode);

@@ -6,6 +6,7 @@ use crate::{
     Children, Color, Container, Direction, LayoutError, LayoutItem, LayoutStyle, Size, Slots,
 };
 
+use super::a11y::Rule;
 use super::host::Args;
 use super::{ActionLog, ArgSpec, Globals, Matrix, PlayFn, PreviewArg, PropsSchema};
 
@@ -22,7 +23,12 @@ pub struct PreviewCtx {
 impl PreviewCtx {
     /// The canvas `entry` mounts in: its args persisted under its id, a fresh action log, and globals seeded from its [`PreviewEnv`].
     pub fn for_entry(entry: &PreviewEntry) -> Self {
-        Self::from(Args::for_entry(entry)).with_globals(Globals::seeded(&entry.env))
+        Self::for_entry_with(entry, Args::for_entry(entry))
+    }
+
+    /// The canvas `entry` mounts in with `args`: a fresh action log, and globals seeded from its [`PreviewEnv`].
+    pub fn for_entry_with(entry: &PreviewEntry, args: Args) -> Self {
+        Self::from(args).with_globals(Globals::seeded(&entry.env))
     }
 
     pub fn with_actions(self, actions: ActionLog) -> Self {
@@ -150,6 +156,8 @@ pub struct PreviewEnv {
     /// A BCP 47 language tag.
     pub locale: Option<&'static str>,
     pub direction: Option<Direction>,
+    /// `Some(true)` to show the preview with more contrast, `Some(false)` with the regular palette.
+    pub high_contrast: Option<bool>,
 }
 
 impl PreviewEnv {
@@ -159,6 +167,7 @@ impl PreviewEnv {
         mode: None,
         locale: None,
         direction: None,
+        high_contrast: None,
     };
 
     pub const fn viewport(self, width: f32, height: f32) -> Self {
@@ -195,6 +204,13 @@ impl PreviewEnv {
             ..self
         }
     }
+
+    pub const fn high_contrast(self, high: bool) -> Self {
+        Self {
+            high_contrast: Some(high),
+            ..self
+        }
+    }
 }
 
 /// A byte range of [`PreviewEntry::source`] and the 1-based line of the source file it starts on.
@@ -222,6 +238,8 @@ pub struct PreviewEntry {
     pub id: &'static str,
     /// The `Group/Title` path the preview is listed under. Defaults to [`Self::component`].
     pub title: &'static str,
+    /// Prose about the component, shown at the top of its docs page: the body of a `.rsx` file's `[previews]` section, which every preview of the file carries. Empty when there is none.
+    pub docs: &'static str,
     pub component: &'static str,
     pub name: &'static str,
     /// The absolute path of the file the preview is written in, as an editor opens it: its package's `CARGO_MANIFEST_DIR` joined to the path within the package, for a `.rsx` preview and a Rust one alike. Empty when unknown.
@@ -243,6 +261,8 @@ pub struct PreviewEntry {
     pub build: BuildFn,
     pub decorator: Option<Decorator>,
     pub play: Option<PlayFn>,
+    /// The accessibility rules the preview knowingly breaks, which its checks leave out.
+    pub a11y_ignore: &'static [Rule],
     /// The props of the component under preview, for its docs and controls.
     pub props: Option<fn() -> &'static PropsSchema>,
 }
@@ -257,6 +277,7 @@ impl PreviewEntry {
         Self {
             id,
             title: component,
+            docs: "",
             component,
             name,
             file: "",
@@ -272,6 +293,7 @@ impl PreviewEntry {
             build,
             decorator: None,
             play: None,
+            a11y_ignore: &[],
             props: None,
         }
     }
@@ -279,6 +301,11 @@ impl PreviewEntry {
     /// The `Group/Title` path to list the preview under.
     pub const fn title(self, title: &'static str) -> Self {
         Self { title, ..self }
+    }
+
+    /// Prose about the component for the top of its docs page, which its other previews may carry too.
+    pub const fn docs(self, docs: &'static str) -> Self {
+        Self { docs, ..self }
     }
 
     pub const fn location(self, file: &'static str, line: u32) -> Self {
@@ -336,6 +363,12 @@ impl PreviewEntry {
         Self { env, ..self }
     }
 
+    /// `true` to show the preview with more contrast, `false` with the regular palette, whatever the application and the system say.
+    pub const fn high_contrast(self, high: bool) -> Self {
+        let env = self.env.high_contrast(high);
+        Self { env, ..self }
+    }
+
     pub const fn surface(self, surface: PreviewSurface) -> Self {
         Self {
             surface: Some(surface),
@@ -343,7 +376,7 @@ impl PreviewEntry {
         }
     }
 
-    /// Renders the preview once per cell of `matrix`: `.matrix(Matrix::Named("themes"))`.
+    /// Renders the preview once per cell of `matrix`: `.matrix(Matrix::Named("themes"))`, or inline, `.matrix(Matrix::Axes(&[Axis::Dir(&[Direction::Ltr, Direction::Rtl])]))`.
     pub const fn matrix(self, matrix: Matrix) -> Self {
         Self {
             matrix: Some(matrix),
@@ -359,6 +392,14 @@ impl PreviewEntry {
     pub const fn play(self, play: PlayFn) -> Self {
         Self {
             play: Some(play),
+            ..self
+        }
+    }
+
+    /// Leaves `rules` out of the preview's accessibility checks, replacing any it left out before: `.a11y_ignore(&[Rule::TargetSize])` for a preview that shows a dense layout on purpose.
+    pub const fn a11y_ignore(self, rules: &'static [Rule]) -> Self {
+        Self {
+            a11y_ignore: rules,
             ..self
         }
     }

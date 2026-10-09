@@ -33,6 +33,16 @@ impl Direction {
     }
 }
 
+/// Taffy is told the direction on every node rather than only having the main axis of a row reversed for it: alignment on a column's cross axis, a block's placement of a narrower child and a grid's columns all follow the inline direction too, and only taffy sees all of them.
+impl From<Direction> for taffy::Direction {
+    fn from(direction: Direction) -> Self {
+        match direction {
+            Direction::Ltr => taffy::Direction::Ltr,
+            Direction::Rtl => taffy::Direction::Rtl,
+        }
+    }
+}
+
 #[cfg(test)]
 #[path = "direction_test.rs"]
 mod tests;

@@ -9,6 +9,7 @@ pub mod app_ctx;
 pub mod asset_base;
 pub mod consumed_keys;
 pub mod destination;
+pub mod dom_code;
 pub mod error;
 pub mod event;
 pub mod event_sink;
@@ -32,6 +33,7 @@ pub use app_ctx::{AppCtx, RedrawWaker};
 pub use asset_base::{asset_url, set_asset_base};
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};
 pub use destination::{Destination, IntoDestination, Uri, address_of, anchor, external, in_locale};
+pub use dom_code::unmodified_key_of_code;
 pub use error::PlatformError;
 pub use event::{
     Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource, ScrollDelta, TAP_SLOP,

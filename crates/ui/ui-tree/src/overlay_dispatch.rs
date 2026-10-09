@@ -47,6 +47,8 @@ struct OverlayRegistry {
     entries: Vec<(u64, Rc<dyn OverlaySink>)>,
     // Set on a press it handled, cleared on release.
     captured: Option<u64>,
+    // Every overlay the last move was dispatched to, so the next one that is not tells it the pointer left.
+    hovered: Vec<u64>,
     next_id: u64,
 }
 
@@ -55,6 +57,7 @@ impl OverlayRegistry {
         Self {
             entries: Vec::new(),
             captured: None,
+            hovered: Vec::new(),
             next_id: 0,
         }
     }
@@ -74,6 +77,7 @@ pub fn register_overlay(sink: Rc<dyn OverlaySink>) -> u64 {
 pub fn unregister_overlay(id: u64) {
     with_overlays(|r| {
         r.entries.retain(|(entry_id, _)| *entry_id != id);
+        r.hovered.retain(|hovered| *hovered != id);
         if r.captured == Some(id) {
             r.captured = None;
         }
@@ -89,12 +93,20 @@ fn pointer_pos(event: &Event) -> Option<(f32, f32)> {
     }
 }
 
-/// Routes a positioned pointer event to the overlay layer with priority over the main tree. Returns `Handled` when an overlay consumed the event (the caller then skips the tree walk, blocking content behind the overlay) and `Ignored` when it should fall through to the tree (no overlays, or the point is outside every overlay and no gesture is captured). Non-pointer events always return `Ignored` so keyboard and `CursorLeft` keep broadcasting through the tree.
+/// Routes a positioned pointer event to the overlay layer with priority over the main tree. Returns `Handled` when an overlay consumed the event (the caller then skips the tree walk, blocking content behind the overlay — but for a move, which the tree still hears with everything in it covered, so a box hovered under the overlay hears the pointer leave it) and `Ignored` when it should fall through to the tree (no overlays, or the point is outside every overlay and no gesture is captured). Non-pointer events always return `Ignored` so keyboard and `CursorLeft` keep broadcasting through the tree.
+///
+/// A move reaches only the overlays it lands on, where the tree broadcasts one to every box. So an overlay the previous move reached and this one does not is sent [`Event::CursorLeft`], which is how its hover settles once the pointer is off it.
 pub fn dispatch_overlays(event: &Event) -> EventResult {
+    if matches!(event, Event::CursorLeft) {
+        // The tree walk carries it into every overlay's content, so nothing here has to be told twice.
+        with_overlays(|r| r.hovered.clear());
+        return EventResult::Ignored;
+    }
     let press = matches!(event, Event::PointerPressed { .. });
     let release = matches!(event, Event::PointerReleased { .. });
+    let moved = matches!(event, Event::PointerMoved { .. });
     // Only these three reach an overlay, and the snapshot below is not free: taking it for a key press cloned the whole registry to answer `Ignored`.
-    if !press && !release && !matches!(event, Event::PointerMoved { .. }) {
+    if !press && !release && !moved {
         return EventResult::Ignored;
     }
     // Snapshot and drop the borrow before dispatching: a handler may write signals whose deferred flush registers or unregisters an overlay, which would re-enter the borrow.
@@ -102,11 +114,29 @@ pub fn dispatch_overlays(event: &Event) -> EventResult {
     if entries.is_empty() {
         return EventResult::Ignored;
     }
+    let mut reached = Vec::new();
+    let result = route(&entries, captured, event, &mut reached);
+    if moved {
+        leave_unreached(reached);
+    }
+    result
+}
+
+/// [`dispatch_overlays`] for a pointer event, noting every overlay it was dispatched to in `reached`.
+fn route(
+    entries: &[(u64, Rc<dyn OverlaySink>)],
+    captured: Option<u64>,
+    event: &Event,
+    reached: &mut Vec<u64>,
+) -> EventResult {
+    let press = matches!(event, Event::PointerPressed { .. });
+    let release = matches!(event, Event::PointerReleased { .. });
     let (x, y) = pointer_pos(event).unwrap();
 
     // A gesture that began on an overlay stays there wherever the pointer goes, until it is released.
     if !press && let Some(cap_id) = captured {
         if let Some((_, sink)) = entries.iter().find(|(id, _)| *id == cap_id) {
+            reached.push(cap_id);
             sink.dispatch(event);
             if release {
                 with_overlays(|r| r.captured = None);
@@ -124,6 +154,7 @@ pub fn dispatch_overlays(event: &Event) -> EventResult {
         if !sink.hits(x, y) {
             continue;
         }
+        reached.push(*id);
         let handled = sink.dispatch(event) == EventResult::Handled;
         if sink.blocking() || handled {
             if press {
@@ -134,6 +165,27 @@ pub fn dispatch_overlays(event: &Event) -> EventResult {
         }
     }
     EventResult::Ignored
+}
+
+/// Makes `reached` the overlays under the pointer, and sends every one the previous move reached and this one did not [`Event::CursorLeft`].
+fn leave_unreached(reached: Vec<u64>) {
+    // Read after the dispatch, so an overlay the move itself took down is not told anything.
+    let left: Vec<Rc<dyn OverlaySink>> = with_overlays(|r| {
+        let previous = std::mem::replace(&mut r.hovered, reached);
+        previous
+            .into_iter()
+            .filter(|id| !r.hovered.contains(id))
+            .filter_map(|id| {
+                r.entries
+                    .iter()
+                    .find(|(entry, _)| *entry == id)
+                    .map(|(_, sink)| Rc::clone(sink))
+            })
+            .collect()
+    });
+    for sink in left {
+        sink.dispatch(&Event::CursorLeft);
+    }
 }
 
 #[cfg(test)]

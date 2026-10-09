@@ -173,14 +173,14 @@ impl ThemeExtensions {
 ///
 /// The extensions are collected here, once per installed value, so they are replaced exactly when the theme is: a mode switch, a [`ScopedTheme::set`] and a hot reload's re-run of `setup` each install a new `Installed`, and no reader sees one theme's tokens beside another's extensions.
 #[derive(Clone)]
-struct Installed {
+pub(crate) struct Installed {
     theme: Rc<dyn Any>,
     tokens: Rc<dyn ThemeTokens>,
     extensions: Rc<ThemeExtensions>,
 }
 
 impl Installed {
-    fn new<T: ThemeTokens + Clone + 'static>(theme: T) -> Self {
+    pub(crate) fn new<T: ThemeTokens + Clone + 'static>(theme: T) -> Self {
         let mut extensions = ThemeExtensions::default();
         theme.register_extensions(&mut extensions);
         let theme = Rc::new(theme);
@@ -197,9 +197,18 @@ thread_local! {
     static THEME: RwSignal<Option<Installed>> = detached(|| signal(None));
 }
 
-/// Installs `theme` as the global default, for both [`use_theme`] and the catalogue's token reads, wherever no [`ScopedTheme`] is provided.
+/// Installs `theme` as the global default, for both [`use_theme`] and the catalogue's token reads, wherever no [`ScopedTheme`] is provided and the surface does not show a mode registered with a theme of its own.
 pub fn set_theme<T: ThemeTokens + Clone + 'static>(theme: T) {
-    THEME.with(|s| s.set(Some(Installed::new(theme))));
+    install(Installed::new(theme));
+}
+
+pub(crate) fn install(installed: Installed) {
+    THEME.with(|s| s.set(Some(installed)));
+}
+
+/// The theme that stands where no [`ScopedTheme`] is provided, subscribing the caller to it: the theme of the active surface's own mode where it has one registered with [`register_mode_theme`](crate::register_mode_theme), else the one [`set_theme`] installed.
+fn global() -> Option<Installed> {
+    crate::mode::surface_mode_theme().or_else(|| THEME.with(|s| s.get()))
 }
 
 /// A theme for one subtree, switchable in place: once [provided](Self::provide) to an owner, every read under that owner — including in effects, measures and handlers that re-enter it later — resolves this theme instead of the global one, and [`set`](Self::set) re-runs only the readers that resolved it.
@@ -214,9 +223,14 @@ impl ScopedTheme {
         Self(signal(Some(Installed::new(theme))))
     }
 
-    /// A scope that resolves whatever [`set_theme`] installs, as if no provider stood above it, until [`set`](Self::set) gives it a theme of its own. For a subtree that has to stay switchable between the application's theme and another one without being rebuilt.
+    /// A scope that resolves whatever [`set_theme`] installs, as if no provider stood above it, until [`set`](Self::set) gives it a theme of its own. For a subtree that has to stay switchable between the application's theme and another one without being rebuilt. On a surface with a mode of its own, the global theme is that mode's, as it is with no provider at all.
     pub fn follow_global() -> Self {
         Self(signal(None))
+    }
+
+    /// A scoped theme holding the theme mode `id` was registered with through [`register_mode_theme`](crate::register_mode_theme), so a subtree shows that mode without it being installed for the application. `None` where no such theme is registered under `id`.
+    pub fn for_mode(id: &str) -> Option<Self> {
+        crate::mode::mode_theme_now(id).map(|installed| Self(signal(Some(installed))))
     }
 
     /// Swaps the theme, re-running whatever resolved this one.
@@ -248,7 +262,7 @@ impl ScopedTheme {
     fn resolved(&self) -> Option<Installed> {
         match self.0.get() {
             Some(installed) => Some(installed),
-            None => THEME.with(|s| s.get()),
+            None => global(),
         }
     }
 
@@ -276,7 +290,7 @@ pub fn nearest_theme() -> Option<ScopedTheme> {
 fn in_force() -> Option<Installed> {
     match nearest_theme() {
         Some(scoped) => scoped.resolved(),
-        None => THEME.with(|s| s.get()),
+        None => global(),
     }
 }
 
@@ -307,7 +321,7 @@ impl<T: Clone + 'static> Theme<T> {
     }
 }
 
-/// The theme in force as the application's own type: the nearest [`ScopedTheme`] above the current owner that holds a `T`, else the global theme, walking past providers of other types. A provider that [follows the global theme](ScopedTheme::follow_global) holds whatever the global theme holds. Reads reactively, so a switch re-runs the caller; panics if no provider or the global theme holds a `T`.
+/// The theme in force as the application's own type: the nearest [`ScopedTheme`] above the current owner that holds a `T`, else the theme of the surface's own mode, else the global theme, walking past any of them that holds another type. A provider that [follows the global theme](ScopedTheme::follow_global) holds whatever the global theme holds. Reads reactively, so a switch re-runs the caller; panics if no provider or the global theme holds a `T`.
 pub fn use_theme<T: Clone + 'static>() -> T {
     let scoped = reactive_core::find_context::<Provided, _>(|provided| {
         provided.0.resolved()?.theme.downcast_ref::<T>().cloned()
@@ -315,8 +329,10 @@ pub fn use_theme<T: Clone + 'static>() -> T {
     if let Some(theme) = scoped {
         return theme;
     }
-    THEME
-        .with(|s| s.with(|global| global.as_ref()?.theme.downcast_ref::<T>().cloned()))
+    let held = |installed: &Installed| installed.theme.downcast_ref::<T>().cloned();
+    crate::mode::surface_mode_theme()
+        .and_then(|installed| held(&installed))
+        .or_else(|| THEME.with(|s| s.with(|global| global.as_ref().and_then(held))))
         .unwrap_or_else(|| {
             panic!(
                 "use_theme::<{}> found no theme of that type in force; install one with set_theme or a ScopedTheme",

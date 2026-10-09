@@ -183,3 +183,56 @@ fn a_generic_props_struct_is_refused() {
         assert!(error.contains("no generic parameters"), "{source}: {error}");
     }
 }
+
+fn actions_of(source: &str) -> (String, String) {
+    let out = expand_str(source).expect("the struct derives");
+    let gated = out
+        .rfind(":: telar :: __previews !")
+        .unwrap_or_else(|| panic!("no gated actions in: {out}"));
+    let gated = &out[gated..];
+    let split = gated
+        .find(":: telar :: preview :: PreviewActions for")
+        .unwrap_or_else(|| panic!("no PreviewActions impl in: {gated}"));
+    (gated[..split].to_owned(), gated[split..].to_owned())
+}
+
+fn logs(expansion: &str, prop: &str) -> bool {
+    expansion.contains(&format!("__preview_action ! (* log , \"{prop}\""))
+}
+
+#[test]
+fn the_builder_logs_its_optional_props_and_the_props_log_every_one() {
+    let (builder, props) = actions_of(
+        "struct PadProps { on_close: Rc<dyn Fn()>, #[props(default)] on_press: Option<Rc<dyn Fn()>>, #[props(default)] r#type: u8 }",
+    );
+    assert!(
+        builder.contains("impl < S0 > PadPropsBuilder < S0 >"),
+        "callable whatever the required props hold: {builder}"
+    );
+    assert!(
+        builder.contains(
+            "pub fn __preview_actions (mut self , log : & :: telar :: preview :: ActionLog) -> Self"
+        ),
+        "{builder}"
+    );
+    assert!(
+        logs(&builder, "on_press") && logs(&builder, "type"),
+        "{builder}"
+    );
+    assert!(!logs(&builder, "on_close"), "{builder}");
+    assert!(
+        ["on_close", "on_press", "type"]
+            .iter()
+            .all(|prop| logs(&props, prop)),
+        "{props}"
+    );
+}
+
+#[test]
+fn a_builder_with_no_optional_prop_leaves_the_log_unused() {
+    let (builder, _) = actions_of("struct PadProps { on_close: Rc<dyn Fn()> }");
+    assert!(
+        builder.contains("pub fn __preview_actions (self , _log : & :: telar :: preview :: ActionLog) -> Self { self }"),
+        "{builder}"
+    );
+}

@@ -517,6 +517,7 @@ mod from_a_screen {
         Event::KeyPressed {
             key: Key::Named(named),
             modifiers: ModifiersState::default(),
+            unmodified: None,
         }
     }
 

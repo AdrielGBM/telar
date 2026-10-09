@@ -1,4 +1,4 @@
-//! The user's system preferences as reactive state: written by the runner from `Event::SystemPreferencesChanged`, read by anything that should follow them. Beside them, the reduced-motion choice an app makes for itself, which wins over the system's while it is set.
+//! The user's system preferences as reactive state: written by the runner from `Event::SystemPreferencesChanged`, read by anything that should follow them. Beside them, the reduced-motion and high-contrast choices an app makes for itself, which win over the system's while they are set, and the high-contrast choice a surface makes for itself, which wins over both on that surface.
 //!
 //! One signal per field, so a view that reads only the locales does not re-render when the colour scheme flips.
 //!
@@ -15,6 +15,12 @@ thread_local! {
     static HIGH_CONTRAST: RwSignal<Option<bool>> = detached(|| signal(None));
     static LOCALES: RwSignal<Vec<String>> = detached(|| signal(Vec::new()));
     static REDUCED_MOTION_OVERRIDE: RwSignal<Option<bool>> = detached(|| signal(None));
+}
+
+reactive_core::surface_scoped! {
+    /// The active surface's own high-contrast choice, in place of the application's and the system's while it has one.
+    scoped contrast: bool as Option<bool> = None;
+    context HighContrastContext, HighContrastGuard;
 }
 
 /// Replaces the preferences everything reads, notifying only the fields that changed. The runner calls this; a test or a tool without one can call it to stand in for the platform.
@@ -49,7 +55,7 @@ pub fn use_system_preferences() -> SystemPreferences {
     SystemPreferences {
         color_scheme: use_color_scheme(),
         reduced_motion: use_system_reduced_motion(),
-        high_contrast: use_high_contrast(),
+        high_contrast: use_system_high_contrast(),
         locales: use_preferred_locales(),
     }
 }
@@ -103,9 +109,41 @@ pub fn use_reduced_motion_override() -> Option<bool> {
     REDUCED_MOTION_OVERRIDE.with(|s| s.get())
 }
 
-/// `Some(true)` when the user asked for more contrast; `None` where the platform cannot say.
+/// Whether the active surface is shown with more contrast: its own choice ([`set_surface_high_contrast`]) while it has one, else the [`high_contrast_override`] while one is set, else the system's preference. `None` only while all three are unknown.
 pub fn use_high_contrast() -> Option<bool> {
+    contrast().get().or_else(use_system_high_contrast)
+}
+
+/// Non-reactive [`use_high_contrast`], for event handlers and the paint pass.
+pub fn high_contrast() -> Option<bool> {
+    contrast()
+        .peek()
+        .or_else(|| HIGH_CONTRAST.with(|s| s.peek()))
+}
+
+/// `Some(true)` when the user asked the system for more contrast; `None` where the platform cannot say. Ignores the app's [`high_contrast_override`] and any surface's own choice.
+pub fn use_system_high_contrast() -> Option<bool> {
     HIGH_CONTRAST.with(|s| s.get())
+}
+
+/// Fixes high contrast for every surface without a choice of its own, whatever the system says: `Some(true)` for more contrast, `Some(false)` for the regular palette, `None` to follow the system again. A fixed value holds through every change the system reports meanwhile.
+pub fn set_high_contrast_override(high: Option<bool>) {
+    contrast().set(high);
+}
+
+/// The application's override now, whatever the active surface's own choice, without subscribing.
+pub fn high_contrast_override() -> Option<bool> {
+    contrast().peek_thread()
+}
+
+/// Gives the active surface a high-contrast choice of its own, or with `None` hands it back to the application's and the system's.
+pub fn set_surface_high_contrast(high: Option<bool>) {
+    contrast().set_surface(high.as_ref());
+}
+
+/// Reactive read of the active surface's own high-contrast choice, `None` where it follows the application's and the system's.
+pub fn use_surface_high_contrast() -> Option<bool> {
+    contrast().surface()
 }
 
 /// BCP 47 tags, most preferred first; empty where the platform reports none.

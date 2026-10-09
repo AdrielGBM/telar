@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use geometry_core::{Rect, Size, Transform};
+use geometry_core::{Insets, Rect, Size, Transform};
 use layout_core::{LayoutStyle, SizeDimension};
 use platform_core::{Event, PointerButton, PointerSource};
 use reactive_core::{dispose_owner, effect, owner_scope, signal};
@@ -198,4 +198,34 @@ fn a_host_routes_overlays_before_its_tree() {
         0,
         "the modal kept the press from the page behind it"
     );
+}
+
+#[test]
+fn a_canvas_in_an_environment_is_built_in_it() {
+    reset_layout_runtime();
+    let env = SurfaceEnv {
+        mode: Some(String::from("dusk")),
+        locale: Some(String::from("ar")),
+        direction: Some(Direction::Rtl),
+        control_size: Some(ControlSize::Large),
+        high_contrast: Some(true),
+        safe_area: Insets::new(44.0, 0.0, 34.0, 0.0),
+    };
+    let built_in = Rc::new(Cell::new(None));
+    let seen = Rc::clone(&built_in);
+    let canvas = SurfaceCanvas::new_in(Size::new(10.0, 10.0), &env, move || {
+        seen.set(Some(SurfaceEnv {
+            mode: theme_core::use_mode(),
+            locale: i18n_core::current_locale(),
+            direction: Some(crate::current_direction()),
+            control_size: Some(theme_core::current_control_size()),
+            high_contrast: preferences_core::high_contrast(),
+            safe_area: crate::use_safe_area_insets(),
+        }));
+        Ok(Box::new(Container::new(fill(), vec![])?) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    assert_eq!(built_in.take(), Some(env));
+    assert_eq!(canvas.direction(), Some(Direction::Rtl));
+    assert_eq!(canvas.safe_area(), Insets::new(44.0, 0.0, 34.0, 0.0));
 }

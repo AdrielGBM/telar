@@ -17,7 +17,7 @@ fn reading<T: std::fmt::Debug>(value: Option<T>) -> String {
 
 let system_scheme = memo(|| reading(telar::use_color_scheme()));
 let reduced = memo(|| reading(telar::use_system_reduced_motion()));
-let contrast = memo(|| reading(telar::use_high_contrast()));
+let contrast = memo(|| reading(telar::use_system_high_contrast()));
 let locales = memo(|| {
     let locales = telar::use_preferred_locales();
     if locales.is_empty() { "none reported".to_string() } else { locales.join(", ") }
@@ -39,7 +39,7 @@ col gap:20
             text "high contrast · {$contrast}" font_size:15 color:$theme.ink
             text "languages · {$locales}" font_size:15 color:$theme.ink
             text "negotiated against es, en · {$negotiated}" font_size:15 color:$theme.primary
-        code_line code:"use_color_scheme()   ·   use_system_reduced_motion()   ·   use_high_contrast()   ·   use_preferred_locales()"
+        code_line code:"use_color_scheme()   ·   use_system_reduced_motion()   ·   use_system_high_contrast()   ·   use_preferred_locales()"
     example title:"The safe area — what the system keeps of the surface"
         card gap:6
             text "{$safe_area}" font_size:13 color:$theme.ink

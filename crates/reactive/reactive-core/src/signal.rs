@@ -161,6 +161,17 @@ impl<T: Clone + 'static> RwSignal<T> {
     }
 }
 
+impl<T: PartialEq + 'static> RwSignal<T> {
+    /// Writes `value` only when it differs from the current one, returning whether it wrote. Subscribers are not notified for an equal value, and the comparison does not subscribe the caller.
+    pub fn set_if_changed(&self, value: T) -> bool {
+        let changed = self.peek_with(|current| *current != value);
+        if changed {
+            self.set(value);
+        }
+        changed
+    }
+}
+
 impl RwSignal<bool> {
     /// Flip a boolean signal in place — sugar for `.update(|v| *v = !*v)`, so `$flag.toggle()` reads cleanly.
     pub fn toggle(&self) {

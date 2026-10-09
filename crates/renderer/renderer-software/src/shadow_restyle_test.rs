@@ -77,3 +77,21 @@ fn a_rekeyed_text_shadow_keeps_drawing_while_its_blur_is_in_flight() {
         "shadow vanished while its blur was in flight: {during} vs {settled} settled"
     );
 }
+
+#[test]
+fn a_synchronous_renderer_draws_a_large_shadow_on_its_first_frame() {
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        W,
+        H,
+        SoftwareRendererConfig {
+            synchronous_shadows: true,
+            ..SoftwareRendererConfig::default()
+        },
+    );
+
+    assert!(draw(&mut renderer, "15:47") > 0);
+    assert!(
+        draw(&mut renderer, "15:48") > 0,
+        "a re-keyed shadow must be blurred inline rather than stood in for"
+    );
+}

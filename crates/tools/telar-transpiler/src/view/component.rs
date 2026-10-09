@@ -23,7 +23,7 @@ impl ViewGen<'_> {
         let props_attrs: Vec<&Attr> = el.attributes.iter().filter(|a| a.key != "slot").collect();
         let has_children = !el.children.is_empty();
 
-        let props_arg = self.component_props_arg(tag, &props_attrs, &el.classes);
+        let props_arg = self.component_props_arg(el, tag, &props_attrs);
 
         if !has_children {
             let code = format!("{pad}let {var} = {tag}({props_arg}, Children::default())?;");
@@ -86,23 +86,53 @@ impl ViewGen<'_> {
     /// **This is where the second type system used to live.** The old form was a `NameProps { … }` literal, which meant the emitter had to know the callee's field types to write each value: eight lists on `ComponentSig` said which props were colours, strings, readings, predicates, owned strings or `Option`s, and whether the struct derived `Default` so the tail could be `..Default::default()`. Every one of those was re-deriving something rustc already knew, and for the shipped catalogue they were hand-mirrored and free to drift.
     ///
     /// A setter answers all of it. `into` on the callee's field decides whether a literal coerces, the field's own type decides whether a `$signal` means the handle or a reading, `Option` needs no `Some(…)` because `From<T> for Option<T>` is std's, and a prop nobody set keeps its declared default. The emitter spells names it read from the markup and knows nothing else.
-    fn component_props_arg(&self, tag: &str, props_attrs: &[&Attr], classes: &[String]) -> String {
+    ///
+    /// The root of a preview reads each of its [`Self::implicit_args`] through the preview's args, so a control can change it, and logs the calls its callbacks receive.
+    fn component_props_arg(&self, el: &Element, tag: &str, props_attrs: &[&Attr]) -> String {
+        let root = self
+            .preview_root
+            .as_ref()
+            .filter(|root| std::ptr::eq(root.element, el));
+        let args = match root {
+            Some(root) if root.implicit_args => self.implicit_args(el),
+            _ => Vec::new(),
+        };
         let mut setters: String = props_attrs
             .iter()
             .map(|attr| {
                 let value = self
                     .baked_id_expr(tag, attr)
                     .unwrap_or_else(|| self.component_attr_expr(attr));
+                let value = match args.iter().any(|arg| std::ptr::eq(*arg, *attr)) {
+                    true => format!(
+                        "::telar::__preview_arg!(__preview, {}, {value})",
+                        rust_str(&attr.key)
+                    ),
+                    false => value,
+                };
                 format!(".{}({value})", attr.key)
             })
             .collect();
-        if let Some(amendment) = self.class_surface_style(classes) {
+        if let Some(amendment) = self.class_surface_style(&el.classes) {
             let _ = write!(setters, ".style({amendment})");
+        }
+        if root.is_some() {
+            setters.push_str(".__preview_actions(&__preview.actions())");
         }
         format!("{}::props(){setters}.build()", props_type(tag))
     }
 
-    /// The value of a prop that names an asset by id — `icon name:"mdi:home"` where `[telar.icons]` configures icons — or `None` for every other prop, which takes the ordinary emission.
+    /// The attributes of a preview's root component call that its controls can change: each written as a literal (a string, a number, a flag or a bool, a hex colour, a `Path::Variant`) and not an id the package bakes. A value reading `$state` or a closure stays as written, and so does anything else that is an expression.
+    pub(crate) fn implicit_args<'e>(&self, el: &'e Element) -> Vec<&'e Attr> {
+        el.attributes
+            .iter()
+            .filter(|attr| attr.key != "slot")
+            .filter(|attr| crate::preview::is_literal(&attr.value))
+            .filter(|attr| self.baked_id_expr(&el.tag, attr).is_none())
+            .collect()
+    }
+
+    /// The value of a prop that names an asset by id — `icon name:"mdi:home"` or `icon_button icon:"mdi:home"` where `[telar.icons]` configures icons — or `None` for every other prop, which takes the ordinary emission.
     ///
     /// A literal becomes the `(id, Arc<data>, monochrome)` triple the artifact answers for it where the package bakes it, or the id spelled in full where it resolves at run time, so a bare name is read in the default set here and a bare name with none is a `compile_error!` on its line. A value that is not a literal is a `compile_error!` naming runtime mode where every id must be baked; anywhere else it reaches the component as written, for its runtime source.
     fn baked_id_expr(&self, tag: &str, attr: &Attr) -> Option<String> {
@@ -111,7 +141,9 @@ impl ViewGen<'_> {
         let resolved = match &attr.value {
             Value::Quoted(id) => assets.literal_id(name, &attr.key, id.trim())?,
             _ => match assets.id_baking(name, &attr.key)? {
-                (kind, IdBaking::Required) => Err(AssetContext::dynamic_id_message(kind)),
+                (kind, IdBaking::Required) => {
+                    Err(AssetContext::dynamic_id_message(kind, name, &attr.key))
+                }
                 _ => return None,
             },
         };

@@ -1,26 +1,27 @@
-//! The top bar: the project's name, the search trigger and the view the workshop shows.
+//! The top bar: the project's name, the trigger of the command palette, the environment every canvas is shown in and the view the workshop shows.
 
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Children, Key, LayoutError, LayoutItem, LayoutStyle, Reactive, RectStyle, Role,
+    AlignItems, Children, LayoutError, LayoutItem, LayoutStyle, Reactive, RectStyle, Role,
     StyledContainer, Text, box_item,
 };
 use telar_components::{IconButtonProps, icon_button};
 use telar_devtools::WORKBENCH_GRID;
 use telar_icons::icon;
 
-use crate::state::{ViewMode, WorkshopState};
-use crate::strings::{self, SEARCH, VIEW_CANVAS, VIEW_DOCS, VIEW_MATRIX, WORKSHOP};
+use crate::keymap::{Action, Keymap};
+use crate::state::WorkshopState;
+use crate::strings::{self, FIND, WORKSHOP};
+use crate::{canvas_toolbar, view_switch};
 
 const HEIGHT: f32 = 40.0;
-const SEARCH_SHORTCUT: char = '/';
 
 pub(crate) fn top_bar(
     state: &WorkshopState,
+    keymap: &Keymap,
     project_name: Option<String>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let shortcut = state.clone();
     let bar = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -32,25 +33,17 @@ pub(crate) fn top_bar(
         |_| RectStyle::default(),
         vec![
             project(project_name)?,
-            search_trigger(state)?,
+            find_trigger(keymap)?,
             box_item(StyledContainer::new(
                 LayoutStyle::new().flex_grow(1.0),
                 |_| RectStyle::default(),
                 Vec::new(),
             )?),
-            view_label(state)?,
+            canvas_toolbar::environment(state)?,
+            view_switch::view_switch(state)?,
         ],
     )?
-    .role(Role::Banner)
-    .on_key(move |key: &Key| {
-        let modifiers = telar::modifiers();
-        let summoned =
-            *key == Key::Char(SEARCH_SHORTCUT) && !modifiers.is_ctrl && !modifiers.is_meta;
-        if summoned {
-            shortcut.focus_search();
-        }
-        summoned
-    });
+    .role(Role::Banner);
     Ok(box_item(bar))
 }
 
@@ -63,34 +56,16 @@ fn project(name: Option<String>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(label))
 }
 
-/// Takes the keyboard to the sidebar's search field, as the shortcut its tooltip names does from anywhere a field is not taking text.
-fn search_trigger(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let state = state.clone();
+/// Opens the command palette, as the shortcut its tooltip names does from anywhere a field is not taking text.
+fn find_trigger(keymap: &Keymap) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let keymap = keymap.clone();
     icon_button(
         IconButtonProps::props()
             .icon(icon!("lucide:search"))
-            .label(Reactive::of(|| strings::text(SEARCH)))
-            .shortcut(SEARCH_SHORTCUT.to_string())
-            .on_press(Rc::new(move || state.focus_search()))
+            .label(Reactive::of(|| strings::text(FIND)))
+            .shortcut(Action::Find.chords()[0].to_string())
+            .on_press(Rc::new(move || keymap.run(Action::Find)))
             .build(),
         Children::default(),
     )
-}
-
-fn view_label(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let view = state.view();
-    let label = Text::declaring(
-        move || strings::text(view_key(view.get())),
-        LayoutStyle::new(),
-        |text| text,
-    )?;
-    Ok(box_item(label))
-}
-
-fn view_key(view: ViewMode) -> &'static str {
-    match view {
-        ViewMode::Canvas => VIEW_CANVAS,
-        ViewMode::Matrix => VIEW_MATRIX,
-        ViewMode::Docs => VIEW_DOCS,
-    }
 }

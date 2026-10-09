@@ -10,6 +10,7 @@ fn key(k: Key) -> Event {
     Event::KeyPressed {
         key: k,
         modifiers: ModifiersState::default(),
+        unmodified: None,
     }
 }
 
@@ -20,6 +21,7 @@ fn chord(k: Key) -> Event {
             is_ctrl: true,
             ..ModifiersState::default()
         },
+        unmodified: None,
     }
 }
 
@@ -30,6 +32,7 @@ fn shifted(k: Key) -> Event {
             is_shift: true,
             ..ModifiersState::default()
         },
+        unmodified: None,
     }
 }
 
@@ -192,6 +195,7 @@ fn ctrl_chord_is_ignored_as_shortcut() {
             is_ctrl: true,
             ..Default::default()
         },
+        unmodified: None,
     };
     assert_eq!(area.on_event(&save), EventResult::Ignored);
     assert_eq!(value.get(), "hi");

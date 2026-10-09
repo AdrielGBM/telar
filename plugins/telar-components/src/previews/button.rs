@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 use telar::{Children, Color, Reactive};
 
 use crate::button::{ButtonProps, button};
@@ -25,7 +25,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )
         })
         .title("Inputs/Button")
-        .layout(Layout::Centered),
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes")),
         preview!(button: ButtonProps, "Emphasis", |p| {
             let accent = p.arg("accent", Color::TRANSPARENT);
             let props = ButtonProps::props().label(p.arg("label", "Save"));

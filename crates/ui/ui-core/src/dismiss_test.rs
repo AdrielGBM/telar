@@ -65,6 +65,7 @@ fn escape_dismisses_only_past_a_focused_field() {
     let esc = Event::KeyPressed {
         key: Key::Named(NamedKey::Escape),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     };
 
     let id = crate::focus::next_id();
@@ -117,6 +118,7 @@ mod transactions {
         Event::KeyPressed {
             key: Key::Named(named),
             modifiers: ModifiersState::default(),
+            unmodified: None,
         }
     }
 
@@ -365,6 +367,7 @@ fn escape_and_enter_go_past_a_focused_control_that_does_not_keep_them() {
     let pressed = |named| Event::KeyPressed {
         key: Key::Named(named),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     };
     let (node, _) = crate::new_leaf(layout_core::LayoutStyle::new()).unwrap();
 

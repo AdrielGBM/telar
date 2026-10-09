@@ -777,13 +777,18 @@ fn set_permissions(path: &Path, read_only: bool) {
 }
 
 #[test]
-fn a_previews_file_is_recognised_and_never_declared_as_a_component() {
+fn a_previews_file_is_declared_as_a_module_beside_the_component_it_previews() {
     assert!(is_previews_file(Path::new(
         "src/forms/checkbox.previews.rsx"
     )));
     assert!(!is_previews_file(Path::new("src/forms/checkbox.rsx")));
     assert!(!is_previews_file(Path::new("src/.previews.rsx")));
     assert!(!is_previews_file(Path::new("src/previews.rsx")));
+    let previews = Path::new("src/forms/checkbox.previews.rsx");
+    assert_eq!(component_name(previews), "checkbox");
+    assert_eq!(module_name(previews), "checkbox_previews");
+    assert_eq!(module_name(Path::new("src/forms/checkbox.rsx")), "checkbox");
+    assert_eq!(component_name(Path::new("src/previews.rsx")), "previews");
 
     let root = std::env::temp_dir().join(format!("rsx_previews_file_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
@@ -794,5 +799,10 @@ fn a_previews_file_is_recognised_and_never_declared_as_a_component() {
     let _ = std::fs::remove_dir_all(&root);
 
     assert!(out.contains("pub mod checkbox;"), "{out}");
-    assert!(!out.contains("previews"), "{out}");
+    assert!(
+        out.contains(
+            "#[path = \"../__generated/checkbox.previews.rs\"] pub mod checkbox_previews;"
+        ),
+        "{out}"
+    );
 }

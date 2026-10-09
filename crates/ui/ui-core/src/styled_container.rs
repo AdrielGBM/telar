@@ -1243,7 +1243,7 @@ impl StyledContainer {
                 cb(dx, dy);
                 EventResult::Handled
             }
-            Event::KeyPressed { key, modifiers } => {
+            Event::KeyPressed { key, modifiers, .. } => {
                 if let Some(id) = self.focusable.id
                     && focus::is_key_target(id)
                     && matches!(key, Key::Named(NamedKey::Tab))

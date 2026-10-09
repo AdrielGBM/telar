@@ -5,9 +5,10 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use telar::testing::named;
 use telar::{
-    AvailableSpace, Children, ComponentList, Container, Event, Key, LayoutItem, LayoutStyle,
-    NamedKey, box_item, compute_layout,
+    AvailableSpace, Children, ComponentList, Container, LayoutItem, LayoutStyle, NamedKey,
+    box_item, compute_layout,
     focus::{self, Role},
     signal,
 };
@@ -38,13 +39,6 @@ fn mount(items: Vec<Box<dyn LayoutItem>>) -> ComponentList {
     list
 }
 
-fn key(named: NamedKey) -> Event {
-    Event::KeyPressed {
-        key: Key::Named(named),
-        modifiers: telar::ModifiersState::default(),
-    }
-}
-
 /// The plain case, and the one that was false for every button in the catalogue: Tab arrives, Enter fires.
 #[test]
 fn a_button_can_be_reached_and_pressed_without_a_mouse() {
@@ -65,7 +59,7 @@ fn a_button_can_be_reached_and_pressed_without_a_mouse() {
 
     focus::focus_next();
     assert!(focus::current().is_some(), "Tab reaches the button");
-    tree.on_event(&key(NamedKey::Enter));
+    tree.on_event(&named(NamedKey::Enter));
     assert!(fired.get(), "and Enter presses it");
 }
 
@@ -84,10 +78,10 @@ fn a_slider_moves_under_the_arrow_keys() {
     let mut tree = mount(vec![item]);
 
     focus::focus_next();
-    tree.on_event(&key(NamedKey::ArrowRight));
+    tree.on_event(&named(NamedKey::ArrowRight));
     assert_eq!(value.get(), 0.75);
-    tree.on_event(&key(NamedKey::ArrowLeft));
-    tree.on_event(&key(NamedKey::ArrowLeft));
+    tree.on_event(&named(NamedKey::ArrowLeft));
+    tree.on_event(&named(NamedKey::ArrowLeft));
     assert_eq!(value.get(), 0.25);
 }
 
@@ -109,7 +103,7 @@ fn enter_toggles_a_focused_checkbox() {
     let mut tree = mount(vec![item]);
 
     focus::focus_next();
-    tree.on_event(&key(NamedKey::Enter));
+    tree.on_event(&named(NamedKey::Enter));
     assert!(checked.get(), "Enter commits what a tap would");
 }
 

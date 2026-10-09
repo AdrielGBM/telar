@@ -211,6 +211,7 @@ fn a_handler_inside_a_provider_reads_the_provider() {
     tree.on_event(&Event::KeyPressed {
         key: Key::Char('a'),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     });
     assert_eq!(*heard.borrow(), vec![RED]);
 }

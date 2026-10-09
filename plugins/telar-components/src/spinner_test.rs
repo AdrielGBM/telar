@@ -3,7 +3,7 @@ use telar::NodeId;
 use super::*;
 
 fn lay_out(node: NodeId) {
-    crate::harness::lay_out(node, 100.0, 100.0);
+    telar::testing::lay_out(node, 100.0, 100.0);
 }
 
 #[test]

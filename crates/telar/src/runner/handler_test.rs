@@ -291,6 +291,35 @@ fn a_pass_that_runs_with_nothing_due_lets_the_loop_sleep_again() {
     );
 }
 
+/// A timer is a deadline, not an animation: the loop sleeps until it comes due rather than drawing frames to find out, and the pass at the deadline runs it.
+#[test]
+fn a_pending_timer_sleeps_the_loop_until_it_comes_due() {
+    let (mut handler, window) = resumed_and_settled();
+    let delay = std::time::Duration::from_secs(5);
+    let fired = Rc::new(Cell::new(false));
+    let _timer = reactive_core::run_after(delay, {
+        let fired = Rc::clone(&fired);
+        move || fired.set(true)
+    });
+
+    run_a_pass(&mut handler, &window);
+    let wait = handler.about_to_wait();
+    assert!(!fired.get());
+    assert!(
+        wait.is_some_and(|wait| wait > FRAME_BUDGET && wait <= delay),
+        "the loop sleeps until the timer, no sooner and no later, got {wait:?}"
+    );
+
+    reactive_core::advance_timer_clock(delay);
+    run_a_pass(&mut handler, &window);
+    assert!(fired.get(), "the pass at the deadline runs it");
+    assert_eq!(
+        handler.about_to_wait(),
+        None,
+        "with the timer gone there is nothing to wake for"
+    );
+}
+
 struct BackgroundHost {
     landed: Rc<Cell<bool>>,
     collected: Rc<Cell<bool>>,
@@ -394,6 +423,7 @@ fn the_runner_feeds_the_keyboard_registry() {
         Event::KeyPressed {
             key: platform_core::Key::Named(platform_core::NamedKey::ArrowUp),
             modifiers: Default::default(),
+            unmodified: None,
         },
         &window,
     );
@@ -830,6 +860,73 @@ fn the_window_shows_the_cursor_the_box_under_the_pointer_asks_for() {
     );
 }
 
+/// A blocking overlay over the bottom half of a 120x80 window that takes every pointer event landing on it.
+struct LowerBlanket;
+
+impl ui_tree::OverlaySink for LowerBlanket {
+    fn content_rect(&self) -> geometry_core::Rect {
+        geometry_core::Rect::new(0.0, 40.0, 120.0, 40.0)
+    }
+
+    fn dispatch(&self, _event: &Event) -> EventResult {
+        EventResult::Handled
+    }
+}
+
+/// A move the overlay layer takes skips the tree's hit-testing, not the tree: the box the pointer slid off hears it leave, and a drag under way keeps going.
+#[test]
+fn a_box_hovered_under_an_overlay_hears_the_pointer_move_onto_it() {
+    use platform_core::{Cursor, PointerButton, PointerSource};
+
+    let mut handler = build_app_handler::<HeadlessWindow, ()>(
+        Box::new(LocalApp(Handles)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "covered-test".to_string(),
+        SurfaceRenderer::builtin(),
+    );
+    let window = HeadlessWindow::new(120, 80);
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    run_a_pass(&mut handler, &window);
+    let blanket = ui_tree::register_overlay(Rc::new(LowerBlanket));
+
+    let moved = |x, y| Event::PointerMoved {
+        x,
+        y,
+        source: PointerSource::Mouse,
+    };
+    handler.on_event(moved(100.0, 20.0), &window);
+    assert_eq!(window.cursor(), Cursor::Grab, "over the card");
+    handler.on_event(moved(100.0, 60.0), &window);
+    assert_eq!(
+        window.cursor(),
+        Cursor::Default,
+        "the card under the overlay is no longer hovered"
+    );
+
+    handler.on_event(moved(20.0, 20.0), &window);
+    handler.on_event(
+        Event::PointerPressed {
+            x: 20.0,
+            y: 20.0,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        },
+        &window,
+    );
+    handler.on_event(moved(20.0, 60.0), &window);
+    assert_eq!(
+        window.cursor(),
+        Cursor::EwResize,
+        "a drag carried under the overlay keeps its shape"
+    );
+
+    ui_tree::unregister_overlay(blanket);
+}
+
 thread_local! {
     static DROPPED_UNDER: Cell<Option<reactive_core::SurfaceHandle>> = const { Cell::new(None) };
 }
@@ -944,6 +1041,88 @@ fn a_history_the_platform_reports_is_not_echoed_to_it() {
         [at("/")],
         "the platform already stands there"
     );
+}
+
+/// A location the hot channel names opens as a link opened into the running app does: on top of where the app is.
+#[cfg(feature = "dev")]
+#[test]
+fn a_link_from_the_hot_channel_opens_on_top_of_where_the_app_is() {
+    let at = |path: &str| platform_core::LocationFormat::root().parse(path).unwrap();
+    let mut handler = handler();
+    handler.location = Some(super::super::location::LocationBinding::new(Box::new(
+        platform_core::FixedLocation::new([at("/preview/a")]),
+    )));
+    handler.hand_over_location();
+    let window = HeadlessWindow::new(4, 4);
+
+    handler.open_link("/preview/b?args=n:2", &window);
+    assert_eq!(
+        platform_core::location_history(),
+        [at("/preview/a"), at("/preview/b?args=n:2")]
+    );
+}
+
+/// Counts the loop wakes the runner hands the app's runtime.
+#[cfg(feature = "dev")]
+struct Woken {
+    app: LocalApp<Unchanging>,
+    wakers: Rc<Cell<u32>>,
+}
+
+#[cfg(feature = "dev")]
+impl AppRuntime for Woken {
+    fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
+        self.app.mount()
+    }
+
+    fn clear_color(&self) -> Option<renderer_core::Color> {
+        self.app.clear_color()
+    }
+
+    fn window_config(&self) -> Option<platform_core::WindowConfig> {
+        self.app.window_config()
+    }
+
+    fn on_frame(&mut self, ctx: &mut platform_core::AppCtx) {
+        self.app.on_frame(ctx)
+    }
+
+    fn install_task_waker(&self, _waker: platform_core::RedrawWaker) {
+        self.wakers.set(self.wakers.get() + 1);
+    }
+}
+
+#[cfg(feature = "dev")]
+fn woken(wakers: &Rc<Cell<u32>>) -> Box<dyn AppRuntime> {
+    Box::new(Woken {
+        app: LocalApp(Unchanging),
+        wakers: Rc::clone(wakers),
+    })
+}
+
+/// A reloaded dylib links a reactive-core copy of its own, whose waker slot starts empty: without the wake handed over again, its tasks and timers sit until the next input event.
+#[cfg(feature = "dev")]
+#[test]
+fn a_runtime_swapped_in_by_a_reload_is_handed_the_loop_wake() {
+    let first = Rc::new(Cell::new(0));
+    let mut handler = build_app_handler::<HeadlessWindow, ()>(
+        woken(&first),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "reload-waker-test".to_string(),
+        SurfaceRenderer::builtin(),
+    );
+    let window = HeadlessWindow::new(40, 40);
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    assert_eq!(first.get(), 1, "precondition: the resume hands one over");
+
+    let reloaded = Rc::new(Cell::new(0));
+    handler.swap_app(woken(&reloaded), &window);
+    assert_eq!(reloaded.get(), 1, "the incoming runtime is handed the wake");
+    assert!(handler.tree.is_some(), "and its tree is mounted");
 }
 
 /// An app of one `text` naming no family, as `.rsx` writes one.
@@ -1163,6 +1342,62 @@ fn an_overlay_that_needs_frames_keeps_them_coming_while_the_app_is_idle() {
         handler.dev.frames,
         settled + 1,
         "and the wake composes a frame"
+    );
+}
+
+/// An overlay whose picture changes while the app beneath it stays still.
+#[derive(Default)]
+struct Repainting {
+    dirty: bool,
+    frames: u32,
+}
+
+impl DevOverlay for Repainting {
+    fn on_frame<'a>(
+        &mut self,
+        base: &'a [renderer_core::DrawCommand],
+        _window_w: f32,
+        _window_h: f32,
+        _tree_dirty: bool,
+    ) -> std::borrow::Cow<'a, [renderer_core::DrawCommand]> {
+        self.frames += 1;
+        self.dirty = false;
+        std::borrow::Cow::Borrowed(base)
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+}
+
+/// A renderer re-presents a frame whose generation it already drew, so an overlay that changed over a still app has to move the number, and its change must not wait for a keepalive that a rasterising run never takes.
+#[test]
+fn an_overlay_that_changed_is_drawn_at_once_under_a_new_generation() {
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = overlaid::<Repainting>(Box::new(LocalApp(Unchanging)));
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    handler.about_to_wait();
+    run_a_pass(&mut handler, &window);
+    let settled = handler.dev.frames;
+    let drawn = handler.generation.last;
+
+    run_a_pass(&mut handler, &window);
+    assert_eq!(
+        handler.dev.frames, settled,
+        "precondition: a clean overlay over a clean tree is handed no frame"
+    );
+
+    handler.dev.dirty = true;
+    run_a_pass(&mut handler, &window);
+    assert_eq!(
+        handler.dev.frames,
+        settled + 1,
+        "the changed overlay is composed in the next pass"
+    );
+    assert!(
+        handler.generation.last > drawn,
+        "under a generation the renderer has not drawn"
     );
 }
 

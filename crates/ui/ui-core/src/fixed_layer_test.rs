@@ -304,6 +304,7 @@ fn a_switch_in_a_layer_is_reached_by_tab_and_flipped_by_the_keyboard() {
     let key = |named| Event::KeyPressed {
         key: platform_core::Key::Named(named),
         modifiers: platform_core::ModifiersState::default(),
+        unmodified: None,
     };
     assert_eq!(
         layer.on_event(&key(platform_core::NamedKey::Space)),
@@ -383,4 +384,43 @@ fn a_box_in_a_layer_scaled_from_its_start_takes_the_pointer_where_it_is_drawn() 
         "past what it draws the press goes on to the page"
     );
     assert_eq!(taps.get(), 1);
+}
+
+fn moved(x: f64, y: f64) -> Event {
+    Event::PointerMoved {
+        x,
+        y,
+        source: PointerSource::Mouse,
+    }
+}
+
+#[test]
+fn a_box_in_a_layer_stops_being_hovered_once_the_pointer_moves_off_the_layer() {
+    reset_layout_runtime();
+    set_surface_size(SURFACE);
+    let hovered = Rc::new(Cell::new(false));
+    let bar = StyledContainer::new(
+        LayoutStyle::new()
+            .width(SizeDimension::Percent(1.0))
+            .height(48.0),
+        |_| renderer_core::RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .on_hover({
+        let hovered = hovered.clone();
+        move |now| hovered.set(now)
+    });
+    let _layer = FixedLayer::new(LayoutStyle::new().flex_column(), vec![Box::new(bar)]).unwrap();
+    relayout_if_dirty();
+
+    dispatch_overlays(&moved(400.0, 20.0));
+    assert!(hovered.get());
+
+    assert_eq!(
+        dispatch_overlays(&moved(400.0, 300.0)),
+        EventResult::Ignored,
+        "the move below the bar is the page's"
+    );
+    assert!(!hovered.get(), "but the bar hears that the pointer left it");
 }

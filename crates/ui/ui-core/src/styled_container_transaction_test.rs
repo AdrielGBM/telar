@@ -38,6 +38,7 @@ fn key(named: NamedKey) -> Event {
     Event::KeyPressed {
         key: Key::Named(named),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     }
 }
 

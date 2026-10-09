@@ -9,7 +9,9 @@
 
 #![cfg(feature = "dev")]
 
+use std::cell::Cell;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::Duration;
 
 use platform_core::{Event, EventHandler, PointerButton, PointerSource};
@@ -78,14 +80,15 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
     handler.new_events();
     assert!(handler.on_resume(&window), "headless renderer init failed");
     handler.about_to_wait();
-    for event in [Event::WindowResized {
-        width: w,
-        height: h,
-    }] {
-        handler.new_events();
-        handler.on_event(event, &window);
-        handler.about_to_wait();
-    }
+    handler.new_events();
+    handler.on_event(
+        Event::WindowResized {
+            width: w,
+            height: h,
+        },
+        &window,
+    );
+    handler.about_to_wait();
     handler.new_events();
     handler.on_redraw(&window);
     handler.about_to_wait();
@@ -134,4 +137,47 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
          re-composing on its own. If the dylib was last built without `telar/hot-reload` it exports no \
          tree shims and the host mounted the tree itself — rebuild it as the module docs describe."
     );
+}
+
+/// The host draws UI of its own — the devtools overlay — with its own reactive and motion copies, which nothing inside the dylib reaches: the hot-reloaded app's runtime has to drive the host's motion, tasks and timers as well as the dylib's.
+#[test]
+#[ignore = "needs a hot-reload dylib built first; see the module docs"]
+fn the_host_runtime_is_driven_alongside_the_dylibs() {
+    let path = dylib_path();
+    assert!(path.exists(), "no dylib at {}", path.display());
+    let app = telar::hot::load_hot_app(&path).expect("dlopen failed");
+
+    let fired = Rc::new(Cell::new(false));
+    let firing = Rc::clone(&fired);
+    let _timer = telar::run_after(Duration::ZERO, move || firing.set(true));
+    assert_eq!(app.until_next_timer(), Some(Duration::ZERO));
+    app.fire_timers();
+    assert!(fired.get(), "the host's timer fired");
+
+    let delivered = Rc::new(Cell::new(None));
+    let delivering = Rc::clone(&delivered);
+    let _task = telar::spawn_task(|| 7, move |value| delivering.set(Some(value)));
+    for _ in 0..500 {
+        app.drain_tasks();
+        if delivered.get().is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(delivered.get(), Some(7), "the host's task delivered");
+
+    let fade = telar::motion::Animated::new(
+        0.0f32,
+        telar::motion::tween(Duration::from_millis(100), telar::motion::Easing::Linear),
+    );
+    fade.retarget(1.0);
+    assert!(app.motion_has_active(), "the host's animation is in flight");
+    for _ in 0..50 {
+        app.motion_tick(std::time::Instant::now());
+        if fade.get() > 0.0 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(fade.get() > 0.0, "the host's animation was ticked");
 }

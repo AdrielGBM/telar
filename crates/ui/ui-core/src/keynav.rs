@@ -4,6 +4,7 @@
 //!
 //! The important half of the contract is the negative one: **everything [`KeyNav::interpret`] returns `None` for must still reach a focused text field as typing.** A list that swallows `j` cannot also be searched, which is why the vim bindings are off unless a caller asks for them.
 
+use layout_core::Direction;
 use platform_core::{Key, NamedKey};
 
 /// A default vertical list: arrows, Home/End, Enter and Escape, and no vim bindings.
@@ -13,6 +14,7 @@ impl Default for KeyNav {
             vim: false,
             horizontal: false,
             grid: false,
+            right_to_left: false,
         }
     }
 }
@@ -43,11 +45,19 @@ pub struct KeyNav {
     pub horizontal: bool,
     /// The list wraps into rows, so it uses *both* pairs of arrows: Left/Right for one tile and Up/Down for a whole row. Only a grid can, which is why it is a mode rather than the default.
     pub grid: bool,
+    /// Left/Right follow the writing direction, so in a right-to-left surface Left moves forward. Only the arrows flip: the vim letters name physical keys.
+    pub right_to_left: bool,
 }
 
 impl KeyNav {
     pub fn horizontal(mut self) -> Self {
         self.horizontal = true;
+        self
+    }
+
+    /// Reads Left/Right along `direction`: the arrow pointing the way the text runs is the one that moves forward.
+    pub fn reading(mut self, direction: Direction) -> Self {
+        self.right_to_left = direction.is_rtl();
         self
     }
 
@@ -61,7 +71,10 @@ impl KeyNav {
     /// What `key` asks the list to do, or `None` when it is not a navigation key — which is the important half of the contract: everything this returns `None` for must still reach a focused text field as typing.
     pub fn interpret(self, key: &Key) -> Option<KeyNavMove> {
         let (forward, back) = if self.horizontal {
-            (NamedKey::ArrowRight, NamedKey::ArrowLeft)
+            match self.right_to_left {
+                true => (NamedKey::ArrowLeft, NamedKey::ArrowRight),
+                false => (NamedKey::ArrowRight, NamedKey::ArrowLeft),
+            }
         } else {
             (NamedKey::ArrowDown, NamedKey::ArrowUp)
         };

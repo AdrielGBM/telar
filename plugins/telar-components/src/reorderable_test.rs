@@ -1,12 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use telar::testing::{lay_out_row, moved, press, release, route};
 use telar::{
     Component, LayoutItem, LayoutStyle, RectStyle, RwSignal, StyledContainer, box_item, signal,
 };
 
 use super::*;
-use crate::harness::{lay_out_row, moved, press, release, route};
 use crate::test_support::fresh_layout_runtime;
 
 const ITEM: f32 = 100.0;

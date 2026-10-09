@@ -141,8 +141,8 @@ fn flipping_direction_moves_logical_padding_to_the_other_edge() {
     lay_out(&mut engine, box_);
     assert_eq!(
         engine.layout(child).unwrap().x,
-        0.0,
-        "padding moved to the right edge, so the child starts flush left"
+        230.0,
+        "the padding moved to the right edge, and the child starts against it"
     );
 }
 
@@ -722,4 +722,76 @@ fn a_measured_leaf_hears_the_content_width_of_the_box_holding_it() {
             );
         }
     }
+}
+
+#[test]
+fn the_box_model_is_what_layout_resolved_on_physical_edges() {
+    let mut engine = LayoutEngine::new();
+    let child = engine
+        .new_leaf(
+            LayoutStyle::new()
+                .width(50.0)
+                .height(10.0)
+                .margin(crate::style::Margin::all(3.0)),
+        )
+        .unwrap();
+    let box_ = engine
+        .new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(300.0)
+                .height(100.0)
+                .padding_start(20.0)
+                .padding_vertical(4.0)
+                .gap(6.0),
+            &[child],
+        )
+        .unwrap();
+    lay_out(&mut engine, box_);
+
+    let model = engine.box_model(box_).unwrap();
+    assert_eq!(
+        model.padding,
+        geometry_core::Insets::new(4.0, 0.0, 4.0, 20.0)
+    );
+    assert_eq!(model.gap, Size::new(6.0, 6.0));
+    assert_eq!(model.margin, geometry_core::Insets::default());
+    assert_eq!(
+        engine.box_model(child).unwrap().margin,
+        geometry_core::Insets::all(3.0)
+    );
+
+    engine.set_direction(Direction::Rtl);
+    engine.mark_dirty(box_).unwrap();
+    lay_out(&mut engine, box_);
+    assert_eq!(
+        engine.box_model(box_).unwrap().padding,
+        geometry_core::Insets::new(4.0, 20.0, 4.0, 0.0),
+        "the logical start edge moved to the right"
+    );
+}
+
+#[test]
+fn a_percentage_gap_is_taken_against_the_content_area() {
+    let mut engine = LayoutEngine::new();
+    let box_ = engine
+        .new_leaf(
+            LayoutStyle::new()
+                .flex_row()
+                .width(200.0)
+                .height(100.0)
+                .padding_all(10.0)
+                .gap_x(SizeDimension::Percent(0.5)),
+        )
+        .unwrap();
+    lay_out(&mut engine, box_);
+    assert_eq!(engine.box_model(box_).unwrap().gap, Size::new(90.0, 0.0));
+}
+
+#[test]
+fn the_box_model_of_a_freed_node_is_an_error() {
+    let mut engine = LayoutEngine::new();
+    let node = engine.new_leaf(LayoutStyle::new()).unwrap();
+    engine.remove(node);
+    assert!(engine.box_model(node).is_err());
 }

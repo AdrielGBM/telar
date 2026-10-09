@@ -233,3 +233,21 @@ fn a_requested_id_beats_a_requested_component_on_the_app() {
     let tree = lay_out(&app);
     assert!(find_text(&tree, "field body"));
 }
+
+#[test]
+fn without_its_chrome_the_workshop_is_the_preview_alone() {
+    telar::hot_restore_json(r#"{"@workshop/chrome":"false"}"#);
+    let runtime = LocalApp(WorkshopApp::new(entries()).project_name("bench"));
+    let tree = lay_out(&runtime.0);
+    assert!(find_text(&tree, "primary body"));
+    let announced = runtime.access_snapshot(&tree.commands());
+    for name in ["Previews", "Panels", "Canvas tools", "Remount", "Copy link"] {
+        assert!(
+            !announced.iter().any(|node| node.name == name),
+            "{name} is shown"
+        );
+    }
+    for text in ["bench", "Primary"] {
+        assert!(!find_text(&tree, text), "{text} is drawn");
+    }
+}

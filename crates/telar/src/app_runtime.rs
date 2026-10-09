@@ -128,7 +128,17 @@ pub trait AppRuntime: 'static {
         reactive_core::drain_tasks();
     }
 
-    /// Gives the reactive runtime the wake a finishing worker uses to run a frame. Without it a task delivers its result into a runtime whose waker slot is empty, and nothing runs until the next input event.
+    /// Runs the callbacks of the [`run_after`](crate::run_after) timers that have come due, on the UI thread.
+    fn fire_timers(&self) {
+        reactive_core::fire_timers();
+    }
+
+    /// How long until the earliest pending timer comes due, so the loop sleeps exactly that long rather than drawing frames to find out.
+    fn until_next_timer(&self) -> Option<std::time::Duration> {
+        reactive_core::until_next_timer()
+    }
+
+    /// Gives the reactive runtime the wake a finishing worker, or a timer due sooner than the loop meant to sleep, uses to run a frame. Without it a task delivers its result into a runtime whose waker slot is empty, and nothing runs until the next input event.
     fn install_task_waker(&self, waker: RedrawWaker) {
         reactive_core::set_task_waker(move || waker.wake());
     }

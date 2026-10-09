@@ -77,6 +77,11 @@ where
             None => self.thread.peek(),
         }
     }
+
+    /// Non-reactive read of the thread's value, whatever override the active surface has.
+    pub fn peek_thread(self) -> Value {
+        self.thread.peek()
+    }
 }
 
 /// Declares a [`SurfaceScoped`] value: a thread-wide signal starting at `init`, a per-surface override, the `Context`/`Guard` pair a surface swaps the override with, and a private `fn name() -> SurfaceScoped<..>` the module's public functions go through.

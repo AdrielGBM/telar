@@ -216,6 +216,11 @@ fn snapped_offset(x: f32, y: f32) -> (f32, f32) {
     (grid.snap_pos_x(x), grid.snap_pos_y(y))
 }
 
+/// Whether an offset at `offset`, between `0` and `max`, has room to move as a wheel `delta` asks: a positive delta scrolls back towards the start.
+fn travels(offset: f32, delta: f32, max: f32) -> bool {
+    (delta > 0.0 && offset > 0.0) || (delta < 0.0 && offset < max)
+}
+
 /// Read by the drawing, the pointer mapping and the input region alike, so all three agree on where the content sits.
 fn content_origin(viewport: Rect, scroll_x: f32, scroll_y: f32) -> (f32, f32) {
     let (sx, sy) = snapped_offset(scroll_x, scroll_y);
@@ -251,11 +256,17 @@ fn handle_scroll_event(
             return EventResult::Handled;
         }
         let (delta_x, delta_y) = delta.pixels();
-        // Here rather than where the event arrived: this is where the scroll is known to be this area's. Recorded earlier, an outer area built up the speed of a gesture its content had consumed.
-        motion.velocity.record(delta_y);
         let content_rect = content_rect_signal.get();
         let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
         let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
+        // An area with no room left the way the wheel turns hands it on, so a code block that only scrolls sideways, or a list already at its end, lets the page around it scroll.
+        if !travels(scroll_x.peek(), delta_x, max_scroll_x)
+            && !travels(scroll_y.peek(), delta_y, max_scroll_y)
+        {
+            return EventResult::Ignored;
+        }
+        // Here rather than where the event arrived: this is where the scroll is known to be this area's. Recorded earlier, an outer area built up the speed of a gesture its content had consumed.
+        motion.velocity.record(delta_y);
         // A notch says how far, never how fast, so it is the one scroll worth easing across. A trackpad and a finger report pixels already travelled, and animating those would animate a movement that has happened.
         if ui_tree::smooth_wheel() && matches!(delta, platform_core::ScrollDelta::Lines { .. }) {
             glide_axis(&mut motion.glide_x, scroll_x, -delta_x, (0.0, max_scroll_x));
@@ -1128,7 +1139,7 @@ impl Component for LayoutScrollArea {
             self.core.follow(*x, *y);
             return EventResult::Handled;
         }
-        if let Event::KeyPressed { key, modifiers } = event
+        if let Event::KeyPressed { key, modifiers, .. } = event
             && self.focus.is_some_and(focus::is_key_target)
             && let Some((x, y)) = self.keyed_offset(key, *modifiers)
         {

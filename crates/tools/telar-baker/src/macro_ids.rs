@@ -43,6 +43,8 @@ pub(crate) fn collect_macro_ids(
         };
         out.push(IdRef {
             kind,
+            tag: name.to_string(),
+            prop: kind.attr.to_string(),
             literal: Some(id.trim().to_string()),
             written: written.to_string(),
             file: file.to_path_buf(),

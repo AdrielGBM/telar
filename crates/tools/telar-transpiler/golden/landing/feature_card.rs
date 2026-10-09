@@ -51,11 +51,13 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
     Ok(Box::new(__sbox_0))
 }
 
+::telar::__previews! {
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
+    let __node_0 = feature_card(FeatureCardProps::props().icon(::telar::__preview_arg!(__preview, "icon", "⚡")).title(::telar::__preview_arg!(__preview, "title", "Fast")).body(::telar::__preview_arg!(__preview, "body", "Software and wgpu renderers with dirty-tracking and scroll-blit detection.")).__preview_actions(&__preview.actions()).build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
@@ -63,13 +65,20 @@ pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
 pub fn feature_card_preview_1(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    let __node_0 = feature_card(FeatureCardProps::props().icon("📱").title("Cross-platform").body("One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.").build(), Children::default())?;
+    let __node_0 = feature_card(FeatureCardProps::props().icon(::telar::__preview_arg!(__preview, "icon", "📱")).title(::telar::__preview_arg!(__preview, "title", "Cross-platform")).body(::telar::__preview_arg!(__preview, "body", "One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.")).__preview_actions(&__preview.actions()).build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
 pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--fast"), "feature_card", "Fast", feature_card_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 19),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 19)
+        .source("[preview \"Fast\"]\nfeature_card icon:\"⚡\" title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"", &[::telar::preview::SourceSpan::new(0, 135, 19)])
+        .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
+        .args(&[::telar::preview::ArgSpec::new("icon").default("\"⚡\""), ::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")]),
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--long-body"), "feature_card", "Long body", feature_card_preview_1)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 22),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 22)
+        .source("[preview \"Long body\"]\nfeature_card icon:\"📱\" title:\"Cross-platform\" body:\"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.\"", &[::telar::preview::SourceSpan::new(0, 205, 22)])
+        .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
+        .args(&[::telar::preview::ArgSpec::new("icon").default("\"📱\""), ::telar::preview::ArgSpec::new("title").default("\"Cross-platform\""), ::telar::preview::ArgSpec::new("body").default("\"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.\"")]),
 ];
+}

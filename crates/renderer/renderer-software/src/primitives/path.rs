@@ -104,6 +104,7 @@ pub(crate) fn draw_path(
         crate::primitives::PendingShadow,
     >,
     recent_path_shadow: &mut Option<(PathShadowCacheKey, u32, u32)>,
+    synchronous_shadows: bool,
 ) {
     let path_hash = hash_path_data(data);
     let Some(path) = build_skia_path(data) else {
@@ -194,6 +195,7 @@ pub(crate) fn draw_path(
                 pending_path_shadows,
                 recent_path_shadow,
                 cache_key,
+                synchronous_shadows,
                 painted,
                 draw_x,
                 draw_y,

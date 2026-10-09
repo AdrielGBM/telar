@@ -1,9 +1,14 @@
-//! [`tabs`]: a row of pills selecting one index.
+//! [`tabs`]: a row of pills selecting one index, and [`tab_list`], the same row selecting any value.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use telar::focus::{self, FocusId};
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError,
-    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    Text, TextStyle, box_item, focus::Role, signal,
+    Accessible, AlignItems, BorderRadius, Children, Color, Container, JustifyContent, Key, KeyNav,
+    KeyNavMove, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal,
+    ShapeStyle, StyledContainer, Text, TextStyle, box_item, current_direction, focus::Role,
+    key_nav_apply, signal,
 };
 
 use crate::shared;
@@ -49,6 +54,30 @@ pub struct TabsProps {
     pub label: Option<Reactive<String>>,
 }
 
+/// One tab of a [`tab_list`]: the value it selects, its name, and optionally an item drawn after the name, such as a count.
+pub struct Tab<T> {
+    value: T,
+    label: Reactive<String>,
+    trailing: Option<Box<dyn LayoutItem>>,
+}
+
+impl<T> Tab<T> {
+    /// A tab selecting `value`, named `label`; a reactive label follows the language or whatever else it reads.
+    pub fn new(value: T, label: impl Into<Reactive<String>>) -> Self {
+        Self {
+            value,
+            label: label.into(),
+            trailing: None,
+        }
+    }
+
+    /// Draws `item` after the tab's name. It is not part of the name a reader hears.
+    pub fn trailing(mut self, item: Box<dyn LayoutItem>) -> Self {
+        self.trailing = Some(item);
+        self
+    }
+}
+
 /// A row of pills selecting one index.
 pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TabsProps {
@@ -59,33 +88,31 @@ pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>
     } = props;
     // Uncontrolled: own the index so the bar still tracks the active tab when the caller binds no signal.
     let selected = selected.unwrap_or_else(|| signal(0u32));
-    let mut tab_items: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(items.len());
-    for (i, label) in items.into_iter().enumerate() {
-        let idx = i as u32;
-        let label_selected = selected;
-        let label_widget = Text::declaring(
-            move || label.to_string(),
-            LayoutStyle::new(),
-            move |t| tab_text(t, label_selected.get() == idx),
-        )?;
+    let entries = items
+        .into_iter()
+        .zip(0u32..)
+        .map(|(name, index)| Tab::new(index, name))
+        .collect();
+    tab_list(selected, entries, color, label)
+}
 
-        let base_selected = selected;
-        let base_color = color.clone();
-        let hover_selected = selected;
-        let hover_color = color.clone();
-        let announced_selected = selected;
-        let press_selected = selected;
-        let tab = StyledContainer::new(
-            tab_box(),
-            move |_r| tab_rect(base_selected.get() == idx, &base_color, false),
-            vec![box_item(label_widget)],
-        )?
-        .styled_by(tab_box)
-        .hover_style(move |_r| tab_rect(hover_selected.get() == idx, &hover_color, true))
-        .control(Role::Tab)
-        .toggled(move || announced_selected.get() == idx)
-        .on_press(move || press_selected.set(idx));
-        tab_items.push(box_item(tab));
+/// The row of pills behind [`tabs`], selecting any `Copy` value instead of an index, so a caller whose selection is an enum binds it directly.
+///
+/// While one tab holds focus the arrows (following the writing direction), Home and End move the selection and focus along the row, wrapping at either end.
+pub fn tab_list<T>(
+    selected: RwSignal<T>,
+    entries: Vec<Tab<T>>,
+    color: Reactive<Color>,
+    label: Option<Reactive<String>>,
+) -> Result<Box<dyn LayoutItem>, LayoutError>
+where
+    T: Copy + PartialEq + 'static,
+{
+    let values: Rc<[T]> = entries.iter().map(|entry| entry.value).collect();
+    let focus_ids: Rc<RefCell<Vec<FocusId>>> = Rc::default();
+    let mut tab_items: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(entries.len());
+    for (index, entry) in entries.into_iter().enumerate() {
+        tab_items.push(tab(selected, entry, index, &color, &values, &focus_ids)?);
     }
 
     let row = Container::new(bar(), tab_items)?
@@ -95,6 +122,76 @@ pub fn tabs(props: TabsProps, _children: Children) -> Result<Box<dyn LayoutItem>
         Some(label) => box_item(row.a11y_label(move || label.get())),
         None => box_item(row),
     })
+}
+
+fn tab<T>(
+    selected: RwSignal<T>,
+    entry: Tab<T>,
+    index: usize,
+    color: &Reactive<Color>,
+    values: &Rc<[T]>,
+    focus_ids: &Rc<RefCell<Vec<FocusId>>>,
+) -> Result<Box<dyn LayoutItem>, LayoutError>
+where
+    T: Copy + PartialEq + 'static,
+{
+    let Tab {
+        value,
+        label,
+        trailing,
+    } = entry;
+    let name = label.clone();
+    let name_widget = Text::declaring(
+        move || label.get(),
+        LayoutStyle::new(),
+        move |t| tab_text(t, selected.get() == value),
+    )?;
+    let mut content = vec![box_item(name_widget)];
+    content.extend(trailing);
+
+    let base_color = color.clone();
+    let hover_color = color.clone();
+    let tab = StyledContainer::new(
+        tab_box(),
+        move |_r| tab_rect(selected.get() == value, &base_color, false),
+        content,
+    )?
+    .styled_by(tab_box)
+    .hover_style(move |_r| tab_rect(selected.get() == value, &hover_color, true))
+    .control(Role::Tab)
+    .toggled(move || selected.get() == value)
+    .on_press(move || selected.set(value))
+    .a11y_label(move || name.get());
+    if let Some(id) = tab.focus_id() {
+        focus_ids.borrow_mut().push(id);
+    }
+    let values = Rc::clone(values);
+    let focus_ids = Rc::clone(focus_ids);
+    let tab = tab.on_focused_key(move |key: &Key| {
+        let Some(next) = step(index, values.len(), key) else {
+            return false;
+        };
+        selected.set(values[next]);
+        if let Some(id) = focus_ids.borrow().get(next) {
+            focus::request(*id);
+        }
+        true
+    });
+    Ok(box_item(tab))
+}
+
+/// The tab `key` moves to from the one at `at` among `count`, or `None` for a key that is not along the row.
+fn step(at: usize, count: usize, key: &Key) -> Option<usize> {
+    let movement = KeyNav::default()
+        .horizontal()
+        .reading(current_direction())
+        .interpret(key)?;
+    match movement {
+        KeyNavMove::Next | KeyNavMove::Previous | KeyNavMove::First | KeyNavMove::Last => {
+            (count > 0).then(|| key_nav_apply(at, count, movement))
+        }
+        _ => None,
+    }
 }
 
 /// The tab pill's paint: the active tab fills with the accent (a touch darker on hover); an inactive tab blends in until hovered, when it lifts to a faint accent wash.

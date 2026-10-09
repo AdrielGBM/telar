@@ -62,6 +62,7 @@ fn a_hidden_overlay_does_not_take_the_keyboard() {
     let press = Event::KeyPressed {
         key: platform_core::Key::Char('a'),
         modifiers: platform_core::ModifiersState::default(),
+        unmodified: None,
     };
     overlay.on_event(&press);
     assert_eq!(keys.get(), 0, "a shut dialog takes no keys");

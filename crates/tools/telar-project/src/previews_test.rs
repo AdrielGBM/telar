@@ -275,3 +275,110 @@ fn an_include_naming_a_crate_the_package_does_not_depend_on_is_said_on_its_line(
         problems[2].message
     );
 }
+
+#[test]
+fn a_named_matrix_reads_into_axes_globals_first_then_args_by_name() {
+    let root = package(
+        "named_axes",
+        r#"
+[telar.previews]
+viewports = { phone = "390x844" }
+
+[telar.previews.matrices]
+everything = { size = [12, 1.5], viewport = ["phone", " 1280x800 "], control_size = ["mini", "large"], dir = ["rtl"], mode = ["dark"], locale = ["ar"], label = ['"Save"', "Primary"], ghost = [true] }
+"#,
+        None,
+    );
+    let matrices = TelarManifest::load(&root)
+        .unwrap()
+        .telar
+        .previews
+        .named_matrices()
+        .expect("a valid table");
+    assert_eq!(
+        matrices["everything"],
+        [
+            MatrixAxis::Mode(vec!["dark".into()]),
+            MatrixAxis::Locale(vec!["ar".into()]),
+            MatrixAxis::Dir(vec![MatrixDirection::Rtl]),
+            MatrixAxis::Viewport(vec!["phone".into(), "1280x800".into()]),
+            MatrixAxis::ControlSize(vec![MatrixControlSize::Mini, MatrixControlSize::Large]),
+            MatrixAxis::Arg {
+                name: "ghost".into(),
+                values: vec!["true".into()],
+            },
+            MatrixAxis::Arg {
+                name: "label".into(),
+                values: vec!["\"Save\"".into(), "Primary".into()],
+            },
+            MatrixAxis::Arg {
+                name: "size".into(),
+                values: vec!["12".into(), "1.5".into()],
+            },
+        ]
+    );
+    let names: Vec<&str> = matrices["everything"]
+        .iter()
+        .map(MatrixAxis::name)
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "mode",
+            "locale",
+            "dir",
+            "viewport",
+            "control_size",
+            "ghost",
+            "label",
+            "size"
+        ]
+    );
+}
+
+#[test]
+fn a_float_arg_value_keeps_the_form_that_reads_back_as_a_float() {
+    let root = package(
+        "float_axis",
+        "[telar.previews.matrices]\nscale = { scale = [2.0, 1e-7, inf, -inf, nan] }\n",
+        None,
+    );
+    let matrices = TelarManifest::load(&root)
+        .unwrap()
+        .telar
+        .previews
+        .named_matrices()
+        .unwrap();
+    assert_eq!(
+        matrices["scale"],
+        [MatrixAxis::Arg {
+            name: "scale".into(),
+            values: vec![
+                "2.0".into(),
+                "1e-7".into(),
+                "+inf".into(),
+                "-inf".into(),
+                "+NaN".into()
+            ],
+        }]
+    );
+}
+
+#[test]
+fn a_package_without_matrices_names_none() {
+    assert_eq!(
+        PreviewsSection::default().named_matrices(),
+        Ok(BTreeMap::new())
+    );
+}
+
+#[test]
+fn every_problem_in_a_matrix_is_said_at_once() {
+    let error = load_error(
+        "matrix_many",
+        "[telar.previews.matrices]\nbroken = { dir = [\"up\"], mode = [1], \"not an arg\" = [true] }\n",
+    );
+    assert!(error.contains("\"up\" is not one of ltr, rtl"), "{error}");
+    assert!(error.contains("`1` is not a string"), "{error}");
+    assert!(error.contains("is neither one of mode"), "{error}");
+}

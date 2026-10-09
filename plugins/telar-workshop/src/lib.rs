@@ -7,18 +7,29 @@
 //! let app = telar_workshop::WorkshopApp::new(telar_all_preview_entries());
 //! ```
 //!
-//! The workshop's chrome draws in the workbench theme from `telar-devtools`, scoped to the chrome, and never changes the application's own theme. What it remembers across a hot reload — the selection, the open groups, the pane sizes, the view, the search and each preview's args — is kept in `@workshop/…` hot signals.
+//! The workshop's chrome draws in the workbench theme from `telar-devtools`, scoped to the chrome, and never changes the application's own theme. What it remembers across a hot reload — the selection, the open groups, the pane sizes, the view, the search, the panel shown, the actions filter, the canvas toolbar's settings and each preview's args — is kept in `@workshop/…` hot signals.
 //!
 //! Its text is in English under the `telar_workshop` namespace, which an application translates or overrides from its own catalog with `telar_workshop.<key>`.
 #![warn(rustdoc::broken_intra_doc_links)]
 
+mod address;
 mod app;
 mod canvas;
+mod canvas_toolbar;
+mod docs;
+mod keymap;
 mod panels;
+mod route;
+mod settings;
 mod shell;
 mod sidebar;
 mod state;
+mod store;
 mod strings;
 mod top_bar;
+mod view_switch;
+
+#[cfg(test)]
+mod test_support;
 
 pub use app::WorkshopApp;

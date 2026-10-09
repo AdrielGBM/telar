@@ -119,20 +119,103 @@ pub fn install(config: FontConfig) -> Arc<Fonts> {
 pub fn add_faces(faces: Vec<FontAsset>) -> Arc<Fonts> {
     add(
         FaceSources {
-            system_scan: false,
-            dirs: Vec::new(),
             faces,
+            ..FaceSources::none()
         },
         None,
     )
 }
 
+/// Makes `faces` the only faces any shaper in this process shapes and measures in: the platform's are never scanned, so text sets the same on every machine, and a glyph none of them has is missing rather than borrowed from whatever the machine happens to have. What a picture compared across machines needs.
+///
+/// The default face is routed to the first of `families` that resolves, or, when `families` is empty, to the family the first face answers to.
+///
+/// Fails when the process has already loaded a face `faces` does not name — the platform's, a directory's, one added since — because the database only grows and cannot be made to forget it; and when `faces` is empty, because a database with no faces has nothing to set text in.
+pub fn install_only(
+    faces: Vec<FontAsset>,
+    families: Vec<String>,
+) -> Result<Arc<Fonts>, ExclusiveFontsError> {
+    renderer_core::set_default_text_metrics(ShaperMetrics);
+    install_only_into(
+        &mut INSTALLED.write().expect("font database lock"),
+        faces,
+        families,
+    )
+}
+
+fn install_only_into(
+    slot: &mut Option<Arc<Fonts>>,
+    faces: Vec<FontAsset>,
+    families: Vec<String>,
+) -> Result<Arc<Fonts>, ExclusiveFontsError> {
+    if faces.is_empty() {
+        return Err(ExclusiveFontsError::NoFaces);
+    }
+    let wanted = FaceSources {
+        faces,
+        ..FaceSources::none()
+    };
+    if let Some(loaded) = slot.as_ref()
+        && !loaded.sources.within(&wanted)
+    {
+        return Err(ExclusiveFontsError::OtherFacesLoaded);
+    }
+    let fonts = add_into(
+        slot,
+        wanted,
+        (!families.is_empty()).then(|| families.clone()),
+    );
+    if !families.is_empty() {
+        return Ok(fonts);
+    }
+    let first = fonts
+        .db
+        .faces()
+        .find_map(|face| face.families.first())
+        .map(|(name, _)| name.clone())
+        .ok_or(ExclusiveFontsError::NoFaces)?;
+    Ok(add_into(slot, FaceSources::none(), Some(vec![first])))
+}
+
+/// Why [`install_only`] could not make the faces it was given the only ones.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExclusiveFontsError {
+    /// It was given no face, or none it could read.
+    NoFaces,
+    /// The process already loaded a face it was not given.
+    OtherFacesLoaded,
+}
+
+impl std::fmt::Display for ExclusiveFontsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NoFaces => "no font face to set text in: declare one",
+            Self::OtherFacesLoaded => {
+                "this process already loaded fonts beyond the declared ones, so text would not set in those alone"
+            }
+        })
+    }
+}
+
+impl std::error::Error for ExclusiveFontsError {}
+
 fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
-    let mut slot = INSTALLED.write().expect("font database lock");
+    add_into(
+        &mut INSTALLED.write().expect("font database lock"),
+        wanted,
+        families,
+    )
+}
+
+fn add_into(
+    slot: &mut Option<Arc<Fonts>>,
+    wanted: FaceSources,
+    families: Option<Vec<String>>,
+) -> Arc<Fonts> {
     let Some(loaded) = slot.as_ref().cloned() else {
         let (locale, db) = wanted.load();
         return replace(
-            &mut slot,
+            slot,
             Fonts {
                 locale,
                 db,
@@ -150,7 +233,7 @@ fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
             return loaded;
         }
         return replace(
-            &mut slot,
+            slot,
             Fonts {
                 locale: loaded.locale.clone(),
                 db: loaded.db.clone(),
@@ -169,7 +252,7 @@ fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
     // Text measured before this may have been measured in a fallback for a family that has a face now.
     renderer_core::invalidate_text_metrics();
     replace(
-        &mut slot,
+        slot,
         Fonts {
             locale: loaded.locale.clone(),
             db,
@@ -247,6 +330,21 @@ impl FaceSources {
             sources.dirs.push(PathBuf::from("/system/fonts"));
         }
         sources
+    }
+
+    fn none() -> Self {
+        Self {
+            system_scan: false,
+            dirs: Vec::new(),
+            faces: Vec::new(),
+        }
+    }
+
+    /// Whether everything these name, `other` names too.
+    fn within(&self, other: &Self) -> bool {
+        (!self.system_scan || other.system_scan)
+            && self.dirs.iter().all(|dir| other.dirs.contains(dir))
+            && self.faces.iter().all(|face| other.faces.contains(face))
     }
 
     /// What `wanted` names and these do not, in the order `wanted` gave it — `fontdb` resolves a face by the order it was read in, so the caller's order is the caller's business.

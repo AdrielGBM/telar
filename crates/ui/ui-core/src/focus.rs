@@ -123,6 +123,18 @@ struct FocusState {
     requests: u64,
     // Who the key being dispatched belongs to, fixed as its dispatch starts. See [`is_key_target`].
     keystroke: Option<Option<FocusId>>,
+    // A surface shown inside another tree's frame: stepping past either end of its tab order leaves it rather than wrapping. See [`host`].
+    hosted: bool,
+    departed: Option<Travel>,
+    // The focusable the latest request was for, when a step made it, and which way that step went.
+    arrival: Option<(FocusId, Travel)>,
+}
+
+/// Which way the keyboard moved through the tab order: Tab, or Shift+Tab.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Travel {
+    Forward,
+    Backward,
 }
 
 impl FocusState {
@@ -140,6 +152,9 @@ impl FocusState {
             deferred: None,
             requests: 0,
             keystroke: None,
+            hosted: false,
+            departed: None,
+            arrival: None,
         }
     }
 
@@ -229,8 +244,13 @@ pub fn request_from_pointer(id: FocusId) {
     take(id, true);
 }
 
-/// Only the latest word on focus counts: a request judged after its batch settles acts only if nothing gave, released or requested focus since it was made.
 fn take(id: FocusId, from_pointer: bool) {
+    take_arriving(id, from_pointer, None);
+}
+
+/// Only the latest word on focus counts: a request judged after its batch settles acts only if nothing gave, released or requested focus since it was made.
+fn take_arriving(id: FocusId, from_pointer: bool, travel: Option<Travel>) {
+    with_focus(|s| s.arrival = travel.map(|travel| (id, travel)));
     if !refuses(id) {
         give(id, from_pointer);
         return;
@@ -616,14 +636,29 @@ fn reachable(node: Option<NodeId>, scopes: &[ScopeView]) -> bool {
     }
 }
 
-/// The tab order and the scopes, copied out from under the slot borrow — see [`step`] for why that matters.
-fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
+/// One place Tab stops: the focusable, the box it is, and what it is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TabStop {
+    pub id: FocusId,
+    /// `None` for a focus id that belongs to no widget.
+    pub node: Option<NodeId>,
+    pub role: Role,
+}
+
+/// The stops Tab walks right now, in the order it walks them.
+///
+/// The document's order, not the order the frame draws in: a layer fixed over the page or an overlay is drawn after everything under it and read where it was declared. Only what Tab can reach is in it — nothing inside a closed region or a disabled one, and only the open modal's own stops while one holds focus.
+pub fn tab_order() -> Vec<TabStop> {
     let (order, scopes) = with_focus_ref(|s| {
-        let order: Vec<(FocusId, Option<NodeId>)> = s
+        let order: Vec<TabStop> = s
             .order
             .iter()
             .filter(|e| e.tabbable)
-            .map(|e| (e.id, e.node))
+            .map(|e| TabStop {
+                id: e.id,
+                node: e.node,
+                role: e.role,
+            })
             .collect();
         let scopes: Vec<ScopeView> = s
             .scopes
@@ -632,20 +667,24 @@ fn snapshot() -> (Vec<(FocusId, Option<NodeId>)>, Vec<ScopeView>) {
             .collect();
         (order, scopes)
     });
+    // Filtered once the borrow drops: `showing` is the author's closure, and the reachability queries borrow the layout runtime.
     let idle = idle_scrollers(&scopes);
     let order = order
         .into_iter()
-        .filter(|(id, _)| !idle.contains(id))
+        .filter(|stop| !idle.contains(&stop.id))
         .collect();
-    (in_document_order(order), scopes)
+    in_document_order(order)
+        .into_iter()
+        .filter(|stop| reachable(stop.node, &scopes))
+        .collect()
 }
 
 /// The stops in the order the document reads them, which is not the order they registered in: a list built before the field drawn above it registers first, and a branch rebuilt registers last. Content placed from elsewhere — a scroll's, an overlay's — reads where it is declared; a focus id with no node comes last.
-fn in_document_order(mut order: Vec<(FocusId, Option<NodeId>)>) -> Vec<(FocusId, Option<NodeId>)> {
+fn in_document_order(mut order: Vec<TabStop>) -> Vec<TabStop> {
     // Roots rank by the first stop registered under each: separate roots have no order of their own to read.
     let mut roots: Vec<NodeId> = Vec::new();
-    order.sort_by_cached_key(|(_, node)| {
-        node.map_or((usize::MAX, Vec::new()), |node| {
+    order.sort_by_cached_key(|stop| {
+        stop.node.map_or((usize::MAX, Vec::new()), |node| {
             let (root, path) = crate::input_region::document_position(node);
             let rank = roots
                 .iter()
@@ -851,14 +890,13 @@ pub fn exposed() -> Vec<Exposed> {
 ///
 /// What a dialog needs on open: the keyboard has to arrive somewhere inside it, or the user is left tabbing from wherever they were — which, now that a modal traps focus, means tabbing nowhere at all.
 pub fn focus_first_in(node: NodeId) -> bool {
-    let (order, scopes) = snapshot();
-    let found = order.into_iter().find(|(_, widget)| {
-        widget.is_some_and(|widget| crate::input_region::is_inside(widget, node))
-            && reachable(*widget, &scopes)
+    let found = tab_order().into_iter().find(|stop| {
+        stop.node
+            .is_some_and(|widget| crate::input_region::is_inside(widget, node))
     });
     match found {
-        Some((id, _)) => {
-            request(id);
+        Some(stop) => {
+            request(stop.id);
             true
         }
         None => false,
@@ -922,29 +960,59 @@ pub fn is_registered(id: FocusId) -> bool {
     with_focus_ref(|s| s.order.iter().any(|e| e.id == id))
 }
 
+/// Wraps at either end, except in a [hosted](host) surface with no modal up, where stepping past an end clears focus and leaves the way it went for the frame to carry on outside.
 fn step(dir: isize) {
-    // Snapshot, then release the borrow: `showing` is the author's closure, the reachability queries borrow the layout runtime, and `request` flushes — none may run under this one.
-    let (order, scopes) = snapshot();
-    let order: Vec<FocusId> = order
-        .into_iter()
-        .filter(|(_, node)| reachable(*node, &scopes))
-        .map(|(id, _)| id)
-        .collect();
-    if order.is_empty() {
+    let order: Vec<FocusId> = tab_order().into_iter().map(|stop| stop.id).collect();
+    let travel = if dir > 0 {
+        Travel::Forward
+    } else {
+        Travel::Backward
+    };
+    let n = order.len() as isize;
+    let at = match current().and_then(|c| order.iter().position(|&x| x == c)) {
+        Some(i) => i as isize + dir,
+        None if dir > 0 => 0,
+        None => n - 1,
+    };
+    if !(0..n).contains(&at) && with_focus_ref(|s| s.hosted) && !trapped() {
+        with_focus(|s| s.departed = Some(travel));
+        clear();
         return;
     }
-    let n = order.len() as isize;
-    let next = match current().and_then(|c| order.iter().position(|&x| x == c)) {
-        Some(i) => order[((i as isize + dir).rem_euclid(n)) as usize],
-        None => {
-            if dir > 0 {
-                order[0]
-            } else {
-                order[order.len() - 1]
-            }
-        }
-    };
-    request(next);
+    if n == 0 {
+        return;
+    }
+    take_arriving(order[at.rem_euclid(n) as usize], false, Some(travel));
+}
+
+/// Whether a modal is up and holding focus inside itself.
+fn trapped() -> bool {
+    let scopes: Vec<(Rc<dyn Fn() -> bool>, bool)> = with_focus_ref(|s| {
+        s.scopes
+            .iter()
+            .map(|scope| (scope.showing.clone(), scope.traps))
+            .collect()
+    });
+    scopes.iter().any(|(showing, traps)| *traps && showing())
+}
+
+/// Marks the active surface as one shown inside another tree's frame, whose keyboard carries on outside it: Tab past the last focusable, or Shift+Tab past the first, clears focus here instead of wrapping and leaves the way it went for [`take_departure`]. A modal up inside still holds Tab within itself.
+pub(crate) fn host() {
+    with_focus(|s| s.hosted = true);
+}
+
+/// Which way the keyboard last stepped out of the active [hosted](host) surface, forgetting it.
+pub(crate) fn take_departure() -> Option<Travel> {
+    with_focus(|s| s.departed.take())
+}
+
+/// Which way the step that gave `id` focus went, when the latest request for focus was such a step for `id`: what tells Shift+Tab arriving at a composite from Tab arriving at it.
+pub(crate) fn arrived_by(id: FocusId) -> Option<Travel> {
+    with_focus_ref(|s| {
+        s.arrival
+            .filter(|(at, _)| *at == id)
+            .map(|(_, travel)| travel)
+    })
 }
 
 #[cfg(test)]

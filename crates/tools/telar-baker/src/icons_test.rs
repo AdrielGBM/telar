@@ -35,6 +35,8 @@ fn section() -> IconsSection {
 fn literal(id: &str, line: usize) -> IdRef {
     IdRef {
         kind: asset_kind_for_id("icon").unwrap(),
+        tag: "icon".to_string(),
+        prop: "name".to_string(),
         literal: Some(id.to_string()),
         written: format!("\"{id}\""),
         file: PathBuf::from("src/app.rsx"),

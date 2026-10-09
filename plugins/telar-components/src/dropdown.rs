@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 use telar::{
-    AlignItems, Border, BorderRadius, Children, Color, ConsumedKeys, Container,
+    AlignItems, Border, BorderRadius, Children, Clip, ClippedItem, Color, ConsumedKeys, Container,
     DismissRegistration, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Overlay, Reactive,
     ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, Stroke, StyledContainer, SurfaceStyle,
     Text, TextWrap, amend_surface, box_item, effect, focus::Role, signal, track_layout,
@@ -96,12 +96,14 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             })
         }
     };
-    // A trigger's label is the name of a control, and splitting `File` across two lines to make room for the caret turns one word into two. `no_wrap`: a trigger's label is the *name* of a control, and splitting `File` across two lines to make room for the caret beside it turns one word into two.
+    // `NoWrap`: a trigger's label is the name of a control, and splitting `File` across two lines to make room for the caret beside it turns one word into two.
     let label_text = Text::declaring(
         move || trigger_label.get(),
-        LayoutStyle::new(),
+        LayoutStyle::new().min_width(0.0),
         |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap),
     )?;
+    // Free to shrink and clipped, so a label longer than the trigger is cut at its edge rather than widening the control or running under the caret.
+    let label_text = ClippedItem::new(box_item(label_text), Clip::x());
     let trigger_style = {
         let color = color.clone();
         let surface = surface.clone();
@@ -124,8 +126,9 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         .padding_horizontal(12.0)
         .gap(6.0)
         .justify_content(telar::JustifyContent::SPACE_BETWEEN);
+    // A stretched trigger is as wide as the root column by cross-axis stretch. Growing it would grow it along that column's main axis, which is its height.
     let trigger_box = if stretch {
-        trigger_box.flex_grow(1.0)
+        trigger_box
     } else {
         trigger_box.width(PANEL_WIDTH)
     };
@@ -292,10 +295,10 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         })
     };
 
-    // The holder's placeholder takes no space in the column, so only the trigger participates in flow layout. `stretch` has to reach the root as well: the trigger grows inside this box, and this box is what the caller's row lays out.
+    // The holder's placeholder takes no space in the column, so only the trigger participates in flow layout. A stretched root takes the width its row offers and none from what it shows: sized from its label, it widened past a fixed row as soon as a longer choice was picked.
     let root_box = LayoutStyle::new().flex_column();
     let root_box = if stretch {
-        root_box.flex_grow(1.0)
+        root_box.flex_grow(1.0).flex_basis(0.0).min_width(0.0)
     } else {
         root_box
     };
@@ -322,19 +325,22 @@ fn trigger_rect_style(color: &Reactive<Color>, bordered: bool) -> RectStyle {
 fn caret() -> Result<Box<dyn LayoutItem>, LayoutError> {
     const W: f32 = 11.0;
     const H: f32 = 5.5;
-    let canvas = telar::Canvas::declaring(LayoutStyle::new().width(W).height(H), |rect, text| {
-        let top = (rect.height - H) / 2.0;
-        let data = std::sync::Arc::new(
-            telar::PathData::new()
-                .move_to(telar::Point::new(0.0, top))
-                .line_to(telar::Point::new(W / 2.0, top + H))
-                .line_to(telar::Point::new(W, top)),
-        );
-        telar::RenderNode::path(
-            data,
-            telar::PathStyle::default().with_stroke(Stroke::new(text.color.faded(0.6), 1.4)),
-        )
-    })?;
+    let canvas = telar::Canvas::declaring(
+        LayoutStyle::new().width(W).height(H).flex_shrink(0.0),
+        |rect, text| {
+            let top = (rect.height - H) / 2.0;
+            let data = std::sync::Arc::new(
+                telar::PathData::new()
+                    .move_to(telar::Point::new(0.0, top))
+                    .line_to(telar::Point::new(W / 2.0, top + H))
+                    .line_to(telar::Point::new(W, top)),
+            );
+            telar::RenderNode::path(
+                data,
+                telar::PathStyle::default().with_stroke(Stroke::new(text.color.faded(0.6), 1.4)),
+            )
+        },
+    )?;
     Ok(box_item(canvas))
 }
 

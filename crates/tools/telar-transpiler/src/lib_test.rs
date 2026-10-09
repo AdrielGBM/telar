@@ -470,7 +470,7 @@ fn a_preview_can_declare_the_surface_it_is() {
     let bad = "[view]\ntext \"x\"\n\n[preview \"Float\" surface:wide]\ndemo\n";
     let code = transpile_source(bad, "demo", None, None).unwrap().rust_code;
     assert!(
-        code.contains("compile_error!(\"[preview] surface: expects WIDTHxHEIGHT"),
+        code.contains("compile_error!(\"[preview \\\"Float\\\"] surface: expects WIDTHxHEIGHT"),
         "a size that does not parse names itself:\n{code}"
     );
 }
@@ -683,7 +683,7 @@ fn preview_section_generates_build_fn_and_entry() {
         "missing preview build fn:\n{code}"
     );
     assert!(
-        code.contains("counter(CounterProps::props().build(), Children::default())?"),
+        code.contains("counter(CounterProps::props().__preview_actions(&__preview.actions()).build(), Children::default())?"),
         "preview body should call the component:\n{code}"
     );
     assert!(
@@ -2853,6 +2853,7 @@ fn transpile_logic(logic: &str, hot_reload: bool) -> String {
     let document = telar_parser::parse(&src).unwrap();
     let code = crate::codegen::transpile(crate::codegen::TranspileInput {
         document: &document,
+        source: &src,
         component_name: "demo",
         theme_type: None,
         assets: None,
@@ -3040,6 +3041,30 @@ fn a_baked_icon_id_becomes_the_artifacts_pair() {
         )),
         "{code}"
     );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// An icon button hands its `icon` to the `icon` it draws, so a literal id it is given bakes like one on `icon` itself, in a preview too, where it stays fixed rather than becoming an arg. What `icon!` builds, or a signal, reaches it as written.
+#[test]
+fn a_literal_icon_id_given_to_a_component_that_carries_icons_is_baked() {
+    let root = icon_package("carried", "baked");
+    let code = transpile_in(
+        &root,
+        "[logic]\nlet which = signal(String::new());\n\n[view]\ncol\n    icon_button icon:\"mdi:home\" label:\"Home\"\n    icon_button icon:$which label:\"Which\"\n    icon_button icon:icon!(\"mdi:home\") label:\"Macro\"\n\n[preview \"Home\"]\nicon_button icon:\"mdi:home\" label:\"Home\"\n",
+    );
+    let name = static_name_for_path("mdi:home");
+    let pair = format!(
+        ".icon((\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{name}), false))"
+    );
+    assert_eq!(code.matches(&pair).count(), 2, "{code}");
+    assert!(code.contains(".icon(which.clone())"), "{code}");
+    assert!(code.contains(".icon(icon!(\"mdi:home\"))"), "{code}");
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(".label(::telar::__preview_arg!(__preview, \"label\", \"Home\"))"),
+        "{code}"
+    );
+    assert!(!code.contains("\"icon\", ("), "{code}");
     let _ = std::fs::remove_dir_all(&root);
 }
 

@@ -437,7 +437,7 @@ impl Component for TextArea {
                     EventResult::Ignored
                 }
             }
-            Event::KeyPressed { key, modifiers } if focus::is_key_target(self.id) => {
+            Event::KeyPressed { key, modifiers, .. } if focus::is_key_target(self.id) => {
                 let style = (self.style)();
                 self.edit(key, modifiers, &style)
             }

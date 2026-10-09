@@ -506,6 +506,7 @@ async fn a_focused_tree_points_a_reader_at_its_cursor_row() {
         page.tree.on_event(&Event::KeyPressed {
             key: telar::Key::Named(telar::NamedKey::ArrowDown),
             modifiers: telar::ModifiersState::default(),
+            unmodified: None,
         });
     });
     let host = render();

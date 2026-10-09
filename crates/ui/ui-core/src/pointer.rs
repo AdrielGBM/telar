@@ -103,6 +103,14 @@ pub(crate) fn occlude() -> OccludedGuard {
     OccludedGuard(OCCLUDED.with(|c| c.replace(true)))
 }
 
+/// Runs `dispatch` with everything it reaches covered, as a container covers the children stacked under a sibling: how a tree hears a move the overlay layer took.
+///
+/// The tree is told rather than skipped, because a move is the only way a box hears the pointer go: skipped, a box hovered when the pointer slid onto a dropdown or a bar fixed over it would keep its hover and its cursor until the pointer came back. Covered, its hover settles, and a gesture it is running keeps tracking the pointer.
+pub fn covered<R>(dispatch: impl FnOnce() -> R) -> R {
+    let _covered = occlude();
+    dispatch()
+}
+
 pub(crate) fn pointer_coords(event: &Event) -> Option<(f64, f64)> {
     match event {
         Event::PointerMoved { x, y, .. } => Some((*x, *y)),

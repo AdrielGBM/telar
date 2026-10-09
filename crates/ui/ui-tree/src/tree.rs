@@ -58,7 +58,7 @@ impl ComponentList {
 
     /// [`on_event`](Self::on_event) through a shared reference, for a holder that hands the tree out while it routes events into it: the root is borrowed only for the dispatch itself.
     pub fn dispatch(&self, event: &Event) -> EventResult {
-        // So signals mutated by handlers flush their effects after `on_event` returns and releases the borrow. Overlay priority routing is not done here: it must run on the side that owns the overlay registry, which under hot reload is the app dylib rather than the host holding this `ComponentList`. The runner consults it via `App::dispatch_overlays` before calling this, and skips this call when an overlay consumed it.
+        // Signals mutated by handlers flush their effects after on_event releases the borrow; overlay routing happens in the runner via App::dispatch_overlays.
         batch(|| self.root.borrow_mut().on_event(event))
     }
 }

@@ -32,6 +32,8 @@ pub fn card(props: CardProps, children: Children) -> Result<Box<dyn LayoutItem>,
     Ok(Box::new(__sbox_0))
 }
 
+::telar::__previews! {
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
@@ -77,12 +79,16 @@ pub fn card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
             }
             }
         );
-        card(CardProps::props().gap(8.0).build(), __deferred)?
+        card(CardProps::props().gap(::telar::__preview_arg!(__preview, "gap", 8.0)).__preview_actions(&__preview.actions()).build(), __deferred)?
     };
     Ok(Box::new(__node_0))
 }
 
 pub const CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--card--card"), "card", "Card", card_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/card.rsx"), 17),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/card.rsx"), 17)
+        .source("[preview \"Card\"]\ncard gap:8\n    text \"Header\" font_size:16 color:$theme.ink slot:\"header\"\n    text \"A card is the standard surface panel.\" font_size:13 color:$theme.muted\n    text \"Bare children stack with the gap you pass; slot:\\\"header\\\" pins a header on top.\" font_size:13 color:$theme.muted", &[::telar::preview::SourceSpan::new(0, 294, 17)])
+        .props(<CardProps as ::telar::preview::HasPropsSchema>::schema)
+        .args(&[::telar::preview::ArgSpec::new("gap").default("8.0")]),
 ];
+}

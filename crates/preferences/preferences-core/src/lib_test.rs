@@ -166,3 +166,80 @@ fn a_forced_value_is_not_disturbed_by_the_system() {
     set_system_preferences(reduced(Some(false)));
     assert_eq!(runs.get(), 1);
 }
+
+fn contrast(system: Option<bool>) -> SystemPreferences {
+    SystemPreferences {
+        high_contrast: system,
+        ..SystemPreferences::default()
+    }
+}
+
+#[test]
+fn without_an_override_high_contrast_is_the_systems() {
+    set_system_preferences(contrast(Some(true)));
+    assert_eq!(high_contrast_override(), None);
+    assert_eq!(use_high_contrast(), Some(true));
+    assert_eq!(high_contrast(), Some(true));
+}
+
+#[test]
+fn a_high_contrast_override_wins_over_the_system_until_it_is_cleared() {
+    set_system_preferences(contrast(Some(true)));
+    set_high_contrast_override(Some(false));
+    assert_eq!(use_high_contrast(), Some(false));
+    assert_eq!(high_contrast(), Some(false));
+    assert_eq!(use_system_high_contrast(), Some(true));
+    assert_eq!(use_system_preferences().high_contrast, Some(true));
+
+    set_high_contrast_override(None);
+    assert_eq!(use_high_contrast(), Some(true));
+}
+
+#[test]
+fn a_surface_high_contrast_shadows_the_application_and_the_system() {
+    set_system_preferences(contrast(Some(false)));
+    set_high_contrast_override(None);
+    let surface = HighContrastContext::new();
+    {
+        let _entered = surface.enter();
+        set_surface_high_contrast(Some(true));
+        assert_eq!(use_high_contrast(), Some(true));
+        assert_eq!(high_contrast(), Some(true));
+        assert_eq!(use_surface_high_contrast(), Some(true));
+        assert_eq!(high_contrast_override(), None);
+    }
+    assert_eq!(
+        use_high_contrast(),
+        Some(false),
+        "the ambient world keeps the system's"
+    );
+
+    set_high_contrast_override(Some(false));
+    {
+        let _entered = surface.enter();
+        assert_eq!(use_high_contrast(), Some(true), "and the application's");
+        set_surface_high_contrast(None);
+        assert_eq!(
+            use_high_contrast(),
+            Some(false),
+            "cleared, the surface follows the application again"
+        );
+    }
+    set_high_contrast_override(None);
+}
+
+#[test]
+fn a_reader_of_high_contrast_hears_every_layer() {
+    set_system_preferences(contrast(Some(false)));
+    set_high_contrast_override(None);
+    let (runs, _effect) = count_runs(|| {
+        use_high_contrast();
+    });
+    set_system_preferences(contrast(Some(true)));
+    assert_eq!(runs.get(), 2);
+    set_high_contrast_override(Some(false));
+    assert_eq!(runs.get(), 3);
+    set_high_contrast_override(Some(false));
+    assert_eq!(runs.get(), 3, "setting the same override notifies nobody");
+    set_high_contrast_override(None);
+}

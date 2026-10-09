@@ -23,6 +23,7 @@ fn a_key_stays_held_until_it_is_released() {
     observe(&Event::KeyPressed {
         key: up(),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     });
     assert!(key_held(&up()), "a press holds the key down");
     end_frame();
@@ -40,6 +41,7 @@ fn a_press_answers_for_one_frame_only() {
     observe(&Event::KeyPressed {
         key: up(),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     });
     assert!(key_pressed(&up()), "the frame of the press answers yes");
     end_frame();
@@ -53,11 +55,13 @@ fn a_repeated_key_is_not_a_new_press() {
     observe(&Event::KeyPressed {
         key: up(),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     });
     end_frame();
     observe(&Event::KeyPressed {
         key: up(),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     });
     assert!(key_held(&up()), "an auto-repeat leaves the key held");
     assert!(!key_pressed(&up()), "the key never came back up");
@@ -82,6 +86,7 @@ fn losing_focus_forgets_what_was_held() {
     observe(&Event::KeyPressed {
         key: up(),
         modifiers: shift(),
+        unmodified: None,
     });
     assert!(
         key_held(&up()) && modifiers().is_shift,
@@ -106,6 +111,7 @@ fn a_key_typed_through_altgr_comes_up_when_its_physical_key_does() {
     observe(&Event::KeyPressed {
         key: pairing.press(backslash_key, Key::Char('\\')),
         modifiers: altgr,
+        unmodified: None,
     });
     assert!(key_held(&Key::Char('\\')));
 
@@ -121,4 +127,32 @@ fn a_key_typed_through_altgr_comes_up_when_its_physical_key_does() {
     });
     assert!(!key_held(&Key::Char('\\')), "the backslash came up");
     assert!(!key_held(&Key::Char('º')), "and nothing else went down");
+}
+
+#[test]
+fn a_shortcut_matches_the_key_the_press_makes_without_modifiers() {
+    fresh();
+    let composed = Key::Char('†');
+    observe(&Event::KeyPressed {
+        key: composed.clone(),
+        modifiers: ModifiersState::default(),
+        unmodified: Some(Key::Char('t')),
+    });
+    assert_eq!(shortcut_key(&composed), Key::Char('t'));
+    assert_eq!(
+        shortcut_key(&Key::Char('x')),
+        Key::Char('x'),
+        "a key that is not the latest press is its own"
+    );
+}
+
+#[test]
+fn a_press_with_no_unmodified_key_is_its_own_shortcut_key() {
+    fresh();
+    observe(&Event::KeyPressed {
+        key: up(),
+        modifiers: ModifiersState::default(),
+        unmodified: None,
+    });
+    assert_eq!(shortcut_key(&up()), up());
 }

@@ -3,14 +3,20 @@
 //! For asserting on what an app actually drew from a test with no GPU adapter. Every other way to ask goes through pixels, which answers "does this look right" but never "was the shadow emitted at all".
 //!
 //! It is also the in-tree proof that [`renderer_core::RendererFactory`] is a real seam: installed from outside the runtime, naming neither a window system nor a surface.
+//!
+//! [`draw_text`] writes a frame as text, one line per command, for a golden file a reviewer reads a change in.
 
 #![warn(rustdoc::broken_intra_doc_links)]
+
+mod text;
 
 use std::sync::{Arc, Mutex};
 
 use renderer_core::{
     BuiltRenderer, Color, DrawCommand, RenderBackend, RendererBuild, RendererError, RendererFactory,
 };
+
+pub use text::draw_text;
 
 /// One frame as the recorder was handed it.
 #[derive(Clone, Debug)]

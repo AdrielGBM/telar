@@ -1,20 +1,23 @@
-//! The workshop's layout: the top bar over the sidebar, and the canvas beside it with the panels along one of its edges, each pane resized by a splitter.
+//! The workshop's layout: the top bar over the sidebar, and the canvas area beside it — the canvas or the docs page, as the view says — with the panels along one of its edges, each pane resized by a splitter.
 //!
 //! The shell owns where each region sits, how big it is and what it is announced as. What a region shows is its own module's.
 
 use telar::{
-    Accessible, Children, LayoutError, LayoutItem, LayoutStyle, Reactive, ReactiveList, RectStyle,
-    Role, ShapeStyle, SizeDimension, Slots, StyledContainer, box_item,
+    Accessible, Children, Key, LayoutError, LayoutItem, LayoutStyle, Reactive, ReactiveList,
+    RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer, box_item,
 };
 use telar_components::{SizedPane, SplitDirection, SplitPaneProps, split_pane};
-use telar_devtools::use_workbench_tokens;
+use telar_devtools::{use_workbench_tokens, workbench_fill};
 
+use crate::keymap::Keymap;
 use crate::state::{
     PANEL_MAX_FRACTION, PANEL_MIN_SIZE, PanelPosition, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
-    WorkshopState,
+    ViewMode, WorkshopState,
 };
-use crate::strings::{self, PANELS, PREVIEWS, RESIZE_PANELS, RESIZE_SIDEBAR, VIEW_CANVAS};
-use crate::{canvas, panels, sidebar, top_bar};
+use crate::strings::{
+    self, PANELS, PREVIEWS, RESIZE_PANELS, RESIZE_SIDEBAR, VIEW_CANVAS, VIEW_DOCS,
+};
+use crate::{canvas, docs, panels, sidebar, top_bar};
 
 const DIVIDER: f32 = 1.0;
 
@@ -27,18 +30,22 @@ pub(crate) fn shell(
         |_| RectStyle::default().with_fill(use_workbench_tokens().border_subtle),
         Vec::new(),
     )?;
+    let keymap = Keymap::new(state);
+    let mut regions = vec![
+        top_bar::top_bar(state, &keymap, project_name)?,
+        box_item(divider),
+        body(state)?,
+    ];
+    regions.extend(keymap.overlays()?);
     let root = StyledContainer::new(
         LayoutStyle::new()
             .flex_column()
             .width(SizeDimension::Percent(1.0))
             .height(SizeDimension::Percent(1.0)),
         |_| RectStyle::default().with_fill(use_workbench_tokens().panel_background),
-        vec![
-            top_bar::top_bar(state, project_name)?,
-            box_item(divider),
-            body(state)?,
-        ],
-    )?;
+        regions,
+    )?
+    .on_key(move |key: &Key| keymap.on_key(key));
     Ok(box_item(root))
 }
 
@@ -58,7 +65,7 @@ fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 fn sidebar_pane(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let pane = StyledContainer::new(
-        fill(),
+        workbench_fill(),
         |_| RectStyle::default().with_fill(use_workbench_tokens().sidebar_background),
         vec![sidebar::sidebar(state)?],
     )?
@@ -72,7 +79,7 @@ fn workspace(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let position = state.panel_position();
     let building = state.clone();
     let workspace = ReactiveList::with_style(
-        fill(),
+        workbench_fill(),
         move || vec![position.get()],
         |position: &PanelPosition| *position,
         move |position| split_workspace(&building, position),
@@ -102,20 +109,44 @@ fn split_workspace(
     )
 }
 
+/// The canvas area: the selected preview on its canvas, or its component's docs page, as the view says.
 fn canvas_pane(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let view = state.view();
+    let building = state.clone();
+    let shown = ReactiveList::with_style(
+        workbench_fill(),
+        move || vec![view.get() == ViewMode::Docs],
+        |docs: &bool| *docs,
+        move |docs| match docs {
+            true => docs::docs(&building),
+            false => canvas::canvas(&building),
+        },
+    )?;
     let pane = StyledContainer::new(
-        fill(),
-        |_| RectStyle::default().with_fill(use_workbench_tokens().canvas_backdrop),
-        vec![canvas::canvas(state)?],
+        workbench_fill(),
+        move |_| {
+            let tokens = use_workbench_tokens();
+            let fill = match view.get() {
+                ViewMode::Docs => tokens.panel_background,
+                _ => tokens.canvas_backdrop,
+            };
+            RectStyle::default().with_fill(fill)
+        },
+        vec![box_item(shown)],
     )?
     .role(Role::Main)
-    .a11y_label(|| strings::text(VIEW_CANVAS));
+    .a11y_label(move || {
+        strings::text(match view.get() {
+            ViewMode::Docs => VIEW_DOCS,
+            _ => VIEW_CANVAS,
+        })
+    });
     Ok(box_item(pane))
 }
 
 fn panels_pane(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let pane = StyledContainer::new(
-        fill(),
+        workbench_fill(),
         |_| RectStyle::default().with_fill(use_workbench_tokens().panel_background),
         vec![panels::panels(state)?],
     )?
@@ -130,12 +161,4 @@ fn panes(items: [Box<dyn LayoutItem>; 2]) -> Children {
         slots.push(None, item);
     }
     Children::from(slots)
-}
-
-fn fill() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
-        .flex_grow(1.0)
-        .min_width(0.0)
-        .min_height(0.0)
 }

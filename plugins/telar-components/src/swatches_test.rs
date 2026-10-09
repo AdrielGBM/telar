@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use telar::testing::{named, press, release};
 use telar::{Component, ComponentList, DrawCommand, LayoutItem, NamedKey, Rect, signal};
 
 use super::*;
-use crate::harness::{named, press, release};
 
 const SIZE: f32 = 20.0;
 
@@ -36,7 +36,7 @@ fn build(
         Children::default(),
     )
     .unwrap();
-    let rect = crate::harness::lay_out_row(item.layout_node(), 400.0, 100.0);
+    let rect = telar::testing::lay_out_row(item.layout_node(), 400.0, 100.0);
     (item, rect)
 }
 

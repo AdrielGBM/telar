@@ -85,6 +85,7 @@ fn a_control_joins_the_tab_order_answers_enter_and_says_what_it_is() {
     let key = |named| Event::KeyPressed {
         key: Key::Named(named),
         modifiers: platform_core::ModifiersState::default(),
+        unmodified: None,
     };
     assert_eq!(card.on_event(&key(NamedKey::Enter)), EventResult::Handled);
     assert_eq!(card.on_event(&key(NamedKey::Space)), EventResult::Handled);
@@ -121,6 +122,7 @@ fn a_press_handler_alone_is_not_a_control() {
         card.on_event(&Event::KeyPressed {
             key: Key::Named(NamedKey::Enter),
             modifiers: platform_core::ModifiersState::default(),
+            unmodified: None,
         }),
         EventResult::Ignored,
         "and Enter is left for whoever else wanted it"
@@ -377,6 +379,7 @@ fn on_key_fires_on_key_press() {
     card.on_event(&Event::KeyPressed {
         key: Key::Char('a'),
         modifiers: platform_core::ModifiersState::default(),
+        unmodified: None,
     });
     assert_eq!(count.get(), 1, "a key press fires on_key");
 }
@@ -403,6 +406,7 @@ fn a_key_handler_that_took_the_key_leaves_nothing_behind() {
     let press = |key| Event::KeyPressed {
         key,
         modifiers: platform_core::ModifiersState::default(),
+        unmodified: None,
     };
 
     assert_eq!(
@@ -432,7 +436,11 @@ fn a_global_key_handler_stands_aside_while_a_field_has_the_caret() {
     )
     .unwrap()
     .on_key(move |_k| sink.set(sink.get() + 1));
-    let press = |key, modifiers| Event::KeyPressed { key, modifiers };
+    let press = |key, modifiers| Event::KeyPressed {
+        key,
+        modifiers,
+        unmodified: None,
+    };
     let plain = platform_core::ModifiersState::default();
     let meta = platform_core::ModifiersState {
         is_meta: true,
@@ -477,6 +485,7 @@ fn a_focused_button_does_not_swallow_shortcuts() {
     card.on_event(&Event::KeyPressed {
         key: Key::Char('3'),
         modifiers: platform_core::ModifiersState::default(),
+        unmodified: None,
     });
     assert_eq!(count.get(), 1);
     focus::unregister(button);

@@ -1,9 +1,11 @@
-use telar::preview::{Layout, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 use telar::{Children, Color};
 
 use crate::tabs::{TabsProps, tabs};
 
-const LABELS: [&str; 6] = ["Overview", "Activity", "Settings", "Billing", "Members", "Audit"];
+const LABELS: [&str; 6] = [
+    "Overview", "Activity", "Settings", "Billing", "Members", "Audit",
+];
 
 fn labels(count: u32) -> Vec<&'static str> {
     LABELS.iter().copied().take(count as usize).collect()
@@ -21,7 +23,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )
         })
         .title("Navigation/Tabs")
-        .layout(Layout::Centered),
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes")),
         preview!(tabs: TabsProps, "Bound selection", |p| {
             let selected = p.signal("selected", 0u32);
             tabs(

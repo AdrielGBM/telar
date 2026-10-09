@@ -3,6 +3,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod effect;
+mod leaked_cell;
 mod memo;
 mod reactive;
 pub use reactive_local::reentry;
@@ -14,6 +15,7 @@ mod surface_scoped;
 mod transaction;
 #[macro_use]
 mod task;
+mod timer;
 
 pub use effect::{Effect, effect};
 pub use memo::{Memo, memo};
@@ -34,6 +36,10 @@ pub use surface_scoped::SurfaceScoped;
 pub use task::{
     Emitter, Task, cancel_tasks_for, drain_tasks, reset_tasks, set_task_waker, spawn_stream,
     spawn_task,
+};
+pub use timer::{
+    Timer, advance_timer_clock, cancel_timers_for, fire_timers, next_timer_due, reset_timers,
+    run_after, timer_now, until_next_timer,
 };
 pub use transaction::{Transaction, TransactionError};
 

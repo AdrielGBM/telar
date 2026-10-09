@@ -5,7 +5,7 @@
 use std::cell::{Cell, OnceCell, Ref, RefCell};
 use std::rc::Rc;
 
-use geometry_core::Rect;
+use geometry_core::{BoxModel, Insets, Rect, Size};
 use reactive_core::effect;
 use renderer_core::DrawCommand;
 
@@ -66,13 +66,20 @@ struct Composition {
     unspliced: Cell<bool>,
 }
 
-/// A node emitted by [`Segment::walk`]: one mounted component, with its pre-order id, widget name, nesting depth, and the bounding rect of its own draw commands unioned with all descendants'.
+/// A node emitted by [`Segment::walk`]: one mounted component, with its pre-order id, widget name, nesting depth, the bounding rect of its own draw commands unioned with all descendants', and the box model layout resolved for the box it draws.
+///
+/// The box model is that of the first layout box the component opens, and all zero for a component that opens none. Edges are physical; see [`BoxModel`].
 #[derive(Clone, Debug)]
 pub struct SegmentNodeInfo {
     pub id: u64,
     pub name: &'static str,
     pub depth: usize,
     pub rect: Rect,
+    pub padding: Insets,
+    pub margin: Insets,
+    pub border: Insets,
+    /// `width` is the gap between columns, `height` the gap between rows.
+    pub gap: Size,
 }
 
 /// Unions two rects, treating any zero/negative-area rect as empty so `empty ∪ r == r` — a leaf with no draw commands must not drag its parent's box to the origin.
@@ -173,10 +180,20 @@ impl Segment {
             name: self.name,
             depth,
             rect: Rect::default(),
+            padding: Insets::default(),
+            margin: Insets::default(),
+            border: Insets::default(),
+            gap: Size::ZERO,
         });
 
         let mut bounds = Rect::default();
+        let mut box_model = None;
         for (cmd, _) in self.own_commands.borrow().iter() {
+            if box_model.is_none()
+                && let DrawCommand::PushElement { element } = cmd
+            {
+                box_model = layout_reactive::box_model(layout_reactive::NodeId::from(element.id.0));
+            }
             // The renderer's own answer to what a command paints, rather than a second list of arms: the local copy knew four commands, so a spanned paragraph contributed nothing and a notification card inspected as an empty rect.
             let Some(rect) = renderer_core::culling::command_visual_rect(
                 cmd,
@@ -192,7 +209,18 @@ impl Segment {
             bounds = union_nonempty(bounds, child.collect(depth + 1, out));
         }
 
-        out[idx].rect = bounds;
+        let BoxModel {
+            padding,
+            margin,
+            border,
+            gap,
+        } = box_model.unwrap_or_default();
+        let info = &mut out[idx];
+        info.rect = bounds;
+        info.padding = padding;
+        info.margin = margin;
+        info.border = border;
+        info.gap = gap;
         bounds
     }
 }

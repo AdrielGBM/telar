@@ -30,7 +30,8 @@ pub use density::{
     set_control_size, set_surface_control_size, use_control_size, use_surface_control_size,
 };
 pub use mode::{
-    ResolvedScheme, SchemePreference, active_mode, follow_system, is_dark, register_mode,
-    scheme_preference, set_mode, set_scheme_preference, use_mode, use_resolved_scheme,
-    use_scheme_preference,
+    ModeContext, ModeGuard, ResolvedScheme, SchemePreference, active_mode, follow_system, is_dark,
+    register_mode, register_mode_theme, registered_modes, scheme_preference, set_mode,
+    set_mode_scheme, set_scheme_preference, set_surface_mode, use_mode, use_resolved_scheme,
+    use_scheme_preference, use_surface_mode,
 };

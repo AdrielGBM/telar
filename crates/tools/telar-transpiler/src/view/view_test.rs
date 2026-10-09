@@ -1679,3 +1679,32 @@ fn a_backdrop_blur_is_read_and_animated_like_opacity() {
     .rust_code;
     assert!(promoted.contains("StyledContainer::"), "{promoted}");
 }
+
+/// A preview finds its root component call by the same rule the emitter dispatches on, so a tag the view builds itself is never taken for one.
+#[test]
+fn every_tag_the_view_builds_is_told_from_a_component_call() {
+    for tag in BUILT_TAGS.iter().chain(&["svg", "img", "image"]) {
+        assert!(!is_component_tag(tag), "`{tag}` is built by the view");
+        let element = Element {
+            tag: tag.to_string(),
+            classes: Vec::new(),
+            attributes: Vec::new(),
+            content: None,
+            children: Vec::new(),
+            line: 1,
+            content_start: 0,
+            content_i18n: false,
+        };
+        let code = match make_gen().emit_element_inner(&element) {
+            ChildEmit::Simple { code, .. }
+            | ChildEmit::Dynamic { code }
+            | ChildEmit::Fragment { code, .. } => code,
+        };
+        assert!(
+            !code.contains("::props()"),
+            "`{tag}` emitted a call:\n{code}"
+        );
+    }
+    assert!(is_component_tag("button"));
+    assert!(is_component_tag("forms::checkbox"));
+}

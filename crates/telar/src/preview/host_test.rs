@@ -107,3 +107,57 @@ fn an_id_resolves_before_a_component() {
             .is_none()
     );
 }
+
+/// A padded page is a column aligned to its start, and a column's cross-axis start is the inline start: under RTL the preview sits in the top-right corner, inside the padding.
+#[test]
+fn a_padded_preview_starts_at_the_inline_start_corner_under_rtl() {
+    use crate::{AvailableSpace, Direction, compute_layout, set_direction, signal};
+
+    for (direction, x) in [
+        (Direction::Ltr, PAGE_PADDING),
+        (Direction::Rtl, 300.0 - PAGE_PADDING - 80.0),
+    ] {
+        crate::reset_layout_runtime();
+        set_direction(direction);
+        let preview = Container::new(LayoutStyle::new().width(80.0).height(40.0), Vec::new())
+            .map(|preview| Box::new(preview) as Box<dyn LayoutItem>)
+            .unwrap();
+        let node = preview.layout_node();
+        let page = page(Layout::Padded, signal(None), preview, None).unwrap();
+        compute_layout(
+            page.layout_node(),
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        let placed = crate::absolute_rect(node).unwrap();
+        set_direction(Direction::Ltr);
+        assert_eq!((placed.x, placed.y), (x, PAGE_PADDING), "{direction:?}");
+    }
+}
+
+#[test]
+fn a_measured_page_reports_the_preview_height_with_its_padding_and_a_fullscreen_one_reports_nothing()
+ {
+    use crate::{AvailableSpace, compute_layout, signal};
+
+    for (layout, expected) in [
+        (Layout::Padded, 40.0 + 2.0 * PAGE_PADDING),
+        (Layout::Centered, 40.0 + 2.0 * PAGE_PADDING),
+        (Layout::Fullscreen, 0.0),
+    ] {
+        crate::reset_layout_runtime();
+        let preview = Container::new(LayoutStyle::new().width(80.0).height(40.0), Vec::new())
+            .map(|preview| Box::new(preview) as Box<dyn LayoutItem>)
+            .unwrap();
+        let measured = signal(0.0);
+        let page = page(layout, signal(None), preview, Some(measured)).unwrap();
+        compute_layout(
+            page.layout_node(),
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(200.0),
+        )
+        .unwrap();
+        assert_eq!(measured.get(), expected, "{layout:?}");
+    }
+}

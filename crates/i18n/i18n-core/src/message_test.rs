@@ -75,3 +75,62 @@ fn arg_names_lists_placeholders() {
         "every placeholder in the message must be listed"
     );
 }
+
+#[test]
+fn a_sorted_catalog_passes_the_assertion() {
+    CATALOG.assert_sorted();
+}
+
+#[test]
+#[should_panic(expected = "catalog keys `b` and `a` are out of order or repeated")]
+fn a_key_out_of_order_is_named() {
+    Catalog {
+        locales: &["en"],
+        default_locale: "en",
+        entries: &[
+            Entry {
+                key: "b",
+                messages: &[("en", Message::Plain("B"))],
+            },
+            Entry {
+                key: "a",
+                messages: &[("en", Message::Plain("A"))],
+            },
+        ],
+    }
+    .assert_sorted();
+}
+
+#[test]
+#[should_panic(expected = "catalog keys `a` and `a` are out of order or repeated")]
+fn a_repeated_key_is_named() {
+    Catalog {
+        locales: &["en"],
+        default_locale: "en",
+        entries: &[
+            Entry {
+                key: "a",
+                messages: &[("en", Message::Plain("A"))],
+            },
+            Entry {
+                key: "a",
+                messages: &[("en", Message::Plain("A"))],
+            },
+        ],
+    }
+    .assert_sorted();
+}
+
+#[test]
+#[should_panic(expected = "the locales `es` and `en` of `a` are out of order or repeated")]
+fn a_locale_out_of_order_is_named() {
+    Catalog {
+        locales: &["en", "es"],
+        default_locale: "en",
+        entries: &[Entry {
+            key: "a",
+            messages: &[("es", Message::Plain("A")), ("en", Message::Plain("A"))],
+        }],
+    }
+    .assert_sorted();
+}

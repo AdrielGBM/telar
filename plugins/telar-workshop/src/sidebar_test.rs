@@ -1,12 +1,12 @@
 use telar::preview::PreviewCtx;
-use telar::testing::{find_text, mount, texts};
+use telar::testing::{centre, find_text, key_with, mount, named, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Component, ComponentList, Container, Event, LayoutStyle, LocalApp,
-    PointerButton, PointerSource, Rect, WindowRoot, relayout_if_dirty, reset_layout_runtime,
+    Rect, WindowRoot, reset_layout_runtime,
 };
-use telar_devtools::workbench_scope;
 
 use super::*;
+use crate::test_support::settle;
 
 fn blank(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?))
@@ -24,20 +24,14 @@ fn entries() -> Vec<PreviewEntry> {
     ]
 }
 
-/// The sidebar alone, or with the shell around it, as an application whose access tree a test can read.
+/// The sidebar alone, as an application whose access tree a test can read.
 struct Workshop {
     state: WorkshopState,
-    shell: bool,
 }
 
 impl App for Workshop {
     fn root(&self) -> Box<dyn Component> {
-        let built = if self.shell {
-            workbench_scope(|| crate::shell::shell(&self.state, None)).map(box_item)
-        } else {
-            sidebar(&self.state)
-        };
-        Box::new(WindowRoot::wrapping(built.unwrap()).unwrap())
+        Box::new(WindowRoot::wrapping(sidebar(&self.state).unwrap()).unwrap())
     }
 }
 
@@ -48,21 +42,13 @@ struct Mounted {
 
 impl Mounted {
     fn new(entries: Vec<PreviewEntry>) -> Self {
-        Self::mount(entries, false, 240, 600)
-    }
-
-    fn in_shell(entries: Vec<PreviewEntry>) -> Self {
-        Self::mount(entries, true, 1000, 700)
-    }
-
-    fn mount(entries: Vec<PreviewEntry>, shell: bool, width: u32, height: u32) -> Self {
         reset_layout_runtime();
         focus::clear();
         let state = WorkshopState::new(entries.into(), &Default::default());
-        let runtime = LocalApp(Workshop { state, shell });
-        let tree = mount(runtime.0.root(), width, height);
+        let runtime = LocalApp(Workshop { state });
+        let tree = mount(runtime.0.root(), 240, 600);
         let mounted = Self { runtime, tree };
-        mounted.settle();
+        settle(&mounted.tree);
         mounted
     }
 
@@ -70,31 +56,18 @@ impl Mounted {
         &self.runtime.0.state
     }
 
-    fn settle(&self) {
-        relayout_if_dirty();
-        let _ = self.tree.commands();
-    }
-
     fn send(&mut self, event: Event) {
-        if !telar::dispatch_overlays(&event) {
-            self.tree.on_event(&event);
-        }
-        self.settle();
+        route(&mut self.tree, &event);
+        settle(&self.tree);
     }
 
     fn key(&mut self, key: NamedKey) {
-        self.send(Event::KeyPressed {
-            key: Key::Named(key),
-            modifiers: Default::default(),
-        });
+        self.send(named(key));
     }
 
     fn type_text(&mut self, text: &str) {
         for c in text.chars() {
-            self.send(Event::KeyPressed {
-                key: Key::Char(c),
-                modifiers: Default::default(),
-            });
+            self.send(key_with(Key::Char(c), Default::default()));
         }
     }
 
@@ -118,7 +91,7 @@ impl Mounted {
 
     fn search(&self, query: &str) {
         self.state().search().set(query.to_owned());
-        self.settle();
+        settle(&self.tree);
     }
 
     fn row(&self, name: &str) -> AccessNode {
@@ -137,35 +110,10 @@ impl Mounted {
             })
     }
 
-    fn focused(&self) -> Option<Role> {
-        self.runtime
-            .access_snapshot(&self.tree.commands())
-            .into_iter()
-            .find(|node| node.focused)
-            .map(|node| node.role)
-    }
-
     fn click(&mut self, rect: Rect) {
-        let (x, y) = (
-            f64::from(rect.x + rect.width / 2.0),
-            f64::from(rect.y + rect.height / 2.0),
-        );
-        for event in [
-            Event::PointerPressed {
-                x,
-                y,
-                button: PointerButton::Primary,
-                source: PointerSource::Mouse,
-            },
-            Event::PointerReleased {
-                x,
-                y,
-                button: PointerButton::Primary,
-                source: PointerSource::Mouse,
-            },
-        ] {
-            self.send(event);
-        }
+        let (x, y) = centre(rect);
+        self.send(press(x, y));
+        self.send(release(x, y));
     }
 }
 
@@ -229,6 +177,8 @@ fn a_search_narrows_by_title_name_and_tags() {
     sidebar.search("inputs sec");
     assert!(sidebar.drawn("Secondary"));
     assert!(!sidebar.drawn("Primary"));
+    sidebar.search("dom");
+    assert!(!sidebar.drawn("Open"));
 }
 
 #[test]
@@ -300,19 +250,6 @@ fn clicking_a_preview_selects_it_and_clicking_a_group_shuts_it() {
     sidebar.click(overlays);
     assert!(!sidebar.drawn("Open"));
     assert_eq!(sidebar.selected().as_deref(), Some("button--secondary"));
-}
-
-#[test]
-fn slash_takes_the_keyboard_to_the_search_without_typing_itself() {
-    let mut workshop = Mounted::in_shell(entries());
-    while workshop.focused() != Some(Role::Tree) {
-        workshop.tab(1);
-    }
-    workshop.type_text("/");
-    assert_eq!(workshop.state().search().get(), "");
-    workshop.type_text("mo/");
-    assert_eq!(workshop.state().search().get(), "mo/");
-    assert_eq!(workshop.selected().as_deref(), Some("button--primary"));
 }
 
 #[test]

@@ -32,34 +32,32 @@ fn resolving_twice_does_not_accumulate() {
 }
 
 #[test]
-fn a_row_reverses_under_rtl_but_an_explicit_reverse_does_not_flip_back() {
+fn a_row_follows_the_direction_taffy_is_told_but_an_explicit_reverse_stays_right_to_left() {
     let row = LayoutStyle::new().flex_row();
+    for direction in [Direction::Ltr, Direction::Rtl] {
+        let resolved = row.resolve(direction, Size::ZERO);
+        assert_eq!(resolved.flex_direction, FlexDirection::Row);
+        assert_eq!(resolved.direction, direction.into());
+    }
+    let reversed = LayoutStyle::new().flex_row_reverse();
     assert_eq!(
-        row.resolve(Direction::Ltr, Size::ZERO).flex_direction,
-        FlexDirection::Row
-    );
-    assert_eq!(
-        row.resolve(Direction::Rtl, Size::ZERO).flex_direction,
+        reversed.resolve(Direction::Ltr, Size::ZERO).flex_direction,
         FlexDirection::RowReverse
     );
-    let reversed = LayoutStyle::new().flex_row_reverse();
-    for direction in [Direction::Ltr, Direction::Rtl] {
-        assert_eq!(
-            reversed.resolve(direction, Size::ZERO).flex_direction,
-            FlexDirection::RowReverse,
-            "an explicit reverse is physical"
-        );
-    }
+    assert_eq!(
+        reversed.resolve(Direction::Rtl, Size::ZERO).flex_direction,
+        FlexDirection::Row,
+        "an explicit reverse is physical: under RTL a plain row already runs right to left"
+    );
 }
 
 #[test]
-fn a_column_is_unaffected_by_direction() {
+fn a_column_keeps_its_axis_and_is_told_the_direction() {
     let col = LayoutStyle::new().flex_column();
     for direction in [Direction::Ltr, Direction::Rtl] {
-        assert_eq!(
-            col.resolve(direction, Size::ZERO).flex_direction,
-            FlexDirection::Column
-        );
+        let resolved = col.resolve(direction, Size::ZERO);
+        assert_eq!(resolved.flex_direction, FlexDirection::Column);
+        assert_eq!(resolved.direction, direction.into());
     }
 }
 

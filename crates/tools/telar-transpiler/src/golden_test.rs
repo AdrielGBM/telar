@@ -26,6 +26,10 @@ const PROJECTS: &[Project] = &[
         name: "landing",
         manifest: "apps/landing",
     },
+    Project {
+        name: "rsx-fixture",
+        manifest: "plugins/telar-rsx-fixture",
+    },
 ];
 
 fn workspace_root() -> PathBuf {
@@ -51,19 +55,19 @@ fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
         "{} has no usable baked asset artifact — run `cargo run -p cargo-telar -- bake` first",
         project.name
     );
+    let library = telar_project::TelarManifest::load(&manifest)
+        .unwrap_or_else(|e| panic!("{} has no readable telar.toml: {e}", project.name))
+        .telar
+        .library;
     let theme_type = telar_transpiler::resolve_theme_type(&manifest);
     assert!(
-        theme_type.is_some(),
-        "{} names no theme — `use_theme::<T>()` would snapshot untyped, which is not what its build compiles",
+        theme_type.is_some() || library,
+        "{} names no theme and is no `[telar] library`, whose `$theme` reads the shared tokens — `use_theme::<T>()` would snapshot untyped, which is not what its build compiles",
         project.name
     );
 
     let prelude = telar_project::resolve_prelude(&manifest)
         .unwrap_or_else(|e| panic!("{} declares no readable prelude: {e}", project.name));
-    let library = telar_project::TelarManifest::load(&manifest)
-        .unwrap_or_else(|e| panic!("{} has no readable telar.toml: {e}", project.name))
-        .telar
-        .library;
 
     let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
         src_dir: &src_dir,

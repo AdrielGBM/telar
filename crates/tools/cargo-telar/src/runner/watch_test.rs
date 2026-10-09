@@ -331,3 +331,17 @@ fn a_telar_toml_edit_rebuilds_and_its_neighbours_do_not() {
     );
     assert!(!watched.wants(&modified(Path::new("/w/app/.telar.toml.swp"))));
 }
+
+#[test]
+fn the_app_is_handed_its_own_arguments_after_cargo_s() {
+    let args = vec!["--location".to_string(), "/preview/a".to_string()];
+    assert_eq!(
+        with_app_args(vec!["run".into(), "-p".into(), "demo".into()], &args),
+        ["run", "-p", "demo", "--", "--location", "/preview/a"]
+    );
+    assert_eq!(
+        with_app_args(vec!["run".into(), "--".into(), "--verbose".into()], &args),
+        ["run", "--", "--verbose", "--location", "/preview/a"]
+    );
+    assert_eq!(with_app_args(vec!["run".into()], &[]), ["run"]);
+}

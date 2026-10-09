@@ -99,9 +99,7 @@ pub fn swatches(
 }
 
 fn choose(selected: RwSignal<Option<u32>>, idx: u32, on_select: Option<&dyn Fn(u32)>) {
-    if selected.peek() != Some(idx) {
-        selected.set(Some(idx));
-    }
+    selected.set_if_changed(Some(idx));
     if let Some(cb) = on_select {
         cb(idx);
     }

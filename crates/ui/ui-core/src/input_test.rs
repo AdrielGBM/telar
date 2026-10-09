@@ -12,6 +12,7 @@ fn key(k: Key) -> Event {
     Event::KeyPressed {
         key: k,
         modifiers: ModifiersState::default(),
+        unmodified: None,
     }
 }
 
@@ -22,6 +23,7 @@ fn chord(k: Key) -> Event {
             is_ctrl: true,
             ..ModifiersState::default()
         },
+        unmodified: None,
     }
 }
 
@@ -32,6 +34,7 @@ fn shifted(k: Key) -> Event {
             is_shift: true,
             ..ModifiersState::default()
         },
+        unmodified: None,
     }
 }
 
@@ -468,6 +471,7 @@ fn tap_focuses_and_ctrl_chord_is_ignored() {
             is_ctrl: true,
             ..Default::default()
         },
+        unmodified: None,
     };
     assert_eq!(input.on_event(&paste), EventResult::Ignored);
     assert_eq!(value.get(), "hi");

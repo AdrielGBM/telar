@@ -6,6 +6,7 @@
 
 #[cfg(feature = "runtime-catalog")]
 mod catalog;
+mod english;
 mod installed;
 mod locale;
 mod message;

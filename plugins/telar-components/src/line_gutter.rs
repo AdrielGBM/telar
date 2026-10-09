@@ -13,10 +13,11 @@ const NO_WRAP_WIDTH: f32 = 1.0e6;
 
 /// A line-number gutter for a code editor: the column "1\n2\n3…" drawn top-aligned with the same line height a [`TextArea`](telar::TextArea) uses, so line *n* here sits exactly on line *n* of the editor. Place it beside the editor inside the same scroll (so they scroll together) and give both the same `font_size`. It measures its own width from the widest number and its height from the line count, re-measuring reactively as the count changes. Toggle it by collapsing its node (`set_display`) inside a [`ClippedItem`](telar::ClippedItem) so a hidden gutter both takes no width and draws nothing.
 pub struct LineGutter {
+    first_line: Rc<dyn Fn() -> usize>,
     line_count: Rc<dyn Fn() -> usize>,
     style: Rc<dyn Fn() -> TextStyle>,
     leaf: LayoutLeaf,
-    // Re-measures when the line count or anything in the style that takes room changes, so the gutter tracks the editor.
+    // Re-measures when the numbers or anything in the style that takes room changes, so the gutter tracks the editor.
     _remeasure: Effect,
 }
 
@@ -26,28 +27,44 @@ impl LineGutter {
         layout_style: LayoutStyle,
         style_fn: impl Fn() -> TextStyle + 'static,
     ) -> Result<Self, LayoutError> {
+        Self::starting_at(|| 1, line_count, layout_style, style_fn)
+    }
+
+    /// [`new`](Self::new), numbering from what `first_line` reads instead of 1: an excerpt of a file, numbered as the file is.
+    pub fn starting_at(
+        first_line: impl Fn() -> usize + 'static,
+        line_count: impl Fn() -> usize + 'static,
+        layout_style: LayoutStyle,
+        style_fn: impl Fn() -> TextStyle + 'static,
+    ) -> Result<Self, LayoutError> {
+        let first_line: Rc<dyn Fn() -> usize> = Rc::new(first_line);
         let line_count: Rc<dyn Fn() -> usize> = Rc::new(line_count);
         let style: Rc<dyn Fn() -> TextStyle> = Rc::new(style_fn);
 
+        let measure_first = Rc::clone(&first_line);
         let measure_count = Rc::clone(&line_count);
         let measure_style = Rc::clone(&style);
         let leaf = LayoutLeaf::measured(layout_style, move |_| {
             let s = (measure_style)();
             let n = (measure_count)().max(1);
-            let width = measure_text(&n.to_string(), None, NO_WRAP_WIDTH, &s).0;
+            let widest = last_number((measure_first)(), n);
+            let width = measure_text(&widest.to_string(), None, NO_WRAP_WIDTH, &s).0;
             (width, n as f32 * line_box(&s))
         })?;
         let remeasure = {
+            let first_line = Rc::clone(&first_line);
             let line_count = Rc::clone(&line_count);
             let style = Rc::clone(&style);
             let node = leaf.node;
-            let measured = RefCell::new(None::<(usize, TextStyle)>);
+            let measured = RefCell::new(None::<(usize, usize, TextStyle)>);
             effect(move || {
-                let next = ((line_count)(), (style)());
+                let next = ((first_line)(), (line_count)(), (style)());
                 let unchanged = measured
                     .borrow()
                     .as_ref()
-                    .is_some_and(|(lines, style)| *lines == next.0 && style.same_extent(&next.1));
+                    .is_some_and(|(first, lines, style)| {
+                        *first == next.0 && *lines == next.1 && style.same_extent(&next.2)
+                    });
                 if unchanged {
                     return;
                 }
@@ -56,6 +73,7 @@ impl LineGutter {
             })
         };
         Ok(Self {
+            first_line,
             line_count,
             style,
             leaf,
@@ -64,17 +82,22 @@ impl LineGutter {
     }
 }
 
+fn last_number(first: usize, count: usize) -> usize {
+    first.max(1) + count.max(1) - 1
+}
+
 impl Component for LineGutter {
     fn view(&self) -> RenderNode {
         let style = (self.style)();
         let line_h = line_box(&style);
         let n = (self.line_count)().max(1);
+        let first = (self.first_line)().max(1);
         let mut numbers = String::new();
-        for i in 1..=n {
-            if i > 1 {
+        for number in first..=last_number(first, n) {
+            if number > first {
                 numbers.push('\n');
             }
-            numbers.push_str(&i.to_string());
+            numbers.push_str(&number.to_string());
         }
         let r = self.leaf.rect.get();
         // From the leaf's top-left, never optically centred, so the numbers line up with the editor even when the leaf is stretched taller than them.

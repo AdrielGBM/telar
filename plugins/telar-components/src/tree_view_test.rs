@@ -1,9 +1,9 @@
 use std::cell::RefCell;
 
+use telar::testing::{key_with, lay_out, named, press, release, route};
 use telar::{ComponentList, DrawCommand, Event, relayout_if_dirty};
 
 use super::*;
-use crate::harness::{key_with, lay_out, named, press, release, route};
 
 fn catalogue() -> Vec<TreeNode> {
     vec![

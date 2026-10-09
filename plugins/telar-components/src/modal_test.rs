@@ -225,3 +225,35 @@ fn unbound_modal_renders_nothing() {
         "a modal bound to nothing draws nothing"
     );
 }
+
+#[test]
+fn a_reader_meets_the_dialog_under_its_title() {
+    crate::test_support::fresh_layout_runtime();
+    let open = signal(true);
+    let modal = modal(
+        ModalProps::props().open(open).title("Confirm").build(),
+        Children::from(slot_with_body("Body")),
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(400.0).height(400.0),
+        &[modal.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(modal);
+    relayout_if_dirty();
+
+    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let dialogs: Vec<&str> = nodes
+        .iter()
+        .filter(|node| node.role == Role::Dialog)
+        .map(|node| node.name.as_str())
+        .collect();
+    assert_eq!(dialogs, ["Confirm"]);
+}

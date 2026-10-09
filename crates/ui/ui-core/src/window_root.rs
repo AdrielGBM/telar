@@ -91,7 +91,7 @@ impl Component for WindowRoot {
             crate::focus::blur_from_pointer(*x as f32, *y as f32);
         }
         // Tab is answered by the box that holds focus, which leaves the first one: with nothing focused the key reaches nobody. Asked last, so a control that wants Tab for itself has already taken it.
-        if let Event::KeyPressed { key, modifiers } = event
+        if let Event::KeyPressed { key, modifiers, .. } = event
             && matches!(key, platform_core::Key::Named(platform_core::NamedKey::Tab))
             && crate::focus::current().is_none()
         {

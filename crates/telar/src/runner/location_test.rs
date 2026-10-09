@@ -69,3 +69,14 @@ fn the_opening_history_is_asked_for_once() {
         "a rebuild reopens where the app is, not where it started"
     );
 }
+
+#[test]
+fn a_link_opens_on_top_of_where_the_app_is() {
+    let prefs = UserPrefs::default();
+    let mut binding = LocationBinding::new(Box::new(FixedLocation::new([at("/preview/a")])));
+    binding.open(&prefs);
+    assert_eq!(
+        binding.linking(at("/preview/b?args=n:2")),
+        [at("/preview/a"), at("/preview/b?args=n:2")]
+    );
+}

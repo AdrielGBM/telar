@@ -122,6 +122,7 @@ pub(crate) fn draw_text(
         crate::primitives::PendingShadow,
     >,
     recent_text_shadow: &mut Option<(TextShadowCacheKey, u32, u32)>,
+    synchronous_shadows: bool,
 ) {
     if let Some(shadow) = style.text_shadow.cast() {
         // The same ceil the shaper applies, computed here so the shadow's key and geometry are known without paying for a raster the cache may already have made unnecessary.
@@ -192,6 +193,7 @@ pub(crate) fn draw_text(
                     pending_text_shadows,
                     recent_text_shadow,
                     shadow_key,
+                    synchronous_shadows,
                     painted,
                     rect.x as i32 + shadow.offset_x as i32 - padding,
                     rect.y as i32 + shadow.offset_y as i32 - padding,

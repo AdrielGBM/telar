@@ -27,6 +27,7 @@ rustc-hash = { workspace = true }
 web-time = { workspace = true }
 tracing.workspace = true
 i18n-core.workspace = true
+preferences-core.workspace = true
 
 [features]
 default = []

@@ -33,7 +33,8 @@ flips.
 | `use_color_scheme()` | yes | `Option<ColorScheme>` |
 | `use_reduced_motion()` | yes | `Option<bool>`, the app's override while it sets one (see [Choosing reduced motion](#choosing-reduced-motion)) |
 | `use_system_reduced_motion()` | yes | `Option<bool>`, the system's alone |
-| `use_high_contrast()` | yes | `Option<bool>` |
+| `use_high_contrast()` | yes | `Option<bool>`, the surface's or the app's choice while one is set (see [Choosing high contrast](#choosing-high-contrast)) |
+| `use_system_high_contrast()` | yes | `Option<bool>`, the system's alone |
 | `use_preferred_locales()` | yes | `Vec<String>` |
 | `system_preferences()` | no | `SystemPreferences` as the system reported it, for event handlers |
 
@@ -67,7 +68,7 @@ facade to do so.
 | Reduced motion | the motion ticker, by default | Follows `use_reduced_motion()`: the system's preference, or the app's override (see [Choosing reduced motion](#choosing-reduced-motion)). Every animation jumps to its end; scroll momentum keeps moving. `motion::follow_reduced_motion(false)` opts out. See [animations.md](animations.md#d5-one-time-scale-and-reduced-motion-zeroes-it). |
 | Locales | `follow_system_locale(available, fallback)` | Sets the active locale to `negotiate_locale(&use_preferred_locales(), available, fallback)`, again whenever the list changes. An empty list leaves an active locale alone. |
 | Locales, once | `follow_location_locale(available, base)` | For an app whose address carries its locale: the system's list is negotiated only when the address the app opens at names none and the person never chose one, and is not followed after. See [docs/location.md](location.md#the-locale-in-the-location). |
-| High contrast | nothing built in | An application reads `use_high_contrast()` and picks its own palette. |
+| High contrast | nothing built in | An application reads `use_high_contrast()` and picks its own palette: the system's preference, the app's override, or the surface's own (see [Choosing high contrast](#choosing-high-contrast)). |
 
 Each follower is opt-in except motion: an application calls `follow_system` and `follow_system_locale` once at
 start, in its setup. Setup runs before the first snapshot arrives, which is why these are followers rather
@@ -117,6 +118,26 @@ target's preference store under `telar.reduced_motion` (`localStorage` on the we
 directory on desktop, a terminal and Android, memory in a headless run), and survives a hot reload. It belongs
 to the runtime that set it: the snapshot a `telar-embed` host forwards is what the system reported, so a
 guest keeps following the system, or its own override, rather than its host's.
+
+### Choosing high contrast
+
+High contrast has the same two layers as reduced motion, and one more. `set_high_contrast_override(Some(true))`
+or `Some(false)` fixes it for the whole app whatever the system says, and `None` hands it back. A surface can
+then make a choice of its own with `SurfaceCanvas::set_high_contrast`, which wins over both on that surface
+alone: that is how a workshop canvas shows a preview in high contrast beside the regular chrome around it.
+`use_high_contrast()` answers the value in force on the surface it is read on; `use_system_high_contrast()` and
+`use_system_preferences()` still answer what the system said.
+
+```rust
+use telar::{set_high_contrast_override, use_high_contrast, use_system_high_contrast};
+
+set_high_contrast_override(Some(true));         // more contrast here, whatever the system says
+let strong = use_high_contrast() == Some(true); // true, unless this surface chose otherwise
+let system = use_system_high_contrast();        // unchanged
+set_high_contrast_override(None);               // follow the system again
+```
+
+Unlike the reduced-motion override, it is not stored between sessions; it does survive a hot reload.
 
 ### Negotiating a locale
 

@@ -115,3 +115,34 @@ fn gutter_and_area_agree_under_a_declared_line_height() {
         "gutter={gutter_height} area={area_height}"
     );
 }
+
+#[test]
+fn an_excerpt_is_numbered_from_its_first_line_and_measured_by_its_last() {
+    fresh_layout_runtime();
+    let first = signal(1usize);
+    let style = || TextStyle::new(14.0, Color::BLACK);
+    let g = LineGutter::starting_at(move || first.get(), || 3, LayoutStyle::new(), style).unwrap();
+    let root = new_container(
+        LayoutStyle::new()
+            .flex_column()
+            .width(200.0)
+            .align_items(telar::AlignItems::START),
+        &[g.leaf.node],
+    )
+    .unwrap();
+    let lay = || {
+        compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::MaxContent,
+        )
+        .unwrap();
+        g.leaf.rect.get().width
+    };
+    let narrow = lay();
+    first.set(998);
+    let wide = lay();
+    assert!(wide > narrow * 2.0, "narrow={narrow} wide={wide}");
+    let drawn = telar::testing::texts(&telar::ComponentList::new(g));
+    assert_eq!(drawn, ["998\n999\n1000"]);
+}

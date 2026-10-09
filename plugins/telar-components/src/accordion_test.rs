@@ -1,7 +1,7 @@
+use telar::testing::{press, release};
 use telar::{AvailableSpace, compute_layout, new_container, track_layout};
 
 use super::*;
-use crate::harness::{press, release};
 
 fn slot_with_body(label: &'static str) -> Slots {
     let body = Text::declaring(

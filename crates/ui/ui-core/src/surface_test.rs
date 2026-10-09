@@ -77,6 +77,7 @@ fn escape_dismisses_only_what_the_panel_left_alone() {
     let escape = Event::KeyPressed {
         key: Key::Named(NamedKey::Escape),
         modifiers: Default::default(),
+        unmodified: None,
     };
     assert_eq!(scaffold.on_event(&escape), EventResult::Handled);
     assert_eq!(

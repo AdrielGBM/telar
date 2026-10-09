@@ -37,6 +37,12 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         tracing::error!("invalid TELAR_HOT_PORT value: {hot_port}");
         std::process::exit(1);
     };
+    // Before the library loads, which is handed whatever is installed here.
+    #[cfg(feature = "dialogs")]
+    platform_desktop::DesktopFileDialogs::install();
+    #[cfg(feature = "clipboard")]
+    platform_desktop::DesktopClipboard::install();
+    platform_desktop::DesktopUriOpener::install();
     let initial_app = match crate::hot::load_hot_app(std::path::Path::new(lib_path)) {
         Ok(app) => app,
         Err(e) => {
@@ -46,11 +52,6 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     };
     let hot_rx = crate::hot::listen_hot_reload(port);
     let paths: Arc<dyn services_core::AppPathsProvider> = Arc::new(DesktopPathsProvider);
-    #[cfg(feature = "dialogs")]
-    platform_desktop::DesktopFileDialogs::install();
-    #[cfg(feature = "clipboard")]
-    platform_desktop::DesktopClipboard::install();
-    platform_desktop::DesktopUriOpener::install();
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     let platform = match WinitPlatform::try_new() {
@@ -85,7 +86,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     );
     handler.hot_reload_rx = Some(hot_rx);
     handler.title = Some(super::state::WindowTitle::opened_as(&window.title));
-    handler.location = Some(super::location::LocationBinding::remembered(Box::new(
+    handler.location = Some(super::location::LocationBinding::for_window(Box::new(
         platform_core::ArgumentLocation::from_env(),
     )));
     if let Err(e) = platform.run(window, handler) {

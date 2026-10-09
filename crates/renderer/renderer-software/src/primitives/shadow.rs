@@ -74,6 +74,8 @@ pub(crate) fn spawn_shadow_async(
 ///
 /// `make_draw` yields the shape-drawing closure and its `Send + 'static` twin for the worker, and is called only on the paths that actually need one — never on a cache hit, and never while a worker is already producing the same pixmap. Producing them lazily is what lets a caller put expensive work (rasterizing a string to an alpha mask) behind the cache lookup instead of ahead of it.
 ///
+/// `synchronous` draws every shadow inline, whatever its size, and consults neither `pending` nor `recent`: a frame that must be right the first time it is drawn, such as an exported image, cannot wait for a worker or stand in a stale shadow.
+///
 /// `painted` is what the whole command paints in window space, shadow included, and is kept with the receiver so the frame the blur lands on can repaint that much and no more.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn blit_cached_shadow_async<K, D, A>(
@@ -82,6 +84,7 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
     pending: &mut std::collections::HashMap<K, PendingShadow>,
     recent: &mut Option<(K, u32, u32)>,
     key: K,
+    synchronous: bool,
     painted: Rect,
     blit_x: i32,
     blit_y: i32,
@@ -98,7 +101,7 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
     A: FnOnce(&mut tiny_skia::Pixmap) + Send + 'static,
 {
     // For small shadows the spawn and channel overhead outweighs the blur cost.
-    if tmp_w.saturating_mul(tmp_h) <= ASYNC_SHADOW_THRESHOLD {
+    if synchronous || tmp_w.saturating_mul(tmp_h) <= ASYNC_SHADOW_THRESHOLD {
         blit_cached_shadow(
             pixmap,
             cache,

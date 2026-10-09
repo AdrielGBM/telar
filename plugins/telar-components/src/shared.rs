@@ -11,26 +11,19 @@ use telar::{
 fn base_ink() -> Color {
     telar::Inherited::initial().text.color.solid_color()
 }
-/// Readable ink for a label sitting on `fill`: whichever of the document's own ink and the theme's `on_primary` contrasts with it more.
+/// The WCAG AA contrast ratio for body text.
+const BODY_TEXT_CONTRAST: f32 = 4.5;
+
+/// Readable ink for a label sitting on `fill`: whichever of the document's own ink and the theme's `on_primary` has the higher WCAG contrast ratio against it. A mid-tone fill neither of them reads on at [`BODY_TEXT_CONTRAST`] takes black or white instead, whichever reads better.
 ///
-/// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A neutral palette — the greys a shadcn-style theme builds on, say — makes `primary` a near-white in dark mode, and the label disappeared into its own button. Reading both ends of the theme and picking by luminance keeps a caller free to pass any colour at all — which the `fill:` prop already lets them do.
+/// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A neutral palette — the greys a shadcn-style theme builds on, say — makes `primary` a near-white in dark mode, and the label disappeared into its own button. Reading both ends of the theme and picking by contrast ratio keeps a caller free to pass any colour at all — which the `fill:` prop already lets them do.
 pub(crate) fn ink_on(fill: Color) -> Color {
-    let dark = base_ink();
-    let light = use_theme_tokens().on_primary();
-    if contrast(fill, dark) >= contrast(fill, light) {
-        dark
+    let ink = fill.most_readable(&[use_theme_tokens().on_primary(), base_ink()]);
+    if fill.contrast_ratio(ink) >= BODY_TEXT_CONTRAST {
+        ink
     } else {
-        light
+        fill.most_readable(&[ink, Color::BLACK, Color::WHITE])
     }
-}
-
-/// Difference in perceived luminance, the cheap stand-in for a full WCAG contrast ratio: enough to choose between two candidate inks, and it needs no gamma round-trip.
-fn contrast(a: Color, b: Color) -> f32 {
-    (luminance(a) - luminance(b)).abs()
-}
-
-fn luminance(c: Color) -> f32 {
-    0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 }
 
 /// The panel surface a floating thing sits on.
@@ -78,8 +71,8 @@ pub(crate) fn spacing() -> f32 {
 pub(crate) const CAPTION_RATIO: f32 = 0.85;
 /// A title's share of the body text around it.
 pub(crate) const HEADING_RATIO: f32 = 1.4;
-/// What is left of a line's ink once it is only supporting the line above it.
-pub(crate) const QUIET_ALPHA: f32 = 0.65;
+/// What is left of a line's ink once it is only supporting the line above it: the least that still reads at 4.5:1 on the tinted rows and key caps the catalogue paints behind such a line.
+pub(crate) const QUIET_ALPHA: f32 = 0.7;
 
 /// The text a control draws: whatever the tree above it says, at the ambient control density, at this control's own ratio to the body size around it.
 ///
@@ -91,7 +84,7 @@ pub(crate) fn control_text(inherited: TextStyle, ratio: f32) -> TextStyle {
 
 /// [`control_text`] in a fainter shade of the ink around it: a hint, a group heading, an inactive tab.
 ///
-/// Fades what the tree above declared instead of naming `ink()`, because `ink()` is the very value the cascade seeds itself with — writing it can only repeat the root or overrule a region that said otherwise, and a label reading "quieter than its neighbours" has to know who its neighbours are. Fading also keeps a colour that arrived already soft from being pushed back up to 0.65.
+/// Fades what the tree above declared instead of naming `ink()`, because `ink()` is the very value the cascade seeds itself with — writing it can only repeat the root or overrule a region that said otherwise, and a label reading "quieter than its neighbours" has to know who its neighbours are. Fading also keeps a colour that arrived already soft from being pushed back up to [`QUIET_ALPHA`].
 pub(crate) fn quiet(inherited: TextStyle, ratio: f32) -> TextStyle {
     let text = control_text(inherited, ratio);
     let ink = text.color.faded(QUIET_ALPHA);

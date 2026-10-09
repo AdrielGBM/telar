@@ -49,7 +49,7 @@ fn the_catalogue_is_exported_exactly_when_previews_are_compiled() {
 telar::__previews! {
     mod with_previews {
         use telar::preview::host::Args;
-        use telar::preview::{ArgBinding, Layout, Matrix, PreviewCtx, PreviewEntry};
+        use telar::preview::{ArgBinding, ArgValue, Axis, ControlKind, Layout, Matrix, PreviewCtx, PreviewEntry};
         use telar::{
             AvailableSpace, ComponentList, DrawCommand, compute_layout, install_default_text_metrics,
             reset_layout_runtime, testing,
@@ -83,16 +83,24 @@ telar::__previews! {
             ComponentList::new(root)
         }
 
+        const RSX_IDS: [&str; 3] = [
+            "telar_rsx_fixture--greeting_card--ada",
+            "telar_rsx_fixture--tally--rsx-literal",
+            "telar_rsx_fixture--tally--rsx-bound",
+        ];
+
         #[test]
         fn each_preview_is_listed_under_its_id() {
             let ids: Vec<&str> = telar_all_previews().iter().map(|entry| entry.id).collect();
-            assert_eq!(ids, ["telar_rsx_fixture--tally--default", "telar_rsx_fixture--tally--counting"]);
+            assert_eq!(ids[..3], RSX_IDS);
+            assert_eq!(ids[3..], ["telar_rsx_fixture--tally--default", "telar_rsx_fixture--tally--counting"]);
         }
 
         #[test]
         fn the_crates_own_list_shadows_the_rsx_only_one() {
-            assert!(telar_rsx_fixture::__telar_previews::telar_all_previews().is_empty());
-            assert_eq!(telar_all_previews().len(), 2);
+            let rsx: Vec<&str> = telar_rsx_fixture::__telar_previews::telar_all_previews().iter().map(|entry| entry.id).collect();
+            assert_eq!(rsx, RSX_IDS);
+            assert_eq!(telar_all_previews().len(), 5);
         }
 
         #[test]
@@ -157,6 +165,81 @@ telar::__previews! {
             });
             assert!(framed, "the text sits inside the frame's padding");
             assert_eq!(ctx.args().states()[0].binding, ArgBinding::Live);
+        }
+
+        /// A `.rsx` preview reads the literals of its root through its args, so each gets a control, and a change builds it again.
+        #[test]
+        fn an_rsx_preview_reads_its_roots_literals_through_its_args() {
+            let entry = entry("telar_rsx_fixture--tally--rsx-literal");
+            assert_eq!(entry.component, "tally");
+            assert_eq!(entry.title, "Fixture/Tally");
+            assert_eq!(entry.layout, Layout::Centered);
+            assert_eq!(entry.docs, "The tally written in Rust, previewed from `.rsx`.");
+            assert_eq!(entry.tags, ["rsx"]);
+            assert_eq!(entry.file, concat!(env!("CARGO_MANIFEST_DIR"), "/src/tally.previews.rsx"));
+            assert_eq!(entry.line, 4);
+            assert!(entry.source.starts_with("[preview \"Rsx literal\""), "{}", entry.source);
+            assert_eq!(
+                entry.matrix,
+                Some(Matrix::Axes(&[
+                    Axis::Dir(&[telar::Direction::Ltr, telar::Direction::Rtl]),
+                    Axis::Arg("count", &["1", "2"]),
+                ]))
+            );
+            assert_eq!((entry.props.expect("the previewed component's props"))().name, "TallyProps");
+
+            let ctx = PreviewCtx::from(Args::for_entry(&entry));
+            assert_eq!(testing::texts(&mounted(&entry, &ctx)), ["Pears · 2"]);
+            let rows: Vec<(&str, ArgBinding, ControlKind, Option<ArgValue>)> = ctx
+                .args()
+                .states()
+                .into_iter()
+                .map(|state| (state.name, state.binding, state.control, state.default))
+                .collect();
+            assert_eq!(
+                rows,
+                [
+                    ("label", ArgBinding::Remount, ControlKind::TEXT, Some(ArgValue::Text("Pears".into()))),
+                    ("count", ArgBinding::Remount, ControlKind::INTEGER, Some(ArgValue::Int(2))),
+                ]
+            );
+
+            let before = ctx.args().remounts();
+            ctx.args().set("count", ArgValue::Int(5)).unwrap();
+            assert_eq!(ctx.args().remounts(), before + 1, "a literal's change builds the preview again");
+            assert_eq!(testing::texts(&mounted(&entry, &ctx)), ["Pears · 5"]);
+        }
+
+        /// `args(…)` declares live args: each has its control before the preview is first built, and the tree reads the signal it shares with it.
+        #[test]
+        fn an_rsx_preview_with_args_gets_live_controls() {
+            let entry = entry("telar_rsx_fixture--tally--rsx-bound");
+            assert_eq!(entry.layout, Layout::Padded, "a variant's own option wins over the meta section's");
+            let ctx = PreviewCtx::from(Args::for_entry(&entry));
+            let declared = ctx.args().states();
+            assert_eq!(declared[0].name, "count");
+            assert_eq!(declared[0].binding, ArgBinding::Live);
+            assert_eq!(declared[0].default, Some(ArgValue::Int(3)));
+
+            assert_eq!(testing::texts(&mounted(&entry, &ctx)), ["Plums · 3"]);
+            let count = ctx.args().states().into_iter().find(|state| state.name == "count").unwrap();
+            assert_eq!((count.binding, count.control), (ArgBinding::Live, ControlKind::INTEGER));
+
+            let before = ctx.args().remounts();
+            ctx.args().set("count", ArgValue::Int(7)).unwrap();
+            assert_eq!(ctx.args().get("count"), Some(ArgValue::Int(7)));
+            assert_eq!(ctx.args().remounts(), before, "a live arg reaches the tree without building it again");
+        }
+
+        #[test]
+        fn a_component_files_preview_is_titled_by_its_meta_section() {
+            let entry = entry("telar_rsx_fixture--greeting_card--ada");
+            assert_eq!(entry.title, "Fixture/Greeting card");
+            assert_eq!(entry.docs, "A greeting in the fixture's own catalog, beside a baked mark and a baked icon.");
+            assert_eq!(entry.layout, Layout::Centered);
+            assert_eq!((entry.props.expect("the component's props"))().name, "GreetingCardProps");
+            let names: Vec<&str> = entry.args.iter().map(|arg| arg.name).collect();
+            assert_eq!(names, ["name"]);
         }
     }
 }

@@ -307,6 +307,8 @@ telar-components = {{ version = "{TELAR_VERSION}", default-features = false }}
 # The devtools overlay: an FPS counter, a node inspector and the build-error banner. Optional, so only
 # `cargo telar dev` and `cargo telar preview` compile it, by turning on the `telar-devtools` feature below.
 telar-devtools = {{ version = "{TELAR_VERSION}", optional = true }}
+# The component workshop `cargo telar preview` shows every `[preview]` in. Optional for the same reason.
+telar-workshop = {{ version = "{TELAR_VERSION}", optional = true }}
 
 [features]
 # The target this project builds for. Each one is complete on its own — swapping one word here, or
@@ -318,6 +320,7 @@ web = ["telar/web"]
 web-dom = ["telar/web-dom"]
 android = ["telar/android"]
 telar-devtools = ["dep:telar-devtools"]
+telar-workshop = ["dep:telar-workshop"]
 # Never turned on by a build: `cargo telar` names these on the command line for its own commands, and this entry is what lets Cargo.lock pin what they bring in.
 {tooling}
 

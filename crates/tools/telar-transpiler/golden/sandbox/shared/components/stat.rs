@@ -39,15 +39,21 @@ pub fn stat(props: StatProps, children: Children) -> Result<Box<dyn LayoutItem>,
     Ok(Box::new(__sbox_0))
 }
 
+::telar::__previews! {
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn stat_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let __node_0 = stat(StatProps::props().value("60 fps").label("software + wgpu").build(), Children::default())?;
+    let __node_0 = stat(StatProps::props().value(::telar::__preview_arg!(__preview, "value", "60 fps")).label(::telar::__preview_arg!(__preview, "label", "software + wgpu")).__preview_actions(&__preview.actions()).build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
 pub const STAT_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--stat--stat"), "stat", "Stat", stat_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/stat.rsx"), 13),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/stat.rsx"), 13)
+        .source("[preview \"Stat\"]\nstat value:\"60 fps\" label:\"software + wgpu\"", &[::telar::preview::SourceSpan::new(0, 60, 13)])
+        .props(<StatProps as ::telar::preview::HasPropsSchema>::schema)
+        .args(&[::telar::preview::ArgSpec::new("value").default("\"60 fps\""), ::telar::preview::ArgSpec::new("label").default("\"software + wgpu\"")]),
 ];
+}

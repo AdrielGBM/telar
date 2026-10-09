@@ -81,11 +81,10 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
         .filter(|named| !is_control(named.node))
         .filter_map(|named| {
             let rect = visible_rect(named.node)?;
-            // A named box that draws artwork and no words is a picture; anything else reads as the text it stands for.
-            let role = if named.drew_art && !named.drew_text {
-                Role::Drawing
-            } else {
-                Role::Label
+            let role = match named.role {
+                _ if named.is_picture() => Role::Drawing,
+                Role::Group => Role::Label,
+                role => role,
             };
             Some(Piece {
                 text: named.label.to_string(),
@@ -215,12 +214,131 @@ struct Named {
     drew_beside_controls: bool,
 }
 
+impl Named {
+    /// A named box that draws artwork and no words is a picture; anything else reads as the text it stands for.
+    fn is_picture(&self) -> bool {
+        self.drew_art && !self.drew_text
+    }
+}
+
+/// What a reader makes of one box a frame draws, as [`FrameReading`] reports it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BoxReading {
+    /// A reader skips it and everything in it: it, or a box around it, is hidden from readers.
+    pub skipped: bool,
+    /// The name the application gave it. `None` for a box given none, and for one a reader skips, which is never announced by any name.
+    pub name: Option<Arc<str>>,
+    /// The language it is in: the nearest said on it or around it.
+    pub lang: Option<Arc<str>>,
+}
+
+/// One bitmap or piece of vector art a frame draws, as a reader meets it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Artwork {
+    /// Its command's place in the frame.
+    pub index: usize,
+    /// The innermost box it is drawn in; `None` for art drawn outside every box.
+    pub node: Option<NodeId>,
+    /// Whether it is drawn inside a control, which a reader announces by the control's name instead.
+    pub in_control: bool,
+    /// A reader skips it: a box it is drawn in is hidden from readers.
+    pub skipped: bool,
+    /// The name a reader hears for it: that of the innermost named box around it, when that box draws artwork and no words and so reads as the picture. `None` for art a reader skips.
+    pub name: Option<Arc<str>>,
+}
+
+/// A frame as a reader meets it, box by box and picture by picture: the annotations [`snapshot`] resolves, kept where it folds them away, for a checker asking what a reader skips and what it hears for each box.
+///
+/// Read with the frame's surface entered, as [`snapshot`] is: the annotations and the controls are the surface's own.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FrameReading {
+    boxes: FxHashMap<NodeId, BoxReading>,
+    artwork: Vec<Artwork>,
+}
+
+impl FrameReading {
+    pub fn of(commands: &[DrawCommand]) -> Self {
+        let controls: FxHashSet<NodeId> = focus::exposed().iter().map(|e| e.node).collect();
+        let reading = Reading::of(commands, &controls);
+        let boxes = reading
+            .scopes
+            .iter()
+            .map(|(node, scope)| {
+                let box_reading = BoxReading {
+                    skipped: scope.hidden,
+                    name: reading.label_of(*node).map(Arc::from),
+                    lang: scope.lang.clone(),
+                };
+                (*node, box_reading)
+            })
+            .collect();
+        let artwork = reading
+            .artwork
+            .iter()
+            .map(|seen| Artwork {
+                index: seen.index,
+                node: seen.node,
+                in_control: seen.in_control,
+                skipped: seen.skipped,
+                name: seen
+                    .named
+                    .filter(|_| !seen.skipped)
+                    .map(|i| &reading.named[i])
+                    .filter(|named| named.is_picture())
+                    .map(|named| Arc::clone(&named.label)),
+            })
+            .collect();
+        Self { boxes, artwork }
+    }
+
+    /// What a reader makes of `node`, or `None` for a box the frame does not draw.
+    pub fn get(&self, node: NodeId) -> Option<&BoxReading> {
+        self.boxes.get(&node)
+    }
+
+    /// Whether a reader skips `node`. A box the frame does not draw is not skipped: nothing hid it.
+    pub fn skips(&self, node: NodeId) -> bool {
+        self.get(node).is_some_and(|reading| reading.skipped)
+    }
+
+    /// Every box the frame draws, in no particular order.
+    pub fn boxes(&self) -> impl Iterator<Item = (NodeId, &BoxReading)> {
+        self.boxes.iter().map(|(node, reading)| (*node, reading))
+    }
+
+    /// Every bitmap and piece of vector art the frame draws, in draw order.
+    pub fn artwork(&self) -> &[Artwork] {
+        &self.artwork
+    }
+}
+
+/// Art as the walk meets it, before the boxes around it have finished saying what they drew.
+struct SeenArt {
+    index: usize,
+    node: Option<NodeId>,
+    in_control: bool,
+    skipped: bool,
+    /// The innermost named box it is drawn in, by its place in [`Reading::named`].
+    named: Option<usize>,
+}
+
+/// One open element, as the walk carries it.
+#[derive(Clone, Default)]
+struct Open {
+    scope: Scope,
+    /// The innermost named box, by its place in [`Reading::named`].
+    named: Option<usize>,
+    in_control: bool,
+    node: Option<NodeId>,
+}
+
 /// One frame, as a reader meets it: the annotations resolved along its element nesting, with everything under a hidden box already gone.
 #[derive(Default)]
 struct Reading {
     scopes: FxHashMap<NodeId, Scope>,
     named: Vec<Named>,
     text: Vec<Piece>,
+    artwork: Vec<SeenArt>,
     /// Where each link box goes, and what it is the current one of when it is marked so.
     links: FxHashMap<NodeId, (platform_core::Destination, Option<CurrentKind>)>,
 }
@@ -228,10 +346,17 @@ struct Reading {
 impl Reading {
     fn of(commands: &[DrawCommand], controls: &FxHashSet<NodeId>) -> Self {
         let mut reading = Self::default();
-        // The scope in force, the innermost named box, and whether a control is open, per open element.
-        let mut open: Vec<(Scope, Option<usize>, bool)> = Vec::new();
+        let mut open: Vec<Open> = Vec::new();
+        let mut index = 0usize;
         renderer_core::for_each_with_matrix(commands, |command, matrix| {
-            let (scope, named, in_control) = open.last().cloned().unwrap_or_default();
+            let at = index;
+            index += 1;
+            let Open {
+                scope,
+                named,
+                in_control,
+                node: innermost,
+            } = open.last().cloned().unwrap_or_default();
             match command {
                 DrawCommand::PushElement { element } => {
                     let node = NodeId::from(element.id.0);
@@ -262,10 +387,33 @@ impl Reading {
                         _ => named,
                     };
                     reading.scopes.insert(node, inner.clone());
-                    open.push((inner, named, in_control || controls.contains(&node)));
+                    open.push(Open {
+                        scope: inner,
+                        named,
+                        in_control: in_control || controls.contains(&node),
+                        node: Some(node),
+                    });
                 }
                 DrawCommand::PopElement => {
                     open.pop();
+                }
+                DrawCommand::Image { .. } | DrawCommand::Path { .. } => {
+                    reading.artwork.push(SeenArt {
+                        index: at,
+                        node: innermost,
+                        in_control,
+                        skipped: scope.hidden,
+                        named,
+                    });
+                    if scope.hidden {
+                        return;
+                    }
+                    if let Some(i) = named {
+                        reading.named[i].drew_art = true;
+                    }
+                    if !in_control {
+                        reading.drew_beside_controls(named);
+                    }
                 }
                 _ if scope.hidden => {}
                 DrawCommand::Text {
@@ -301,14 +449,6 @@ impl Reading {
                             url: Some(platform_core::address_of(link)),
                             named_box: None,
                         });
-                    }
-                }
-                DrawCommand::Image { .. } | DrawCommand::Path { .. } => {
-                    if let Some(i) = named {
-                        reading.named[i].drew_art = true;
-                    }
-                    if !in_control {
-                        reading.drew_beside_controls(named);
                     }
                 }
                 _ => {}

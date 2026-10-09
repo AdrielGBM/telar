@@ -103,6 +103,9 @@ fn css_of(style: &Style, sticky: Option<&StickyInsets>) -> Css {
         }
     }
 
+    if style.direction == taffy::Direction::Rtl {
+        css.push("direction", "rtl");
+    }
     if style.display == Display::Flex {
         css.push("flex-direction", flex_direction_of(style.flex_direction));
         if style.flex_wrap == FlexWrap::Wrap {

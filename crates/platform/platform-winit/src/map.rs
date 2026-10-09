@@ -323,6 +323,7 @@ pub fn map_window_event(
             event.physical_key,
             event.state,
             crate::map_key(&event.logical_key, event.location),
+            crate::map_key(&key_without_modifiers(&event), event.location),
             *modifiers,
         ),
         WindowEvent::ThemeChanged(_) => SurfaceIntent::RereadPreferences,
@@ -336,18 +337,40 @@ fn paired_key_event(
     physical: PhysicalKey,
     state: ElementState,
     key: Option<platform_core::Key>,
+    unmodified: Option<platform_core::Key>,
     modifiers: platform_core::ModifiersState,
 ) -> SurfaceIntent {
     let event = match state {
         ElementState::Pressed => key.map(|key| Event::KeyPressed {
             key: keys.press(physical, key),
             modifiers,
+            unmodified,
         }),
         ElementState::Released => keys
             .release(&physical, key)
             .map(|key| Event::KeyReleased { key, modifiers }),
     };
     event.map_or(SurfaceIntent::Ignore, SurfaceIntent::Event)
+}
+
+/// The key `event` makes with no modifier applied; where winit cannot say, the logical key it reports.
+#[cfg(any(
+    target_os = "windows",
+    target_os = "macos",
+    all(unix, not(target_vendor = "apple"), not(target_os = "android"))
+))]
+fn key_without_modifiers(event: &winit::event::KeyEvent) -> WinitKey {
+    use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
+    event.key_without_modifiers()
+}
+
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    all(unix, not(target_vendor = "apple"), not(target_os = "android"))
+)))]
+fn key_without_modifiers(event: &winit::event::KeyEvent) -> WinitKey {
+    event.logical_key.clone()
 }
 
 // On the press, so it answers as soon as the button goes down; the release carries nothing.

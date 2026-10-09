@@ -12,9 +12,12 @@ is the batteries, written against the same public API an application's own compo
 default, and the buttons, fields, selects, tabs, sliders and indicators are in every build. Name the groups
 you draw beyond them:
 
-- `overlays`: menus, context menus, modals, drawers and tooltips
+- `overlays`: menus, context menus, modals, drawers, tooltips, the command palette and the key caps its rows
+  show, and toasts
 - `chrome`: the window frame a desktop application draws itself
 - `advanced`: reorderable lists, accordions and steppers
+- `workbench`: split panes, trees, toolbars, icon buttons, a colour picker and a code view, with the `icons`
+  and `overlays` they build on
 
 ```toml
 # Cargo.toml

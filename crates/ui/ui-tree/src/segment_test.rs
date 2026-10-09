@@ -1,4 +1,4 @@
-use geometry_core::Rect;
+use geometry_core::{Insets, Rect, Size};
 use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, ShapeStyle};
 
@@ -434,4 +434,83 @@ fn a_spliced_root_composed_by_its_own_reader_first_still_dirties_the_outer_tree(
     );
     assert!(!outer.is_dirty());
     assert!(!inner.is_dirty());
+}
+
+struct Boxed {
+    node: layout_reactive::NodeId,
+}
+impl Component for Boxed {
+    fn view(&self) -> RenderNode {
+        let element = renderer_core::Element::new(
+            renderer_core::ElementId(self.node.into()),
+            renderer_core::Semantics::group(),
+            "",
+            Rect::default(),
+        );
+        RenderNode::element(std::sync::Arc::new(element), [rect(0.0)])
+    }
+}
+
+fn laid_out_box() -> layout_reactive::NodeId {
+    use layout_reactive::{AvailableSpace, LayoutStyle};
+
+    layout_reactive::reset_layout_runtime();
+    let child = layout_reactive::new_leaf(LayoutStyle::new().width(10.0).height(10.0))
+        .unwrap()
+        .0;
+    let node = layout_reactive::new_container(
+        LayoutStyle::new()
+            .flex_row()
+            .width(200.0)
+            .height(100.0)
+            .padding_all(4.0)
+            .gap(6.0),
+        &[child],
+    )
+    .unwrap();
+    layout_reactive::compute_layout(
+        node,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    node
+}
+
+#[test]
+fn a_walked_node_carries_the_box_model_of_the_box_it_opens() {
+    let root = SegmentRoot::mount(Boxed {
+        node: laid_out_box(),
+    });
+    let mut nodes = Vec::new();
+    root.walk(&mut nodes);
+
+    assert_eq!(nodes[0].padding, Insets::all(4.0));
+    assert_eq!(nodes[0].gap, Size::new(6.0, 6.0));
+    assert_eq!(nodes[0].margin, Insets::default());
+    assert_eq!(nodes[0].border, Insets::default());
+}
+
+#[test]
+fn a_node_that_opens_no_box_has_an_empty_box_model() {
+    let root = SegmentRoot::mount(Nested);
+    let mut nodes = Vec::new();
+    root.walk(&mut nodes);
+
+    assert_eq!(nodes[0].padding, Insets::default());
+    assert_eq!(nodes[0].gap, Size::ZERO);
+}
+
+#[test]
+fn a_box_model_is_taken_per_node_in_a_tree() {
+    let outer = SegmentRoot::mount(Parent {
+        children: vec![Segment::mount(Boxed {
+            node: laid_out_box(),
+        })],
+    });
+    let mut nodes = Vec::new();
+    outer.walk(&mut nodes);
+
+    assert_eq!(nodes[0].padding, Insets::default());
+    assert_eq!(nodes[1].padding, Insets::all(4.0));
 }

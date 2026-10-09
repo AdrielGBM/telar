@@ -58,6 +58,7 @@ fn press(key: NamedKey) -> Event {
     Event::KeyPressed {
         key: Key::Named(key),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     }
 }
 
@@ -188,4 +189,72 @@ fn the_page_scroll_is_no_stop() {
     page.relayout(400.0, 800.0);
 
     assert_eq!(walk(1), vec![None]);
+}
+
+fn opened_at(commands: &[renderer_core::DrawCommand], node: NodeId) -> usize {
+    let id = renderer_core::ElementId(node.into());
+    commands
+        .iter()
+        .position(|command| {
+            matches!(command, renderer_core::DrawCommand::PushElement { element } if element.id == id)
+        })
+        .expect("the box is in the frame")
+}
+
+/// A layer fixed over the page is drawn after all of it and read where it was declared: the tab order is the document's, whatever order the frame draws in.
+#[test]
+fn the_tab_order_is_the_documents_and_not_the_frames() {
+    reset_layout_runtime();
+    clear();
+    crate::context::set_surface_size(geometry_core::Size::new(400.0, 800.0));
+    let inside = control(30.0);
+    let (inside_id, inside_node) = (inside.focus_id(), inside.layout_node());
+    let layer = crate::FixedLayer::new(LayoutStyle::new(), vec![box_item(inside)]).unwrap();
+    let (before, after) = (control(30.0), control(30.0));
+    let (before_id, after_id) = (before.focus_id(), after.focus_id());
+    let (before_node, after_node) = (before.layout_node(), after.layout_node());
+    let root = ui_tree::SegmentRoot::mount(page(vec![
+        box_item(before),
+        box_item(layer),
+        box_item(after),
+    ]));
+    crate::context::relayout_if_dirty();
+
+    let commands = root.commands();
+    assert!(opened_at(&commands, before_node) < opened_at(&commands, after_node));
+    assert!(
+        opened_at(&commands, after_node) < opened_at(&commands, inside_node),
+        "the layer is drawn over the page"
+    );
+    let order = tab_order();
+    let ids: Vec<Option<FocusId>> = order.iter().map(|stop| Some(stop.id)).collect();
+    assert_eq!(ids, vec![before_id, inside_id, after_id]);
+    let nodes: Vec<Option<NodeId>> = order.iter().map(|stop| stop.node).collect();
+    assert_eq!(
+        nodes,
+        vec![Some(before_node), Some(inside_node), Some(after_node)]
+    );
+    assert!(order.iter().all(|stop| stop.role == Role::Button));
+    assert_eq!(
+        walk(3),
+        vec![before_id, inside_id, after_id],
+        "and it is the order Tab walks"
+    );
+}
+
+/// What Tab cannot reach is not in the order: a region kept mounted while it is not showing takes its stops with it.
+#[test]
+fn the_tab_order_leaves_out_what_tab_cannot_reach() {
+    reset_layout_runtime();
+    clear();
+    let hidden = control(30.0);
+    let shown = control(30.0);
+    let shown_id = shown.focus_id();
+    let region = Container::new(LayoutStyle::new(), vec![box_item(hidden)]).unwrap();
+    let scope = register_scope(region.layout_node(), || false, false);
+    let _page = page(vec![box_item(region), box_item(shown)]);
+
+    let ids: Vec<Option<FocusId>> = tab_order().iter().map(|stop| Some(stop.id)).collect();
+    assert_eq!(ids, vec![shown_id]);
+    unregister_scope(scope);
 }

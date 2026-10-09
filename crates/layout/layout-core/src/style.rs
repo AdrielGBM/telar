@@ -261,7 +261,7 @@ pub(crate) struct LogicalStyle {
     pub(crate) margin_end: Option<SizeDimension>,
     pub(crate) inset_start: Option<SizeDimension>,
     pub(crate) inset_end: Option<SizeDimension>,
-    /// Set by [`LayoutStyle::flex_row`]: the main axis is the inline axis, so it reverses under RTL. An explicit [`LayoutStyle::flex_row_reverse`] leaves this clear — it means "reversed" in either direction.
+    /// Set by [`LayoutStyle::flex_row`]: the main axis is the inline axis, which taffy runs right to left once it is told the direction is RTL. An explicit [`LayoutStyle::flex_row_reverse`] leaves this clear — it runs right to left in either direction.
     pub(crate) row_follows_direction: bool,
     /// Set by `LayoutEngine::make_flex_row` for a node whose own declared style never called `flex_row`.
     pub(crate) row_forced: bool,
@@ -676,9 +676,12 @@ impl LayoutStyle {
     /// A margin from the viewport's physical left edge, which does **not** follow the writing direction.
     ///
     /// The one place that is right: placing an in-flow box at an x already worked out in physical viewport coordinates — a dropdown panel under its trigger, a picker under its anchor. Those come from a laid-out rect, so mirroring them under RTL would put the panel on the wrong side of the screen. For a margin that is part of a box's own spacing, use [`margin_inline_start`](Self::margin_inline_start).
+    ///
+    /// The right margin goes `auto` with it, which pins the box to that x in a column under either direction: a column's cross-axis start is the inline start, the right edge under RTL, and an auto margin outranks the alignment that would otherwise carry the box there.
     pub fn margin_from_left(mut self, px: f32) -> Self {
         self.inner.margin.left =
             LengthPercentageAuto::length(geometry_core::layout_grid().snap_pos_x(px));
+        self.inner.margin.right = LengthPercentageAuto::auto();
         self
     }
 
@@ -863,12 +866,12 @@ impl LayoutStyle {
             slot.write(&mut style, slot.snap(d.against(surface)));
         }
         let logical = &self.logical;
+        style.direction = direction.into();
         if logical.row_follows_direction || logical.row_forced {
-            style.flex_direction = if direction.is_rtl() {
-                FlexDirection::RowReverse
-            } else {
-                FlexDirection::Row
-            };
+            style.flex_direction = FlexDirection::Row;
+        } else if style.flex_direction == FlexDirection::RowReverse && direction.is_rtl() {
+            // An explicit reverse runs right to left on screen in both directions, and under RTL that is what a plain row already does.
+            style.flex_direction = FlexDirection::Row;
         }
         if logical.is_hidden() {
             style.display = Display::None;

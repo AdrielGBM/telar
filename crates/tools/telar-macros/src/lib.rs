@@ -12,6 +12,7 @@ mod baked_id;
 mod component;
 mod preview_arg;
 mod preview_id;
+mod preview_matrices;
 mod preview_source;
 mod props;
 mod props_schema;
@@ -324,8 +325,9 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_cleanup() {
                 // Drop in-flight animations alongside the signals they target so none outlive this dylib's reset runtime.
                 ::telar::motion::reset();
-                // Drop pending task callbacks too: they are code compiled into this dylib, so running — or even dropping — one after dlclose would jump into unmapped memory.
+                // Drop pending task and timer callbacks too: they are code compiled into this dylib, so running — or even dropping — one after dlclose would jump into unmapped memory.
                 ::telar::reset_tasks();
+                ::telar::reset_timers();
                 ::telar::reset_runtime();
             }
         }
@@ -368,6 +370,13 @@ pub fn app(input: TokenStream) -> TokenStream {
                 event: &::telar::Event,
             ) -> bool {
                 unsafe { ::telar::HotTree::on_event(tree, event) }
+            }
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_tree_on_covered_event(
+                tree: *mut ::telar::HotTree,
+                event: &::telar::Event,
+            ) {
+                unsafe { ::telar::HotTree::on_covered_event(tree, event) }
             }
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_tree_end_frame(tree: *mut ::telar::HotTree) {
@@ -479,15 +488,30 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_navigate_back() -> bool {
                 ::telar::navigate_back()
             }
-            // Run the completions of tasks spawned inside this dylib: `spawn_task` registers its callback in this dylib's reactive-core thread-local, so the host must drain it across this boundary — its own copy is empty.
+            // Run the completions of tasks spawned inside this dylib.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_drain_tasks() {
                 ::telar::drain_tasks();
             }
-            // Give this dylib's reactive-core copy the loop wake, so a worker finishing in here runs a frame instead of waiting for the next input event.
+            // Run the timers scheduled inside this dylib.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_fire_timers() {
+                ::telar::fire_timers();
+            }
+            // How long until this dylib's earliest timer comes due.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_until_next_timer() -> ::std::option::Option<::std::time::Duration> {
+                ::telar::until_next_timer()
+            }
+            // Give this dylib's reactive-core copy the loop wake.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_install_task_waker(waker: ::telar::RedrawWaker) {
                 ::telar::set_task_waker(move || waker.wake());
+            }
+            // This dylib's copies of the clipboard, the URI opener and the file dialogs start empty; the host's serve it instead.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_install_services(services: ::telar::hot::HostServices) {
+                services.install();
             }
         }
     } else {
@@ -963,9 +987,12 @@ fn wire_package(
             // The const lives inside the file's own module now, so it is named by its path rather than reached by a bare name the crate root used to re-export.
             let module: Vec<Ident> = file
                 .rel_out
-                .with_extension("")
-                .components()
-                .map(|c| Ident::new(&c.as_os_str().to_string_lossy(), Span::call_site()))
+                .parent()
+                .into_iter()
+                .flat_map(Path::components)
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .chain([telar_project::module_name(&file.rsx_path)])
+                .map(|segment| Ident::new(&segment, Span::call_site()))
                 .collect();
             let name = preview_const_ident(&telar_project::component_name(&file.rsx_path));
             preview_const_idents.push(quote! { crate::#(#module)::*::#name });
@@ -1031,6 +1058,16 @@ fn wire_package(
     for file in catalog.tracked_files() {
         let path_str = file.to_string_lossy().to_string();
         rerun_stmts.extend(quote! { const _: &str = include_str!(#path_str); });
+    }
+
+    // A library has no matrices of its own to install: an application lists its previews and resolves their names against its own table.
+    if !manifest.telar.library && flavour.has_previews() {
+        let install = preview_matrices::matrices_install(&manifest.telar.previews, invocation)
+            .map_err(|problems| {
+                let msg = format!("rsx: {problems}");
+                quote! { compile_error!(#msg); }
+            })?;
+        include_stmts.extend(install);
     }
 
     // A library's icons are in the notice of the application built with it, and a library installing its own would take the application's place.

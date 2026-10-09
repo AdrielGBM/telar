@@ -1,22 +1,26 @@
 use std::cell::Cell;
+use std::rc::Rc;
 
 use telar::preview::{
     ArgSpec, ArgValue, ControlKind, PreviewCtx, PreviewEntry, PropDefault, PropField, PropsSchema,
 };
-use telar::testing::{mount, texts};
+use telar::testing::{centre, key_with, mount, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Color, ComponentList, Event, Key, LayoutError, LayoutItem,
-    LayoutStyle, LocalApp, ModifiersState, NamedKey, PointerButton, PointerSource, Rect, Role,
-    StyledContainer, Text, TextStyle, box_item, relayout_if_dirty,
+    AccessNode, App, AppRuntime, Children, Color, ComponentList, DrawCommand, Event, Key,
+    LayoutError, LayoutItem, LayoutStyle, LocalApp, ModifiersState, NamedKey, Rect, Role,
+    StyledContainer, Text, TextStyle, box_item, for_each_with_matrix, transform_clip_rect,
 };
+use telar_components::{ButtonProps, button};
 
 use crate::WorkshopApp;
+use crate::test_support::{control, settle};
 
 const WIDTH: u32 = 1600;
 const HEIGHT: u32 = 1800;
 const BADGE: &str = "fake--badge--all";
 const LIVE: &str = "fake--badge--live";
 const BARE: &str = "fake--badge--bare";
+const FIRING: &str = "fake--fire--all";
 
 #[derive(Clone, Copy, Debug, PartialEq, telar::PreviewArg)]
 enum Tone {
@@ -122,6 +126,31 @@ fn bare(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     line("bare body".to_string())
 }
 
+fn firing(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let log = ctx.actions();
+    let fired = Rc::new(Cell::new(0u32));
+    let fire = button(
+        ButtonProps::props()
+            .label("Fire")
+            .on_press(Rc::new(move || {
+                fired.set(fired.get() + 1);
+                log.log("on_fire", vec![fired.get().to_string()]);
+            }))
+            .build(),
+        Children::default(),
+    )?;
+    let pick = button(
+        ButtonProps::props()
+            .label("Pick")
+            .on_press(Rc::new(move || {
+                log.log("on_pick", vec!["\"apple\"".to_string(), "2".to_string()])
+            }))
+            .build(),
+        Children::default(),
+    )?;
+    column(vec![fire, pick])
+}
+
 fn entries() -> Vec<PreviewEntry> {
     vec![
         PreviewEntry::new(BADGE, "badge", "All", badge)
@@ -129,6 +158,7 @@ fn entries() -> Vec<PreviewEntry> {
             .args(&DECLARED),
         PreviewEntry::new(LIVE, "badge", "Live", live),
         PreviewEntry::new(BARE, "badge", "Bare", bare),
+        PreviewEntry::new(FIRING, "fire", "All", firing),
     ]
 }
 
@@ -143,16 +173,9 @@ impl Workshop {
         telar::hot_restore_json(r#"{"@workshop/panel.size":"1000.0"}"#);
         let runtime = LocalApp(WorkshopApp::new(entries).select(id));
         let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
-        let mut workshop = Self { runtime, tree };
-        workshop.settle();
+        let workshop = Self { runtime, tree };
+        settle(&workshop.tree);
         workshop
-    }
-
-    fn settle(&mut self) {
-        for _ in 0..3 {
-            relayout_if_dirty();
-            let _ = self.tree.commands();
-        }
     }
 
     fn draws(&self, text: &str) -> bool {
@@ -164,28 +187,12 @@ impl Workshop {
     }
 
     fn control(&self, role: Role, name: &str) -> AccessNode {
-        let nodes = self.access();
-        nodes
-            .iter()
-            .find(|node| node.id.is_some() && node.role == role && node.name == name)
-            .cloned()
-            .unwrap_or_else(|| {
-                let controls: Vec<_> = nodes
-                    .iter()
-                    .filter(|node| node.id.is_some())
-                    .map(|node| (node.role, node.name.as_str()))
-                    .collect();
-                panic!("no {role:?} named {name:?} among {controls:?}")
-            })
+        control(&self.access(), role, name)
     }
 
     fn dispatch(&mut self, event: Event) {
-        telar::begin_batch();
-        if !telar::dispatch_overlays(&event) {
-            self.tree.on_event(&event);
-        }
-        telar::end_batch();
-        self.settle();
+        route(&mut self.tree, &event);
+        settle(&self.tree);
     }
 
     fn click(&mut self, role: Role, name: &str) {
@@ -194,29 +201,13 @@ impl Workshop {
     }
 
     fn press_at(&mut self, rect: Rect) {
-        let (x, y) = (
-            f64::from(rect.x + rect.width / 2.0),
-            f64::from(rect.y + rect.height / 2.0),
-        );
-        self.dispatch(Event::PointerPressed {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        });
-        self.dispatch(Event::PointerReleased {
-            x,
-            y,
-            button: PointerButton::Primary,
-            source: PointerSource::Mouse,
-        });
+        let (x, y) = centre(rect);
+        self.dispatch(press(x, y));
+        self.dispatch(release(x, y));
     }
 
     fn key(&mut self, key: Key) {
-        self.dispatch(Event::KeyPressed {
-            key,
-            modifiers: ModifiersState::default(),
-        });
+        self.dispatch(key_with(key, ModifiersState::default()));
     }
 
     fn type_text(&mut self, text: &str) {
@@ -233,6 +224,25 @@ impl Workshop {
             self.key(Key::Named(NamedKey::Backspace));
         }
         self.type_text(text);
+    }
+
+    /// Presses the first string drawn that contains `needle`, wherever it is drawn: in the chrome or inside a canvas.
+    fn press_text(&mut self, needle: &str) {
+        let mut found = None;
+        for_each_with_matrix(&self.tree.commands(), |command, matrix| {
+            if let DrawCommand::Text { text, rect, .. } = command
+                && found.is_none()
+                && text.contains(needle)
+            {
+                found = Some(transform_clip_rect(matrix, *rect));
+            }
+        });
+        let rect = found.unwrap_or_else(|| panic!("{needle} is not drawn"));
+        self.press_at(rect);
+    }
+
+    fn shows_tab(&self, name: &str) -> bool {
+        self.control(Role::Tab, name).toggled == Some(true)
     }
 }
 
@@ -485,4 +495,119 @@ fn a_preview_without_args_says_so() {
 fn nothing_selected_says_so() {
     let workshop = Workshop::open(Vec::new(), BADGE);
     assert!(workshop.draws("Nothing selected"));
+}
+
+#[test]
+fn the_controls_tab_is_shown_first_and_the_actions_tab_beside_it() {
+    let workshop = Workshop::open(entries(), FIRING);
+    assert!(workshop.shows_tab("Controls"));
+    assert!(!workshop.shows_tab("Actions"));
+}
+
+#[test]
+fn a_press_in_the_preview_lists_the_call_with_its_payload() {
+    let mut workshop = Workshop::open(entries(), FIRING);
+    workshop.click(Role::Tab, "Actions");
+    assert!(workshop.shows_tab("Actions"));
+    assert!(workshop.draws("No actions yet"));
+    workshop.press_text("Pick");
+    for text in ["#1", "on_pick", "\"apple\", 2"] {
+        assert!(workshop.draws(text), "the log draws {text}");
+    }
+    workshop.press_text("Fire");
+    assert!(workshop.draws("#2"));
+    assert!(workshop.draws("on_fire"));
+    let drawn = texts(&workshop.tree);
+    let position = |needle: &str| drawn.iter().position(|text| text == needle);
+    assert!(
+        position("on_fire") < position("on_pick"),
+        "the newest call is listed first: {drawn:?}"
+    );
+}
+
+#[test]
+fn the_tab_counts_the_calls_whichever_panel_is_shown() {
+    let mut workshop = Workshop::open(entries(), FIRING);
+    workshop.press_text("Fire");
+    workshop.press_text("Fire");
+    workshop.press_text("Pick");
+    assert!(workshop.shows_tab("Controls"));
+    assert!(workshop.draws("3"), "the Actions tab carries the count");
+}
+
+#[test]
+fn the_filter_keeps_the_calls_whose_name_or_payload_match() {
+    let mut workshop = Workshop::open(entries(), FIRING);
+    workshop.click(Role::Tab, "Actions");
+    workshop.press_text("Fire");
+    workshop.press_text("Pick");
+    workshop.click(Role::TextInput, "Filter actions");
+    workshop.type_text("APPLE");
+    assert!(workshop.draws("on_pick"));
+    assert!(!workshop.draws("on_fire"));
+    workshop.retype(Role::TextInput, "Filter actions", "fire");
+    assert!(workshop.draws("on_fire"));
+    assert!(!workshop.draws("on_pick"));
+    workshop.retype(Role::TextInput, "Filter actions", "nothing");
+    assert!(workshop.draws("No actions match the filter"));
+}
+
+#[test]
+fn clear_empties_the_log_and_drops_the_count() {
+    let mut workshop = Workshop::open(entries(), FIRING);
+    workshop.click(Role::Tab, "Actions");
+    workshop.press_text("Fire");
+    workshop.press_text("Fire");
+    assert!(workshop.draws("2"), "the tab counts two calls");
+    workshop.click(Role::Button, "Clear");
+    assert!(workshop.draws("No actions yet"));
+    assert!(!workshop.draws("2"), "the count goes with the calls");
+    assert!(!workshop.draws("on_fire"));
+    workshop.press_text("Fire");
+    assert!(workshop.draws("#3"), "numbering carries on after a clear");
+    assert!(workshop.draws("1"), "the count starts again");
+}
+
+#[test]
+fn the_arrows_move_along_the_tabs() {
+    let mut workshop = Workshop::open(entries(), FIRING);
+    workshop.click(Role::Tab, "Controls");
+    workshop.key(Key::Named(NamedKey::ArrowRight));
+    assert!(workshop.shows_tab("Actions"));
+    workshop.key(Key::Named(NamedKey::ArrowRight));
+    assert!(workshop.shows_tab("Controls"), "the strip wraps at its end");
+    workshop.key(Key::Named(NamedKey::End));
+    assert!(workshop.shows_tab("Actions"));
+}
+
+#[test]
+fn the_panel_shown_survives_a_hot_reload() {
+    let mut workshop = Workshop::open(entries(), FIRING);
+    workshop.click(Role::Tab, "Actions");
+    let snapshot = telar::hot_snapshot_json();
+    telar::hot_restore_json(&snapshot);
+    let workshop = Workshop::open(entries(), FIRING);
+    assert!(workshop.shows_tab("Actions"));
+}
+
+#[test]
+fn matching_lists_the_newest_first_and_ignores_case() {
+    use telar::preview::ActionCall;
+
+    let calls = [
+        ActionCall::new(1, "on_press", Vec::new()),
+        ActionCall::new(2, "on_change", vec!["\"Apple\"".to_string()]),
+        ActionCall::new(3, "on_press", Vec::new()),
+    ];
+    let seqs = |filter: &str| -> Vec<u64> {
+        super::actions::matching(&calls, filter)
+            .iter()
+            .map(|call| call.seq)
+            .collect()
+    };
+    assert_eq!(seqs(""), [3, 2, 1]);
+    assert_eq!(seqs("  "), [3, 2, 1]);
+    assert_eq!(seqs("PRESS"), [3, 1]);
+    assert_eq!(seqs("apple"), [2]);
+    assert!(seqs("pear").is_empty());
 }

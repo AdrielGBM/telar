@@ -44,8 +44,13 @@ pub(super) fn shadow_marker(name: &str) -> String {
 }
 
 /// Builds an [`SRC_EXPR_OPEN`] marker for a verbatim expression at source byte offset `rsx_start` spanning `len` bytes.
-fn expr_marker(rsx_start: usize, len: usize) -> String {
+pub(crate) fn expr_marker(rsx_start: usize, len: usize) -> String {
     format!("{SRC_EXPR_OPEN}{rsx_start}:{len}{SRC_EXPR_CLOSE}")
+}
+
+/// `code` attributed to the 1-based `.rsx` `line`, for [`resolve_source_map`] to map back.
+pub(crate) fn on_source_line(line: usize, code: &str) -> String {
+    format!("{SRC_PUSH}{}\n{code}\n{SRC_POP}", line.saturating_sub(1))
 }
 
 /// Wraps `emit`'s code in `SRC_PUSH`/`SRC_POP` markers carrying the 0-based `.rsx` `line`.
@@ -240,6 +245,14 @@ pub struct ViewGen<'a> {
     scroll_viewport: Option<String>,
     /// What a `$theme` read compiles to: the `theme` handle, or in a library the shared tokens.
     theme_access: ThemeAccess,
+    /// The root component call of the preview being emitted, which reads its literal attributes as args and logs its callbacks.
+    preview_root: Option<PreviewRoot<'a>>,
+}
+
+/// A preview's root component call, by identity, and whether its literal attributes are args or `args:none` opted out.
+pub(crate) struct PreviewRoot<'a> {
+    element: &'a Element,
+    implicit_args: bool,
 }
 
 impl<'a> ViewGen<'a> {
@@ -259,6 +272,7 @@ impl<'a> ViewGen<'a> {
             reactive_depth: 0,
             scroll_viewport: None,
             theme_access: ThemeAccess::Handle,
+            preview_root: None,
         }
     }
 
@@ -365,6 +379,15 @@ impl<'a> ViewGen<'a> {
 
     pub(crate) fn with_signals(mut self, signals: Vec<String>) -> Self {
         self.signals = signals;
+        self
+    }
+
+    /// Marks `element` as the root component call of a preview's body: its builder logs its callbacks in the preview's action log and, unless `implicit_args` is off, reads each of [`Self::implicit_args`] through the preview's args.
+    pub(crate) fn with_preview_root(mut self, element: &'a Element, implicit_args: bool) -> Self {
+        self.preview_root = Some(PreviewRoot {
+            element,
+            implicit_args,
+        });
         self
     }
 
@@ -680,6 +703,17 @@ impl<'a> ViewGen<'a> {
             other => self.emit_component_call(el, other),
         }
     }
+}
+
+/// The tags [`ViewGen::emit_element`] builds itself, besides the asset tags; every other tag is a component call.
+const BUILT_TAGS: &[&str] = &[
+    "text", "span", "col", "row", "grid", "box", "overlay", "layer", "lazy", "mask", "input",
+    "path", "canvas", "scroll", "children",
+];
+
+/// Whether `tag` is a component call rather than a tag the view builds itself.
+pub(crate) fn is_component_tag(tag: &str) -> bool {
+    asset_kind_for_tag(tag).is_none() && !BUILT_TAGS.contains(&tag)
 }
 
 /// Whether a view node must build a mutable `__children` vec rather than a `children![...]` literal: control flow (`if`/`for`/`let`) that mutates the vec in place, or a `children` slot placeholder that splices a runtime `Vec` into it.

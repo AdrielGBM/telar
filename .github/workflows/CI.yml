@@ -192,6 +192,7 @@ jobs:
               echo "telar = { path = \"$GITHUB_WORKSPACE/crates/telar\" }"
               echo "telar-components = { path = \"$GITHUB_WORKSPACE/plugins/telar-components\" }"
               echo "telar-devtools = { path = \"$GITHUB_WORKSPACE/plugins/telar-devtools\" }"
+              echo "telar-workshop = { path = \"$GITHUB_WORKSPACE/plugins/telar-workshop\" }"
             } >> "$dir/Cargo.toml"
             # Resolving alone validates every `telar/<feature>` the manifest names, including the three
             # targets this project did not start on — a renamed feature fails here, compiling nothing.
@@ -204,6 +205,7 @@ jobs:
             # The runner `telar::app!` emits when `cargo telar dev` turns the overlay on, which no other job compiles.
             if [[ "$target" == desktop ]]; then
               CARGO_TARGET_DIR="$scaffold_target" cargo check --manifest-path "$dir/Cargo.toml" --features telar-devtools,telar/dev
+              CARGO_TARGET_DIR="$scaffold_target" cargo check --manifest-path "$dir/Cargo.toml" --features telar-workshop,telar/preview
             fi
             echo "::endgroup::"
           done

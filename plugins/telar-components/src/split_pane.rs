@@ -20,7 +20,7 @@ const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 const DRAG_THRESHOLD: f32 = 3.0;
 
 /// How the two panes sit relative to each other.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, telar::PreviewArg)]
 pub enum SplitDirection {
     /// Side by side, the first pane at the inline start; the splitter is a vertical bar.
     #[default]
@@ -78,7 +78,7 @@ impl SplitDirection {
 }
 
 /// Which pane [`SplitPaneProps::size`], the limits and the collapse belong to; the other pane takes the rest.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, telar::PreviewArg)]
 pub enum SizedPane {
     /// The pane at the inline start of a row, or at the top of a column.
     #[default]

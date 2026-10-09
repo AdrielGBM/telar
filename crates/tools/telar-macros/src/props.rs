@@ -2,6 +2,7 @@
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, format_ident, quote};
+use syn::ext::IdentExt;
 use syn::spanned::Spanned;
 use syn::{Data, DeriveInput, Expr, ExprLit, Fields, Ident, Lit, Type};
 
@@ -172,6 +173,7 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
     });
 
     let schema = props_schema::expand(name, &props_schema::doc_of(&input.attrs), &props);
+    let actions = preview_actions(name, &builder, &generics, &props);
 
     Ok(quote! {
         #(
@@ -210,6 +212,8 @@ pub fn expand(input: DeriveInput) -> Result<TokenStream2, syn::Error> {
         }
 
         #schema
+
+        #actions
     })
 }
 
@@ -219,6 +223,54 @@ fn angled(args: impl Iterator<Item = TokenStream2>) -> TokenStream2 {
     match args.is_empty() {
         true => quote! {},
         false => quote! { <#(#args),*> },
+    }
+}
+
+/// Emits, wrapped in `telar::__previews!`, the builder's `__preview_actions` over the optional props, callable in any builder state, and the props' `PreviewActions` over every prop.
+///
+/// Every prop goes through the action probe rather than only those whose type is written as a `Fn`, so a callback reached through a type alias is logged too, and a prop that is no callback comes back as it was.
+fn preview_actions(
+    name: &Ident,
+    builder: &Ident,
+    generics: &TokenStream2,
+    props: &[Prop],
+) -> TokenStream2 {
+    let optional: Vec<&Prop> = props.iter().filter(|p| !p.is_required()).collect();
+    let all: Vec<&Prop> = props.iter().collect();
+    let builder_fn = logging_fn(quote! { pub fn __preview_actions }, &optional);
+    let props_fn = logging_fn(quote! { fn preview_actions }, &all);
+    quote! {
+        ::telar::__previews! {
+            impl #generics #builder #generics {
+                #[doc(hidden)]
+                #builder_fn
+            }
+
+            impl ::telar::preview::PreviewActions for #name {
+                #props_fn
+            }
+        }
+    }
+}
+
+/// `fn(self, log: &ActionLog) -> Self` passing each of `props` through the action probe, with no `mut` and an unused `_log` when there are none, so the expansion raises no warning in the deriving crate.
+fn logging_fn(signature: TokenStream2, props: &[&Prop]) -> TokenStream2 {
+    if props.is_empty() {
+        return quote! {
+            #signature(self, _log: &::telar::preview::ActionLog) -> Self {
+                self
+            }
+        };
+    }
+    let logged = props.iter().map(|p| {
+        let (field, text) = (&p.name, p.name.unraw().to_string());
+        quote! { self.#field = ::telar::__preview_action!(*log, #text, self.#field); }
+    });
+    quote! {
+        #signature(mut self, log: &::telar::preview::ActionLog) -> Self {
+            #(#logged)*
+            self
+        }
     }
 }
 

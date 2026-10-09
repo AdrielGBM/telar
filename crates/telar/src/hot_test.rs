@@ -23,3 +23,23 @@ fn a_literal_backslash_is_not_read_as_an_escape() {
     let escaped = message.replace('\\', "\\\\").replace('\n', "\\n");
     assert_eq!(unescape_lines(&escaped), message);
 }
+
+#[cfg(feature = "dev")]
+#[test]
+fn each_line_of_the_channel_is_the_event_its_prefix_names() {
+    assert_eq!(
+        hot_event("hot:/target/debug/libapp.so"),
+        Some(HotEvent::Reload("/target/debug/libapp.so".into()))
+    );
+    assert_eq!(
+        hot_event("err:line\\none"),
+        Some(HotEvent::BuildError("line\none".to_string()))
+    );
+    assert_eq!(
+        hot_event("goto:/preview/demo--card--a?args=label:%22Hi%22"),
+        Some(HotEvent::Goto(
+            "/preview/demo--card--a?args=label:%22Hi%22".to_string()
+        ))
+    );
+    assert_eq!(hot_event("/target/debug/libapp.so"), None);
+}

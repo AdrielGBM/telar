@@ -74,9 +74,21 @@ fn a_reduced_motion_override_survives_snapshot_restore() {
 }
 
 #[test]
+fn a_high_contrast_override_survives_snapshot_restore() {
+    preferences_core::set_high_contrast_override(Some(false));
+    let blob = hot_snapshot_json();
+    preferences_core::set_high_contrast_override(None);
+    hot_restore_json(&blob);
+    assert_eq!(preferences_core::high_contrast_override(), Some(false));
+    preferences_core::set_high_contrast_override(None);
+}
+
+#[test]
 fn following_the_system_adds_nothing_to_the_snapshot() {
     preferences_core::set_reduced_motion_override(None);
     assert!(!hot_snapshot_json().contains(REDUCED_MOTION_OVERRIDE_KEY));
+    preferences_core::set_high_contrast_override(None);
+    assert!(!hot_snapshot_json().contains(HIGH_CONTRAST_OVERRIDE_KEY));
 }
 
 /// The transpiler swaps `signal(` for this macro and keeps the author's arguments as written, so a formatter's trailing comma has to be as welcome here as in the call it replaced.

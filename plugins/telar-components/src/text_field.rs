@@ -4,9 +4,9 @@ use std::rc::Rc;
 
 use crate::shared;
 use telar::{
-    Accessible, Border, BorderRadius, Children, Color, Input, LayoutError, LayoutItem, LayoutStyle,
-    Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, box_item, signal,
-    style_follows,
+    Accessible, Border, BorderRadius, Children, Color, Input, Key, LayoutError, LayoutItem,
+    LayoutStyle, ModifiersState, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
+    box_item, focus::FocusId, signal, style_follows,
 };
 
 fn box_radius() -> f32 {
@@ -54,7 +54,16 @@ pub struct TextFieldProps {
     /// Runs when Enter is pressed while the field is focused.
     #[props(some, default)]
     pub on_submit: Option<Rc<dyn Fn()>>,
+    /// Hears every key pressed while the field holds the keyboard, before the field acts on it; answering `true` takes the key from the field. What a field that walks a list of suggestions under it needs: the arrows and Enter are keys a focused field keeps for itself.
+    #[props(some, default)]
+    pub on_key: Option<FieldKeyHandler>,
+    /// The suggestion a field like that has its cursor on, so a reader announces it while the keyboard stays in the field. `None` (the default) points at nothing.
+    #[props(some, default)]
+    pub active_descendant: Option<Rc<dyn Fn() -> Option<FocusId>>>,
 }
+
+/// What [`TextFieldProps::on_key`] is called with: the key and the modifiers held with it.
+pub type FieldKeyHandler = Rc<dyn Fn(&Key, ModifiersState) -> bool>;
 
 /// Builds a `text_field`: a bordered/padded box around `telar::Input`, swapping in a muted placeholder muted hint via the `Input`'s own `placeholder` while the value is empty — the field stays a live, always-mounted `Input`, so it is tappable/typable from a cold start (no swapped-in `Text` that would refuse focus).
 pub fn text_field(
@@ -68,6 +77,8 @@ pub fn text_field(
         width,
         color,
         on_submit,
+        on_key,
+        active_descendant,
     } = props;
     let value = value.unwrap_or_else(|| signal(String::new()));
     let width = if width > 0.0 { width } else { DEFAULT_WIDTH };
@@ -90,6 +101,12 @@ pub fn text_field(
     });
     if let Some(cb) = on_submit {
         input = input.on_submit(move || cb());
+    }
+    if let Some(hook) = on_key {
+        input = input.on_key(move |key, modifiers| hook(key, modifiers));
+    }
+    if let Some(read) = active_descendant {
+        telar::focus::set_active_descendant(input.focus_id(), move || read());
     }
     // The input is a leaf, so its node's style is followed from the box that outlives it.
     let line_node = input.layout_node();

@@ -17,6 +17,8 @@ mod lexer;
 #[cfg(feature = "transpile")]
 mod package;
 #[cfg(feature = "transpile")]
+mod preview;
+#[cfg(feature = "transpile")]
 mod registry;
 #[cfg(feature = "transpile")]
 mod rust;
@@ -24,6 +26,8 @@ mod rust;
 mod signal_scan;
 #[cfg(feature = "transpile")]
 mod source_map;
+#[cfg(feature = "transpile")]
+mod split;
 #[cfg(feature = "transpile")]
 mod style;
 #[cfg(feature = "transpile")]
@@ -45,6 +49,8 @@ pub use package::{
     GeneratedFile, PackageError, PackageOptions, build_index, transpile_buffer, transpile_package,
     write_package,
 };
+#[cfg(feature = "transpile")]
+pub use preview::PREVIEW_OPTION_KEYS;
 #[cfg(feature = "transpile")]
 pub use registry::{
     AttrSpec, ROLE_VALUES, ValueKind, attr_doc, attr_spec, builtin_tag_doc, builtin_tags,

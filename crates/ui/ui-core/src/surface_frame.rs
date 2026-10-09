@@ -10,7 +10,7 @@ use platform_core::{Event, Key, NamedKey, PointerButton, Role, WindowCommand};
 use reactive_core::{OwnerId, dispose_owner, effect, owner_scope};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::focus::{self, FocusId, FocusKind};
+use crate::focus::{self, FocusId, FocusKind, Travel};
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 use crate::surface_canvas::{SurfaceCanvas, composite_surface};
@@ -21,7 +21,7 @@ use crate::surface_context::Surface;
 /// The canvas keeps its own world, so whatever opens inside it stays inside it: a dialog covers the frame and is clipped to it, Escape reaches the frame's dismiss stack and not the page's, and its size, safe area and breakpoints are the frame's.
 ///
 /// - **Pointer.** A press inside the frame, the moves and wheel over it, and every move and release of a gesture that began inside it reach the canvas, mapped into its coordinates; the surface's overlays see them first. A pointer leaving the frame reaches it as [`Event::CursorLeft`].
-/// - **Keyboard.** The frame is one stop in the outer tab order and holds the keys while it has focus: a press inside it takes focus, arriving by Tab hands focus to the first focusable inside, and leaving it clears focus inside. Tab moves only among the focusables inside and wraps there; a frame with nothing focusable inside lets Tab go on. Whether a field inside has the caret is what the outer tree hears when it asks [`text_entry_focused`](crate::focus::text_entry_focused).
+/// - **Keyboard.** The frame is one stop in the outer tab order and holds the keys while it has focus: a press inside it takes focus, arriving by Tab hands focus to the first focusable inside and arriving by Shift+Tab to the last, and leaving it clears focus inside. Tab moves among the focusables inside and, past the last, on to the stop after the frame, as Shift+Tab past the first does to the stop before it, so the keyboard is never trapped in a canvas; a modal open inside holds Tab within itself until it closes. Whether a field inside has the caret is what the outer tree hears when it asks [`text_entry_focused`](crate::focus::text_entry_focused).
 /// - **Window.** The canvas has no window: only the pointer shapes it asks for reach the real one.
 pub struct SurfaceFrame {
     canvas: Rc<SurfaceCanvas>,
@@ -66,6 +66,10 @@ impl SurfaceFrame {
         })?;
         let id = focus::next_id();
         focus::register_with_role(id, FocusKind::Widget, leaf.node, Role::Group);
+        {
+            let _inside = canvas.enter();
+            focus::host();
+        }
         let surface = Rc::downgrade(canvas.surface());
         focus::delegate_keyboard(id, {
             let surface = surface.clone();
@@ -135,19 +139,30 @@ impl SurfaceFrame {
         EventResult::Ignored
     }
 
+    /// Tab inside the canvas, and once it steps past the canvas's last focusable or Shift+Tab past its first, on through the outer tree from the frame.
     fn tab(&self, event: &Event, backwards: bool) -> EventResult {
-        if self.forward(event) == EventResult::Handled {
-            return EventResult::Handled;
+        let inside = || self.canvas.enter();
+        {
+            // A step off the end that something other than Tab made is no reason for this one to leave.
+            let _inside = inside();
+            focus::take_departure();
         }
-        let holds_focus_inside = {
-            let _inside = self.canvas.enter();
-            if focus::current().is_none() {
+        let handled = self.forward(event) == EventResult::Handled;
+        let departed = {
+            let _inside = inside();
+            if !handled {
                 step(backwards);
             }
-            focus::current().is_some()
+            focus::take_departure().is_some()
         };
-        if !holds_focus_inside {
+        if departed {
             step(backwards);
+            // The window wrapped round to this frame, its only stop: carry on inside it from the other end.
+            if focus::is_focused(self.focus) {
+                let _inside = inside();
+                step(backwards);
+                focus::take_departure();
+            }
         }
         EventResult::Handled
     }
@@ -192,6 +207,7 @@ impl Component for SurfaceFrame {
             Event::KeyPressed {
                 key: Key::Named(NamedKey::Tab),
                 modifiers,
+                ..
             } if focused() => self.tab(event, modifiers.is_shift),
             Event::KeyPressed { .. } | Event::KeyReleased { .. } if focused() => {
                 self.forward(event)
@@ -272,7 +288,7 @@ fn forward_pointer_shape(canvas: &SurfaceCanvas) {
     }
 }
 
-/// Clears focus inside when the frame loses it here, and hands it to the first focusable inside when the keyboard arrives — a press brings its own target.
+/// Clears focus inside when the frame loses it here, and when the keyboard arrives hands it to the first focusable inside, or the last when Shift+Tab brought it — a press brings its own target.
 fn follow_outer_focus(id: FocusId, surface: Weak<Surface>) {
     let held_before = Cell::new(false);
     effect(move || {
@@ -281,6 +297,7 @@ fn follow_outer_focus(id: FocusId, surface: Weak<Surface>) {
         if held_before.replace(held) == held {
             return;
         }
+        let backwards = focus::arrived_by(id) == Some(Travel::Backward);
         let Some(surface) = surface.upgrade() else {
             return;
         };
@@ -288,7 +305,7 @@ fn follow_outer_focus(id: FocusId, surface: Weak<Surface>) {
         if !held {
             focus::clear();
         } else if by_keyboard && focus::current().is_none() {
-            focus::focus_next();
+            step(backwards);
         }
     });
 }

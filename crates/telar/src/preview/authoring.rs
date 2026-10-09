@@ -54,6 +54,8 @@ impl<T: LayoutItem + 'static> IntoPreviewRoot for Result<T, LayoutError> {
 /// - **`"Primary"`** names the variant. The id is `<crate>--button--primary`, slugged as a `.rsx` preview's is, so a name with no letter or digit is a compile error.
 /// - **`|p| body`** builds the tree. `p` is the canvas's [`PreviewCtx`](crate::preview::PreviewCtx): [`p.arg`](crate::preview::PreviewCtx::arg) reads a value its control can change, building the preview again when it does, and [`p.signal`](crate::preview::PreviewCtx::signal) shares a signal with its control. The body returns `Result<impl LayoutItem, LayoutError>`, as a component call does, and may use `?`; it is compiled as a fn, so it cannot capture anything.
 ///
+/// When `: ButtonProps` is written, every call the body makes to `button` logs its callbacks in the canvas's [`ActionLog`](crate::preview::ActionLog), each under its prop's name: one the body sets is logged as it runs, and one it leaves unset is logged and does nothing else. `button` must then be the component's fn in scope, called by that name. The body sees it as a closure, so a `'static` closure in the body that calls it is written `move`.
+///
 /// The entry also records the absolute path of the file it is written in, its line and the body's source text.
 ///
 /// Write previews, and the `pub fn telar_all_previews() -> Vec<Preview>` that lists a crate's, inside [`crate::__previews!`], so a build without the `previews` feature compiles none of them.
@@ -69,6 +71,17 @@ macro_rules! __preview_entry {
                 ::std::boxed::Box<dyn $crate::LayoutItem>,
                 $crate::LayoutError,
             > {
+                $(
+                    let actions = ctx.actions();
+                    // Shadows the component for the body alone, so every call it makes logs the callbacks it is handed.
+                    #[allow(unused_variables)]
+                    let $tag = move |props: $props, children| {
+                        $tag(
+                            <$props as $crate::preview::PreviewActions>::preview_actions(props, &actions),
+                            children,
+                        )
+                    };
+                )?
                 let $ctx = ctx;
                 $crate::preview::IntoPreviewRoot::into_preview_root($body)
             }

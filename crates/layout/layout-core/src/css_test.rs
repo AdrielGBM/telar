@@ -26,16 +26,26 @@ fn a_row_becomes_a_flex_row() {
 }
 
 #[test]
-fn a_row_reverses_under_rtl() {
+fn a_row_under_rtl_is_a_row_told_the_direction() {
     let style = LayoutStyle::new().flex_row();
+    let written = style.to_css(Direction::Rtl, Size::ZERO).into_string();
     assert!(
-        style
+        written.contains("direction:rtl;flex-direction:row;"),
+        "got {written}"
+    );
+}
+
+/// The browser resolves a column's cross axis against `direction` just as taffy does, so the two only agree if it is written down.
+#[test]
+fn rtl_is_written_on_every_box_and_ltr_is_left_to_the_default() {
+    let column = LayoutStyle::new().flex_column();
+    assert!(
+        column
             .to_css(Direction::Rtl, Size::ZERO)
             .as_str()
-            .contains("flex-direction:row-reverse"),
-        "got {}",
-        style.to_css(Direction::Rtl, Size::ZERO)
+            .contains(";direction:rtl;")
     );
+    assert!(!css(column).contains(";direction:"));
 }
 
 #[test]

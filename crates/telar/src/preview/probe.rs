@@ -1,4 +1,4 @@
-//! Autoref specialisation over [`PreviewArg`], so generated code can hand any value to a preview's args without knowing its type.
+//! Autoref specialisation over [`PreviewArg`], so generated code can hand any value to a preview's args without knowing its type, and over [`IntoAction`], so it can log a prop's calls whatever the prop is.
 //!
 //! A type with [`PreviewArg`] is read through the [`PreviewCtx`] and gets its control. A type without one passes through unchanged and is listed read-only, shown by its `Debug` text when it has one. The choice is made by method resolution on `&&&Probe<T>`, where each tier implements its trait one reference shallower than the tier above, so the first that applies wins.
 //!
@@ -12,9 +12,11 @@
 //! let agree = ::telar::__preview_signal!(__preview, "agree", false);
 //! // A type's control, with no value: `ControlKind::ReadOnly` when it has none.
 //! let control: ::telar::preview::ControlKind = ::telar::__preview_control!(ButtonSize);
+//! // A prop: each call logged under its name when it is a callback, by its arguments' `Debug` text or else their type's name; any other value unchanged.
+//! self.on_press = ::telar::__preview_action!(log, "on_press", self.on_press);
 //! ```
 //!
-//! The first argument is a `PreviewCtx` or a reference to one.
+//! The first argument is a `PreviewCtx` or a reference to one, or for `__preview_action!` the `ActionLog`.
 
 use std::borrow::Borrow;
 use std::fmt::Debug;
@@ -23,7 +25,7 @@ use std::sync::OnceLock;
 
 use reactive_core::{RwSignal, signal};
 
-use super::{ControlKind, PreviewArg, PreviewCtx};
+use super::{ActionLog, ControlKind, IntoAction, PreviewArg, PreviewCtx};
 
 /// Carries the type under test. Built from a value with [`Probe::of`], or from a type alone with [`Probe::new`].
 pub struct Probe<T>(PhantomData<fn() -> T>);
@@ -135,6 +137,73 @@ impl<T: 'static> ViaOpaque for Probe<T> {
     }
 }
 
+macro_rules! callback_traits {
+    ($($(#[$doc:meta])* $name:ident;)*) => {
+        $(
+            $(#[$doc])*
+            pub trait $name: Sized {
+                fn action(log: ActionLog, name: &'static str) -> Self;
+                fn logged(self, log: ActionLog, name: &'static str) -> Self;
+            }
+        )*
+    };
+}
+
+callback_traits! {
+    /// [`IntoAction`] for a callback with an argument that has no `Debug`, each argument recorded by its type's name.
+    IntoOpaqueAction;
+    /// [`IntoAction`] for a callback of one borrowed argument, `Rc<dyn Fn(&T)>`, recorded by its `Debug` text. A trait of its own because an impl of `IntoAction` for it would overlap the one for `Rc<dyn Fn(T)>` as coherence will come to see it (rust-lang/rust#56105).
+    IntoBorrowedAction;
+    /// [`IntoBorrowedAction`] for an argument that has no `Debug`, recorded by its type's name.
+    IntoOpaqueBorrowedAction;
+}
+
+macro_rules! action_tiers {
+    ($($(#[$doc:meta])* $tier:ident: $callback:ident for $probe:ty;)*) => {
+        $(
+            $(#[$doc])*
+            pub trait $tier {
+                type Value;
+                fn log_calls(&self, value: Self::Value, log: ActionLog, name: &'static str) -> Self::Value;
+            }
+
+            impl<T: $callback> $tier for $probe {
+                type Value = T;
+
+                fn log_calls(&self, value: T, log: ActionLog, name: &'static str) -> T {
+                    value.logged(log, name)
+                }
+            }
+        )*
+    };
+}
+
+// A callback has at most one of `IntoAction` and `IntoBorrowedAction`, and of their opaque pair, so two tiers can share a depth.
+action_tiers! {
+    /// The tier for a callback with [`IntoAction`].
+    ViaAction: IntoAction for &&Probe<T>;
+    /// The tier for a callback with [`IntoBorrowedAction`].
+    ViaBorrowedAction: IntoBorrowedAction for &&Probe<T>;
+    /// The tier for a callback whose arguments have no `Debug`.
+    ViaOpaqueAction: IntoOpaqueAction for &Probe<T>;
+    /// The tier for a callback whose borrowed argument has no `Debug`.
+    ViaOpaqueBorrowedAction: IntoOpaqueBorrowedAction for &Probe<T>;
+}
+
+/// The last tier: a value that is no callback, left as it is.
+pub trait ViaInert {
+    type Value;
+    fn log_calls(&self, value: Self::Value, log: ActionLog, name: &'static str) -> Self::Value;
+}
+
+impl<T> ViaInert for Probe<T> {
+    type Value = T;
+
+    fn log_calls(&self, value: T, _: ActionLog, _: &'static str) -> T {
+        value
+    }
+}
+
 /// Applies a `#[props(control = …)]` refinement to a probed control, reaching through an `Option` to the control it wraps.
 ///
 /// [`ControlKind::Optional`] holds its inner control by `'static` reference, so the refined inner one needs a home that outlives the call: `inner` is the generated field's own cell, filled once.
@@ -192,6 +261,25 @@ macro_rules! __preview_probe {
             $crate::preview::__probe::ctx_of(&$ctx),
             $name,
             __telar_arg,
+        )
+    }};
+}
+
+/// A prop's value with each call it receives recorded in an [`ActionLog`] under the prop's name when it is a callback, and as it was when it is not.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __preview_action {
+    ($log:expr, $name:expr, $value:expr $(,)?) => {{
+        #[allow(unused_imports)]
+        use $crate::preview::__probe::{
+            ViaAction as _, ViaBorrowedAction as _, ViaInert as _, ViaOpaqueAction as _,
+            ViaOpaqueBorrowedAction as _,
+        };
+        let __telar_value = $value;
+        (&&&$crate::preview::__probe::Probe::of(&__telar_value)).log_calls(
+            __telar_value,
+            $log,
+            $name,
         )
     }};
 }

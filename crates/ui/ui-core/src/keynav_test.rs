@@ -5,6 +5,7 @@ fn arrows() -> KeyNav {
         vim: false,
         horizontal: false,
         grid: false,
+        right_to_left: false,
     }
 }
 
@@ -13,6 +14,7 @@ fn vim() -> KeyNav {
         vim: true,
         horizontal: false,
         grid: false,
+        right_to_left: false,
     }
 }
 
@@ -84,6 +86,52 @@ fn a_horizontal_list_reads_the_other_pair_of_arrows() {
         None,
         "down is not along a row, so it stays available to whatever else wants it"
     );
+}
+
+#[test]
+fn a_right_to_left_row_moves_forward_on_the_left_arrow() {
+    let row = arrows().horizontal().reading(Direction::Rtl);
+    assert_eq!(
+        row.interpret(&named(NamedKey::ArrowLeft)),
+        Some(KeyNavMove::Next)
+    );
+    assert_eq!(
+        row.interpret(&named(NamedKey::ArrowRight)),
+        Some(KeyNavMove::Previous)
+    );
+    assert_eq!(
+        row.interpret(&named(NamedKey::Home)),
+        Some(KeyNavMove::First),
+        "Home and End name the ends, not a side"
+    );
+    let ltr = arrows().horizontal().reading(Direction::Ltr);
+    assert_eq!(
+        ltr.interpret(&named(NamedKey::ArrowRight)),
+        Some(KeyNavMove::Next)
+    );
+}
+
+#[test]
+fn a_right_to_left_grid_flips_the_tiles_but_not_the_rows() {
+    let grid = arrows().grid().reading(Direction::Rtl);
+    assert_eq!(
+        grid.interpret(&named(NamedKey::ArrowLeft)),
+        Some(KeyNavMove::Next)
+    );
+    assert_eq!(
+        grid.interpret(&named(NamedKey::ArrowDown)),
+        Some(KeyNavMove::NextRow)
+    );
+}
+
+#[test]
+fn a_vertical_list_ignores_the_writing_direction() {
+    let list = arrows().reading(Direction::Rtl);
+    assert_eq!(
+        list.interpret(&named(NamedKey::ArrowDown)),
+        Some(KeyNavMove::Next)
+    );
+    assert_eq!(list.interpret(&named(NamedKey::ArrowLeft)), None);
 }
 
 #[test]

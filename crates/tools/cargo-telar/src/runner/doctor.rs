@@ -168,7 +168,7 @@ pub(crate) fn run_doctor_cmd() -> ! {
             "`telar-devtools` is an optional dependency, which `cargo telar dev` and `cargo telar preview` turn on",
         );
     } else if resolved.package.is_some() {
-        doc.info("devtools overlay", &missing_devtools_note(&resolved.name()));
+        doc.warn("devtools overlay", &missing_devtools_note(&resolved.name()));
     }
     if telar_project::declares_optional_dependency(
         &resolved.package_dir,
@@ -179,7 +179,7 @@ pub(crate) fn run_doctor_cmd() -> ! {
             "`telar-workshop` is an optional dependency, which `cargo telar preview` turns on",
         );
     } else if resolved.package.is_some() {
-        doc.info("preview workshop", &missing_workshop_note(&resolved.name()));
+        doc.warn("preview workshop", &missing_workshop_note(&resolved.name()));
     }
     match telar_project::previews_include_problems(&package_dir) {
         Ok(problems) if !problems.is_empty() => {

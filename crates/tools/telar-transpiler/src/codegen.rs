@@ -10,9 +10,7 @@ use crate::style::generate_style_section;
 use crate::tag_errors::glob_import;
 use crate::theme_access::ThemeAccess;
 use crate::view::ViewGen;
-use telar_project::naming::{
-    preview_entries_const_name, preview_file_expr, preview_slug, to_pascal_case, to_snake_case,
-};
+use telar_project::naming::{to_pascal_case, to_snake_case};
 use telar_project::{AssetContext, PreludeEntry};
 
 /// A parsed `Props` field: its name, its type, and any inline default expression (the `name: Type = expr` sugar). Whether it is `Option<...>` is no longer anyone's business here — the builder's `some` attribute answers that in the callee's own declaration.
@@ -172,6 +170,8 @@ fn parse_field(chunk: &str) -> Option<ParsedField> {
 /// Input to a single transpilation: the parsed document plus the desired component function name (typically derived from the source file stem).
 pub(crate) struct TranspileInput<'a> {
     pub document: &'a RsxDocument,
+    /// The `.rsx` text the document was parsed from, which each preview's source is cut from.
+    pub source: &'a str,
     pub component_name: &'a str,
     /// Concrete theme type path (e.g. `SandboxTheme`). When set, the generated view binds `theme` as a `telar::Theme<Type>` handle, which `$theme.field` reads.
     pub theme_type: Option<&'a str>,
@@ -220,6 +220,7 @@ pub fn transpile_source(
     let document = telar_parser::parse(source)?;
     transpile(TranspileInput {
         document: &document,
+        source,
         component_name,
         theme_type,
         assets,
@@ -233,13 +234,13 @@ pub fn transpile_source(
 
 /// Accumulates generated code together with a per-line origin map. Each completed line (terminated by `\n`) records the `.rsx` source line passed when its newline was appended, so callers tag a line by emitting its content and the closing newline with the same `src`.
 #[derive(Default)]
-struct Code {
-    out: String,
+pub(crate) struct Code {
+    pub(crate) out: String,
     map: Vec<Option<u32>>,
 }
 
 impl Code {
-    fn push(&mut self, text: &str, src: Option<u32>) {
+    pub(crate) fn push(&mut self, text: &str, src: Option<u32>) {
         for ch in text.chars() {
             self.out.push(ch);
             if ch == '\n' {
@@ -252,7 +253,7 @@ impl Code {
 /// Binds the `theme` handle an application's `$theme` reads go through, or nothing when there is no theme type, as in a library, whose reads name no binding.
 ///
 /// Inside the fn so multiple `include!`-ed files don't conflict at crate scope. `theme` is a handle, not a value: the read must happen inside the closure that asks, or it freezes at build time.
-fn push_theme_binding(code: &mut Code, theme_type: Option<&str>) {
+pub(crate) fn push_theme_binding(code: &mut Code, theme_type: Option<&str>) {
     let Some(theme_type) = theme_type else {
         return;
     };
@@ -512,69 +513,25 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     }
     code.push("}\n", None);
 
-    if input.previews && !doc.previews.is_empty() {
-        // One build fn per preview, so a prop-taking component can be previewed through its markup body.
-        for (i, preview) in doc.previews.iter().enumerate() {
-            let pfn = format!("{fn_name}_preview_{i}");
-            let mut pgen = ViewGen::new(&doc.style.classes, input.assets).with_theme_access(theme);
-            let pbody = pgen.generate_root(&preview.body);
-            code.push("\n", None);
-            code.push("#[allow(dead_code, unused_variables, unused_mut)]\n", None);
-            code.push(
-                &format!("pub fn {pfn}(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {{\n"),
-                None,
-            );
-            push_theme_binding(&mut code, theme_type);
-            if let Some(binding) = scheme_binding(&pbody, false) {
-                code.push(binding, None);
-            }
-            // A path rather than a `[logic]` name: the logic zone is emitted inside the component fn, which a sibling preview fn cannot see into. Process-wide setup belongs in `telar::dev_entry`'s `setup` closure instead.
-            if let Some(fixture) = preview_fixture(preview) {
-                code.push(&format!("    {fixture}();\n"), None);
-            }
-            let prefix = code.out.len();
-            let resolved = crate::view::resolve_source_map(&pbody);
-            for (line, src) in &resolved.lines {
-                code.push(line, *src);
-                code.push("\n", *src);
-            }
-            for &(rel, rsx_start, len) in &resolved.expr_spans {
-                expr_spans.push(ExprSpan {
-                    rsx_start,
-                    len,
-                    gen_start: (prefix + rel) as u32,
-                });
-            }
-            for (rel, name) in &resolved.shadows {
-                shadows.push(ShadowBinding {
-                    gen_decl: (prefix + rel) as u32,
-                    name: name.clone(),
-                });
-            }
-            if !code.out.ends_with('\n') {
-                code.push("\n", None);
-            }
-            code.push("}\n", None);
-        }
-
+    if input.previews && (!doc.previews.is_empty() || doc.previews_meta.is_some()) {
         code.push("\n", None);
-        let const_name = preview_entries_const_name(&fn_name);
-        code.push(
-            &format!("pub const {const_name}: &[::telar::preview::PreviewEntry] = &[\n"),
-            None,
+        code.push(crate::preview::OPEN, None);
+        let mapped = crate::preview::emit_variants(
+            &mut code,
+            &crate::preview::Previews {
+                document: doc,
+                component: &fn_name,
+                props_type: Some(&props_type),
+                source: input.source,
+                assets: input.assets,
+                theme,
+                theme_type,
+                rsx_path: input.rsx_path,
+            },
         );
-        let file = match input.rsx_path {
-            Some(path) => preview_file_expr(path),
-            None => "\"\"".to_string(),
-        };
-        for (i, preview) in doc.previews.iter().enumerate() {
-            let entry = match preview_id_suffix(&fn_name, &doc.previews, i) {
-                Ok(suffix) => preview_entry(&fn_name, i, preview, &suffix, &file),
-                Err(message) => format!("    compile_error!({message:?}),\n"),
-            };
-            code.push(&entry, None);
-        }
-        code.push("];\n", None);
+        expr_spans.extend(mapped.expr_spans);
+        shadows.extend(mapped.shadows);
+        code.push(crate::preview::CLOSE, None);
     }
 
     Ok(TranspiledSource {
@@ -678,102 +635,6 @@ fn find_move_keyword(line: &str) -> Option<usize> {
         from = pos + 4;
     }
     None
-}
-
-/// The `fixture:` header option of a `[preview]`, if it names one. Quoted or bare, both spellings reach the same path — `fixture:"mock_env"` and `fixture:mock_env` are the same request.
-fn preview_fixture(preview: &telar_parser::Preview) -> Option<String> {
-    preview_path_option(preview, "fixture")
-}
-
-/// The `decorator:` header option of a `[preview]`: a fn taking the preview's root as `Children`, which the entry wraps it in. Quoted or bare, like `fixture:`.
-fn preview_decorator(preview: &telar_parser::Preview) -> Option<String> {
-    preview_path_option(preview, "decorator")
-}
-
-/// The Rust path a `[preview]` header option names, quoted or bare.
-fn preview_path_option(preview: &telar_parser::Preview, key: &str) -> Option<String> {
-    let value = preview
-        .options
-        .iter()
-        .find(|option| option.key == key)?
-        .value
-        .trim()
-        .trim_matches('"');
-    (!value.is_empty()).then(|| value.to_string())
-}
-
-/// The `--<component>--<slug(name)>` that follows the crate name in the id of the `index`th preview, or why the preview cannot have one: an id names exactly one preview for as long as its name stays the same, so a name that slugs to nothing, or to what an earlier preview's already did, is refused rather than numbered.
-fn preview_id_suffix(
-    component: &str,
-    previews: &[telar_parser::Preview],
-    index: usize,
-) -> Result<String, String> {
-    let name = &previews[index].name;
-    let suffix = telar_project::naming::preview_id_suffix(component, name)
-        .map_err(|error| error.to_string())?;
-    let slug = preview_slug(name);
-    if let Some(earlier) = previews[..index]
-        .iter()
-        .find(|earlier| preview_slug(&earlier.name) == slug)
-    {
-        return Err(format!(
-            "[preview \"{name}\"] has the same id as [preview \"{}\"] on line {}: `{component}--{slug}`; rename one of them",
-            earlier.name, earlier.line
-        ));
-    }
-    Ok(suffix)
-}
-
-/// One element of the `{STEM}_PREVIEW_ENTRIES` table. `file` is the Rust expression for the `.rsx` path the entry records.
-fn preview_entry(
-    component: &str,
-    index: usize,
-    preview: &telar_parser::Preview,
-    id_suffix: &str,
-    file: &str,
-) -> String {
-    let mut entry = format!(
-        "    ::telar::preview::PreviewEntry::new(concat!(env!(\"CARGO_CRATE_NAME\"), {id_suffix:?}), {component:?}, {:?}, {component}_preview_{index})\n        .location({file}, {})",
-        preview.name, preview.line
-    );
-    if let Some(surface) = preview_surface(preview) {
-        entry.push_str(&format!("\n        .surface({surface})"));
-    }
-    if let Some(decorator) = preview_decorator(preview) {
-        entry.push_str(&format!("\n        .decorate({decorator})"));
-    }
-    entry.push_str(",\n");
-    entry
-}
-
-/// The `surface:WxH` header option of a `[preview]`, as the `PreviewSurface` its entry carries, or `None` when the preview is a tree.
-///
-/// `[preview "Float" surface:360x240]` renders the component the way the runner mounts a surface — inside a box of that size, under the root that plays the enter transition — instead of as one more widget in the page's column. The bare `animate` flag beside it asks for that transition to run, which is how a preview shows what opening the surface looks like rather than only what it settles to.
-fn preview_surface(preview: &telar_parser::Preview) -> Option<String> {
-    let size = preview
-        .options
-        .iter()
-        .find(|option| option.key == "surface")
-        .map(|option| option.value.trim().trim_matches('"'))?;
-    let Some((width, height)) = size
-        .split_once(['x', 'X'])
-        .and_then(|(w, h)| Some((w.trim().parse::<f32>().ok()?, h.trim().parse::<f32>().ok()?)))
-    else {
-        // Falling back to a tree would answer a question the author did not ask.
-        return Some(format!(
-            "compile_error!(\"[preview] surface: expects WIDTHxHEIGHT, e.g. surface:360x240 (got {})\")",
-            size.replace('"', "'")
-        ));
-    };
-    let animate = preview
-        .options
-        .iter()
-        .any(|option| option.key == "animate" && option.value.is_empty());
-    let surface = format!("::telar::preview::PreviewSurface::new({width:?}, {height:?})");
-    Some(match animate {
-        true => format!("{surface}.animated()"),
-        false => surface,
-    })
 }
 
 /// Whether any node in the view tree is a `children` slot placeholder, so the component function must take a `Slots` argument. Recurses through element children and `if`/`for` branches.
@@ -978,6 +839,80 @@ fn field_line(lines: &[&str], name: &str) -> Option<usize> {
     })
 }
 
+/// The module a `*.previews.rsx` compiles to: previews of a component written elsewhere, beside it, under the component's name.
+///
+/// Everything in it exists for its previews, so its `[logic]` — the `use` lines and the items its previews name, such as a `fixture:` or a `decorator:` — and its `[style]` sit inside the same `::telar::__previews!` as the previews. In a build that emits no previews the module is empty. A `[view]` is refused rather than compiled into a component nothing calls.
+pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
+    let doc = input.document;
+    if !doc.view.nodes.is_empty() {
+        return Err(TranspileError::Codegen(
+            "a `.previews.rsx` holds previews of components written elsewhere, so it has no `[view]`: move the view to a `.rsx` of its own".into(),
+        ));
+    }
+    let mut code = Code::default();
+    code.push(
+        "// Generated by telar-transpiler — do not edit manually\n",
+        None,
+    );
+    let mut mapped = crate::preview::Mapped::default();
+    if input.previews && (!doc.previews.is_empty() || doc.previews_meta.is_some()) {
+        let fn_name = to_snake_case(input.component_name);
+        let theme = ThemeAccess::for_library(input.library);
+        let theme_type = match theme {
+            ThemeAccess::Tokens => None,
+            ThemeAccess::Handle => input.theme_type,
+        };
+        code.push("#![allow(clippy::all)]\n", None);
+        code.push("#![allow(noop_method_call)]\n", None);
+        code.push(&format!("{}\n", glob_import("telar")), None);
+        for entry in input.prelude {
+            code.push(&format!("{}\n", glob_import(entry.path())), None);
+        }
+        code.push(&format!("{}\n", glob_import("crate")), None);
+        code.push("\n", None);
+        code.push(crate::preview::OPEN, None);
+        let logic_start0 = doc.logic.start_line.saturating_sub(1) as u32;
+        for (j, line) in doc.logic.source.trim_end().lines().enumerate() {
+            let src = Some(logic_start0 + j as u32);
+            if line.starts_with("use ") {
+                code.push("#[allow(unused_imports)] ", src);
+            }
+            code.push(line, src);
+            code.push("\n", src);
+        }
+        let style_section = generate_style_section(&doc.style, theme_type, theme);
+        if !style_section.is_empty() {
+            code.push("\n", None);
+            code.push(style_section.trim_end(), None);
+            code.push("\n", None);
+        }
+        mapped = crate::preview::emit_variants(
+            &mut code,
+            &crate::preview::Previews {
+                document: doc,
+                component: &fn_name,
+                props_type: None,
+                source: input.source,
+                assets: input.assets,
+                theme,
+                theme_type,
+                rsx_path: input.rsx_path,
+            },
+        );
+        code.push(crate::preview::CLOSE, None);
+    }
+    Ok(TranspiledSource {
+        rust_code: code.out,
+        preview_names: match input.previews {
+            true => doc.previews.iter().map(|p| p.name.clone()).collect(),
+            false => Vec::new(),
+        },
+        source_map: code.map,
+        expr_spans: mapped.expr_spans,
+        shadows: mapped.shadows,
+    })
+}
+
 /// The file a directory's `mod.rsx` compiles to: the module itself, not a component in it.
 ///
 /// `[logic]` lands at module level rather than inside a function, which is what gives a `//!` and a `#![…]` somewhere to live — a module is the one place in a `.rsx` where Rust items, not statements, are what belongs. A `[view]`, a `[preview]` or a `[style]` is refused rather than ignored: a module is not callable, so markup here has no caller and silently dropping it would be the surprise.
@@ -1051,7 +986,7 @@ pub(crate) fn module_root(
 }
 
 /// The binding behind `$scheme`, for a view that reads it and whose `[logic]` does not bind a `scheme` of its own. A declared `scheme` wins outright, so a component written before the built-in existed keeps meaning what it says.
-fn scheme_binding(view_body: &str, shadowed: bool) -> Option<&'static str> {
+pub(crate) fn scheme_binding(view_body: &str, shadowed: bool) -> Option<&'static str> {
     (!shadowed && contains_ident(view_body, "scheme"))
         .then_some("    #[allow(unused_variables)] let scheme = telar::ResolvedScheme;\n")
 }

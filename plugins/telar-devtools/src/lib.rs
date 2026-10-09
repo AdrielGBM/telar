@@ -1,416 +1,68 @@
-//! The dev overlay `cargo telar dev` draws over a running application: an FPS counter, a node inspector and the build-error banner.
+//! The dev overlay `cargo telar dev` draws over a running application: an FPS badge and panel, the renderer in use, a component inspector and the build-error banner.
 //!
-//! Nothing here is privileged. It implements [`ui_tree::DevOverlay`], which is the whole of what the runner asks of an overlay, and an overlay of your own goes in through the same door — see `telar::run_app_with_devtools`.
+//! The overlay is a widget tree built from `telar-components` in the workbench theme, on a window-sized [`SurfaceCanvas`](telar::SurfaceCanvas) of its own in the host's runtime. The host owns it, so it outlives every hot reload and every failed build, and it never reads the application's theme, direction or control size.
 //!
-//! Kept out of `telar` because it is 400 lines of chrome no shipping application draws, and because a seam whose only implementation lives inside the crate that defines it is a seam nobody can be shown how to use.
+//! Nothing here is privileged. It implements [`telar::DevOverlay`], which is the whole of what the runner asks of an overlay, and an overlay of your own goes in through the same door — see `telar::run_app_with_devtools`.
+//!
+//! Its text is in English under the `telar_devtools` namespace, which an application translates or overrides from its own catalog with `telar_devtools.<key>`.
 #![warn(rustdoc::broken_intra_doc_links)]
 
+mod meter;
+mod overlay;
+mod strings;
 mod workbench;
 pub use workbench::{
     WORKBENCH_CONTROL_SIZE, WORKBENCH_GRID, WORKBENCH_RADIUS, WORKBENCH_TEXT_SIZE, WorkbenchTheme,
-    WorkbenchTokens, use_workbench_tokens, workbench_scope, workbench_theme,
+    WorkbenchTokens, use_workbench_tokens, workbench_card, workbench_fill, workbench_mono,
+    workbench_muted, workbench_scope, workbench_theme,
 };
 
 use std::borrow::Cow;
-use std::collections::VecDeque;
-use std::time::Duration;
-use web_time::Instant;
 
-use geometry_core::Rect;
-use platform_core::{Event, Key, ModifiersState};
-use renderer_core::{
-    BlendMode, Border, BorderRadius, Color, DrawCommand, Paint, RectStyle, ShapeStyle, TextStyle,
+use telar::{
+    DevAction, DevOverlay, DrawCommand, Event, Key, ModifiersState, OverlayResponse,
+    SegmentNodeInfo, Size,
 };
-use ui_tree::{DevAction, DevOverlay, OverlayResponse, SegmentNodeInfo};
 
-fn rect_command(rect: Rect, style: RectStyle) -> DrawCommand {
-    DrawCommand::Rect {
-        rect,
-        style: std::sync::Arc::new(style),
-    }
-}
+use meter::{Clock, FrameMeter};
+use overlay::Overlay;
 
-fn text_command(text: std::sync::Arc<str>, rect: Rect, style: TextStyle) -> DrawCommand {
-    DrawCommand::Text {
-        text,
-        spans: None,
-        rect,
-        style: std::sync::Arc::new(style),
-    }
-}
-
-const BADGE_WIDTH: f32 = 100.0;
-const BADGE_HEIGHT: f32 = 24.0;
-const MARGIN: f32 = 10.0;
-const PANEL_WIDTH: f32 = 200.0;
-const PANEL_HEIGHT: f32 = 178.0;
-const GAP: f32 = 4.0;
-
-const INSPECTOR_WIDTH: f32 = 300.0;
-const INSPECTOR_BACKGROUND: Color = Color::rgba(0.08, 0.08, 0.12, 0.92);
-const INSPECTOR_SELECTION_BACKGROUND: Color = Color::rgba(0.2, 0.4, 0.8, 0.25);
-const HIGHLIGHT_FILL: Color = Color::rgba(0.2, 0.5, 1.0, 0.18);
-const HIGHLIGHT_BORDER: Color = Color::rgba(0.3, 0.6, 1.0, 0.85);
-const ROW_HEIGHT: f32 = 20.0;
-const INSPECTOR_HEADER_HEIGHT: f32 = 32.0;
-
-const PANEL_BACKGROUND: Color = Color::rgba(0.05, 0.05, 0.05, 0.75);
-const BADGE_BACKGROUND: Color = Color::rgba(0.0, 0.0, 0.0, 0.70);
-const BACKDROP_BLUR_RADIUS: f32 = 12.0;
-const GREEN: Color = Color::rgba(0.0, 1.0, 0.4, 1.0);
-const WHITE: Color = Color::rgba(0.9, 0.9, 0.9, 1.0);
-const GRAY: Color = Color::rgba(0.5, 0.5, 0.5, 1.0);
-const GRAY_DIM: Color = Color::rgba(0.3, 0.3, 0.3, 1.0);
-
-const FPS_WINDOW: Duration = Duration::from_secs(1);
-
-/// The dev overlay: an FPS counter, a node inspector and the build-error banner.
+/// The dev overlay: an FPS badge and panel, a component inspector and the build-error banner.
+///
+/// It takes the pointer only over its own panels and the keyboard only while one of them holds focus; everything else reaches the application. Ctrl+Shift+B switches the renderer, Ctrl+Shift+D opens the panel and Ctrl+Shift+I the inspector, and the application hears those chords too.
+#[derive(Default)]
 pub struct DevTools {
-    frame_times: VecDeque<Instant>,
-    last_fps: u32,
-    panel_open: bool,
-    badge_rect: Rect,
-    renderer_info: Option<String>,
-    build_error: Option<String>,
-    inspector_open: bool,
-    selected_node: Option<u64>,
-    nodes: Vec<SegmentNodeInfo>,
-    inspector_rect: Rect,
-    frame_time_millis: f32,
-    node_count: usize,
+    meter: FrameMeter,
+    clock: Clock,
+    overlay: Built,
 }
 
-impl Default for DevTools {
-    fn default() -> Self {
-        Self {
-            frame_times: VecDeque::new(),
-            last_fps: 0,
-            panel_open: false,
-            badge_rect: Rect::default(),
-            renderer_info: None,
-            build_error: None,
-            inspector_open: false,
-            selected_node: None,
-            nodes: Vec::new(),
-            inspector_rect: Rect::default(),
-            frame_time_millis: 0.0,
-            node_count: 0,
-        }
-    }
-}
-
-impl DevOverlay for DevTools {
-    fn set_renderer_info(&mut self, info: &str) {
-        self.renderer_info = Some(info.to_owned());
-    }
-
-    fn on_frame<'a>(
-        &mut self,
-        base: &'a [DrawCommand],
-        window_w: f32,
-        window_h: f32,
-        tree_dirty: bool,
-    ) -> Cow<'a, [DrawCommand]> {
-        let now = Instant::now();
-        // Only sample on content frames so hardware keepalive blits don't pollute the count.
-        if tree_dirty {
-            self.frame_times.push_back(now);
-        }
-        let cutoff = now - FPS_WINDOW;
-        while self.frame_times.front().is_some_and(|t| *t <= cutoff) {
-            self.frame_times.pop_front();
-        }
-        self.last_fps = self.frame_times.len() as u32;
-
-        self.frame_time_millis = if self.frame_times.len() >= 2 {
-            let oldest = self.frame_times[0];
-            let newest = self.frame_times[self.frame_times.len() - 1];
-            let elapsed_ms = newest.duration_since(oldest).as_secs_f32() * 1000.0;
-            elapsed_ms / (self.frame_times.len() - 1) as f32
-        } else {
-            0.0
-        };
-
-        let badge_x = window_w - BADGE_WIDTH - MARGIN;
-        let badge_y = window_h - BADGE_HEIGHT - MARGIN;
-        self.badge_rect = Rect::new(badge_x, badge_y, BADGE_WIDTH, BADGE_HEIGHT);
-
-        let mut cmds = Vec::with_capacity(base.len() + 16);
-        cmds.extend_from_slice(base);
-
-        if self.inspector_open {
-            if let Some(selected_id) = self.selected_node
-                && let Some(node) = self.nodes.iter().find(|n| n.id == selected_id)
-                && node.rect.width > 0.0
-                && node.rect.height > 0.0
-            {
-                cmds.push(rect_command(
-                    node.rect,
-                    RectStyle::default()
-                        .with_fill(Paint::Solid(HIGHLIGHT_FILL))
-                        .with_border(Border::uniform(HIGHLIGHT_BORDER, 1.5)),
-                ));
-            }
-
-            let panel_rect = Rect::new(0.0, 0.0, INSPECTOR_WIDTH, window_h);
-            self.inspector_rect = panel_rect;
-            cmds.push(rect_command(
-                panel_rect,
-                RectStyle::default().with_fill(Paint::Solid(INSPECTOR_BACKGROUND)),
-            ));
-
-            let header_text = format!("Inspector  {} nodes", self.nodes.len());
-            cmds.push(text_command(
-                header_text.into(),
-                Rect::new(12.0, 8.0, INSPECTOR_WIDTH - 24.0, 18.0),
-                TextStyle::new(12.0, WHITE),
-            ));
-            cmds.push(rect_command(
-                Rect::new(0.0, INSPECTOR_HEADER_HEIGHT, INSPECTOR_WIDTH, 1.0),
-                RectStyle::default().with_fill(Paint::Solid(GRAY_DIM)),
-            ));
-
-            let max_visible = ((window_h - INSPECTOR_HEADER_HEIGHT) / ROW_HEIGHT) as usize;
-            for (i, node) in self.nodes.iter().take(max_visible).enumerate() {
-                let row_y = INSPECTOR_HEADER_HEIGHT + i as f32 * ROW_HEIGHT;
-                let is_selected = self.selected_node == Some(node.id);
-
-                if is_selected {
-                    cmds.push(rect_command(
-                        Rect::new(0.0, row_y, INSPECTOR_WIDTH, ROW_HEIGHT),
-                        RectStyle::default()
-                            .with_fill(Paint::Solid(INSPECTOR_SELECTION_BACKGROUND)),
-                    ));
-                }
-
-                let indent = node.depth as f32 * 8.0;
-                let r = node.rect;
-                let label = format!("{}  {:.0}\u{00d7}{:.0}", node.name, r.width, r.height);
-                cmds.push(text_command(
-                    label.into(),
-                    Rect::new(
-                        12.0 + indent,
-                        row_y + 3.0,
-                        INSPECTOR_WIDTH - 24.0 - indent,
-                        ROW_HEIGHT - 6.0,
-                    ),
-                    TextStyle::new(10.0, if is_selected { WHITE } else { GRAY }),
-                ));
-            }
-        }
-
-        // Badge wrapped in a clip + backdrop-blur layer so the semi-transparent fill samples a blurred copy of the underlying content.
-        cmds.push(DrawCommand::PushClip {
-            rect: self.badge_rect,
-            radius: BorderRadius::all(4.0),
-        });
-        cmds.push(DrawCommand::PushLayer {
-            opacity: 1.0,
-            backdrop_blur: BACKDROP_BLUR_RADIUS,
-            blend: BlendMode::Normal,
-            mask: renderer_core::LayerMask::None,
-        });
-
-        cmds.push(rect_command(
-            self.badge_rect,
-            RectStyle::default()
-                .with_fill(Paint::Solid(BADGE_BACKGROUND))
-                .with_radius(BorderRadius::all(4.0)),
-        ));
-
-        let badge_label = format!("DEV \u{2022} {} fps", self.last_fps);
-        cmds.push(text_command(
-            badge_label.into(),
-            Rect::new(
-                badge_x + 8.0,
-                badge_y + 5.0,
-                BADGE_WIDTH - 16.0,
-                BADGE_HEIGHT - 10.0,
-            ),
-            TextStyle::new(12.0, GREEN),
-        ));
-
-        cmds.push(DrawCommand::PopLayer);
-        cmds.push(DrawCommand::PopClip);
-
-        if self.panel_open {
-            let panel_x = window_w - PANEL_WIDTH - MARGIN;
-            let panel_y = badge_y - PANEL_HEIGHT - GAP;
-
-            cmds.push(DrawCommand::PushClip {
-                rect: Rect::new(panel_x, panel_y, PANEL_WIDTH, PANEL_HEIGHT),
-                radius: BorderRadius::all(8.0),
-            });
-            cmds.push(DrawCommand::PushLayer {
-                opacity: 1.0,
-                backdrop_blur: BACKDROP_BLUR_RADIUS,
-                blend: BlendMode::Normal,
-                mask: renderer_core::LayerMask::None,
-            });
-
-            cmds.push(rect_command(
-                Rect::new(panel_x, panel_y, PANEL_WIDTH, PANEL_HEIGHT),
-                RectStyle::default()
-                    .with_fill(Paint::Solid(PANEL_BACKGROUND))
-                    .with_radius(BorderRadius::all(8.0)),
-            ));
-
-            cmds.push(text_command(
-                "rsx devtools".into(),
-                Rect::new(panel_x + 12.0, panel_y + 12.0, PANEL_WIDTH - 24.0, 16.0),
-                TextStyle::new(11.0, WHITE),
-            ));
-
-            cmds.push(rect_command(
-                Rect::new(panel_x + 12.0, panel_y + 36.0, PANEL_WIDTH - 24.0, 1.0),
-                RectStyle::default().with_fill(Paint::Solid(GRAY_DIM)),
-            ));
-
-            let fps_label = format!("{} fps", self.last_fps);
-            cmds.push(text_command(
-                fps_label.into(),
-                Rect::new(panel_x + 12.0, panel_y + 44.0, PANEL_WIDTH - 24.0, 28.0),
-                TextStyle::new(20.0, GREEN),
-            ));
-
-            let frame_time_label = format!(
-                "{:.1} ms/frame  {} nodes",
-                self.frame_time_millis, self.node_count
-            );
-            cmds.push(text_command(
-                frame_time_label.into(),
-                Rect::new(panel_x + 12.0, panel_y + 70.0, PANEL_WIDTH - 24.0, 14.0),
-                TextStyle::new(10.0, GRAY),
-            ));
-
-            let renderer_text_y = if let Some(ref info) = self.renderer_info {
-                let renderer_label = format!("renderer: {}", info);
-                cmds.push(text_command(
-                    renderer_label.into(),
-                    Rect::new(panel_x + 12.0, panel_y + 90.0, PANEL_WIDTH - 24.0, 16.0),
-                    TextStyle::new(11.0, GRAY),
-                ));
-                108.0
-            } else {
-                90.0
-            };
-
-            cmds.push(text_command(
-                "ctrl+shift+b  toggle renderer".into(),
-                Rect::new(
-                    panel_x + 12.0,
-                    panel_y + renderer_text_y,
-                    PANEL_WIDTH - 24.0,
-                    14.0,
-                ),
-                TextStyle::new(10.0, GRAY_DIM),
-            ));
-
-            cmds.push(text_command(
-                "ctrl+shift+i  inspector".into(),
-                Rect::new(
-                    panel_x + 12.0,
-                    panel_y + renderer_text_y + 16.0,
-                    PANEL_WIDTH - 24.0,
-                    14.0,
-                ),
-                TextStyle::new(10.0, GRAY_DIM),
-            ));
-
-            cmds.push(text_command(
-                "click badge  close".into(),
-                Rect::new(
-                    panel_x + 12.0,
-                    panel_y + renderer_text_y + 32.0,
-                    PANEL_WIDTH - 24.0,
-                    14.0,
-                ),
-                TextStyle::new(10.0, GRAY_DIM),
-            ));
-
-            cmds.push(DrawCommand::PopLayer);
-            cmds.push(DrawCommand::PopClip);
-        }
-
-        if let Some(ref error_msg) = self.build_error {
-            const BANNER_PAD: f32 = 16.0;
-            const BANNER_LINE_HEIGHT: f32 = 16.0;
-            const ERROR_BACKGROUND: Color = Color::rgba(0.7, 0.1, 0.1, 0.92);
-            const ERROR_TEXT: Color = Color::rgba(1.0, 0.9, 0.9, 1.0);
-            const TITLE_COLOR: Color = Color::rgba(1.0, 0.5, 0.5, 1.0);
-
-            let lines: Vec<&str> = error_msg.lines().take(20).collect();
-            let banner_h = BANNER_PAD * 2.0
-                + BANNER_LINE_HEIGHT
-                + lines.len() as f32 * (BANNER_LINE_HEIGHT + 2.0);
-            let banner_rect = Rect::new(0.0, 0.0, window_w, banner_h);
-
-            cmds.push(rect_command(
-                banner_rect,
-                RectStyle::default().with_fill(Paint::Solid(ERROR_BACKGROUND)),
-            ));
-            cmds.push(text_command(
-                "Build failed".into(),
-                Rect::new(
-                    BANNER_PAD,
-                    BANNER_PAD,
-                    window_w - BANNER_PAD * 2.0,
-                    BANNER_LINE_HEIGHT,
-                ),
-                TextStyle::new(13.0, TITLE_COLOR),
-            ));
-            for (i, line) in lines.iter().enumerate() {
-                let y =
-                    BANNER_PAD + BANNER_LINE_HEIGHT + 4.0 + i as f32 * (BANNER_LINE_HEIGHT + 2.0);
-                cmds.push(text_command(
-                    (*line).to_string().into(),
-                    Rect::new(
-                        BANNER_PAD,
-                        y,
-                        window_w - BANNER_PAD * 2.0,
-                        BANNER_LINE_HEIGHT,
-                    ),
-                    TextStyle::new(11.0, ERROR_TEXT),
-                ));
-            }
-        }
-
-        Cow::Owned(cmds)
-    }
-
-    // The FPS badge decays to zero only if frames keep coming while the app is idle.
-    fn needs_frame(&self) -> bool {
-        true
-    }
-
-    fn on_event(&mut self, event: &Event) -> OverlayResponse {
-        match event {
-            Event::KeyPressed { key, modifiers } => OverlayResponse {
-                consumed: false,
-                action: self.shortcut(key, *modifiers),
-            },
-            Event::PointerPressed { x, y, .. } if self.press_at(*x as f32, *y as f32) => {
-                OverlayResponse {
-                    consumed: true,
-                    action: Some(DevAction::Redraw),
-                }
-            }
-            _ => OverlayResponse::IGNORED,
-        }
-    }
-
-    fn set_build_error(&mut self, error: Option<String>) {
-        self.build_error = error;
-    }
-
-    fn on_tree(&mut self, nodes: &[SegmentNodeInfo]) {
-        self.node_count = nodes.len();
-        self.nodes.clear();
-        self.nodes.extend_from_slice(nodes);
-    }
+/// The widget tree is built on first use rather than in `Default`, which the runner may call on another thread than the one that drives it.
+#[derive(Default)]
+enum Built {
+    #[default]
+    Pending,
+    Ready(Box<Overlay>),
+    Failed,
 }
 
 impl DevTools {
+    fn overlay(&mut self) -> Option<&mut Overlay> {
+        if matches!(self.overlay, Built::Pending) {
+            self.overlay = match Overlay::new() {
+                Ok(overlay) => Built::Ready(Box::new(overlay)),
+                Err(error) => {
+                    tracing::error!("the devtools overlay could not be built: {error}");
+                    Built::Failed
+                }
+            };
+        }
+        match &mut self.overlay {
+            Built::Ready(overlay) => Some(overlay),
+            _ => None,
+        }
+    }
+
     fn shortcut(&mut self, key: &Key, modifiers: ModifiersState) -> Option<DevAction> {
         if !(modifiers.is_ctrl && modifiers.is_shift) {
             return None;
@@ -418,46 +70,82 @@ impl DevTools {
         match key {
             Key::Char('b' | 'B') => Some(DevAction::ToggleBackend),
             Key::Char('d' | 'D') => {
-                self.panel_open = !self.panel_open;
+                self.overlay()?.toggle_panel();
                 Some(DevAction::Redraw)
             }
             Key::Char('i' | 'I') => {
-                self.inspector_open = !self.inspector_open;
+                self.overlay()?.toggle_inspector();
                 Some(DevAction::Redraw)
             }
             _ => None,
         }
     }
+}
 
-    fn press_at(&mut self, x: f32, y: f32) -> bool {
-        if self.inspector_open && self.inspector_rect.contains(x, y) {
-            let list_y = y - INSPECTOR_HEADER_HEIGHT;
-            if list_y >= 0.0 {
-                let idx = (list_y / ROW_HEIGHT) as usize;
-                if let Some(node) = self.nodes.get(idx) {
-                    self.selected_node = Some(node.id);
-                }
-            }
-            return true;
-        }
+impl DevOverlay for DevTools {
+    fn on_frame<'a>(
+        &mut self,
+        base: &'a [DrawCommand],
+        window_w: f32,
+        window_h: f32,
+        tree_dirty: bool,
+    ) -> Cow<'a, [DrawCommand]> {
+        let reading = self.meter.sample(self.clock.now(), tree_dirty);
+        let Some(overlay) = self.overlay() else {
+            return Cow::Borrowed(base);
+        };
+        overlay.show_reading(reading);
+        overlay.fit(Size::new(window_w, window_h));
+        let drawn = overlay.frame();
+        let mut commands = Vec::with_capacity(base.len() + drawn.len());
+        commands.extend_from_slice(base);
+        commands.extend_from_slice(&drawn);
+        Cow::Owned(commands)
+    }
 
-        if self.inspector_open {
-            let clicked = self
-                .nodes
-                .iter()
-                .filter(|n| n.rect.width > 0.0 && n.rect.height > 0.0 && n.rect.contains(x, y))
-                .max_by_key(|n| n.depth);
-            if let Some(node) = clicked {
-                self.selected_node = Some(node.id);
-                return true;
-            }
-        }
+    // The FPS badge falls to zero only if frames keep coming while the app is idle.
+    fn needs_frame(&self) -> bool {
+        true
+    }
 
-        if self.badge_rect.contains(x, y) {
-            self.panel_open = !self.panel_open;
-            return true;
+    fn is_dirty(&self) -> bool {
+        match &self.overlay {
+            Built::Ready(overlay) => overlay.is_dirty() || self.meter.is_stale(self.clock.now()),
+            _ => false,
         }
-        false
+    }
+
+    fn on_event(&mut self, event: &Event) -> OverlayResponse {
+        if let Event::KeyPressed { key, modifiers, .. } = event
+            && let Some(action) = self.shortcut(key, *modifiers)
+        {
+            return OverlayResponse {
+                consumed: false,
+                action: Some(action),
+            };
+        }
+        match self.overlay() {
+            Some(overlay) => overlay.route(event),
+            None => OverlayResponse::IGNORED,
+        }
+    }
+
+    fn set_build_error(&mut self, error: Option<String>) {
+        if let Some(overlay) = self.overlay() {
+            overlay.set_build_error(error);
+        }
+    }
+
+    fn set_renderer_info(&mut self, info: &str) {
+        if let Some(overlay) = self.overlay() {
+            overlay.set_renderer(info);
+        }
+    }
+
+    fn on_tree(&mut self, nodes: &[SegmentNodeInfo]) {
+        if let Some(overlay) = self.overlay() {
+            overlay.set_nodes(nodes);
+        }
     }
 }
 

@@ -340,12 +340,20 @@ impl Args {
 
     /// The args a canvas mounts `entry` with: persisted under its id, linked to its component's props and with its declared args listed.
     pub fn for_entry(entry: &PreviewEntry) -> Self {
-        let args = Self::persisted(entry.id);
+        Self::persisted(entry.id).describing(entry)
+    }
+
+    /// [`for_entry`](Self::for_entry) held in memory only: what a canvas that must start from the defaults whatever ran before it mounts with, such as a play's.
+    pub fn in_memory_for(entry: &PreviewEntry) -> Self {
+        Self::new().describing(entry)
+    }
+
+    fn describing(self, entry: &PreviewEntry) -> Self {
         if let Some(props) = entry.props {
-            args.link_props(props());
+            self.link_props(props());
         }
-        args.declare(entry.args);
-        args
+        self.declare(entry.args);
+        self
     }
 
     fn with_overrides(overrides: impl FnOnce() -> RwSignal<Overrides>) -> Self {

@@ -1,5 +1,6 @@
-//! The panels along the canvas: a strip of tabs over the panel it shows. Controls is the only panel yet; actions, interactions, accessibility, source and layout join the strip as they land.
+//! The panels along the canvas: a strip of tabs over the panel it shows, Controls or Actions. Interactions, accessibility, source and layout join the strip as they land.
 
+mod actions;
 mod controls;
 mod editors;
 
@@ -7,14 +8,18 @@ use std::rc::Rc;
 
 use telar::preview::PreviewEntry;
 use telar::{
-    AlignItems, BorderRadius, Children, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item,
+    Accessible, AlignItems, Children, Color, LayoutError, LayoutItem, LayoutStyle, Reactive,
+    ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, box_item,
 };
-use telar_components::{ButtonProps, button};
-use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, use_workbench_tokens};
+use telar_components::{ButtonProps, Tab, button, tab_list};
+use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_fill};
 
-use crate::state::WorkshopState;
-use crate::strings::{self, CONTROLS, RESET_ALL};
+pub(crate) use controls::arg_table;
+
+use crate::state::{PanelTab, WorkshopState};
+use crate::strings::{self, ACTIONS, CONTROLS, PANELS, RESET_ALL};
+
+const TABS: [PanelTab; 2] = [PanelTab::Controls, PanelTab::Actions];
 
 /// What fills the panels pane the shell sizes.
 pub(crate) fn panels(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -24,17 +29,12 @@ pub(crate) fn panels(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layou
             .flex_grow(1.0)
             .min_height(0.0),
         |_| RectStyle::default(),
-        vec![header(state)?, divider()?, controls::controls(state)?],
+        vec![header(state)?, divider()?, body(state)?],
     )?;
     Ok(box_item(panels))
 }
 
 fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let strip = StyledContainer::new(
-        LayoutStyle::new().flex_row().gap(WORKBENCH_GRID / 2.0),
-        |_| RectStyle::default(),
-        vec![tab(CONTROLS)?],
-    )?;
     let spacer = StyledContainer::new(
         LayoutStyle::new().flex_grow(1.0),
         |_| RectStyle::default(),
@@ -45,35 +45,79 @@ fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .flex_row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
+            .gap(WORKBENCH_GRID)
             .padding_horizontal(WORKBENCH_GRID)
             .padding_vertical(WORKBENCH_GRID / 2.0),
         |_| RectStyle::default(),
-        vec![box_item(strip), box_item(spacer), reset_all(state)?],
+        vec![strip(state)?, box_item(spacer), tools(state)?],
     )?;
     Ok(box_item(header))
 }
 
-fn tab(key: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let label = Text::declaring(
-        move || strings::text(key),
-        LayoutStyle::new(),
-        |text| text.with_font_weight(600),
-    )?;
-    let tab = StyledContainer::new(
+fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let tabs = TABS
+        .into_iter()
+        .map(|tab| {
+            let named = Tab::new(tab, strings::reactive(tab_key(tab)));
+            Ok(match tab {
+                PanelTab::Actions => named.trailing(actions::count_badge(state.actions())?),
+                PanelTab::Controls => named,
+            })
+        })
+        .collect::<Result<Vec<_>, LayoutError>>()?;
+    tab_list(
+        state.panel_tab(),
+        tabs,
+        Color::TRANSPARENT.into(),
+        Some(strings::reactive(PANELS)),
+    )
+}
+
+fn tab_key(tab: PanelTab) -> &'static str {
+    match tab {
+        PanelTab::Controls => CONTROLS,
+        PanelTab::Actions => ACTIONS,
+    }
+}
+
+/// What acts on the panel shown, at the end of the strip.
+fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let shown = state.panel_tab();
+    let state = state.clone();
+    let tools = ReactiveList::with_style(
         LayoutStyle::new()
             .flex_row()
-            .padding_horizontal(WORKBENCH_GRID)
-            .padding_vertical(WORKBENCH_GRID / 2.0),
-        |_| {
-            RectStyle::default()
-                .with_fill(use_workbench_tokens().selection)
-                .with_radius(BorderRadius::all(WORKBENCH_RADIUS))
+            .align_items(AlignItems::CENTER),
+        move || vec![shown.get()],
+        |tab: &PanelTab| *tab,
+        move |tab| match tab {
+            PanelTab::Controls => reset_all(&state),
+            PanelTab::Actions => actions::tools(&state),
         },
-        vec![box_item(label)],
+    )?;
+    Ok(box_item(tools))
+}
+
+fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let shown = state.panel_tab();
+    let building = state.clone();
+    let panel = ReactiveList::with_style(
+        workbench_fill(),
+        move || vec![shown.get()],
+        |tab: &PanelTab| *tab,
+        move |tab| match tab {
+            PanelTab::Controls => controls::controls(&building),
+            PanelTab::Actions => actions::actions(&building),
+        },
+    )?;
+    let body = StyledContainer::new(
+        workbench_fill(),
+        |_| RectStyle::default(),
+        vec![box_item(panel)],
     )?
-    .control(Role::Tab)
-    .toggled(|| true);
-    Ok(box_item(tab))
+    .role(Role::TabPanel)
+    .a11y_label(move || strings::text(tab_key(shown.get())));
+    Ok(box_item(body))
 }
 
 /// Puts every arg of the selected preview back to its default, offered only while one holds something else.

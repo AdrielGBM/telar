@@ -294,15 +294,15 @@ fn a_buffer_transpiles_as_the_saved_file_would() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// A previews file is accepted beside the component it previews, and registers nothing the macro would wire to a module the tree never declares.
+/// A previews file previews the component beside it, in a module of its own: its previews are named after that component, its `[logic]` and its `[style]` exist for them alone, and a build without previews gets an empty module.
 #[test]
-fn a_previews_file_is_accepted_and_a_view_in_one_is_refused() {
+fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
     let root = package("previews_file");
     let src = root.join("src");
     std::fs::write(src.join("card.rsx"), "[view]\ntext \"body\"\n").unwrap();
     std::fs::write(
         src.join("card.previews.rsx"),
-        "[previews \"Cards/Card\"]\nA card.\n\n[preview \"Default\" args(title:\"Hi\")]\ncard\n\n[play]\ncanvas.expect_text(\"Hi\")?;\n",
+        "[logic]\nuse crate::card::*;\n\nfn framed(children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {\n    card(CardProps::props().build(), children)\n}\n\n[style]\n@quiet\n    fill: #202020\n\n[previews \"Cards/Card\"]\nA card.\n\n[preview \"Default\" args(title:\"Hi\") decorator:framed]\ncard\n\n[play]\ncanvas.expect_text(\"Hi\")?;\n",
     )
     .unwrap();
 
@@ -311,8 +311,52 @@ fn a_previews_file_is_accepted_and_a_view_in_one_is_refused() {
         .iter()
         .find(|file| file.rel_out == std::path::Path::new("card.previews.rs"))
         .expect("the previews file is transpiled");
-    assert!(previews.source.preview_names.is_empty());
-    assert!(!previews.source.rust_code.contains("fn "));
+    let code = &previews.source.rust_code;
+    assert_eq!(previews.source.preview_names, ["Default"]);
+    let (header, gated) = code
+        .split_once("::telar::__previews! {\n")
+        .expect("everything it holds is gated");
+    assert!(header.contains("use crate::*;"), "{code}");
+    assert!(
+        gated.contains("#[allow(unused_imports)] use crate::card::*;"),
+        "{code}"
+    );
+    assert!(gated.contains("fn framed(children: Children)"), "{code}");
+    assert!(gated.contains("pub fn card_preview_0("), "{code}");
+    assert!(gated.contains("pub const CARD_PREVIEW_ENTRIES"), "{code}");
+    assert!(
+        gated.contains("concat!(env!(\"CARGO_CRATE_NAME\"), \"--card--default\"), \"card\""),
+        "{code}"
+    );
+    assert!(gated.contains(".title(\"Cards/Card\")"), "{code}");
+    assert!(gated.contains(".decorate(framed)"), "{code}");
+    assert!(
+        gated.contains(".props(<CardProps as ::telar::preview::HasPropsSchema>::schema)"),
+        "{code}"
+    );
+    assert!(gated.contains("/src/card.previews.rsx\")"), "{code}");
+    assert!(syn::parse_file(code).is_ok(), "{code}");
+    let framed = code
+        .lines()
+        .position(|line| line.contains("fn framed"))
+        .unwrap();
+    assert_eq!(
+        previews.source.source_map[framed],
+        Some(3),
+        "the logic maps back to its line"
+    );
+
+    let plain = transpile_package(&options(&src, BuildFlavour::Plain)).unwrap();
+    let plain = plain
+        .iter()
+        .find(|file| file.rel_out == std::path::Path::new("card.previews.rs"))
+        .unwrap();
+    assert!(plain.source.preview_names.is_empty());
+    assert!(
+        !plain.source.rust_code.contains("framed"),
+        "{}",
+        plain.source.rust_code
+    );
 
     std::fs::write(src.join("card.previews.rsx"), "[view]\ncol\n").unwrap();
     let error = transpile_package(&options(&src, BuildFlavour::Preview)).unwrap_err();

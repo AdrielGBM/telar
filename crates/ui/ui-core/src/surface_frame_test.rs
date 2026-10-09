@@ -60,6 +60,7 @@ fn key(key: NamedKey, shift: bool) -> Event {
             is_shift: shift,
             ..ModifiersState::default()
         },
+        unmodified: None,
     }
 }
 
@@ -445,31 +446,45 @@ fn an_overlay_inside_a_frame_hears_a_scroll_end_in_the_frames_coordinates() {
     );
 }
 
-#[test]
-fn focus_inside_a_frame_does_not_escape_it() {
-    reset_layout_runtime();
-    let [outer_before, outer_after, first, second] = [(); 4].map(|_| signal(false));
-    let canvas = Rc::new(
-        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
-            Ok(boxed(Container::new(
-                fill().flex_row(),
-                vec![
-                    focusable(Color::BLACK, first),
-                    focusable(Color::WHITE, second),
-                ],
-            )?))
-        })
-        .unwrap(),
-    );
-    let window = Window::new(
+/// A window with `before` and `after` after a frame at [`FRAME`] whose canvas holds what `content` builds.
+fn focus_window(
+    content: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+    before: Box<dyn LayoutItem>,
+    after: Box<dyn LayoutItem>,
+) -> Window {
+    let canvas = Rc::new(SurfaceCanvas::new(Size::new(1.0, 1.0), content).unwrap());
+    Window::new(
         SurfaceFrame::filling(
-            Rc::clone(&canvas),
+            canvas,
             LayoutStyle::new().width(FRAME.width).height(FRAME.height),
         )
         .unwrap(),
-        focusable(Color::BLACK, outer_before),
-        focusable(Color::WHITE, outer_after),
+        before,
+        after,
         || {},
+    )
+}
+
+fn row_of(
+    focused: Vec<RwSignal<bool>>,
+) -> impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    move || {
+        let boxes = focused
+            .into_iter()
+            .map(|focused| focusable(Color::BLACK, focused))
+            .collect();
+        Ok(boxed(Container::new(fill().flex_row(), boxes)?))
+    }
+}
+
+#[test]
+fn tab_walks_the_frame_and_leaves_it_past_either_end() {
+    reset_layout_runtime();
+    let [before, after, first, second] = [(); 4].map(|_| signal(false));
+    let window = focus_window(
+        row_of(vec![first, second]),
+        focusable(Color::BLACK, before),
+        focusable(Color::WHITE, after),
     );
 
     window.click(35.0, 55.0);
@@ -477,40 +492,122 @@ fn focus_inside_a_frame_does_not_escape_it() {
         first.get(),
         "a press on the first box inside takes focus there"
     );
+    window.send(key(NamedKey::Tab, false));
+    assert!(second.get(), "Tab walks the focusables inside the frame");
 
-    for expected in [second, first, second, first] {
-        window.send(key(NamedKey::Tab, false));
-        assert!(
-            expected.get(),
-            "Tab walks the focusables inside the frame and wraps there"
-        );
-        assert!(
-            !outer_before.get() && !outer_after.get(),
-            "and never reaches the window's"
-        );
-    }
-    window.send(key(NamedKey::Tab, true));
+    window.send(key(NamedKey::Tab, false));
     assert!(
-        second.get(),
-        "Shift+Tab wraps backwards inside the frame too"
-    );
-
-    window.click(5.0, 165.0);
-    assert!(
-        outer_before.get(),
-        "a press on the window's own box takes focus there"
+        before.get(),
+        "past the last one, Tab goes on to the window's next stop"
     );
     assert!(
         !first.get() && !second.get(),
         "leaving the frame clears focus inside it"
     );
 
-    window.send(key(NamedKey::Tab, false));
+    window.send(key(NamedKey::Tab, true));
+    assert!(
+        second.get() && !before.get(),
+        "Shift+Tab back into the frame lands on its last focusable"
+    );
+    window.send(key(NamedKey::Tab, true));
+    assert!(first.get(), "Shift+Tab walks back inside the frame");
+
+    window.send(key(NamedKey::Tab, true));
+    assert!(
+        after.get(),
+        "past the first one, Shift+Tab leaves the frame backwards, round to the window's last stop"
+    );
+    assert!(!first.get() && !second.get());
+
     window.send(key(NamedKey::Tab, false));
     assert!(
         first.get(),
         "Tab arriving at the frame hands the keyboard to the first focusable inside"
     );
+}
+
+#[test]
+fn a_frame_with_nothing_focusable_inside_lets_tab_go_on() {
+    reset_layout_runtime();
+    let [before, after] = [(); 2].map(|_| signal(false));
+    let window = focus_window(
+        row_of(Vec::new()),
+        focusable(Color::BLACK, before),
+        focusable(Color::WHITE, after),
+    );
+
+    window.click(5.0, 165.0);
+    assert!(before.get());
+    window.send(key(NamedKey::Tab, false));
+    window.send(key(NamedKey::Tab, false));
+    assert!(
+        !before.get() && !after.get(),
+        "the frame is a stop of its own"
+    );
+    window.send(key(NamedKey::Tab, false));
+    assert!(before.get(), "and Tab goes on from it");
+    window.send(key(NamedKey::Tab, true));
+    window.send(key(NamedKey::Tab, true));
+    assert!(after.get(), "as Shift+Tab does");
+}
+
+#[test]
+fn a_frame_that_is_the_windows_only_stop_wraps_inside_it() {
+    reset_layout_runtime();
+    let [first, second] = [(); 2].map(|_| signal(false));
+    let window = focus_window(row_of(vec![first, second]), no_focusable(), no_focusable());
+
+    window.click(35.0, 55.0);
+    window.send(key(NamedKey::Tab, false));
+    assert!(second.get());
+    window.send(key(NamedKey::Tab, false));
+    assert!(
+        first.get(),
+        "the window wraps round to the frame, which carries on from its first focusable"
+    );
+    window.send(key(NamedKey::Tab, true));
+    assert!(second.get(), "and Shift+Tab from its last");
+}
+
+#[test]
+fn a_modal_open_inside_a_frame_holds_tab_until_it_closes() {
+    reset_layout_runtime();
+    let [before, after, under, first, second] = [(); 5].map(|_| signal(false));
+    let open = signal(true);
+    let window = focus_window(
+        move || {
+            let dialog = Overlay::toggleable(
+                LayoutStyle::new().flex_row(),
+                vec![
+                    focusable(Color::BLACK, first),
+                    focusable(Color::WHITE, second),
+                ],
+                move || open.get(),
+            )?;
+            Ok(boxed(Container::new(
+                fill().flex_column().padding_top(40.0),
+                vec![focusable(Color::BLACK, under), boxed(dialog)],
+            )?))
+        },
+        focusable(Color::BLACK, before),
+        focusable(Color::WHITE, after),
+    );
+
+    window.click(35.0, 55.0);
+    assert!(first.get(), "a press on the dialog's first box takes focus");
+    for expected in [second, first, second] {
+        window.send(key(NamedKey::Tab, false));
+        assert!(expected.get(), "Tab wraps inside the open dialog");
+        assert!(!before.get() && !after.get() && !under.get());
+    }
+
+    open.set(false);
+    window.frame();
+    window.send(key(NamedKey::Tab, false));
+    assert!(under.get(), "closed, Tab reaches the page under it");
+    window.send(key(NamedKey::Tab, false));
+    assert!(before.get(), "and goes on out of the frame");
 }
 
 #[test]
@@ -866,6 +963,54 @@ fn a_control_size_set_on_a_frame_reaches_only_the_readers_inside_it() {
 }
 
 #[test]
+fn high_contrast_set_on_a_frame_reaches_only_the_readers_inside_it() {
+    reset_layout_runtime();
+    preferences_core::set_high_contrast_override(None);
+    let inside = Rc::new(RefCell::new(Vec::new()));
+    let outside = Rc::new(RefCell::new(Vec::new()));
+    let canvas = {
+        let inside = inside.clone();
+        Rc::new(
+            SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+                effect(move || {
+                    inside
+                        .borrow_mut()
+                        .push(preferences_core::use_high_contrast())
+                });
+                Ok(boxed(Container::new(fill(), vec![])?))
+            })
+            .unwrap(),
+        )
+    };
+    let _outside = {
+        let outside = outside.clone();
+        effect(move || {
+            outside
+                .borrow_mut()
+                .push(preferences_core::use_high_contrast())
+        })
+    };
+
+    canvas.set_high_contrast(Some(true));
+    assert_eq!(canvas.high_contrast(), Some(true));
+    preferences_core::set_high_contrast_override(Some(false));
+    canvas.set_high_contrast(None);
+    assert_eq!(canvas.high_contrast(), None);
+
+    assert_eq!(
+        *inside.borrow(),
+        vec![None, Some(true), Some(false)],
+        "its own choice, deaf to the window's override, then the window's once cleared"
+    );
+    assert_eq!(
+        *outside.borrow(),
+        vec![None, Some(false)],
+        "the window never sees the frame's choice"
+    );
+    preferences_core::set_high_contrast_override(None);
+}
+
+#[test]
 fn a_modal_open_from_the_start_covers_its_frame_above_the_page() {
     reset_layout_runtime();
     let canvas = Rc::new(
@@ -912,5 +1057,153 @@ fn a_modal_open_from_the_start_covers_its_frame_above_the_page() {
     assert!(
         order(Color::BLACK) > order(Color::WHITE),
         "the modal is drawn above the page"
+    );
+}
+
+fn painted(
+    read: fn(&dyn theme_core::ThemeTokens) -> Color,
+    style: LayoutStyle,
+) -> Box<dyn LayoutItem> {
+    boxed(
+        StyledContainer::new(
+            style,
+            move |_| RectStyle::default().with_fill(read(&*theme_core::use_theme_tokens())),
+            vec![],
+        )
+        .unwrap(),
+    )
+}
+
+fn framed_window(canvas: &Rc<SurfaceCanvas>, chrome: Box<dyn LayoutItem>) -> Window {
+    Window::new(
+        SurfaceFrame::filling(
+            Rc::clone(canvas),
+            LayoutStyle::new().width(FRAME.width).height(FRAME.height),
+        )
+        .unwrap(),
+        chrome,
+        no_focusable(),
+        || {},
+    )
+}
+
+#[test]
+fn a_frame_in_the_dark_mode_paints_dark_defaults_inside_a_light_window() {
+    reset_layout_runtime();
+    theme_core::register_mode("light", || {});
+    theme_core::register_mode("dark", || {});
+    theme_core::follow_system("light", "dark");
+    theme_core::set_scheme_preference(theme_core::SchemePreference::Light);
+    let ink = |tokens: &dyn theme_core::ThemeTokens| tokens.ink();
+    let canvas =
+        Rc::new(SurfaceCanvas::new(Size::new(1.0, 1.0), move || Ok(painted(ink, fill()))).unwrap());
+    let window = framed_window(
+        &canvas,
+        painted(ink, LayoutStyle::new().width(20.0).height(20.0)),
+    );
+    let (light, dark) = {
+        let light = theme_core::use_theme_tokens().ink();
+        theme_core::set_scheme_preference(theme_core::SchemePreference::Dark);
+        let dark = theme_core::use_theme_tokens().ink();
+        theme_core::set_scheme_preference(theme_core::SchemePreference::Light);
+        (light, dark)
+    };
+    assert_ne!(light, dark);
+    let inks =
+        |commands: &[DrawCommand]| (fills(commands, light).len(), fills(commands, dark).len());
+    assert_eq!(inks(&window.frame()), (2, 0));
+
+    canvas.set_mode(Some("dark"));
+    assert_eq!(canvas.mode().as_deref(), Some("dark"));
+    let frame = window.frame();
+    assert_eq!(
+        inks(&frame),
+        (1, 1),
+        "the frame resolves the dark ink and the window keeps the light one"
+    );
+    assert_eq!(
+        fills(&frame, dark)[0].1,
+        Some(FRAME),
+        "the dark ink is the frame's"
+    );
+    assert_eq!(theme_core::active_mode().as_deref(), Some("light"));
+
+    canvas.set_mode(None);
+    assert_eq!(
+        inks(&window.frame()),
+        (2, 0),
+        "cleared, the frame follows the window's mode again"
+    );
+
+    theme_core::set_scheme_preference(theme_core::SchemePreference::Dark);
+    assert_eq!(
+        inks(&window.frame()),
+        (0, 2),
+        "a frame with no mode of its own hears the window's switch"
+    );
+    theme_core::set_scheme_preference(theme_core::SchemePreference::System);
+}
+
+#[derive(Clone)]
+struct Day;
+impl theme_core::ThemeTokens for Day {
+    fn primary(&self) -> Color {
+        Color::WHITE
+    }
+}
+
+#[derive(Clone)]
+struct Night;
+impl theme_core::ThemeTokens for Night {
+    fn primary(&self) -> Color {
+        Color::BLACK
+    }
+}
+
+#[test]
+fn a_frame_in_a_mode_registered_with_its_theme_restyles_inside_only() {
+    reset_layout_runtime();
+    theme_core::register_mode_theme("day", Day);
+    theme_core::register_mode_theme("night", Night);
+    theme_core::set_mode("day");
+    let primary = |tokens: &dyn theme_core::ThemeTokens| tokens.primary();
+    let canvas = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), move || Ok(painted(primary, fill()))).unwrap(),
+    );
+    let window = framed_window(
+        &canvas,
+        painted(primary, LayoutStyle::new().width(20.0).height(20.0)),
+    );
+    let primaries = |commands: &[DrawCommand]| {
+        (
+            fills(commands, Color::WHITE).len(),
+            fills(commands, Color::BLACK).len(),
+        )
+    };
+    assert_eq!(primaries(&window.frame()), (2, 0));
+
+    canvas.set_mode(Some("night"));
+    let frame = window.frame();
+    assert_eq!(
+        primaries(&frame),
+        (1, 1),
+        "the frame takes the night theme, the window keeps the day one"
+    );
+    assert_eq!(fills(&frame, Color::BLACK)[0].1, Some(FRAME));
+
+    theme_core::set_mode("night");
+    canvas.set_mode(Some("day"));
+    assert_eq!(
+        primaries(&window.frame()),
+        (1, 1),
+        "and the other way round"
+    );
+    assert_eq!(fills(&window.frame(), Color::WHITE)[0].1, Some(FRAME));
+
+    canvas.set_mode(None);
+    assert_eq!(
+        primaries(&window.frame()),
+        (0, 2),
+        "cleared, the frame follows the window"
     );
 }

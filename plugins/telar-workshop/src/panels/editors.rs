@@ -6,15 +6,15 @@ use std::rc::Rc;
 use telar::preview::host::{ArgState, Args};
 use telar::preview::{ArgValue, ControlKind, NumberControl};
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, ReadSignal, RectStyle, RwSignal, ShapeStyle, Slots, StyledContainer,
-    Text, TextArea, box_item, effect, signal,
+    Accessible, AlignItems, Children, Color, LayoutError, LayoutItem, LayoutStyle, Reactive,
+    ReadSignal, RectStyle, RwSignal, ShapeStyle, Slots, StyledContainer, Text, TextArea, box_item,
+    effect, signal,
 };
 use telar_components::{
     ItemProps, ScrubFieldProps, SelectProps, SliderProps, TabsProps, TextFieldProps, ToggleProps,
     item, scrub_field, select, slider, tabs, text_field, toggle,
 };
-use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, use_workbench_tokens};
+use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_card, workbench_mono};
 
 use crate::strings::{self, UNSET, UNSET_ARG};
 
@@ -181,7 +181,11 @@ fn number_editor(binding: &Binding, number: NumberControl) -> Result<Editor, Lay
             )?
             .a11y_label(move || name);
             let shown = binding.clone();
-            let value = Text::declaring(move || shown.value_text(), LayoutStyle::new(), mono)?;
+            let value = Text::declaring(
+                move || shown.value_text(),
+                LayoutStyle::new(),
+                workbench_mono,
+            )?;
             inline(vec![slider, box_item(value)])?
         }
         None => {
@@ -285,10 +289,7 @@ fn color_editor(binding: &Binding) -> Result<Editor, LayoutError> {
                 Some(ArgValue::Color(color)) => color,
                 _ => Color::TRANSPARENT,
             };
-            RectStyle::default()
-                .with_fill(color)
-                .with_border(Border::uniform(use_workbench_tokens().border_subtle, 1.0))
-                .with_radius(BorderRadius::all(WORKBENCH_RADIUS))
+            workbench_card().with_fill(color)
         },
         Vec::new(),
     )?
@@ -389,7 +390,7 @@ fn optional_editor(binding: &Binding, inner: ControlKind) -> Result<Editor, Layo
             .build(),
         Children::default(),
     )?
-    .a11y_label(move || strings::text_naming(UNSET_ARG, name));
+    .a11y_label(move || strings::text_with(UNSET_ARG, name));
     Ok(Editor {
         item: inline(vec![inner.item, switch])?,
         current: unset.current,
@@ -401,7 +402,7 @@ fn read_only(binding: &Binding) -> Result<Editor, LayoutError> {
     let shown = Text::declaring(
         move || state.with(|arg| arg.shown.clone().unwrap_or_else(|| "—".to_string())),
         LayoutStyle::new(),
-        mono,
+        workbench_mono,
     )?;
     Ok(Editor {
         item: box_item(shown),
@@ -422,16 +423,5 @@ fn inline(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, Layout
 }
 
 fn field_frame() -> RectStyle {
-    let tokens = use_workbench_tokens();
-    RectStyle::default()
-        .with_fill(tokens.sidebar_background)
-        .with_border(Border::uniform(tokens.border_subtle, 1.0))
-        .with_radius(BorderRadius::all(WORKBENCH_RADIUS))
-}
-
-/// Code: an arg's type, default and value as they are written.
-pub(super) fn mono(text: telar::TextStyle) -> telar::TextStyle {
-    let tokens = use_workbench_tokens();
-    text.with_font_family(tokens.mono_family)
-        .with_font_size(tokens.mono_size)
+    workbench_card().with_fill(use_workbench_tokens().sidebar_background)
 }

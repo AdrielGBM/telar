@@ -1,18 +1,17 @@
 //! The fallback preview host: every preview in one scrolling column, for a build with no workshop.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-#[cfg(feature = "preview-headless")]
-use crate::AppConfig;
 use crate::{
     App, BuildFailure, Color, Component, Container, LayoutError, LayoutItem, LayoutStyle,
     ScrollPage, Text, TextStyle, reset_layout_runtime,
 };
+#[cfg(feature = "preview-headless")]
+use crate::{AppConfig, Size};
 
 #[cfg(feature = "preview-headless")]
-use super::host::fail_duplicate_ids;
+use super::host::{Args, fail_duplicate_ids, file_stem};
 use super::host::{duplicate_ids, remounting, requested_preview};
+#[cfg(feature = "preview-headless")]
+use super::{Matrices, Play};
 use super::{PreviewCtx, PreviewEntry};
 
 /// An app that renders previews instead of its own root: the page `cargo telar preview` falls back to when the package declares no workshop.
@@ -22,18 +21,8 @@ pub struct PreviewApp {
     entries: Vec<PreviewEntry>,
 }
 
-/// The failures a page's boundaries caught, for a caller that has to report them rather than only show them.
-type Failures = Rc<RefCell<Vec<String>>>;
-
-fn failure_label(
-    failure: BuildFailure,
-    record: Option<&Failures>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let message = failure.to_string();
-    if let Some(record) = record {
-        record.borrow_mut().push(message.clone());
-    }
-    let message = format!("Error: {message}");
+fn failure_label(failure: BuildFailure) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let message = format!("Error: {failure}");
     Ok(Box::new(Text::new(
         move || message.clone(),
         LayoutStyle::new(),
@@ -52,7 +41,7 @@ impl PreviewApp {
         Self { entries }
     }
 
-    fn page(&self, failures: Option<&Failures>) -> Box<dyn Component> {
+    fn page(&self) -> Box<dyn Component> {
         reset_layout_runtime();
         let mut sections: Vec<Box<dyn LayoutItem>> = Vec::new();
 
@@ -75,11 +64,10 @@ impl PreviewApp {
             .unwrap();
 
             let entry = *entry;
-            let record = failures.cloned();
             let canvas = remounting(
                 PreviewCtx::for_entry(&entry),
                 move |ctx| entry.build_root(ctx),
-                move |failure| failure_label(failure, record.as_ref()),
+                failure_label,
             )
             .unwrap();
 
@@ -118,7 +106,7 @@ impl PreviewApp {
 
 impl App for PreviewApp {
     fn root(&self) -> Box<dyn Component> {
-        self.page(None)
+        self.page()
     }
 
     fn clear_color(&self) -> Option<Color> {
@@ -126,121 +114,111 @@ impl App for PreviewApp {
     }
 }
 
-/// [`PreviewApp`] for one PNG, keeping what its boundary caught so a preview that failed is reported as a failure rather than written as a picture of its error.
-#[cfg(feature = "preview-headless")]
-struct PngApp {
-    page: PreviewApp,
-    failures: Failures,
-}
-
-#[cfg(feature = "preview-headless")]
-impl App for PngApp {
-    fn root(&self) -> Box<dyn Component> {
-        self.page.page(Some(&self.failures))
-    }
-
-    fn clear_color(&self) -> Option<Color> {
-        Some(PreviewApp::page_color())
-    }
-}
-
-/// Renders every preview to its own PNG under `out_dir`, named by its id, on the headless backend, then exits.
+/// Renders every preview, and every cell of its matrix, to a PNG of its own under `out_dir`, named by its id, then exits.
 ///
-/// The third answer, and the one an out-of-tree backend wants: [`crate::try_run_test`] proves a component builds and lays out but never draws a pixel, and the preview window draws but needs a desktop window a shell has no way to open. Each entry gets its own file rather than one page of all of them, so a name identifies a preview and a golden-image run can compare them one at a time.
+/// The third answer, and the one an out-of-tree backend wants: [`crate::try_run_test`] proves a component builds and lays out but never draws a pixel, and the preview window draws but needs a desktop window a shell has no way to open. Each preview and each cell gets its own file rather than one page of all of them, so a name identifies what it shows and a golden-image run can compare them one at a time.
+///
+/// Each is mounted the way a workshop canvas mounts it — on a surface of its own, in its environment, with its args at their defaults or at the cell's, settled — at the window size `config` names unless it asks for one, and drawn on the CPU rasterizer. A matrix that cannot be expanded fails once, as `<preview-id>--matrix`.
 #[cfg(feature = "preview-headless")]
 pub fn run_preview_png(
     entries: Vec<PreviewEntry>,
     config: AppConfig,
     out_dir: &std::path::Path,
 ) -> ! {
-    use std::sync::{Arc, Mutex};
-
     if let Err(e) = std::fs::create_dir_all(out_dir) {
         eprintln!("cannot write previews to {}: {e}", out_dir.display());
         std::process::exit(1);
     }
-    let width = config.window.width.max(1);
-    let height = config.window.height.max(1);
+    crate::runner::install_preview_text_metrics(&config);
+    ui_core::open_surface_font_family(
+        config
+            .font_family
+            .as_deref()
+            .map(renderer_core::FontFamily::from),
+    );
+    let viewport = Size::new(
+        config.window.width.max(1) as f32,
+        config.window.height.max(1) as f32,
+    );
+    let matrices = Matrices::installed();
     println!("rendering {} preview component(s)", entries.len());
 
-    let (mut written, mut failed) = (0usize, fail_duplicate_ids(&entries));
-    for entry in entries {
-        let label = entry.id;
-        let file = out_dir.join(format!("{}.png", sanitize(entry.id)));
-        let sink: platform_headless::FrameSink = Arc::new(Mutex::new(None));
-        // The headless platform paces at a real 60fps, so a handful of frames lets an enter transition settle — a preview captured on the first frame shows every animation at its start value.
-        let platform = platform_headless::HeadlessPlatform::new(width, height)
-            .with_frames(PREVIEW_FRAMES)
-            .capture_into(sink.clone());
-        let failures = Failures::default();
-        let app = PngApp {
-            page: PreviewApp::new(vec![entry]),
-            failures: Rc::clone(&failures),
-        };
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            crate::run_with_platform::<_, _, ()>(
-                platform,
-                config.clone(),
-                Arc::new(crate::NoPaths) as Arc<dyn crate::AppPathsProvider>,
-                app,
-                "telar-preview",
-            )
-        }));
-        let pixels = match outcome {
-            Ok(Ok(())) => sink.lock().ok().and_then(|mut held| held.take()),
-            Ok(Err(e)) => {
-                println!("  FAIL  {label}  {e}");
-                failed += 1;
-                continue;
-            }
-            Err(_) => {
-                println!("  FAIL  {label}  panicked while rendering");
-                failed += 1;
-                continue;
-            }
-        };
-        if let Some(failure) = failures.borrow().first() {
-            println!("  FAIL  {label}  {failure}");
-            failed += 1;
-            continue;
-        }
-        let Some(pixels) = pixels else {
-            println!("  FAIL  {label}  no frame captured");
-            failed += 1;
+    let mut tally = Tally {
+        written: 0,
+        failed: fail_duplicate_ids(&entries),
+    };
+    for entry in &entries {
+        let opening = PreviewCtx::for_entry_with(entry, Args::in_memory_for(entry));
+        tally.record(
+            entry.id,
+            write_png(entry, entry.id, Ok(opening), viewport, out_dir),
+        );
+        let Some(matrix) = entry.matrix else {
             continue;
         };
-        match renderer_software::save_premultiplied_rgba8_png(pixels, width, height, &file) {
-            Ok(()) => {
-                written += 1;
-                println!("  ok    {label}  → {}", file.display());
+        match matrix.cells(entry, &matrices) {
+            Ok(cells) => {
+                for cell in &cells {
+                    let ctx = cell.ctx(entry).map_err(|error| error.to_string());
+                    tally.record(&cell.id, write_png(entry, &cell.id, ctx, viewport, out_dir));
+                }
             }
-            Err(e) => {
-                failed += 1;
-                println!("  FAIL  {label}  {e}");
+            Err(error) => {
+                tally.record(&format!("{}--matrix", entry.id), Err(error.to_string()));
             }
         }
     }
 
     println!();
-    println!("preview result: {written} written, {failed} failed");
-    std::process::exit(if failed == 0 { 0 } else { 1 });
+    println!(
+        "preview result: {} written, {} failed",
+        tally.written, tally.failed
+    );
+    std::process::exit(if tally.failed == 0 { 0 } else { 1 });
 }
 
-/// Enough frames at 60fps for a 200ms enter transition to settle.
 #[cfg(feature = "preview-headless")]
-const PREVIEW_FRAMES: u32 = 13;
+struct Tally {
+    written: usize,
+    failed: usize,
+}
 
 #[cfg(feature = "preview-headless")]
-fn sanitize(name: &str) -> String {
-    name.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
-                c
-            } else {
-                '-'
+impl Tally {
+    fn record(&mut self, id: &str, outcome: Result<std::path::PathBuf, String>) {
+        match outcome {
+            Ok(file) => {
+                self.written += 1;
+                println!("  ok    {id}  → {}", file.display());
             }
-        })
-        .collect()
+            Err(error) => {
+                self.failed += 1;
+                println!("  FAIL  {id}  {error}");
+            }
+        }
+    }
+}
+
+/// Mounts `entry` against `ctx` and writes what its canvas shows once settled to `<out_dir>/<id>.png`: `id` is the preview's, or the cell's whose args and globals `ctx` carries.
+#[cfg(feature = "preview-headless")]
+fn write_png(
+    entry: &PreviewEntry,
+    id: &str,
+    ctx: Result<PreviewCtx, String>,
+    viewport: Size,
+    out_dir: &std::path::Path,
+) -> Result<std::path::PathBuf, String> {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let ctx = ctx?;
+    let png = catch_unwind(AssertUnwindSafe(|| {
+        let play = Play::mount_with(entry, ctx, viewport).map_err(|error| error.to_string())?;
+        play.frame().to_png()
+    }))
+    .map_err(|_| "panicked while rendering".to_string())??;
+    let file = out_dir.join(format!("{}.png", file_stem(id)));
+    std::fs::write(&file, png).map_err(|error| error.to_string())?;
+    Ok(file)
 }
 
 #[cfg(test)]

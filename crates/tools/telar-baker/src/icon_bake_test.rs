@@ -114,6 +114,22 @@ fn a_computed_id_is_an_error_naming_runtime_mode() {
     );
 }
 
+/// An icon button hands its `icon` to the `icon` it draws, so a literal id it is given in `.rsx` bakes like one written on `icon` itself, in a view and in a preview alike. Anything else it is given is left as written, since it also takes what `icon!` builds.
+#[test]
+fn a_literal_id_given_to_a_component_that_carries_icons_is_baked() {
+    let root = package(
+        "carried",
+        "baked",
+        "[logic]\nlet which = signal(String::new());\n\n[view]\ncol\n    icon_button icon:\"demo:home\" label:\"Home\"\n    icon_button icon:$which label:\"Which\"\n    icon_button icon:icon!(\"demo:gear\") label:\"Gear\"\n\n[preview \"Starred\"]\nicon_button icon:\"demo:star\" label:\"Star\"\n",
+    );
+    let report = bake_package(&root, "test", VERSION).unwrap();
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    assert_eq!(
+        baked_icons(&root),
+        vec!["demo:gear", "demo:home", "demo:star"]
+    );
+}
+
 #[test]
 fn a_computed_id_is_left_for_the_runtime_when_only_literals_are_baked() {
     let root = package(

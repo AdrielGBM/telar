@@ -1,4 +1,4 @@
-use telar::preview::{Layout, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 use telar::{Children, Color, Reactive, Slots};
 
 use crate::list::{ItemProps, item};
@@ -29,7 +29,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )
         })
         .title("Inputs/Select")
-        .layout(Layout::Centered),
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes")),
         preview!(select: SelectProps, "Bound selection", |p| {
             let selected = p.signal("selected", 1u32);
             select(SelectProps::props().selected(selected).build(), sizes())

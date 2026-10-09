@@ -4,9 +4,9 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Border, BorderRadius, Children, Color, Cursor, Key, LayoutError, LayoutItem, LayoutStyle,
-    NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Transaction,
-    box_item, focus::Role, signal, step_factor, use_theme_tokens,
+    Accessible, Border, BorderRadius, Children, Color, Cursor, Key, LayoutError, LayoutItem,
+    LayoutStyle, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
+    Transaction, box_item, focus::Role, signal, step_factor, use_theme_tokens,
 };
 
 use crate::edit::write_through;
@@ -50,6 +50,9 @@ pub struct HandleProps {
     /// `Color::TRANSPARENT` (the default) falls back to the theme's warning colour.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub clamped_color: Reactive<Color>,
+    /// What a reader calls the handle: the value it sets, such as "Hue" or "Start time".
+    #[props(into, default)]
+    pub label: Reactive<String>,
     /// Runs as a drag takes hold of the handle, before its first value is asked for. Arrow-key steps are not drags and do not run it.
     #[props(some, default)]
     pub on_start: Option<Rc<dyn Fn()>>,
@@ -100,6 +103,7 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
         clamped,
         color,
         clamped_color,
+        label,
         on_start,
         on_end,
     } = props;
@@ -126,9 +130,7 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
     let request = move |raw: f32| {
         let bounded = raw.clamp(min, max);
         let cut = bounded != raw;
-        if clamped.peek() != cut {
-            clamped.set(cut);
-        }
+        clamped.set_if_changed(cut);
         write_through(transaction, bounded);
     };
     let release = {
@@ -168,6 +170,7 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
         }
     })
     .control(Role::Slider)
+    .a11y_label(move || label.get())
     .valued(move || telar::NumericValue {
         now: value.get() as f64,
         min: min as f64,

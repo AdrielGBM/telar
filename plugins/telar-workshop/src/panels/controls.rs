@@ -10,9 +10,11 @@ use telar::{
     box_item,
 };
 use telar_components::{ButtonProps, button};
-use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens};
+use telar_devtools::{
+    WORKBENCH_GRID, use_workbench_tokens, workbench_fill, workbench_mono, workbench_muted,
+};
 
-use super::editors::{self, Binding, mono};
+use super::editors::{self, Binding};
 use crate::state::WorkshopState;
 use crate::strings::{
     self, COLUMN_DEFAULT, COLUMN_DESCRIPTION, COLUMN_NAME, COLUMN_VALUE, NO_ARGS, NOTHING_SELECTED,
@@ -30,7 +32,7 @@ pub(super) fn controls(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Lay
     let selected = state.clone();
     let state = state.clone();
     let panel = ReactiveList::with_style(
-        fill(),
+        workbench_fill(),
         move || vec![selected.selected()],
         |entry: &Option<PreviewEntry>| entry.map(|entry| entry.id),
         move |entry| match entry {
@@ -44,15 +46,35 @@ pub(super) fn controls(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Lay
 fn preview_controls(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let listed = args.clone();
     let controls = ReactiveList::with_style(
-        fill(),
+        workbench_fill(),
         move || vec![!listed.states().is_empty()],
         |has_args: &bool| *has_args,
         move |has_args| match has_args {
-            true => table(args.clone()),
+            true => scrolling(table(args.clone())?),
             false => empty(NO_ARGS),
         },
     )?;
     Ok(box_item(controls))
+}
+
+/// The controls of the preview `args` belong to, at the height of their rows, for a page that scrolls them with the rest of it. Nothing until the preview reads an arg.
+pub(crate) fn arg_table(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let listed = args.clone();
+    let table = ReactiveList::with_style(
+        LayoutStyle::new().flex_column(),
+        move || match listed.states().is_empty() {
+            true => Vec::new(),
+            false => vec![()],
+        },
+        |_: &()| (),
+        move |()| table(args.clone()),
+    )?;
+    Ok(box_item(table))
+}
+
+fn scrolling(table: Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let scroll = LayoutScrollArea::new(LayoutStyle::new().flex_grow(1.0).min_height(0.0), table)?;
+    Ok(box_item(scroll))
 }
 
 fn table(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -73,21 +95,13 @@ fn table(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> {
         |_| RectStyle::default(),
         vec![heading()?, box_item(rows)],
     )?;
-    let scroll = LayoutScrollArea::new(
-        LayoutStyle::new().flex_grow(1.0).min_height(0.0),
-        box_item(table),
-    )?;
-    Ok(box_item(scroll))
+    Ok(box_item(table))
 }
 
 fn heading() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label =
         |key: &'static str, style: LayoutStyle| -> Result<Box<dyn LayoutItem>, LayoutError> {
-            let text = Text::declaring(
-                move || strings::text(key),
-                style,
-                |text| text.with_color(use_workbench_tokens().text_muted),
-            )?;
+            let text = Text::declaring(move || strings::text(key), style, workbench_muted)?;
             Ok(box_item(text))
         };
     line(vec![
@@ -109,7 +123,7 @@ fn row(binding: Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ty = Text::declaring(
         move || state.with(type_text),
         LayoutStyle::new(),
-        |text| mono(text).with_color(use_workbench_tokens().text_muted),
+        |text| workbench_muted(workbench_mono(text)),
     )?;
     let name = StyledContainer::new(
         fixed(NAME_WIDTH).flex_column().gap(WORKBENCH_GRID / 4.0),
@@ -127,12 +141,12 @@ fn row(binding: Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let default = Text::declaring(
         move || state.with(default_text),
         fixed(DEFAULT_WIDTH),
-        |text| mono(text).with_color(use_workbench_tokens().text_muted),
+        |text| workbench_muted(workbench_mono(text)),
     )?;
     let doc = Text::declaring(
         move || state.with(|arg| arg.doc.to_string()),
         growing(),
-        |text| text.with_color(use_workbench_tokens().text_muted),
+        workbench_muted,
     )?;
     line(vec![
         box_item(name),
@@ -207,7 +221,7 @@ fn reset_button(binding: &Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .build(),
         Children::default(),
     )?
-    .a11y_label(move || strings::text_naming(RESET_ARG, name));
+    .a11y_label(move || strings::text_with(RESET_ARG, name));
     Ok(button)
 }
 
@@ -253,21 +267,14 @@ fn empty(key: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let message = Text::declaring(
         move || strings::text(key),
         LayoutStyle::new(),
-        |text| text.with_color(use_workbench_tokens().text_muted),
+        workbench_muted,
     )?;
     let centred = StyledContainer::new(
-        fill()
+        workbench_fill()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
         |_| RectStyle::default(),
         vec![box_item(message)],
     )?;
     Ok(box_item(centred))
-}
-
-fn fill() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
-        .flex_grow(1.0)
-        .min_height(0.0)
 }

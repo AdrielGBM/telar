@@ -14,7 +14,7 @@ telar-embed = "0.2.2"
 telar-embed = { version = "0.2.2", features = ["host"] }
 ```
 
-The guest implements `EmbeddedApp` and calls `embed!` to export the shims; the host calls `load_embedded` and drives what it returns.
+The guest implements `EmbeddedApp` and calls `embed!` to export the shims; the host calls `load_embedded` and drives what it returns. The host must call `LoadedEmbed::on_frame` every frame for guest timers to fire and wake the event loop.
 
 Keep it on the same version as `telar` — the same lockstep `telar` and `telar-macros` already have, and for the same reason.
 

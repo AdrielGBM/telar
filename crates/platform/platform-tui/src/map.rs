@@ -132,6 +132,7 @@ impl Mapper {
                     out.push(Event::KeyPressed {
                         key: Key::Char(c),
                         modifiers: ModifiersState::default(),
+                        unmodified: None,
                     });
                     out.push(Event::KeyReleased {
                         key: Key::Char(c),
@@ -156,6 +157,7 @@ impl Mapper {
                 out.push(Event::KeyPressed {
                     key: mapped.clone(),
                     modifiers,
+                    unmodified: None,
                 });
                 if self.synthesises_releases {
                     out.push(Event::KeyReleased {

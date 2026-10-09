@@ -167,6 +167,10 @@ pub struct AndroidPlatform {
 /// How often the system preferences are re-read. Changing one is a human action, so half a second reads as instant, and it keeps the reads out of every frame.
 const PREFERENCES_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(500);
 
+/// The longest wait the next vsync serves. A longer one — a timer counting down, a keepalive — sleeps on the event loop instead, which costs no frames, and comes back through here once it is down to a frame.
+#[cfg(target_os = "android")]
+const VSYNC_WAIT: std::time::Duration = std::time::Duration::from_nanos(1_000_000_000 / 60);
+
 impl AndroidPlatform {
     pub fn try_new(app: AndroidApp) -> Result<Self, PlatformError> {
         use tracing_subscriber::filter::LevelFilter;
@@ -254,6 +258,11 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
         if let Some(_d) = self.handler.about_to_wait() {
             #[cfg(target_os = "android")]
             {
+                if _d > VSYNC_WAIT {
+                    event_loop
+                        .set_control_flow(ControlFlow::WaitUntil(std::time::Instant::now() + _d));
+                    return;
+                }
                 // On Android, use Choreographer vsync callbacks instead of WaitUntil wall-clock timers. This aligns frame wakeups to vsync edges, eliminating jank at any refresh rate (60/90/120 Hz).
                 let already_pending = self
                     .is_animation_pending

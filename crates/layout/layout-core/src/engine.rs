@@ -77,6 +77,13 @@ impl LayoutEngine {
         for (&node, style) in &styles {
             self.push_style(node, style);
         }
+        // A leading margin is placed from the parent's resolved axis, which the pass above may have reached only after the child.
+        for (&node, style) in styles
+            .iter()
+            .filter(|(_, style)| style.logical.leading_margin.is_some())
+        {
+            self.push_style(node, style);
+        }
         self.styles = styles;
         true
     }
@@ -382,7 +389,10 @@ impl LayoutEngine {
         self.tree
             .parent(node)
             .and_then(|parent| self.style_of(parent))
-            .map(|s| s.flex_direction == taffy::FlexDirection::RowReverse)
+            .map(|s| {
+                (s.flex_direction == taffy::FlexDirection::RowReverse)
+                    != (s.direction == taffy::Direction::Rtl)
+            })
             .unwrap_or(false)
     }
 
@@ -456,6 +466,50 @@ impl LayoutEngine {
             layout.size.width,
             layout.size.height,
         ))
+    }
+
+    /// The padding, margin, border and gap layout resolved for `node`, as of the last [`compute_layout`](Self::compute_layout).
+    ///
+    /// Read from what taffy computed rather than from the declared style, so a logical edge is already on its physical side, a percentage is already pixels, and a leading margin placed by the parent is included. A percentage gap is taken against the box's content area, as CSS does.
+    pub fn box_model(&self, node: NodeId) -> Result<geometry_core::BoxModel, LayoutError> {
+        use taffy::ResolveOrZero;
+
+        self.alive(node)?;
+        let layout = self.tree.layout(node).map_err(LayoutError::from)?;
+        let style = self.tree.style(node).map_err(LayoutError::from)?;
+        let insets = |rect: taffy::Rect<f32>| {
+            geometry_core::Insets::new(rect.top, rect.right, rect.bottom, rect.left)
+        };
+        let content = Size::new(
+            (layout.size.width
+                - layout.padding.left
+                - layout.padding.right
+                - layout.border.left
+                - layout.border.right)
+                .max(0.0),
+            (layout.size.height
+                - layout.padding.top
+                - layout.padding.bottom
+                - layout.border.top
+                - layout.border.bottom)
+                .max(0.0),
+        );
+        let no_calc = |_: *const (), _: f32| 0.0;
+        Ok(geometry_core::BoxModel {
+            padding: insets(layout.padding),
+            margin: insets(layout.margin),
+            border: insets(layout.border),
+            gap: Size::new(
+                style
+                    .gap
+                    .width
+                    .resolve_or_zero(Some(content.width), no_calc),
+                style
+                    .gap
+                    .height
+                    .resolve_or_zero(Some(content.height), no_calc),
+            ),
+        })
     }
 
     /// Every node under `root`, top-down, at the root-relative rect layout gave it; `f` returns whether to descend. Sticky nodes are left where layout put them — see [`walk_in_view`](Self::walk_in_view).
@@ -639,3 +693,7 @@ mod tests;
 #[cfg(test)]
 #[path = "engine_sticky_test.rs"]
 mod sticky_tests;
+
+#[cfg(test)]
+#[path = "engine_direction_test.rs"]
+mod direction_tests;

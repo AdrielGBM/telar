@@ -3,6 +3,7 @@
 use std::process::Command;
 
 use clap::Parser;
+use telar_project::protocol::{PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR};
 
 mod android;
 mod bake;
@@ -19,6 +20,7 @@ mod package;
 mod transpile;
 mod watch;
 mod web_dev;
+mod workshop_channel;
 
 use android::build_android_package;
 use bake::bake_workspace;
@@ -42,6 +44,11 @@ use web_dev::run_web_dev;
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-telar".to_string()).chain(args));
     let command = cli.command.unwrap_or_else(default_dev_command);
+    if let TelarCommand::Preview(args) = &command
+        && open_in_running_workshop(args)
+    {
+        return;
+    }
     // The one place `cargo telar` prepares a build, rather than at each of the nine sites that spawn `cargo`; the ones excluded here compile nothing or prepare for themselves. Bake first: a `src:"…"` transpiles against the artifact the bake writes.
     if !matches!(
         command,
@@ -169,6 +176,7 @@ fn run_dev_cmd(args: DevArgs) {
         HotMode::Dev,
         HotLoopOpts {
             args: plan.cargo_args,
+            app_args: Vec::new(),
             config: plan.config,
             // The hot-reload host opens a window of its own, so an app running in the terminal restarts on a change instead. Reloading in place is the only thing lost: the rebuild is the same one.
             no_hot_reload: no_hot_reload || terminal,
@@ -179,14 +187,25 @@ fn run_dev_cmd(args: DevArgs) {
 fn run_preview_cmd(args: PreviewArgs) {
     let PreviewArgs {
         hot,
+        preview,
         component,
         list,
         png,
     } = args;
-    // The preview host process inherits our env; it filters PreviewEntries by this when set.
+    // The preview host process inherits our env, and reads both of these as it starts.
     if let Some(component) = &component {
         // SAFETY: single-threaded at this point (set before any threads/spawns are created).
-        unsafe { std::env::set_var("TELAR_PREVIEW_COMPONENT", component) };
+        unsafe { std::env::set_var(PREVIEW_COMPONENT_VAR, component) };
+    }
+    let mut app_args = Vec::new();
+    match preview {
+        Some(id) if workshop_channel::is_preview_id(&id) => {
+            // SAFETY: as above.
+            unsafe { std::env::set_var(PREVIEW_ID_VAR, id) };
+        }
+        // A link carries args and a view as well as a preview, which only the workshop reads, from the location the app is started at.
+        Some(link) => app_args = vec!["--location".to_string(), link],
+        None => {}
     }
     let HotArgs {
         common,
@@ -213,10 +232,26 @@ fn run_preview_cmd(args: PreviewArgs) {
         HotMode::Preview,
         HotLoopOpts {
             args: plan.cargo_args,
+            app_args,
             config: plan.config,
             no_hot_reload,
         },
     );
+}
+
+/// Moves the workshop a running `cargo telar preview` shows for the package to the preview `args` names, and answers whether there was one to move. Asked before anything is built: a workshop that is already open needs nothing rebuilt to move.
+fn open_in_running_workshop(args: &PreviewArgs) -> bool {
+    let Some(target) = &args.preview else {
+        return false;
+    };
+    let common = &args.hot.common;
+    let resolved = resolve_package(&build_cargo_args(&common.package, false, &None));
+    let file = workshop_channel::channel_file(&resolved.workspace_root, &resolved.name());
+    let opened = workshop_channel::send(&file, &workshop_channel::location_of(target));
+    if opened {
+        eprintln!("[cargo-telar] Opened {target} in the running workshop.");
+    }
+    opened
 }
 
 /// Runs the app binary once with `var` set, under the `telar` feature that makes it answer, and exits with its code.

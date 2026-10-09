@@ -70,7 +70,8 @@ fn is_ctrl_c(event: &Event) -> bool {
         event,
         Event::KeyPressed {
             key: Key::Char('c'),
-            modifiers: ModifiersState { is_ctrl: true, .. }
+            modifiers: ModifiersState { is_ctrl: true, .. },
+            ..
         }
     )
 }

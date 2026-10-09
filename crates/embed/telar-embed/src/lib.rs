@@ -18,6 +18,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::time::Duration;
 use web_time::Instant;
 
 use geometry_core::{Rect, Size, Transform};
@@ -184,12 +185,16 @@ impl EmbedInstance {
 
     /// Route a positioned event to the guest's overlay layer (modals/dropdowns) with priority; `true` means an overlay consumed it and the host should not fall through to the content.
     ///
-    /// The host calls this before [`on_event`](Self::on_event) and stops when it returns `true`, so the registries are fed here too — otherwise an event an overlay consumes never reaches them at all.
+    /// The host calls this before [`on_event`](Self::on_event) and stops when it returns `true`, so the registries are fed here too — otherwise an event an overlay consumes never reaches them at all. For the same reason a move an overlay takes is handed to the content here, [`covered`](ui_core::covered), so a box hovered under the overlay hears the pointer leave it.
     pub fn dispatch_overlays(&self, event: &Event) -> bool {
         let _g = self.canvas.enter();
         ui_core::observe_keyboard(event);
         ui_core::observe_pointer(event);
-        self.canvas.dispatch_overlays(event) == EventResult::Handled
+        let taken = self.canvas.dispatch_overlays(event) == EventResult::Handled;
+        if taken && matches!(event, Event::PointerMoved { .. }) {
+            ui_core::covered(|| self.canvas.dispatch_tree(event));
+        }
+        taken
     }
 
     /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event) observes on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose widgets asked.
@@ -217,20 +222,31 @@ impl EmbedInstance {
         preferences_core::set_system_preferences(preferences.clone());
     }
 
-    /// Run the guest's per-frame background-work hook, forwarding the host's `ctx` (so a guest worker thread can wake the host loop via `ctx.redraw_waker()`, just as an in-process app does).
+    /// Run the guest's due timers, its finished tasks and then its per-frame background-work hook, forwarding the host's `ctx` (so a guest worker thread can wake the host loop via `ctx.redraw_waker()`, just as an in-process app does).
     pub fn on_frame(&mut self, ctx: &mut AppCtx) {
         let _g = self.canvas.enter();
-        // The guest links its own reactive-core copy, so `spawn_task` inside it registers in a runtime the host cannot reach. Both halves of the bridge are wired here rather than through new FFI symbols.
+        // The guest links its own reactive-core copy, so `spawn_task` and `run_after` inside it register in a runtime the host cannot reach: the wake is installed here, and timers and tasks are run here, in the runner's order.
         if !self.task_waker_installed
             && let Some(waker) = ctx.redraw_waker()
         {
             reactive_core::set_task_waker(move || waker.wake());
             self.task_waker_installed = true;
         }
+        reactive_core::fire_timers();
         reactive_core::drain_tasks();
         // So signals the hook writes flush after the `borrow_mut` releases, never re-entering `view()` mid-borrow.
         let embedded = &self.embedded;
         reactive_core::batch(|| embedded.borrow_mut().on_frame(ctx));
+    }
+
+    /// How long until the guest's earliest [`run_after`](reactive_core::run_after) timer comes due, which [`on_frame`](Self::on_frame) fires; `None` when none is waiting.
+    pub fn until_next_timer(&self) -> Option<Duration> {
+        reactive_core::until_next_timer()
+    }
+
+    /// When that timer comes due, on the guest's own timer clock: the same answer until the deadline itself moves. See [`reactive_core::next_timer_due`].
+    pub fn next_timer_due(&self) -> Option<Instant> {
+        reactive_core::next_timer_due()
     }
 
     /// Autofocus/announce the content becoming visible; re-render so a focus change shows this frame.
@@ -295,6 +311,8 @@ embed_shim!(__embed_dispatch_overlays(event: &Event) -> bool => dispatch_overlay
 embed_shim!(__embed_end_frame() => end_frame);
 embed_shim!(__embed_motion_tick(now: Instant) => motion_tick);
 embed_shim!(__embed_motion_active() -> bool => motion_active);
+embed_shim!(__embed_until_next_timer() -> Option<Duration> => until_next_timer);
+embed_shim!(__embed_next_timer_due() -> Option<Instant> => next_timer_due);
 embed_shim!(__embed_drain_window_commands() -> WindowCommands => drain_window_commands);
 embed_shim!(__embed_set_system_preferences(preferences: &SystemPreferences) => set_system_preferences);
 embed_shim!(__embed_activate() => activate);
@@ -310,8 +328,8 @@ pub unsafe fn __embed_on_frame(inst: *mut EmbedInstance, ctx: &mut AppCtx) {
     unsafe { (*inst).on_frame(ctx) }
 }
 
-/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`.
-pub const TELAR_EMBED_ABI: u32 = 5;
+/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers.
+pub const TELAR_EMBED_ABI: u32 = 6;
 
 /// Everything the host calls on a guest, as one exported symbol.
 ///
@@ -333,6 +351,8 @@ pub struct EmbedVTable {
     pub end_frame: unsafe extern "Rust" fn(*mut EmbedInstance),
     pub motion_tick: unsafe extern "Rust" fn(*mut EmbedInstance, Instant),
     pub motion_active: unsafe extern "Rust" fn(*mut EmbedInstance) -> bool,
+    pub until_next_timer: unsafe extern "Rust" fn(*mut EmbedInstance) -> Option<Duration>,
+    pub next_timer_due: unsafe extern "Rust" fn(*mut EmbedInstance) -> Option<Instant>,
     pub drain_window_commands: unsafe extern "Rust" fn(*mut EmbedInstance) -> WindowCommands,
     pub set_system_preferences: unsafe extern "Rust" fn(*mut EmbedInstance, &SystemPreferences),
     pub activate: unsafe extern "Rust" fn(*mut EmbedInstance),
@@ -375,6 +395,8 @@ macro_rules! embed {
                 end_frame: $crate::__embed_end_frame,
                 motion_tick: $crate::__embed_motion_tick,
                 motion_active: $crate::__embed_motion_active,
+                until_next_timer: $crate::__embed_until_next_timer,
+                next_timer_due: $crate::__embed_next_timer_due,
                 drain_window_commands: $crate::__embed_drain_window_commands,
                 set_system_preferences: $crate::__embed_set_system_preferences,
                 activate: $crate::__embed_activate,
@@ -400,6 +422,7 @@ mod host {
     pub struct LoadedEmbed {
         inst: *mut EmbedInstance,
         vtable: EmbedVTable,
+        timer_mirror: TimerMirror,
         // Declared last so it drops last: the instance is destroyed before the library unmaps.
         _lib: libloading::Library,
     }
@@ -425,6 +448,7 @@ mod host {
         let guest = LoadedEmbed {
             inst,
             vtable,
+            timer_mirror: TimerMirror::default(),
             _lib: lib,
         };
         // A guest starts with a store of its own that knows nothing, and a host only forwards changes; without this one opened mid-session would draw light on a dark desktop until the user next changed a setting.
@@ -512,8 +536,37 @@ mod host {
         pub fn id(&self) -> String {
             unsafe { (self.vtable.id)(self.inst) }
         }
+        /// Call once per frame. Runs the guest's due timers, its finished tasks and its own hook, then keeps the host's loop waking for the guest's next timer.
         pub fn on_frame(&self, ctx: &mut AppCtx) {
             unsafe { (self.vtable.on_frame)(self.inst, ctx) }
+            self.timer_mirror
+                .follow(self.next_timer_due(), self.until_next_timer());
+        }
+        /// How long until the guest's earliest timer comes due; `None` when none is waiting. [`on_frame`](Self::on_frame) already keeps the host's loop waking for it.
+        pub fn until_next_timer(&self) -> Option<Duration> {
+            unsafe { (self.vtable.until_next_timer)(self.inst) }
+        }
+        fn next_timer_due(&self) -> Option<Instant> {
+            unsafe { (self.vtable.next_timer_due)(self.inst) }
+        }
+    }
+
+    /// The guest's earliest timer, held as a timer of the host's own. The host's loop sleeps until the earliest deadline in the host's runtime, and the guest's timers are in a copy of their own it cannot see: this one runs nothing, it only wakes the frame in which the host drives the guest's [`on_frame`](LoadedEmbed::on_frame).
+    #[derive(Default)]
+    pub(crate) struct TimerMirror(RefCell<Option<(Instant, reactive_core::Timer)>>);
+
+    impl TimerMirror {
+        /// Follows the guest's earliest deadline, `due` on its clock and `wait` from now. A deadline already followed is left alone: scheduling it again would wake the loop every frame for a timer that has not moved.
+        pub(crate) fn follow(&self, due: Option<Instant>, wait: Option<Duration>) {
+            let mut mirrored = self.0.borrow_mut();
+            let following = mirrored
+                .as_ref()
+                .is_some_and(|(at, timer)| Some(*at) == due && timer.is_pending());
+            if !following {
+                *mirrored = due
+                    .zip(wait)
+                    .map(|(due, wait)| (due, reactive_core::run_after(wait, || {})));
+            }
         }
     }
 

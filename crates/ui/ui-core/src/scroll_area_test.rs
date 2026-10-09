@@ -6,6 +6,7 @@ use renderer_core::DrawCommand;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use super::*;
+use crate::Container;
 use crate::canvas::Canvas;
 use crate::context::{compute_layout, new_container, track_layout};
 use crate::layout_item::LayoutItem;
@@ -1017,4 +1018,83 @@ fn a_release_over_content_scrolled_out_of_view_fires_no_tap() {
     assert_eq!(pressed.get(), 0, "let go over what is scrolled out of view");
     tap(&mut sa, 298.0);
     assert_eq!(pressed.get(), 1, "let go inside the viewport");
+}
+
+#[test]
+fn an_area_with_no_room_the_way_the_wheel_turns_hands_it_on() {
+    let mut wide = make_scroll_area_wide();
+    let result = wide.on_event(&wheel_over(ScrollDelta::Pixels { x: 0.0, y: -80.0 }));
+    assert_eq!(result, EventResult::Ignored, "it only scrolls sideways");
+
+    let mut fits = make_scroll_area_small();
+    let result = fits.on_event(&wheel_over(ScrollDelta::Pixels { x: 0.0, y: -80.0 }));
+    assert_eq!(result, EventResult::Ignored, "nothing overflows it");
+
+    let mut tall = make_scroll_area();
+    let result = tall.on_event(&wheel_over(ScrollDelta::Pixels { x: 0.0, y: 80.0 }));
+    assert_eq!(result, EventResult::Ignored, "it is at its start already");
+}
+
+#[test]
+fn an_area_at_its_end_hands_the_wheel_on_and_takes_it_back_turned_the_other_way() {
+    let mut sa = make_scroll_area();
+    let down = wheel_over(ScrollDelta::Pixels { x: 0.0, y: -9999.0 });
+    assert_eq!(sa.on_event(&down), EventResult::Handled);
+    assert_eq!(sa.on_event(&down), EventResult::Ignored);
+    let up = wheel_over(ScrollDelta::Pixels { x: 0.0, y: 80.0 });
+    assert_eq!(sa.on_event(&up), EventResult::Handled);
+    assert_eq!(sa.core.scroll_y.get(), 620.0);
+}
+
+#[test]
+fn a_wheel_over_an_inner_area_that_cannot_take_it_scrolls_the_one_around_it() {
+    reset_layout_runtime();
+    let wide = Canvas::new(LayoutStyle::new().width(1000.0).height(100.0), |_| {
+        RenderNode::Empty
+    })
+    .unwrap();
+    let inner = LayoutScrollArea::new(
+        LayoutStyle::new()
+            .width(400.0)
+            .height(100.0)
+            .flex_shrink(0.0),
+        Box::new(wide),
+    )
+    .unwrap();
+    let inner_x = inner.core.scroll_x;
+    let inner_y = inner.core.scroll_y;
+    let page = Container::new(
+        LayoutStyle::new().flex_column().width(400.0).height(1000.0),
+        vec![Box::new(inner) as Box<dyn LayoutItem>],
+    )
+    .unwrap();
+    let mut outer = LayoutScrollArea::new(
+        LayoutStyle::new().width(400.0).height(300.0),
+        Box::new(page),
+    )
+    .unwrap();
+    compute_layout(
+        outer.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(300.0),
+    )
+    .unwrap();
+
+    let over_inner = Event::Scrolled {
+        delta: ScrollDelta::Pixels { x: 0.0, y: -80.0 },
+        x: 200.0,
+        y: 50.0,
+    };
+    assert_eq!(outer.on_event(&over_inner), EventResult::Handled);
+    assert_eq!(outer.core.scroll_y.get(), 80.0, "the page scrolled");
+    assert_eq!((inner_x.get(), inner_y.get()), (0.0, 0.0));
+
+    let sideways = Event::Scrolled {
+        delta: ScrollDelta::Pixels { x: -80.0, y: 0.0 },
+        x: 200.0,
+        y: 10.0,
+    };
+    outer.on_event(&sideways);
+    assert_eq!(inner_x.get(), 80.0, "the inner area keeps what it can take");
+    assert_eq!(outer.core.scroll_y.get(), 80.0);
 }

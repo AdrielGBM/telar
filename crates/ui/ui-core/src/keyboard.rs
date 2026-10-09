@@ -16,6 +16,7 @@ struct Keyboard {
     modifiers: ModifiersState,
     held: FxHashSet<Key>,
     pressed: FxHashSet<Key>,
+    last_press: Option<(Key, Key)>,
 }
 
 thread_local! {
@@ -31,8 +32,15 @@ pub fn observe(event: &Event) {
         let mut k = k.borrow_mut();
         match event {
             Event::ModifiersChanged { modifiers } => k.modifiers = *modifiers,
-            Event::KeyPressed { key, modifiers } => {
+            Event::KeyPressed {
+                key,
+                modifiers,
+                unmodified,
+            } => {
                 k.modifiers = *modifiers;
+                k.last_press = unmodified
+                    .clone()
+                    .map(|unmodified| (key.clone(), unmodified));
                 // `insert` reports whether the key was absent, which separates a first press from an OS repeat.
                 if k.held.insert(key.clone()) {
                     k.pressed.insert(key.clone());
@@ -70,6 +78,16 @@ pub fn modifiers() -> ModifiersState {
 /// A release lets go of the key its press reported, which the backend pairs by physical key ([`platform_core::KeyPairing`]), so a `\` typed through `AltGr` comes up with its key even when `AltGr` came up first. Losing the window's focus lets go of everything.
 pub fn key_held(key: &Key) -> bool {
     KEYBOARD.with(|k| k.borrow().held.contains(key))
+}
+
+/// The key a shortcut should match for the press that reported `key`: what the layout makes of that physical key with no modifier applied.
+///
+/// `key` is what the modifiers made of it, so Option+T on macOS is `†` and a chord matching on it never fires. This answers `t` while that press is the latest one, and `key` itself for anything else: a backend that cannot tell, or a key that is not the latest press.
+pub fn shortcut_key(key: &Key) -> Key {
+    KEYBOARD.with(|k| match &k.borrow().last_press {
+        Some((pressed, unmodified)) if pressed == key => unmodified.clone(),
+        _ => key.clone(),
+    })
 }
 
 /// Whether `key` went down during this frame. False for a key the OS is repeating, which is what makes it the one to drive a once-per-press action while [`key_held`] drives a continuous one.

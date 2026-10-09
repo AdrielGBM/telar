@@ -1,13 +1,13 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use telar::testing::{moved, press, release};
 use telar::{Component, LayoutItem, NodeId, Rect, signal};
 
 use super::*;
-use crate::harness::{moved, press, release};
 
 fn lay_out(node: NodeId) -> Rect {
-    crate::harness::lay_out(node, 300.0, 100.0)
+    telar::testing::lay_out(node, 300.0, 100.0)
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn only_the_focused_slider_answers_the_arrows() {
             .unwrap()
         })
         .collect();
-    let right = crate::harness::named(telar::NamedKey::ArrowRight);
+    let right = telar::testing::named(telar::NamedKey::ArrowRight);
 
     for widget in &mut sliders {
         widget.on_event(&right);

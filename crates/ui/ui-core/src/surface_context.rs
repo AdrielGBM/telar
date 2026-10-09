@@ -1,6 +1,6 @@
 //! `Surface` — one RSX surface's complete per-surface world.
 //!
-//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale and control size it overrides the thread's with. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
+//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale, control size, theme mode and high contrast it overrides the thread's with. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
 //! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and `enter` is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
@@ -14,11 +14,12 @@ use layout_reactive::{
     SurfaceSizeContext, SurfaceSizeGuard,
 };
 use platform_core::{WindowCommandContext, WindowCommandGuard};
+use preferences_core::{HighContrastContext, HighContrastGuard};
 use reactive_core::{
     SurfaceEnterGuard, SurfaceHandle, dispose_surface, in_surface_world, set_current_surface,
     set_surface_enter_hook,
 };
-use theme_core::{ControlSizeContext, ControlSizeGuard};
+use theme_core::{ControlSizeContext, ControlSizeGuard, ModeContext, ModeGuard};
 use ui_tree::{OverlayContext, OverlayGuard};
 
 use crate::anchor_line::{PlacesContext, PlacesGuard};
@@ -56,6 +57,8 @@ pub struct Surface {
     direction: DirectionContext,
     locale: LocaleContext,
     control_size: ControlSizeContext,
+    mode: ModeContext,
+    high_contrast: HighContrastContext,
 }
 
 impl Surface {
@@ -87,6 +90,8 @@ impl Surface {
                 direction: DirectionContext::new_owned(),
                 locale: LocaleContext::new_owned(),
                 control_size: ControlSizeContext::new_owned(),
+                mode: ModeContext::new_owned(),
+                high_contrast: HighContrastContext::new_owned(),
             })
         };
         let surface = Rc::new(world);
@@ -124,6 +129,8 @@ impl Surface {
             _direction: self.direction.enter(),
             _locale: self.locale.enter(),
             _control_size: self.control_size.enter(),
+            _mode: self.mode.enter(),
+            _high_contrast: self.high_contrast.enter(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -156,6 +163,8 @@ impl Surface {
             _direction: DirectionContext::enter_ambient(),
             _locale: LocaleContext::enter_ambient(),
             _control_size: ControlSizeContext::enter_ambient(),
+            _mode: ModeContext::enter_ambient(),
+            _high_contrast: HighContrastContext::enter_ambient(),
             _prev_surface: RestoreSurface(prev_surface),
         }
     }
@@ -196,6 +205,8 @@ pub struct SurfaceGuard {
     _direction: DirectionGuard,
     _locale: LocaleGuard,
     _control_size: ControlSizeGuard,
+    _mode: ModeGuard,
+    _high_contrast: HighContrastGuard,
     _prev_surface: RestoreSurface,
 }
 

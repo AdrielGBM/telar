@@ -719,6 +719,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bstr"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f"
+dependencies = [
+ "memchr",
+ "serde_core",
+]
+
+[[package]]
 name = "built"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5345,6 +5355,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "similar"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f66ca1f7aca2474dc10c942eb22feffc897735f54cd1db90138c2fddb490987"
+dependencies = [
+ "bstr",
+]
+
+[[package]]
 name = "simplecss"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5667,6 +5686,7 @@ dependencies = [
  "raw-window-handle",
  "serde",
  "serde_json",
+ "similar",
  "telar",
  "telar-geometry-core",
  "telar-i18n-core",
@@ -5695,6 +5715,7 @@ dependencies = [
  "telar-theme-core",
  "telar-ui-core",
  "telar-ui-tree",
+ "tiny-skia 0.12.0",
  "toml",
  "tracing",
  "wasm-bindgen",
@@ -5767,10 +5788,7 @@ version = "0.2.2"
 dependencies = [
  "telar",
  "telar-components",
- "telar-geometry-core",
- "telar-platform-core",
- "telar-renderer-core",
- "telar-ui-tree",
+ "tracing",
  "web-time",
 ]
 
@@ -6170,6 +6188,7 @@ dependencies = [
 name = "telar-renderer-record"
 version = "0.2.2"
 dependencies = [
+ "telar-geometry-core",
  "telar-renderer-core",
 ]
 
@@ -6309,6 +6328,7 @@ dependencies = [
  "telar-layout-reactive",
  "telar-motion-core",
  "telar-platform-core",
+ "telar-preferences-core",
  "telar-reactive-core",
  "telar-renderer-assets",
  "telar-renderer-core",
@@ -6326,6 +6346,7 @@ version = "0.2.2"
 dependencies = [
  "criterion",
  "telar-geometry-core",
+ "telar-layout-reactive",
  "telar-motion-core",
  "telar-platform-core",
  "telar-reactive-core",

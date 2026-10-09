@@ -79,7 +79,7 @@ where
 ///
 /// A renderer skips its pipeline and re-presents the texture it retained when the generation it is handed matches the last one it rendered — so equal generations have to mean identical draw commands, and the number must never go backwards. Three loose `u64` fields written from three places said that only by convention, and disagreed on overflow: one used `+ 1`, the others saturated.
 ///
-/// Two things break the invariant on their own. A remount: the compose counter lives on the tree, so a new tree starts over and a surface whose content never changes hands out the number it did before — which is why `restart` steps past everything already drawn. And a continuous region: its commands are identical every frame while the picture they point at is not, so `next` steps per frame while one is alive.
+/// Three things break the invariant on their own. A remount: the compose counter lives on the tree, so a new tree starts over and a surface whose content never changes hands out the number it did before — which is why `restart` steps past everything already drawn. And a continuous region: its commands are identical every frame while the picture they point at is not, so `next` steps per frame while one is alive. And a dev overlay whose own picture changed: its commands are not the tree's, so the tree's number cannot see them move, and `next` steps for that frame too.
 #[derive(Default)]
 pub(super) struct FrameGeneration {
     base: u64,
@@ -94,8 +94,8 @@ impl FrameGeneration {
     }
 
     /// This frame's generation, and the only place the three counters move.
-    fn next(&mut self, composed: u64, continuous: bool) -> u64 {
-        if continuous {
+    fn next(&mut self, composed: u64, unseen_change: bool) -> u64 {
+        if unseen_change {
             self.continuous_frames = self.continuous_frames.saturating_add(1);
         }
         let generation = self
@@ -363,19 +363,13 @@ where
                 window.request_redraw();
                 false
             }
+            crate::hot::HotEvent::Goto(reference) => {
+                self.open_link(&reference, window);
+                false
+            }
             crate::hot::HotEvent::Reload(new_path) => match crate::hot::load_hot_app(&new_path) {
                 Ok(new_app) => {
-                    // Taken while the old tree and its signals are still alive.
-                    let snapshot = self.app.hot_snapshot();
-                    // Dropped first, so effect closures holding old-dylib code are destroyed while that lib is still mapped; only then does replacing `self.app` dlclose it.
-                    self.tree = None;
-                    self.app = Box::new(new_app);
-                    // Preferences before the snapshot: the incoming `follow_system` re-drives the mode as its scheme goes from unknown to known, and a mode the user picked by hand must land after that to survive the reload.
-                    self.replay_system_preferences();
-                    if let Some(blob) = snapshot {
-                        self.app.hot_restore(&blob);
-                    }
-                    self.mount_tree(window);
+                    self.swap_app(Box::new(new_app), window);
                     self.dev.set_build_error(None);
                     tracing::info!("hot reloaded: {}", new_path.display());
                     window.request_redraw();
@@ -387,6 +381,54 @@ where
                 }
             },
         }
+    }
+
+    /// Replaces the running app with a freshly loaded runtime, hands it what the outgoing one knew and mounts its tree.
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
+    fn swap_app(&mut self, app: Box<dyn AppRuntime>, window: &W) {
+        // Taken while the old tree and its signals are still alive.
+        let snapshot = self.app.hot_snapshot();
+        // Dropped first, so effect closures holding old-dylib code are destroyed while that lib is still mapped; only then does replacing `self.app` dlclose it.
+        self.tree = None;
+        self.app = app;
+        // Before anything runs in the new runtime, so a task or timer its restore or its first build starts already wakes the loop.
+        self.install_task_waker();
+        // Preferences before the snapshot: the incoming `follow_system` re-drives the mode as its scheme goes from unknown to known, and a mode the user picked by hand must land after that to survive the reload.
+        self.replay_system_preferences();
+        if let Some(blob) = snapshot {
+            self.app.hot_restore(&blob);
+        }
+        self.mount_tree(window);
+    }
+
+    /// Hands the app's runtime the loop wake, so a task finishing in it, or a timer it schedules, runs a frame. Every runtime swapped in needs it again: a reloaded dylib's reactive-core copy starts with an empty waker slot of its own.
+    fn install_task_waker(&self) {
+        if let Some(waker) = self.redraw_waker.clone() {
+            self.app.install_task_waker(waker);
+        }
+    }
+
+    /// Opens `reference` as a link opened into the running app would be — on top of where it is — and raises the window to show it. A reference the app's location format cannot read, or a surface with no address of its own, is left alone.
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
+    fn open_link(&mut self, reference: &str, window: &W) {
+        let Some(location) = platform_core::location_format().parse(reference) else {
+            tracing::warn!("cannot open `{reference}`: not a location of this app");
+            return;
+        };
+        let Some(binding) = &self.location else {
+            return;
+        };
+        let history = binding.linking(location);
+        self.follow_location(history, window);
+        window.focus_window();
     }
 
     /// Puts a relay between the hot-reload watcher and this handler, so a rebuilt dylib wakes the loop. Spawned by the resume that mounts the first tree, which is the first moment a waker exists, and never again: a later resume would chain a second relay onto the first.
@@ -530,12 +572,14 @@ where
         let has_content = self.pacer.presentation_owed
             || self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
             || self.app.motion_has_continuous();
+        // Not content of the app's own: the overlay's change is due now, but the app drew nothing new, which is what an FPS readout counts.
+        let fresh = has_content || self.dev.is_dirty();
         let needs_keepalive = self.keepalive_due();
-        if !has_content && !needs_keepalive {
+        if !fresh && !needs_keepalive {
             return None;
         }
         // A keepalive blit carries no new content, so it runs at its own cadence. Enforced here rather than in `about_to_wait` because a submitted frame is itself a wakeup: its commit returns the next dispatch at once.
-        if !has_content && now.duration_since(self.pacer.last_submit) < HW_KEEPALIVE_INTERVAL {
+        if !fresh && now.duration_since(self.pacer.last_submit) < HW_KEEPALIVE_INTERVAL {
             return None;
         }
         Some(has_content)
@@ -553,8 +597,10 @@ where
                 t.generation()
             })
             .unwrap_or(0);
-        self.generation
-            .next(composed, self.app.motion_has_continuous())
+        self.generation.next(
+            composed,
+            self.app.motion_has_continuous() || self.dev.is_dirty(),
+        )
     }
 
     /// Whether the app asked for a transparent surface (`WindowConfig::is_transparent`). Read at each renderer creation so hardware picks a premultiplied-alpha composite mode and software presents an alpha-preserving buffer.
@@ -613,11 +659,12 @@ where
         Some(now)
     }
 
-    /// Runs the frame's reactive work — queued tasks, then the motion tick — and relayouts whatever they dirtied, leaving a fresh batch open for the app's own frame.
+    /// Runs the frame's reactive work — due timers and queued tasks, then the motion tick — and relayouts whatever they dirtied, leaving a fresh batch open for the app's own frame.
     ///
     /// Ahead of the dirtiness [`frame_is_due`](Self::frame_is_due) reads: `motion_tick`'s writes only enqueue effects while a batch is open, so flushing here re-runs any segment reading an animated value in this frame rather than the next.
     fn advance_reactive_state(&mut self, now: web_time::Instant) {
-        // Before the tick: the batch open here defers its flush to the `end_batch` below, so a task that dirties layout is picked up by the `relayout` that follows instead of waiting a frame.
+        // Before the tick: the batch open here defers its flush to the `end_batch` below, so a timer or task that dirties layout is picked up by the `relayout` that follows instead of waiting a frame.
+        self.app.fire_timers();
         self.app.drain_tasks();
         self.app.motion_tick(now);
         end_batch();
@@ -789,6 +836,7 @@ where
             let enter = platform_core::Event::KeyPressed {
                 key: platform_core::Key::Named(platform_core::NamedKey::Enter),
                 modifiers: platform_core::ModifiersState::default(),
+                unmodified: None,
             };
             if let Some(tree) = &mut self.tree {
                 tree.on_event(&enter);
@@ -831,9 +879,7 @@ where
             .or_else(|| window.redraw_waker())
             .map(|wake| platform_core::RedrawWaker::new(move || wake()));
         // The same wake reaches the app's reactive runtime, so `spawn_task` needs no waker ceremony. Under the per-window fallback this points at whichever surface resumed last, which is enough: every frame drains the whole task queue.
-        if let Some(waker) = self.redraw_waker.clone() {
-            self.app.install_task_waker(waker);
-        }
+        self.install_task_waker();
         if self.tree.is_some() {
             self.fit_tree_to(window);
         } else {
@@ -939,8 +985,11 @@ where
         }
         // A hot-reloaded app dylib links its own reactive-core copy, which the host's batch cannot reach; a handler's signal write would flush immediately and re-run a segment's effect while its widget is still borrowed for `on_event`, silently dropping that segment's subscriptions.
         self.app.begin_event_batch();
-        // Overlays paint on top, so a positioned pointer event must reach one first and be blocked from the content behind. The registry lives on the app's side of the hot-reload boundary, so it is consulted via the bridge before the tree walk.
+        // Overlays paint on top, so positioned events must reach them first; registry is consulted via the bridge before tree dispatch.
         let handled = if self.app.dispatch_overlays(&event) {
+            if let (Event::PointerMoved { .. }, Some(tree)) = (&event, self.tree.as_mut()) {
+                tree.on_covered_event(&event);
+            }
             EventResult::Handled
         } else {
             self.tree
@@ -1025,18 +1074,28 @@ where
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
         end_batch();
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
+        // Against `last_tick`, the clock `on_redraw` gates on: reporting a deadline the pass would decline wakes the loop early and it spins re-asking.
+        let budget_left = FRAME_BUDGET.saturating_sub(self.pacer.last_tick.elapsed());
         // An unsettled animation must keep the loop scheduling frames even while the tree is momentarily clean.
-        if self.pacer.frame_owed
+        let frame = if self.pacer.frame_owed
             || tree_dirty
             || self.app.motion_has_active()
             || self.app.motion_has_continuous()
         {
-            // Against `last_tick`, the clock `on_redraw` gates on: reporting a deadline the pass would decline wakes the loop early and it spins re-asking.
-            Some(FRAME_BUDGET.saturating_sub(self.pacer.last_tick.elapsed()))
+            Some(budget_left)
         } else if self.keepalive_due() {
             Some(HW_KEEPALIVE_INTERVAL)
         } else {
             None
+        };
+        // Timers fire inside the frame pass, so the same budget bounds how early one may wake the loop.
+        let timer = self
+            .app
+            .until_next_timer()
+            .map(|wait| wait.max(budget_left));
+        match (frame, timer) {
+            (Some(frame), Some(timer)) => Some(frame.min(timer)),
+            (frame, timer) => frame.or(timer),
         }
     }
 

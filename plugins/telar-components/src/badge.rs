@@ -2,8 +2,7 @@
 
 use telar::{
     AlignItems, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, Text, TextStyle,
-    box_item,
+    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, Text, box_item,
 };
 
 use crate::shared;
@@ -29,7 +28,7 @@ fn pill() -> LayoutStyle {
         .padding_vertical(pad_y())
 }
 
-/// A small solid pill tag: an accent-filled box with a short label in a contrasting on-accent colour. Non-interactive (unlike `button`) — pure presentation sugar over `StyledContainer` + `Text`; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
+/// A small solid pill tag: an accent-filled box with a short label in whichever ink reads on that fill. Non-interactive (unlike `button`) — pure presentation sugar over `StyledContainer` + `Text`; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
 #[derive(Props)]
 pub struct BadgeProps {
     #[props(into, default)]
@@ -43,7 +42,15 @@ pub struct BadgeProps {
 pub fn badge(props: BadgeProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let BadgeProps { label, color } = props;
 
-    let label_widget = Text::declaring(move || label.get(), LayoutStyle::new(), on_accent_style)?;
+    let ink_fill = color.clone();
+    let label_widget = Text::declaring(
+        move || label.get(),
+        LayoutStyle::new(),
+        move |inherited| {
+            shared::control_text(inherited, TEXT_RATIO)
+                .with_color(shared::ink_on(shared::resolve(&ink_fill, fill_default)))
+        },
+    )?;
 
     let container = StyledContainer::new(
         pill(),
@@ -61,11 +68,6 @@ pub fn badge(props: BadgeProps, _children: Children) -> Result<Box<dyn LayoutIte
 /// The default pill fill when `color` is unset: the theme's primary accent, matching `button`'s own default.
 fn fill_default() -> Color {
     shared::accent()
-}
-
-/// The label's on-accent colour, re-read every frame so it tracks the active theme (mirrors `button`'s no-variant label default: the theme's `on_primary()`, or white with no theme installed).
-fn on_accent_style(inherited: TextStyle) -> TextStyle {
-    shared::control_text(inherited, TEXT_RATIO).with_color(shared::on_accent())
 }
 
 #[cfg(test)]

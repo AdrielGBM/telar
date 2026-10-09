@@ -283,3 +283,130 @@ fn an_overlay_registered_before_a_fixed_layer_is_still_hit_first() {
     unregister_overlay(b);
     unregister_overlay(d);
 }
+
+/// A bar fixed over the page that writes down what reached it, to tell a move from a leave.
+struct LoggingLayer {
+    bar: Rect,
+    log: Rc<std::cell::RefCell<Vec<&'static str>>>,
+}
+
+impl OverlaySink for LoggingLayer {
+    fn content_rect(&self) -> Rect {
+        self.bar
+    }
+    fn dispatch(&self, event: &Event) -> EventResult {
+        self.log.borrow_mut().push(match event {
+            Event::PointerMoved { .. } => "moved",
+            Event::CursorLeft => "left",
+            _ => "other",
+        });
+        EventResult::Ignored
+    }
+    fn hits(&self, x: f32, y: f32) -> bool {
+        self.bar.contains(x, y)
+    }
+    fn fixed(&self) -> bool {
+        true
+    }
+}
+
+fn logging_bar() -> (
+    Rc<dyn OverlaySink>,
+    Rc<std::cell::RefCell<Vec<&'static str>>>,
+) {
+    let log = Rc::new(std::cell::RefCell::new(Vec::new()));
+    let sink: Rc<dyn OverlaySink> = Rc::new(LoggingLayer {
+        bar: Rect::new(0.0, 0.0, 800.0, 48.0),
+        log: Rc::clone(&log),
+    });
+    (sink, log)
+}
+
+#[test]
+fn a_move_off_a_fixed_layer_tells_it_the_pointer_left() {
+    reset();
+    let (bar, log) = logging_bar();
+    let id = register_overlay(bar);
+
+    dispatch_overlays(&moved(400.0, 20.0));
+    assert_eq!(
+        dispatch_overlays(&moved(400.0, 300.0)),
+        EventResult::Ignored,
+        "the move itself is the page's"
+    );
+    dispatch_overlays(&moved(400.0, 320.0));
+    assert_eq!(
+        *log.borrow(),
+        ["moved", "left"],
+        "told once, on the move that left it"
+    );
+
+    unregister_overlay(id);
+}
+
+#[test]
+fn a_move_taken_by_an_overlay_above_leaves_the_layer_under_it() {
+    reset();
+    let (bar, log) = logging_bar();
+    let b = register_overlay(bar);
+    dispatch_overlays(&moved(400.0, 20.0));
+
+    let (dialog, _hits) = sink(Rect::new(0.0, 0.0, 800.0, 600.0));
+    let d = register_overlay(dialog);
+    assert_eq!(dispatch_overlays(&moved(400.0, 21.0)), EventResult::Handled);
+    assert_eq!(*log.borrow(), ["moved", "left"]);
+
+    unregister_overlay(d);
+    unregister_overlay(b);
+}
+
+#[test]
+fn a_captured_gesture_leaves_every_other_overlay() {
+    reset();
+    let (bar, log) = logging_bar();
+    let b = register_overlay(bar);
+    let (panel, _hits) = sink(Rect::new(0.0, 100.0, 200.0, 200.0));
+    let p = register_overlay(panel);
+
+    dispatch_overlays(&moved(400.0, 20.0));
+    dispatch_overlays(&press(50.0, 150.0));
+    dispatch_overlays(&moved(400.0, 20.0));
+    assert_eq!(
+        *log.borrow(),
+        ["moved", "left"],
+        "the drag belongs to the panel wherever it goes, so the bar under it is not hovered"
+    );
+
+    unregister_overlay(p);
+    unregister_overlay(b);
+}
+
+#[test]
+fn the_pointer_leaving_the_window_is_the_trees_to_deliver() {
+    reset();
+    let (bar, log) = logging_bar();
+    let id = register_overlay(bar);
+    dispatch_overlays(&moved(400.0, 20.0));
+
+    assert_eq!(dispatch_overlays(&Event::CursorLeft), EventResult::Ignored);
+    dispatch_overlays(&moved(400.0, 300.0));
+    assert_eq!(
+        *log.borrow(),
+        ["moved"],
+        "the tree walk already carried the leave to it, so the next move has nobody left to tell"
+    );
+
+    unregister_overlay(id);
+}
+
+#[test]
+fn an_overlay_taken_down_is_not_told_the_pointer_left() {
+    reset();
+    let (bar, log) = logging_bar();
+    let id = register_overlay(bar);
+    dispatch_overlays(&moved(400.0, 20.0));
+    unregister_overlay(id);
+
+    dispatch_overlays(&moved(400.0, 300.0));
+    assert_eq!(*log.borrow(), ["moved"]);
+}

@@ -1,9 +1,9 @@
 use std::cell::RefCell;
 
-use telar::{ComponentList, LayoutItem, ModifiersState};
+use telar::testing::{lay_out, moved, named, press, release, route};
+use telar::{ComponentList, LayoutItem};
 
 use super::*;
-use crate::harness::{lay_out, moved, press, release, route};
 use crate::test_support::fresh_layout_runtime;
 
 const WINDOW: Rect = Rect {
@@ -22,13 +22,6 @@ fn drawn_texts(tree: &ComponentList) -> Vec<String> {
             _ => None,
         })
         .collect()
-}
-
-fn key(named: NamedKey) -> telar::Event {
-    telar::Event::KeyPressed {
-        key: Key::Named(named),
-        modifiers: ModifiersState::default(),
-    }
 }
 
 /// A menu of three rows with a separator in the middle and a disabled one, over a shared record of what was picked and whether it asked to be closed.
@@ -122,9 +115,9 @@ fn the_rows_may_be_children() {
         drawn_texts(&tree)
     );
 
-    route(&mut tree, &key(NamedKey::ArrowDown));
-    route(&mut tree, &key(NamedKey::ArrowDown));
-    route(&mut tree, &key(NamedKey::Enter));
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::Enter));
     assert_eq!(
         *said.borrow(),
         vec!["copiar"],
@@ -138,10 +131,10 @@ fn the_rows_may_be_children() {
 fn the_keyboard_walks_the_rows_that_can_be_picked() {
     let (mut tree, said) = menu();
 
-    route(&mut tree, &key(NamedKey::ArrowDown));
-    route(&mut tree, &key(NamedKey::ArrowDown));
-    route(&mut tree, &key(NamedKey::ArrowUp));
-    route(&mut tree, &key(NamedKey::Enter));
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::ArrowUp));
+    route(&mut tree, &named(NamedKey::Enter));
 
     assert_eq!(
         *said.borrow(),
@@ -155,8 +148,8 @@ fn the_keyboard_walks_the_rows_that_can_be_picked() {
 #[test]
 fn a_submenu_opens_beside_its_row_and_answers_the_keyboard() {
     let (mut tree, said) = menu();
-    route(&mut tree, &key(NamedKey::End));
-    route(&mut tree, &key(NamedKey::ArrowRight));
+    route(&mut tree, &named(NamedKey::End));
+    route(&mut tree, &named(NamedKey::ArrowRight));
     telar::relayout_if_dirty();
 
     assert!(
@@ -165,8 +158,8 @@ fn a_submenu_opens_beside_its_row_and_answers_the_keyboard() {
         drawn_texts(&tree)
     );
 
-    route(&mut tree, &key(NamedKey::ArrowDown));
-    route(&mut tree, &key(NamedKey::Enter));
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::Enter));
     assert_eq!(
         *said.borrow(),
         vec!["cerrar", "hondo"],
@@ -222,7 +215,7 @@ fn every_way_out_says_so_once() {
     assert_eq!(*said.borrow(), vec!["cerrar"], "el clic fuera no lo cerró");
 
     said.borrow_mut().clear();
-    route(&mut tree, &key(NamedKey::Escape));
+    route(&mut tree, &named(NamedKey::Escape));
     assert_eq!(*said.borrow(), vec!["cerrar"], "escape no lo cerró");
 }
 

@@ -193,47 +193,20 @@ fn parse_f32_list(s: &str) -> Result<Vec<String>, String> {
         .collect()
 }
 
-/// Paren-depth-aware splitter shared by [`split_top_level`] and [`split_top_level_ws`]: a boundary char only splits at depth 0, so separators nested inside `(...)` (e.g. cubic-bezier/spring args) stay part of the current segment; `keep_empty` controls whether empty segments (including a trailing one) are dropped.
-fn split_top_level_by(
-    s: &str,
-    is_boundary: impl Fn(char) -> bool,
-    keep_empty: bool,
-) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut depth = 0i32;
-    let mut cur = String::new();
-    for c in s.chars() {
-        match c {
-            '(' => {
-                depth += 1;
-                cur.push(c);
-            }
-            ')' => {
-                depth -= 1;
-                cur.push(c);
-            }
-            c if is_boundary(c) && depth == 0 => {
-                if keep_empty || !cur.is_empty() {
-                    out.push(std::mem::take(&mut cur));
-                }
-            }
-            _ => cur.push(c),
-        }
-    }
-    if keep_empty || !cur.is_empty() {
-        out.push(cur);
-    }
-    out
-}
-
-/// Splits `s` on `sep`, ignoring separators nested inside parentheses.
+/// Splits `s` on `sep`, ignoring separators nested inside parentheses, brackets or quotes.
 pub(crate) fn split_top_level(s: &str, sep: char) -> Vec<String> {
-    split_top_level_by(s, |c| c == sep, true)
+    crate::split::split_top_level(s, |c| c == sep, true)
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 /// Splits `s` on whitespace runs, ignoring whitespace nested inside parentheses (so `cubic-bezier(0.4, 0, 0.2, 1)` stays one token).
 pub(crate) fn split_top_level_ws(s: &str) -> Vec<String> {
-    split_top_level_by(s, char::is_whitespace, false)
+    crate::split::split_top_level(s, char::is_whitespace, false)
+        .into_iter()
+        .map(str::to_string)
+        .collect()
 }
 
 #[cfg(test)]

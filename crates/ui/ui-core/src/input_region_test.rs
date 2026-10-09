@@ -516,6 +516,7 @@ fn an_inert_subtree_takes_no_pointer_no_keys_and_no_focus() {
     root.on_event(&Event::KeyPressed {
         key: Key::Char('a'),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     });
     focus::clear();
     focus::focus_next();
@@ -563,6 +564,7 @@ fn a_shortcut_table_in_a_hidden_subtree_hears_no_keys() {
     let key = Event::KeyPressed {
         key: Key::Char('a'),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     };
 
     root.on_event(&key);
@@ -611,6 +613,7 @@ fn a_shortcut_table_in_a_hidden_scroll_area_hears_no_keys() {
     let key = Event::KeyPressed {
         key: Key::Char('a'),
         modifiers: ModifiersState::default(),
+        unmodified: None,
     };
 
     root.on_event(&key);

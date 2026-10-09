@@ -1,7 +1,7 @@
+use telar::testing::{hold, moved, named, press, release};
 use telar::{Component, LayoutItem, NamedKey, Orientation, Slots, Text, focus};
 
 use super::*;
-use crate::harness::{hold, moved, named, press, release};
 
 const WIDTH: f32 = 600.0;
 const HEIGHT: f32 = 300.0;
@@ -32,7 +32,7 @@ impl Split {
         let item = split_pane(props, Children::from(pane_content())).unwrap();
         let node = item.layout_node();
         let root = telar::track_layout(node).unwrap();
-        crate::harness::lay_out(node, WIDTH, HEIGHT);
+        telar::testing::lay_out(node, WIDTH, HEIGHT);
         Self {
             item,
             root,
@@ -131,10 +131,10 @@ fn escape_during_a_drag_restores_the_size() {
     let split = Split::build(props(size));
     let (x, y) = split.bar_centre();
     let mut tree = telar::ComponentList::new(split.item);
-    crate::harness::route(&mut tree, &press(x, y));
-    crate::harness::route(&mut tree, &moved(x + 40.0, y));
+    telar::testing::route(&mut tree, &press(x, y));
+    telar::testing::route(&mut tree, &moved(x + 40.0, y));
     assert_eq!(size.get(), 240.0);
-    crate::harness::route(&mut tree, &named(NamedKey::Escape));
+    telar::testing::route(&mut tree, &named(NamedKey::Escape));
     assert_eq!(size.get(), 200.0);
 }
 
@@ -250,7 +250,7 @@ fn the_bound_size_moves_the_pane_when_the_caller_sets_it() {
     let size = signal(200.0f32);
     let split = Split::build(props(size));
     size.set(320.0);
-    crate::harness::lay_out(split.item.layout_node(), WIDTH, HEIGHT);
+    telar::testing::lay_out(split.item.layout_node(), WIDTH, HEIGHT);
     assert_eq!(split.applied(), 320.0);
 }
 
@@ -353,7 +353,7 @@ fn a_sized_second_pane_takes_the_bound_size() {
     let split = Split::build(second(size, SplitDirection::Row));
     assert_eq!(split.applied(), 200.0);
     size.set(260.0);
-    crate::harness::lay_out(split.item.layout_node(), WIDTH, HEIGHT);
+    telar::testing::lay_out(split.item.layout_node(), WIDTH, HEIGHT);
     assert_eq!(split.applied(), 260.0);
 }
 
@@ -363,7 +363,7 @@ fn dragging_toward_a_sized_second_pane_shrinks_it() {
     let mut split = Split::build(second(size, SplitDirection::Row));
     split.drag_by(60.0);
     assert_eq!(size.get(), 140.0);
-    crate::harness::lay_out(split.item.layout_node(), WIDTH, HEIGHT);
+    telar::testing::lay_out(split.item.layout_node(), WIDTH, HEIGHT);
     split.drag_by(-100.0);
     assert_eq!(size.get(), 240.0);
 }
@@ -427,7 +427,7 @@ fn a_collapsed_pane_takes_its_controls_out_of_the_tab_order() {
         Children::from(slots),
     )
     .unwrap();
-    crate::harness::lay_out(item.layout_node(), WIDTH, HEIGHT);
+    telar::testing::lay_out(item.layout_node(), WIDTH, HEIGHT);
     focus::focus_next();
     let first = focus::exposed()
         .into_iter()

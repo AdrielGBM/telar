@@ -9,27 +9,27 @@
 mod pool;
 
 use std::any::Any;
-use std::cell::{Cell, Ref, RefCell, RefMut};
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use rustc_hash::FxHashMap;
 
+use crate::leaked_cell::LeakedCell;
 use crate::runtime::{SurfaceHandle, current_surface};
 
 type TaskId = u64;
 type Waker = Arc<dyn Fn() + Send + Sync>;
 
-/// Set by the runner so a finishing worker can wake the UI loop. Absent in headless and test contexts, where the caller drives [`drain_tasks`] itself.
+/// Set by the runner so a finishing worker, or a timer due sooner than the loop meant to sleep, can wake the UI loop. Absent in headless and test contexts, where the caller drives [`drain_tasks`] itself.
 static TASK_WAKER: RwLock<Option<Waker>> = RwLock::new(None);
 
-/// Installs the process-global "wake the UI loop" used after a task posts a value. The runner passes the same wake an app gets from `AppCtx::redraw_waker`.
+/// Installs the process-global "wake the UI loop" used after a task posts a value, and when a [`run_after`](crate::run_after) is scheduled to come due before anything the loop was waiting for. The runner passes the same wake an app gets from `AppCtx::redraw_waker`.
 pub fn set_task_waker(wake: impl Fn() + Send + Sync + 'static) {
     *TASK_WAKER.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(wake));
 }
 
-fn wake_loop() {
+pub(crate) fn wake_loop() {
     let waker = TASK_WAKER.read().unwrap_or_else(|e| e.into_inner()).clone();
     if let Some(wake) = waker {
         wake();
@@ -80,22 +80,8 @@ struct TaskRegistry {
     mailbox: Arc<Mailbox>,
 }
 
-// The same raw-pointer idiom as the reactive runtime cell: no `Drop`, so no TLS destructor is registered and dlclosing a hot-reload dylib on thread exit stays safe. The one allocation per thread is leaked.
-struct TaskCell(Cell<*mut RefCell<TaskRegistry>>);
-
-impl TaskCell {
-    fn borrow(&self) -> Ref<'_, TaskRegistry> {
-        unsafe { (*self.0.get()).borrow() }
-    }
-    fn borrow_mut(&self) -> RefMut<'_, TaskRegistry> {
-        unsafe { (*self.0.get()).borrow_mut() }
-    }
-}
-
 thread_local! {
-    static TASKS: TaskCell = TaskCell(Cell::new(
-        Box::into_raw(Box::new(RefCell::new(TaskRegistry::default())))
-    ));
+    static TASKS: LeakedCell<TaskRegistry> = LeakedCell::new();
 }
 
 /// The worker's end of a task. Posting `End` from `Drop` is what releases the callback on *both* exits — a normal return and an unwind — so work that panics abandons its task instead of leaving it pending forever.

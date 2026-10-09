@@ -1,5 +1,5 @@
 use telar::Children;
-use telar::preview::{Layout, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 
 use crate::text_field::{TextFieldProps, text_field};
 
@@ -16,7 +16,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )
         })
         .title("Inputs/Text field")
-        .layout(Layout::Centered),
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes")),
         preview!(text_field: TextFieldProps, "Bound value", |p| {
             let value = p.signal("value", String::new());
             text_field(

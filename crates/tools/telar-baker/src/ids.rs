@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use telar_parser::{RsxDocument, Value, ViewNode};
-use telar_project::AssetKind;
+use telar_project::{AssetKind, asset_kind_for_component};
 
 use crate::macro_ids::collect_macro_ids;
 
@@ -11,6 +11,10 @@ use crate::macro_ids::collect_macro_ids;
 #[derive(Clone)]
 pub struct IdRef {
     pub kind: &'static AssetKind,
+    /// The component the id was given to, or for a macro call, the component the macro is named after.
+    pub tag: String,
+    /// The prop the id was given to, or for a macro call, the prop of the component the macro is named after.
+    pub prop: String,
     /// The id, when the prop is written as a literal. `None` for a signal or an expression, which cannot be baked.
     pub literal: Option<String>,
     /// The value as written, for a message about it.
@@ -80,23 +84,29 @@ impl Walk<'_> {
             match node {
                 ViewNode::Element(el) => {
                     let tag = el.tag.rsplit("::").next().unwrap_or(&el.tag);
-                    for kind in self.kinds {
-                        if !kind.component.is_some_and(|component| component.tag == tag) {
+                    for attr in &el.attributes {
+                        let Some(kind) = asset_kind_for_component(tag, &attr.key)
+                            .filter(|kind| self.kinds.iter().any(|k| k.id == kind.id))
+                        else {
+                            continue;
+                        };
+                        let literal = match &attr.value {
+                            Value::Quoted(id) => Some(id.trim().to_string()),
+                            _ => None,
+                        };
+                        let carried = kind.component.is_some_and(|c| c.carries(tag, &attr.key));
+                        if carried && literal.is_none() {
                             continue;
                         }
-                        for attr in el.attributes.iter().filter(|attr| attr.key == kind.attr) {
-                            let literal = match &attr.value {
-                                Value::Quoted(id) => Some(id.trim().to_string()),
-                                _ => None,
-                            };
-                            self.out.push(IdRef {
-                                kind,
-                                literal,
-                                written: attr.value.text().trim().to_string(),
-                                file: self.file.to_path_buf(),
-                                line: el.line,
-                            });
-                        }
+                        self.out.push(IdRef {
+                            kind,
+                            tag: tag.to_string(),
+                            prop: attr.key.clone(),
+                            literal,
+                            written: attr.value.text().trim().to_string(),
+                            file: self.file.to_path_buf(),
+                            line: el.line,
+                        });
                     }
                     for attr in &el.attributes {
                         if let Value::Expr(text) = &attr.value {

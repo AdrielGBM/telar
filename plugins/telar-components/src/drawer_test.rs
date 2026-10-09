@@ -76,3 +76,34 @@ fn unbound_drawer_renders_nothing() {
         "a drawer bound to nothing draws nothing"
     );
 }
+
+#[test]
+fn a_named_drawer_is_a_dialog_to_a_reader() {
+    crate::test_support::fresh_layout_runtime();
+    let open = signal(true);
+    let drawer = drawer(
+        DrawerProps::props().open(open).label("Filters").build(),
+        Children::from(slot_with_body("Drawer body")),
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(400.0).height(400.0),
+        &[drawer.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(drawer);
+    relayout_if_dirty();
+
+    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    assert!(
+        nodes
+            .iter()
+            .any(|node| node.role == Role::Dialog && node.name == "Filters")
+    );
+}

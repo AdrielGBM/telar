@@ -3,7 +3,7 @@ name = "telar-devtools"
 version = { workspace = true }
 edition = { workspace = true }
 rust-version = { workspace = true }
-description = "The in-app devtools overlay for Telar: an FPS counter, a live node inspector and the build-error banner."
+description = "The in-app devtools overlay for Telar: an FPS badge and panel, a component inspector and the build-error banner, built from telar-components."
 keywords = ["telar", "devtools", "inspector", "gui", "debugging"]
 categories = ["gui", "development-tools::debugging"]
 readme = "README.md"
@@ -11,11 +11,11 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-geometry-core = { workspace = true }
-platform-core = { workspace = true }
-renderer-core = { workspace = true }
 telar = { workspace = true, features = ["runtime"] }
-telar-components.workspace = true
-ui-tree = { workspace = true }
+telar-components = { workspace = true, features = ["workbench"] }
+tracing.workspace = true
 
 web-time = { workspace = true }
+
+[dev-dependencies]
+telar = { workspace = true, features = ["runtime", "shaper", "testing"] }

@@ -11,4 +11,5 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+geometry-core.workspace = true
 renderer-core = { workspace = true }

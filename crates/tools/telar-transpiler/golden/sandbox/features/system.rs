@@ -33,7 +33,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
 
     let system_scheme = memo(|| reading(telar::use_color_scheme()));
     let reduced = memo(|| reading(telar::use_system_reduced_motion()));
-    let contrast = memo(|| reading(telar::use_high_contrast()));
+    let contrast = memo(|| reading(telar::use_system_high_contrast()));
     let locales = memo(|| {
         let locales = telar::use_preferred_locales();
         if locales.is_empty() { "none reported".to_string() } else { locales.join(", ") }
@@ -139,7 +139,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                             card(CardProps::props().gap(6.0).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
-                        let __node_3 = code_line(CodeLineProps::props().code("use_color_scheme()   ·   use_system_reduced_motion()   ·   use_high_contrast()   ·   use_preferred_locales()").build(), Children::default())?;
+                        let __node_3 = code_line(CodeLineProps::props().code("use_color_scheme()   ·   use_system_reduced_motion()   ·   use_system_high_contrast()   ·   use_preferred_locales()").build(), Children::default())?;
                         __children.push(box_item(__node_3));
                     }
                     __slots.extend_default(__children);

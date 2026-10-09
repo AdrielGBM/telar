@@ -30,7 +30,11 @@ pub(crate) fn split_call(value: &str) -> Option<(&str, &str)> {
 }
 
 pub(crate) fn parse<'a>(kind: &str, args: &'a str) -> Option<Gradient<'a>> {
-    let mut parts: Vec<&str> = split_top_level(args);
+    let mut parts: Vec<&str> = crate::split::split_top_level(args, |c| c == ',', false)
+        .into_iter()
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect();
     if parts.len() < 2 {
         return None;
     }
@@ -92,27 +96,6 @@ fn position(stop: &str) -> Option<(&str, f32)> {
     let balanced =
         color.chars().filter(|c| *c == '(').count() == color.chars().filter(|c| *c == ')').count();
     balanced.then(|| pos.trim().parse::<f32>().ok().map(|p| (color.trim(), p)))?
-}
-
-/// Splits on commas outside parentheses, so a colour that is itself a call reads whole.
-fn split_top_level(args: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0i32;
-    let mut start = 0;
-    for (i, c) in args.char_indices() {
-        match c {
-            '(' | '[' => depth += 1,
-            ')' | ']' => depth -= 1,
-            ',' if depth == 0 => {
-                parts.push(args[start..i].trim());
-                start = i + 1;
-            }
-            _ => {}
-        }
-    }
-    parts.push(args[start..].trim());
-    parts.retain(|p| !p.is_empty());
-    parts
 }
 
 #[cfg(test)]

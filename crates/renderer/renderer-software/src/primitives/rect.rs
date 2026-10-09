@@ -104,6 +104,7 @@ fn draw_rect_shadow(
     shadow_cache: &mut ShadowCache,
     pending_shadows: &mut HashMap<ShadowCacheKey, PendingShadow>,
     recent_shadow: &mut Option<(ShadowCacheKey, u32, u32)>,
+    synchronous_shadows: bool,
     blur_scratch: &mut Vec<u8>,
 ) {
     let spread = shadow.spread;
@@ -184,6 +185,7 @@ fn draw_rect_shadow(
         pending_shadows,
         recent_shadow,
         cache_key,
+        synchronous_shadows,
         painted,
         tmp_x,
         tmp_y,
@@ -208,6 +210,7 @@ pub(crate) fn draw_rect(
     shadow_cache: &mut ShadowCache,
     pending_shadows: &mut HashMap<ShadowCacheKey, PendingShadow>,
     recent_shadow: &mut Option<(ShadowCacheKey, u32, u32)>,
+    synchronous_shadows: bool,
     blur_scratch: &mut Vec<u8>,
 ) {
     if let Some(shadow) = style.shadow {
@@ -222,6 +225,7 @@ pub(crate) fn draw_rect(
             shadow_cache,
             pending_shadows,
             recent_shadow,
+            synchronous_shadows,
             blur_scratch,
         );
     }

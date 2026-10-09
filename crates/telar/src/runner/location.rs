@@ -38,6 +38,37 @@ impl LocationBinding {
         }
     }
 
+    /// A desktop window's binding: [`remembered`](Self::remembered), except in a `cargo telar preview` run. Its address is the workshop's, which keeps its own place between runs, and remembering it under the application's name would reopen the application at a workshop address and the workshop at the application's.
+    #[cfg(any(
+        test,
+        all(
+            feature = "desktop-bare",
+            not(target_os = "android"),
+            not(target_arch = "wasm32")
+        )
+    ))]
+    pub(crate) fn for_window(source: Box<dyn LocationSource>) -> Self {
+        match std::env::var_os("TELAR_PREVIEW") {
+            Some(_) => Self::new(source),
+            None => Self::remembered(source),
+        }
+    }
+
+    /// The history with `location` opened on top, as a link opened into the running app opens it.
+    #[cfg(any(
+        test,
+        all(
+            feature = "dev",
+            not(target_os = "android"),
+            not(target_arch = "wasm32")
+        )
+    ))]
+    pub(crate) fn linking(&self, location: Location) -> Vec<Location> {
+        let mut history = self.history.clone();
+        history.push(location);
+        history
+    }
+
     /// The history to hand the app before it builds: the platform's opening one the first time, and whatever it has moved to since on every rebuild after.
     pub(crate) fn open(&mut self, prefs: &UserPrefs) -> &[Location] {
         if !self.opened {

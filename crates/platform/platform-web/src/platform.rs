@@ -1,6 +1,7 @@
 //! The animation-frame loop, and the listeners that feed it.
 
 use std::cell::RefCell;
+use std::time::Duration;
 
 use platform_core::{
     Event, EventHandler, Key, KeyPairing, NamedKey, Platform, PlatformError, Window, WindowConfig,
@@ -12,11 +13,14 @@ use crate::dom;
 use crate::map;
 use crate::window::WebWindow;
 
+/// The longest wait the next animation frame serves. A longer one waits on a timeout instead, which costs no frames.
+const FRAME_INTERVAL: Duration = Duration::from_nanos(1_000_000_000 / 60);
+
 // Separate from the running app on purpose: a listener must be able to record an event while a frame is running, and the browser can dispatch one synchronously from inside our own code. Sharing a cell with the running handler would make that a panic.
 thread_local! {
     static QUEUE: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
     static APP: RefCell<Option<App>> = const { RefCell::new(None) };
-    static FRAME: RefCell<Frame> = const { RefCell::new(Frame { scheduled: false, callback: None }) };
+    static FRAME: RefCell<Frame> = const { RefCell::new(Frame { scheduled: false, callback: None, timeout: None, wake: None }) };
     // The pointer that went down and where, until it travels far enough to be a drag or comes back up.
     static PRESSED: std::cell::Cell<Option<(i32, f32, f32)>> = const { std::cell::Cell::new(None) };
     // The safe area last reported, so a resize that leaves it where it was reports nothing.
@@ -28,6 +32,9 @@ thread_local! {
 struct Frame {
     scheduled: bool,
     callback: Option<Closure<dyn FnMut()>>,
+    /// The browser timeout standing in for a wait longer than a frame, until it fires or a turn supersedes it.
+    timeout: Option<i32>,
+    wake: Option<Closure<dyn FnMut()>>,
 }
 
 struct App {
@@ -452,7 +459,7 @@ fn on_key(pressed: bool, owns_keyboard: bool, event: &web_sys::KeyboardEvent) {
         false => KEYS.with(|keys| {
             let mut keys = keys.borrow_mut();
             match pressed {
-                true => read.map(|key| keys.press(code, key)),
+                true => read.map(|key| keys.press(code.clone(), key)),
                 false => keys.release(&code, read),
             }
         }),
@@ -474,7 +481,15 @@ fn on_key(pressed: bool, owns_keyboard: bool, event: &web_sys::KeyboardEvent) {
         return;
     }
     let event = if pressed {
-        Event::KeyPressed { key, modifiers }
+        let unmodified = match key {
+            Key::Char(c) if !c.is_ascii() => platform_core::unmodified_key_of_code(&code),
+            _ => None,
+        };
+        Event::KeyPressed {
+            key,
+            modifiers,
+            unmodified,
+        }
     } else {
         Event::KeyReleased { key, modifiers }
     };
@@ -498,7 +513,44 @@ fn install_frame_callback() {
         FRAME.with(|frame| frame.borrow_mut().scheduled = false);
         turn();
     });
-    FRAME.with(|frame| frame.borrow_mut().callback = Some(callback));
+    let wake = Closure::<dyn FnMut()>::new(move || {
+        FRAME.with(|frame| frame.borrow_mut().timeout = None);
+        request_frame();
+    });
+    FRAME.with(|frame| {
+        let mut frame = frame.borrow_mut();
+        frame.callback = Some(callback);
+        frame.wake = Some(wake);
+    });
+}
+
+/// Asks for the turn `wait` from now: the next frame when that is no further off, otherwise a browser timeout that asks for one then, so a long wait (a notice counting down, a keepalive) costs no frames on the way.
+fn request_turn_after(wait: Duration) {
+    if wait <= FRAME_INTERVAL {
+        request_frame();
+        return;
+    }
+    FRAME.with(|frame| {
+        let mut frame = frame.borrow_mut();
+        let Some(wake) = frame.wake.as_ref() else {
+            return;
+        };
+        // Rounded up: a timeout firing a fraction early would find nothing due and only ask again.
+        let millis = i32::try_from(wait.as_micros().div_ceil(1000)).unwrap_or(i32::MAX);
+        if let Ok(handle) = dom::window().set_timeout_with_callback_and_timeout_and_arguments_0(
+            wake.as_ref().unchecked_ref(),
+            millis,
+        ) {
+            frame.timeout = Some(handle);
+        }
+    });
+}
+
+/// Drops the timeout an earlier turn left behind: every turn works out its own wait.
+fn cancel_pending_timeout() {
+    if let Some(handle) = FRAME.with(|frame| frame.borrow_mut().timeout.take()) {
+        dom::window().clear_timeout_with_handle(handle);
+    }
 }
 
 /// One pass of the loop: drain what arrived, draw, and decide whether another is due.
@@ -509,6 +561,7 @@ fn turn() {
         return;
     };
 
+    cancel_pending_timeout();
     app.handler.new_events();
 
     let measured = app.window.measure();
@@ -539,7 +592,7 @@ fn turn() {
     }
 
     app.handler.on_redraw(&app.window);
-    let wants_another = app.handler.about_to_wait().is_some();
+    let next_turn = app.handler.about_to_wait();
 
     if app.handler.take_exit_request() {
         app.handler.on_suspend();
@@ -547,8 +600,8 @@ fn turn() {
     }
 
     APP.with(|slot| *slot.borrow_mut() = Some(app));
-    if wants_another {
-        request_frame();
+    if let Some(wait) = next_turn {
+        request_turn_after(wait);
     }
 }
 

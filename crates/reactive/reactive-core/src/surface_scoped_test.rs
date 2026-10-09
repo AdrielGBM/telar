@@ -58,6 +58,11 @@ fn an_override_shadows_the_thread_value_on_its_surface_alone() {
         let _entered = surface.enter();
         size().set_surface(Some(&Size::Large));
         assert_eq!(size().peek(), Size::Large);
+        assert_eq!(
+            size().peek_thread(),
+            Size::Small,
+            "the thread's value is still there under the override"
+        );
     }
     assert_eq!(
         size().peek(),

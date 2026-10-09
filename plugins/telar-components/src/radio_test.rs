@@ -1,13 +1,13 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use telar::testing::{centre, press, release};
 use telar::{Component, LayoutItem, NodeId, signal};
 
 use super::*;
-use crate::harness::{centre, press, release};
 
 fn lay_out(node: NodeId) -> (f64, f64) {
-    centre(crate::harness::lay_out(node, 200.0, 100.0))
+    centre(telar::testing::lay_out(node, 200.0, 100.0))
 }
 
 #[test]

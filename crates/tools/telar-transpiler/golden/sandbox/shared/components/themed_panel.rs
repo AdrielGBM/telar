@@ -44,6 +44,8 @@ pub fn themed_panel(props: ThemedPanelProps, children: Children) -> Result<Box<d
     Ok(Box::new(__col_0))
 }
 
+::telar::__previews! {
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn themed_panel_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
@@ -72,12 +74,16 @@ pub fn themed_panel_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
             }
             }
         );
-        themed_panel(ThemedPanelProps::props().mode("pastel").build(), __deferred)?
+        themed_panel(ThemedPanelProps::props().mode(::telar::__preview_arg!(__preview, "mode", "pastel")).__preview_actions(&__preview.actions()).build(), __deferred)?
     };
     Ok(Box::new(__node_0))
 }
 
 pub const THEMED_PANEL_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--themed_panel--themed-panel"), "themed_panel", "Themed panel", themed_panel_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/themed_panel.rsx"), 21),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/themed_panel.rsx"), 21)
+        .source("[preview \"Themed panel\"]\nthemed_panel mode:\"pastel\"\n    text \"Nested at the call site, drawn in {$theme.name}\" font_size:14 color:$theme.ink", &[::telar::preview::SourceSpan::new(0, 140, 21)])
+        .props(<ThemedPanelProps as ::telar::preview::HasPropsSchema>::schema)
+        .args(&[::telar::preview::ArgSpec::new("mode").default("\"pastel\"")]),
 ];
+}

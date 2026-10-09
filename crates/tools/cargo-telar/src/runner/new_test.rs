@@ -100,6 +100,24 @@ fn the_devtools_are_an_optional_dependency_dev_sessions_turn_on() {
     );
 }
 
+/// `cargo telar preview` turns the workshop on only for a package that declares it, and `cargo telar doctor` points at the same dependency.
+#[test]
+fn the_workshop_is_an_optional_dependency_previews_turn_on() {
+    for target in [Target::Desktop, Target::Tui, Target::Web, Target::Android] {
+        let dir = temp_dir(&format!("workshop_{}", target_name(target)));
+        std::fs::write(dir.join("Cargo.toml"), manifest("my-app", target, None)).unwrap();
+        let declared =
+            telar_project::declares_optional_dependency(&dir, telar_project::WORKSHOP_PACKAGE);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(declared, "{}", target_name(target));
+    }
+    let manifest = generated_manifest(Target::Desktop);
+    assert_eq!(
+        manifest["dependencies"]["telar-workshop"]["version"].as_str(),
+        Some(TELAR_VERSION)
+    );
+}
+
 #[test]
 fn every_rsx_file_sees_the_catalogue() {
     for target in [Target::Desktop, Target::Tui, Target::Web, Target::Android] {

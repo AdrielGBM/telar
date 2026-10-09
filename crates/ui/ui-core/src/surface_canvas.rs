@@ -1,6 +1,6 @@
 //! [`SurfaceCanvas`]: a tree with a [`Surface`] of its own, driven by whatever holds it rather than by a runner.
 //!
-//! Its overlays, dismiss stack, focus, size, safe area and breakpoints are its own, and so are the writing direction, locale and control size wherever it is given one, so it can sit inside another tree — through a [`SurfaceFrame`](crate::SurfaceFrame) — or inside an application's texture, or stand as a window-sized layer over an app, without either side reaching into the other.
+//! Its overlays, dismiss stack, focus, size, safe area and breakpoints are its own, and so are the writing direction, locale, control size, theme mode and high contrast wherever it is given one, so it can sit inside another tree — through a [`SurfaceFrame`](crate::SurfaceFrame) — or inside an application's texture, or stand as a window-sized layer over an app, without either side reaching into the other.
 
 use std::cell::{Cell, Ref};
 use std::rc::Rc;
@@ -31,6 +31,31 @@ pub struct SurfaceCanvas {
     surface: Rc<Surface>,
 }
 
+/// The environment a [`SurfaceCanvas`] is built in: each value it names is the surface's own, as the canvas's setters give it, and each `None` follows the thread's.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SurfaceEnv {
+    /// A mode registered with [`register_mode`](theme_core::register_mode), by id.
+    pub mode: Option<String>,
+    /// A BCP 47 language tag.
+    pub locale: Option<String>,
+    pub direction: Option<Direction>,
+    pub control_size: Option<ControlSize>,
+    /// `Some(true)` for more contrast, `Some(false)` for the regular palette, whatever the application and the system say.
+    pub high_contrast: Option<bool>,
+    /// How far in from each edge the system keeps the surface for itself, as a device's notch and home indicator do. Zero keeps nothing.
+    pub safe_area: Insets,
+}
+
+impl SurfaceEnv {
+    fn apply(&self) {
+        theme_core::set_surface_mode(self.mode.as_deref());
+        i18n_core::set_surface_locale(self.locale.as_deref());
+        layout_reactive::set_surface_direction(self.direction);
+        theme_core::set_surface_control_size(self.control_size);
+        preferences_core::set_surface_high_contrast(self.high_contrast);
+    }
+}
+
 /// The content plus the box it fills, so "this surface is 390×844" holds whatever the content's own style says: a percent-sized parent turns the surface size into a definite box the content stretches into, as a window root does for a windowed tree.
 struct SurfaceRoot {
     content: Box<dyn LayoutItem>,
@@ -58,7 +83,16 @@ impl SurfaceCanvas {
         size: Size,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Self, LayoutError> {
-        Self::with_root(size, || {
+        Self::new_in(size, &SurfaceEnv::default(), build)
+    }
+
+    /// [`new`](Self::new) on a surface already in `env`: what `build` reads of the mode, locale, direction, control size, high contrast and safe area — once, or reactively — is `env`'s from the first build on. Setting them afterwards re-runs only the reactive readers, so a canvas shown in an environment of its own is built in it.
+    pub fn new_in(
+        size: Size,
+        env: &SurfaceEnv,
+        build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
+    ) -> Result<Self, LayoutError> {
+        Self::with_root_in(size, env, || {
             let content = build()?;
             let root = new_container(
                 LayoutStyle::new()
@@ -75,12 +109,23 @@ impl SurfaceCanvas {
         size: Size,
         build: impl FnOnce() -> Result<(C, NodeId), LayoutError>,
     ) -> Result<Self, LayoutError> {
+        Self::with_root_in(size, &SurfaceEnv::default(), build)
+    }
+
+    /// [`with_root`](Self::with_root) on a surface already in `env`, as [`new_in`](Self::new_in) is.
+    pub fn with_root_in<C: Component + 'static>(
+        size: Size,
+        env: &SurfaceEnv,
+        build: impl FnOnce() -> Result<(C, NodeId), LayoutError>,
+    ) -> Result<Self, LayoutError> {
         let surface = Surface::new();
         let (tree, root, signals) = {
             let _entered = surface.enter();
             let signals =
-                in_surface_world(|| (signal(size), signal(Insets::default()), signal(1.0f32)));
+                in_surface_world(|| (signal(size), signal(env.safe_area), signal(1.0f32)));
             crate::set_surface_size(size);
+            crate::set_safe_area_insets(env.safe_area);
+            env.apply();
             let _scope = root_scope();
             let (component, root) = build()?;
             (ComponentList::new(component), root, signals)
@@ -193,6 +238,30 @@ impl SurfaceCanvas {
         theme_core::set_surface_control_size(size);
     }
 
+    /// The theme mode the surface is shown in, where it has one of its own; `None` where it follows [`set_mode`](theme_core::set_mode). Reactive.
+    pub fn mode(&self) -> Option<String> {
+        let _entered = self.enter();
+        theme_core::use_surface_mode()
+    }
+
+    /// Shows the surface in mode `id` whatever the thread's is, or with `None` in the thread's again. Its mode-following tokens resolve as that mode, and where the mode was registered with [`register_mode_theme`](theme_core::register_mode_theme), whatever inside has no theme provided resolves that theme. Re-runs only the readers inside; the application's theme stays installed as it is.
+    pub fn set_mode(&self, id: Option<&str>) {
+        let _entered = self.enter();
+        theme_core::set_surface_mode(id);
+    }
+
+    /// Whether the surface is shown with more contrast, where it makes that choice itself; `None` where it follows [`set_high_contrast_override`](preferences_core::set_high_contrast_override) and the system. Reactive.
+    pub fn high_contrast(&self) -> Option<bool> {
+        let _entered = self.enter();
+        preferences_core::use_surface_high_contrast()
+    }
+
+    /// Shows the surface with more contrast (`Some(true)`) or without (`Some(false)`) whatever the application and the system say, or with `None` as they say again. Re-runs only the readers of `use_high_contrast` inside.
+    pub fn set_high_contrast(&self, high: Option<bool>) {
+        let _entered = self.enter();
+        preferences_core::set_surface_high_contrast(high);
+    }
+
     /// How many units of the tree around it one logical unit of this surface covers when a [`SurfaceFrame`](crate::SurfaceFrame) draws it: a zoom, independent of the surface's own size. Reactive.
     pub fn scale(&self) -> f32 {
         self.scale.get()
@@ -223,11 +292,14 @@ impl SurfaceCanvas {
         self.placement.set(placement);
     }
 
-    /// Routes an event that arrived in the outer space: pointers are mapped back through the [`placement`](Self::placement), the surface's overlays see it first, and the tree only if none of them took it.
+    /// Routes an event that arrived in the outer space: pointers are mapped back through the [`placement`](Self::placement), the surface's overlays see it first, and the tree only if none of them took it — but for a move, which reaches the tree [`covered`](crate::covered).
     pub fn dispatch(&self, event: &Event) -> EventResult {
         let mapped = crate::transform_pointer(event, self.placement.get().to_array());
         let event = mapped.as_ref().unwrap_or(event);
         if self.dispatch_overlays(event) == EventResult::Handled {
+            if matches!(event, Event::PointerMoved { .. }) {
+                crate::covered(|| self.dispatch_tree(event));
+            }
             return EventResult::Handled;
         }
         self.dispatch_tree(event)
@@ -286,8 +358,9 @@ impl SurfaceCanvas {
 
 impl Drop for SurfaceCanvas {
     fn drop(&mut self) {
-        // Background work this canvas started must not outlive it: its completion callbacks close over this surface's state. Scoped to this surface so a sibling tree's tasks are left running.
+        // Background work and timers this canvas started must not outlive it: their callbacks close over this surface's state. Scoped to this surface so a sibling tree's are left running.
         reactive_core::cancel_tasks_for(self.surface.handle());
+        reactive_core::cancel_timers_for(self.surface.handle());
     }
 }
 

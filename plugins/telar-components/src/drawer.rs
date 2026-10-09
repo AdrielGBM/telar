@@ -4,8 +4,9 @@ use std::rc::Rc;
 #[cfg(test)]
 use telar::Slots;
 use telar::{
-    AlignItems, Border, Children, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, box_item,
+    Accessible, AlignItems, Border, Children, Color, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, box_item,
+    focus::Role,
 };
 
 use crate::scrim;
@@ -40,6 +41,9 @@ pub struct DrawerProps {
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
     #[props(some, default)]
     pub on_close: Option<Rc<dyn Fn()>>,
+    /// Names the panel for a reader. `None` (the default) leaves it announced by what it holds.
+    #[props(some, into, default)]
+    pub label: Option<Reactive<String>>,
     /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -54,6 +58,7 @@ pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutIt
         side,
         width,
         on_close,
+        label,
         color,
     } = props;
     let body = slots.take_default();
@@ -67,7 +72,7 @@ pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutIt
     };
 
     scrim::scrim_overlay(open, on_close, move |dismiss| {
-        build_open_drawer(width, justify, body, color, dismiss)
+        build_open_drawer(width, justify, body, label, color, dismiss)
     })
 }
 
@@ -76,6 +81,7 @@ fn build_open_drawer(
     width: f32,
     justify: JustifyContent,
     body: Vec<Box<dyn LayoutItem>>,
+    label: Option<Reactive<String>>,
     color: Reactive<Color>,
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -96,6 +102,8 @@ fn build_open_drawer(
         body,
     )?
     .styled_by(sheet)
+    .role(Role::Dialog)
+    .a11y_label(move || label.as_ref().map(|label| label.get()).unwrap_or_default())
     // Swallow taps on the panel so only the scrim dismisses.
     .on_press(|| {});
 

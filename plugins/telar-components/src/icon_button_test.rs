@@ -26,6 +26,7 @@ fn enter() -> Event {
     Event::KeyPressed {
         key: Key::Named(NamedKey::Enter),
         modifiers: telar::ModifiersState::default(),
+        unmodified: None,
     }
 }
 

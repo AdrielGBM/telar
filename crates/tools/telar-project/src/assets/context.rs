@@ -150,7 +150,12 @@ impl AssetContext {
     /// The component-named kind whose id `prop` carries on `tag`, and how this package bakes it. `None` when the package bakes nothing there, and the prop then receives the id as written.
     pub fn id_baking(&self, tag: &str, prop: &str) -> Option<(&'static AssetKind, IdBaking)> {
         let kind = asset_kind_for_component(tag, prop)?;
-        let baking = self.telar.id_baking(kind);
+        let baking = match self.telar.id_baking(kind) {
+            IdBaking::Required if kind.component.is_some_and(|c| c.carries(tag, prop)) => {
+                IdBaking::Literals
+            }
+            baking => baking,
+        };
         (baking != IdBaking::Off).then_some((kind, baking))
     }
 
@@ -168,7 +173,7 @@ impl AssetContext {
                 .canonical_id(kind, written)?
                 .map(|id| format!("{id:?}"))
                 .map_err(|message| format!("rsx: {message}")),
-            IdBaking::Literals | IdBaking::Required => self.resolve_id(kind, written),
+            IdBaking::Literals | IdBaking::Required => self.resolve_prop_id(kind, prop, written),
         })
     }
 
@@ -176,10 +181,20 @@ impl AssetContext {
     ///
     /// Unlike a path, there is no file here to re-hash: the id is either in the artifact or it is not, and whether its source changed is the bake's question, which runs before every build route.
     pub fn resolve_id(&self, kind: &AssetKind, written: &str) -> Result<String, String> {
+        self.resolve_prop_id(kind, kind.attr, written)
+    }
+
+    /// [`Self::resolve_id`] for an id given to `prop`, which a message names it by.
+    fn resolve_prop_id(
+        &self,
+        kind: &AssetKind,
+        prop: &str,
+        written: &str,
+    ) -> Result<String, String> {
         let (id, entry) = self
             .baked_entry(kind, written, |id| match written == id {
-                true => format!("{}:\"{id}\"", kind.attr),
-                false => format!("{}:\"{written}\" (`{id}`)", kind.attr),
+                true => format!("{prop}:\"{id}\""),
+                false => format!("{prop}:\"{written}\" (`{id}`)"),
             })
             .map_err(|message| format!("rsx: {message}"))?;
         Ok(format!(
@@ -273,13 +288,13 @@ impl AssetContext {
             .as_deref()
     }
 
-    /// Why a prop that has to be baked was given something that is not a literal id.
-    pub fn dynamic_id_message(kind: &AssetKind) -> String {
+    /// Why `prop` on `tag`, which has to be baked, was given something that is not a literal id.
+    pub fn dynamic_id_message(kind: &AssetKind, tag: &str, prop: &str) -> String {
         let section = kind.component.map_or("", |component| component.section);
-        let tag = kind.component.map_or("", |component| component.tag);
+        let drawn_by = kind.component.map_or("", |component| component.tag);
         format!(
-            "rsx: `{tag} {}:` takes a literal id while `[telar.{section}]` bakes every {}, because only a literal can be baked ahead of time. Write the id out, choosing between literal ids with `if` or `match` where it varies; or set `[telar.{section}] mode = \"both\"` to resolve ids that are not literal as the application runs, or `mode = \"runtime\"` to resolve all of them then — see the `runtime` feature of the crate that provides `{tag}`.",
-            kind.attr, kind.label
+            "rsx: `{tag} {prop}:` takes a literal id while `[telar.{section}]` bakes every {}, because only a literal can be baked ahead of time. Write the id out, choosing between literal ids with `if` or `match` where it varies; or set `[telar.{section}] mode = \"both\"` to resolve ids that are not literal as the application runs, or `mode = \"runtime\"` to resolve all of them then — see the `runtime` feature of the crate that provides `{drawn_by}`.",
+            kind.label
         )
     }
 

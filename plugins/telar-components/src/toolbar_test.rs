@@ -2,7 +2,8 @@ use std::cell::Cell;
 
 use super::*;
 use crate::{IconButtonProps, icon_button};
-use telar::{AvailableSpace, ComponentList, Container, Event, Slots, compute_layout};
+use telar::testing::named;
+use telar::{AvailableSpace, ComponentList, Container, Slots, compute_layout};
 
 struct Bar {
     tree: ComponentList,
@@ -49,16 +50,9 @@ fn bar(disabled: [bool; 3]) -> Bar {
     Bar { tree, fired }
 }
 
-fn key(named: NamedKey) -> Event {
-    Event::KeyPressed {
-        key: Key::Named(named),
-        modifiers: telar::ModifiersState::default(),
-    }
-}
-
 impl Bar {
-    fn press(&mut self, named: NamedKey) {
-        self.tree.on_event(&key(named));
+    fn press(&mut self, key: NamedKey) {
+        self.tree.on_event(&named(key));
     }
 
     fn activated(&mut self) -> usize {
@@ -258,14 +252,14 @@ fn a_vertical_toolbar_keeps_up_and_down_whatever_the_direction() {
         children,
     )
     .unwrap();
-    crate::harness::lay_out(item.layout_node(), 100.0, 400.0);
+    telar::testing::lay_out(item.layout_node(), 100.0, 400.0);
     let mut tree = ComponentList::new(item);
     let _ = tree.commands();
     focus::focus_next();
 
     telar::set_direction(Direction::Rtl);
-    tree.on_event(&key(NamedKey::ArrowDown));
-    tree.on_event(&key(NamedKey::Enter));
+    tree.on_event(&named(NamedKey::ArrowDown));
+    tree.on_event(&named(NamedKey::Enter));
     telar::set_direction(Direction::Ltr);
     assert_eq!(fired[1].get(), 1, "down still moves forward");
 }

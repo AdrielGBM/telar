@@ -69,6 +69,7 @@ pub struct SoftwareRenderer<D: HasDisplayHandle, W: HasWindowHandle> {
     prev_commands: Vec<DrawCommand>,
     prev_commands_hash: u64,
     prev_clear_color: Option<Color>,
+    redraw_in_full: bool,
     // Cache for expand_fill_layers: avoids re-expanding on idle frames where commands didn't change.
     expanded_commands_cache: Option<(u64, Vec<DrawCommand>)>,
     // Cache for compute_layer_bounds: avoids re-traversing commands when input and dimensions are unchanged.
@@ -182,6 +183,7 @@ where
             prev_commands: Vec::with_capacity(256),
             prev_commands_hash: 0,
             prev_clear_color: None,
+            redraw_in_full: false,
             expanded_commands_cache: None,
             layer_bounds_cache: None,
             present_log: PresentLog::new(),
@@ -238,6 +240,7 @@ where
             prev_commands: Vec::with_capacity(256),
             prev_commands_hash: 0,
             prev_clear_color: None,
+            redraw_in_full: false,
             expanded_commands_cache: None,
             layer_bounds_cache: None,
             present_log: PresentLog::new(),
@@ -251,6 +254,11 @@ where
             #[cfg(test)]
             fail_after: None,
         }
+    }
+
+    /// Makes the next frame a full redraw instead of a repaint of what differs from the last one. For a renderer reused across frames that have nothing to do with each other, where the last frame says nothing about which pixels the next one changes.
+    pub fn redraw_in_full(&mut self) {
+        self.redraw_in_full = true;
     }
 
     /// The current frame's pixels as premultiplied RGBA8888 (tiny-skia byte order: `[R, G, B, A]` per pixel, row-major, `width * height * 4` bytes). `None` before the first frame is rendered.

@@ -142,3 +142,50 @@ fn families_are_listed_sorted_once_each_without_the_ones_a_platform_hides() {
     }
     assert_eq!(listed_families(&db), ["Alpha", "Display"]);
 }
+
+#[test]
+fn only_the_faces_given_are_loaded_and_the_default_face_is_routed_to_the_first() {
+    let _installing = FACES_STABLE
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let declared = || {
+        vec![
+            FontAsset::embedded(TEST_FACE)
+                .named("Snapshot Face")
+                .with_weight(FontWeight::range(100, 900)),
+        ]
+    };
+    let mut slot = None;
+    let fonts = install_only_into(&mut slot, declared(), Vec::new()).unwrap();
+    assert_eq!(
+        fonts.family_names(),
+        ["Snapshot Face".to_string()],
+        "nothing but the declared face is loaded"
+    );
+    assert_eq!(fonts.families(), ["Snapshot Face".to_string()]);
+    assert!(
+        Arc::ptr_eq(
+            &fonts,
+            &install_only_into(&mut slot, declared(), Vec::new()).unwrap()
+        ),
+        "the same faces again load nothing and replace nothing"
+    );
+
+    add_into(
+        &mut slot,
+        FaceSources {
+            faces: vec![FontAsset::file("/nonexistent/other.ttf")],
+            ..FaceSources::none()
+        },
+        None,
+    );
+    assert_eq!(
+        install_only_into(&mut slot, declared(), Vec::new()).err(),
+        Some(ExclusiveFontsError::OtherFacesLoaded),
+        "a face loaded beyond the declared ones cannot be taken back"
+    );
+    assert_eq!(
+        install_only_into(&mut None, Vec::new(), Vec::new()).err(),
+        Some(ExclusiveFontsError::NoFaces)
+    );
+}

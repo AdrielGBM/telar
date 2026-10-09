@@ -165,9 +165,10 @@ pub use platform_desktop::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
     Effect, Emitter, Memo, OwnerGuard, OwnerId, Reactive, ReadSignal, RwSignal, Source, Task,
-    Transaction, TransactionError, batch, begin_batch, current_owner, derive, derive_pair,
-    detached, dispose_owner, drain_tasks, effect, end_batch, memo, on_cleanup, owner_scope,
-    reset_runtime, reset_tasks, set_task_waker, signal, spawn_stream, spawn_task, with_owner,
+    Timer, Transaction, TransactionError, advance_timer_clock, batch, begin_batch, current_owner,
+    derive, derive_pair, detached, dispose_owner, drain_tasks, effect, end_batch, fire_timers,
+    memo, on_cleanup, owner_scope, reset_runtime, reset_tasks, reset_timers, run_after,
+    set_task_waker, signal, spawn_stream, spawn_task, timer_now, until_next_timer, with_owner,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};
@@ -258,10 +259,10 @@ pub use platform_core::{
 };
 #[cfg(feature = "runtime")]
 pub use preferences_core::{
-    reduced_motion_override, set_reduced_motion_override, set_system_preferences,
-    system_preferences, use_color_scheme, use_high_contrast, use_preferred_locales,
-    use_reduced_motion, use_reduced_motion_override, use_system_preferences,
-    use_system_reduced_motion,
+    high_contrast_override, reduced_motion_override, set_high_contrast_override,
+    set_reduced_motion_override, set_system_preferences, system_preferences, use_color_scheme,
+    use_high_contrast, use_preferred_locales, use_reduced_motion, use_reduced_motion_override,
+    use_system_high_contrast, use_system_preferences, use_system_reduced_motion,
 };
 #[cfg(feature = "runtime")]
 pub use services_core::{Scope, context, provide, set_context, try_inject, with_service};
@@ -276,9 +277,10 @@ pub use system_locale::follow_system_locale;
 pub use theme_core::{
     ControlSize, ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions,
     ThemeTokens, active_mode, control_scale, current_control_size, follow_system, is_dark,
-    nearest_theme, register_mode, scheme_preference, set_control_size, set_mode,
-    set_scheme_preference, set_theme, use_control_size, use_mode, use_resolved_scheme,
-    use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
+    nearest_theme, register_mode, register_mode_theme, registered_modes, scheme_preference,
+    set_control_size, set_mode, set_mode_scheme, set_scheme_preference, set_theme,
+    use_control_size, use_mode, use_resolved_scheme, use_scheme_preference, use_theme,
+    use_theme_extension, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
@@ -302,7 +304,7 @@ pub use ui_core::{
 };
 // The family a surface's text shapes in where nothing above it names one: seeded from `AppConfig::font_family`, changed live with `set_font_family`.
 #[cfg(feature = "runtime")]
-pub use ui_core::{SurfaceCanvas, SurfaceFrame, composite_surface};
+pub use ui_core::{SurfaceCanvas, SurfaceEnv, SurfaceFrame, composite_surface};
 #[cfg(feature = "runtime")]
 pub use ui_core::{SurfaceStyle, amend_surface};
 #[cfg(feature = "runtime")]
@@ -326,9 +328,9 @@ pub use ui_core::{
     logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
     observe_pointer, open_overlay, overlay_state, overlay_viewport, pointer_buttons, provide_theme,
     register_transaction, relayout_if_dirty, remove_node, requested_cursor, set_children,
-    set_direction, set_display, set_min_height, set_overlay_host, single_line_box, step_factor,
-    style_follows, track_layout, transform_pointer, undeclare, use_context, use_direction,
-    use_dismiss_depth, visible_window,
+    set_direction, set_display, set_min_height, set_overlay_host, shortcut_key, single_line_box,
+    step_factor, style_follows, track_layout, transform_pointer, undeclare, use_context,
+    use_direction, use_dismiss_depth, visible_window,
 };
 #[cfg(feature = "async-assets")]
 pub use ui_core::{

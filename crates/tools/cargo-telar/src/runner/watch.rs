@@ -7,6 +7,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use telar_project::protocol::{BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, WORKSPACE_DIR_VAR};
 use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE};
 
 use super::android::{android_install_and_launch, make_android_cmd};
@@ -16,6 +17,7 @@ use super::config::{
 };
 use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
+use super::workshop_channel::{WorkshopChannel, channel_file};
 
 fn inject_feature(args: &mut Vec<String>, feature: &str) {
     if let Some(pos) = args.iter().position(|a| a == "--features" || a == "-F")
@@ -263,7 +265,7 @@ impl HotChannel {
     }
 
     fn notify_hot_reload(&mut self, lib_path: &str) {
-        self.send(&format!("hot:{lib_path}"));
+        self.send(&format!("{HOT_RELOAD_PREFIX}{lib_path}"));
     }
 
     fn notify_build_error(&mut self, message: &str) {
@@ -272,23 +274,29 @@ impl HotChannel {
             .replace('\\', "\\\\")
             .replace('\n', "\\n")
             .replace('\r', "");
-        self.send(&format!("err:{escaped}"));
+        self.send(&format!("{BUILD_ERROR_PREFIX}{escaped}"));
     }
 
-    fn send(&mut self, message: &str) {
+    /// Answers whether the line reached the app.
+    fn send(&mut self, message: &str) -> bool {
         use std::io::Write;
         // The app's connection sits in the accept backlog until the first send; a reconnect replaces the previous stream.
         while let Ok((stream, _)) = self.listener.accept() {
             self.stream = Some(stream);
         }
         match &mut self.stream {
-            Some(stream) => {
-                if let Err(e) = writeln!(stream, "{message}") {
+            Some(stream) => match writeln!(stream, "{message}") {
+                Ok(()) => true,
+                Err(e) => {
                     eprintln!("[cargo-telar] Failed to write to hot reload channel: {e}");
                     self.stream = None;
+                    false
                 }
+            },
+            None => {
+                eprintln!("[cargo-telar] App not connected to the hot reload channel.");
+                false
             }
-            None => eprintln!("[cargo-telar] App not connected to the hot reload channel."),
         }
     }
 }
@@ -310,20 +318,34 @@ fn make_watcher(
     watcher
 }
 
-fn watch_and_hot_reload(
-    build_args: Vec<String>,
+/// The app the hot-reload loop runs: the binary and what it is started with.
+struct HotLaunch {
     bin_path: PathBuf,
     lib_path: PathBuf,
-    mut channel: HotChannel,
+    args: Vec<String>,
     envs: Vec<(String, String)>,
+}
+
+fn watch_and_hot_reload(
+    build_args: Vec<String>,
+    launch: HotLaunch,
+    mut channel: HotChannel,
+    workshop: Option<WorkshopChannel>,
     workspace_root: PathBuf,
 ) -> ! {
+    let HotLaunch {
+        bin_path,
+        lib_path,
+        args,
+        envs,
+    } = launch;
     let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
     let watched = WatchSet::collect(&workspace_root);
     let _watcher = make_watcher(tx, &watched);
 
     eprintln!("[cargo-telar] Starting with hot reload...");
     let mut child = Command::new(&bin_path)
+        .args(&args)
         .env("TELAR_HOT_LIB", lib_path.to_str().unwrap_or_default())
         .env("TELAR_HOT_PORT", channel.port.to_string())
         .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
@@ -338,10 +360,16 @@ fn watch_and_hot_reload(
         match child.try_wait() {
             Ok(Some(_)) => {
                 eprintln!("[cargo-telar] App exited.");
+                // `exit` runs no destructors, and the channel's removes the file naming a workshop that is gone.
+                drop(workshop);
                 std::process::exit(0);
             }
             Ok(None) => {}
             Err(e) => eprintln!("[cargo-telar] error: {e}"),
+        }
+
+        if let Some(workshop) = &workshop {
+            workshop.poll(|line| channel.send(line));
         }
 
         while let Ok(Ok(event)) = rx.try_recv() {
@@ -521,13 +549,28 @@ fn with_tooling<'a>(features: &[&'a str], tooling: &[&'a str]) -> Vec<&'a str> {
 
 pub(crate) struct HotLoopOpts {
     pub(crate) args: Vec<String>,
+    /// What the app binary itself is started with, after cargo's own arguments.
+    pub(crate) app_args: Vec<String>,
     pub(crate) config: TelarSection,
     pub(crate) no_hot_reload: bool,
+}
+
+/// `cargo run`'s arguments with `app_args` handed on to the binary.
+fn with_app_args(mut cargo_args: Vec<String>, app_args: &[String]) -> Vec<String> {
+    if app_args.is_empty() {
+        return cargo_args;
+    }
+    if !cargo_args.iter().any(|arg| arg == "--") {
+        cargo_args.push("--".to_string());
+    }
+    cargo_args.extend(app_args.iter().cloned());
+    cargo_args
 }
 
 pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     let HotLoopOpts {
         args,
+        app_args,
         config,
         no_hot_reload,
     } = opts;
@@ -569,6 +612,10 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
     )];
     if is_preview {
         launch_envs.push(("TELAR_PREVIEW".to_string(), "1".to_string()));
+        launch_envs.push((
+            WORKSPACE_DIR_VAR.to_string(),
+            resolved.workspace_root.display().to_string(),
+        ));
     }
     if config.dev.devtools == Some(false) {
         launch_envs.push(("TELAR_DEVTOOLS".to_string(), "0".to_string()));
@@ -632,19 +679,30 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
 
         if bin_path.exists() && lib_path.exists() {
             let lib_build_args = make_lib_build_args(&rest, &hot_features);
+            let workshop = is_preview
+                .then(|| WorkshopChannel::open(channel_file(&workspace_root, &package_name)))
+                .flatten();
 
             watch_and_hot_reload(
                 lib_build_args,
-                bin_path,
-                lib_path,
+                HotLaunch {
+                    bin_path,
+                    lib_path,
+                    args: app_args,
+                    envs: launch_envs,
+                },
                 HotChannel::bind(),
-                launch_envs,
+                workshop,
                 workspace_root,
             );
         }
     }
 
-    watch_and_run(cargo_args, launch_envs, workspace_root);
+    watch_and_run(
+        with_app_args(cargo_args, &app_args),
+        launch_envs,
+        workspace_root,
+    );
 }
 
 #[cfg(test)]

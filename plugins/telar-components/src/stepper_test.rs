@@ -1,10 +1,10 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use telar::testing::{press, release};
 use telar::{AvailableSpace, Component, compute_layout, track_layout};
 
 use super::*;
-use crate::harness::{press, release};
 
 fn tap_minus(widget: &mut Box<dyn LayoutItem>, r: telar::Rect) {
     let (x, y) = (

@@ -39,6 +39,13 @@ fn icon_kind() -> &'static AssetKind {
 fn the_icon_tags_name_prop_is_a_component_kind() {
     assert_eq!(icon_kind().id, "icon");
     assert!(asset_kind_for_component("icon", "size").is_none());
+    assert_eq!(
+        asset_kind_for_component("icon_button", "icon").map(|kind| kind.id),
+        Some("icon"),
+        "an icon button carries an icon id to the `icon` it draws"
+    );
+    assert!(asset_kind_for_component("icon_button", "name").is_none());
+    assert!(asset_kind_for_component("icon_button", "label").is_none());
     assert!(
         super::super::asset_kind_for_tag("icon").is_none(),
         "`icon` is not a built-in tag"
@@ -112,11 +119,17 @@ fn an_unbaked_package_names_the_bake() {
 
 #[test]
 fn the_dynamic_id_message_names_runtime_mode() {
-    let message = AssetContext::dynamic_id_message(icon_kind());
+    let message = AssetContext::dynamic_id_message(icon_kind(), "icon", "name");
     assert!(
         message.contains("`icon name:` takes a literal id"),
         "{message}"
     );
+    let carried = AssetContext::dynamic_id_message(icon_kind(), "icon_button", "icon");
+    assert!(
+        carried.contains("`icon_button icon:` takes a literal id"),
+        "{carried}"
+    );
+    assert!(carried.contains("crate that provides `icon`"), "{carried}");
     assert!(message.contains("mode = \"both\""), "{message}");
     assert!(message.contains("mode = \"runtime\""), "{message}");
 }

@@ -20,6 +20,9 @@ struct HotTreeHandle {
     release: unsafe extern "Rust" fn(*mut crate::tree::HotTree),
     /// Absent in a dylib built before the input registries were fed on this side; the tree still runs, it just leaves `key_pressed` answering for longer than a frame.
     end_frame: Option<unsafe extern "Rust" fn(*mut crate::tree::HotTree)>,
+    /// Absent in a dylib built before the overlay layer covered the tree; a move an overlay takes then never reaches the tree, and a box hovered under the overlay keeps its hover.
+    on_covered_event:
+        Option<unsafe extern "Rust" fn(*mut crate::tree::HotTree, &platform_core::Event)>,
 }
 
 #[cfg(feature = "dev")]
@@ -42,6 +45,10 @@ impl HotTreeHandle {
                     .get(b"_rsx_hot_tree_end_frame\0")
                     .ok()
                     .map(|symbol| *symbol),
+                on_covered_event: lib
+                    .get(b"_rsx_hot_tree_on_covered_event\0")
+                    .ok()
+                    .map(|symbol| *symbol),
             };
             Some(handle)
         }
@@ -55,6 +62,12 @@ impl crate::tree::UiTree for HotTreeHandle {
             ui_core::EventResult::Handled
         } else {
             ui_core::EventResult::Ignored
+        }
+    }
+
+    fn on_covered_event(&mut self, event: &platform_core::Event) {
+        if let Some(dispatch) = self.on_covered_event {
+            unsafe { dispatch(self.ptr, event) }
         }
     }
 
@@ -89,13 +102,26 @@ impl Drop for HotTreeHandle {
 }
 
 #[cfg(feature = "dev")]
+impl HotApp {
+    /// Resolved per call: the lookup is a cheap hashmap hit on a dev-only path, and caching would store a `Symbol` borrowing `_lib` in the same struct. `None` for a dylib built before the export existed, which each caller degrades past.
+    fn symbol<F>(&self, name: &[u8]) -> Option<libloading::Symbol<'_, F>> {
+        unsafe { self._lib.get::<F>(name) }.ok()
+    }
+
+    fn dylib_answers(&self, name: &[u8]) -> bool {
+        self.symbol::<unsafe extern "Rust" fn() -> bool>(name)
+            .is_some_and(|answer| unsafe { answer() })
+    }
+}
+
+#[cfg(feature = "dev")]
 impl crate::app_runtime::AppRuntime for HotApp {
-    // Delegated rather than defaulted: the window a hot-reloaded app asks for is the one its own `app!` invocation names, and that lives on the far side of the boundary.
+    // The window a hot-reloaded app asks for is the one its own `app!` invocation names, which lives on the far side of the boundary.
     fn window_config(&self) -> Option<platform_core::WindowConfig> {
         self.inner.window_config()
     }
 
-    // Mounted inside the dylib, where the app's signals live: a tree mounted out here would register its segment effects in the host's runtime and never subscribe to anything the app writes. A dylib too old to export them has no fallback — the host-side mount only worked while a force-tick re-ran every segment.
+    // Mounted inside the dylib, where the app's signals live: a tree mounted out here would register its segment effects in the host's runtime and never subscribe to anything the app writes.
     fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
         match HotTreeHandle::mount(&self._lib, self.inner.as_ref()) {
             Some(handle) => Box::new(handle),
@@ -114,91 +140,59 @@ impl crate::app_runtime::AppRuntime for HotApp {
     }
 
     fn hot_snapshot(&self) -> Option<String> {
-        // Missing symbol (a dylib built before hot state existed) degrades to no preservation.
-        let snapshot: libloading::Symbol<unsafe extern "Rust" fn() -> String> =
-            unsafe { self._lib.get(b"_rsx_hot_snapshot\0") }.ok()?;
+        let snapshot =
+            self.symbol::<unsafe extern "Rust" fn() -> String>(b"_rsx_hot_snapshot\0")?;
         Some(unsafe { snapshot() })
     }
 
     fn hot_restore(&self, blob: &str) {
-        if let Ok(restore) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(&str)>(b"_rsx_hot_restore\0")
-        } {
+        if let Some(restore) = self.symbol::<unsafe extern "Rust" fn(&str)>(b"_rsx_hot_restore\0") {
             unsafe { restore(blob) }
         }
     }
 
-    // Resolved per call rather than cached: a dev-only path where the lookup is a cheap hashmap hit, and this avoids storing a `Symbol` borrowed from `_lib` in the same struct. A missing symbol is a no-op, since the host's own motion-core copy is a separate, empty registry.
+    // The app's motion registry is the dylib's motion-core copy; the host's animates what the host draws itself, the devtools overlay.
     fn motion_tick(&self, now: web_time::Instant) {
-        if let Ok(tick) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(web_time::Instant)>(b"_rsx_hot_motion_tick\0")
-        } {
+        motion_core::tick(now);
+        if let Some(tick) =
+            self.symbol::<unsafe extern "Rust" fn(web_time::Instant)>(b"_rsx_hot_motion_tick\0")
+        {
             unsafe { tick(now) }
         }
     }
 
     fn motion_has_active(&self) -> bool {
-        let Ok(active) = (unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn() -> bool>(b"_rsx_hot_motion_active\0")
-        }) else {
-            return false;
-        };
-        unsafe { active() }
+        motion_core::has_active() || self.dylib_answers(b"_rsx_hot_motion_active\0")
     }
 
     fn motion_has_continuous(&self) -> bool {
-        let Ok(continuous) = (unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn() -> bool>(b"_rsx_hot_motion_continuous\0")
-        }) else {
-            return false;
-        };
-        unsafe { continuous() }
+        motion_core::has_continuous() || self.dylib_answers(b"_rsx_hot_motion_continuous\0")
     }
 
-    // The dylib's reactive runtime is separate from the host's. A missing symbol degrades to a no-op: the app runs as before, without the mid-dispatch flush protection.
     fn begin_event_batch(&self) {
-        if let Ok(begin) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn()>(b"_rsx_hot_begin_batch\0")
-        } {
+        if let Some(begin) = self.symbol::<unsafe extern "Rust" fn()>(b"_rsx_hot_begin_batch\0") {
             unsafe { begin() }
         }
     }
 
     fn end_event_batch(&self) {
-        if let Ok(end) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn()>(b"_rsx_hot_end_batch\0")
-        } {
+        if let Some(end) = self.symbol::<unsafe extern "Rust" fn()>(b"_rsx_hot_end_batch\0") {
             unsafe { end() }
         }
     }
 
-    // The dylib's own layout runtime, so a reactive list change is laid out before the frame composes. A missing symbol degrades to a no-op.
     fn relayout(&self) {
-        if let Ok(relayout) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn()>(b"_rsx_hot_relayout\0")
-        } {
+        if let Some(relayout) = self.symbol::<unsafe extern "Rust" fn()>(b"_rsx_hot_relayout\0") {
             unsafe { relayout() }
         }
     }
 
-    // `overlay` widgets register in the dylib where the view is built, so a modal's priority routing must be driven across this boundary. A missing symbol degrades to `false` and the event falls through.
+    // `overlay` widgets register in the dylib where the view is built, so a modal's priority routing must be driven across this boundary.
     fn dispatch_overlays(&self, event: &platform_core::Event) -> bool {
-        let Ok(dispatch) = (unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(&platform_core::Event) -> bool>(
-                    b"_rsx_hot_dispatch_overlays\0",
-                )
-        }) else {
-            return false;
-        };
-        unsafe { dispatch(event) }
+        self.symbol::<unsafe extern "Rust" fn(&platform_core::Event) -> bool>(
+            b"_rsx_hot_dispatch_overlays\0",
+        )
+        .is_some_and(|dispatch| unsafe { dispatch(event) })
     }
 
     // The controls and their rects live in the dylib's registries, which no host-side reading can see, and the dylib exports no snapshot of its own yet.
@@ -209,115 +203,108 @@ impl crate::app_runtime::AppRuntime for HotApp {
         Vec::new()
     }
 
-    // A title bar's `on_press` pushes into the dylib's platform-core copy, so the host drains it across this boundary. A missing symbol degrades to an empty vec: window controls are inert until the dylib is rebuilt.
+    // A title bar's `on_press` pushes into the dylib's platform-core copy, so the host drains it across this boundary.
     fn drain_window_commands(&self) -> Vec<platform_core::WindowCommand> {
-        let Ok(drain) = (unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn() -> Vec<platform_core::WindowCommand>>(
-                    b"_rsx_hot_drain_window_commands\0",
-                )
-        }) else {
-            return Vec::new();
-        };
-        unsafe { drain() }
+        self.symbol::<unsafe extern "Rust" fn() -> Vec<platform_core::WindowCommand>>(
+            b"_rsx_hot_drain_window_commands\0",
+        )
+        .map(|drain| unsafe { drain() })
+        .unwrap_or_default()
     }
 
-    // The dylib reads its own copy of the store, so it is written across the boundary, and its theme and motion follow that copy; the host's copy is kept too, for the devtools that live on this side. A missing symbol leaves the dylib's preferences unknown until it is rebuilt.
+    // The dylib reads its own copy of the store; the host's copy is kept too, for the devtools that live on this side.
     fn set_system_preferences(&self, preferences: &platform_core::SystemPreferences) {
         preferences_core::set_system_preferences(preferences.clone());
-        if let Ok(set) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(&platform_core::SystemPreferences)>(
-                    b"_rsx_hot_set_system_preferences\0",
-                )
-        } {
+        if let Some(set) = self
+            .symbol::<unsafe extern "Rust" fn(&platform_core::SystemPreferences)>(
+                b"_rsx_hot_set_system_preferences\0",
+            )
+        {
             unsafe { set(preferences) }
         }
     }
 
-    // The dylib lays out and reads against its own copy of the size, so it is written across the boundary. A missing symbol leaves the dylib's surface at zero until it is rebuilt, which only surface fractions and breakpoints notice.
     fn set_surface_size(&self, size: geometry_core::Size) {
-        if let Ok(set) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(f32, f32)>(b"_rsx_hot_set_surface_size\0")
-        } {
+        if let Some(set) =
+            self.symbol::<unsafe extern "Rust" fn(f32, f32)>(b"_rsx_hot_set_surface_size\0")
+        {
             unsafe { set(size.width, size.height) }
         }
     }
 
-    // The dylib reads its own copy of the safe area. A missing symbol leaves it at zero until the dylib is rebuilt.
     fn set_safe_area_insets(&self, insets: geometry_core::Insets) {
-        if let Ok(set) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(f32, f32, f32, f32)>(
-                    b"_rsx_hot_set_safe_area_insets\0",
-                )
-        } {
+        if let Some(set) = self.symbol::<unsafe extern "Rust" fn(f32, f32, f32, f32)>(
+            b"_rsx_hot_set_safe_area_insets\0",
+        ) {
             unsafe { set(insets.top, insets.right, insets.bottom, insets.left) }
         }
     }
 
-    // The navigator following the address lives in the dylib's store. A missing symbol leaves the dylib at its own root until it is rebuilt.
     fn set_location_history(&self, history: &[platform_core::Location]) {
-        if let Ok(set) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(&[platform_core::Location])>(
-                    b"_rsx_hot_set_location_history\0",
-                )
-        } {
+        if let Some(set) = self.symbol::<unsafe extern "Rust" fn(&[platform_core::Location])>(
+            b"_rsx_hot_set_location_history\0",
+        ) {
             unsafe { set(history) }
         }
     }
 
-    // The surface's title is derived in the dylib's store. A missing symbol leaves its titles without the app's part until the dylib is rebuilt.
     fn open_title(&self, app: &str, showing: &str) {
-        if let Ok(open) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(&str, &str)>(b"_rsx_hot_open_title\0")
-        } {
+        if let Some(open) =
+            self.symbol::<unsafe extern "Rust" fn(&str, &str)>(b"_rsx_hot_open_title\0")
+        {
             unsafe { open(app, showing) }
         }
     }
 
-    // The cascade the family seeds is the dylib's. A missing symbol leaves its text in the platform's family until the dylib is rebuilt.
     fn open_font_family(&self, family: Option<&str>) {
-        if let Ok(open) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(Option<&str>)>(b"_rsx_hot_open_font_family\0")
-        } {
+        if let Some(open) =
+            self.symbol::<unsafe extern "Rust" fn(Option<&str>)>(b"_rsx_hot_open_font_family\0")
+        {
             unsafe { open(family) }
         }
     }
 
-    // Its dialogs and its history are the dylib's. A missing symbol answers that nothing went back.
+    // Its dialogs and its history are the dylib's.
     fn navigate_back(&self) -> bool {
-        let Ok(back) = (unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn() -> bool>(b"_rsx_hot_navigate_back\0")
-        }) else {
-            return false;
-        };
-        unsafe { back() }
+        self.symbol::<unsafe extern "Rust" fn() -> bool>(b"_rsx_hot_navigate_back\0")
+            .is_some_and(|back| unsafe { back() })
     }
 
-    // `spawn_task` registered their callbacks in the dylib's own reactive-core thread-local, so the host must drain it across this boundary; its own copy is empty. A missing symbol degrades to a no-op.
+    // `spawn_task` registers its callback in the reactive-core copy of whoever called it, so both sides are drained.
     fn drain_tasks(&self) {
-        if let Ok(drain) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn()>(b"_rsx_hot_drain_tasks\0")
-        } {
+        reactive_core::drain_tasks();
+        if let Some(drain) = self.symbol::<unsafe extern "Rust" fn()>(b"_rsx_hot_drain_tasks\0") {
             unsafe { drain() }
         }
     }
 
-    // So a worker finishing inside the dylib can run a frame. A missing symbol degrades to a no-op: results then wait for the next input event.
+    fn fire_timers(&self) {
+        reactive_core::fire_timers();
+        if let Some(fire) = self.symbol::<unsafe extern "Rust" fn()>(b"_rsx_hot_fire_timers\0") {
+            unsafe { fire() }
+        }
+    }
+
+    // The loop wakes for whichever side's timer comes due first.
+    fn until_next_timer(&self) -> Option<std::time::Duration> {
+        let host = reactive_core::until_next_timer();
+        let app = self
+            .symbol::<unsafe extern "Rust" fn() -> Option<std::time::Duration>>(
+                b"_rsx_hot_until_next_timer\0",
+            )
+            .and_then(|until| unsafe { until() });
+        match (host, app) {
+            (Some(host), Some(app)) => Some(host.min(app)),
+            (host, app) => host.or(app),
+        }
+    }
+
     fn install_task_waker(&self, waker: platform_core::RedrawWaker) {
-        if let Ok(install) = unsafe {
-            self._lib
-                .get::<unsafe extern "Rust" fn(platform_core::RedrawWaker)>(
-                    b"_rsx_hot_install_task_waker\0",
-                )
-        } {
+        let host = waker.clone();
+        reactive_core::set_task_waker(move || host.wake());
+        if let Some(install) = self.symbol::<unsafe extern "Rust" fn(platform_core::RedrawWaker)>(
+            b"_rsx_hot_install_task_waker\0",
+        ) {
             unsafe { install(waker) }
         }
     }
@@ -339,17 +326,78 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
     let lib_result = platform_core::guest::open(&unique);
     let _ = std::fs::remove_file(&unique);
     let lib = lib_result?;
+    // Before the app is made, so whatever its setup or its first build reaches for is already there. A library built before the symbol existed keeps its empty stores.
+    if let Ok(install) =
+        unsafe { lib.get::<unsafe extern "Rust" fn(HostServices)>(b"_rsx_hot_install_services\0") }
+    {
+        unsafe { install(HostServices::installed()) }
+    }
     let create: libloading::Symbol<unsafe extern "Rust" fn() -> Box<dyn crate::app::App>> =
         unsafe { lib.get(b"_rsx_hot_create_app\0") }?;
     let inner = unsafe { create() };
     Ok(HotApp { inner, _lib: lib })
 }
 
+/// The platform services the host installed, handed to each library it loads: the library's copies of their stores start empty, so without them a reloaded app copies to no clipboard, opens no link and shows no file dialog.
+///
+/// The host's backends serve both sides, so a selection the clipboard owns outlives every library swapped in under it.
 #[cfg(feature = "dev")]
-/// What `cargo telar dev` sends the running app: a rebuild landed, or a build failed.
+#[doc(hidden)]
+pub struct HostServices {
+    clipboard: Option<std::sync::Arc<dyn services_core::Clipboard>>,
+    uri_opener: Option<std::sync::Arc<dyn services_core::UriOpener>>,
+    file_dialogs: Option<std::sync::Arc<dyn services_core::FileDialogs>>,
+}
+
+#[cfg(feature = "dev")]
+impl HostServices {
+    /// What this side has installed.
+    pub fn installed() -> Self {
+        Self {
+            clipboard: services_core::clipboard(),
+            uri_opener: services_core::uri_opener(),
+            file_dialogs: services_core::file_dialogs(),
+        }
+    }
+
+    /// Installs each service on this side, as the host had it.
+    pub fn install(self) {
+        if let Some(clipboard) = self.clipboard {
+            services_core::set_clipboard(clipboard);
+        }
+        if let Some(opener) = self.uri_opener {
+            services_core::set_uri_opener(opener);
+        }
+        if let Some(dialogs) = self.file_dialogs {
+            services_core::set_file_dialogs(dialogs);
+        }
+    }
+}
+
+#[cfg(feature = "dev")]
+use telar_project::protocol::{BUILD_ERROR_PREFIX, GOTO_PREFIX, HOT_RELOAD_PREFIX};
+
+#[cfg(feature = "dev")]
+/// What `cargo telar dev` sends the running app: a rebuild landed, a build failed, or a location to open.
+#[derive(Debug, PartialEq)]
 pub enum HotEvent {
     Reload(std::path::PathBuf),
     BuildError(String),
+    /// A location reference, as `LocationFormat::parse` reads one, to open as a link into the running app would: `cargo telar preview <ID>` moving the workshop already open.
+    Goto(String),
+}
+
+/// The event one line of the channel carries, or `None` for a line with a prefix this host does not know.
+#[cfg(feature = "dev")]
+fn hot_event(line: &str) -> Option<HotEvent> {
+    if let Some(path) = line.strip_prefix(HOT_RELOAD_PREFIX) {
+        Some(HotEvent::Reload(std::path::PathBuf::from(path)))
+    } else if let Some(message) = line.strip_prefix(BUILD_ERROR_PREFIX) {
+        Some(HotEvent::BuildError(unescape_lines(message)))
+    } else {
+        line.strip_prefix(GOTO_PREFIX)
+            .map(|reference| HotEvent::Goto(reference.to_string()))
+    }
 }
 
 /// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via `TELAR_HOT_PORT`) and forwards line-delimited hot events. TCP instead of a unix socket so the same code path works on non-Unix hosts.
@@ -383,13 +431,8 @@ pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
                 if line.is_empty() {
                     continue;
                 }
-                let event = if let Some(path_str) = line.strip_prefix("hot:") {
-                    HotEvent::Reload(std::path::PathBuf::from(path_str))
-                } else if let Some(msg) = line.strip_prefix("err:") {
-                    HotEvent::BuildError(unescape_lines(msg))
-                } else {
-                    // Legacy bare path, with no prefix.
-                    HotEvent::Reload(std::path::PathBuf::from(line))
+                let Some(event) = hot_event(line) else {
+                    continue;
                 };
                 if tx.send(event).is_err() {
                     break;

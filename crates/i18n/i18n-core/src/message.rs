@@ -123,6 +123,32 @@ impl Catalog {
     pub fn contains(&self, key: &str) -> bool {
         self.entries.binary_search_by(|e| e.key.cmp(key)).is_ok()
     }
+
+    /// Panics naming the first key, or the first locale of a key, that is out of order or repeated.
+    ///
+    /// Both are binary-searched, so an entry out of order is silently never found. A baked or loaded catalog is sorted by construction; a hand-written `static` one calls this from a test.
+    #[track_caller]
+    pub fn assert_sorted(&self) {
+        for pair in self.entries.windows(2) {
+            assert!(
+                pair[0].key < pair[1].key,
+                "catalog keys `{}` and `{}` are out of order or repeated",
+                pair[0].key,
+                pair[1].key
+            );
+        }
+        for entry in self.entries {
+            for pair in entry.messages.windows(2) {
+                assert!(
+                    pair[0].0 < pair[1].0,
+                    "the locales `{}` and `{}` of `{}` are out of order or repeated",
+                    pair[0].0,
+                    pair[1].0,
+                    entry.key
+                );
+            }
+        }
+    }
 }
 
 impl Entry {

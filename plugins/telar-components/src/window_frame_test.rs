@@ -1,5 +1,5 @@
 use super::*;
-use crate::harness::press;
+use telar::testing::press;
 use telar::{AvailableSpace, Component, Event, PointerSource, compute_layout};
 
 fn panel() -> Box<dyn LayoutItem> {
@@ -24,16 +24,16 @@ fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
     let asked: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = asked.clone();
     let style = SurfaceFrameStyle {
-        background: Color::TRANSPARENT,
-        title_bar: Color::TRANSPARENT,
-        title_text: Color::TRANSPARENT,
-        close: Color::TRANSPARENT,
+        background: Color::TRANSPARENT.into(),
+        title_bar: Color::TRANSPARENT.into(),
+        title_text: Color::TRANSPARENT.into(),
+        close: Color::TRANSPARENT.into(),
         radius: 0.0,
         font_size: 12.0,
         controls: WindowControls::default(),
         body_inset: 12.0,
-        control_hover: Color::TRANSPARENT,
-        close_hover: Color::TRANSPARENT,
+        control_hover: Color::TRANSPARENT.into(),
+        close_hover: Color::TRANSPARENT.into(),
     };
     let mut frame = window_frame(
         "Settings",
@@ -87,16 +87,16 @@ fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
 
     const SURFACE: (f32, f32) = (920.0, 680.0);
     let style = SurfaceFrameStyle {
-        background: Color::TRANSPARENT,
-        title_bar: Color::TRANSPARENT,
-        title_text: Color::TRANSPARENT,
-        close: Color::TRANSPARENT,
+        background: Color::TRANSPARENT.into(),
+        title_bar: Color::TRANSPARENT.into(),
+        title_text: Color::TRANSPARENT.into(),
+        close: Color::TRANSPARENT.into(),
         radius: 0.0,
         font_size: 12.0,
         controls: WindowControls::default(),
         body_inset: 12.0,
-        control_hover: Color::TRANSPARENT,
-        close_hover: Color::TRANSPARENT,
+        control_hover: Color::TRANSPARENT.into(),
+        close_hover: Color::TRANSPARENT.into(),
     };
     let hungry = box_item(
         StyledContainer::new(
@@ -154,16 +154,16 @@ fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
 fn a_frame_without_a_resize_callback_draws_no_grip() {
     crate::test_support::fresh_layout_runtime();
     let style = SurfaceFrameStyle {
-        background: Color::TRANSPARENT,
-        title_bar: Color::TRANSPARENT,
-        title_text: Color::TRANSPARENT,
-        close: Color::TRANSPARENT,
+        background: Color::TRANSPARENT.into(),
+        title_bar: Color::TRANSPARENT.into(),
+        title_text: Color::TRANSPARENT.into(),
+        close: Color::TRANSPARENT.into(),
         radius: 0.0,
         font_size: 12.0,
         controls: WindowControls::default(),
         body_inset: 12.0,
-        control_hover: Color::TRANSPARENT,
-        close_hover: Color::TRANSPARENT,
+        control_hover: Color::TRANSPARENT.into(),
+        close_hover: Color::TRANSPARENT.into(),
     };
     // A grip a backend cannot act on must be absent rather than present and inert.
     assert!(
@@ -233,4 +233,75 @@ fn a_leading_item_and_a_zero_inset_reshape_the_frame_without_replacing_it() {
         inset.x, 12.0,
         "the default inset must still hold the body off the edge"
     );
+}
+
+#[derive(Clone, telar::ThemeTokens)]
+#[theme(default(
+    on_primary,
+    radius,
+    spacing,
+    icon_size,
+    muted,
+    scrollbar,
+    ink,
+    surface_alt,
+    border,
+    success,
+    warning,
+    error,
+    info,
+    highlight_low,
+    highlight_med,
+    highlight_high
+))]
+struct PaperTheme {
+    primary: Color,
+    surface: Color,
+}
+
+fn fills(commands: &[telar::DrawCommand]) -> Vec<telar::Paint> {
+    commands
+        .iter()
+        .filter_map(|command| match command {
+            telar::DrawCommand::Rect { style, .. } => style.fill,
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_frame_restyles_on_a_mode_switch_without_being_rebuilt() {
+    crate::test_support::fresh_layout_runtime();
+    let light = Color::rgba(1.0, 1.0, 1.0, 1.0);
+    let dark = Color::rgba(0.0, 0.0, 0.0, 1.0);
+    telar::register_mode("frame-light", move || {
+        telar::set_theme(PaperTheme {
+            primary: light,
+            surface: light,
+        })
+    });
+    telar::register_mode("frame-dark", move || {
+        telar::set_theme(PaperTheme {
+            primary: dark,
+            surface: dark,
+        })
+    });
+    telar::set_mode("frame-light");
+
+    let style = SurfaceFrameStyle::default()
+        .background(Reactive::of(|| telar::use_theme_tokens().surface()));
+    let frame = window_frame("Files", None, style, Rc::new(|| {}), panel(), None).unwrap();
+    compute_layout(
+        frame.layout_node(),
+        AvailableSpace::Definite(300.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    let tree = telar::ComponentList::new(frame);
+    assert!(fills(&tree.commands()).contains(&light.into()));
+
+    telar::set_mode("frame-dark");
+    let after = fills(&tree.commands());
+    assert!(after.contains(&dark.into()), "the card kept its old colour");
+    assert!(!after.contains(&light.into()));
 }

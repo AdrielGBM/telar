@@ -5,8 +5,10 @@ fn reset() {
     if let Some(previous) = FOLLOW.take() {
         reactive_core::dispose_owner(previous);
     }
-    ACTIVE_MODE.with(|s| s.set(None));
+    mode().set(None);
     MODES.with(|m| m.borrow_mut().clear());
+    MODE_THEMES.with(|t| t.set(HashMap::new()));
+    MODE_SCHEMES.with(|s| s.set(HashMap::new()));
     SCHEME_PAIR.with(|p| *p.borrow_mut() = None);
     PREFERENCE.with(|p| p.set(SchemePreference::System));
     set_system_preferences(SystemPreferences::default());
@@ -182,4 +184,70 @@ fn the_resolved_scheme_handle_follows_the_preference_and_the_system() {
     assert_eq!(handle.get(), ColorScheme::Dark);
     set_scheme_preference(SchemePreference::Light);
     assert_eq!(handle.get(), ColorScheme::Light);
+}
+
+#[test]
+fn registered_modes_keep_their_registration_order_through_re_registration() {
+    reset();
+    register_mode("modern", || {});
+    register_mode_theme("pastel", Plain);
+    register_mode("midnight", || {});
+    register_mode("modern", || {});
+    assert_eq!(registered_modes(), ["modern", "pastel", "midnight"]);
+
+    assert!(mode_theme_now("pastel").is_some());
+    register_mode("pastel", || {});
+    assert!(
+        mode_theme_now("pastel").is_none(),
+        "registered anew without a theme, it lends none"
+    );
+}
+
+#[derive(Clone)]
+struct Plain;
+impl ThemeTokens for Plain {}
+
+#[test]
+fn a_mode_outside_the_pair_is_dark_once_it_declares_so() {
+    reset();
+    register_mode("day", || {});
+    register_mode("night", || {});
+    follow_system("day", "night");
+    register_mode_theme("dusk", Plain);
+    register_mode("contrast", || {});
+
+    set_mode("dusk");
+    assert!(!is_dark(), "undeclared and unpaired counts as light");
+    set_mode_scheme("dusk", ColorScheme::Dark);
+    assert!(is_dark());
+    set_mode("contrast");
+    assert!(!is_dark());
+    set_mode_scheme("contrast", ColorScheme::Dark);
+    assert!(is_dark());
+    set_mode("day");
+    assert!(!is_dark());
+}
+
+#[test]
+fn a_declared_scheme_beats_the_pair_and_survives_re_registration() {
+    reset();
+    follow_system("day", "night");
+    set_mode_scheme("night", ColorScheme::Light);
+    set_mode("night");
+    assert!(!is_dark());
+    set_mode_scheme("night", ColorScheme::Dark);
+    register_mode("night", || {});
+    assert!(is_dark());
+}
+
+#[test]
+fn declaring_a_scheme_re_runs_what_reads_the_active_mode() {
+    reset();
+    register_mode("dusk", || {});
+    set_mode("dusk");
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let log = Rc::clone(&seen);
+    reactive_core::effect(move || log.borrow_mut().push(is_dark()));
+    set_mode_scheme("dusk", ColorScheme::Dark);
+    assert_eq!(*seen.borrow(), [false, true]);
 }

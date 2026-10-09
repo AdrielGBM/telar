@@ -285,6 +285,7 @@ fn post_key(key: Key) {
     platform_core::post_event(Event::KeyPressed {
         key: key.clone(),
         modifiers,
+        unmodified: None,
     });
     platform_core::post_event(Event::KeyReleased { key, modifiers });
 }

@@ -5,6 +5,7 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod border_radius;
+mod box_model;
 mod color;
 mod grid;
 mod insets;
@@ -15,6 +16,7 @@ mod size;
 mod transform;
 
 pub use border_radius::BorderRadius;
+pub use box_model::BoxModel;
 pub use color::Color;
 pub use grid::{LayoutGrid, layout_grid, set_layout_grid};
 pub use insets::Insets;

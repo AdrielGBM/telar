@@ -536,15 +536,20 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
     Ok(Box::new(__col_0))
 }
 
+::telar::__previews! {
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn home_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-    let __node_0 = home(HomeProps::props().build(), Children::default())?;
+    let __node_0 = home(HomeProps::props().__preview_actions(&__preview.actions()).build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
 pub const HOME_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--home--landing-full-page"), "home", "Landing — full page", home_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/home.rsx"), 149),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/home.rsx"), 149)
+        .source("[preview \"Landing — full page\"]\nhome", &[::telar::preview::SourceSpan::new(0, 38, 149)])
+        .props(<HomeProps as ::telar::preview::HasPropsSchema>::schema),
 ];
+}

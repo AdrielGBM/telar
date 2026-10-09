@@ -48,15 +48,21 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
     Ok(Box::new(__sbox_0))
 }
 
+::telar::__previews! {
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let __node_0 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
+    let __node_0 = feature_card(FeatureCardProps::props().icon(::telar::__preview_arg!(__preview, "icon", "⚡")).title(::telar::__preview_arg!(__preview, "title", "Fast")).body(::telar::__preview_arg!(__preview, "body", "Software and wgpu renderers with dirty-tracking and scroll-blit detection.")).__preview_actions(&__preview.actions()).build(), Children::default())?;
     Ok(Box::new(__node_0))
 }
 
 pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--feature-card"), "feature_card", "Feature card", feature_card_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/feature_card.rsx"), 15),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/feature_card.rsx"), 15)
+        .source("[preview \"Feature card\"]\nfeature_card icon:\"⚡\" title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"", &[::telar::preview::SourceSpan::new(0, 143, 15)])
+        .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
+        .args(&[::telar::preview::ArgSpec::new("icon").default("\"⚡\""), ::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")]),
 ];
+}

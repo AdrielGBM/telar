@@ -229,7 +229,12 @@ impl TreeWalk<'_> {
             if file_name.starts_with('.') {
                 continue;
             }
-            let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let module = module_name(&path);
+            let name = match is_previews_file(&path) {
+                true => module.as_str(),
+                false => stem,
+            };
             if !crate::naming::is_ident(name) {
                 continue;
             }
@@ -278,7 +283,7 @@ impl TreeWalk<'_> {
                 // A `.rsx` is a module where the file sits, so `shared/components/card.rsx` is `crate::shared::components::card`. Flattening to the crate root meant two files could not share a basename.
                 out.push_str(&mod_decl(
                     name,
-                    &rsx_output(self.generated_dir, flat_prefix, name),
+                    &rsx_output(self.generated_dir, flat_prefix, stem),
                     holder,
                 ));
             }
@@ -468,10 +473,29 @@ fn rsx_output(generated_dir: &Path, flat_prefix: &str, name: &str) -> PathBuf {
     out.join(format!("{name}.rs"))
 }
 
-/// The name the component in `path` is generated under: its file stem.
+/// The name the component in `path` is generated under: its file stem. A previews file names the component it previews, so `checkbox.previews.rsx` is `checkbox`, and its previews get the ids and the entry table a `[preview]` in `checkbox.rsx` would.
 ///
 /// A `.rsx` is a module where its file sits, so two files may share a basename — they are different modules, which is what a path-flattened name existed to work around. One function rather than each caller taking the stem itself: the editor and the golden harness both have to agree with the macro on this exactly, and they silently drifted apart when the flattening went.
 pub fn component_name(path: &Path) -> String {
+    let stem = file_stem(path);
+    match is_previews_file(path) {
+        true => stem
+            .strip_suffix(PREVIEWS_STEM_SUFFIX)
+            .unwrap_or(&stem)
+            .to_string(),
+        false => stem,
+    }
+}
+
+/// The module the `.rsx` at `path` is declared as, where its file sits: its stem, or for a previews file, whose stem is no identifier, the component's name and `_previews`, so `checkbox.previews.rsx` is `checkbox_previews` beside `checkbox`.
+pub fn module_name(path: &Path) -> String {
+    match is_previews_file(path) {
+        true => format!("{}_previews", component_name(path)),
+        false => file_stem(path),
+    }
+}
+
+fn file_stem(path: &Path) -> String {
     path.file_stem()
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default()
@@ -631,7 +655,9 @@ pub fn is_module_root(path: &Path) -> bool {
 /// The suffix of a `.rsx` that holds only previews of a component written elsewhere: `checkbox.previews.rsx`.
 const PREVIEWS_FILE_SUFFIX: &str = ".previews.rsx";
 
-/// Whether `path` holds only previews: `[previews]` and `[preview]` sections, and no `[view]` of its own. Its stem is no identifier, so the module tree never declares it as a component.
+const PREVIEWS_STEM_SUFFIX: &str = ".previews";
+
+/// Whether `path` holds only previews: `[previews]` and `[preview]` sections, and no `[view]` of its own. Its stem is no identifier, so the module tree declares it under [`module_name`].
 pub fn is_previews_file(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
