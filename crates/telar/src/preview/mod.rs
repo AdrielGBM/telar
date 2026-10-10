@@ -22,19 +22,21 @@
 //!
 //! Under `preview-snapshots`, the `snapshot` module compares each preview and each cell of its matrix against the picture and the draw text kept for it.
 //!
+//! [`test_run`] is what `cargo telar test` runs over them all.
+//!
 //! What mounts previews and gives them controls is in [`host`].
 
 #[doc(hidden)]
 #[path = "probe.rs"]
 pub mod __probe;
-pub mod a11y;
+pub use crate::inspect::a11y;
 mod actions;
 mod arg;
 mod args;
 mod authoring;
 mod control;
 mod entry;
-mod frame;
+use crate::inspect::frame;
 mod globals;
 pub mod host;
 mod matrix;
@@ -50,6 +52,8 @@ mod value;
 mod app;
 #[cfg(not(target_os = "android"))]
 mod runner;
+#[cfg(not(target_os = "android"))]
+pub mod test_run;
 
 pub use actions::{ActionCall, ActionLog, IntoAction, PreviewActions};
 pub use arg::PreviewArg;
@@ -66,7 +70,7 @@ pub use matrix::{
     ViewportPreset, control_size_word, direction_word, parse_control_size, parse_direction,
     parse_size,
 };
-pub use play::{Play, PlayError, PlayFn, PlayResult, PlayStep};
+pub use play::{CaughtFailures, Play, PlayError, PlayFn, PlayResult, PlayStep};
 pub use props::{HasPropsSchema, PropDefault, PropField, PropsSchema};
 pub use query::{Query, by_role, by_text};
 pub use telar_macros::PreviewArg;

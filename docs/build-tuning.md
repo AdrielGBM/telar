@@ -73,7 +73,7 @@ them once under `[features]` in your app's `Cargo.toml`:
 
 ```toml
 [features]
-tooling = ["telar/dev", "telar/hot-reload", "telar/previews", "telar/preview", "telar/preview-headless"]
+tooling = ["telar/dev", "telar/hot-reload", "telar/previews", "telar/preview", "telar/preview-headless", "telar/preview-snapshots"]
 ```
 
 No build turns `tooling` on; it is there for the lockfile. Without it those dependencies are resolved against

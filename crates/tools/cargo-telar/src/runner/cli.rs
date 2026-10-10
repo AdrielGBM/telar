@@ -27,7 +27,7 @@ pub(crate) enum TelarCommand {
     Preview(PreviewArgs),
     /// Build the app for distribution
     Build(BuildArgs),
-    /// Render every preview component headlessly and report failures
+    /// Test every preview and matrix cell headlessly: build and layout, play, accessibility and snapshots
     Test(TestArgs),
     /// Type-check the project, reporting `.rsx` errors on their own lines
     Check(CheckArgs),
@@ -219,6 +219,38 @@ pub(crate) struct TestArgs {
     /// Build in release mode
     #[arg(long)]
     pub(crate) release: bool,
+    /// Test only the previews, or matrix cells, whose id matches this glob (`*` any run, `?` one character)
+    #[arg(long, value_name = "GLOB")]
+    pub(crate) preview: Option<String>,
+    /// What accessibility findings do: `off` checks nothing, `warn` reports them, `error` fails a preview on any error-level finding
+    #[arg(long, value_enum, default_value = "warn")]
+    pub(crate) a11y: A11yArg,
+    /// Write the snapshot goldens that are missing or no longer match, instead of failing on them
+    #[arg(long, conflicts_with = "no_snapshots")]
+    pub(crate) update_snapshots: bool,
+    /// Take no snapshots
+    #[arg(long)]
+    pub(crate) no_snapshots: bool,
+    /// Also write the run's report to PATH, as `json` (report.json as is) or `junit` (XML)
+    #[arg(long, num_args = 2, value_names = ["FORMAT", "PATH"])]
+    pub(crate) report: Option<Vec<String>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub(crate) enum A11yArg {
+    Off,
+    Warn,
+    Error,
+}
+
+impl A11yArg {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        }
+    }
 }
 
 #[derive(clap::Args)]

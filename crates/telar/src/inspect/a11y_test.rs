@@ -127,6 +127,20 @@ fn a_picture_needs_a_name_or_to_be_hidden() {
             .on_press(|| {}),
         )])
     }
+    fn inside_a_control_under_a_dialog(_: &PreviewCtx) -> Built {
+        let control = StyledContainer::new(
+            LayoutStyle::new().width(48.0).height(48.0),
+            |_| RectStyle::default(),
+            vec![box_item(square()), label("Save", 12.0, INK)],
+        )?
+        .control(Role::Button)
+        .on_press(|| {});
+        let dialog = crate::Overlay::new(
+            LayoutStyle::new().flex_column(),
+            vec![button(Some("Close"), 48.0, 48.0)],
+        )?;
+        column(vec![box_item(control), box_item(dialog)])
+    }
     assert_eq!(found(&report(bare), Rule::UnnamedPicture), 1);
     assert_eq!(found(&report(named), Rule::UnnamedPicture), 0);
     assert_eq!(found(&report(hidden), Rule::UnnamedPicture), 0);
@@ -135,6 +149,14 @@ fn a_picture_needs_a_name_or_to_be_hidden() {
         0
     );
     assert_eq!(found(&report(inside_a_control), Rule::UnnamedPicture), 0);
+    assert_eq!(
+        found(
+            &report(inside_a_control_under_a_dialog),
+            Rule::UnnamedPicture
+        ),
+        0,
+        "a picture stays its control's while a dialog keeps a reader away from both"
+    );
 }
 
 #[test]
@@ -445,4 +467,44 @@ fn a_frame_made_from_commands_alone_is_read_against_the_surface_entered() {
 
     let _entered = play.canvas().enter();
     assert_eq!(check(&bare, snapshot), check(&captured, snapshot));
+}
+
+#[test]
+fn a_pressable_named_only_by_symbols_is_reported() {
+    fn close_glyph(_: &PreviewCtx) -> Built {
+        column(vec![button(Some("\u{2715}"), 40.0, 40.0)])
+    }
+    fn ellipsis(_: &PreviewCtx) -> Built {
+        column(vec![button(Some("\u{22ef}"), 40.0, 40.0)])
+    }
+    fn glyph_named_by_the_app(_: &PreviewCtx) -> Built {
+        column(vec![
+            button(Some("\u{2715}"), 40.0, 40.0).a11y_label(|| "Close"),
+        ])
+    }
+    fn word(_: &PreviewCtx) -> Built {
+        column(vec![button(Some("Close"), 40.0, 40.0)])
+    }
+    fn number(_: &PreviewCtx) -> Built {
+        column(vec![button(Some("+1"), 40.0, 40.0)])
+    }
+    fn icon_only(_: &PreviewCtx) -> Built {
+        column(vec![button(None, 40.0, 40.0)])
+    }
+    assert_eq!(found(&report(close_glyph), Rule::SymbolOnlyName), 1);
+    assert_eq!(found(&report(ellipsis), Rule::SymbolOnlyName), 1);
+    assert_eq!(
+        found(&report(glyph_named_by_the_app), Rule::SymbolOnlyName),
+        0
+    );
+    assert_eq!(found(&report(word), Rule::SymbolOnlyName), 0);
+    assert_eq!(found(&report(number), Rule::SymbolOnlyName), 0);
+    assert_eq!(found(&report(icon_only), Rule::SymbolOnlyName), 0);
+    assert_eq!(
+        report(close_glyph)
+            .of(Rule::SymbolOnlyName)
+            .next()
+            .map(|violation| violation.severity),
+        Some(Severity::Error)
+    );
 }

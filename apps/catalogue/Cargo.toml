@@ -23,7 +23,7 @@ web-dom = ["telar/web-dom"]
 android = ["telar/android"]
 telar-devtools = ["dep:telar-devtools"]
 telar-workshop = ["dep:telar-workshop"]
-tooling = ["telar/dev", "telar/hot-reload", "telar/previews", "telar/preview", "telar/preview-headless"]
+tooling = ["telar/dev", "telar/hot-reload", "telar/previews", "telar/preview", "telar/preview-headless", "telar/preview-snapshots"]
 
 [dependencies]
 telar = { workspace = true, features = ["runtime"] }

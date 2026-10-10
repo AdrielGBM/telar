@@ -13,10 +13,12 @@ mod config;
 mod diagnostics;
 mod doctor;
 mod fmt;
+mod junit;
 mod library;
 mod migrate;
 mod new;
 mod package;
+mod test_cmd;
 mod transpile;
 mod watch;
 mod web_dev;
@@ -27,7 +29,7 @@ use bake::bake_workspace;
 use check::run_check_cmd;
 use cli::{
     BuildArgs, BuildFormat, Cli, CommonArgs, DevArgs, DevtoolsArg, HotArgs, PreviewArgs, Target,
-    TelarCommand, TestArgs, WebRenderer,
+    TelarCommand, WebRenderer,
 };
 use config::{TelarSection, load_config, resolve_package};
 use doctor::run_doctor_cmd;
@@ -36,6 +38,7 @@ use library::{run_package_cmd, run_publish_cmd};
 use migrate::run_migrate_cmd;
 use new::{run_init_cmd, run_new_cmd};
 use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis, build_web};
+use test_cmd::run_test_cmd;
 use transpile::transpile_workspace;
 use watch::{HotLoopOpts, HotMode, run_hot_loop};
 use web_dev::run_web_dev;
@@ -279,50 +282,6 @@ fn run_preview_once(
     let status = Command::new("cargo")
         .args(&cargo_args)
         .env(var, value)
-        .status()
-        .expect("[cargo-telar] failed to invoke cargo");
-    std::process::exit(status.code().unwrap_or(1));
-}
-
-fn run_test_cmd(args: TestArgs) -> ! {
-    let TestArgs { common, release } = args;
-    let CommonArgs {
-        package,
-        features,
-        target,
-        backend,
-        renderer,
-        cargo_args: extra,
-    } = common;
-    if let Some(target @ (Target::Android | Target::Web)) = target {
-        let name = match target {
-            Target::Android => "android",
-            _ => "web",
-        };
-        eprintln!(
-            "[cargo-telar] `cargo telar test` renders on the host; --target {name} is not supported."
-        );
-        std::process::exit(2);
-    }
-    // `TELAR_TEST` makes the generated entrypoint render every preview headlessly and exit non-zero on failure.
-    let mut cargo_args = vec!["run".to_string()];
-    cargo_args.extend(build_cargo_args(&package, release, &features));
-    cargo_args.extend(extra);
-    // The frontend the target named, so a terminal project's tests are not a desktop build — and so `--target tui` reaches this command too, rather than every command but this one.
-    if let Some(target) = target {
-        let selected = frontend_args(target, None, &cargo_args);
-        cargo_args.extend(selected);
-    }
-    config::warn_if_tooling_unlocked(&cargo_args, &["telar/previews"]);
-    // What emits the `[preview]` blocks and the entry point that runs them. Without it the binary has neither, and `TELAR_TEST` below reaches nothing — which is the point: it reaches nothing in a shipped build either.
-    cargo_args.push("--features".to_string());
-    cargo_args.push("telar/previews".to_string());
-    // The test host never instantiates a renderer, and the value is read via `option_env!`, so setting it would change the build fingerprint and force a needless recompile.
-    let _ = (backend, renderer);
-    eprintln!("[cargo-telar] Running component render tests...");
-    let status = Command::new("cargo")
-        .args(&cargo_args)
-        .env("TELAR_TEST", "1")
         .status()
         .expect("[cargo-telar] failed to invoke cargo");
     std::process::exit(status.code().unwrap_or(1));

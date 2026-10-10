@@ -249,6 +249,7 @@ fn a_leading_item_and_a_zero_inset_reshape_the_frame_without_replacing_it() {
     success,
     warning,
     error,
+    on_error,
     info,
     highlight_low,
     highlight_med,

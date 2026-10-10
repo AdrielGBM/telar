@@ -72,13 +72,7 @@ pub(super) fn capture(
     .map_err(SnapshotError::Mount)?;
     let frame = play.frame();
     let id = cell.map_or(entry.id, |cell| &cell.id);
-    let coordinates = cell.map_or_else(Vec::new, |cell| {
-        cell.coordinates
-            .iter()
-            .map(|(axis, value)| (axis.to_string(), value.clone()))
-            .collect()
-    });
-    Ok(Snapshot::of_frame(id, &frame)?.of_preview(entry.id, coordinates))
+    Ok(Snapshot::of_frame(id, &frame)?.of_preview(entry.id, MatrixCell::owned_coordinates(cell)))
 }
 
 fn draw_text(frame: &Frame) -> String {

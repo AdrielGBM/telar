@@ -709,6 +709,21 @@ fn a_flavour_without_previews_lists_no_rsx_preview() {
 }
 
 #[test]
+fn a_library_tests_its_previews_from_a_unit_test_at_the_call_site() {
+    let fonts = quote::quote! { ::std::vec::Vec::new() };
+    let test = spaced(super::library_previews_test(fonts));
+    assert!(test.starts_with(":: telar :: __previews !"), "{test}");
+    assert!(
+        test.contains("# [cfg (test)] # [test] fn telar_previews ()"),
+        "{test}"
+    );
+    assert!(
+        test.contains(":: telar :: preview :: test_run :: __test_library (telar_all_previews () , :: telar :: AppConfig :: default () . with_fonts (:: std :: vec :: Vec :: new ())"),
+        "{test}"
+    );
+}
+
+#[test]
 fn an_application_lists_its_previews_then_each_included_crates() {
     let includes = ["telar_components", "my_plugin"]
         .map(|name| proc_macro2::Ident::new(name, proc_macro2::Span::call_site()));

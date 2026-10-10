@@ -753,6 +753,13 @@ where
             tree.walk(&mut nodes);
             self.dev.on_tree(&nodes);
         }
+        // The app's own frame, before the overlay draws over it: the overlay inspects the app, not itself.
+        if self.dev.wants_access()
+            && let Some(audit) = self.app.access_audit(base_slice)
+        {
+            self.dev.on_access(&audit.nodes);
+            self.dev.on_violations(&audit.violations);
+        }
         let (width, height) = pass.size;
         let logical_w = width as f32 / self.scale_factor;
         let logical_h = height as f32 / self.scale_factor;
@@ -777,10 +784,6 @@ where
         // The message owns its commands from here, so release the tree and dev-plugin borrows for the submit below.
         drop(frame_commands);
         drop(commands_ref);
-        if self.dev.wants_access() {
-            let nodes = self.app.access_snapshot(&self.frame_text);
-            self.dev.on_access(&nodes);
-        }
         FrameMsg {
             width,
             height,

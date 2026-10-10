@@ -195,12 +195,25 @@ impl crate::app_runtime::AppRuntime for HotApp {
         .is_some_and(|dispatch| unsafe { dispatch(event) })
     }
 
-    // The controls and their rects live in the dylib's registries, which no host-side reading can see, and the dylib exports no snapshot of its own yet.
+    // The controls, their names and their rects live in the dylib's registries, which no host-side reading can see. A dylib built before the export existed has nothing to say.
     fn access_snapshot(
         &self,
-        _frame: &[renderer_core::DrawCommand],
+        frame: &[renderer_core::DrawCommand],
     ) -> Vec<platform_core::AccessNode> {
-        Vec::new()
+        self.access_audit(frame)
+            .map(|audit| audit.nodes)
+            .unwrap_or_default()
+    }
+
+    fn access_audit(
+        &self,
+        frame: &[renderer_core::DrawCommand],
+    ) -> Option<platform_core::AccessAudit> {
+        let audit = self.symbol::<unsafe extern "Rust" fn(
+            &[renderer_core::DrawCommand],
+            Option<renderer_core::Color>,
+        ) -> platform_core::AccessAudit>(b"_rsx_hot_access_snapshot\0")?;
+        Some(unsafe { audit(frame, self.inner.clear_color()) })
     }
 
     // A title bar's `on_press` pushes into the dylib's platform-core copy, so the host drains it across this boundary.

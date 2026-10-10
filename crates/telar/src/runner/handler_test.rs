@@ -1424,12 +1424,12 @@ impl<A: App> AppRuntime for Counted<A> {
         self.app.on_frame(ctx)
     }
 
-    fn access_snapshot(
+    fn access_audit(
         &self,
         frame: &[renderer_core::DrawCommand],
-    ) -> Vec<platform_core::AccessNode> {
+    ) -> Option<platform_core::AccessAudit> {
         self.snapshots.set(self.snapshots.get() + 1);
-        self.app.access_snapshot(frame)
+        self.app.access_audit(frame)
     }
 }
 
@@ -1481,5 +1481,72 @@ fn no_snapshot_is_built_unless_the_overlay_asks() {
         snapshots.get(),
         0,
         "an overlay that does not ask is not handed one"
+    );
+}
+
+/// An overlay that reads the window and draws a word of its own over it.
+#[derive(Default)]
+struct Inspecting {
+    heard: Vec<String>,
+    findings: Option<usize>,
+}
+
+impl DevOverlay for Inspecting {
+    fn on_frame<'a>(
+        &mut self,
+        base: &'a [renderer_core::DrawCommand],
+        _window_w: f32,
+        _window_h: f32,
+        _tree_dirty: bool,
+    ) -> std::borrow::Cow<'a, [renderer_core::DrawCommand]> {
+        let mut drawn = base.to_vec();
+        drawn.push(renderer_core::DrawCommand::Text {
+            text: "Overlay".into(),
+            spans: None,
+            rect: geometry_core::Rect::new(0.0, 20.0, 60.0, 16.0),
+            style: Arc::new(renderer_core::TextStyle::new(
+                12.0,
+                renderer_core::Color::BLACK,
+            )),
+        });
+        std::borrow::Cow::Owned(drawn)
+    }
+
+    fn wants_access(&self) -> bool {
+        true
+    }
+
+    fn on_access(&mut self, nodes: &[platform_core::AccessNode]) {
+        self.heard = nodes.iter().map(|n| n.name.clone()).collect();
+    }
+
+    fn on_violations(&mut self, violations: &[platform_core::AccessViolation]) {
+        self.findings = Some(violations.len());
+    }
+}
+
+#[test]
+fn an_overlay_reads_the_apps_frame_with_what_the_checks_found_and_not_its_own() {
+    crate::install_default_text_metrics();
+    let window = HeadlessWindow::new(200, 40);
+    let mut handler = overlaid::<Inspecting>(Box::new(LocalApp(Labelled)));
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    run_a_pass(&mut handler, &window);
+    run_a_pass(&mut handler, &window);
+
+    assert!(
+        handler.dev.heard.iter().any(|name| name == "Configured"),
+        "{:?}",
+        handler.dev.heard
+    );
+    assert!(
+        !handler.dev.heard.iter().any(|name| name == "Overlay"),
+        "the overlay inspects the app, not itself: {:?}",
+        handler.dev.heard
+    );
+    assert!(
+        handler.dev.findings.is_some(),
+        "and is told what the checks found in the same frame"
     );
 }

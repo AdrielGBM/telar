@@ -7,7 +7,9 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use telar_project::protocol::{BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, WORKSPACE_DIR_VAR};
+use telar_project::protocol::{
+    BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR,
+};
 use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE};
 
 use super::android::{android_install_and_launch, make_android_cmd};
@@ -615,6 +617,12 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         launch_envs.push((
             WORKSPACE_DIR_VAR.to_string(),
             resolved.workspace_root.display().to_string(),
+        ));
+        launch_envs.push((
+            TEST_TARGET_DIR_VAR.to_string(),
+            telar_project::find_target_dir(&resolved.workspace_root)
+                .display()
+                .to_string(),
         ));
     }
     if config.dev.devtools == Some(false) {

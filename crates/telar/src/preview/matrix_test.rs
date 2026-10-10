@@ -159,6 +159,55 @@ fn a_viewport_is_a_size_or_a_name_the_package_declares() {
 }
 
 #[test]
+fn the_project_viewports_axis_takes_every_viewport_the_package_names() {
+    const PROJECT: &[ViewportPreset] = &[
+        ViewportPreset::new("phone", 390.0, 844.0),
+        ViewportPreset::new("desk", 1280.0, 800.0),
+    ];
+    let matrix = Matrix::Axes(&[Axis::ProjectViewports]);
+    let cells = matrix
+        .cells(&entry(), &Matrices::new(&[], PROJECT))
+        .unwrap();
+    assert_eq!(
+        ids(&cells),
+        [
+            "kit--button--primary--viewport=phone",
+            "kit--button--primary--viewport=desk",
+        ]
+    );
+    assert_eq!(cells[1].coordinates, [("viewport", "desk".to_string())]);
+    assert_eq!(cells[1].globals.viewport, Some(Size::new(1280.0, 800.0)));
+    assert_eq!(
+        matrix.cells(&entry(), &Matrices::default()),
+        Ok(Vec::new()),
+        "a package naming no viewport varies nothing"
+    );
+}
+
+#[test]
+fn axes_chosen_as_the_program_runs_expand_as_a_written_matrix_does() {
+    let matrices = Matrices::default().with_modes(["light", "dark"]);
+    let chosen = vec![
+        Axis::RegisteredModes,
+        Axis::Dir(&[Direction::Ltr, Direction::Rtl]),
+    ];
+    let written = Matrix::Axes(&[
+        Axis::RegisteredModes,
+        Axis::Dir(&[Direction::Ltr, Direction::Rtl]),
+    ]);
+    assert_eq!(
+        Matrix::expand(&chosen, &entry(), &matrices),
+        written.cells(&entry(), &matrices)
+    );
+    assert_eq!(Matrix::count(&chosen, &matrices), 4);
+    assert_eq!(Matrix::count(&[], &matrices), 0);
+    assert_eq!(
+        Matrix::expand(&[Axis::Dir(&[]), Axis::Dir(&[])], &entry(), &matrices),
+        Err(MatrixError::RepeatedAxis { axis: "dir" })
+    );
+}
+
+#[test]
 fn an_axis_with_no_values_varies_nothing() {
     let themes = Matrix::Named("themes");
     let matrices = Matrices::default();

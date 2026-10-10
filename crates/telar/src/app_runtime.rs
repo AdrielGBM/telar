@@ -83,6 +83,14 @@ pub trait AppRuntime: 'static {
         ui_core::accessibility::snapshot(frame)
     }
 
+    /// What a screen reader is told about the window that drew `frame` and what the accessibility checks find in it, read against the focus and layout registries this application's widgets live in. `None` where they cannot be read.
+    fn access_audit(
+        &self,
+        frame: &[renderer_core::DrawCommand],
+    ) -> Option<platform_core::AccessAudit> {
+        Some(crate::inspect::audit(frame, self.clear_color()))
+    }
+
     /// Drains the window-management commands a UI closure queued during dispatch — a title bar's drag, a close button — so the runner can apply them to the OS window.
     fn drain_window_commands(&self) -> Vec<WindowCommand> {
         platform_core::take_window_commands()

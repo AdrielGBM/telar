@@ -68,6 +68,9 @@ pub mod window;
 
 pub use config::RendererBackend;
 
+#[cfg(feature = "runtime")]
+pub mod inspect;
+
 #[cfg(feature = "previews")]
 pub mod preview;
 
@@ -97,7 +100,9 @@ pub use app::App;
 #[cfg(feature = "runtime")]
 pub use app_config::AppConfig;
 #[cfg(feature = "runtime")]
-pub use platform_core::{AccessNode, AppCtx, RedrawWaker};
+pub use platform_core::{
+    AccessAudit, AccessNode, AccessRule, AccessSeverity, AccessViolation, AppCtx, RedrawWaker,
+};
 // For a backend author driving a handler by hand. An application implements `App` and names neither.
 #[cfg(feature = "runtime")]
 pub use app_runtime::{AppRuntime, LocalApp};
@@ -165,10 +170,11 @@ pub use platform_desktop::DesktopPathsProvider;
 #[cfg(feature = "runtime")]
 pub use reactive_core::{
     Effect, Emitter, Memo, OwnerGuard, OwnerId, Reactive, ReadSignal, RwSignal, Source, Task,
-    Timer, Transaction, TransactionError, advance_timer_clock, batch, begin_batch, current_owner,
-    derive, derive_pair, detached, dispose_owner, drain_tasks, effect, end_batch, fire_timers,
-    memo, on_cleanup, owner_scope, reset_runtime, reset_tasks, reset_timers, run_after,
-    set_task_waker, signal, spawn_stream, spawn_task, timer_now, until_next_timer, with_owner,
+    Timer, Transaction, TransactionError, advance_timer_clock, after_settle, batch, begin_batch,
+    current_owner, derive, derive_pair, detached, dispose_owner, drain_tasks, effect, end_batch,
+    fire_timers, memo, on_cleanup, owner_scope, reset_runtime, reset_tasks, reset_timers,
+    run_after, set_task_waker, signal, spawn_stream, spawn_task, timer_now, until_next_timer,
+    with_owner,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};
@@ -317,25 +323,28 @@ pub use ui_core::{
     DragAxis, DragStart, Edge, ErrorBoundary, EventResult, FINE_STEP, FixedLayer, Image, Inherited,
     Input, IntoClip, KeyAnswer, KeyNav, KeyNavMove, LayoutItem, LayoutLeaf, LayoutScrollArea,
     LayoutTransition, Lazy, Mask, NodeId, NodeVec, Overlay, Path, Placement, PointerButtons,
-    Presence, ReactiveList, Rectangle, RenderNode, ScrollPage, ScrollViewport, ScrollbarStyle,
-    SlotRequest, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea,
-    TextRun, ThemeProvider, TransformOrigin, Transition, Underline, VirtualList, WindowRoot,
-    absolute_rect, anchor_rect, animate_layout, apply_move, box_item, box_transform,
+    Presence, ReactiveList, Rectangle, RelayoutHook, RenderNode, ScrollPage, ScrollViewport,
+    ScrollbarStyle, SlotRequest, Slots, StyledContainer, SurfaceScaffold, SurfaceTransition, Text,
+    TextArea, TextRun, ThemeProvider, TransformOrigin, Transition, Underline, VirtualList,
+    WindowRoot, absolute_rect, anchor_rect, animate_layout, apply_move, box_item, box_transform,
     box_transform_about, close_overlay, compute_layout, confirm_top, current_direction, declare,
     dismiss_depth, dismiss_top, drag_start, drag_travel, exits_in_flight, focus, follow_theme,
     fragment, fragment_positional, inherited_text_style, insertion_index, interactive_rects, kept,
     key_held, key_nav_apply, key_nav_apply_grid, key_pressed, line_box, logical_border_radius,
     logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
-    observe_pointer, open_overlay, overlay_state, overlay_viewport, pointer_buttons, provide_theme,
-    register_transaction, relayout_if_dirty, remove_node, requested_cursor, set_children,
-    set_direction, set_display, set_min_height, set_overlay_host, shortcut_key, single_line_box,
-    step_factor, style_follows, track_layout, transform_pointer, undeclare, use_context,
-    use_direction, use_dismiss_depth, visible_window,
+    observe_pointer, on_relayout, open_overlay, overlay_state, overlay_viewport, pointer_buttons,
+    provide_theme, register_transaction, register_transaction_within, relayout_if_dirty,
+    remove_node, requested_cursor, set_children, set_direction, set_display, set_min_height,
+    set_overlay_host, shortcut_key, single_line_box, step_factor, style_follows, track_layout,
+    transform_pointer, undeclare, use_context, use_direction, use_dismiss_depth, visible_window,
 };
 #[cfg(feature = "async-assets")]
 pub use ui_core::{
     AssetCache, AssetDecoder, AssetError, AssetKey, AssetLoader, AssetState, AssetTransport, Reply,
 };
+/// A subtree built once and moved between the boxes that show it, so an arrangement rebuilt around it — a breakpoint crossed, a pane moved to another edge — keeps everything the subtree held.
+#[cfg(feature = "runtime")]
+pub use ui_core::{Movable, MovableOutlet};
 
 /// Empties the layout runtime for a fresh tree, and installs the glyph measurer if nothing installed one.
 ///

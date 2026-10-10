@@ -20,6 +20,18 @@ pub struct PreviewsSection {
     pub viewports: Option<BTreeMap<String, Viewport>>,
     /// Named matrices, which a preview asks for by name.
     pub matrices: Option<BTreeMap<String, MatrixAxes>>,
+    /// How far a snapshot may drift from its golden and still match, in `cargo telar test`.
+    pub snapshots: Option<SnapshotSettings>,
+}
+
+/// The `[telar.previews.snapshots]` table. A key left out keeps the test runner's default.
+#[derive(Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotSettings {
+    /// The most one channel of a pixel, on the 0–255 scale, may move before the pixel counts as differing.
+    pub channel_tolerance: Option<u8>,
+    /// How many pixels may differ and the picture still match its golden.
+    pub max_differing_pixels: Option<u64>,
 }
 
 /// One matrix as `telar.toml` writes it: the values of each axis, by axis name. A key in [`MATRIX_GLOBAL_AXES`] varies the canvas's environment; any other key names an arg. Read through [`PreviewsSection::named_matrices`].
@@ -204,6 +216,7 @@ impl PreviewsSection {
             include: self.include.or(base.include),
             viewports: self.viewports.or(base.viewports),
             matrices: self.matrices.or(base.matrices),
+            snapshots: self.snapshots.or(base.snapshots),
         }
     }
 

@@ -113,3 +113,14 @@ pub(crate) fn install_preview_text_metrics(config: &AppConfig) {
     }
     super::font_config::install_shaper_fonts(config.clone());
 }
+
+/// Whether [`install_preview_text_metrics`] measures in terminal cells, where a picture of the preview drawn with glyphs would not be what the terminal shows.
+#[cfg(all(feature = "previews", feature = "tui", not(target_os = "android")))]
+pub(crate) fn previews_measure_in_cells() -> bool {
+    tui_selected()
+}
+
+#[cfg(all(feature = "previews", not(feature = "tui"), not(target_os = "android")))]
+pub(crate) fn previews_measure_in_cells() -> bool {
+    false
+}

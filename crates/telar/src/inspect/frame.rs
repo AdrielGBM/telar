@@ -30,7 +30,7 @@ pub struct Frame {
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct FrameAccess {
-    /// What a reader is told, in reading order: the [`accessibility::snapshot`].
+    /// What a reader is told about the surface itself, in reading order: the [`accessibility::surface_snapshot`]. A surface nested in its frame is read on its own; see [`audit`](super::audit).
     pub snapshot: Vec<AccessNode>,
     /// What a reader skips, and what it calls each box and picture.
     pub reading: FrameReading,
@@ -42,7 +42,7 @@ impl FrameAccess {
     /// What the surface entered now tells a reader and the keyboard about `commands`, its own frame.
     pub fn read(commands: &[DrawCommand]) -> Self {
         Self {
-            snapshot: accessibility::snapshot(commands),
+            snapshot: accessibility::surface_snapshot(commands),
             reading: FrameReading::of(commands),
             tab_order: focus::tab_order(),
         }

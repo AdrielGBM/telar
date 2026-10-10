@@ -137,7 +137,9 @@ thread_local! {
 fn follow_locale_language() {
     let effect = reactive_core::effect(|| {
         let locale = i18n_core::use_locale();
-        let lang = locale.as_deref().unwrap_or("en");
+        let lang = locale
+            .as_deref()
+            .unwrap_or_else(|| i18n_core::default_locale());
         let is_rtl = layout_core::Direction::for_locale(lang).is_rtl();
         platform_web::set_document_language(lang, is_rtl);
     });

@@ -203,6 +203,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         preview_const_idents,
         flavour,
         previews_include,
+        ..
     } = match transpile_project(Invocation::App, Some(theme_type_str.as_str())) {
         Ok(o) => o,
         Err(err) => return err.into(),
@@ -403,6 +404,14 @@ pub fn app(input: TokenStream) -> TokenStream {
                 tree: *mut ::telar::HotTree,
             ) -> ::std::vec::Vec<::telar::SegmentNodeInfo> {
                 unsafe { ::telar::HotTree::walk(tree) }
+            }
+            // What a reader is told and what the checks find are read from the dylib's registries, which the host's copies of them never see.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_access_snapshot(
+                commands: &[::telar::DrawCommand],
+                background: ::std::option::Option<::telar::Color>,
+            ) -> ::telar::AccessAudit {
+                ::telar::inspect::audit(commands, background)
             }
         }
     } else {
@@ -746,6 +755,8 @@ struct TranspileOutput {
     flavour: telar_project::BuildFlavour,
     /// The crates `[telar.previews] include` names, as Rust names them.
     previews_include: Vec<Ident>,
+    /// Whether the package is a `[telar] library`, which has no binary for `cargo telar test` to start.
+    library: bool,
 }
 
 /// The package an expansion compiles: where it is, what cargo calls it, and how it is wired.
@@ -1114,12 +1125,15 @@ fn wire_package(
             .iter()
             .map(|entry| Ident::new(entry.crate_name(), Span::call_site()))
             .collect(),
+        library: manifest.telar.library,
     })
 }
 
 /// Transpile every `.rsx` file under `src/` and declare the module tree — what `app!` does, minus the winit runner. Use this in a crate that drives rsx through a **custom** `Platform` (e.g. a Wayland layer-shell backend) instead of the built-in desktop runner: invoke `telar::rsx_modules!()` at the crate root, then build your own `App` from the transpiled components and run it via `telar::run_with_platform` / `telar::run_multi_with_platform`. Pass a theme type — `rsx_modules!(MyTheme)` — if your `.rsx` calls `use_theme`; otherwise `rsx_modules!()`, which is also the only form a `[telar] library` may use: its `$theme` reads the shared `ThemeTokens`.
 ///
 /// In an application crate it also installs the catalog the crate baked as the binary loads, unless one is installed already, so the one `app!` installs wins over it; a `[telar] library` never installs its own.
+///
+/// In a `[telar] library` built with its previews, it also emits `#[test] fn telar_previews()`, which tests every preview the way an application binary does under `cargo telar test`: what `cargo telar test -p <library>` runs, since a library has no binary.
 #[proc_macro]
 pub fn rsx_modules(input: TokenStream) -> TokenStream {
     let theme_type_str = if input.is_empty() {
@@ -1137,16 +1151,25 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
         rerun_stmts,
         preview_const_idents,
         flavour,
+        library,
         ..
     } = match transpile_project(Invocation::Modules, theme_type_str.as_deref()) {
         Ok(o) => o,
         Err(err) => return err.into(),
     };
     let preview_fn = previews_table(flavour.has_previews(), &preview_const_idents);
+    let previews_test = match library && flavour.has_previews() {
+        true => match declared_fonts() {
+            Ok(fonts) => library_previews_test(fonts),
+            Err(err) => return err.into(),
+        },
+        false => quote! {},
+    };
     quote! {
         #rerun_stmts
         #include_stmts
         #preview_fn
+        #previews_test
     }
     .into()
 }
@@ -1178,6 +1201,28 @@ fn previews_table(previews: bool, consts: &[TokenStream2]) -> TokenStream2 {
             #[doc(hidden)]
             #[allow(unused_imports)]
             pub use __telar_previews::*;
+        }
+    }
+}
+
+/// The test `cargo telar test -p <library>` runs under `cargo test`: a library has no binary to start with `TELAR_TEST`, so its previews are tested from a unit test instead, against the faces it declares.
+///
+/// At the call site rather than in the hidden module, so `telar_all_previews` resolves to the one a crate with Rust previews defines beside the call.
+fn library_previews_test(fonts: TokenStream2) -> TokenStream2 {
+    let name = Ident::new(
+        telar_project::protocol::LIBRARY_TEST_NAME,
+        Span::call_site(),
+    );
+    quote! {
+        ::telar::__previews! {
+            #[cfg(test)]
+            #[test]
+            fn #name() {
+                ::telar::preview::test_run::__test_library(
+                    telar_all_previews(),
+                    ::telar::AppConfig::default().with_fonts(#fonts),
+                );
+            }
         }
     }
 }

@@ -88,6 +88,28 @@ fn a_package_without_the_table_includes_nothing() {
 }
 
 #[test]
+fn the_snapshot_tolerance_reads_back_key_by_key() {
+    let root = package(
+        "snapshots",
+        "[telar.previews.snapshots]\nchannel_tolerance = 4\n",
+        None,
+    );
+    let previews = TelarManifest::load(&root).unwrap().telar.previews;
+    assert_eq!(
+        previews.snapshots,
+        Some(SnapshotSettings {
+            channel_tolerance: Some(4),
+            max_differing_pixels: None,
+        })
+    );
+    let error = load_error(
+        "snapshots_typo",
+        "[telar.previews.snapshots]\nmax_pixels = 4\n",
+    );
+    assert!(error.contains("max_pixels"), "{error}");
+}
+
+#[test]
 fn a_misspelled_key_in_the_table_is_named() {
     let error = load_error("typo", "[telar.previews]\nincludes = [\"a\"]\n");
     assert!(error.contains("includes"), "{error}");

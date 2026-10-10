@@ -238,3 +238,145 @@ fn advance_lets_a_wait_pass_and_runs_what_came_due() {
         .collect();
     assert_eq!(advanced, ["advance 2s", "advance 1s"]);
 }
+
+fn volume(_: &PreviewCtx) -> Built {
+    let level = signal(0.5f64);
+    let open = signal(false);
+    let slider = StyledContainer::new(
+        LayoutStyle::new().width(120.0).height(24.0),
+        |_| RectStyle::default(),
+        vec![label(|| String::from("Volume"))],
+    )?
+    .control(Role::Slider)
+    .valued(move || crate::NumericValue {
+        now: level.get(),
+        min: 0.0,
+        max: 1.0,
+    })
+    .on_press(move || level.set(0.75));
+    let more = StyledContainer::new(
+        LayoutStyle::new().padding_all(8.0),
+        |_| RectStyle::default(),
+        vec![label(|| String::from("More"))],
+    )?
+    .control(Role::Button)
+    .expanded(move || open.get())
+    .on_press(move || open.update(|open| *open = !*open));
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_column().gap(8.0),
+        vec![box_item(slider), box_item(more)],
+    )?))
+}
+
+#[test]
+fn a_play_reads_the_value_and_the_expanded_state_a_reader_hears() {
+    let mut play = Play::mount(&entry(volume)).unwrap();
+    play.expect_value(by_role(Role::Slider), 0.5).unwrap();
+    let error = play.expect_value(by_role(Role::Slider), 0.75).unwrap_err();
+    assert!(error.message.contains("reads 0.5"), "{error}");
+    play.click(by_role(Role::Slider)).unwrap();
+    play.expect_value(by_role(Role::Slider), 0.75).unwrap();
+
+    play.expect_expanded(by_role(Role::Button), false).unwrap();
+    play.click(by_role(Role::Button)).unwrap();
+    play.expect_expanded(by_role(Role::Button), true).unwrap();
+    let error = play
+        .expect_expanded(by_role(Role::Slider), true)
+        .unwrap_err();
+    assert!(error.message.contains("neither expands"), "{error}");
+}
+
+fn grip(_: &PreviewCtx) -> Built {
+    let travelled = signal(None::<(f32, f32)>);
+    let grip = StyledContainer::new(
+        LayoutStyle::new().width(40.0).height(40.0),
+        |_| RectStyle::default(),
+        vec![label(|| String::from("Grip"))],
+    )?
+    .control(Role::Button)
+    .on_drag_end(move |x, y| travelled.set(Some((x, y))));
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_column().gap(8.0),
+        vec![
+            box_item(grip),
+            label(move || match travelled.get() {
+                Some((x, _)) => format!("Let go at {x:.0}"),
+                None => String::from("Resting"),
+            }),
+        ],
+    )?))
+}
+
+#[test]
+fn a_drag_carries_the_pointer_from_the_node_and_lets_go_there() {
+    let let_go_at = |play: &Play| -> f32 {
+        let frame = play.frame();
+        let text = frame
+            .texts()
+            .find_map(|text| text.strip_prefix("Let go at "))
+            .expect("the grip was let go");
+        text.parse().unwrap()
+    };
+    let mut play = Play::mount(&entry(grip)).unwrap();
+    play.expect_text("Resting").unwrap();
+    play.click(by_role(Role::Button).named("Grip")).unwrap();
+    let pressed = let_go_at(&play);
+    play.drag(by_role(Role::Button).named("Grip"), 60.0, 0.0)
+        .unwrap();
+    assert_eq!(let_go_at(&play) - pressed, 60.0);
+    assert_eq!(
+        play.steps()[2].action,
+        "drag button \"Grip\" by (60, 0)",
+        "{:?}",
+        play.steps()
+    );
+}
+
+fn hosted(entry: PreviewEntry, failures: &CaughtFailures) -> (PreviewCtx, Rc<SurfaceCanvas>) {
+    crate::install_default_text_metrics();
+    let ctx = PreviewCtx::for_entry_with(&entry, Args::in_memory_for(&entry));
+    let (built, record) = (ctx.clone(), failures.clone());
+    let size = Size::new(320.0, 240.0);
+    let canvas = SurfaceCanvas::new(size, move || {
+        mount_preview(&entry, built, move |failure| failed(&record, failure), None)
+    })
+    .unwrap();
+    canvas.resize(size);
+    (ctx, Rc::new(canvas))
+}
+
+#[test]
+fn an_attached_play_drives_the_canvas_its_host_mounted_wherever_it_shows_it() {
+    let pressing = entry(counter).play(|canvas| {
+        canvas.click(by_role(Role::Button).named("Pressed 0"))?;
+        canvas.expect_text("Pressed 1")
+    });
+    let failures = CaughtFailures::default();
+    let (ctx, canvas) = hosted(pressing, &failures);
+    canvas.set_placement(
+        crate::Transform::scale_around(0.5, 0.5, 0.0, 0.0)
+            .then(crate::Transform::translate(500.0, 300.0)),
+    );
+    let mut play = Play::attach(&pressing, ctx, Rc::clone(&canvas), failures);
+    assert_eq!(play.run(), Ok(()));
+    assert_eq!(play.steps().len(), 2);
+    drop(play);
+    assert!(
+        Frame::capture(&canvas)
+            .texts()
+            .any(|text| text == "Pressed 1"),
+        "the host keeps the canvas as the play left it"
+    );
+}
+
+#[test]
+fn a_failure_the_host_caught_before_an_attached_run_fails_it() {
+    let checking = entry(failing).play(|canvas| canvas.expect_text("anything"));
+    let failures = CaughtFailures::default();
+    let (ctx, canvas) = hosted(checking, &failures);
+    let mut play = Play::attach(&checking, ctx, canvas, failures);
+    let error = play.run().unwrap_err();
+    assert!(error.message.contains("no tree today"), "{error}");
+    assert_eq!(play.steps().len(), 1);
+    assert_eq!(play.steps()[0].action, "play");
+}

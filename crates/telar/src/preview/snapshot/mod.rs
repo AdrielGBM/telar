@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::AppConfig;
 
-use super::{Matrices, PlayError, PreviewEntry};
+use super::{Frame, Matrices, MatrixCell, PlayError, PreviewEntry};
 
 pub use super::host::file_stem;
 pub use capture::Snapshot;
@@ -64,7 +64,7 @@ impl SnapshotPaths {
     pub fn new(package_dir: &Path, target_dir: &Path) -> Self {
         Self {
             goldens: package_dir.join("previews").join("__snapshots__"),
-            out: target_dir.join("telar-snapshots"),
+            out: target_dir.join(telar_project::protocol::TEST_OUT_DIR),
         }
     }
 
@@ -150,11 +150,7 @@ impl Snapshots {
             match matrix.cells(entry, matrices) {
                 Ok(cells) => {
                     for cell in &cells {
-                        let coordinates = cell
-                            .coordinates
-                            .iter()
-                            .map(|(axis, value)| (axis.to_string(), value.clone()))
-                            .collect();
+                        let coordinates = MatrixCell::owned_coordinates(Some(cell));
                         self.check_captured(&cell.id, entry.id, coordinates, || {
                             capture::capture(entry, Some(cell))
                         });
@@ -168,6 +164,21 @@ impl Snapshots {
             }
         }
         &self.results[start..]
+    }
+
+    /// Checks `frame` against the goldens of `entry`, or of its matrix `cell`: what a run that already mounted the canvas, as it opened, snapshots it with instead of mounting it again.
+    pub fn check_frame(
+        &mut self,
+        entry: &PreviewEntry,
+        cell: Option<&MatrixCell>,
+        frame: &Frame,
+    ) -> &SnapshotResult {
+        let id = cell.map_or(entry.id, |cell| &cell.id);
+        let coordinates = MatrixCell::owned_coordinates(cell);
+        match Snapshot::of_frame(id, frame) {
+            Ok(snapshot) => self.check(&snapshot.of_preview(entry.id, coordinates)),
+            Err(error) => self.record_failure(id, entry.id, coordinates, &error),
+        }
     }
 
     /// Checks `snapshot` against its goldens: compares it, or in an update run writes them where it does not match.
@@ -195,18 +206,23 @@ impl Snapshots {
         self.push(failed(id, preview, cell, error))
     }
 
-    /// Writes the report of every snapshot checked to `report.json` under the out directory, and returns it.
-    pub fn finish(self) -> Result<SnapshotReport, SnapshotError> {
-        let report = SnapshotReport {
+    /// The report of every snapshot checked, without writing it: for a caller that writes it inside a report of its own.
+    pub fn into_report(self) -> SnapshotReport {
+        SnapshotReport {
             version: SnapshotReport::VERSION,
             mode: self.mode,
-            goldens: self.paths.goldens.clone(),
-            out: self.paths.out.clone(),
+            goldens: self.paths.goldens,
+            out: self.paths.out,
             tolerance: self.tolerance,
             summary: SnapshotSummary::of(&self.results),
             snapshots: self.results,
-        };
+        }
+    }
+
+    /// Writes the report of every snapshot checked to `report.json` under the out directory, and returns it.
+    pub fn finish(self) -> Result<SnapshotReport, SnapshotError> {
         let path = self.paths.report();
+        let report = self.into_report();
         let json = serde_json::to_string_pretty(&report)
             .map_err(|error| SnapshotError::io(&path, io::Error::other(error)))?;
         write(&path, json.as_bytes())?;

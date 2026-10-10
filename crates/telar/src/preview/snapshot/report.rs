@@ -62,7 +62,7 @@ impl SnapshotReport {
     pub const VERSION: u32 = 1;
 
     /// The file name a run gives its report, inside [`out`](Self::out).
-    pub const FILE_NAME: &'static str = "report.json";
+    pub const FILE_NAME: &'static str = telar_project::protocol::TEST_REPORT_FILE;
 
     /// A report a run wrote, or why it cannot be read.
     pub fn read(path: &Path) -> std::io::Result<Self> {

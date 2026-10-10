@@ -9,7 +9,7 @@ pub const DEFAULT_MODE: &str = "modern";
 #[derive(Clone, ThemeTokens)]
 #[theme(scrollbar = Color::rgba(self.muted.r, self.muted.g, self.muted.b, 0.55))]
 // A documentation app deliberately reads like the catalogue's own defaults, so these stay the built-ins — stated rather than left silent.
-#[theme(default(radius, icon_size, info, highlight_low, highlight_med, highlight_high))]
+#[theme(default(radius, icon_size, on_error, info, highlight_low, highlight_med, highlight_high))]
 /// The sandbox's tokens, one instance per registered mode.
 pub struct SandboxTheme {
     pub name: &'static str,

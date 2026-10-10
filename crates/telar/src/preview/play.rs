@@ -33,12 +33,24 @@ pub struct Play {
     entry: PreviewEntry,
     ctx: PreviewCtx,
     canvas: Option<Rc<SurfaceCanvas>>,
-    failures: Failures,
+    failures: CaughtFailures,
     steps: Vec<PlayStep>,
-    owner: OwnerId,
+    owner: Option<OwnerId>,
 }
 
-type Failures = Rc<RefCell<Vec<String>>>;
+/// What the error boundary of a canvas a [`Play`] drives caught, so the play fails the step that broke the build. A host that mounts the preview its own way records each failure its boundary reports here, and hands the same handle to [`Play::attach`].
+#[derive(Clone, Debug, Default)]
+pub struct CaughtFailures(Rc<RefCell<Vec<String>>>);
+
+impl CaughtFailures {
+    pub fn record(&self, failure: &BuildFailure) {
+        self.0.borrow_mut().push(failure.to_string());
+    }
+
+    fn take(&self) -> Vec<String> {
+        std::mem::take(&mut *self.0.borrow_mut())
+    }
+}
 
 /// One thing a play did or asserted, how it went, and the canvas as it left it.
 #[non_exhaustive]
@@ -80,6 +92,12 @@ pub type PlayFn = fn(&mut Play) -> PlayResult;
 /// The most passes [`Play::settle`] takes for the animations a step started to reach their ends: one finishing can start the next.
 const SETTLE_ROUNDS: usize = 32;
 
+/// How far a value read may stray from the one a play expects: values a widget keeps in `f32` reach a reader widened to `f64`.
+const VALUE_TOLERANCE: f64 = 1e-4;
+
+/// How many moves [`Play::drag`] makes on its way: enough that a widget tracking the pointer sees it travel past a drag threshold rather than jump.
+const DRAG_STEPS: u32 = 8;
+
 impl Play {
     /// The canvas size a preview that names no viewport is mounted at.
     pub const DEFAULT_VIEWPORT: Size = Size::new(800.0, 600.0);
@@ -100,6 +118,25 @@ impl Play {
         Self::mount_in_owner(entry, viewport, || ctx)
     }
 
+    /// Drives `canvas`, on which a host already mounted `entry` against `ctx` its own way — a workshop canvas, with its own card for a build that fails — rather than mounting one; the host's failure handler records into `failures`.
+    ///
+    /// The canvas is left as it is, neither resized nor settled, so a host runs the play once the canvas has the size it shows it at. A failure recorded before [`run`](Self::run) fails the run.
+    pub fn attach(
+        entry: &PreviewEntry,
+        ctx: PreviewCtx,
+        canvas: Rc<SurfaceCanvas>,
+        failures: CaughtFailures,
+    ) -> Self {
+        Self {
+            entry: *entry,
+            ctx,
+            canvas: Some(canvas),
+            failures,
+            steps: Vec::new(),
+            owner: None,
+        }
+    }
+
     fn mount_in_owner(
         entry: &PreviewEntry,
         viewport: Size,
@@ -109,7 +146,7 @@ impl Play {
         let scope = owner_scope();
         let owner = scope.id();
         let ctx = ctx();
-        let failures = Failures::default();
+        let failures = CaughtFailures::default();
         let canvas = canvas(entry, &ctx, viewport, &failures);
         drop(scope);
         let mut play = Self {
@@ -118,7 +155,7 @@ impl Play {
             canvas: None,
             failures,
             steps: Vec::new(),
-            owner,
+            owner: Some(owner),
         };
         play.canvas = Some(canvas?);
         play.settle_now();
@@ -133,7 +170,7 @@ impl Play {
         let Some(play) = self.entry.play else {
             return Ok(());
         };
-        let outcome = play(self);
+        let outcome = self.built().and_then(|()| play(self));
         if let Err(error) = &outcome
             && self
                 .steps
@@ -236,6 +273,23 @@ impl Play {
             self.settle_now();
         });
         self.step(format!("hover {query}"), outcome)
+    }
+
+    /// Presses on the node `query` matches, moves the pointer `dx`, `dy` logical px away in even steps, and releases it there, as a person drags a thumb, a divider or a row.
+    pub fn drag(&mut self, query: Query, dx: f32, dy: f32) -> PlayResult {
+        let outcome = self.enabled_target(&query).map(|node| {
+            let (x, y) = testing::centre(node.rect);
+            let (dx, dy) = (f64::from(dx), f64::from(dy));
+            self.dispatch(&testing::moved(x, y));
+            self.dispatch(&testing::press(x, y));
+            for step in 1..=DRAG_STEPS {
+                let along = f64::from(step) / f64::from(DRAG_STEPS);
+                self.dispatch(&testing::moved(x + dx * along, y + dy * along));
+            }
+            self.dispatch(&testing::release(x + dx, y + dy));
+            self.settle_now();
+        });
+        self.step(format!("drag {query} by ({dx}, {dy})"), outcome)
     }
 
     /// Clicks the node `query` matches, then types `text` into it a key at a time.
@@ -358,6 +412,39 @@ impl Play {
         self.step(format!("expect {query} {}", on_off(on)), outcome)
     }
 
+    /// That the node `query` matches is expanded — its popup open, its branch shown — or collapsed.
+    pub fn expect_expanded(&mut self, query: Query, expanded: bool) -> PlayResult {
+        let word = |expanded| if expanded { "expanded" } else { "collapsed" };
+        let outcome = self.find(&query).and_then(|node| match node.expanded {
+            Some(state) if state == expanded => Ok(()),
+            Some(state) => Err(PlayError::new(format!(
+                "expected {query} to be {}, but it is {}",
+                word(expanded),
+                word(state)
+            ))),
+            None => Err(PlayError::new(format!(
+                "expected {query} to be {}, but it neither expands nor collapses",
+                word(expanded)
+            ))),
+        });
+        self.step(format!("expect {query} {}", word(expanded)), outcome)
+    }
+
+    /// That the node `query` matches reads `value` now, as a slider or a spin button tells a reader.
+    pub fn expect_value(&mut self, query: Query, value: f64) -> PlayResult {
+        let outcome = self.find(&query).and_then(|node| match node.value {
+            Some(read) if (read.now - value).abs() <= VALUE_TOLERANCE => Ok(()),
+            Some(read) => Err(PlayError::new(format!(
+                "expected {query} to read {value}, but it reads {}",
+                read.now
+            ))),
+            None => Err(PlayError::new(format!(
+                "expected {query} to read {value}, but it has no value"
+            ))),
+        });
+        self.step(format!("expect {query} = {value}"), outcome)
+    }
+
     /// That the preview's callback `name` was called `count` times, by the calls its [`ActionLog`] keeps.
     pub fn expect_action(&mut self, name: &str, count: usize) -> PlayResult {
         let actions = self.actions();
@@ -404,8 +491,7 @@ impl Play {
 
     /// Fails with what the preview's boundary caught since this was last asked, so a build that fails mid-play fails the step that caused it.
     fn built(&self) -> PlayResult {
-        let failures = std::mem::take(&mut *self.failures.borrow_mut());
-        match failures.first() {
+        match self.failures.take().first() {
             None => Ok(()),
             Some(failure) => Err(PlayError::new(format!("the preview failed: {failure}"))),
         }
@@ -430,7 +516,7 @@ impl Play {
     }
 
     fn dispatch(&self, event: &Event) -> EventResult {
-        self.canvas().dispatch(event)
+        self.canvas().dispatch_own(event)
     }
 
     /// A primary press and release at the centre of `rect`, with the pointer moved there first, and focus let go first where the press lands on nothing that takes it, as a canvas frame does.
@@ -498,7 +584,9 @@ impl Play {
 impl Drop for Play {
     fn drop(&mut self) {
         self.canvas.take();
-        dispose_owner(self.owner);
+        if let Some(owner) = self.owner {
+            dispose_owner(owner);
+        }
     }
 }
 
@@ -515,10 +603,10 @@ fn canvas(
     entry: &PreviewEntry,
     ctx: &PreviewCtx,
     viewport: Size,
-    failures: &Failures,
+    failures: &CaughtFailures,
 ) -> Result<Rc<SurfaceCanvas>, PlayError> {
     let (ctx, globals) = (ctx.clone(), ctx.globals());
-    let record = Rc::clone(failures);
+    let record = failures.clone();
     let canvas = globals
         .canvas(viewport, move || {
             mount_preview(entry, ctx, move |failure| failed(&record, failure), None)
@@ -528,10 +616,12 @@ fn canvas(
     Ok(canvas)
 }
 
-fn failed(failures: &Failures, failure: BuildFailure) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let message = failure.to_string();
-    failures.borrow_mut().push(message.clone());
-    let message = format!("Error: {message}");
+fn failed(
+    failures: &CaughtFailures,
+    failure: BuildFailure,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    failures.record(&failure);
+    let message = format!("Error: {failure}");
     Ok(Box::new(Text::new(
         move || message.clone(),
         LayoutStyle::new(),

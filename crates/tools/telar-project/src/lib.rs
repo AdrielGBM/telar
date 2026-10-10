@@ -82,8 +82,9 @@ pub use prerender::{
 };
 pub use previews::{
     MATRIX_GLOBAL_AXES, MatrixAxes, MatrixAxis, MatrixControlSize, MatrixDirection, MatrixValue,
-    PreviewsInclude, PreviewsIncludeDeclaration, PreviewsIncludeProblem, PreviewsSection, Viewport,
-    is_preview_name, previews_include_declarations, previews_include_problems,
+    PreviewsInclude, PreviewsIncludeDeclaration, PreviewsIncludeProblem, PreviewsSection,
+    SnapshotSettings, Viewport, is_preview_name, previews_include_declarations,
+    previews_include_problems,
 };
 pub use theme::{normalize_theme_path, theme_type_in_config};
 pub use web::{OgImage, SchemeColors, ThemeColor, WebHost, is_absolute_url};

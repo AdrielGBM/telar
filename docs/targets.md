@@ -169,8 +169,8 @@ telar = { version = "0.1", default-features = false, features = ["headless"] }
 ```
 
 No surface: `rasterize` takes draw commands and returns pixels, on the CPU. For rendering a component to
-PNG from a test, a server, or a build script. `cargo telar test` is this target — it renders every
-`[preview]` block and reports the ones that failed.
+PNG from a test, a server, or a build script. `cargo telar test` is this target — it builds, plays and
+accessibility-checks every `[preview]` and matrix cell, compares each with its snapshot, and reports the ones that failed.
 
 It lays text out the way the target it stands in for would: with the glyph shaper over the faces `[[telar.fonts]]`
 declares on every target but the terminal, and in cells for `--target tui`. The harness installs the measurer

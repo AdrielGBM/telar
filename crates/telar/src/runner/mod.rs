@@ -85,7 +85,7 @@ pub use desktop::{
     open_window, run_app_windowed, run_desktop_app_with_devtools, run_desktop_app_with_name,
 };
 #[cfg(all(feature = "previews", not(target_os = "android")))]
-pub(crate) use entry::install_preview_text_metrics;
+pub(crate) use entry::{install_preview_text_metrics, previews_measure_in_cells};
 pub use entry::{run_app_with_devtools, run_app_with_name};
 pub use generic::{run_with_platform, run_with_platform_and_renderer};
 pub use host::SurfaceWindow;

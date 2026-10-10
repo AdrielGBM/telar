@@ -18,6 +18,7 @@ pub const REQUIRED: &[&str] = &[
     "success",
     "warning",
     "error",
+    "on_error",
     "info",
     "highlight_low",
     "highlight_med",

@@ -1,6 +1,6 @@
 //! Accessibility checks over what a canvas drew and what a reader is told about it.
 //!
-//! [`check`] reads a [`Frame`] beside the accessibility snapshot of the same moment and reports what would stop someone using the canvas with a screen reader, a keyboard, low vision or an imprecise pointer. Each finding names its [`Rule`] and carries the rule's [`Severity`]; a preview that knowingly breaks a rule says so with [`PreviewEntry::a11y_ignore`](super::PreviewEntry::a11y_ignore), and [`Report::ignoring`] drops those.
+//! [`check`] reads a [`Frame`] beside the accessibility snapshot of the same moment and reports what would stop someone using the canvas with a screen reader, a keyboard, low vision or an imprecise pointer. Each finding names its [`Rule`] and carries the rule's [`Severity`]; a preview that knowingly breaks a rule says so with its `a11y_ignore`, and [`Report::ignoring`] drops those.
 
 use renderer_core::LayerMask;
 use std::collections::{HashMap, HashSet};
@@ -25,119 +25,10 @@ pub const MIN_TARGET: f32 = 24.0;
 const OPAQUE: f32 = 0.999;
 const EPSILON: f32 = 0.5;
 
-/// How much a finding matters: an [`Error`](Self::Error) keeps someone from using the canvas, a [`Warning`](Self::Warning) makes it harder or depends on where the canvas ends up.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Severity {
-    Warning,
-    Error,
-}
-
-impl Severity {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Severity::Warning => "warning",
-            Severity::Error => "error",
-        }
-    }
-}
-
-/// What a finding is about.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Rule {
-    /// A control a reader announces by its role alone.
-    UnnamedControl,
-    /// A picture a reader is not told about, and not told to skip.
-    UnnamedPicture,
-    /// Text too close in luminance to the nearest opaque fill behind it.
-    Contrast,
-    /// A pointer target smaller than [`MIN_TARGET`] with something else within reach of it.
-    TargetSize,
-    /// A Tab stop a reader is never told is there.
-    HiddenFocusable,
-    /// Tab moving back against the reading order.
-    FocusOrder,
-    /// Text in a canvas that names no language.
-    MissingLang,
-}
-
-impl Rule {
-    pub const ALL: [Rule; 7] = [
-        Rule::UnnamedControl,
-        Rule::UnnamedPicture,
-        Rule::Contrast,
-        Rule::TargetSize,
-        Rule::HiddenFocusable,
-        Rule::FocusOrder,
-        Rule::MissingLang,
-    ];
-
-    /// The rule's name in a report and on a command line.
-    pub const fn id(self) -> &'static str {
-        match self {
-            Rule::UnnamedControl => "unnamed-control",
-            Rule::UnnamedPicture => "unnamed-picture",
-            Rule::Contrast => "contrast",
-            Rule::TargetSize => "target-size",
-            Rule::HiddenFocusable => "hidden-focusable",
-            Rule::FocusOrder => "focus-order",
-            Rule::MissingLang => "missing-lang",
-        }
-    }
-
-    /// Target size and focus order are judged by geometry that can be right for reasons the frame does not show, and the language is often the host's to give rather than the preview's, so those three warn.
-    pub const fn severity(self) -> Severity {
-        match self {
-            Rule::UnnamedControl
-            | Rule::UnnamedPicture
-            | Rule::Contrast
-            | Rule::HiddenFocusable => Severity::Error,
-            Rule::TargetSize | Rule::FocusOrder | Rule::MissingLang => Severity::Warning,
-        }
-    }
-
-    pub fn from_id(id: &str) -> Option<Rule> {
-        Rule::ALL.into_iter().find(|rule| rule.id() == id)
-    }
-}
-
-impl fmt::Display for Rule {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.id())
-    }
-}
-
-/// One finding: the rule broken, how much it matters, what is wrong in words, and where, in the canvas's coordinates.
-#[non_exhaustive]
-#[derive(Clone, Debug, PartialEq)]
-pub struct Violation {
-    pub rule: Rule,
-    pub severity: Severity,
-    pub message: String,
-    pub rect: Option<Rect>,
-}
-
-impl Violation {
-    pub fn new(rule: Rule, message: impl Into<String>, rect: Option<Rect>) -> Self {
-        Self {
-            rule,
-            severity: rule.severity(),
-            message: message.into(),
-            rect,
-        }
-    }
-}
-
-impl fmt::Display for Violation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{:<7}  {:<16}  {}",
-            self.severity.as_str(),
-            self.rule.id(),
-            self.message
-        )
-    }
-}
+/// How much a finding matters, what it is about and the finding itself: shared with the platform layer, so a finding made where an application's registries live reaches an overlay drawn somewhere else.
+pub use platform_core::{
+    AccessRule as Rule, AccessSeverity as Severity, AccessViolation as Violation,
+};
 
 /// Everything [`check`] found, in the order of [`Rule::ALL`].
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -146,7 +37,7 @@ pub struct Report {
 }
 
 impl Report {
-    /// The report without the findings of `rules`: what a preview's [`a11y_ignore`](super::PreviewEntry::a11y_ignore) asks for.
+    /// The report without the findings of `rules`: what a preview's `a11y_ignore` asks for.
     pub fn ignoring(mut self, rules: &[Rule]) -> Self {
         self.violations
             .retain(|violation| !rules.contains(&violation.rule));
@@ -191,11 +82,12 @@ impl fmt::Display for Report {
     }
 }
 
-/// Checks `frame` against `snapshot`, the [`accessibility::snapshot`](ui_core::accessibility::snapshot) of the same commands.
+/// Checks `frame` against `snapshot`, the [`accessibility::surface_snapshot`](ui_core::accessibility::surface_snapshot) of the same commands. A surface nested in the frame is left to [`audit`](super::audit), which checks it in its own world.
 ///
 /// What takes focus, in what order, and what a reader skips are the surface's live state, which commands drawn on a raster target do not carry. A frame [captured](Frame::capture) from a canvas keeps them in its [`access`](Frame::access), so it can be checked whenever; one made from commands alone is read against the surface entered now, so call it with the frame's surface entered and before anything in it changes.
 ///
 /// - **Unnamed controls and pictures:** a control whose name is empty, and a picture (a bitmap or vector art outside every control) that is neither named nor hidden from readers.
+/// - **Symbol-only names:** a control activated by pressing it whose name has no letter or number in it, such as "×" or "⋯".
 /// - **Contrast:** each run of text against the nearest opaque fill behind its centre, with the translucent fills between them composited over it, below [`TEXT_CONTRAST`], or [`LARGE_TEXT_CONTRAST`] for large text. Text over a picture or a gradient, and text in a disabled control, is not judged.
 /// - **Target size:** an enabled control smaller than [`MIN_TARGET`] on a side whose 24 px circle reaches another target or another small target's circle.
 /// - **Hidden focusables:** a Tab stop a reader is not told about, or one collapsed to no size.
@@ -213,6 +105,7 @@ pub fn check(frame: &Frame, snapshot: &[AccessNode]) -> Report {
     let walk = Walk::of(frame);
     let mut violations = Vec::new();
     unnamed_controls(snapshot, &mut violations);
+    symbol_only_names(snapshot, &mut violations);
     unnamed_pictures(reading, &walk, &mut violations);
     contrast(frame, snapshot, &walk, &mut violations);
     target_sizes(snapshot, &mut violations);
@@ -236,6 +129,45 @@ fn unnamed_controls(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
             ));
         }
     }
+}
+
+fn symbol_only_names(snapshot: &[AccessNode], out: &mut Vec<Violation>) {
+    for node in snapshot {
+        let name = node.name.trim();
+        if node.id.is_some()
+            && activates(node.role)
+            && !name.is_empty()
+            && !has_word_character(name)
+        {
+            out.push(Violation::new(
+                Rule::SymbolOnlyName,
+                format!(
+                    "{} is named only by symbols, which a reader spells out or skips: give it a name in words",
+                    describe(node)
+                ),
+                Some(node.rect),
+            ));
+        }
+    }
+}
+
+fn activates(role: Role) -> bool {
+    matches!(
+        role,
+        Role::Button
+            | Role::Link
+            | Role::CheckBox
+            | Role::Radio
+            | Role::Switch
+            | Role::Tab
+            | Role::MenuItem
+            | Role::Disclosure
+            | Role::TreeItem
+    )
+}
+
+fn has_word_character(name: &str) -> bool {
+    name.chars().any(char::is_alphanumeric)
 }
 
 /// One finding per box: the pieces of one picture drawn in the same box are the one picture.
@@ -495,9 +427,23 @@ impl Walk {
             hidden: false,
         }];
         let mut at = 0usize;
+        let mut nested = 0usize;
         for_each_with_matrix(&frame.commands, |command, matrix| {
             let index = at;
             at += 1;
+            // A surface nested in the frame is checked on its own, in its own world: see `super::audit`.
+            match command {
+                DrawCommand::PushSurface { .. } => {
+                    nested += 1;
+                    return;
+                }
+                DrawCommand::PopSurface => {
+                    nested = nested.saturating_sub(1);
+                    return;
+                }
+                _ if nested > 0 => return,
+                _ => {}
+            }
             let clip = *clips.last().unwrap_or(&unbounded);
             let layer = *layers.last().unwrap_or(&Layer {
                 opacity: 1.0,
@@ -664,6 +610,6 @@ fn describe(node: &AccessNode) -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "previews"))]
 #[path = "a11y_test.rs"]
 mod tests;

@@ -112,6 +112,16 @@ pub fn workspace_dir() -> Option<std::path::PathBuf> {
         .map(std::path::PathBuf::from)
 }
 
+/// The `report.json` the last `cargo telar test` of the workspace wrote, whether or not it exists: under the target directory [`TEST_TARGET_DIR_VAR`](telar_project::protocol::TEST_TARGET_DIR_VAR) names, which `cargo telar preview` sets, else under `<workspace>/target`. `None` for a preview build started some other way.
+pub fn test_report_path() -> Option<std::path::PathBuf> {
+    use telar_project::protocol::{TEST_OUT_DIR, TEST_REPORT_FILE, TEST_TARGET_DIR_VAR};
+    let target = std::env::var_os(TEST_TARGET_DIR_VAR)
+        .filter(|dir| !dir.is_empty())
+        .map(std::path::PathBuf::from)
+        .or_else(|| workspace_dir().map(|workspace| workspace.join("target")))?;
+    Some(target.join(TEST_OUT_DIR).join(TEST_REPORT_FILE))
+}
+
 /// What `cargo telar preview` asked a host to open: a preview by id, a component by name, or neither.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct PreviewRequest {
@@ -186,7 +196,7 @@ pub fn duplicate_ids(entries: &[PreviewEntry]) -> Option<String> {
 }
 
 /// Prints a `FAIL` line for each id `entries` repeat, the way a run that renders or tests every preview reports one that failed, and answers how many it printed.
-#[cfg(not(target_os = "android"))]
+#[cfg(all(feature = "preview-headless", not(target_os = "android")))]
 pub(crate) fn fail_duplicate_ids(entries: &[PreviewEntry]) -> usize {
     let Some(duplicates) = duplicate_ids(entries) else {
         return 0;

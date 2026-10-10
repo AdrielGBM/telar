@@ -116,7 +116,7 @@ impl App for PreviewApp {
 
 /// Renders every preview, and every cell of its matrix, to a PNG of its own under `out_dir`, named by its id, then exits.
 ///
-/// The third answer, and the one an out-of-tree backend wants: [`crate::try_run_test`] proves a component builds and lays out but never draws a pixel, and the preview window draws but needs a desktop window a shell has no way to open. Each preview and each cell gets its own file rather than one page of all of them, so a name identifies what it shows and a golden-image run can compare them one at a time.
+/// The third answer, and the one an out-of-tree backend wants: [`crate::try_run_test`] judges each preview against its goldens rather than handing over a picture to look at, and the preview window draws but needs a desktop window a shell has no way to open. Each preview and each cell gets its own file rather than one page of all of them, so a name identifies what it shows and a golden-image run can compare them one at a time.
 ///
 /// Each is mounted the way a workshop canvas mounts it — on a surface of its own, in its environment, with its args at their defaults or at the cell's, settled — at the window size `config` names unless it asks for one, and drawn on the CPU rasterizer. A matrix that cannot be expanded fails once, as `<preview-id>--matrix`.
 #[cfg(feature = "preview-headless")]

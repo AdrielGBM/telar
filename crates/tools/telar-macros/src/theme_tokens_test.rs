@@ -9,7 +9,7 @@ const FULL: &str = "struct T {
         primary: Color, on_primary: Color, radius: f32, spacing: f32, font_size: f32,
         icon_size: f32, muted: Color, scrollbar: Color, ink: Color, surface: Color,
     surface_alt: Color, border: Color, success: Color, warning: Color, error: Color,
-    info: Color, highlight_low: Color, highlight_med: Color, highlight_high: Color,
+    on_error: Color, info: Color, highlight_low: Color, highlight_med: Color, highlight_high: Color,
 }";
 
 #[test]
@@ -45,8 +45,11 @@ fn a_defaulted_token_is_accepted_and_left_to_the_trait() {
 
 #[test]
 fn an_alias_answers_a_token_the_field_is_not_named_after() {
-    let out = expand_str(&FULL.replace("error: Color,", "#[token(error)] danger: Color,"))
-        .expect("the alias answers `error`");
+    let out = expand_str(&FULL.replace(
+        "warning: Color, error: Color,",
+        "warning: Color, #[token(error)] danger: Color,",
+    ))
+    .expect("the alias answers `error`");
     assert!(out.contains("self . danger"), "reads the aliased field");
 }
 

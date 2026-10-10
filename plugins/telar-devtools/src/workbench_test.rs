@@ -59,6 +59,7 @@ fn assert_aa(variant: &str, what: &str, foreground: Color, background: Color) {
     success,
     warning,
     error,
+    on_error,
     info,
     highlight_low,
     highlight_med,

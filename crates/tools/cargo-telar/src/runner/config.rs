@@ -360,12 +360,13 @@ fn enables_frontend(features: &BTreeMap<String, toml::Value>, feature: &str) -> 
 }
 
 // Cargo.lock only pins what some workspace feature reaches, so a feature named only on the command line resolves against whatever copy of the crates.io index this machine last fetched.
-pub(crate) const TOOLING_FEATURES: [&str; 5] = [
+pub(crate) const TOOLING_FEATURES: [&str; 6] = [
     "telar/dev",
     "telar/hot-reload",
     "telar/previews",
     "telar/preview",
     "telar/preview-headless",
+    "telar/preview-snapshots",
 ];
 
 pub(crate) fn tooling_feature_entry() -> String {

@@ -288,14 +288,14 @@ dev = [
 ## application inside it, and a terminal run has no such loop — it restarts the process instead.
 hot-reload = ["dev", "desktop-bare", "telar-macros/hot-reload"]
 
-## Emitting the `[preview]` blocks at all, and the entry point that runs them. Injected by `cargo telar test`.
+## Emitting the `[preview]` blocks at all, and the entry point that runs them. Every preview tool turns it on.
 ##
 ## The one that matters, because without it a `[preview]` is not compiled into anything: the transpiler emits
 ## a build fn per block only for the flavours that ask, and this is what asks. A build without it also has no
 ## `telar::dev_entry` in its `run()` — which is why a shipped binary no longer answers `TELAR_TEST=1` from
 ## whoever sets it, and no longer carries the preview harness or the markup of every block.
 ##
-## Carries no frontend of its own: `cargo telar test` builds and lays a preview out without drawing it, and a
+## Carries no frontend of its own: a preview is built and laid out on a canvas of its own with no window, and a
 ## terminal application must not acquire a window on the way to being tested. It does carry the shaper,
 ## because laying text out needs a measurer and nothing else in the build is guaranteed to bring one; a
 ## terminal build still measures in cells. It carries `testing` too, because a preview's play drives its canvas with the same events a test does.
@@ -311,7 +311,7 @@ preview = ["previews", "desktop-bare"]
 ## by hand, and rendered nothing when you did.
 preview-headless = ["previews", "headless"]
 
-## Comparing previews against the pictures and draw-command text kept beside them, which is what `cargo telar test` checks snapshots with. Draws on the CPU rasterizer and sets text in the faces the package declares alone.
+## Comparing previews against the pictures and draw-command text kept beside them, and writing `report.json`: what `cargo telar test` injects, whether or not the run takes snapshots, so `--no-snapshots` costs no rebuild. Draws on the CPU rasterizer and sets text in the faces the package declares alone.
 preview-snapshots = [
     "previews",
     "headless",

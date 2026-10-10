@@ -40,6 +40,8 @@ pub enum Axis {
     Dir(&'static [Direction]),
     /// Canvas sizes, each written `"390x844"` or named in `[telar.previews] viewports`.
     Viewport(&'static [&'static str]),
+    /// Every viewport `[telar.previews] viewports` names, by name, as [`Matrices::installed`] reads them.
+    ProjectViewports,
     ControlSize(&'static [ControlSize]),
     /// An arg, by name, and its values in [`ArgValue`]'s text form: `"12"`, `"true"`, `"Primary"`, `"\"Save\""`.
     Arg(&'static str, &'static [&'static str]),
@@ -52,7 +54,7 @@ impl Axis {
             Self::Mode(_) | Self::RegisteredModes => "mode",
             Self::Locale(_) => "locale",
             Self::Dir(_) => "dir",
-            Self::Viewport(_) => "viewport",
+            Self::Viewport(_) | Self::ProjectViewports => "viewport",
             Self::ControlSize(_) => "control_size",
             Self::Arg(name, _) => name,
         }
@@ -62,6 +64,7 @@ impl Axis {
         match self {
             Self::Mode(values) | Self::Locale(values) | Self::Viewport(values) => values.len(),
             Self::RegisteredModes => matrices.modes.len(),
+            Self::ProjectViewports => matrices.viewports.len(),
             Self::Dir(values) => values.len(),
             Self::ControlSize(values) => values.len(),
             Self::Arg(_, values) => values.len(),
@@ -90,6 +93,11 @@ impl Axis {
                         .ok_or(MatrixError::Viewport { text })
                 })
                 .collect::<Result<_, _>>()?,
+            Self::ProjectViewports => matrices
+                .viewports
+                .iter()
+                .map(|preset| Setting::Viewport(preset.name, preset.size))
+                .collect(),
             Self::ControlSize(sizes) => sizes.iter().copied().map(Setting::ControlSize).collect(),
             Self::Arg(name, texts) => texts
                 .iter()
@@ -333,13 +341,7 @@ impl Matrix {
 
     /// How many cells [`Self::cells`] would expand to, without expanding them: what a view checks against [`MATRIX_CELL_CAP`]. Saturates rather than overflowing.
     pub fn cell_count(&self, matrices: &Matrices) -> Result<usize, MatrixError> {
-        Ok(self
-            .axes(matrices)?
-            .iter()
-            .map(|axis| axis.len(matrices))
-            .filter(|len| *len > 0)
-            .reduce(usize::saturating_mul)
-            .unwrap_or(0))
+        Ok(Self::count(self.axes(matrices)?, matrices))
     }
 
     /// One cell per combination of the axes' values, the first axis outermost, each with the id `<preview-id>--<axis>=<value>…` that deep links and snapshot files name it by.
@@ -350,10 +352,28 @@ impl Matrix {
         entry: &PreviewEntry,
         matrices: &Matrices,
     ) -> Result<Vec<MatrixCell>, MatrixError> {
-        let mut axes: Vec<(&'static str, Vec<AxisValue>)> = Vec::new();
-        for axis in self.axes(matrices)? {
+        Self::expand(self.axes(matrices)?, entry, matrices)
+    }
+
+    /// [`Self::cell_count`] for axes chosen as the program runs, as a workshop's ad-hoc matrix is.
+    pub fn count(axes: &[Axis], matrices: &Matrices) -> usize {
+        axes.iter()
+            .map(|axis| axis.len(matrices))
+            .filter(|len| *len > 0)
+            .reduce(usize::saturating_mul)
+            .unwrap_or(0)
+    }
+
+    /// [`Self::cells`] for axes chosen as the program runs, as a workshop's ad-hoc matrix is: the same cells, named the same way, as a matrix written with those axes.
+    pub fn expand(
+        axes: &[Axis],
+        entry: &PreviewEntry,
+        matrices: &Matrices,
+    ) -> Result<Vec<MatrixCell>, MatrixError> {
+        let mut expanded: Vec<(&'static str, Vec<AxisValue>)> = Vec::new();
+        for axis in axes {
             let name = axis.name();
-            if axes.iter().any(|(seen, _)| *seen == name) {
+            if expanded.iter().any(|(seen, _)| *seen == name) {
                 return Err(MatrixError::RepeatedAxis { axis: name });
             }
             let mut values: Vec<AxisValue> = Vec::new();
@@ -378,14 +398,14 @@ impl Matrix {
                     setting,
                 });
             }
-            axes.push((name, values));
+            expanded.push((name, values));
         }
-        axes.retain(|(_, values)| !values.is_empty());
-        if axes.is_empty() {
+        expanded.retain(|(_, values)| !values.is_empty());
+        if expanded.is_empty() {
             return Ok(Vec::new());
         }
         let mut cells = vec![MatrixCell::of(entry)];
-        for (axis, values) in &axes {
+        for (axis, values) in &expanded {
             cells = cells
                 .iter()
                 .flat_map(|cell| values.iter().map(|value| value.extend(cell, axis)))
@@ -466,6 +486,16 @@ impl MatrixCell {
             globals: CellGlobals::default(),
             args: Vec::new(),
         }
+    }
+
+    /// The axis and value pairs a report records for `cell`, in axis order; none for the preview itself.
+    pub(crate) fn owned_coordinates(cell: Option<&Self>) -> Vec<(String, String)> {
+        cell.map_or_else(Vec::new, |cell| {
+            cell.coordinates
+                .iter()
+                .map(|(axis, value)| (axis.to_string(), value.clone()))
+                .collect()
+        })
     }
 
     /// Sets each global the cell names, and leaves the ones it does not.
