@@ -132,8 +132,20 @@ pub trait ThemeTokens: 'static {
     fn warning(&self) -> Color {
         Color::rgba(0.9, 0.75, 0.4, 1.0)
     }
+    /// Readable ink on [`error`](Self::error): what a control filled with it draws its glyph or label in.
+    fn on_error(&self) -> Color {
+        if crate::mode::is_dark() {
+            Color::rgba(0.04, 0.06, 0.14, 1.0)
+        } else {
+            Color::rgba(1.0, 1.0, 1.0, 1.0)
+        }
+    }
     fn error(&self) -> Color {
-        Color::rgba(0.8, 0.35, 0.4, 1.0)
+        if crate::mode::is_dark() {
+            Color::rgba(0.8, 0.35, 0.4, 1.0)
+        } else {
+            Color::rgba(0.75, 0.2, 0.25, 1.0)
+        }
     }
     fn info(&self) -> Color {
         Color::rgba(0.4, 0.6, 0.8, 1.0)

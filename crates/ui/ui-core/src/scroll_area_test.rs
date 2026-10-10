@@ -40,6 +40,54 @@ fn scroll_area_lays_out_its_detached_content() {
     );
 }
 
+/// Torn down the way a container retires a child: its owner first, then its node. The content is laid out apart from the viewport, so nothing in the layout tree carries it along; left behind, the next relayout walks it into rect signals its owner already freed.
+#[test]
+fn freeing_the_viewport_frees_the_content_laid_out_apart_from_it() {
+    reset_layout_runtime();
+    let baseline = crate::context::live_node_count();
+    let scope = reactive_core::owner_scope();
+    let owner = scope.id();
+    let row = Canvas::new(LayoutStyle::new().width(300.0).height(40.0), |_| {
+        RenderNode::Empty
+    })
+    .unwrap();
+    let content = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![Box::new(row) as Box<dyn LayoutItem>],
+    )
+    .unwrap();
+    let content_node = content.layout_node();
+    let scroll = LayoutScrollArea::new(
+        LayoutStyle::new().width(300.0).height(160.0),
+        Box::new(content),
+    )
+    .unwrap();
+    drop(scope);
+    let scroll_node = scroll.layout_node();
+    compute_layout(
+        scroll_node,
+        AvailableSpace::Definite(300.0),
+        AvailableSpace::Definite(160.0),
+    )
+    .unwrap();
+
+    crate::context::mark_dirty(content_node).unwrap();
+    reactive_core::dispose_owner(owner);
+    crate::context::remove_node(scroll_node);
+    drop(scroll);
+    crate::context::relayout_if_dirty();
+
+    assert!(
+        track_layout(content_node).is_none(),
+        "the content goes with the viewport that shows it"
+    );
+    assert_eq!(
+        crate::context::live_node_count(),
+        baseline,
+        "every node the scroll area built is freed"
+    );
+}
+
 /// A page swapped for a shorter one must not leave the viewport looking at nothing.
 ///
 /// This is the bug as a user meets it: scroll down a long page, switch to a short one, and the panel is blank — the offset is still 600 while there is 200 of content, so the transform has pushed all of it out of the clip. It comes back on the next wheel tick, which is what makes it read as a repaint bug rather than a scroll one. Nothing here touches an input event: the layout alone has to put it right.

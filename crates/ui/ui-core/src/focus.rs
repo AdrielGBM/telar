@@ -69,6 +69,8 @@ struct Scope {
     /// Whether the scope holds focus in while it shows — a modal, as against a tooltip layer.
     traps: bool,
     reason: ScopeReason,
+    /// The control the scope's content belongs to, which a reader is still told about while the scope holds focus inside itself.
+    owner: Option<NodeId>,
 }
 
 /// Why a scope's focusables are out of reach, which the keyboard does not care about and a screen reader does.
@@ -499,9 +501,21 @@ pub fn register_scope_because(
             showing: Rc::new(showing),
             traps,
             reason,
+            owner: None,
         });
         id
     })
+}
+
+/// Names the control `scope` was opened from, so a reader keeps being told about it while the scope holds focus inside itself.
+///
+/// A dropdown's panel traps focus like any modal, and its trigger is outside it; without this the trigger would drop out of the accessibility snapshot for as long as the panel is open, taking its expanded state with it. Only what is read changes: Tab still stays inside the scope.
+pub fn set_scope_owner(scope: ScopeId, owner: NodeId) {
+    with_focus(|s| {
+        if let Some(scope) = s.scopes.iter_mut().find(|sc| sc.id == scope) {
+            scope.owner = Some(owner);
+        }
+    });
 }
 
 /// Withdraws a scope registered with [`register_scope`].
@@ -516,6 +530,25 @@ pub fn unregister(id: FocusId) {
         s.text_entries.remove(&id);
     });
     release(id);
+}
+
+/// Forgets every focusable and scope that names a layout node, for a layout runtime being replaced: the next tree is handed the same node ids, and an entry left behind would be announced, and stepped onto, as part of it.
+pub(crate) fn forget_nodes() {
+    let (entries, scopes) = with_focus(|s| {
+        let (entries, kept): (Vec<Entry>, Vec<Entry>) = std::mem::take(&mut s.order)
+            .into_iter()
+            .partition(|e| e.node.is_some());
+        s.order = kept;
+        for entry in &entries {
+            s.text_entries.remove(&entry.id);
+        }
+        (entries, std::mem::take(&mut s.scopes))
+    });
+    for entry in &entries {
+        release(entry.id);
+    }
+    // Dropped outside the slot: a closure they hold may own a widget whose teardown reaches back into it.
+    drop((entries, scopes));
 }
 
 /// Whether the focused widget takes keys as text — during a key's dispatch, the widget the key belongs to (see [`is_key_target`]). Reactive, like [`current`].
@@ -847,19 +880,25 @@ pub fn exposed() -> Vec<Exposed> {
                 )
             })
             .collect();
-        type ScopeRow = (NodeId, Rc<dyn Fn() -> bool>, bool, ScopeReason);
+        type ScopeRow = (
+            NodeId,
+            Rc<dyn Fn() -> bool>,
+            bool,
+            ScopeReason,
+            Option<NodeId>,
+        );
         let scopes: Vec<ScopeRow> = s
             .scopes
             .iter()
-            .map(|sc| (sc.node, sc.showing.clone(), sc.traps, sc.reason))
+            .map(|sc| (sc.node, sc.showing.clone(), sc.traps, sc.reason, sc.owner))
             .collect();
         (order, scopes)
     });
-    let hiding: Vec<ScopeView> = scopes
+    let (hiding, owners): (Vec<ScopeView>, Vec<Option<NodeId>>) = scopes
         .iter()
-        .filter(|(_, _, _, reason)| *reason == ScopeReason::NotShowing)
-        .map(|(node, showing, traps, _)| (*node, showing.clone(), *traps))
-        .collect();
+        .filter(|(_, _, _, reason, _)| *reason == ScopeReason::NotShowing)
+        .map(|(node, showing, traps, _, owner)| ((*node, showing.clone(), *traps), *owner))
+        .unzip();
     let idle = idle_scrollers(&hiding);
 
     order
@@ -867,11 +906,20 @@ pub fn exposed() -> Vec<Exposed> {
         .filter(|(id, ..)| !idle.contains(id))
         .filter_map(|(id, node, role, toggled, value, orientation, outline)| {
             let node = node?;
-            reachable(Some(node), &hiding).then(|| Exposed {
+            let seen: Vec<ScopeView> = hiding
+                .iter()
+                .zip(&owners)
+                .map(|((scope, showing, traps), owner)| {
+                    let owned =
+                        owner.is_some_and(|owner| crate::input_region::is_inside(node, owner));
+                    (*scope, showing.clone(), *traps && !owned)
+                })
+                .collect();
+            reachable(Some(node), &seen).then(|| Exposed {
                 id,
                 node,
                 role,
-                enabled: !scopes.iter().any(|(scope, showing, _, reason)| {
+                enabled: !scopes.iter().any(|(scope, showing, _, reason, _)| {
                     *reason == ScopeReason::Disabled
                         && !showing()
                         && crate::input_region::is_inside(node, *scope)
@@ -953,6 +1001,17 @@ pub fn follow_box(box_id: u64) -> bool {
     }
     request(id);
     true
+}
+
+/// The box of every registered control, reachable now or not: a picture drawn inside one is that control's, even while a dialog over it keeps the keyboard and a reader away from it.
+pub fn control_nodes() -> Vec<NodeId> {
+    with_focus_ref(|s| {
+        s.order
+            .iter()
+            .filter(|e| e.role.is_control())
+            .filter_map(|e| e.node)
+            .collect()
+    })
 }
 
 /// Whether `id` is still registered, so a caller restoring remembered focus does not aim at a widget that has since been dropped.

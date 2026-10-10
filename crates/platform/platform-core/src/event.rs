@@ -201,6 +201,13 @@ pub enum Event {
         box_id: u64,
         run: u32,
     },
+    /// A box event about a box inside a surface nested in this one, which the frame it is drawn in passes on into it.
+    ///
+    /// Each surface numbers its boxes from its own counter, so a box id alone would name a box of this surface as readily as one of the frame's: the event carries the surface the frame drew, as the `PushSurface` marker around the box named it, and `event` is the box event in that surface's own terms. A surface nested deeper is reached the same way, by the frames along the way.
+    InSurface {
+        surface: u64,
+        event: Box<Event>,
+    },
     /// The part of the surface the system keeps for itself changed: status and navigation bars, a notch, rounded corners, a browser's own chrome over a page drawn to its edges. Logical units, measured in from each edge. Sent before the first frame where the platform knows, and again whenever it moves.
     SafeAreaChanged {
         insets: geometry_core::Insets,

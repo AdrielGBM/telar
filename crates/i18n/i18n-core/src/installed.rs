@@ -37,6 +37,15 @@ pub fn catalog() -> Option<&'static Catalog> {
     *INSTALLED.read().unwrap_or_else(|e| e.into_inner())
 }
 
+/// The language text is in where no locale was chosen: the installed catalog's default locale, which [`translate`](crate::translate) falls back to, or English where no catalog is installed, the language every catalog a Telar crate ships is written in.
+pub fn default_locale() -> &'static str {
+    default_locale_of(catalog())
+}
+
+fn default_locale_of(catalog: Option<&'static Catalog>) -> &'static str {
+    catalog.map_or("en", |catalog| catalog.default_locale)
+}
+
 /// Translates `key` against the installed catalog for the active locale.
 ///
 /// The runtime twin of the `t!` macro, for code the transpiler never sees — a plain Rust module, a crate with no `.rsx` file in it at all. Same catalog format, same lookup, same reactive read of the locale: calling this inside a widget's content closure subscribes that widget to language switches.

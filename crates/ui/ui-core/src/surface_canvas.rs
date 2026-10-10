@@ -295,7 +295,11 @@ impl SurfaceCanvas {
     /// Routes an event that arrived in the outer space: pointers are mapped back through the [`placement`](Self::placement), the surface's overlays see it first, and the tree only if none of them took it — but for a move, which reaches the tree [`covered`](crate::covered).
     pub fn dispatch(&self, event: &Event) -> EventResult {
         let mapped = crate::transform_pointer(event, self.placement.get().to_array());
-        let event = mapped.as_ref().unwrap_or(event);
+        self.dispatch_own(mapped.as_ref().unwrap_or(event))
+    }
+
+    /// [`dispatch`](Self::dispatch) for an event already in the surface's own coordinates, wherever the surface is shown: what drives a canvas from inside, as a scripted play does.
+    pub fn dispatch_own(&self, event: &Event) -> EventResult {
         if self.dispatch_overlays(event) == EventResult::Handled {
             if matches!(event, Event::PointerMoved { .. }) {
                 crate::covered(|| self.dispatch_tree(event));
@@ -333,12 +337,52 @@ impl SurfaceCanvas {
     }
 
     /// The tree as a child of another tree's `view()`: drawn as this surface's whole frame, overlays included, where the parent puts it. Place it with [`composite_surface`].
+    ///
+    /// The frame is marked as this surface's ([`DrawCommand::PushSurface`]), so whoever reads the parent's frame — a screen reader, the inspector, a document — reads the boxes inside as this surface's and not the parent's.
     pub fn boundary(&self) -> RenderNode {
-        self.tree.boundary()
+        RenderNode::group([
+            RenderNode::Primitive(DrawCommand::PushSurface {
+                surface: self.surface.handle().0,
+            }),
+            self.tree.boundary(),
+            RenderNode::Primitive(DrawCommand::PopSurface),
+        ])
     }
 
-    /// The mounted components in pre-order, as the inspector lists them.
+    /// Hands this surface a box event a surface reported for a box nested in it ([`Event::InSurface`]): its own, in its own world, or one for a surface nested deeper, through its tree to the frame that draws that one. Anything else is ignored.
+    pub fn dispatch_in_surface(&self, event: &Event) -> EventResult {
+        let Event::InSurface {
+            surface,
+            event: inner,
+        } = event
+        else {
+            return EventResult::Ignored;
+        };
+        if *surface != self.surface.handle().0 {
+            return self.dispatch_tree(event);
+        }
+        let _entered = self.enter();
+        let followed = match &**inner {
+            Event::BoxFocused { box_id } => crate::focus::follow_box(*box_id),
+            Event::BoxActivated { box_id } => crate::activate_box(*box_id),
+            Event::RunActivated { box_id, run } => crate::activate_run(*box_id, *run),
+            Event::FocusLeftBoxes => {
+                let held = crate::focus::current().is_some();
+                crate::focus::clear();
+                held
+            }
+            other => return self.tree.dispatch(other),
+        };
+        if followed {
+            EventResult::Handled
+        } else {
+            EventResult::Ignored
+        }
+    }
+
+    /// The mounted components in pre-order, as the inspector lists them, each with its box model read in this surface's world.
     pub fn walk(&self, out: &mut Vec<SegmentNodeInfo>) {
+        let _entered = self.enter();
         self.tree.walk_tree(out);
     }
 

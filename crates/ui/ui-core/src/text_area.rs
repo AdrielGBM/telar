@@ -17,6 +17,7 @@ use crate::focus::{self, FocusId};
 use crate::impl_leaf_widget;
 use crate::input_region::InputHandle;
 use crate::layout_leaf::LayoutLeaf;
+use crate::surface_context::HomeSurface;
 
 /// Width of the caret, in logical px.
 const CARET_WIDTH: f32 = 1.5;
@@ -28,6 +29,7 @@ const TAB_INSERT: &str = "    ";
 /// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input). A base primitive: unstyled (wrap it in a `box` for a border/background), keyboard-driven, no soft-wrap (only `\n` breaks lines, so long lines overflow horizontally). It requests focus on tap, positions the caret at the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining lines, arrows in all four directions, Home/End, Tab), and draws a caret. Its measured height grows with the line count, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor. Selection (`Shift`+arrows, `Ctrl+A`, shift-click) with copy, cut and paste, newlines and all. IME is not yet supported.
 pub struct TextArea {
     value: RwSignal<String>,
+    home: HomeSurface,
     // Reactive so a bare caret move re-renders even when the text is unchanged.
     caret: RwSignal<usize>,
     // Either side of the caret: a selection extended leftwards has its anchor after it.
@@ -122,6 +124,7 @@ impl TextArea {
         input.answer(node, rect.read_only());
         Ok(Self {
             value,
+            home: HomeSurface::here(),
             caret: signal(caret),
             anchor: signal(None),
             style,
@@ -452,7 +455,9 @@ impl Component for TextArea {
 
 impl Drop for TextArea {
     fn drop(&mut self) {
-        focus::unregister(self.id);
+        if let Some(_home) = self.home.enter() {
+            focus::unregister(self.id);
+        }
     }
 }
 

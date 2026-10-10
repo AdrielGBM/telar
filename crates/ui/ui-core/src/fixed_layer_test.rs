@@ -424,3 +424,25 @@ fn a_box_in_a_layer_stops_being_hovered_once_the_pointer_moves_off_the_layer() {
     );
     assert!(!hovered.get(), "but the bar hears that the pointer left it");
 }
+
+#[test]
+fn dropping_the_layer_leaves_its_root_for_the_node_that_holds_it() {
+    reset_layout_runtime();
+    set_surface_size(SURFACE);
+    let baseline = crate::context::live_node_count();
+    let bar = bar(Rc::default());
+    let bar_node = bar.layout_node();
+    let layer = FixedLayer::new(LayoutStyle::new().flex_column(), vec![Box::new(bar)]).unwrap();
+    let place = layer.layout_node();
+    relayout_if_dirty();
+
+    drop(layer);
+    assert!(
+        track_layout(bar_node).is_some(),
+        "the root outlives the widget until its owner is disposed"
+    );
+
+    crate::context::remove_node(place);
+    assert!(track_layout(bar_node).is_none(), "freed with its place");
+    assert_eq!(crate::context::live_node_count(), baseline);
+}

@@ -121,6 +121,7 @@ impl<'a> Painter<'a> {
             DrawCommand::PopElement => {
                 self.links.pop();
             }
+            DrawCommand::PushSurface { .. } | DrawCommand::PopSurface => {}
         }
     }
 

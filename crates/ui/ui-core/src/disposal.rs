@@ -11,7 +11,7 @@ use std::mem::ManuallyDrop;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 use layout_core::NodeId;
-use reactive_core::{OwnerId, PanicPayload, dispose_owner};
+use reactive_core::{OwnerId, PanicPayload, SurfaceHandle, current_surface, dispose_owner};
 
 use crate::context::remove_node;
 
@@ -25,11 +25,16 @@ thread_local! {
 struct Retired {
     owner: Option<OwnerId>,
     node: NodeId,
+    surface: SurfaceHandle,
 }
 
 /// Frees a child's owner and its layout node, once nothing is executing inside it.
 pub(crate) fn retire(owner: Option<OwnerId>, node: NodeId) {
-    let retired = Retired { owner, node };
+    let retired = Retired {
+        owner,
+        node,
+        surface: current_surface(),
+    };
     if DEPTH.with(Cell::get) == 0 {
         let mut panicked = None;
         free(retired, &mut panicked);
@@ -77,11 +82,16 @@ impl Drop for DispatchGuard {
 
 /// Frees one retired child, containing a panic so the rest of a batch is still freed: a teardown that stops early leaks everything after it.
 fn free(retired: Retired, panicked: &mut Option<PanicPayload>) {
+    // A node id names a node only in its own surface's tree, and a batch may be freed on another surface's turn.
+    let _entered = retired.surface.enter();
     // Owner before node: a node freed first has its id back in circulation while the owner still points at it, which lands the cascade on whatever the id names next.
     if let Some(owner) = retired.owner {
         contain(panicked, || dispose_owner(owner));
     }
-    contain(panicked, || remove_node(retired.node));
+    // A surface torn down first took its tree with it, and the tree active now is another surface's.
+    if current_surface() == retired.surface {
+        contain(panicked, || remove_node(retired.node));
+    }
 }
 
 fn contain(first: &mut Option<PanicPayload>, f: impl FnOnce()) {

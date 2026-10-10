@@ -57,7 +57,7 @@ pub fn new_measured_leaf(
 
 /// Creates a container node holding `children`.
 pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, LayoutError> {
-    let node = with_runtime(|rt| rt.new_container(style, children))?;
+    let node = relinking(|rt| rt.new_container(style, children))?;
     note_created(node);
     Ok(node)
 }
@@ -204,6 +204,7 @@ pub fn compute_layout(
         Ok(if again.is_empty() { updates } else { again })
     })?;
     publish(updates);
+    announce_relinks();
     Ok(())
 }
 
@@ -327,6 +328,13 @@ pub fn lay_out_against_surface(root: NodeId) {
     });
 }
 
+/// Frees `root`, a layout root of its own, whenever [`remove_node`] frees `holder`.
+///
+/// For a subtree laid out apart from the node that shows it, as a scroll's content is apart from its viewport: nothing in the layout tree links the two, so freeing the viewport alone would leave the content behind, still laid out by every [`relayout_if_dirty`] after whoever built it has gone.
+pub fn free_with(root: NodeId, holder: NodeId) {
+    with_runtime(|rt| rt.held_roots.entry(holder).or_default().push(root));
+}
+
 /// How many layout passes the active surface has run: computes that found something dirty and laid it out, not the calls that found everything clean.
 pub fn layout_passes() -> u64 {
     with_runtime_ref(|rt| rt.passes)
@@ -413,6 +421,33 @@ pub fn parent(node: NodeId) -> Option<NodeId> {
     with_parents_ref(|p| p.get(&node).copied())
 }
 
+/// [`parent`], read reactively: the caller runs again when `node` is hung from another node or taken down from the one it hangs from.
+///
+/// What a reader of a node's ancestry follows, since a moved subtree changes what is above it without any node in it changing.
+pub fn track_parent(node: NodeId) -> Option<NodeId> {
+    let read = with_runtime(|rt| {
+        *rt.parent_reads
+            .entry(node)
+            .or_insert_with(|| reactive_core::in_surface_world(|| signal(0u64)))
+    });
+    let _ = read.get();
+    parent(node)
+}
+
+/// Runs `change` on the runtime, then tells whoever tracked a parent link it moved, once the runtime is no longer borrowed.
+fn relinking<R>(change: impl FnOnce(&mut LayoutRuntime) -> R) -> R {
+    let result = with_runtime(change);
+    announce_relinks();
+    result
+}
+
+fn announce_relinks() {
+    let relinked = with_runtime(|rt| std::mem::take(&mut rt.relinked));
+    for read in relinked {
+        read.update(|generation| *generation = generation.wrapping_add(1));
+    }
+}
+
 /// The nodes `node` holds, in layout order, a portalled overlay's content last among its host's; empty for a leaf or a freed node.
 pub fn children(node: NodeId) -> Vec<NodeId> {
     with_runtime_ref(|rt| rt.engine.children(node))
@@ -458,11 +493,19 @@ impl Iterator for Ancestors {
 /// Records that `child` hangs from `parent`.
 ///
 /// The one place a parent link is written, because the invariant every climb here depends on — that following these links from any node reaches a root — belongs to no single caller. A link that would close a cycle is refused rather than stored.
-fn link_parent(child: NodeId, parent: NodeId) {
+fn link_parent(rt: &mut LayoutRuntime, child: NodeId, parent: NodeId) {
     if ancestors(parent).any(|above| above == child) {
         return;
     }
-    with_parents(|p| p.insert(child, parent));
+    if with_parents(|p| p.insert(child, parent)) != Some(parent) {
+        rt.note_relinked(child);
+    }
+}
+
+fn unlink_parent(rt: &mut LayoutRuntime, child: NodeId) -> Option<NodeId> {
+    let parent = with_parents(|p| p.remove(&child))?;
+    rt.note_relinked(child);
+    Some(parent)
 }
 
 /// Whether `node` is `ancestor` or sits anywhere beneath it.
@@ -577,12 +620,27 @@ pub fn set_min_height(node: NodeId, px: f32) {
 
 /// Replaces `parent`'s children with `children`, in order, marking `parent` dirty. Operates on the thread-local runtime; `parent` must be a container already registered in the runtime.
 pub fn set_children(parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
-    with_runtime(|rt| rt.set_children(parent, children))
+    relinking(|rt| rt.set_children(parent, children))
+}
+
+/// Takes `node` out of the node that holds it, leaving it and everything beneath it alive: a root of its own until [`set_children`] hangs it somewhere else.
+///
+/// What moving a built subtree needs between two parents. [`set_children`] on the new parent already takes a child from its old one, but a subtree with nowhere to go yet has to leave a parent that is about to be freed, or [`remove_node`] on that parent frees the subtree with it. A node that hangs from nothing is left as it is.
+pub fn detach_node(node: NodeId) {
+    relinking(|rt| {
+        let Some(parent) = unlink_parent(rt, node) else {
+            return;
+        };
+        if rt.engine.children(parent).contains(&node) {
+            rt.engine.remove_child(parent, node).ok();
+            rt.engine.mark_dirty(parent).ok();
+        }
+    });
 }
 
 /// Frees `node` and every node beneath it, with their rect signals and bookkeeping. The caller must have removed it from its parent's child list (via [`set_children`]) first; a node already freed is skipped.
 pub fn remove_node(node: NodeId) {
-    with_runtime(|rt| rt.remove_node(node))
+    relinking(|rt| rt.remove_node(node))
 }
 
 /// How many layout nodes the active surface's runtime holds. What a test watches to see a disposal free every node it should.
@@ -602,7 +660,7 @@ pub fn overlay_viewport() -> Option<geometry_core::Rect> {
 
 /// Pins the overlay host to `node` — the app's window-spanning root — so overlays always fill the viewport even when the app computes several independent layout roots (e.g. a shell with a separate sidebar root computed after the main one, which the auto-detection would otherwise pick as the host). Call it each relayout with the current main root (it survives hot-reload rebuilds, which mint a new root node). Once pinned, auto-detection no longer overrides the host. Content waiting for a host is attached to it at once.
 pub fn set_overlay_host(node: NodeId) {
-    with_runtime(|rt| {
+    relinking(|rt| {
         rt.overlay_host.pin(node);
         rt.attach_waiting_overlays();
     });
@@ -612,7 +670,7 @@ pub fn set_overlay_host(node: NodeId) {
 ///
 /// With no host yet — an overlay open while its tree is still being built, before the surface's first layout pass — the content waits and is attached as soon as a host is detected or pinned. Returns `false` only when the content is refused, because the host sits inside it.
 pub fn attach_overlay(node: NodeId) -> bool {
-    with_runtime(|rt| match rt.overlay_host.node() {
+    relinking(|rt| match rt.overlay_host.node() {
         Some(host) => rt.attach_to_host(host, node),
         None => {
             rt.overlay_host.wait(node);
@@ -623,10 +681,10 @@ pub fn attach_overlay(node: NodeId) -> bool {
 
 /// Detaches an overlay's content from the layout host (inverse of [`attach_overlay`]), or withdraws it while it still waits for one; the caller frees it afterwards with [`remove_node`]. A no-op if the host is gone.
 pub fn detach_overlay(node: NodeId) {
-    with_runtime(|rt| {
+    relinking(|rt| {
         rt.overlay_host.withdraw(node);
         // The host the overlay actually attached to, recorded at attach — not the current one: auto-detection may have moved the host to another root since, and taffy panics if `node` is not a child of what it is removed from.
-        if let Some(host) = with_parents(|p| p.remove(&node)) {
+        if let Some(host) = unlink_parent(rt, node) {
             rt.engine.remove_child(host, node).ok();
             rt.engine.mark_dirty(host).ok();
         }
@@ -710,6 +768,8 @@ struct LayoutRuntime {
     sticky_anchors: FxHashMap<NodeId, Vec<StickyAnchor>>,
     /// The roots laid out against the surface. See [`lay_out_against_surface`].
     surface_roots: FxHashSet<NodeId>,
+    /// The roots each node frees along with itself. See [`free_with`].
+    held_roots: FxHashMap<NodeId, Vec<NodeId>>,
     /// What runs after each [`relayout_if_dirty`], keyed by the handle that withdraws it. See [`on_relayout`].
     relayout_hooks: Vec<(u64, Rc<dyn Fn()>)>,
     next_relayout_hook: u64,
@@ -717,6 +777,10 @@ struct LayoutRuntime {
     css_reads: FxHashMap<NodeId, RwSignal<u64>>,
     /// A generation per node whose display something tracked, bumped by [`restyle`] when the node is hidden or shown. Minted on first read, like `css_reads`. See [`track_display_none`].
     display_reads: FxHashMap<NodeId, RwSignal<u64>>,
+    /// A generation per node whose parent something tracked, bumped when the node is hung somewhere else or taken down. See [`track_parent`].
+    parent_reads: FxHashMap<NodeId, RwSignal<u64>>,
+    /// The tracked links a change moved, announced once the runtime is no longer borrowed. See [`relinking`].
+    relinked: Vec<RwSignal<u64>>,
     // Guards against a recursive `compute()`: an effect that reads a layout signal and calls `compute_layout`.
     #[cfg(debug_assertions)]
     is_computing: bool,
@@ -737,10 +801,13 @@ impl LayoutRuntime {
             sticky_views: FxHashMap::default(),
             sticky_anchors: FxHashMap::default(),
             surface_roots: FxHashSet::default(),
+            held_roots: FxHashMap::default(),
             relayout_hooks: Vec::new(),
             next_relayout_hook: 0,
             css_reads: FxHashMap::default(),
             display_reads: FxHashMap::default(),
+            parent_reads: FxHashMap::default(),
+            relinked: Vec::new(),
             #[cfg(debug_assertions)]
             is_computing: false,
         }
@@ -783,7 +850,7 @@ impl LayoutRuntime {
         let signal = signal(Rect::default());
         self.registry.insert(node, signal);
         for &child in children {
-            link_parent(child, node);
+            link_parent(self, child, node);
         }
         Ok(node)
     }
@@ -884,7 +951,7 @@ impl LayoutRuntime {
         if self.engine.add_child(host, content).is_err() {
             return false;
         }
-        link_parent(content, host);
+        link_parent(self, content, host);
         self.engine.mark_dirty(host).ok();
         true
     }
@@ -944,12 +1011,24 @@ impl LayoutRuntime {
     }
 
     fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
+        let before = self.engine.children(parent);
         self.engine.set_children(parent, children)?;
+        for dropped in before.into_iter().filter(|old| !children.contains(old)) {
+            if with_parents_ref(|p| p.get(&dropped) == Some(&parent)) {
+                unlink_parent(self, dropped);
+            }
+        }
         for &child in children {
-            link_parent(child, parent);
+            link_parent(self, child, parent);
         }
         self.engine.mark_dirty(parent).ok();
         Ok(())
+    }
+
+    fn note_relinked(&mut self, node: NodeId) {
+        if let Some(&read) = self.parent_reads.get(&node) {
+            self.relinked.push(read);
+        }
     }
 
     /// Frees `node` and every node beneath it: taffy's own `remove` orphans the children, and nothing else would ever free them.
@@ -961,6 +1040,7 @@ impl LayoutRuntime {
                 continue;
             }
             pending.extend(self.engine.children(at));
+            pending.extend(self.held_roots.remove(&at).into_iter().flatten());
             self.engine.remove(at);
             self.registry.remove(&at);
             self.last_space.remove(&at);
@@ -969,6 +1049,7 @@ impl LayoutRuntime {
             self.abs_pos_signals.remove(&at);
             self.css_reads.remove(&at);
             self.display_reads.remove(&at);
+            self.parent_reads.remove(&at);
             self.sticky_views.remove(&at);
             self.sticky_anchors.remove(&at);
             self.surface_roots.remove(&at);
@@ -979,7 +1060,18 @@ impl LayoutRuntime {
             anchors.retain(|anchor| !freed.contains(&anchor.node()));
         }
         // Every link naming a freed node goes with it, not only the one it owned: taffy hands a freed index back out.
-        with_parents(|p| p.retain(|below, above| !freed.contains(below) && !freed.contains(above)));
+        let orphaned: Vec<NodeId> = with_parents(|p| {
+            let orphaned = p
+                .iter()
+                .filter(|(below, above)| freed.contains(*above) && !freed.contains(*below))
+                .map(|(below, _)| *below)
+                .collect();
+            p.retain(|below, above| !freed.contains(below) && !freed.contains(above));
+            orphaned
+        });
+        for node in orphaned {
+            self.note_relinked(node);
+        }
     }
 }
 

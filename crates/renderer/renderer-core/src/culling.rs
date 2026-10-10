@@ -136,7 +136,9 @@ pub fn command_visual_rect(
         | DrawCommand::PushLayer { .. }
         | DrawCommand::PopLayer
         | DrawCommand::PushElement { .. }
-        | DrawCommand::PopElement => None,
+        | DrawCommand::PopElement
+        | DrawCommand::PushSurface { .. }
+        | DrawCommand::PopSurface => None,
     }
 }
 

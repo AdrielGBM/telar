@@ -348,14 +348,14 @@ impl DragGesture {
         self.threshold > 0.0
     }
 
-    /// A press inside `rect` with a button this gesture arms starts the drag and reports the press point. Returns `Handled` when it starts, so the press is consumed (as with a tap).
+    /// A press inside `hit` with a button this gesture arms starts the drag and reports the press point, local to `rect`. Returns `Handled` when it starts, so the press is consumed (as with a tap). `hit` is `rect` unless the box grew its hit area past its laid-out one, so a press in that outset reports a point outside the box.
     ///
     /// With a threshold set, the press *arms* the gesture without reporting: nothing has travelled yet, so nothing has been dragged.
-    pub(crate) fn press(&mut self, event: &Event, rect: Rect) -> EventResult {
+    pub(crate) fn press(&mut self, event: &Event, rect: Rect, hit: Rect) -> EventResult {
         self.settle();
         if let Event::PointerPressed { x, y, button, .. } = event
             && self.arms(button)
-            && rect.contains(*x as f32, *y as f32)
+            && hit.contains(*x as f32, *y as f32)
         {
             let local = (*x as f32 - rect.x, *y as f32 - rect.y);
             self.origin = Some((

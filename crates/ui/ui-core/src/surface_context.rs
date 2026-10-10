@@ -1,6 +1,6 @@
 //! `Surface` — one RSX surface's complete per-surface world.
 //!
-//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale, control size, theme mode and high contrast it overrides the thread's with. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
+//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale, control size, theme mode and high contrast it overrides the thread's with. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
 //! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and `enter` is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
@@ -16,8 +16,8 @@ use layout_reactive::{
 use platform_core::{WindowCommandContext, WindowCommandGuard};
 use preferences_core::{HighContrastContext, HighContrastGuard};
 use reactive_core::{
-    SurfaceEnterGuard, SurfaceHandle, dispose_surface, in_surface_world, set_current_surface,
-    set_surface_enter_hook,
+    SurfaceEnterGuard, SurfaceHandle, current_surface, dispose_surface, in_surface_world,
+    set_current_surface, set_surface_enter_hook,
 };
 use theme_core::{ControlSizeContext, ControlSizeGuard, ModeContext, ModeGuard};
 use ui_tree::{OverlayContext, OverlayGuard};
@@ -29,6 +29,7 @@ use crate::dismiss::{DismissContext, DismissGuard};
 use crate::focus::{FocusContext, FocusGuard};
 use crate::inherit::{CascadeContext, CascadeGuard};
 use crate::input_region::{InputRegionContext, InputRegionGuard};
+use crate::named_overlay::{NamedOverlaysContext, NamedOverlaysGuard};
 use crate::presence::{ExitsContext, ExitsGuard};
 use crate::scroll_viewports::{ViewportsContext, ViewportsGuard};
 use crate::surface_font::{SurfaceFontContext, SurfaceFontGuard};
@@ -43,6 +44,7 @@ pub struct Surface {
     size: SurfaceSizeContext,
     overlay: OverlayContext,
     dismiss: DismissContext,
+    named_overlays: NamedOverlaysContext,
     focus: FocusContext,
     input_region: InputRegionContext,
     exits: ExitsContext,
@@ -76,6 +78,7 @@ impl Surface {
                 size: SurfaceSizeContext::new_owned(),
                 overlay: OverlayContext::new_owned(),
                 dismiss: DismissContext::new_owned(),
+                named_overlays: NamedOverlaysContext::new_owned(),
                 focus: FocusContext::new_owned(),
                 input_region: InputRegionContext::new_owned(),
                 exits: ExitsContext::new_owned(),
@@ -104,6 +107,11 @@ impl Surface {
         self.handle
     }
 
+    /// The surface `handle` names on this thread, while it is alive.
+    pub fn find(handle: SurfaceHandle) -> Option<Rc<Surface>> {
+        SURFACES.with(|s| s.borrow().get(&handle).and_then(Weak::upgrade))
+    }
+
     /// Activates this surface's world until the returned guard drops, which restores the previously-active world. The swapped worlds are independent thread-locals, so restore order among them is irrelevant; nesting `enter`s is fine.
     #[must_use = "the surface is only active while this guard is alive"]
     pub fn enter(&self) -> SurfaceGuard {
@@ -115,6 +123,7 @@ impl Surface {
             _size: self.size.enter(),
             _overlay: self.overlay.enter(),
             _dismiss: self.dismiss.enter(),
+            _named_overlays: self.named_overlays.enter(),
             _focus: self.focus.enter(),
             _input_region: self.input_region.enter(),
             _exits: self.exits.enter(),
@@ -149,6 +158,7 @@ impl Surface {
             _size: SurfaceSizeContext::enter_ambient(),
             _overlay: OverlayContext::enter_ambient(),
             _dismiss: DismissContext::enter_ambient(),
+            _named_overlays: NamedOverlaysContext::enter_ambient(),
             _focus: FocusContext::enter_ambient(),
             _input_region: InputRegionContext::enter_ambient(),
             _exits: ExitsContext::enter_ambient(),
@@ -191,6 +201,7 @@ pub struct SurfaceGuard {
     _size: SurfaceSizeGuard,
     _overlay: OverlayGuard,
     _dismiss: DismissGuard,
+    _named_overlays: NamedOverlaysGuard,
     _focus: FocusGuard,
     _input_region: InputRegionGuard,
     _exits: ExitsGuard,
@@ -208,6 +219,28 @@ pub struct SurfaceGuard {
     _mode: ModeGuard,
     _high_contrast: HighContrastGuard,
     _prev_surface: RestoreSurface,
+}
+
+/// The surface something was registered on, for withdrawing it there whichever surface is active when it goes.
+///
+/// A per-surface registry is reached through the active world, and a widget is dropped wherever its last handle lets go: a tree torn down on another surface's turn would otherwise withdraw its focus stops, input regions and overlays from that surface's world, and leave its own behind.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct HomeSurface(SurfaceHandle);
+
+impl HomeSurface {
+    pub(crate) fn here() -> Self {
+        Self(current_surface())
+    }
+
+    /// Enters the surface until the guard drops, or `None` once it is torn down: it took its worlds with it, and the one active now is another's.
+    pub(crate) fn enter(self) -> Option<SurfaceEnterGuard> {
+        let entered = self.0.enter();
+        (current_surface() == self.0).then_some(entered)
+    }
+
+    pub(crate) fn handle(self) -> SurfaceHandle {
+        self.0
+    }
 }
 
 struct RestoreSurface(SurfaceHandle);

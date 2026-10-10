@@ -5,7 +5,7 @@
 use std::borrow::Cow;
 
 use crate::SegmentNodeInfo;
-use platform_core::{AccessNode, Event};
+use platform_core::{AccessNode, AccessViolation, Event};
 use renderer_core::DrawCommand;
 
 /// What a dev overlay asks the runner to do.
@@ -67,6 +67,11 @@ pub trait DevOverlay: Default + 'static {
     /// The window's accessibility nodes as a screen reader would be told them, after a frame for which [`wants_access`](Self::wants_access) said yes.
     fn on_access(&mut self, nodes: &[AccessNode]) {
         let _ = nodes;
+    }
+
+    /// What the accessibility checks found in the same frame as the last [`on_access`](Self::on_access), in window coordinates.
+    fn on_violations(&mut self, violations: &[AccessViolation]) {
+        let _ = violations;
     }
 
     /// Sets (or clears with `None`) the build error banner shown over the app.

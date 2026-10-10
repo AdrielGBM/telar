@@ -1166,6 +1166,32 @@ fn a_root_against_the_surface_is_laid_out_at_its_size_and_never_hosts_overlays()
 }
 
 #[test]
+fn a_root_held_by_a_node_is_freed_with_it_and_stops_being_laid_out() {
+    reset_layout_runtime();
+    let (row, _) = new_leaf(LayoutStyle::new().height(20.0)).unwrap();
+    let content = new_container(LayoutStyle::new().flex_column(), &[row]).unwrap();
+    let (viewport, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let page = new_container(LayoutStyle::new(), &[viewport]).unwrap();
+    free_with(content, viewport);
+    compute_layout(
+        content,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    let passes = layout_passes();
+
+    mark_dirty(row).unwrap();
+    set_children(page, &[]).unwrap();
+    remove_node(viewport);
+    relayout_if_dirty();
+
+    assert!(track_layout(content).is_none(), "freed with its holder");
+    assert!(track_layout(row).is_none(), "with everything beneath it");
+    assert_eq!(layout_passes(), passes, "and no relayout reaches it again");
+}
+
+#[test]
 fn a_tracked_display_wakes_its_reader_when_the_node_is_hidden_or_shown() {
     use std::cell::Cell;
     use std::rc::Rc;
@@ -1293,4 +1319,74 @@ fn the_box_model_reads_the_active_surfaces_layout() {
 
     remove_node(leaf);
     assert_eq!(box_model(leaf), None, "a freed node answers None");
+}
+
+#[test]
+fn a_detached_subtree_outlives_the_parent_it_left_and_can_hang_from_another() {
+    reset_layout_runtime();
+    let (leaf, _) = new_leaf(LayoutStyle::new().width(10.0).height(10.0)).unwrap();
+    let moved = new_container(LayoutStyle::new(), &[leaf]).unwrap();
+    let old = new_container(LayoutStyle::new(), &[moved]).unwrap();
+    let new = new_container(LayoutStyle::new().padding_all(5.0), &[]).unwrap();
+
+    detach_node(moved);
+    assert_eq!(parent(moved), None);
+    assert!(children(old).is_empty());
+
+    remove_node(old);
+    assert!(
+        track_layout(leaf).is_some(),
+        "freeing the parent it left does not free the subtree"
+    );
+
+    set_children(new, &[moved]).unwrap();
+    compute_layout(
+        new,
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    assert_eq!(parent(moved), Some(new));
+    assert_eq!(
+        track_layout(moved).unwrap().get().x,
+        5.0,
+        "laid out where it hangs now"
+    );
+
+    detach_node(moved);
+    detach_node(moved);
+    assert_eq!(parent(moved), None, "detaching twice is harmless");
+}
+
+#[test]
+fn a_tracked_parent_is_read_again_whenever_the_node_moves() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    reset_layout_runtime();
+    let (node, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let first = new_container(LayoutStyle::new(), &[node]).unwrap();
+    let second = new_container(LayoutStyle::new(), &[]).unwrap();
+    let seen = Rc::new(Cell::new(None));
+    let runs = Rc::new(Cell::new(0));
+    let (wrote, ran) = (seen.clone(), runs.clone());
+    let _reader = reactive_core::effect(move || {
+        ran.set(ran.get() + 1);
+        wrote.set(track_parent(node));
+    });
+    assert_eq!(seen.get(), Some(first));
+
+    set_children(second, &[node]).unwrap();
+    assert_eq!(seen.get(), Some(second), "hung somewhere else");
+    detach_node(node);
+    assert_eq!(seen.get(), None, "taken down");
+    set_children(first, &[node]).unwrap();
+    assert_eq!(seen.get(), Some(first), "and hung back");
+    set_children(first, &[]).unwrap();
+    assert_eq!(seen.get(), None, "and let go of");
+
+    let before = runs.get();
+    let (sibling, _) = new_leaf(LayoutStyle::new()).unwrap();
+    set_children(second, &[sibling]).unwrap();
+    assert_eq!(runs.get(), before, "a move elsewhere is not this node's");
 }

@@ -2,11 +2,13 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use geometry_core::{Point, Rect, Transform};
+use geometry_core::{Insets, Point, Rect, Transform};
 use layout_core::NodeId;
 use platform_core::Event;
 use reactive_core::ReadSignal;
 use ui_tree::EventResult;
+
+use crate::surface_context::HomeSurface;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum InputMode {
@@ -49,6 +51,11 @@ struct Link {
     hoisted: bool,
 }
 
+struct Outset {
+    token: u64,
+    by: Rc<dyn Fn() -> Insets>,
+}
+
 #[derive(Default)]
 struct Registry {
     answers: HashMap<NodeId, Answer>,
@@ -59,6 +66,7 @@ struct Registry {
     gates: HashMap<NodeId, Vec<Gate>>,
     placements: HashMap<NodeId, Vec<(u64, Placement)>>,
     links: HashMap<NodeId, Link>,
+    outsets: HashMap<NodeId, Outset>,
 }
 
 reactive_core::surface_local! {
@@ -81,6 +89,7 @@ pub(crate) fn reset() {
 pub(crate) struct InputHandle {
     token: u64,
     nodes: Vec<NodeId>,
+    home: HomeSurface,
 }
 
 impl InputHandle {
@@ -88,6 +97,7 @@ impl InputHandle {
         Self {
             token: NEXT_TOKEN.with(|next| next.replace(next.get() + 1)),
             nodes: Vec::new(),
+            home: HomeSurface::here(),
         }
     }
 
@@ -154,6 +164,14 @@ impl InputHandle {
         });
     }
 
+    pub(crate) fn outset(&mut self, node: NodeId, by: Rc<dyn Fn() -> Insets>) {
+        self.touch(node);
+        let token = self.token;
+        with_input(|r| {
+            r.outsets.insert(node, Outset { token, by });
+        });
+    }
+
     pub(crate) fn link(&mut self, node: NodeId, owner: NodeId, hoisted: bool) {
         self.touch(node);
         let token = self.token;
@@ -176,6 +194,9 @@ impl Drop for InputHandle {
         if self.nodes.is_empty() {
             return;
         }
+        let Some(_home) = self.home.enter() else {
+            return;
+        };
         let token = self.token;
         let nodes = std::mem::take(&mut self.nodes);
         with_input(|r| {
@@ -199,6 +220,9 @@ impl Drop for InputHandle {
                 if r.links.get(&node).is_some_and(|l| l.token == token) {
                     r.links.remove(&node);
                 }
+                if r.outsets.get(&node).is_some_and(|o| o.token == token) {
+                    r.outsets.remove(&node);
+                }
             }
         });
     }
@@ -212,6 +236,7 @@ pub(crate) fn mentions(node: NodeId) -> bool {
             || r.gates.contains_key(&node)
             || r.placements.contains_key(&node)
             || r.links.contains_key(&node)
+            || r.outsets.contains_key(&node)
     })
 }
 
@@ -277,10 +302,22 @@ pub(crate) fn receives_input(node: NodeId) -> bool {
     true
 }
 
-/// Whether `node` or any box it was declared inside is out of layout flow, read reactively: the caller runs again when one of them is hidden or shown. Climbs the links the layout tree lacks, into the scroll areas and hoisted subtrees a box sits in, as [`receives_input`] does.
+/// Whether `node` or any box it was declared inside is out of layout flow, read reactively: the caller runs again when one of them is hidden or shown, or when a box on the way up is hung from another parent. Climbs the links the layout tree lacks, into the scroll areas and hoisted subtrees a box sits in, as [`receives_input`] does.
 pub(crate) fn tracks_hidden(node: NodeId) -> bool {
-    std::iter::successors(Some(node), |&at| logical_parent(at))
+    std::iter::successors(Some(node), |&at| tracked_logical_parent(at))
         .any(layout_reactive::track_display_none)
+}
+
+/// [`tracks_hidden`] without subscribing, for a key press that has to answer now.
+pub(crate) fn is_hidden(node: NodeId) -> bool {
+    std::iter::successors(Some(node), |&at| logical_parent(at)).any(layout_reactive::is_hidden)
+}
+
+fn tracked_logical_parent(node: NodeId) -> Option<NodeId> {
+    match link_of(node) {
+        Some((owner, _)) => Some(owner),
+        None => layout_reactive::track_parent(node),
+    }
 }
 
 pub(crate) fn is_inside(node: NodeId, ancestor: NodeId) -> bool {
@@ -593,10 +630,44 @@ pub fn visible_rect(node: NodeId) -> Option<Rect> {
     lift(node, layout_reactive::track_layout(node)?.peek(), false).map(|shape| shape.bounds())
 }
 
-/// Whether `(x, y)` lands on `node` where it is drawn, rather than merely inside the bounds around it.
+/// [`visible_rect`] grown by the node's hit outset: where the pointer finds the box, and so the target a reader and a target-size check are told about.
+pub(crate) fn hit_rect(node: NodeId) -> Option<Rect> {
+    let laid = layout_reactive::track_layout(node)?.peek();
+    lift(node, hit_area(node, laid), false).map(|shape| shape.bounds())
+}
+
+/// The outset `node` declared with `StyledContainer::hit_outset`, read now.
+pub(crate) fn outset_of(node: NodeId) -> Option<Insets> {
+    let by = with_input_ref(|r| r.outsets.get(&node).map(|o| Rc::clone(&o.by)))?;
+    Some(by())
+}
+
+pub(crate) fn grown(rect: Rect, by: Insets) -> Rect {
+    Rect::new(
+        rect.x - by.left,
+        rect.y - by.top,
+        (rect.width + by.left + by.right).max(0.0),
+        (rect.height + by.top + by.bottom).max(0.0),
+    )
+}
+
+fn hit_area(node: NodeId, laid: Rect) -> Rect {
+    outset_of(node).map_or(laid, |by| grown(laid, by))
+}
+
+/// Whether `(x, y)` falls in the hit area of a `node` that declared an outset, which its parent tests before its siblings. `false` for every node that declared none.
+pub(crate) fn reaches(node: NodeId, layout: Rect, x: f32, y: f32) -> bool {
+    let Some(by) = outset_of(node) else {
+        return false;
+    };
+    gate_admits(node)
+        && place(node, Shape::Box(grown(layout, by)), true).is_some_and(|hit| hit.contains(x, y))
+}
+
+/// Whether `(x, y)` lands on `node` where it is drawn, or in the outset it is pointed at by, rather than merely inside the bounds around it.
 pub(crate) fn pointable(node: NodeId, x: f32, y: f32) -> bool {
     layout_reactive::track_layout(node)
-        .and_then(|rect| drawn(node, rect.peek()))
+        .and_then(|rect| drawn(node, hit_area(node, rect.peek())))
         .is_some_and(|shape| shape.contains(x, y))
 }
 
@@ -612,7 +683,7 @@ pub fn interactive_rects() -> Vec<Rect> {
     let mut region: Vec<Rect> = answers
         .into_iter()
         .filter(|(node, _)| receives_input(*node))
-        .filter_map(|(node, rect)| drawn(node, rect.peek()))
+        .filter_map(|(node, rect)| drawn(node, hit_area(node, rect.peek())))
         .flat_map(Shape::rects)
         .collect();
     for &(node, rect, mode) in &declared {

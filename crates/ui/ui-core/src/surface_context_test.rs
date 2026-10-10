@@ -388,3 +388,173 @@ fn a_component_reads_the_size_of_the_surface_it_was_built_on() {
         "the panel resizing is not the window resizing"
     );
 }
+
+/// A control, a modal over a 100×100 root and the root, built on the active surface: the first focus id and the first overlay id that surface mints, so another surface's twins are their namesakes.
+struct Widgets {
+    _control: crate::StyledContainer,
+    focus: crate::focus::FocusId,
+    node: layout_reactive::NodeId,
+    _modal: crate::Overlay,
+}
+
+fn widgets() -> Widgets {
+    use crate::LayoutItem;
+    use layout_reactive::{AvailableSpace, LayoutStyle, compute_layout, new_container};
+
+    let control = crate::StyledContainer::new(
+        LayoutStyle::new().width(40.0).height(20.0),
+        |_| renderer_core::RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(crate::focus::Role::Button)
+    .on_press(|| {});
+    let panel = crate::StyledContainer::new(
+        LayoutStyle::new().width(50.0).height(20.0),
+        |_| renderer_core::RectStyle::default(),
+        vec![],
+    )
+    .unwrap();
+    let modal = crate::Overlay::new(LayoutStyle::new(), vec![Box::new(panel)]).unwrap();
+    let root = new_container(
+        LayoutStyle::new().width(100.0).height(100.0),
+        &[control.layout_node(), modal.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    Widgets {
+        focus: control.focus_id().expect("a control has a focus id"),
+        node: control.layout_node(),
+        _control: control,
+        _modal: modal,
+    }
+}
+
+fn modal_takes_a_press() -> bool {
+    use platform_core::{Event, PointerButton, PointerSource};
+    let press = Event::PointerPressed {
+        x: 10.0,
+        y: 10.0,
+        button: PointerButton::Primary,
+        source: PointerSource::Mouse,
+    };
+    ui_tree::dispatch_overlays(&press) == ui_tree::EventResult::Handled
+}
+
+fn untouched(widgets: &Widgets) {
+    assert!(
+        crate::focus::is_registered(widgets.focus),
+        "the namesake focus stop is still there"
+    );
+    assert!(
+        crate::input_region::mentions(widgets.node),
+        "and so is its input region"
+    );
+    assert!(modal_takes_a_press(), "and the namesake modal still blocks");
+}
+
+#[test]
+fn a_widget_dropped_after_its_surface_is_gone_leaves_the_active_surface_alone() {
+    let home = Surface::new();
+    let away = Surface::new();
+    let gone = {
+        let _home = home.enter();
+        widgets()
+    };
+    drop(home);
+
+    let _away = away.enter();
+    let here = widgets();
+    assert_eq!(
+        (here.focus, here.node),
+        (gone.focus, gone.node),
+        "the two surfaces must really collide on ids, or this proves nothing"
+    );
+    drop(gone);
+
+    untouched(&here);
+}
+
+#[test]
+fn a_widget_dropped_on_another_surfaces_turn_withdraws_from_its_own() {
+    let home = Surface::new();
+    let away = Surface::new();
+    let (leaving, leaving_node) = {
+        let _home = home.enter();
+        let widgets = widgets();
+        let node = widgets.node;
+        (widgets, node)
+    };
+
+    {
+        let _away = away.enter();
+        let here = widgets();
+        drop(leaving);
+        untouched(&here);
+    }
+
+    let _home = home.enter();
+    assert!(
+        crate::focus::tab_order().is_empty(),
+        "its focus stop left its own surface"
+    );
+    assert!(
+        !crate::input_region::mentions(leaving_node),
+        "and so did its input region"
+    );
+    assert!(!modal_takes_a_press(), "and its modal");
+}
+
+struct FreesNode(layout_reactive::NodeId);
+
+impl Drop for FreesNode {
+    fn drop(&mut self) {
+        layout_reactive::remove_node(self.0);
+    }
+}
+
+#[test]
+fn an_owner_disposed_on_another_surfaces_turn_tears_down_inside_its_own() {
+    use layout_reactive::{LayoutStyle, live_node_count, new_container};
+    use reactive_core::{dispose_owner, on_cleanup, owner_scope, signal};
+
+    let home = Surface::new();
+    let away = Surface::new();
+    let owner = {
+        let _home = home.enter();
+        let scope = owner_scope();
+        let held = new_container(LayoutStyle::new(), &[]).unwrap();
+        let by_cleanup = new_container(LayoutStyle::new(), &[]).unwrap();
+        let _value = signal(FreesNode(held));
+        on_cleanup(move || drop(FreesNode(by_cleanup)));
+        assert_eq!(live_node_count(), 2);
+        scope.id()
+    };
+
+    {
+        let _away = away.enter();
+        let _namesake = new_container(LayoutStyle::new(), &[]).unwrap();
+        let _other = new_container(LayoutStyle::new(), &[]).unwrap();
+        assert_eq!(live_node_count(), 2);
+
+        dispose_owner(owner);
+
+        assert_eq!(
+            live_node_count(),
+            2,
+            "nothing of the owner's was withdrawn from the surface active now"
+        );
+    }
+
+    let _home = home.enter();
+    assert_eq!(
+        live_node_count(),
+        0,
+        "the owner's nodes left their own surface"
+    );
+}

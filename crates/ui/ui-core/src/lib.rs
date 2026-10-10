@@ -37,6 +37,7 @@ mod layout_transition;
 mod lazy;
 mod link;
 mod mask;
+mod movable;
 mod named_overlay;
 pub mod overlay;
 mod page_anchor;
@@ -91,16 +92,16 @@ pub use canvas::Canvas;
 pub use child_host::{ChildSlot, fragment, fragment_positional};
 pub use container::Container;
 pub use context::{
-    NodeId, absolute_rect, compute_layout, current_direction, live_node_count, mark_dirty,
-    new_container, new_leaf, overlay_viewport, relayout_if_dirty, remove_node,
-    reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
+    NodeId, RelayoutHook, absolute_rect, compute_layout, current_direction, live_node_count,
+    mark_dirty, new_container, new_leaf, on_relayout, overlay_viewport, relayout_if_dirty,
+    remove_node, reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
     set_overlay_host, set_safe_area_insets, set_surface_size, surface_size, track_layout,
     use_direction, use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
 };
 pub use cursor::requested_cursor;
 pub use dismiss::{
     DismissRegistration, confirm_top, dismiss_depth, dismiss_top, register_transaction,
-    use_dismiss_depth,
+    register_transaction_within, use_dismiss_depth,
 };
 pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use error_boundary::{BuildFailure, ErrorBoundary};
@@ -124,6 +125,7 @@ pub use link::{
     has_anchor, reader_moved, register_anchor, reveal_anchor,
 };
 pub use mask::Mask;
+pub use movable::{Movable, MovableOutlet};
 pub use named_overlay::{close as close_overlay, open as open_overlay, state as overlay_state};
 pub use overlay::{Overlay, Placement, anchor_rect};
 pub use page_anchor::PageAnchor;

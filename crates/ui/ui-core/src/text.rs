@@ -14,6 +14,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 use crate::context::mark_dirty;
 use crate::impl_leaf_widget;
 use crate::layout_leaf::LayoutLeaf;
+use crate::surface_context::HomeSurface;
 use crate::text_fit::Fitting;
 
 /// What a text was last measured from: its string, its declared style, and the fit it asked for with the surface that fit read.
@@ -33,8 +34,10 @@ type InkKey = (u32, u64);
 
 pub struct Text {
     content: Rc<dyn Fn() -> String>,
+    home: HomeSurface,
     // The byte ranges that restyle themselves, or `None` for a paragraph without any.
     spans: Option<Rc<dyn Fn() -> Vec<Span>>>,
+    runs_token: Option<u64>,
     cached_content: RefCell<(String, Arc<str>)>,
     // (font_size bits, text metrics generation) -> (ink_top, ink_height, line_height). Keyed on size and not on text, because the band is measured from a reference run.
     cached_ink: RefCell<Option<(InkKey, f32, f32, f32)>>,
@@ -321,15 +324,17 @@ impl Text {
             *measured.borrow_mut() = Some(next);
             mark_dirty(node).ok();
         });
-        if let Some(spans) = spans_fn.clone() {
+        let runs_token = spans_fn.clone().map(|spans| {
             crate::link::register_runs(
                 node,
                 Rc::new(move |run| spans().get(run).and_then(|span| span.link.clone())),
-            );
-        }
+            )
+        });
         Ok(Self {
             content: content_fn,
+            home: HomeSurface::here(),
             spans: spans_fn,
+            runs_token,
             cached_content: RefCell::new((String::new(), Arc::from(""))),
             cached_ink: RefCell::new(None),
             style,
@@ -473,8 +478,8 @@ impl Text {
 
 impl Drop for Text {
     fn drop(&mut self) {
-        if self.spans.is_some() {
-            crate::link::unregister_runs(self.leaf.node);
+        if let Some(token) = self.runs_token {
+            crate::link::unregister_runs(self.home, self.leaf.node, token);
         }
     }
 }

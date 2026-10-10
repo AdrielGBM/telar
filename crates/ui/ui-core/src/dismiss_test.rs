@@ -412,3 +412,42 @@ fn escape_and_enter_go_past_a_focused_control_that_does_not_keep_them() {
     crate::focus::unregister(button);
     crate::focus::unregister(slider);
 }
+
+#[test]
+fn an_entry_inside_a_hidden_box_is_skipped_by_dismissal_and_confirmation() {
+    use layout_core::LayoutStyle;
+
+    use crate::context::{new_container, reset_layout_runtime, set_display};
+
+    reset_layout_runtime();
+    reset();
+    let shown = new_container(LayoutStyle::new(), &[]).unwrap();
+    let hidden = new_container(LayoutStyle::new(), &[]).unwrap();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let _below = {
+        let log = log.clone();
+        DismissRegistration::within(shown, Rc::new(move || log.borrow_mut().push("below")))
+    };
+    let above = {
+        let (dismissed, confirmed) = (log.clone(), log.clone());
+        DismissRegistration::confirmable_within(
+            hidden,
+            Rc::new(move || dismissed.borrow_mut().push("above")),
+            Rc::new(move || confirmed.borrow_mut().push("confirm")),
+        )
+    };
+    set_display(hidden, false);
+    assert_eq!(dismiss_depth(), 1);
+
+    assert!(
+        !confirm_top(),
+        "the shown entry takes no confirmation, and the hidden one is not asked"
+    );
+    assert!(dismiss_top());
+    assert_eq!(*log.borrow(), vec!["below"]);
+    assert!(
+        !dismiss_top(),
+        "only the hidden entry is left, and it stays"
+    );
+    drop(above);
+}

@@ -492,3 +492,41 @@ fn a_text_entry_shows_focus_however_it_was_reached() {
     unregister(button);
     unregister(field);
 }
+
+#[test]
+fn a_fresh_layout_runtime_forgets_the_focusables_of_the_tree_it_replaced() {
+    use crate::LayoutItem;
+    crate::context::reset_layout_runtime();
+    let old_node = laid_out_box().layout_node();
+    let old = next_id();
+    register_with_role(old, FocusKind::Widget, old_node, Role::Splitter);
+    let scope = register_scope(old_node, || false, false);
+    request(old);
+    let token = next_id();
+    register_as(token, FocusKind::Widget);
+
+    crate::context::reset_layout_runtime();
+    let node = laid_out_box().layout_node();
+    assert_eq!(
+        node, old_node,
+        "the fresh runtime hands the same id out again"
+    );
+    let id = next_id();
+    register_with_role(id, FocusKind::Widget, node, Role::Button);
+
+    let exposed: Vec<FocusId> = exposed().iter().map(|e| e.id).collect();
+    assert_eq!(
+        exposed,
+        vec![id],
+        "only the new tree's control is announced"
+    );
+    assert_eq!(current(), None, "focus left with the tree that held it");
+    assert!(
+        is_registered(token),
+        "an id naming no node is not the tree's"
+    );
+    unregister_scope(scope);
+    unregister(old);
+    unregister(token);
+    unregister(id);
+}

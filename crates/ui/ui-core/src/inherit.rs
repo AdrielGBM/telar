@@ -142,6 +142,12 @@ pub fn undeclare(node: NodeId) {
     }
 }
 
+/// Re-resolves every walk, for a subtree hung from a different parent: what it inherits is now what its new ancestors declare, and nothing about any one declaration changed to say so.
+pub(crate) fn restructured() {
+    let structure = with_cascade_ref(|c| c.structure);
+    structure.set(structure.peek().wrapping_add(1));
+}
+
 /// Puts `theme` at the top of everything beneath `node`, for as long as the current owner lives. The first provider to claim a node keeps it, so nested providers give the shared node to the nearest one.
 pub(crate) fn bind_theme(node: NodeId, theme: ScopedTheme) {
     let by = reactive_core::current_owner();

@@ -499,3 +499,73 @@ fn a_modal_open_from_the_start_covers_the_window_above_the_tree() {
         "and blocks the whole window, far from where it was declared"
     );
 }
+
+#[test]
+fn dropping_a_portaled_overlay_leaves_its_content_for_the_placeholder_that_holds_it() {
+    use crate::context::{live_node_count, relayout_if_dirty, remove_node, track_layout};
+
+    reset_layout_runtime();
+    let host = Container::new(LayoutStyle::new().width(400.0).height(400.0), vec![]).unwrap();
+    compute_layout(
+        host.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let baseline = live_node_count();
+    let overlay = Overlay::new(LayoutStyle::new(), vec![]).unwrap();
+    let content = overlay.content_node();
+    let placeholder = overlay.layout_node();
+    assert_ne!(content, placeholder, "the content is portaled");
+    relayout_if_dirty();
+
+    drop(overlay);
+    assert!(
+        track_layout(content).is_some(),
+        "the content outlives the widget until its owner is disposed"
+    );
+
+    remove_node(placeholder);
+    assert!(
+        track_layout(content).is_none(),
+        "freed with its placeholder"
+    );
+    assert_eq!(live_node_count(), baseline);
+}
+
+/// Its content is a root of its own, so a box hiding the place it was declared in has to tell it, as it tells a fixed layer: an open overlay is hidden with that box rather than closed, and back when the box is.
+#[test]
+fn a_box_hiding_where_the_overlay_was_declared_hides_the_overlay() {
+    use crate::{Container, StyledContainer};
+    use renderer_core::{DrawCommand, ElementId};
+    use ui_tree::SegmentRoot;
+
+    reset_layout_runtime();
+    let panel = StyledContainer::new(
+        LayoutStyle::new().width(50.0).height(20.0),
+        |_r| renderer_core::RectStyle::default(),
+        vec![],
+    )
+    .unwrap();
+    let panel_node = panel.layout_node();
+    let overlay = Overlay::new(LayoutStyle::new(), vec![Box::new(panel)]).unwrap();
+    let section =
+        Container::new(LayoutStyle::new().flex_column(), vec![Box::new(overlay)]).unwrap();
+    let section_node = section.layout_node();
+    let root = SegmentRoot::mount(section);
+    let drawn = |root: &SegmentRoot| {
+        let id = ElementId(panel_node.into());
+        root.commands().iter().any(
+            |command| matches!(command, DrawCommand::PushElement { element } if element.id == id),
+        )
+    };
+    assert!(drawn(&root));
+
+    crate::context::set_layout_style(section_node, LayoutStyle::new().flex_column().shown(false))
+        .unwrap();
+    assert!(!drawn(&root), "hidden with the section it was declared in");
+
+    crate::context::set_layout_style(section_node, LayoutStyle::new().flex_column().shown(true))
+        .unwrap();
+    assert!(drawn(&root), "and back when the section is");
+}

@@ -113,6 +113,11 @@ pub fn hash_draw_commands_into<H: Hasher>(cmds: &[DrawCommand], h: &mut H) {
                 element.layout.hash(h);
             }
             DrawCommand::PopElement => 13u8.hash(h),
+            DrawCommand::PushSurface { surface } => {
+                14u8.hash(h);
+                surface.hash(h);
+            }
+            DrawCommand::PopSurface => 15u8.hash(h),
         }
     }
 }

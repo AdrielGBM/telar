@@ -297,3 +297,71 @@ fn a_link_with_nowhere_to_go_is_the_current_one_of_nothing() {
     assert!(element.semantics.current, "it was told");
     assert_eq!(element.semantics.current_kind(), None);
 }
+
+#[test]
+fn a_link_dropped_on_another_surfaces_turn_leaves_that_surfaces_namesake_alone() {
+    let home = crate::Surface::new();
+    let away = crate::Surface::new();
+    let leaving = {
+        let _home = home.enter();
+        link_to(Destination::Route(projects()))
+    };
+    let _away = away.enter();
+    let staying = link_to(Destination::Route(projects()));
+    let id: u64 = staying.layout_node().into();
+    assert_eq!(
+        id,
+        u64::from(leaving.layout_node()),
+        "the two surfaces must really collide on ids, or this proves nothing"
+    );
+
+    drop(leaving);
+
+    assert!(activate_box(id), "the box here still links where it did");
+    drop(staying);
+    let _home = home.enter();
+    assert!(
+        !activate_box(id),
+        "and the one that left took its link along"
+    );
+}
+
+#[test]
+fn a_link_outliving_a_layout_reset_leaves_the_new_trees_link_alone() {
+    let stale = link_to(Destination::Route(projects()));
+    let stale_id: u64 = stale.layout_node().into();
+    let fresh = link_to(Destination::Route(projects()));
+    assert_eq!(
+        stale_id,
+        u64::from(fresh.layout_node()),
+        "the reset must recycle the id, or this proves nothing"
+    );
+
+    drop(stale);
+
+    assert!(
+        activate_box(stale_id),
+        "the new box still links where it did"
+    );
+    drop(fresh);
+    assert!(!activate_box(stale_id));
+}
+
+#[test]
+fn runs_outliving_a_layout_reset_leave_the_new_trees_runs_alone() {
+    reset_layout_runtime();
+    let node = NodeId::from(7_u64);
+    let stale = register_runs(node, Rc::new(|_| None));
+    reset_layout_runtime();
+    let fresh = register_runs(
+        node,
+        Rc::new(|_| Some(Destination::Route(Location::root().segment("projects")))),
+    );
+    receive_location_history(vec![Location::root()]);
+
+    unregister_runs(HomeSurface::here(), node, stale);
+
+    assert!(activate_run(7, 0), "the new text's runs are still there");
+    unregister_runs(HomeSurface::here(), node, fresh);
+    assert!(!activate_run(7, 0));
+}

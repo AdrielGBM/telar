@@ -76,6 +76,11 @@ pub enum DrawCommand {
         element: Arc<Element>,
     },
     PopElement,
+    /// A marker, like [`PushElement`](Self::PushElement): everything until the matching [`PopSurface`](Self::PopSurface) is the frame of another surface drawn inside this one, whose element ids name its own boxes rather than this surface's. `surface` is that surface's handle in the runtime that drew the stream, so whoever reads the boxes inside can read them in their own world. A rasteriser draws nothing for either.
+    PushSurface {
+        surface: u64,
+    },
+    PopSurface,
 }
 
 impl PartialEq for DrawCommand {
@@ -178,6 +183,11 @@ impl PartialEq for DrawCommand {
                 DrawCommand::PushElement { element: e2 },
             ) => Arc::ptr_eq(e1, e2) || e1 == e2,
             (DrawCommand::PopElement, DrawCommand::PopElement) => true,
+            (
+                DrawCommand::PushSurface { surface: s1 },
+                DrawCommand::PushSurface { surface: s2 },
+            ) => s1 == s2,
+            (DrawCommand::PopSurface, DrawCommand::PopSurface) => true,
             _ => false,
         }
     }

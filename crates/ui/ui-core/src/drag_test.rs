@@ -46,7 +46,7 @@ fn logging(threshold: f32) -> (DragGesture, Log) {
 fn without_a_threshold_the_press_itself_reports() {
     let (mut drag, log) = logging(0.0);
     assert_eq!(
-        drag.press(&press_at(30.0, 40.0), RECT),
+        drag.press(&press_at(30.0, 40.0), RECT, RECT),
         EventResult::Handled
     );
     assert_eq!(log.borrow().len(), 1, "the press reported straight away");
@@ -57,7 +57,7 @@ fn without_a_threshold_the_press_itself_reports() {
 #[test]
 fn a_press_that_never_travels_is_not_a_drag() {
     let (mut drag, log) = logging(4.0);
-    drag.press(&press_at(30.0, 40.0), RECT);
+    drag.press(&press_at(30.0, 40.0), RECT, RECT);
     drag.moved(&move_to(32.0, 41.0), RECT);
     assert!(log.borrow().is_empty(), "two pixels is not a drag");
     assert!(!drag.end(None), "so nothing was dragged to end");
@@ -67,7 +67,7 @@ fn a_press_that_never_travels_is_not_a_drag() {
 #[test]
 fn crossing_the_threshold_starts_the_drag_where_it_crossed() {
     let (mut drag, log) = logging(4.0);
-    drag.press(&press_at(30.0, 40.0), RECT);
+    drag.press(&press_at(30.0, 40.0), RECT, RECT);
     drag.moved(&move_to(32.0, 40.0), RECT);
     drag.moved(&move_to(50.0, 40.0), RECT);
 
@@ -87,7 +87,7 @@ fn a_drag_reports_what_armed_it_and_not_what_is_held_now() {
         },
     });
     let (mut drag, log) = logging(0.0);
-    drag.press(&press_at(10.0, 10.0), RECT);
+    drag.press(&press_at(10.0, 10.0), RECT, RECT);
 
     crate::keyboard::observe(&Event::ModifiersChanged {
         modifiers: ModifiersState::default(),
@@ -120,7 +120,7 @@ fn a_live_drag_is_cancelled_only_from_its_own_surface() {
         drag.transact(Rc::new(Transaction::new(reactive_core::signal(0.0_f32))));
         let seen = cancelled.clone();
         drag.set_cancel(move || seen.set(true));
-        drag.press(&press_at(10.0, 10.0), RECT);
+        drag.press(&press_at(10.0, 10.0), RECT, RECT);
         drag
     };
 
@@ -150,7 +150,7 @@ fn a_drag_says_where_the_press_that_armed_it_landed() {
         height: 100.0,
     };
     let (mut drag, log) = logging(4.0);
-    drag.press(&press_at(230.0, 140.0), placed);
+    drag.press(&press_at(230.0, 140.0), placed, placed);
     drag.moved(&move_to(250.0, 140.0), placed);
 
     let entries = log.borrow();

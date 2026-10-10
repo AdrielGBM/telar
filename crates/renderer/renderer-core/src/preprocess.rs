@@ -154,6 +154,8 @@ fn scale_command(cmd: &DrawCommand, sf: f32) -> DrawCommand {
             element: element.clone(),
         },
         DrawCommand::PopElement => DrawCommand::PopElement,
+        DrawCommand::PushSurface { surface } => DrawCommand::PushSurface { surface: *surface },
+        DrawCommand::PopSurface => DrawCommand::PopSurface,
     }
 }
 

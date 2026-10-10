@@ -258,3 +258,34 @@ fn the_tab_order_leaves_out_what_tab_cannot_reach() {
     assert_eq!(ids, vec![shown_id]);
     unregister_scope(scope);
 }
+
+/// A dropdown's trigger sits outside the panel that traps focus, and a reader still has to hear that it is expanded.
+#[test]
+fn the_control_a_modal_was_opened_from_is_still_exposed_but_is_not_a_tab_stop() {
+    reset_layout_runtime();
+    clear();
+    let trigger = control(30.0);
+    let (trigger_id, trigger_node) = (trigger.focus_id(), trigger.layout_node());
+    let other = control(30.0);
+    let other_id = other.focus_id();
+    let inside = control(30.0);
+    let inside_id = inside.focus_id();
+    let panel = Container::new(LayoutStyle::new(), vec![box_item(inside)]).unwrap();
+    let panel_node = panel.layout_node();
+    let _page = page(vec![box_item(trigger), box_item(other), box_item(panel)]);
+    let scope = register_scope(panel_node, || true, true);
+
+    let ids = |controls: Vec<Exposed>| controls.into_iter().map(|e| Some(e.id)).collect::<Vec<_>>();
+    assert_eq!(ids(exposed()), vec![inside_id], "a modal hides the page");
+
+    set_scope_owner(scope, trigger_node);
+    assert_eq!(
+        ids(exposed()),
+        vec![trigger_id, inside_id],
+        "the owner stays, and nothing else outside does"
+    );
+    assert!(!ids(exposed()).contains(&other_id));
+    assert_eq!(walk(2), vec![inside_id, inside_id], "Tab stays inside");
+    unregister_scope(scope);
+    clear();
+}

@@ -214,14 +214,16 @@ pub(crate) fn dispatch_container_event(
         Event::PointerMoved { .. } | Event::PointerReleased { .. }
     ) {
         // The others still get the move too, for gestures already running, but under the occlusion mark.
-        let over = pointer_coords(event).and_then(|(x, y)| {
-            children
-                .iter()
-                .rposition(|child| covers(child, x as f32, y as f32))
-        });
+        let point = pointer_coords(event).map(|(x, y)| (x as f32, y as f32));
+        let reaching = point.and_then(|(x, y)| reaching(children, x, y));
+        let over = point.and_then(|(x, y)| children.iter().rposition(|child| covers(child, x, y)));
         let mut any_handled = false;
         for (i, child) in children.iter().enumerate() {
-            let _covered = (over.is_some_and(|top| top > i)).then(occlude);
+            let covered = match reaching {
+                Some(reach) => reach != i,
+                None => over.is_some_and(|top| top > i),
+            };
+            let _covered = covered.then(occlude);
             if child.deliver(event) == EventResult::Handled {
                 any_handled = true;
             }
@@ -235,15 +237,39 @@ pub(crate) fn dispatch_container_event(
     let Some((x, y)) = pointer_coords(event).map(|(x, y)| (x as f32, y as f32)) else {
         return dispatch_to_children(children, event);
     };
+    // A press only: the wheel stays with the pane a grab area lies over, or the pane would stop scrolling at its edge.
+    let reached = match event {
+        Event::PointerPressed { .. } => reaching(children, x, y),
+        _ => None,
+    };
+    if let Some(reach) = reached
+        && children[reach].deliver(event) == EventResult::Handled
+    {
+        return EventResult::Handled;
+    }
     // Back to front, the order they are painted in: where two children overlap, the one on top takes the event whether or not it wants it. Falling sideways to a covered sibling is what made a wheel over a floating panel zoom the pane underneath.
-    for child in children.iter_mut().rev() {
+    for (i, child) in children.iter_mut().enumerate().rev() {
         // Offered even when its box misses the point: an absolutely placed descendant is painted, and pressed, outside it.
-        let result = child.deliver(event);
+        let result = if reached == Some(i) {
+            EventResult::Ignored
+        } else {
+            child.deliver(event)
+        };
         if result == EventResult::Handled || covers(child, x, y) {
             return result;
         }
     }
     EventResult::Ignored
+}
+
+/// The topmost child whose hit outset holds the point: it is tested before its siblings, however they are stacked.
+fn reaching(children: &TrackedChildren, x: f32, y: f32) -> Option<usize> {
+    children.iter().rposition(|child| {
+        child
+            .rect
+            .as_ref()
+            .is_some_and(|rect| input_region::reaches(child.node(), rect.get(), x, y))
+    })
 }
 
 fn covers(child: &Child, x: f32, y: f32) -> bool {

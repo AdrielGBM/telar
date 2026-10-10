@@ -5,7 +5,7 @@
 use std::cell::{Cell, OnceCell, Ref, RefCell};
 use std::rc::Rc;
 
-use geometry_core::{BoxModel, Insets, Rect, Size};
+use geometry_core::{BoxModel, Insets, Rect, Size, Transform};
 use reactive_core::effect;
 use renderer_core::DrawCommand;
 
@@ -168,11 +168,19 @@ impl Segment {
 
     /// Emits this segment's subtree in pre-order (parent before children) into `out`. See `Segment::collect` for how ids, depth, and bounding rects are computed.
     pub fn walk(&self, out: &mut Vec<SegmentNodeInfo>) {
-        self.collect(0, out);
+        self.collect(0, [Transform::IDENTITY; Stratum::COUNT], Stratum::Page, out);
     }
 
     /// Recursively appends one [`SegmentNodeInfo`] per segment in pre-order. `id` is the pre-order index, so a consumer can select by both row index and canvas hit-test. Returns this subtree's bounding rect (own draw commands unioned with all descendants') so a container highlights its whole subtree, not just its own commands.
-    fn collect(&self, depth: usize, out: &mut Vec<SegmentNodeInfo>) -> Rect {
+    ///
+    /// Rects are where the composed frame draws them: `bases` is the matrix each stratum is drawn under where this segment is spliced and `enclosing` the stratum it is spliced in, so a leaf drawn at its own origin and moved into place, a hoisted overlay and a surface nested in a frame all land in the root's coordinates. A nested surface's boxes are looked up in that surface's world, where their ids mean them.
+    fn collect(
+        &self,
+        depth: usize,
+        bases: [Transform; Stratum::COUNT],
+        enclosing: Stratum,
+        out: &mut Vec<SegmentNodeInfo>,
+    ) -> Rect {
         let idx = out.len();
         // Pushed before recursing, so the parent precedes its children and keeps the pre-order id.
         out.push(SegmentNodeInfo {
@@ -188,25 +196,79 @@ impl Segment {
 
         let mut bounds = Rect::default();
         let mut box_model = None;
-        for (cmd, _) in self.own_commands.borrow().iter() {
-            if box_model.is_none()
-                && let DrawCommand::PushElement { element } = cmd
-            {
-                box_model = layout_reactive::box_model(layout_reactive::NodeId::from(element.id.0));
+        let mut matrices: [Vec<Transform>; Stratum::COUNT] = bases.map(|base| vec![base]);
+        let top = |matrices: &[Vec<Transform>; Stratum::COUNT], stratum: Stratum| {
+            matrices[stratum.index()]
+                .last()
+                .copied()
+                .unwrap_or(Transform::IDENTITY)
+        };
+        let mut entered = Vec::new();
+        let own = self.own_commands.borrow();
+        let slots = self.child_slots.borrow();
+        let mut next_slot = 0;
+        for at in 0..=own.len() {
+            while let Some((_, child, stratum)) = slots.get(next_slot).filter(|slot| slot.0 == at) {
+                next_slot += 1;
+                let stratum = enclosing.max(*stratum);
+                let child_bounds = match child.composition.get() {
+                    // A composition root is spliced as its whole frame, every stratum of it under the matrix of the place it goes in.
+                    Some(_) => child.collect(
+                        depth + 1,
+                        [top(&matrices, stratum); Stratum::COUNT],
+                        Stratum::Page,
+                        out,
+                    ),
+                    None => child.collect(
+                        depth + 1,
+                        [Stratum::Page, Stratum::Fixed, Stratum::Overlay]
+                            .map(|stratum| top(&matrices, stratum)),
+                        stratum,
+                        out,
+                    ),
+                };
+                bounds = union_nonempty(bounds, child_bounds);
             }
-            // The renderer's own answer to what a command paints, rather than a second list of arms: the local copy knew four commands, so a spanned paragraph contributed nothing and a notification card inspected as an empty rect.
-            let Some(rect) = renderer_core::culling::command_visual_rect(
-                cmd,
-                geometry_core::Transform::IDENTITY.to_array(),
-                &renderer_core::culling::FontMetrics::default(),
-            ) else {
-                continue;
+            let Some((cmd, own_stratum)) = own.get(at) else {
+                break;
             };
-            bounds = union_nonempty(bounds, rect);
+            let stratum = enclosing.max(*own_stratum);
+            match cmd {
+                DrawCommand::PushMatrix { matrix } => {
+                    let parent = top(&matrices, stratum);
+                    matrices[stratum.index()].push(Transform::from_array(*matrix).then(parent));
+                }
+                DrawCommand::PopMatrix => {
+                    let stack = &mut matrices[stratum.index()];
+                    if stack.len() > 1 {
+                        stack.pop();
+                    }
+                }
+                DrawCommand::PushSurface { surface } => {
+                    entered.push(reactive_core::SurfaceHandle(*surface).enter());
+                }
+                DrawCommand::PopSurface => drop(entered.pop()),
+                DrawCommand::PushElement { element } => {
+                    if box_model.is_none() {
+                        box_model =
+                            layout_reactive::box_model(layout_reactive::NodeId::from(element.id.0));
+                    }
+                }
+                // The renderer's own answer to what a command paints, rather than a second list of arms: the local copy knew four commands, so a spanned paragraph contributed nothing and a notification card inspected as an empty rect.
+                _ => {
+                    if let Some(rect) = renderer_core::culling::command_visual_rect(
+                        cmd,
+                        top(&matrices, stratum).to_array(),
+                        &renderer_core::culling::FontMetrics::default(),
+                    ) {
+                        bounds = union_nonempty(bounds, rect);
+                    }
+                }
+            }
         }
-
-        for (_, child, _) in self.child_slots.borrow().iter() {
-            bounds = union_nonempty(bounds, child.collect(depth + 1, out));
+        // Each guard restores the world that was active when it was taken, so they are dropped innermost first.
+        while let Some(guard) = entered.pop() {
+            drop(guard);
         }
 
         let BoxModel {

@@ -713,7 +713,10 @@ impl Walk<'_> {
             }
             DrawCommand::PopMatrix => open.moved = None,
             DrawCommand::PopClip | DrawCommand::PopLayer => {}
-            DrawCommand::PushElement { .. } | DrawCommand::PopElement => {}
+            DrawCommand::PushElement { .. }
+            | DrawCommand::PopElement
+            | DrawCommand::PushSurface { .. }
+            | DrawCommand::PopSurface => {}
         }
     }
 
@@ -1144,6 +1147,7 @@ fn draw(
         }
         DrawCommand::PushElement { element } => drawing.open_box(element.rect),
         DrawCommand::PopElement => drawing.close_group(),
+        DrawCommand::PushSurface { .. } | DrawCommand::PopSurface => {}
     }
 }
 

@@ -15,6 +15,7 @@ use crate::focus::{self, FocusId};
 use crate::impl_leaf_widget;
 use crate::input_region::InputHandle;
 use crate::layout_leaf::LayoutLeaf;
+use crate::surface_context::HomeSurface;
 
 /// How much of the field's ink a hint keeps: enough that it still reads at 4.5:1 on a field's surface, which WCAG asks of placeholder text as of any other.
 pub(crate) const PLACEHOLDER_OPACITY: f32 = 0.7;
@@ -68,6 +69,7 @@ impl Caret {
 /// A single-line editable text field bound to a `RwSignal<String>`. A base primitive: unstyled (no border or background — wrap it in a `box` for the look) and keyboard-driven. It requests focus on tap and, while focused, edits the bound signal from key events, drawing a caret at the insertion point. Selection (`Shift`+arrows/Home/End, `Ctrl+A`) with copy, cut and paste; IME composition is not yet supported. Drag-to-select waits on click-to-position, which this field does not have either.
 pub struct Input {
     value: RwSignal<String>,
+    home: HomeSurface,
     // Reactive so a bare caret move re-renders even when the text is unchanged; always re-snapped to a char boundary in case the signal changed elsewhere.
     caret: RwSignal<usize>,
     // Either side of the caret: a selection extended leftwards has its anchor after it.
@@ -139,6 +141,7 @@ impl Input {
         input.answer(leaf.node, leaf.rect.read_only());
         Ok(Self {
             value,
+            home: HomeSurface::here(),
             caret: signal(caret),
             anchor: signal(None),
             style,
@@ -419,11 +422,13 @@ impl Component for Input {
         let text = self.value.get();
         let style = (self.style)();
         let paint = style.color;
+        let line_h = crate::text_metrics::line_box(&style);
+        let inset = line_inset(r.height, style.font_size);
         let full = Rect {
             x: 0.0,
-            y: 0.0,
+            y: inset,
             width: r.width,
-            height: r.height,
+            height: r.height - inset * 2.0,
         };
         // The field itself stays live: the caret and hit-test still work, so it is typable from empty.
         let text_node = if text.is_empty() && !self.placeholder.is_empty() {
@@ -450,7 +455,6 @@ impl Component for Input {
         let measure = |upto: usize| {
             crate::text_metrics::measure_text(&self.shown(&text[..upto]), None, 1.0e6, &style).0
         };
-        let line_h = crate::text_metrics::line_box(&style);
         let underlines = spans.into_iter().map(|underline| {
             let from = floor_boundary(&text, underline.range.start);
             let to = floor_boundary(&text, underline.range.end.max(from));
@@ -462,7 +466,7 @@ impl Component for Input {
             RenderNode::rect(
                 Rect {
                     x: origin + start,
-                    y: line_h - UNDERLINE_THICKNESS,
+                    y: inset + line_h - UNDERLINE_THICKNESS,
                     width,
                     height: UNDERLINE_THICKNESS,
                 },
@@ -480,7 +484,7 @@ impl Component for Input {
             RenderNode::rect(
                 Rect {
                     x: origin + start,
-                    y: 0.0,
+                    y: inset,
                     width: (end - start).max(1.0),
                     height: line_h,
                 },
@@ -489,7 +493,7 @@ impl Component for Input {
         });
         let caret_rect = Rect {
             x: origin + measure(caret),
-            y: 0.0,
+            y: inset,
             width: CARET_WIDTH,
             height: line_h,
         };
@@ -541,12 +545,20 @@ impl Component for Input {
 
 impl Drop for Input {
     fn drop(&mut self) {
-        // Leaves the tab order, and drops focus if held, when a reactive list destroys the field.
-        focus::unregister(self.id);
+        if let Some(_home) = self.home.enter() {
+            focus::unregister(self.id);
+        }
     }
 }
 
 impl_leaf_widget!(Input);
+
+/// How far down a field taller than its single line puts that line, so the text sits mid-box and the whole box is the control.
+fn line_inset(height: f32, font_size: f32) -> f32 {
+    ((height - crate::text_metrics::single_line_box(font_size)) / 2.0)
+        .max(0.0)
+        .round()
+}
 
 /// The char boundary at or before byte offset `i`, within `s`.
 fn floor_boundary(s: &str, i: usize) -> usize {

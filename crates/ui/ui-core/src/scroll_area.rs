@@ -20,6 +20,7 @@ use crate::layout_item::{LayoutItem, mount_item_segment};
 use crate::layout_leaf::LayoutLeaf;
 use crate::pointer::{clip_pointer_event, occlude, offset_pointer, pointer_coords};
 use crate::styled_container::default_focus_ring;
+use crate::surface_context::HomeSurface;
 
 /// How a scroll area's bars are painted, and how wide they are.
 pub struct ScrollbarStyle {
@@ -858,6 +859,7 @@ impl platform_core::PrimaryScroll for ScrollViewport {
 /// Taffy-layout viewport; always valid as a `LayoutItem`, so no panic is possible.
 pub struct LayoutScrollArea {
     leaf: LayoutLeaf,
+    home: HomeSurface,
     core: ScrollCore,
     // Needed because the content is laid out as a root of its own, not a normal layout child.
     _input: InputHandle,
@@ -940,6 +942,7 @@ impl LayoutScrollArea {
             build(handed.clone())?
         };
         let content_node = content.layout_node();
+        layout_reactive::free_with(content_node, leaf.node);
         let content_rect_signal =
             track_layout(content_node).expect("content node not registered in ctx");
         handed.content.set(Some(content_rect_signal.read_only()));
@@ -1013,6 +1016,7 @@ impl LayoutScrollArea {
 
         Ok(Self {
             leaf,
+            home: HomeSurface::here(),
             core: ScrollCore::with_offsets(
                 content_rect_signal,
                 content,
@@ -1156,7 +1160,9 @@ impl Component for LayoutScrollArea {
 
 impl Drop for LayoutScrollArea {
     fn drop(&mut self) {
-        if let Some(id) = self.focus {
+        if let Some(id) = self.focus
+            && let Some(_home) = self.home.enter()
+        {
             focus::unregister(id);
         }
     }

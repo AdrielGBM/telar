@@ -11,6 +11,7 @@ use theme_core::ControlSize;
 use ui_tree::ComponentList;
 
 use super::*;
+use crate::annotation::Accessible;
 use crate::dismiss::{self, DismissRegistration};
 use crate::{
     Container, Overlay, StyledContainer, WindowRoot, compute_layout, relayout_if_dirty,
@@ -1205,5 +1206,229 @@ fn a_frame_in_a_mode_registered_with_its_theme_restyles_inside_only() {
         primaries(&window.frame()),
         (0, 2),
         "cleared, the frame follows the window"
+    );
+}
+
+fn word(text: &'static str, style: LayoutStyle) -> crate::Text {
+    crate::Text::new(
+        move || text.to_string(),
+        style,
+        || renderer_core::TextStyle::new(12.0, Color::BLACK),
+    )
+    .unwrap()
+}
+
+fn handle_of(canvas: &SurfaceCanvas) -> u64 {
+    canvas.surface().handle().0
+}
+
+#[test]
+fn a_frame_marks_the_surface_it_draws_in_the_window_stream() {
+    reset_layout_runtime();
+    let canvas = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), || {
+            Ok(boxed(swatch(Color::BLACK, fill())?))
+        })
+        .unwrap(),
+    );
+    let window = framed_window(&canvas, no_focusable());
+    let frame = window.frame();
+    let opened = frame
+        .iter()
+        .position(|command| {
+            matches!(command, DrawCommand::PushSurface { surface } if *surface == handle_of(&canvas))
+        })
+        .expect("the frame's surface is marked");
+    let closed = frame
+        .iter()
+        .rposition(|command| matches!(command, DrawCommand::PopSurface))
+        .expect("and closed");
+    assert_eq!(
+        fills(&frame[opened + 1..closed], Color::BLACK).len(),
+        1,
+        "what the canvas drew sits between the markers"
+    );
+    assert!(
+        !canvas
+            .frame_commands()
+            .iter()
+            .any(|command| matches!(command, DrawCommand::PushSurface { .. })),
+        "the canvas's own frame carries no marker of itself"
+    );
+}
+
+/// The window and the canvas number their boxes from the same start, so the window's labelled box and the canvas's button share a node id; each is still read in its own world.
+#[test]
+fn a_reader_hears_a_frames_controls_by_their_own_names_where_the_frame_shows_them() {
+    reset_layout_runtime();
+    focus::clear();
+    let inside = Rc::new(Cell::new(None));
+    let built = Rc::clone(&inside);
+    let canvas = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+            let button = StyledContainer::new(
+                LayoutStyle::new().width(60.0).height(24.0),
+                |_| RectStyle::default(),
+                vec![boxed(word(
+                    "Inside",
+                    LayoutStyle::new().width(40.0).height(16.0),
+                ))],
+            )?
+            .control(focus::Role::Button)
+            .on_press(|| {});
+            built.set(Some(button.layout_node()));
+            let secret = StyledContainer::new(
+                LayoutStyle::new().width(60.0).height(16.0),
+                |_| RectStyle::default(),
+                vec![boxed(word(
+                    "Secret",
+                    LayoutStyle::new().width(40.0).height(16.0),
+                ))],
+            )?
+            .a11y_hidden();
+            Ok(boxed(Container::new(
+                fill().flex_column(),
+                vec![boxed(button), boxed(secret)],
+            )?))
+        })
+        .unwrap(),
+    );
+    let outside = Rc::new(Cell::new(None));
+    let labelled = StyledContainer::new(
+        LayoutStyle::new().width(60.0).height(24.0),
+        |_| RectStyle::default(),
+        vec![boxed(word(
+            "Ignored",
+            LayoutStyle::new().width(40.0).height(16.0),
+        ))],
+    )
+    .unwrap()
+    .a11y_label(|| "Window label");
+    outside.set(Some(labelled.layout_node()));
+    let window = framed_window(&canvas, boxed(labelled));
+    assert_eq!(
+        inside.get(),
+        outside.get(),
+        "the two boxes share an id, each in its own world"
+    );
+
+    let nodes = crate::accessibility::snapshot(&window.frame());
+    assert_eq!(
+        nodes
+            .iter()
+            .filter(|node| node.name == "Window label")
+            .count(),
+        1,
+        "the window's label names its own box once: {nodes:#?}"
+    );
+    let button = nodes
+        .iter()
+        .find(|node| node.role == focus::Role::Button)
+        .expect("the frame's button is announced");
+    assert_eq!(button.name, "Inside");
+    let window_ids: Vec<u64> = focus::exposed().iter().map(|exposed| exposed.id).collect();
+    assert!(
+        button.id.is_some_and(|id| !window_ids.contains(&id)),
+        "its id is told apart from every id of the window's"
+    );
+    let (x, y) = (
+        button.rect.x + button.rect.width / 2.0,
+        button.rect.y + button.rect.height / 2.0,
+    );
+    assert!(
+        FRAME.contains(x, y),
+        "it is placed where the frame shows it: {:?}",
+        button.rect
+    );
+    assert!(
+        !nodes.iter().any(|node| node.name.contains("Secret")),
+        "what the canvas hides stays hidden"
+    );
+}
+
+#[test]
+fn a_box_event_for_a_box_in_a_frame_reaches_it_in_the_frames_world() {
+    reset_layout_runtime();
+    focus::clear();
+    let inner_focused = signal(false);
+    let inner_node = Rc::new(Cell::new(None));
+    let built = Rc::clone(&inner_node);
+    let canvas = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+            let target = swatch(Color::BLACK, LayoutStyle::new().width(20.0).height(20.0))?
+                .on_focus(move |now| inner_focused.set(now));
+            built.set(Some(target.layout_node()));
+            Ok(boxed(Container::new(fill(), vec![boxed(target)])?))
+        })
+        .unwrap(),
+    );
+    let window = framed_window(&canvas, no_focusable());
+    let box_id = u64::from(inner_node.get().expect("the target was built"));
+
+    window.send(Event::InSurface {
+        surface: handle_of(&canvas) + 1,
+        event: Box::new(Event::BoxFocused { box_id }),
+    });
+    window.frame();
+    assert!(
+        !inner_focused.get(),
+        "a surface the frame does not draw is not its"
+    );
+
+    window.send(Event::InSurface {
+        surface: handle_of(&canvas),
+        event: Box::new(Event::BoxFocused { box_id }),
+    });
+    window.frame();
+    assert!(
+        inner_focused.get(),
+        "the box the surface focused takes focus inside the frame"
+    );
+    assert!(
+        focus::current().is_some(),
+        "and the frame holds the window's focus, so the keys that follow reach it"
+    );
+}
+
+#[test]
+fn the_windows_walk_lists_a_frames_components_where_the_frame_shows_them() {
+    reset_layout_runtime();
+    let canvas = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), || {
+            let padded = StyledContainer::new(
+                LayoutStyle::new().width(40.0).height(20.0).padding_all(4.0),
+                |_| RectStyle::default().with_fill(Color::BLACK),
+                vec![],
+            )?;
+            Ok(boxed(Container::new(
+                fill().padding_all(10.0),
+                vec![boxed(padded)],
+            )?))
+        })
+        .unwrap(),
+    );
+    let window = framed_window(&canvas, no_focusable());
+    window.frame();
+    let mut walked = Vec::new();
+    window.tree.walk_tree(&mut walked);
+
+    let mut own = Vec::new();
+    canvas.walk(&mut own);
+    let filled = own
+        .iter()
+        .find(|node| node.padding == Insets::all(4.0))
+        .expect("the canvas walks its padded box");
+    assert_eq!(filled.rect, Rect::new(10.0, 10.0, 40.0, 20.0));
+
+    let placed = walked
+        .iter()
+        .find(|node| node.padding == Insets::all(4.0))
+        .expect(
+            "the window's walk reaches into the frame, its box model read in the frame's world",
+        );
+    assert_eq!(
+        placed.rect,
+        Rect::new(FRAME.x + 10.0, FRAME.y + 10.0, 40.0, 20.0),
+        "in window coordinates"
     );
 }

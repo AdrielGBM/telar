@@ -809,3 +809,126 @@ fn a_frame_reading_says_which_pictures_are_read_and_by_what_name() {
     assert!(in_button.in_control);
     assert_eq!(in_button.node, Some(button_node));
 }
+
+/// A menu opened over a page covers the page's text: the heading under its first item is the page's, not part of what the item is called.
+#[test]
+fn text_a_control_is_drawn_over_is_not_part_of_its_name() {
+    reset_layout_runtime();
+    focus::clear();
+    let item = StyledContainer::new(
+        LayoutStyle::new().width(120.0).height(30.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(Role::MenuItem)
+    .on_press(|| {});
+    let node = item.layout_node();
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(item)]).unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+
+    let nodes = snapshot(&[
+        text_at("Page title", rect(10.0, 5.0, 60.0, 16.0)),
+        open(node, rect(0.0, 0.0, 120.0, 30.0)),
+        text_at("Default", rect(10.0, 7.0, 50.0, 16.0)),
+        DrawCommand::PopElement,
+        text_at("Hint", rect(80.0, 7.0, 30.0, 16.0)),
+    ]);
+    let item = nodes
+        .iter()
+        .find(|node| node.id.is_some())
+        .expect("the item is exposed");
+    assert_eq!(
+        item.name, "Default Hint",
+        "what it draws, and what is drawn over it"
+    );
+    assert!(
+        nodes
+            .iter()
+            .any(|node| node.id.is_none() && node.name == "Page title"),
+        "the covered heading is still the page's: {nodes:?}"
+    );
+}
+
+/// A wide named box an open overlay covers stays its own node: the overlay control is not named by it.
+#[test]
+fn a_named_box_under_an_overlay_control_is_not_part_of_its_name() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let overlay = StyledContainer::new(
+        LayoutStyle::new().absolute_fill(),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(Role::MenuItem)
+    .on_press(|| {});
+    let node = overlay.layout_node();
+    let status = StyledContainer::new(
+        LayoutStyle::new().width(200.0).height(20.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .role(Role::Status)
+    .a11y_label(|| "Header status");
+    let status_node = status.layout_node();
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(status), box_item(overlay)],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+
+    let nodes = snapshot(&[
+        open(status_node, rect(0.0, 0.0, 200.0, 20.0)),
+        DrawCommand::PopElement,
+        open(node, rect(0.0, 0.0, 400.0, 200.0)),
+        text_at("Copy", rect(10.0, 40.0, 40.0, 16.0)),
+        DrawCommand::PopElement,
+    ]);
+    let item = nodes
+        .iter()
+        .find(|node| node.id.is_some())
+        .expect("the overlay control is exposed");
+    assert_eq!(item.name, "Copy");
+    assert!(
+        read_on_its_own(&nodes, "Header status"),
+        "the covered box keeps its own node: {nodes:?}"
+    );
+}
+
+/// A pane folded away clips its content to nothing: what it drew is not on screen to be read.
+#[test]
+fn text_clipped_to_nothing_is_not_announced() {
+    reset_layout_runtime();
+    focus::clear();
+    let clip = |rect| DrawCommand::PushClip {
+        rect,
+        radius: renderer_core::BorderRadius::zero(),
+    };
+    let nodes = snapshot(&[
+        clip(rect(0.0, 40.0, 0.0, 300.0)),
+        clip(rect(0.0, 40.0, 200.0, 20.0)),
+        text_at("Folded", rect(0.0, 40.0, 60.0, 16.0)),
+        DrawCommand::PopClip,
+        DrawCommand::PopClip,
+        clip(rect(0.0, 40.0, 200.0, 20.0)),
+        text_at("Shown", rect(10.0, 40.0, 40.0, 16.0)),
+        DrawCommand::PopClip,
+        text_at("Unclipped", rect(10.0, 80.0, 0.0, 0.0)),
+    ]);
+    let names: Vec<&str> = nodes.iter().map(|node| node.name.as_str()).collect();
+    assert_eq!(names, ["Shown", "Unclipped"]);
+}

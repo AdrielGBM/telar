@@ -4,6 +4,7 @@
 //!
 //! Almost nothing here is authored per widget, and that is the design. The set of controls is the focus registry's own tab order, so the reader and the keyboard cannot come to different conclusions about what is on screen. The name is taken from **the text the widget actually draws inside itself**, which is how it reads to everyone else and needs no second copy that can fall out of step with the first. What an application does author — a name, a language, a box a reader skips — is resolved along the frame's own element nesting, the same nesting a document backend turns into elements.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -12,8 +13,11 @@ use platform_core::{AccessNode, CurrentKind, Role};
 use renderer_core::DrawCommand;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use reactive_core::SurfaceHandle;
+
 use crate::focus;
-use crate::input_region::visible_rect;
+use crate::input_region::{hit_rect, visible_rect};
+use crate::surface_context::{Surface, SurfaceGuard};
 
 /// Whether the snapshot reads `command`, for a runner that keeps the last frame's reading between frames rather than the whole frame.
 ///
@@ -28,13 +32,36 @@ pub fn is_read(command: &DrawCommand) -> bool {
             | DrawCommand::Path { .. }
             | DrawCommand::PushElement { .. }
             | DrawCommand::PopElement
+            | DrawCommand::PushSurface { .. }
+            | DrawCommand::PopSurface
+            | DrawCommand::PushClip { .. }
+            | DrawCommand::PopClip
     )
 }
 
 /// Everything the platform's accessibility layer needs to describe the window, in reading order.
 ///
 /// `commands` is the frame the renderer is about to draw — the same list, so what is announced and what is painted are the same picture by construction rather than by agreement.
+///
+/// A surface drawn inside this one's frame ([`DrawCommand::PushSurface`]) is read in its own world, where its boxes' ids mean its boxes, and its nodes are placed where the frame shows them: see [`NestedSurface::place`].
 pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
+    let mut nodes = surface_snapshot(commands);
+    for nested in nested_surfaces(commands) {
+        let Some(_entered) = nested.enter() else {
+            continue;
+        };
+        nodes.extend(
+            snapshot(&commands[nested.commands.clone()])
+                .into_iter()
+                .map(|node| nested.place(node)),
+        );
+    }
+    sort_in_reading_order(&mut nodes);
+    nodes
+}
+
+/// What a reader is told about the surface entered now, which drew `commands`, leaving out every surface nested in its frame: [`snapshot`] for one surface, as a check that reads each surface in its own world wants it.
+pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
     let exposed = focus::exposed();
     let control_nodes: FxHashSet<NodeId> = exposed.iter().map(|e| e.node).collect();
     let reading = Reading::of(commands, &control_nodes);
@@ -57,7 +84,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 id: Some(e.id),
                 role: e.role,
                 name: label.map(str::to_string).unwrap_or_default(),
-                rect: *rect,
+                rect: hit_rect(e.node).unwrap_or(*rect),
                 focused: focused == Some(e.id),
                 enabled: e.enabled,
                 toggled: e.toggled,
@@ -80,7 +107,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
         .iter()
         .filter(|named| !is_control(named.node))
         .filter_map(|named| {
-            let rect = visible_rect(named.node)?;
+            let rect = visible_rect(named.node).filter(|rect| area(*rect) > 0.0)?;
             let role = match named.role {
                 _ if named.is_picture() => Role::Drawing,
                 Role::Group => Role::Label,
@@ -96,6 +123,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                     node: named.node,
                     wraps: wrapped_control(named, &controls),
                 }),
+                drawn_at: Some(named.opened_at),
             })
         })
         .chain(reading.text.iter().cloned());
@@ -109,6 +137,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 .enumerate()
                 .filter(|(_, (_, bounds))| contains(*bounds, piece.rect))
                 .filter(|(_, (control, _))| !piece.groups(control.node))
+                .filter(|(_, (control, _))| !piece.lies_under(control.node, &reading))
                 .min_by(|(_, (_, a)), (_, (_, b))| area(*a).total_cmp(&area(*b)))
                 .map(|(i, _)| i),
         };
@@ -137,13 +166,7 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
         }
     }
 
-    // Reading order rather than tab order: a label sits between the controls it explains. Tab order stays the focus registry's answer.
-    nodes.sort_by(|a, b| {
-        a.rect
-            .y
-            .total_cmp(&b.rect.y)
-            .then(a.rect.x.total_cmp(&b.rect.x))
-    });
+    sort_in_reading_order(&mut nodes);
     nodes.retain(|n| n.id.is_some() || !n.name.is_empty());
     nodes
 }
@@ -159,6 +182,8 @@ struct Piece {
     url: Option<String>,
     /// The box the application named, for a piece that is one rather than a run of text.
     named_box: Option<NamedBox>,
+    /// Where in the frame a run of text was drawn, or a named box began.
+    drawn_at: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -174,6 +199,13 @@ impl Piece {
         self.named_box
             .as_ref()
             .is_some_and(|named| crate::input_region::is_inside(node, named.node))
+    }
+
+    /// Whether this is a run of text, or a named box, painted before the control at `node` began, outside it: the control is drawn over it, as a menu is over the page it opens on, so it is covered rather than a label.
+    fn lies_under(&self, node: NodeId, reading: &Reading) -> bool {
+        self.drawn_at
+            .zip(reading.controls_opened.get(&node))
+            .is_some_and(|(drawn, opened)| drawn < *opened)
     }
 }
 
@@ -208,6 +240,8 @@ struct Named {
     role: Role,
     /// The named box this one sits in, by its place in [`Reading::named`].
     enclosing: Option<usize>,
+    /// Where in the frame the box began.
+    opened_at: usize,
     drew_text: bool,
     drew_art: bool,
     /// Whether it drew words or artwork outside every control inside it.
@@ -258,7 +292,11 @@ pub struct FrameReading {
 
 impl FrameReading {
     pub fn of(commands: &[DrawCommand]) -> Self {
-        let controls: FxHashSet<NodeId> = focus::exposed().iter().map(|e| e.node).collect();
+        let controls: FxHashSet<NodeId> = focus::exposed()
+            .iter()
+            .map(|e| e.node)
+            .chain(focus::control_nodes())
+            .collect();
         let reading = Reading::of(commands, &controls);
         let boxes = reading
             .scopes
@@ -339,6 +377,8 @@ struct Reading {
     named: Vec<Named>,
     text: Vec<Piece>,
     artwork: Vec<SeenArt>,
+    /// Where in the frame each control's box began.
+    controls_opened: FxHashMap<NodeId, usize>,
     /// Where each link box goes, and what it is the current one of when it is marked so.
     links: FxHashMap<NodeId, (platform_core::Destination, Option<CurrentKind>)>,
 }
@@ -348,9 +388,24 @@ impl Reading {
         let mut reading = Self::default();
         let mut open: Vec<Open> = Vec::new();
         let mut index = 0usize;
+        let mut nested = 0usize;
+        let mut clipped_away: Vec<bool> = Vec::new();
         renderer_core::for_each_with_matrix(commands, |command, matrix| {
             let at = index;
             index += 1;
+            // A nested surface's boxes are numbered in its own world, where they are read; here their ids would name this surface's boxes.
+            match command {
+                DrawCommand::PushSurface { .. } => {
+                    nested += 1;
+                    return;
+                }
+                DrawCommand::PopSurface => {
+                    nested = nested.saturating_sub(1);
+                    return;
+                }
+                _ if nested > 0 => return,
+                _ => {}
+            }
             let Open {
                 scope,
                 named,
@@ -358,8 +413,20 @@ impl Reading {
                 node: innermost,
             } = open.last().cloned().unwrap_or_default();
             match command {
+                DrawCommand::PushClip { rect, .. } => {
+                    let placed = renderer_core::transform_clip_rect(matrix, *rect);
+                    let empty = placed.width <= 0.0 || placed.height <= 0.0;
+                    let outer = clipped_away.last().copied().unwrap_or(false);
+                    clipped_away.push(outer || empty);
+                }
+                DrawCommand::PopClip => {
+                    clipped_away.pop();
+                }
                 DrawCommand::PushElement { element } => {
                     let node = NodeId::from(element.id.0);
+                    if controls.contains(&node) {
+                        reading.controls_opened.entry(node).or_insert(at);
+                    }
                     if let Some(link) = &element.semantics.link {
                         reading
                             .links
@@ -378,6 +445,7 @@ impl Reading {
                                 lang: inner.lang.clone(),
                                 role: element.semantics.role,
                                 enclosing: named,
+                                opened_at: at,
                                 drew_text: false,
                                 drew_art: false,
                                 drew_beside_controls: false,
@@ -426,6 +494,9 @@ impl Reading {
                     if !in_control {
                         reading.drew_beside_controls(named);
                     }
+                    if clipped_away.last().copied().unwrap_or(false) {
+                        return;
+                    }
                     reading.text.push(Piece {
                         text: text.to_string(),
                         rect: placed,
@@ -433,6 +504,7 @@ impl Reading {
                         lang: scope.lang.clone(),
                         url: None,
                         named_box: None,
+                        drawn_at: Some(at),
                     });
                     for span in spans.iter().flat_map(|spans| spans.iter()) {
                         let (Some(link), Some(words)) = (
@@ -448,6 +520,7 @@ impl Reading {
                             lang: scope.lang.clone(),
                             url: Some(platform_core::address_of(link)),
                             named_box: None,
+                            drawn_at: Some(at),
                         });
                     }
                 }
@@ -498,6 +571,94 @@ fn append(name: &mut String, piece: &str) {
         name.push(' ');
     }
     name.push_str(piece.trim());
+}
+
+/// Reading order rather than tab order: a label sits between the controls it explains. Tab order stays the focus registry's answer.
+pub fn sort_in_reading_order(nodes: &mut [AccessNode]) {
+    nodes.sort_by(|a, b| {
+        a.rect
+            .y
+            .total_cmp(&b.rect.y)
+            .then(a.rect.x.total_cmp(&b.rect.x))
+    });
+}
+
+/// A surface drawn inside another's frame, as the [`DrawCommand::PushSurface`] marker around it names it: the commands it drew and where the frame around it shows them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NestedSurface {
+    /// Its handle, as the marker carries it.
+    pub surface: u64,
+    /// Its own commands, between the markers, as a range of the frame they were found in. They are in its own coordinates.
+    pub commands: Range<usize>,
+    /// Maps a point in its coordinates to one in the frame's.
+    pub placement: [f32; 6],
+}
+
+impl NestedSurface {
+    /// Activates the surface's world for as long as the guard lives, as reading what it drew needs; `None` once the surface is gone, when its boxes mean nothing on this thread.
+    pub fn enter(&self) -> Option<SurfaceGuard> {
+        Surface::find(SurfaceHandle(self.surface)).map(|surface| surface.enter())
+    }
+
+    /// Where the frame shows `rect`, given in the surface's coordinates.
+    pub fn place_rect(&self, rect: Rect) -> Rect {
+        renderer_core::transform_clip_rect(self.placement, rect)
+    }
+
+    /// A node read inside the surface, as the frame around it shows it: at its place in the frame, with its id and the one it names as its active descendant made distinct from every id of the frame's own.
+    pub fn place(&self, node: AccessNode) -> AccessNode {
+        AccessNode {
+            rect: self.place_rect(node.rect),
+            id: node.id.map(|id| self.qualify(id)),
+            active_descendant: node.active_descendant.map(|id| self.qualify(id)),
+            ..node
+        }
+    }
+
+    // Every surface counts its focus ids from the same start, so a nested one's are moved above the frame's; ids already moved by a surface nested deeper are unique as they are, since handles are.
+    fn qualify(&self, id: u64) -> u64 {
+        if id >> NESTED_ID_SHIFT == 0 {
+            (self.surface << NESTED_ID_SHIFT) | id
+        } else {
+            id
+        }
+    }
+}
+
+const NESTED_ID_SHIFT: u32 = 32;
+
+/// The surfaces drawn directly inside `commands`, in draw order. One nested deeper is inside one of these, and is found in its commands.
+pub fn nested_surfaces(commands: &[DrawCommand]) -> Vec<NestedSurface> {
+    let mut found = Vec::new();
+    let mut open: Option<(u64, usize, [f32; 6])> = None;
+    let mut depth = 0usize;
+    let mut index = 0usize;
+    renderer_core::for_each_with_matrix(commands, |command, matrix| {
+        let at = index;
+        index += 1;
+        match command {
+            DrawCommand::PushSurface { surface } => {
+                if depth == 0 {
+                    open = Some((*surface, at + 1, matrix));
+                }
+                depth += 1;
+            }
+            DrawCommand::PopSurface if depth > 0 => {
+                depth -= 1;
+                if depth == 0
+                    && let Some((surface, start, placement)) = open.take()
+                {
+                    found.push(NestedSurface {
+                        surface,
+                        commands: start..at,
+                        placement,
+                    });
+                }
+            }
+            _ => {}
+        }
+    });
+    found
 }
 
 #[cfg(test)]

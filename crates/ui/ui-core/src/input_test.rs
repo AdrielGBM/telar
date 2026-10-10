@@ -682,3 +682,31 @@ fn a_key_that_moves_focus_to_a_field_is_not_typed_into_it() {
     assert_eq!(value.get(), "/", "the next one is typed");
     focus::clear();
 }
+
+/// **A tall field is a tall control with its line in the middle.** A field given more height than one line — padding folded into its own box so the whole of it takes the press and is as big a target as it looks — keeps the caret on the line the text is drawn on.
+#[test]
+fn a_field_taller_than_its_line_centres_the_line_and_the_caret() {
+    reset_layout_runtime();
+    let value = signal("hola".to_string());
+    let input = Input::new(value, LayoutStyle::new().width(200.0).height(40.0), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(200.0).height(100.0),
+        &[input.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    focus::request(input.id);
+
+    let caret = caret_of(&input).0;
+    let inset = ((40.0 - crate::text_metrics::single_line_box(14.0)) / 2.0).round();
+    assert_eq!(caret.y, inset, "the caret starts where the line does");
+    assert!(inset > 0.0, "and that is below the top of the box");
+}

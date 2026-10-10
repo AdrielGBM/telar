@@ -34,3 +34,14 @@ fn an_absent_key_renders_as_the_key() {
     set_catalog(&CATALOG);
     assert_eq!(t("nope", &[]), "nope");
 }
+
+#[test]
+fn the_default_locale_is_the_catalogs_or_english_without_one() {
+    static SPANISH_FIRST: Catalog = Catalog {
+        locales: &["es"],
+        default_locale: "es",
+        entries: &[],
+    };
+    assert_eq!(default_locale_of(Some(&SPANISH_FIRST)), "es");
+    assert_eq!(default_locale_of(None), "en");
+}

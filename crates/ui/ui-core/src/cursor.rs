@@ -3,7 +3,8 @@
 use std::cell::Cell;
 
 use platform_core::{Cursor, WindowCommand};
-use reactive_core::SurfaceHandle;
+
+use crate::surface_context::HomeSurface;
 
 #[derive(Clone, Copy)]
 struct Claim {
@@ -83,7 +84,7 @@ impl Drop for Deeper {
 /// One box's say in the pointer's shape, withdrawn when dropped from the record of the surface it was made on, whichever surface is active then.
 pub(crate) struct CursorClaim {
     id: u64,
-    surface: SurfaceHandle,
+    home: HomeSurface,
 }
 
 impl CursorClaim {
@@ -103,7 +104,7 @@ impl CursorClaim {
         });
         Self {
             id,
-            surface: reactive_core::current_surface(),
+            home: HomeSurface::here(),
         }
     }
 
@@ -131,11 +132,9 @@ impl CursorClaim {
 impl Drop for CursorClaim {
     fn drop(&mut self) {
         let id = self.id;
-        let _entered = self.surface.enter();
-        // A surface torn down first took its claims with it, and whichever world is active now is not this claim's to publish to.
-        if reactive_core::current_surface() != self.surface {
+        let Some(_home) = self.home.enter() else {
             return;
-        }
+        };
         with_cursors(|c| c.claims.retain(|claim| claim.id != id));
         publish();
     }

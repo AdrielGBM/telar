@@ -4,6 +4,7 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+pub mod access_audit;
 pub mod accessibility;
 pub mod app_ctx;
 pub mod asset_base;
@@ -26,6 +27,7 @@ pub mod system_preferences;
 pub mod window;
 pub mod window_command;
 
+pub use access_audit::{AccessAudit, AccessRule, AccessSeverity, AccessViolation};
 pub use accessibility::{
     AccessNode, CurrentKind, NumericValue, Orientation, Role, SetPosition, ToggleKind,
 };

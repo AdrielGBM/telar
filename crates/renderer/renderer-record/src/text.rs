@@ -54,6 +54,7 @@ fn opens(command: &DrawCommand) -> bool {
             | DrawCommand::PushMatrix { .. }
             | DrawCommand::PushLayer { .. }
             | DrawCommand::PushElement { .. }
+            | DrawCommand::PushSurface { .. }
     )
 }
 
@@ -64,6 +65,7 @@ fn closes(command: &DrawCommand) -> bool {
             | DrawCommand::PopMatrix
             | DrawCommand::PopLayer
             | DrawCommand::PopElement
+            | DrawCommand::PopSurface
     )
 }
 
@@ -211,10 +213,13 @@ fn write_command(out: &mut String, command: &DrawCommand) {
                 let _ = write!(out, " label={:?}", &**label);
             }
         }
+        // The handle is numbered by how many surfaces the runtime made before this one, so a text meant to be compared leaves it out.
+        DrawCommand::PushSurface { .. } => out.push_str("surface"),
         DrawCommand::PopClip
         | DrawCommand::PopMatrix
         | DrawCommand::PopLayer
-        | DrawCommand::PopElement => out.push_str("end"),
+        | DrawCommand::PopElement
+        | DrawCommand::PopSurface => out.push_str("end"),
     }
 }
 

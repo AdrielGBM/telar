@@ -475,3 +475,25 @@ fn a_dark_mode_outside_the_pair_resolves_the_dark_defaults() {
     crate::set_surface_mode(Some("dusk"));
     assert!(use_theme_tokens().ink().r > 0.5);
 }
+
+#[test]
+fn the_default_ink_on_each_filled_token_reads_at_4_5_to_1_in_either_mode() {
+    crate::register_mode("light", || {});
+    crate::register_mode("dark", || {});
+    crate::follow_system("light", "dark");
+
+    for (mode, color_scheme) in [("light", ColorScheme::Light), ("dark", ColorScheme::Dark)] {
+        scheme(color_scheme);
+        let tokens = use_theme_tokens();
+        for (name, fill, ink) in [
+            ("primary", tokens.primary(), tokens.on_primary()),
+            ("error", tokens.error(), tokens.on_error()),
+        ] {
+            let ratio = fill.contrast_ratio(ink);
+            assert!(
+                ratio >= 4.5,
+                "on_{name} on {name} in {mode} mode reads at {ratio:.2}:1"
+            );
+        }
+    }
+}

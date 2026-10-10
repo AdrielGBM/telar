@@ -14,7 +14,7 @@ use crate::focus::{self, FocusId, FocusKind, Travel};
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 use crate::surface_canvas::{SurfaceCanvas, composite_surface};
-use crate::surface_context::Surface;
+use crate::surface_context::{HomeSurface, Surface};
 
 /// A [`SurfaceCanvas`] drawn where the layout puts this widget, at the canvas's [`scale`](SurfaceCanvas::scale).
 ///
@@ -25,6 +25,7 @@ use crate::surface_context::Surface;
 /// - **Window.** The canvas has no window: only the pointer shapes it asks for reach the real one.
 pub struct SurfaceFrame {
     canvas: Rc<SurfaceCanvas>,
+    home: HomeSurface,
     leaf: LayoutLeaf,
     focus: FocusId,
     hovered: Cell<bool>,
@@ -97,6 +98,7 @@ impl SurfaceFrame {
 
         Ok(Self {
             canvas,
+            home: HomeSurface::here(),
             leaf,
             focus: id,
             hovered: Cell::new(false),
@@ -137,6 +139,19 @@ impl SurfaceFrame {
             self.forward(&Event::CursorLeft);
         }
         EventResult::Ignored
+    }
+
+    /// A box event for a box drawn inside this frame, or inside a frame nested in it. Focus the surface moved onto a box in there brings the frame the outer focus too, so the keys that follow reach the box.
+    fn in_surface(&self, event: &Event) -> EventResult {
+        let result = self.canvas.dispatch_in_surface(event);
+        let holds_focus_inside = {
+            let _inside = self.canvas.enter();
+            focus::current().is_some()
+        };
+        if result == EventResult::Handled && holds_focus_inside && !focus::is_focused(self.focus) {
+            focus::request(self.focus);
+        }
+        result
     }
 
     /// Tab inside the canvas, and once it steps past the canvas's last focusable or Shift+Tab past its first, on through the outer tree from the frame.
@@ -212,6 +227,7 @@ impl Component for SurfaceFrame {
             Event::KeyPressed { .. } | Event::KeyReleased { .. } if focused() => {
                 self.forward(event)
             }
+            Event::InSurface { .. } => self.in_surface(event),
             // What everything in the window hears, so the frame passes it on and never keeps it from the siblings after it.
             Event::ModifiersChanged { .. }
             | Event::FocusChanged { .. }
@@ -232,6 +248,9 @@ impl Component for SurfaceFrame {
 
 impl Drop for SurfaceFrame {
     fn drop(&mut self) {
+        let Some(_home) = self.home.enter() else {
+            return;
+        };
         focus::unregister(self.focus);
         dispose_owner(self.owner);
     }

@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use crate::transform_origin::{TransformOrigin, box_transform_about};
-use geometry_core::Rect;
+use geometry_core::{Insets, Rect};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{
     ConsumedKeys, Cursor, Destination, Event, IntoDestination, Key, NamedKey, NumericValue,
@@ -23,6 +23,7 @@ use crate::input_region::{self, InputHandle, InputMode, Placement};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::{dispatch_container_event, transform_pointer};
 use crate::press::PressGesture;
+use crate::surface_context::HomeSurface;
 
 /// The bool is [`KeyAnswer::took`], resolved at the builder so dispatch has one shape to call.
 type KeyTable = Box<dyn Fn(&Key) -> bool>;
@@ -186,12 +187,15 @@ pub struct StyledContainer {
     input: InputMode,
     inert: Option<Rc<dyn Fn() -> bool>>,
     registration: InputHandle,
+    home: HomeSurface,
     // Whether a stroke that starts here is this box's and goes no further out.
     holds_stroke: bool,
     // What the box is, where it is more than a box. `None` reads it from what the box does.
     role: Option<renderer_core::Role>,
     link: Option<Rc<dyn Fn() -> Option<Destination>>>,
+    link_token: Option<u64>,
     current: Option<Rc<dyn Fn() -> bool>>,
+    hit_outset: Option<Rc<dyn Fn() -> Insets>>,
 }
 
 impl StyledContainer {
@@ -234,10 +238,13 @@ impl StyledContainer {
             input: InputMode::Auto,
             inert: None,
             registration: InputHandle::new(),
+            home: HomeSurface::here(),
             holds_stroke: false,
             role: None,
             link: None,
+            link_token: None,
             current: None,
+            hit_outset: None,
         }
     }
 
@@ -324,6 +331,13 @@ impl StyledContainer {
             && self.opacity.as_ref().is_none_or(|opacity| opacity() > 0.0)
     }
 
+    fn hit_area(&self, rect: Rect) -> Rect {
+        match &self.hit_outset {
+            Some(outset) => input_region::grown(rect, outset()),
+            None => rect,
+        }
+    }
+
     fn swallows(&self, rect: Rect, x: f64, y: f64) -> bool {
         self.input == InputMode::Opaque
             && rect.contains(x as f32, y as f32)
@@ -349,6 +363,7 @@ impl StyledContainer {
         &mut self,
         event: &Event,
         rect: Rect,
+        hit: Rect,
         x: f64,
         y: f64,
         source: &PointerSource,
@@ -361,7 +376,7 @@ impl StyledContainer {
         }
         let child = self.dispatch_children(event);
         // A move is broadcast for gestures already running, but only the topmost box under the pointer is hovered.
-        let inside = rect.contains(x as f32, y as f32) && !crate::pointer::pointer_occluded();
+        let inside = hit.contains(x as f32, y as f32) && !crate::pointer::pointer_occluded();
         // Pressed clears once the pointer drags off the box, so it never sticks.
         if !inside {
             self.set_active(false);
@@ -393,6 +408,7 @@ impl StyledContainer {
         &mut self,
         event: &Event,
         rect: Rect,
+        hit: Rect,
         x: f64,
         y: f64,
         button: &PointerButton,
@@ -401,7 +417,7 @@ impl StyledContainer {
         let primary = *button == PointerButton::Primary;
         if !primary && !self.press.wants_alt() && !self.drag.arms(button) {
             let below = self.dispatch_children(event);
-            if self.swallows(rect, x, y) {
+            if self.swallows(hit, x, y) {
                 crate::drag::claim();
                 return EventResult::Handled;
             }
@@ -409,33 +425,34 @@ impl StyledContainer {
         }
         // A child takes the tap; the innermost drag takes the stroke. Standing this drag down because a child took the press made a strip draggable only where nothing pressable sat in it; arming it regardless moved the band and reordered the tab on one press. So the children are asked who claimed the stroke.
         let (below, claimed) = crate::drag::claimed(|| self.dispatch_children(event));
-        let swallows = self.swallows(rect, x, y);
+        let swallows = self.swallows(hit, x, y);
         // Said after the children have had the press and before this returns, so it reaches whatever contains this box.
-        if swallows || (self.holds_stroke && rect.contains(x as f32, y as f32)) {
+        if swallows || (self.holds_stroke && hit.contains(x as f32, y as f32)) {
             crate::drag::claim();
         }
         if below == EventResult::Handled {
             self.press.cancel();
             if self.drag.is_set() && !claimed {
-                self.drag.press(event, rect);
+                self.drag.press(event, rect, hit);
             }
             return EventResult::Handled;
         }
-        if primary && rect.contains(x as f32, y as f32) {
+        if primary && hit.contains(x as f32, y as f32) {
             self.set_active(true);
         }
         let focused = match self.focusable.id {
             Some(id)
-                if primary && !self.focusable.presented && rect.contains(x as f32, y as f32) =>
+                if primary && !self.focusable.presented && hit.contains(x as f32, y as f32) =>
             {
                 focus::request_from_pointer(id);
                 true
             }
             _ => false,
         };
-        let tapped = self.press.is_set() && self.press.arm(event, rect) == EventResult::Handled;
-        let dragged =
-            !claimed && self.drag.is_set() && self.drag.press(event, rect) == EventResult::Handled;
+        let tapped = self.press.is_set() && self.press.arm(event, hit) == EventResult::Handled;
+        let dragged = !claimed
+            && self.drag.is_set()
+            && self.drag.press(event, rect, hit) == EventResult::Handled;
         if tapped || dragged || focused || swallows {
             EventResult::Handled
         } else {
@@ -448,6 +465,7 @@ impl StyledContainer {
         &mut self,
         event: &Event,
         rect: Rect,
+        hit: Rect,
         button: &PointerButton,
     ) -> EventResult {
         let primary = *button == PointerButton::Primary;
@@ -468,7 +486,7 @@ impl StyledContainer {
             _ => None,
         };
         let dragged = self.drag.arms(button) && self.drag.end(released_at);
-        let tapped = self.press.is_set() && self.press.release(event, rect) == EventResult::Handled;
+        let tapped = self.press.is_set() && self.press.release(event, hit) == EventResult::Handled;
         if tapped || dragged {
             EventResult::Handled
         } else {
@@ -598,7 +616,7 @@ impl StyledContainer {
     pub fn to<D: IntoDestination>(mut self, destination: impl Fn() -> D + 'static) -> Self {
         let read: Rc<dyn Fn() -> Option<Destination>> =
             Rc::new(move || destination().into_destination());
-        crate::link::register_link(self.node, read.clone());
+        self.link_token = Some(crate::link::register_link(self.node, read.clone()));
         self.link = Some(read.clone());
         self.press.set_follow(move || {
             if !crate::link::surface_follows_links()
@@ -765,6 +783,21 @@ impl StyledContainer {
     /// A descendant that answers the pointer, or is itself `input_opaque`, still claims its own rect despite this.
     pub fn input_transparent(self) -> Self {
         self.input_mode(InputMode::Transparent)
+    }
+
+    /// Grows the area the pointer finds this box in by `outset` past each edge of its laid-out box, without moving anything or drawing anything there: a thin control — the bar of a splitter, the edge of a resizable panel — stays thin and is still a full-size target.
+    ///
+    /// **The grown area overlaps the box's siblings, and wins over them.** Its parent tests it before any sibling, however they are stacked, so a press, a drag, the hover and the cursor in the outset are this box's even where a neighbouring pane is drawn. The wheel is the exception: it hit-tests the laid-out box alone, so the pane the outset lies over still scrolls under it. The outset is the opposite of [`input_transparent`](Self::input_transparent) — that gives up the box's own rect, this claims past it — and it wins only among the box's own siblings: its parent still stacks under the parent's siblings as it always has, and a viewport around the box clips the outset as it clips the box.
+    ///
+    /// The grown area is also what a reader and a target-size check are told the control's rect is, and it joins the input region of a surface that carves one, so all three agree on where the control can be pointed at. Re-read on every event and query, so a theme that changes the size of the bar changes the outset with it.
+    pub fn hit_outset(mut self, outset: impl Into<Reactive<Insets>>) -> Self {
+        let outset: Rc<dyn Fn() -> Insets> = match outset.into() {
+            Reactive::Const(by) => Rc::new(move || by),
+            Reactive::Read(read) => read,
+        };
+        self.registration.outset(self.node, Rc::clone(&outset));
+        self.hit_outset = Some(outset);
+        self
     }
 
     /// Read on every event and every region query, so a pane goes inert and comes back without being rebuilt.
@@ -1196,7 +1229,10 @@ impl StyledContainer {
                 Event::PointerPressed { x, y, .. } => {
                     self.end_containment();
                     self.drag.abort();
-                    if self.rect.get().contains(*x as f32, *y as f32) {
+                    if self
+                        .hit_area(self.rect.get())
+                        .contains(*x as f32, *y as f32)
+                    {
                         EventResult::Handled
                     } else {
                         EventResult::Ignored
@@ -1209,14 +1245,17 @@ impl StyledContainer {
             return self.dispatch_children(event);
         }
         let rect = self.rect.get();
+        let hit = self.hit_area(rect);
         match event {
             Event::PointerMoved { x, y, source } => {
-                self.on_pointer_moved(event, rect, *x, *y, source)
+                self.on_pointer_moved(event, rect, hit, *x, *y, source)
             }
             Event::PointerPressed { x, y, button, .. } => {
-                self.on_pointer_pressed(event, rect, *x, *y, button)
+                self.on_pointer_pressed(event, rect, hit, *x, *y, button)
             }
-            Event::PointerReleased { button, .. } => self.on_pointer_released(event, rect, button),
+            Event::PointerReleased { button, .. } => {
+                self.on_pointer_released(event, rect, hit, button)
+            }
             // A drag is measured from the press, so ending it at the window border would cut an orbit short. What leaving does invalidate is containment.
             Event::CursorLeft => {
                 self.end_containment();
@@ -1284,11 +1323,14 @@ impl StyledContainer {
 
 impl Drop for StyledContainer {
     fn drop(&mut self) {
-        if self.link.is_some() {
-            crate::link::unregister_link(self.node);
+        if let Some(token) = self.link_token {
+            crate::link::unregister_link(self.home, self.node, token);
         }
         // Before releasing focus below, so `on_focus` does not fire during teardown.
         self.focusable._effect.take();
+        let Some(_home) = self.home.enter() else {
+            return;
+        };
         if let Some(id) = self.focusable.id {
             focus::unregister(id);
         }
@@ -1346,3 +1388,7 @@ mod paint_state_tests;
 #[cfg(test)]
 #[path = "styled_container_transaction_test.rs"]
 mod transaction_tests;
+
+#[cfg(test)]
+#[path = "styled_container_hit_outset_test.rs"]
+mod hit_outset_tests;

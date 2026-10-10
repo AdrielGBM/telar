@@ -514,3 +514,87 @@ fn a_box_model_is_taken_per_node_in_a_tree() {
     assert_eq!(nodes[0].padding, Insets::default());
     assert_eq!(nodes[1].padding, Insets::all(4.0));
 }
+
+struct Moved {
+    child: Rc<Segment>,
+}
+impl Component for Moved {
+    fn view(&self) -> RenderNode {
+        RenderNode::translate(100.0, 50.0, [rect(0.0), self.child.boundary()])
+    }
+}
+
+struct Hoisting {
+    child: Rc<Segment>,
+}
+impl Component for Hoisting {
+    fn view(&self) -> RenderNode {
+        RenderNode::translate(100.0, 50.0, [RenderNode::overlay([self.child.boundary()])])
+    }
+}
+
+#[test]
+fn a_walked_node_is_where_the_frame_draws_it_after_every_matrix_around_it() {
+    let child = Segment::mount(Leaf { x: signal(0.0) });
+    let root = SegmentRoot::mount(Moved { child });
+    let mut nodes = Vec::new();
+    root.walk(&mut nodes);
+    assert_eq!(nodes[1].rect, Rect::new(100.0, 50.0, 15.0, 10.0));
+    assert_eq!(nodes[0].rect, Rect::new(100.0, 50.0, 15.0, 10.0));
+}
+
+#[test]
+fn a_hoisted_child_is_walked_free_of_the_matrices_it_was_hoisted_out_of() {
+    let child = Segment::mount(Leaf { x: signal(0.0) });
+    let root = SegmentRoot::mount(Hoisting { child });
+    let commands = root.commands().clone();
+    let mut drawn = Vec::new();
+    renderer_core::for_each_with_matrix(&commands, |command, matrix| {
+        if let DrawCommand::Rect { rect, .. } = command {
+            drawn.push(renderer_core::transform_clip_rect(matrix, *rect));
+        }
+    });
+    let mut nodes = Vec::new();
+    root.walk(&mut nodes);
+    assert_eq!(
+        nodes[1].rect,
+        drawn[0].union(drawn[1]),
+        "as the composed frame draws it"
+    );
+    assert_eq!(nodes[1].rect, Rect::new(0.0, 0.0, 15.0, 10.0));
+}
+
+struct Spliced {
+    inner: SegmentRoot,
+}
+impl Component for Spliced {
+    fn view(&self) -> RenderNode {
+        RenderNode::translate(
+            20.0,
+            30.0,
+            [
+                RenderNode::Primitive(DrawCommand::PushMatrix {
+                    matrix: geometry_core::Transform::scale_around(2.0, 2.0, 0.0, 0.0).to_array(),
+                }),
+                self.inner.boundary(),
+                RenderNode::Primitive(DrawCommand::PopMatrix),
+            ],
+        )
+    }
+}
+
+#[test]
+fn a_spliced_roots_overlays_are_walked_inside_the_place_it_is_spliced() {
+    let inner = SegmentRoot::mount(Hoisting {
+        child: Segment::mount(Leaf { x: signal(0.0) }),
+    });
+    let root = SegmentRoot::mount(Spliced { inner });
+    let mut nodes = Vec::new();
+    root.walk(&mut nodes);
+    let leaf = nodes.last().expect("the leaf is walked");
+    assert_eq!(
+        leaf.rect,
+        Rect::new(20.0, 30.0, 30.0, 20.0),
+        "the inner root's overlay leaves its own matrices behind, not the place its root is spliced"
+    );
+}

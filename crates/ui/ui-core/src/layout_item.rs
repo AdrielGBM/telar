@@ -57,6 +57,10 @@ impl Child {
         reactive_core::with_owner(self.built_under, f)
     }
 
+    pub(crate) fn owner(&self) -> Option<OwnerId> {
+        self.owner
+    }
+
     pub(crate) fn owned_by(mut self, owner: OwnerId) -> Self {
         self.owner = Some(owner);
         self

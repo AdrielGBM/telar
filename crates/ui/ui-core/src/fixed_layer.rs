@@ -11,12 +11,13 @@ use ui_tree::{
     Component, EventResult, OverlaySink, RenderNode, register_overlay, unregister_overlay,
 };
 
-use crate::context::{new_leaf, remove_node};
+use crate::context::new_leaf;
 use crate::input_region::{
     InputHandle, pointable, receives_input, tracks_hidden, visible_rect, withhold,
 };
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
+use crate::surface_context::HomeSurface;
 
 /// A non-modal layer fixed to the surface, drawn over the primary scroll: a bar that stays at the top of the window while the page scrolls under it.
 ///
@@ -36,6 +37,7 @@ pub struct FixedLayer {
     content: NodeId,
     children: TrackedChildren,
     overlay_id: u64,
+    home: HomeSurface,
     _input: InputHandle,
     _covers: crate::scroll_viewports::LayerRegistration,
 }
@@ -48,6 +50,7 @@ impl FixedLayer {
         let (content, _rect, children) = register_container(layout_style, children)?;
         layout_reactive::lay_out_against_surface(content);
         let (place, _rect) = new_leaf(LayoutStyle::new().absolute().width(0.0).height(0.0))?;
+        layout_reactive::free_with(content, place);
         let sink: Rc<dyn OverlaySink> = Rc::new(LayerSink {
             children: RefCell::new(children.clone()),
             content,
@@ -64,6 +67,7 @@ impl FixedLayer {
             content,
             children,
             overlay_id,
+            home: HomeSurface::here(),
             _input: input,
             _covers: covers,
         })
@@ -164,9 +168,9 @@ impl Component for FixedLayer {
 
 impl Drop for FixedLayer {
     fn drop(&mut self) {
-        unregister_overlay(self.overlay_id);
-        // A root of its own, so nothing above it would free it.
-        remove_node(self.content);
+        if let Some(_home) = self.home.enter() {
+            unregister_overlay(self.overlay_id);
+        }
     }
 }
 

@@ -330,9 +330,9 @@ impl Drop for Disposing {
     }
 }
 
-/// Disposes an owner and everything below it, children first; a panic mid-teardown resumes only once it completes, and whatever the cleanups invalidated is flushed afterward rather than dropped, since a surviving effect may still need to see it.
+/// Disposes an owner and everything below it, children first, each owner's teardown inside the surface it was created on; a panic mid-teardown resumes only once it completes, and whatever the cleanups invalidated is flushed afterward rather than dropped, since a surviving effect may still need to see it.
 pub fn dispose_owner(id: OwnerId) {
-    let (cleanups, effects, signals) = uproot(id);
+    let mut torn = uproot(id);
     let mut panicked = None;
 
     {
@@ -340,24 +340,34 @@ pub fn dispose_owner(id: OwnerId) {
 
         // One wave, not one per withdrawal: `undeclare` bumps the cascade's `structure` signal, which every context read subscribes to, so tearing down N nodes outside a batch is N invalidations across the tree.
         batch(|| {
-            for cleanup in cleanups {
-                contain(&mut panicked, cleanup);
+            for owner in &mut torn {
+                let _surface = owner.surface.enter();
+                for cleanup in std::mem::take(&mut owner.cleanups) {
+                    contain(&mut panicked, cleanup);
+                }
             }
         });
 
-        for effect in effects {
-            contain(&mut panicked, || deregister_effect(effect));
+        for owner in &mut torn {
+            let _surface = owner.surface.enter();
+            for effect in std::mem::take(&mut owner.effects) {
+                contain(&mut panicked, || deregister_effect(effect));
+            }
         }
-        // Taken out under the borrow and dropped after releasing it: a signal whose value owns signal handles re-enters the runtime as that value drops, which under the borrow aborts.
-        let removed: Vec<Box<dyn Any>> = RUNTIME.with(|rt| {
-            let mut rt = rt.borrow_mut();
-            signals
-                .into_iter()
-                .filter_map(|signal| rt.signals.remove(signal))
-                .map(|storage| storage.value)
-                .collect()
-        });
-        contain(&mut panicked, || drop(removed));
+        for owner in torn {
+            // Taken out under the borrow and dropped after releasing it: a signal whose value owns signal handles re-enters the runtime as that value drops, which under the borrow aborts.
+            let removed: Vec<Box<dyn Any>> = RUNTIME.with(|rt| {
+                let mut rt = rt.borrow_mut();
+                owner
+                    .signals
+                    .into_iter()
+                    .filter_map(|signal| rt.signals.remove(signal))
+                    .map(|storage| storage.value)
+                    .collect()
+            });
+            let _surface = owner.surface.enter();
+            contain(&mut panicked, || drop(removed));
+        }
     }
 
     flush_when_settled();
@@ -460,7 +470,14 @@ pub fn live_owner_count() -> usize {
 }
 
 /// Removes an owner's subtree from the arena and hands back what it held, deepest owner first; iterative rather than recursive, since a stack overflow inside disposal would abort rather than unwind.
-type Uprooted = (Vec<Box<dyn FnOnce()>>, Vec<EffectId>, Vec<SignalId>);
+type Uprooted = Vec<TornOwner>;
+
+struct TornOwner {
+    surface: SurfaceHandle,
+    cleanups: Vec<Box<dyn FnOnce()>>,
+    effects: Vec<EffectId>,
+    signals: Vec<SignalId>,
+}
 
 fn uproot(root: OwnerId) -> Uprooted {
     RUNTIME.with(|rt| {
@@ -482,17 +499,17 @@ fn uproot(root: OwnerId) -> Uprooted {
             order.push(id);
         }
 
-        let mut cleanups = Vec::new();
-        let mut effects = Vec::new();
-        let mut signals = Vec::new();
-        for id in order.into_iter().rev() {
-            if let Some(entry) = rt.owners.remove(id) {
-                cleanups.extend(entry.cleanups);
-                effects.extend(entry.effects);
-                signals.extend(entry.signals);
-            }
-        }
-        (cleanups, effects, signals)
+        order
+            .into_iter()
+            .rev()
+            .filter_map(|id| rt.owners.remove(id))
+            .map(|entry| TornOwner {
+                surface: entry.surface,
+                cleanups: entry.cleanups,
+                effects: entry.effects,
+                signals: entry.signals,
+            })
+            .collect()
     })
 }
 

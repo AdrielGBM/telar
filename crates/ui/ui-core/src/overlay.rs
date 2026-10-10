@@ -11,10 +11,11 @@ use ui_tree::{
     Component, EventResult, OverlaySink, RenderNode, register_overlay, unregister_overlay,
 };
 
-use crate::context::{attach_overlay, detach_overlay, remove_node, track_layout};
-use crate::input_region::{InputHandle, receives_input, visible_rect, withhold};
+use crate::context::{attach_overlay, track_layout};
+use crate::input_region::{InputHandle, receives_input, tracks_hidden, visible_rect, withhold};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::{dispatch_container_event, offset_pointer};
+use crate::surface_context::HomeSurface;
 
 /// Where an anchored overlay's content sits relative to its trigger widget. Maps to the `.rsx` `placement` attribute. Only vertical placements are provided today; horizontal ones would follow the same pattern.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -217,6 +218,7 @@ pub struct Overlay {
     anchor: Option<Anchor>,
     // Kept mounted while false, so a modal's slotted body survives a close and reopen instead of being rebuilt from a consumed slot.
     visible: Rc<dyn Fn() -> bool>,
+    home: HomeSurface,
     _input: InputHandle,
 }
 
@@ -308,6 +310,7 @@ impl Overlay {
         if attach_overlay(content) {
             // An empty leaf takes no room in the flow, and left auto-sized it fills the space it is laid out in when the overlay is the root itself, which then hosts the portal.
             let (placeholder, _r) = crate::context::new_leaf(LayoutStyle::new())?;
+            layout_reactive::free_with(content, placeholder);
             input.link(content, placeholder, true);
             Ok(Overlay {
                 layout_node: placeholder,
@@ -317,6 +320,7 @@ impl Overlay {
                 focus_scope,
                 anchor,
                 visible,
+                home: HomeSurface::here(),
                 _input: input,
             })
         } else {
@@ -329,6 +333,7 @@ impl Overlay {
                 focus_scope,
                 anchor,
                 visible,
+                home: HomeSurface::here(),
                 _input: input,
             })
         }
@@ -336,6 +341,12 @@ impl Overlay {
 }
 
 impl Overlay {
+    /// Declares the control this overlay was opened from, which stays in what a reader is told while the overlay holds focus inside itself. See [`focus::set_scope_owner`](crate::focus::set_scope_owner).
+    pub fn owned_by(self, owner: NodeId) -> Self {
+        crate::focus::set_scope_owner(self.focus_scope, owner);
+        self
+    }
+
     /// The node its content actually hangs from, which is the portaled one unless the host refused it. What a caller asks for to reason about the content by ancestry — autofocusing what is inside it, say — since [`layout_node`](LayoutItem::layout_node) is an empty placeholder once portaled.
     pub fn content_node(&self) -> NodeId {
         self.portaled_content.unwrap_or(self.layout_node)
@@ -355,8 +366,8 @@ impl LayoutItem for Overlay {
 
 impl Component for Overlay {
     fn view(&self) -> RenderNode {
-        // Its content stays alive for the next time it is shown.
-        if !(self.visible)() {
+        // Its content stays alive for the next time it is shown. A root of its own, it is not hidden by a box hiding where it was declared unless it asks.
+        if !(self.visible)() || tracks_hidden(self.layout_node) {
             return RenderNode::Empty;
         }
         let boundaries = self.children.iter().map(|c| c.segment.boundary());
@@ -405,13 +416,11 @@ impl Component for Overlay {
 
 impl Drop for Overlay {
     fn drop(&mut self) {
+        let Some(_home) = self.home.enter() else {
+            return;
+        };
         unregister_overlay(self.overlay_id);
         crate::focus::unregister_scope(self.focus_scope);
-        // The portaled content lives outside the DOM subtree, so nothing else would remove it.
-        if let Some(content) = self.portaled_content {
-            detach_overlay(content);
-            remove_node(content);
-        }
     }
 }
 
