@@ -9,8 +9,12 @@ use serde::{Deserialize, Serialize};
 use telar::focus::{self, FocusId};
 use telar::preview::host::{Args, PreviewRequest};
 use telar::preview::{ActionLog, ArgValue, PreviewEntry};
-use telar::{OwnerId, Route, RwSignal, batch, hot_signal, owner_scope, signal, with_owner};
+use telar::{Memo, OwnerId, Route, RwSignal, batch, hot_signal, owner_scope, signal, with_owner};
+use telar_devtools::Inspection;
 
+use crate::arrangement::Arrangement;
+use crate::interactions::Interactions;
+use crate::matrix::{CustomAxis, MatrixSource};
 use crate::route::{Link, Page, WorkshopRoute};
 use crate::settings::CanvasSettings;
 use crate::sidebar::{group_ids, listed};
@@ -31,6 +35,10 @@ pub(crate) mod keys {
     pub(crate) const ACTIONS_FILTER: &str = "@workshop/actions.filter";
     pub(crate) const CANVAS_SETTINGS: &str = "@workshop/canvas.settings";
     pub(crate) const CHROME: &str = "@workshop/chrome";
+    pub(crate) const MATRIX_SOURCE: &str = "@workshop/matrix.source";
+    pub(crate) const MATRIX_AXES: &str = "@workshop/matrix.axes";
+    pub(crate) const MATRIX_FOCUS: &str = "@workshop/matrix.focus";
+    pub(crate) const PLAY_AUTO_RUN: &str = "@workshop/play.auto_run";
 }
 
 pub(crate) const SIDEBAR_DEFAULT_WIDTH: f32 = 240.0;
@@ -41,10 +49,11 @@ pub(crate) const PANEL_MIN_SIZE: f32 = 160.0;
 pub(crate) const PANEL_MAX_FRACTION: f32 = 0.6;
 
 /// Which of the workshop's views the area beside the sidebar shows.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub(crate) enum ViewMode {
     #[default]
     Canvas,
+    Matrix,
     Docs,
 }
 
@@ -62,11 +71,14 @@ pub(crate) enum PanelTab {
     #[default]
     Controls,
     Actions,
+    Interactions,
+    Layout,
+    Accessibility,
 }
 
-/// What the sidebar, the canvas and the panels share: the previews, which one is selected, which groups are open, the pane sizes, the view, the search, the panel shown and the actions filter, each preview's args, the canvas toolbar's settings and the calls the mounted preview's callbacks received.
+/// What the sidebar, the canvas and the panels share: the previews, which one is selected, which groups are open, the pane sizes, the view, the search, the panel shown and the actions filter, each preview's args, the canvas toolbar's settings, the matrix the Matrix view shows and its focused cell, the calls the mounted preview's callbacks received and what the inspection panels read of its canvas.
 ///
-/// A cheap handle: clones share one state. Everything but the previews, the remount count, the action log and the search field is a `@workshop/…` hot signal, so it is made where the tree is built, after a hot reload has restored the values it carries.
+/// A cheap handle: clones share one state. Everything but the previews, the remount count, the action log, the inspection and the search field is a `@workshop/…` hot signal, so it is made where the tree is built, after a hot reload has restored the values it carries.
 #[derive(Clone)]
 pub(crate) struct WorkshopState {
     entries: Rc<[PreviewEntry]>,
@@ -83,8 +95,15 @@ pub(crate) struct WorkshopState {
     actions_filter: RwSignal<String>,
     canvas_settings: RwSignal<CanvasSettings>,
     chrome: RwSignal<bool>,
+    matrix_source: RwSignal<MatrixSource>,
+    matrix_axes: RwSignal<Vec<CustomAxis>>,
+    matrix_focus: RwSignal<Option<String>>,
     remounts: RwSignal<u64>,
+    arrangement: Memo<Arrangement>,
+    sidebar_drawer: RwSignal<bool>,
     actions: ActionLog,
+    inspection: Inspection,
+    interactions: Interactions,
     search_field: Rc<Cell<Option<FocusId>>>,
     args: Rc<RefCell<HashMap<&'static str, Args>>>,
     // Args are made lazily, often from inside a canvas, and would otherwise be freed with whichever canvas asked first.
@@ -170,8 +189,19 @@ impl WorkshopState {
                 CanvasSettings::default(),
             ),
             chrome: hot_signal(keys::CHROME, true),
+            matrix_source: hot_signal(keys::MATRIX_SOURCE, MatrixSource::default()),
+            matrix_axes: hot_signal(keys::MATRIX_AXES, Vec::new()),
+            matrix_focus: hot_signal(keys::MATRIX_FOCUS, None),
             remounts: signal(0),
+            arrangement: Arrangement::follow(),
+            sidebar_drawer: signal(false),
             actions: ActionLog::new(),
+            inspection: Inspection::new(),
+            interactions: Interactions::new(keeper.kept(
+                keys::PLAY_AUTO_RUN,
+                store::keys::PLAY_AUTO_RUN,
+                true,
+            )),
             search_field: Rc::default(),
             args: Rc::default(),
             owner: owner_scope().id(),
@@ -216,12 +246,33 @@ impl WorkshopState {
         self.search
     }
 
-    /// Takes the keyboard to the search field, opening the sidebar first if it is collapsed.
+    /// Takes the keyboard to the search field, opening the sidebar first if it is collapsed or in its drawer.
     pub(crate) fn focus_search(&self) {
-        self.sidebar_collapsed.set(false);
+        match self.arrangement.get().sidebar_in_drawer() {
+            true => self.sidebar_drawer.set(true),
+            false => self.sidebar_collapsed.set(false),
+        }
         if let Some(field) = self.search_field.get() {
             focus::request(field);
         }
+    }
+
+    /// Shows or hides the sidebar: its drawer while the window is narrow, its pane otherwise.
+    pub(crate) fn toggle_sidebar(&self) {
+        match self.arrangement.get().sidebar_in_drawer() {
+            true => self.sidebar_drawer.toggle(),
+            false => self.sidebar_collapsed.toggle(),
+        }
+    }
+
+    /// How the chrome is arranged for the window's width now. Tracked.
+    pub(crate) fn arrangement(&self) -> Memo<Arrangement> {
+        self.arrangement
+    }
+
+    /// Whether the sidebar's drawer is open. Only a narrow window shows the sidebar in a drawer, and it starts shut there.
+    pub(crate) fn sidebar_drawer(&self) -> RwSignal<bool> {
+        self.sidebar_drawer
     }
 
     /// Names the field [`Self::focus_search`] takes the keyboard to.
@@ -272,6 +323,21 @@ impl WorkshopState {
         self.chrome
     }
 
+    /// Whether the Matrix view shows the selected preview's own matrix or one built from [`Self::matrix_axes`]. A preview with no matrix of its own always shows the built one.
+    pub(crate) fn matrix_source(&self) -> RwSignal<MatrixSource> {
+        self.matrix_source
+    }
+
+    /// What the Matrix view varies when it builds a matrix itself, for every preview alike.
+    pub(crate) fn matrix_axes(&self) -> RwSignal<Vec<CustomAxis>> {
+        self.matrix_axes
+    }
+
+    /// The id of the matrix cell the inspection panels and the marks follow; the view moves it to its first cell when it names none of the cells shown.
+    pub(crate) fn matrix_focus(&self) -> RwSignal<Option<String>> {
+        self.matrix_focus
+    }
+
     /// Where the workshop is, as its address carries it, subscribing the caller to the selection, the view and the chrome. `None` only when there are no previews.
     pub(crate) fn route(&self) -> Option<WorkshopRoute> {
         let entry = self.selected()?;
@@ -290,6 +356,7 @@ impl WorkshopState {
         batch(|| {
             let (view, listed) = match &route.page {
                 Page::Preview(id) => (ViewMode::Canvas, self.select(id)),
+                Page::Matrix(id) => (ViewMode::Matrix, self.select(id)),
                 Page::Docs(title) => (ViewMode::Docs, self.select_title(title)),
             };
             if listed {
@@ -357,6 +424,16 @@ impl WorkshopState {
         self.remounts.get()
     }
 
+    /// What the Layout and Accessibility panels show of the mounted canvas, or of the focused matrix cell, and the marks they draw over it.
+    pub(crate) fn inspection(&self) -> Inspection {
+        self.inspection
+    }
+
+    /// The play the canvas runs: the steps of its last run, the one picked to show, and whether it runs as the canvas mounts.
+    pub(crate) fn interactions(&self) -> &Interactions {
+        &self.interactions
+    }
+
     /// The calls the mounted preview's callbacks received. One log for as long as the workshop lives, so a panel reading it outlives each canvas, and emptied as each canvas mounts.
     pub(crate) fn actions(&self) -> ActionLog {
         self.actions
@@ -375,6 +452,7 @@ impl WorkshopState {
 fn route_of(entry: &PreviewEntry, view: ViewMode, chrome: bool) -> WorkshopRoute {
     let page = match view {
         ViewMode::Canvas => Page::Preview(entry.id.into()),
+        ViewMode::Matrix => Page::Matrix(entry.id.into()),
         ViewMode::Docs => Page::Docs(entry.title.into()),
     };
     WorkshopRoute::new(page, chrome)

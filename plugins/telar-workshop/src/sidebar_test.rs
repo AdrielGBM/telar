@@ -274,3 +274,18 @@ fn names(node: &AccessNode, label: &str) -> bool {
         .strip_prefix(label)
         .is_some_and(|rest| rest.is_empty() || rest.starts_with(' '))
 }
+
+#[test]
+fn the_search_field_is_a_full_size_target() {
+    let mounted = Mounted::new(entries());
+    let nodes = mounted.runtime.access_snapshot(&mounted.tree.commands());
+    let field = nodes
+        .iter()
+        .find(|node| node.role == Role::TextInput)
+        .expect("the sidebar has a search field");
+    assert!(
+        field.rect.height >= telar::inspect::a11y::MIN_TARGET,
+        "the search field is {:?}",
+        field.rect
+    );
+}

@@ -100,14 +100,25 @@ impl Panel {
         }
     }
 
+    /// Selects the first preview the search finds and takes the keyboard to it in the tree; from the drawer, it shuts the drawer instead, so the canvas showing it is in view.
     fn select_first_match(&self) {
         let first = self
             .items
             .with(|items| first_leaf(items).map(|leaf| leaf.id.clone()));
         if let Some(id) = first {
             self.state.select(&id);
-            self.focus_tree();
+            if !self.close_drawer() {
+                self.focus_tree();
+            }
         }
+    }
+
+    /// Shuts the sidebar's drawer, and answers whether it was open.
+    fn close_drawer(&self) -> bool {
+        let drawer = self.state.sidebar_drawer();
+        let open = drawer.peek();
+        drawer.set_if_changed(false);
+        open
     }
 }
 
@@ -118,15 +129,18 @@ fn first_leaf(nodes: &[TreeNode]) -> Option<&TreeNode> {
     })
 }
 
+/// The input carries the field's vertical padding in its own height, so the press and the audit see the whole field.
+fn search_height() -> f32 {
+    (single_line_box(WORKBENCH_TEXT_SIZE) + WORKBENCH_GRID).max(telar::inspect::a11y::MIN_TARGET)
+}
+
 fn search_field(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let keys = panel.clone();
     let submit = panel.clone();
     let search = panel.state.search();
-    let input = Input::declaring(
-        search,
-        LayoutStyle::new().height(single_line_box(WORKBENCH_TEXT_SIZE)),
-        |text| text,
-    )?
+    let input = Input::declaring(search, LayoutStyle::new().height(search_height()), |text| {
+        text
+    })?
     .placeholder(strings::text(SEARCH))
     .a11y_label(|| strings::text(SEARCH))
     .on_submit(move || submit.select_first_match())
@@ -151,7 +165,6 @@ fn search_field(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new()
             .flex_column()
             .padding_horizontal(WORKBENCH_GRID)
-            .padding_vertical(WORKBENCH_GRID / 2.0)
             .bordered(),
         |_| workbench_card(),
         vec![box_item(input)],
@@ -216,11 +229,15 @@ fn empty(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let state = &panel.state;
+    let picked = panel.clone();
     let tree = tree_view(
         TreeViewProps::props()
             .items(panel.items)
             .selected(state.selection())
             .expanded(state.expanded())
+            .on_select(Rc::new(move |_: &TreeNode| {
+                picked.close_drawer();
+            }))
             .select_branches(false)
             .label(Reactive::of(|| strings::text(PREVIEWS)))
             .build(),

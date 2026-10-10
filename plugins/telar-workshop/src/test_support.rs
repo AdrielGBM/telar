@@ -1,7 +1,9 @@
+use telar::preview::{PreviewCtx, PreviewEntry};
 use telar::{
-    AccessNode, App, Component, ComponentList, DrawCommand, Rect, Role, WindowRoot,
-    for_each_with_matrix, relayout_if_dirty, transform_clip_rect,
+    AccessNode, App, Children, Component, ComponentList, DrawCommand, LayoutError, LayoutItem,
+    Reactive, Rect, Role, WindowRoot, for_each_with_matrix, relayout_if_dirty, transform_clip_rect,
 };
+use telar_components::{BadgeProps, ButtonProps, badge, button};
 use telar_devtools::workbench_scope;
 
 use crate::state::WorkshopState;
@@ -75,4 +77,41 @@ pub fn control_matching(
 
 pub fn control(nodes: &[AccessNode], role: Role, name: &str) -> AccessNode {
     control_matching(nodes, role, name, |node| node.name == name)
+}
+
+fn sample_button(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let label = ctx.arg("label", "Save".to_string());
+    button(
+        ButtonProps::props()
+            .label(Reactive::of(move || label.clone()))
+            .build(),
+        Children::default(),
+    )
+}
+
+fn sample_badge(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let count = ctx.arg("count", 3_i64);
+    badge(
+        BadgeProps::props()
+            .label(Reactive::of(move || count.to_string()))
+            .build(),
+        Children::default(),
+    )
+}
+
+/// A small library of previews written as an application writes them, over two groups, for what has to hold whatever the previews are.
+pub fn sample_previews() -> Vec<PreviewEntry> {
+    vec![
+        PreviewEntry::new(
+            "sample--button--primary",
+            "button",
+            "Primary",
+            sample_button,
+        )
+        .title("Inputs/Button"),
+        PreviewEntry::new("sample--button--ghost", "button", "Ghost", sample_button)
+            .title("Inputs/Button"),
+        PreviewEntry::new("sample--badge--count", "badge", "Count", sample_badge)
+            .title("Display/Badge"),
+    ]
 }

@@ -115,7 +115,7 @@ fn panel(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let timing = Text::declaring(
         move || {
             let millis = format!("{:.1}", model.reading.get().frame_millis);
-            let nodes = model.nodes.with(|nodes| nodes.len()).to_string();
+            let nodes = model.inspection.nodes.with(|nodes| nodes.len()).to_string();
             format!(
                 "{} · {}",
                 strings::text_with(FRAME_TIME, &millis),

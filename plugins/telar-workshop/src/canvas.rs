@@ -1,6 +1,6 @@
 //! The canvas: the selected preview, mounted on a surface of its own so its overlays, focus, size and environment stay inside it, under a header naming it, or with no header where the workshop shows no chrome.
 //!
-//! Each mount is a new [`telar::SurfaceCanvas`] shown through a [`telar::SurfaceFrame`], with the preview built inside an error boundary by [`mount_preview`]: a failed build or a panic shows a card in the canvas, and the workshop around it keeps running. An arg the preview read at build builds it again inside the same canvas; [`WorkshopState::remount`] replaces the canvas itself. The preview's callbacks log their calls in the workshop's one action log, which each mount empties.
+//! Each mount is a new [`telar::SurfaceCanvas`] shown through a [`telar::SurfaceFrame`], with the preview built inside an error boundary by [`mount_preview`]: a failed build or a panic shows a card in the canvas, and the workshop around it keeps running. An arg the preview read at build builds it again inside the same canvas; [`WorkshopState::remount`] replaces the canvas itself. The preview's callbacks log their calls in the workshop's one action log, which each mount empties, and its play drives the canvas as the interactions panel says.
 
 pub(crate) mod env;
 mod frame;
@@ -10,18 +10,18 @@ pub(crate) mod states;
 use std::rc::Rc;
 
 use telar::preview::host::mount_preview;
-use telar::preview::{PreviewCtx, PreviewEntry};
+use telar::preview::{CaughtFailures, PreviewCtx, PreviewEntry};
 use telar::{
-    AlignItems, Children, LayoutError, LayoutItem, LayoutStyle, Reactive, ReactiveList, RectStyle,
-    ShapeStyle, SizeDimension, Slots, StyledContainer, Text, box_item,
+    Accessible, AlignItems, Children, LayoutError, LayoutItem, LayoutStyle, Reactive, ReactiveList,
+    RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer, Text, box_item, on_cleanup,
 };
 use telar_components::{ButtonProps, IconButtonProps, ToolbarProps, button, icon_button, toolbar};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_fill};
 use telar_icons::icon;
 
-use crate::canvas_toolbar;
 use crate::state::WorkshopState;
 use crate::strings::{self, CANVAS_TOOLS, COPY_LINK, REMOUNT};
+use crate::{canvas_toolbar, interactions};
 
 pub(crate) const HEADER_HEIGHT: f32 = WORKBENCH_GRID * 5.0;
 
@@ -73,14 +73,22 @@ fn mount(
     let ctx = PreviewCtx::for_entry_with(&entry, state.args(&entry)).with_actions(actions);
     let globals = ctx.globals();
     let failing = state.clone();
+    let failures = CaughtFailures::default();
+    let (playing, caught) = (ctx.clone(), failures.clone());
     let surface = env::canvas(state, &entry, globals, move || {
         mount_preview(
             &entry,
             ctx,
-            move |failure| states::failure(&failing, &entry, failure),
+            move |failure| {
+                caught.record(&failure);
+                states::failure(&failing, &entry, failure)
+            },
             None,
         )
     })?;
+    interactions::drive(state, &entry, playing, &surface, failures);
+    let following = state.inspection().follow(Rc::clone(&surface));
+    on_cleanup(move || drop(following));
     let stage = frame::stage(state, entry.layout, globals, surface)?;
     let items = match header {
         Header::Shown => vec![self::header(state, &entry, stage.size)?, stage.item],
@@ -95,12 +103,20 @@ fn header(
     entry: &PreviewEntry,
     size: Option<frame::SizeLabel>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let title = format!("{} / {}", entry.title, entry.name);
+    let name = format!("{} / {}", entry.title, entry.name);
+    let shown = name.clone();
     let title = Text::declaring(
-        move || title.clone(),
-        LayoutStyle::new().flex_grow(1.0).min_width(0.0),
+        move || shown.clone(),
+        LayoutStyle::new().min_width(0.0),
         |text| text.with_font_weight(600),
     )?;
+    let title = StyledContainer::new(
+        LayoutStyle::new().flex_grow(1.0).min_width(0.0),
+        |_| RectStyle::default(),
+        vec![box_item(title)],
+    )?
+    .role(Role::Status)
+    .a11y_label(move || name.clone());
     let mut items = vec![box_item(title)];
     let framed = size.is_some();
     if let Some(size) = size {

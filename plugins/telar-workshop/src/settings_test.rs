@@ -274,3 +274,13 @@ fn the_grid_and_the_rulers_start_off() {
         "settings kept before the rulers existed still load"
     );
 }
+
+#[test]
+fn the_preset_viewports_a_matrix_varies_are_the_presets_sizes() {
+    let written: Vec<Size> = PRESET_VIEWPORTS
+        .iter()
+        .map(|text| telar::preview::parse_size(text).unwrap())
+        .collect();
+    let presets: Vec<Size> = PRESETS.iter().map(|preset| preset.size).collect();
+    assert_eq!(written, presets);
+}

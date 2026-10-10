@@ -207,11 +207,7 @@ fn alt_digits_switch_the_view() {
     workshop.alt('3');
     assert_eq!(workshop.state().view().get(), ViewMode::Docs);
     workshop.alt('2');
-    assert_eq!(
-        workshop.state().view().get(),
-        ViewMode::Docs,
-        "the matrix view is not there yet"
-    );
+    assert_eq!(workshop.state().view().get(), ViewMode::Matrix);
     workshop.alt('1');
     assert_eq!(workshop.state().view().get(), ViewMode::Canvas);
 }
@@ -294,6 +290,18 @@ fn alt_g_shows_the_grid_and_alt_shift_g_the_rulers() {
     assert!(workshop.settings().rulers);
     workshop.alt('g');
     assert!(!workshop.settings().grid && workshop.settings().rulers);
+}
+
+#[test]
+fn alt_m_and_alt_o_show_the_measure_and_the_outline_over_what_is_inspected() {
+    let mut workshop = Workshop::open(entries());
+    let inspection = workshop.state().inspection();
+    workshop.alt('m');
+    assert!(inspection.measure().get() && !inspection.outline().get());
+    workshop.alt('o');
+    assert!(inspection.outline().get());
+    workshop.alt('m');
+    assert!(!inspection.measure().get() && inspection.outline().get());
 }
 
 #[test]
@@ -570,7 +578,7 @@ fn an_option_chord_composed_into_another_character_still_runs() {
         "Alt+T on a keyboard that composes it"
     );
     assert_eq!(
-        chord_action('Ø', Some('o'), alt(false)),
+        chord_action('œ', Some('q'), alt(false)),
         None,
         "a composed key whose plain key is no chord is none"
     );
@@ -587,4 +595,20 @@ fn the_unmodified_key_is_not_read_without_alt() {
         chord_action('?', Some('/'), ModifiersState::default()),
         Some(Action::Shortcuts)
     );
+}
+
+#[test]
+fn a_shortcut_that_changes_the_preview_announces_it_through_the_canvas_title() {
+    let mut workshop = Workshop::open(entries());
+    let announced = |workshop: &Workshop| {
+        workshop
+            .nodes()
+            .into_iter()
+            .filter(|node| node.role == Role::Status)
+            .map(|node| node.name)
+            .collect::<Vec<_>>()
+    };
+    assert!(announced(&workshop).contains(&"Inputs/Button / Primary".to_string()));
+    workshop.alt_arrow(NamedKey::ArrowDown);
+    assert!(announced(&workshop).contains(&"Inputs/Button / Secondary".to_string()));
 }

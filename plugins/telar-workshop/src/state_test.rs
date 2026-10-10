@@ -53,6 +53,9 @@ fn the_hot_signal_keys_are_stable() {
     assert_eq!(keys::PANEL_COLLAPSED, "@workshop/panel.collapsed");
     assert_eq!(keys::PANEL_POSITION, "@workshop/panel.position");
     assert_eq!(keys::CANVAS_SETTINGS, "@workshop/canvas.settings");
+    assert_eq!(keys::MATRIX_SOURCE, "@workshop/matrix.source");
+    assert_eq!(keys::MATRIX_AXES, "@workshop/matrix.axes");
+    assert_eq!(keys::MATRIX_FOCUS, "@workshop/matrix.focus");
 }
 
 #[test]
@@ -70,6 +73,9 @@ fn a_snapshot_carries_every_key() {
         keys::PANEL_COLLAPSED,
         keys::PANEL_POSITION,
         keys::CANVAS_SETTINGS,
+        keys::MATRIX_SOURCE,
+        keys::MATRIX_AXES,
+        keys::MATRIX_FOCUS,
     ] {
         assert!(snapshot.contains_key(key), "{key} is not in {snapshot:?}");
     }
@@ -119,6 +125,31 @@ fn a_restored_selection_wins_over_the_request() {
     assert_eq!(state.panel_position().peek(), PanelPosition::Right);
     assert_eq!(state.view().peek(), ViewMode::Docs);
     assert_eq!(state.search().peek(), "butt");
+}
+
+#[test]
+fn the_matrix_view_and_its_focused_cell_survive_a_hot_reload() {
+    restore(&[
+        (keys::VIEW, "\"Matrix\""),
+        (keys::MATRIX_SOURCE, "\"Custom\""),
+        (keys::MATRIX_AXES, r#"["Direction",{"Arg":"ghost"}]"#),
+        (keys::MATRIX_FOCUS, "\"fake--button--primary--dir=rtl\""),
+    ]);
+    let state = WorkshopState::new(entries(), &PreviewRequest::default());
+    assert_eq!(state.view().peek(), ViewMode::Matrix);
+    assert_eq!(state.matrix_source().peek(), MatrixSource::Custom);
+    assert_eq!(
+        state.matrix_axes().peek(),
+        [CustomAxis::Direction, CustomAxis::Arg("ghost".into())]
+    );
+    assert_eq!(
+        state.matrix_focus().peek().as_deref(),
+        Some("fake--button--primary--dir=rtl")
+    );
+    assert_eq!(
+        state.current_route().map(|route| route.page),
+        Some(Page::Matrix(PRIMARY.into()))
+    );
 }
 
 #[test]

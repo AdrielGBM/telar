@@ -1,4 +1,4 @@
-//! [`WorkshopRoute`]: where the workshop is, as an address carries it — `/preview/<id>` or `/docs/<title>` — and what a copied link adds to that: the args edited on the preview and the canvas toolbar's settings, `?args=…&globals=…`, and `?chrome=0` for the canvas alone.
+//! [`WorkshopRoute`]: where the workshop is, as an address carries it — `/preview/<id>`, `/matrix/<id>` or `/docs/<title>` — and what a copied link adds to that: the args edited on the preview and the canvas toolbar's settings, `?args=…&globals=…`, and `?chrome=0` for the canvas alone.
 //!
 //! The args travel as `name:value;…`, each value in [`ArgValue`]'s text form, and the settings as `key:value;…` words, settings at their defaults and args at theirs adding nothing. A route carries them only while a link that arrived is being opened: once they are set the workshop stands on its page alone, so the address it reports as it moves never holds an edited arg.
 
@@ -12,6 +12,7 @@ use telar::{Location, Route};
 use crate::settings::{Background, CanvasSettings, CanvasSize, Zoom};
 
 const PREVIEW: &str = "preview";
+const MATRIX: &str = "matrix";
 const DOCS: &str = "docs";
 const ARGS: &str = "args";
 const GLOBALS: &str = "globals";
@@ -22,6 +23,8 @@ const CHROME: &str = "chrome";
 pub(crate) enum Page {
     /// A preview on its canvas, by id.
     Preview(Arc<str>),
+    /// A preview's matrix, by the preview's id.
+    Matrix(Arc<str>),
     /// A component's docs, by the title its previews are listed under.
     Docs(Arc<str>),
 }
@@ -57,6 +60,7 @@ impl Route for WorkshopRoute {
     fn to_location(&self) -> Location {
         let location = match &self.page {
             Page::Preview(id) => Location::from_segments([PREVIEW, id.as_ref()]),
+            Page::Matrix(id) => Location::from_segments([MATRIX, id.as_ref()]),
             Page::Docs(title) => Location::from_segments(
                 std::iter::once(DOCS).chain(title.split('/').map(str::trim)),
             ),
@@ -84,6 +88,7 @@ impl Route for WorkshopRoute {
     fn from_location(location: &Location) -> Option<Self> {
         let page = match location.segments() {
             [kind, id] if kind == PREVIEW && !id.is_empty() => Page::Preview(id.as_str().into()),
+            [kind, id] if kind == MATRIX && !id.is_empty() => Page::Matrix(id.as_str().into()),
             [kind, title @ ..] if kind == DOCS && !title.is_empty() => {
                 Page::Docs(title.join("/").into())
             }

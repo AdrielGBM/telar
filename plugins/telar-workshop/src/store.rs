@@ -1,4 +1,4 @@
-//! What the workshop remembers between runs: the selection, the pane sizes and the canvas toolbar's settings, each under a `workshop.*` key of the preference store.
+//! What the workshop remembers between runs: the selection, the pane sizes, the canvas toolbar's settings and whether a play runs as its canvas mounts, each under a `workshop.*` key of the preference store.
 //!
 //! On the desktop the workshop installs a store of its own, which keeps those keys in `<workspace>/.telar/workshop/state` and every other key in memory: a preview's own preferences last the run and no longer. Edited args are never stored; they live in memory, and in a copied link.
 
@@ -25,6 +25,7 @@ pub(crate) mod keys {
     pub(crate) const PANEL_COLLAPSED: &str = "workshop.panel.collapsed";
     pub(crate) const PANEL_POSITION: &str = "workshop.panel.position";
     pub(crate) const CANVAS_SETTINGS: &str = "workshop.canvas.settings";
+    pub(crate) const PLAY_AUTO_RUN: &str = "workshop.play.auto_run";
 }
 
 const PREFIX: &str = "workshop.";

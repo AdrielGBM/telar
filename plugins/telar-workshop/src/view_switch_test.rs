@@ -62,10 +62,14 @@ impl Workshop {
 }
 
 #[test]
-fn the_top_bar_switches_between_the_canvas_and_the_docs() {
+fn the_top_bar_switches_between_the_canvas_the_matrix_and_the_docs() {
     let mut workshop = Workshop::open();
     assert_eq!(workshop.tab("Canvas").toggled, Some(true));
+    assert_eq!(workshop.tab("Matrix").toggled, Some(false));
     assert_eq!(workshop.tab("Docs").toggled, Some(false));
+    workshop.click("Matrix");
+    assert_eq!(workshop.view(), ViewMode::Matrix);
+    assert_eq!(workshop.tab("Matrix").toggled, Some(true));
     workshop.click("Docs");
     assert_eq!(workshop.view(), ViewMode::Docs);
     assert_eq!(workshop.tab("Docs").toggled, Some(true));
@@ -74,7 +78,7 @@ fn the_top_bar_switches_between_the_canvas_and_the_docs() {
 }
 
 #[test]
-fn the_matrix_is_not_offered_before_it_lands() {
+fn the_views_are_offered_in_the_order_their_shortcuts_number_them() {
     let workshop = Workshop::open();
     let tabs: Vec<_> = workshop
         .runtime
@@ -82,15 +86,18 @@ fn the_matrix_is_not_offered_before_it_lands() {
         .into_iter()
         .filter(|node| node.role == Role::Tab)
         .map(|node| node.name)
+        .filter(|name| ["Canvas", "Matrix", "Docs"].contains(&name.as_str()))
         .collect();
-    assert!(tabs.contains(&"Canvas".to_string()) && tabs.contains(&"Docs".to_string()));
-    assert!(!tabs.contains(&"Matrix".to_string()));
+    assert_eq!(tabs, ["Canvas", "Matrix", "Docs"]);
+    assert_eq!(view_key(ViewMode::Matrix), VIEW_MATRIX);
 }
 
 #[test]
 fn the_arrows_move_along_the_views_while_one_has_focus() {
     let mut workshop = Workshop::open();
     workshop.click("Canvas");
+    workshop.send(named(NamedKey::ArrowRight));
+    assert_eq!(workshop.view(), ViewMode::Matrix);
     workshop.send(named(NamedKey::ArrowRight));
     assert_eq!(workshop.view(), ViewMode::Docs);
     workshop.send(named(NamedKey::ArrowRight));

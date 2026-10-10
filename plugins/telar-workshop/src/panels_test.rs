@@ -574,10 +574,14 @@ fn the_arrows_move_along_the_tabs() {
     workshop.click(Role::Tab, "Controls");
     workshop.key(Key::Named(NamedKey::ArrowRight));
     assert!(workshop.shows_tab("Actions"));
+    for tab in ["Interactions", "Layout", "Accessibility"] {
+        workshop.key(Key::Named(NamedKey::ArrowRight));
+        assert!(workshop.shows_tab(tab));
+    }
     workshop.key(Key::Named(NamedKey::ArrowRight));
     assert!(workshop.shows_tab("Controls"), "the strip wraps at its end");
     workshop.key(Key::Named(NamedKey::End));
-    assert!(workshop.shows_tab("Actions"));
+    assert!(workshop.shows_tab("Accessibility"));
 }
 
 #[test]
@@ -610,4 +614,131 @@ fn matching_lists_the_newest_first_and_ignores_case() {
     assert_eq!(seqs("PRESS"), [3, 1]);
     assert_eq!(seqs("apple"), [2]);
     assert!(seqs("pear").is_empty());
+}
+
+fn inspected(id: &str) -> (crate::state::WorkshopState, ComponentList) {
+    telar::install_default_text_metrics();
+    telar::hot_restore_json(r#"{"@workshop/panel.size":"1000.0"}"#);
+    let request = telar::preview::host::PreviewRequest::new(Some(id), None);
+    let state = crate::state::WorkshopState::new(entries().into(), &request);
+    let chrome = telar_devtools::workbench_scope(|| crate::shell::shell(&state, None)).unwrap();
+    let tree = mount(
+        telar::WindowRoot::wrapping(box_item(chrome)).unwrap(),
+        WIDTH,
+        HEIGHT,
+    );
+    settle(&tree);
+    (state, tree)
+}
+
+#[test]
+fn the_layout_panel_lists_what_the_canvas_mounted_with_the_marks_to_draw_over_it() {
+    let (state, tree) = inspected(FIRING);
+    state.panel_tab().set(crate::state::PanelTab::Layout);
+    settle(&tree);
+    let shown = texts(&tree);
+    for expected in [
+        "SurfaceRoot",
+        "Outline",
+        "Measure",
+        "Select a component to see its box.",
+    ] {
+        assert!(
+            shown.iter().any(|text| text == expected),
+            "{expected:?} is shown: {shown:?}"
+        );
+    }
+    assert!(
+        !state.inspection().nodes().is_empty(),
+        "the inspection follows the mounted canvas"
+    );
+}
+
+/// The acceptance the inspection panels are built for: what the canvas's own panels show is what the whole window shows of it, placed where the window draws it.
+#[test]
+fn the_canvas_panels_agree_with_a_reading_of_the_whole_window() {
+    let (state, tree) = inspected(FIRING);
+    state.panel_tab().set(crate::state::PanelTab::Accessibility);
+    settle(&tree);
+    let inspection = state.inspection();
+    let placement = inspection.placement().to_array();
+    let place = |rect: Rect| transform_clip_rect(placement, rect);
+
+    let canvas = inspection
+        .audit()
+        .expect("the accessibility panel reads the canvas");
+    let window = telar::inspect::audit(&tree.commands(), None);
+    assert!(
+        canvas.nodes.iter().any(|node| node.name == "Fire"),
+        "{:#?}",
+        canvas.nodes
+    );
+    for node in &canvas.nodes {
+        assert!(
+            window.nodes.iter().any(|seen| seen.name == node.name
+                && seen.role == node.role
+                && seen.rect == place(node.rect)),
+            "the window tells a reader of {:?} where the canvas sits: {:#?}",
+            node.name,
+            window.nodes
+        );
+    }
+    for violation in &canvas.violations {
+        assert!(
+            window
+                .violations
+                .iter()
+                .any(|seen| seen.rule == violation.rule && seen.rect == violation.rect.map(place)),
+            "the window finds {violation} too"
+        );
+    }
+
+    let mut walked = Vec::new();
+    tree.walk_tree(&mut walked);
+    for node in inspection.nodes().iter() {
+        assert!(
+            walked
+                .iter()
+                .any(|seen| *seen.name == *node.name && seen.rect == place(node.rect)),
+            "the window's walk has {} where the canvas sits",
+            node.name
+        );
+    }
+}
+
+#[test]
+fn the_selected_component_is_marked_over_the_canvas_where_the_window_draws_it() {
+    let (state, tree) = inspected(FIRING);
+    state.panel_tab().set(crate::state::PanelTab::Layout);
+    settle(&tree);
+    let inspection = state.inspection();
+    let chosen = inspection
+        .nodes()
+        .iter()
+        .find(|node| node.depth > 0 && node.rect.width > 0.0 && node.rect.height > 0.0)
+        .cloned()
+        .expect("the canvas mounted something to choose");
+    inspection.select(Some(chosen.id));
+    settle(&tree);
+
+    let expected = transform_clip_rect(inspection.placement().to_array(), chosen.rect);
+    let mut stroked = Vec::new();
+    for_each_with_matrix(&tree.commands(), |command, matrix| {
+        if let DrawCommand::Rect { rect, style } = command
+            && style.border.is_some()
+            && style.fill.is_none()
+        {
+            stroked.push(transform_clip_rect(matrix, *rect));
+        }
+    });
+    let close = |a: Rect, b: Rect| {
+        (a.x - b.x).abs() < 0.01
+            && (a.y - b.y).abs() < 0.01
+            && (a.width - b.width).abs() < 0.01
+            && (a.height - b.height).abs() < 0.01
+    };
+    assert!(
+        stroked.iter().any(|rect| close(*rect, expected)),
+        "{expected:?} is outlined among {stroked:?}"
+    );
 }

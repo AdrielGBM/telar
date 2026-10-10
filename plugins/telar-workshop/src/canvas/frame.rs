@@ -11,9 +11,12 @@ use telar::{
     ShapeStyle, Size, SizeDimension, StyledContainer, SurfaceCanvas, SurfaceFrame, Text, box_item,
     current_direction, effect, memo, signal, track_layout,
 };
-use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_mono, workbench_muted};
+use telar_devtools::{
+    WORKBENCH_GRID, inspection_marks, use_workbench_tokens, workbench_mono, workbench_muted,
+};
 
 use super::guides;
+use crate::interactions;
 use crate::settings::{CanvasSettings, CanvasSize, fit_scale};
 use crate::state::WorkshopState;
 use crate::strings::{self, VIEWPORT_HEIGHT, VIEWPORT_RESET, VIEWPORT_SIZE, VIEWPORT_WIDTH};
@@ -46,7 +49,12 @@ pub(super) fn stage(
         let edge_to_edge = StyledContainer::new(
             growing().width(SizeDimension::Percent(1.0)),
             |_| RectStyle::default(),
-            vec![box_item(frame), grid],
+            vec![
+                box_item(frame),
+                interactions::frame_layer(state)?,
+                grid,
+                inspection_marks(state.inspection())?,
+            ],
         )?;
         return Ok(Stage {
             item: box_item(edge_to_edge),
@@ -86,6 +94,11 @@ fn framed(
         |fixed: &bool| *fixed,
         move |fixed| surface_frame(Rc::clone(&shown), fixed),
     )?;
+    let surface = StyledContainer::new(
+        growing().width(SizeDimension::Percent(1.0)),
+        |_| RectStyle::default(),
+        vec![box_item(surface), interactions::frame_layer(state)?],
+    )?;
     let box_style = move || {
         let edge = edge(device.get());
         let style = LayoutStyle::new().flex_column().padding_all(edge);
@@ -100,7 +113,12 @@ fn framed(
     let viewport_box = StyledContainer::new(
         box_style(),
         move |_| frame_paint(device.get()),
-        vec![box_item(checker), box_item(surface), grid],
+        vec![
+            box_item(checker),
+            box_item(surface),
+            grid,
+            inspection_marks(state.inspection())?,
+        ],
     )?
     .styled_by(box_style);
     let box_rect =

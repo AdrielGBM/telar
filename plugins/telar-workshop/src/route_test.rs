@@ -14,9 +14,11 @@ fn written(location: &Location) -> String {
 fn each_page_has_an_address_of_its_own() {
     let preview = WorkshopRoute::new(Page::Preview("demo--card--a".into()), true);
     assert_eq!(written(&preview.to_location()), "/preview/demo--card--a");
+    let matrix = WorkshopRoute::new(Page::Matrix("demo--card--a".into()), true);
+    assert_eq!(written(&matrix.to_location()), "/matrix/demo--card--a");
     let docs = WorkshopRoute::new(Page::Docs("Inputs/Button".into()), true);
     assert_eq!(written(&docs.to_location()), "/docs/Inputs/Button");
-    for route in [preview, docs] {
+    for route in [preview, matrix, docs] {
         assert_eq!(
             WorkshopRoute::from_location(&route.to_location()),
             Some(route)
@@ -37,7 +39,15 @@ fn the_canvas_alone_is_asked_for_with_chrome_0() {
 
 #[test]
 fn an_address_the_workshop_has_no_page_for_is_none() {
-    for reference in ["/", "/preview", "/settings/a", "/docs", "/preview/a/b"] {
+    for reference in [
+        "/",
+        "/preview",
+        "/settings/a",
+        "/docs",
+        "/preview/a/b",
+        "/matrix",
+        "/matrix/a/b",
+    ] {
         assert_eq!(
             WorkshopRoute::from_location(&at(reference)),
             None,

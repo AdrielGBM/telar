@@ -1,4 +1,4 @@
-//! The panels along the canvas: a strip of tabs over the panel it shows, Controls or Actions. Interactions, accessibility, source and layout join the strip as they land.
+//! The panels along the canvas: a strip of tabs over the panel it shows, Controls, Actions, Interactions, Layout or Accessibility. Layout and Accessibility are the devtools' inspection panels over the mounted canvas, the same ones the overlay shows over a whole window. Source joins the strip as it lands.
 
 mod actions;
 mod controls;
@@ -12,14 +12,26 @@ use telar::{
     ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, box_item,
 };
 use telar_components::{ButtonProps, Tab, button, tab_list};
-use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_fill};
+use telar_devtools::{
+    WORKBENCH_GRID, accessibility_panel, inspection_toggles, inspector_panel, use_workbench_tokens,
+    workbench_fill,
+};
 
 pub(crate) use controls::arg_table;
 
+use crate::interactions;
 use crate::state::{PanelTab, WorkshopState};
-use crate::strings::{self, ACTIONS, CONTROLS, PANELS, RESET_ALL};
+use crate::strings::{
+    self, ACCESSIBILITY, ACTIONS, CONTROLS, INTERACTIONS, LAYOUT, PANELS, RESET_ALL,
+};
 
-const TABS: [PanelTab; 2] = [PanelTab::Controls, PanelTab::Actions];
+const TABS: [PanelTab; 5] = [
+    PanelTab::Controls,
+    PanelTab::Actions,
+    PanelTab::Interactions,
+    PanelTab::Layout,
+    PanelTab::Accessibility,
+];
 
 /// What fills the panels pane the shell sizes.
 pub(crate) fn panels(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -61,7 +73,8 @@ fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
             let named = Tab::new(tab, strings::reactive(tab_key(tab)));
             Ok(match tab {
                 PanelTab::Actions => named.trailing(actions::count_badge(state.actions())?),
-                PanelTab::Controls => named,
+                PanelTab::Interactions => named.trailing(interactions::tab_badge(state)?),
+                PanelTab::Controls | PanelTab::Layout | PanelTab::Accessibility => named,
             })
         })
         .collect::<Result<Vec<_>, LayoutError>>()?;
@@ -77,6 +90,9 @@ fn tab_key(tab: PanelTab) -> &'static str {
     match tab {
         PanelTab::Controls => CONTROLS,
         PanelTab::Actions => ACTIONS,
+        PanelTab::Interactions => INTERACTIONS,
+        PanelTab::Layout => LAYOUT,
+        PanelTab::Accessibility => ACCESSIBILITY,
     }
 }
 
@@ -93,6 +109,9 @@ fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move |tab| match tab {
             PanelTab::Controls => reset_all(&state),
             PanelTab::Actions => actions::tools(&state),
+            PanelTab::Interactions => interactions::tools(&state),
+            PanelTab::Layout => inspection_toggles(state.inspection()),
+            PanelTab::Accessibility => nothing(),
         },
     )?;
     Ok(box_item(tools))
@@ -108,6 +127,9 @@ fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move |tab| match tab {
             PanelTab::Controls => controls::controls(&building),
             PanelTab::Actions => actions::actions(&building),
+            PanelTab::Interactions => interactions::panel(&building),
+            PanelTab::Layout => inspector_panel(building.inspection()),
+            PanelTab::Accessibility => accessibility_panel(building.inspection()),
         },
     )?;
     let body = StyledContainer::new(
@@ -148,6 +170,14 @@ fn reset_all(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> 
         },
     )?;
     Ok(box_item(cell))
+}
+
+fn nothing() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    Ok(box_item(StyledContainer::new(
+        LayoutStyle::new(),
+        |_| RectStyle::default(),
+        Vec::new(),
+    )?))
 }
 
 fn divider() -> Result<Box<dyn LayoutItem>, LayoutError> {

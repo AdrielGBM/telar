@@ -49,7 +49,7 @@ pub(crate) struct CanvasSettings {
     pub(crate) rulers: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Background {
     /// The preview's own, or the application theme's surface.
@@ -62,7 +62,8 @@ pub(crate) enum Background {
 }
 
 impl Background {
-    fn color(self, asked: Option<Color>) -> Option<Color> {
+    /// The canvas background this choice gives a preview asking for `asked`.
+    pub(crate) fn color(self, asked: Option<Color>) -> Option<Color> {
         match self {
             Self::Preview => asked,
             Self::Transparent => Some(Color::TRANSPARENT),
@@ -139,6 +140,9 @@ pub(crate) struct Preset {
     pub(crate) name: &'static str,
     pub(crate) size: Size,
 }
+
+/// [`PRESETS`]' sizes as a matrix's viewport axis writes them, in the same order.
+pub(crate) const PRESET_VIEWPORTS: &[&str] = &["360x800", "768x1024", "1280x800", "1920x1080"];
 
 pub(crate) const PRESETS: &[Preset] = &[
     Preset {

@@ -25,7 +25,7 @@ Each page of the workshop has an address: `/preview/<id>` and `/docs/<title>`, s
 
 ## What it remembers
 
-A hot reload keeps everything the workshop shows. A restart under `cargo telar preview` reopens on the same preview and view, with the same pane sizes and canvas toolbar settings, which the workshop keeps in `<workspace>/.telar/workshop/state`. Edited args start again at their defaults: they last the run, or travel in a copied link. The previews' own preferences, such as a scheme a preview stores, stay in memory.
+A hot reload keeps everything the workshop shows. A restart under `cargo telar preview` reopens on the same preview and view, with the same pane sizes, canvas toolbar settings and choice of whether plays run on mount, which the workshop keeps in `<workspace>/.telar/workshop/state`. Edited args start again at their defaults: they last the run, or travel in a copied link. The previews' own preferences, such as a scheme a preview stores, stay in memory.
 
 The preview it opens on is the one a link or `<ID>` names, else the one it showed when it last closed, else the first; with `--component`, the last two are chosen among the previews the filter keeps.
 
@@ -37,7 +37,13 @@ A setting the toolbar leaves unset takes what the preview's own environment asks
 
 ## Panels
 
-The panels beside the canvas show one tab at a time. **Controls** lists every arg of the selected preview with an editor for its value, its type, its default and its doc. **Actions** lists the calls the preview's callbacks received, newest first, each with the `Debug` text of its arguments; a filter keeps the calls whose name or arguments contain it, and Clear empties the log. The Actions tab counts the calls since the log was last emptied, whichever tab is shown, and the log starts empty each time a preview mounts.
+The panels beside the canvas show one tab at a time. **Controls** lists every arg of the selected preview with an editor for its value, its type, its default and its doc. **Actions** lists the calls the preview's callbacks received, newest first, each with the `Debug` text of its arguments; a filter keeps the calls whose name or arguments contain it, and Clear empties the log. The Actions tab counts the calls since the log was last emptied, whichever tab is shown, and the log starts empty each time a preview mounts. **Interactions** lists the steps the preview's play took on the canvas, in order, each passed, failed with why, or not run yet; the play runs on the canvas itself once it has mounted, so the canvas is left where the play left it. Picking a step shows the frame it left in place of the live canvas, read-only, until **Back to live** or Escape; the arrow keys, Home and End move through the steps. A failed step is red, with its frame beside it. **Replay** mounts the preview afresh and runs its play again, and **Run on mount**, kept between runs, decides whether a play runs as its canvas mounts. **Layout** and **Accessibility** are the devtools' inspection panels over the canvas: the components it mounted with the selected one's box model, an outline and measurements drawn over the canvas, and what the accessibility checks found with what a screen reader is told. They show what the devtools overlay shows of the same canvas.
+
+## Matrix
+
+The Matrix view (Alt+2) shows the selected preview once per cell of its matrix, side by side under a heading for each axis: the last axis across, the others down. A preview with no matrix, or one switched to **Custom axes**, gets a matrix built from the axes picked in the view's header: mode, locale, direction, control size, viewport, and each arg with a fixed set of values. Each cell mounts the first time it scrolls into view, on a canvas of its own in the cell's environment over the toolbar's, runs the preview's play there and checks what it left; its badges say how the play and the accessibility checks came out, and how its snapshot did in the last `cargo telar test`. The view mounts at most 64 cells and says how many it left out, and warns past 48.
+
+Pressing a cell focuses it: the Layout and Accessibility panels, and the outline (Alt+O) and measure (Alt+M), follow its canvas. **Open in canvas** shows the preview on the Canvas view with the toolbar and args set to the focused cell's.
 
 ## Docs
 

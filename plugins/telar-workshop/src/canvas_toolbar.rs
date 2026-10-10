@@ -9,7 +9,8 @@ use telar::{
     registered_modes, signal,
 };
 use telar_components::{
-    GroupProps, IconButtonProps, ItemProps, SelectProps, group, icon_button, item, select,
+    GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, group,
+    icon_button, item, menu, select, separator,
 };
 use telar_devtools::WORKBENCH_GRID;
 use telar_icons::icon;
@@ -36,25 +37,58 @@ const NO_ROW: u32 = u32::MAX;
 
 /// The top bar's settings: the mode, locale, direction, control size, background and high contrast every canvas is shown in, and reduced motion.
 pub(crate) fn environment(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let items = environment_settings(state)
+        .iter()
+        .map(|setting| setting.inline())
+        .collect::<Result<Vec<_>, _>>()?;
+    group_of(items)
+}
+
+/// [`environment`] as one menu, for a top bar too narrow to hold it: a heading over each setting's choices with the one in use ticked, then the switches, ticked while on.
+pub(crate) fn environment_menu(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let settings: Rc<[Box<dyn Setting>]> = environment_settings(state).into();
+    menu(
+        MenuProps::props()
+            .label(Reactive::of(|| strings::text(CANVAS_SETTINGS)))
+            .build(),
+        Children::new(move || {
+            let mut slots = Slots::new();
+            let mut after_choice = false;
+            for setting in settings.iter() {
+                if setting.is_switch() && after_choice {
+                    slots.push(
+                        None,
+                        separator(SeparatorProps::props().build(), Children::default())?,
+                    );
+                }
+                after_choice = !setting.is_switch();
+                setting.menu_rows(&mut slots)?;
+            }
+            Ok(slots)
+        }),
+    )
+}
+
+fn environment_settings(state: &WorkshopState) -> Vec<Box<dyn Setting>> {
     let settings = state.canvas_settings();
     let modes = listed(registered_modes(), settings.peek().mode);
     let locales = listed(locales(state), settings.peek().locale);
-    let items = vec![
-        choice(
+    vec![
+        Box::new(Choice::new(
             MODE,
             REGULAR,
             optional(MODE_DEFAULT, modes),
             move || settings.with(|settings| settings.mode.clone()),
             move |mode| settings.update(|settings| settings.mode = mode),
-        )?,
-        choice(
+        )),
+        Box::new(Choice::new(
             LOCALE,
             REGULAR,
             optional(LOCALE_DEFAULT, locales),
             move || settings.with(|settings| settings.locale.clone()),
             move |locale| settings.update(|settings| settings.locale = locale),
-        )?,
-        choice(
+        )),
+        Box::new(Choice::new(
             DIRECTION,
             WIDE,
             vec![
@@ -64,8 +98,8 @@ pub(crate) fn environment(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
             ],
             move || settings.with(|settings| settings.direction),
             move |direction| settings.update(|settings| settings.direction = direction),
-        )?,
-        choice(
+        )),
+        Box::new(Choice::new(
             CONTROL_SIZE,
             REGULAR,
             vec![
@@ -77,8 +111,8 @@ pub(crate) fn environment(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
             ],
             move || settings.with(|settings| settings.control_size),
             move |size| settings.update(|settings| settings.control_size = size),
-        )?,
-        choice(
+        )),
+        Box::new(Choice::new(
             BACKGROUND,
             WIDE,
             vec![
@@ -89,11 +123,10 @@ pub(crate) fn environment(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
             ],
             move || settings.with(|settings| settings.background),
             move |background| settings.update(|settings| settings.background = background),
-        )?,
-        reduced_motion(settings)?,
-        high_contrast(settings)?,
-    ];
-    group_of(items)
+        )),
+        Box::new(reduced_motion(settings)),
+        Box::new(high_contrast(settings)),
+    ]
 }
 
 /// The canvas header's settings for a framed preview: its size and its zoom.
@@ -104,29 +137,33 @@ pub(crate) fn frame_settings(
     let settings = state.canvas_settings();
     let asked = entry.env.viewport;
     let project = Matrices::installed().viewports();
-    let items =
-        vec![
-            choice(
-                VIEWPORT,
-                WIDE,
-                size_rows(asked, project),
-                move || settings.with(|settings| SizeChoice::of(&settings.size)),
-                move |choice| {
-                    settings.update(|settings| choice.apply(settings, asked, project));
-                },
-            )?,
-            choice(
-                ZOOM,
-                NARROW,
-                std::iter::once(Row::choice(Zoom::Fit, Label::Key(ZOOM_FIT)))
-                    .chain(ZOOM_STEPS.iter().map(|&percent| {
-                        Row::choice(Zoom::Percent(percent), Label::Percent(percent))
-                    }))
-                    .collect(),
-                move || settings.with(|settings| settings.zoom),
-                move |zoom| settings.update(|settings| settings.zoom = zoom),
-            )?,
-        ];
+    let zooms = std::iter::once(Row::choice(Zoom::Fit, Label::Key(ZOOM_FIT)))
+        .chain(
+            ZOOM_STEPS
+                .iter()
+                .map(|&percent| Row::choice(Zoom::Percent(percent), Label::Percent(percent))),
+        )
+        .collect();
+    let items = vec![
+        Choice::new(
+            VIEWPORT,
+            WIDE,
+            size_rows(asked, project),
+            move || settings.with(|settings| SizeChoice::of(&settings.size)),
+            move |choice| {
+                settings.update(|settings| choice.apply(settings, asked, project));
+            },
+        )
+        .inline()?,
+        Choice::new(
+            ZOOM,
+            NARROW,
+            zooms,
+            move || settings.with(|settings| settings.zoom),
+            move |zoom| settings.update(|settings| settings.zoom = zoom),
+        )
+        .inline()?,
+    ];
     group_of(items)
 }
 
@@ -158,44 +195,29 @@ pub(crate) fn rotate(
 /// Shows the grid over the canvas while pressed. An item of a `toolbar`, so it is built among its children.
 pub(crate) fn grid(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let settings = state.canvas_settings();
-    toggle(
+    Switch::new(
         icon!("lucide:grid-3x3"),
         GRID,
         move || settings.with(|settings| settings.grid),
         move || settings.update(|settings| settings.grid = !settings.grid),
     )
+    .inline()
 }
 
 /// Shows the rulers along the stage while pressed. An item of a `toolbar`, so it is built among its children.
 pub(crate) fn rulers(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let settings = state.canvas_settings();
-    toggle(
+    Switch::new(
         icon!("lucide:ruler"),
         RULERS,
         move || settings.with(|settings| settings.rulers),
         move || settings.update(|settings| settings.rulers = !settings.rulers),
     )
+    .inline()
 }
 
-fn toggle(
-    icon: telar_icons::IconName,
-    name: &'static str,
-    pressed: impl Fn() -> bool + 'static,
-    flip: impl Fn() + 'static,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    icon_button(
-        IconButtonProps::props()
-            .icon(icon)
-            .label(Reactive::of(move || strings::text(name)))
-            .pressed(Reactive::of(pressed))
-            .on_press(Rc::new(flip))
-            .build(),
-        Children::default(),
-    )
-}
-
-fn reduced_motion(settings: RwSignal<CanvasSettings>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    toggle(
+fn reduced_motion(settings: RwSignal<CanvasSettings>) -> Switch {
+    Switch::new(
         icon!("lucide:snail"),
         REDUCED_MOTION,
         move || settings.with(|settings| settings.reduced_motion),
@@ -203,9 +225,9 @@ fn reduced_motion(settings: RwSignal<CanvasSettings>) -> Result<Box<dyn LayoutIt
     )
 }
 
-/// Shows every canvas in high contrast while pressed; released, each canvas is left to its preview and the application.
-fn high_contrast(settings: RwSignal<CanvasSettings>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    toggle(
+/// Shows every canvas in high contrast while on; off, each canvas is left to its preview and the application.
+fn high_contrast(settings: RwSignal<CanvasSettings>) -> Switch {
+    Switch::new(
         icon!("lucide:contrast"),
         HIGH_CONTRAST,
         move || settings.with(|settings| settings.high_contrast == Some(true)),
@@ -218,6 +240,188 @@ fn high_contrast(settings: RwSignal<CanvasSettings>) -> Result<Box<dyn LayoutIte
             })
         },
     )
+}
+
+/// One canvas setting, shown in place as a control of its own or as rows of a menu.
+trait Setting {
+    fn inline(&self) -> Result<Box<dyn LayoutItem>, LayoutError>;
+
+    fn menu_rows(&self, slots: &mut Slots) -> Result<(), LayoutError>;
+
+    fn is_switch(&self) -> bool {
+        false
+    }
+}
+
+/// A setting turned on and off: an icon button pressed while on, or a menu row ticked while on.
+struct Switch {
+    icon: telar_icons::IconName,
+    name: &'static str,
+    on: Rc<dyn Fn() -> bool>,
+    flip: Rc<dyn Fn()>,
+}
+
+impl Switch {
+    fn new(
+        icon: telar_icons::IconName,
+        name: &'static str,
+        on: impl Fn() -> bool + 'static,
+        flip: impl Fn() + 'static,
+    ) -> Self {
+        Self {
+            icon,
+            name,
+            on: Rc::new(on),
+            flip: Rc::new(flip),
+        }
+    }
+
+    fn label(&self) -> Reactive<String> {
+        let name = self.name;
+        Reactive::of(move || strings::text(name))
+    }
+
+    fn is_on(&self) -> Reactive<bool> {
+        let on = Rc::clone(&self.on);
+        Reactive::of(move || on())
+    }
+}
+
+impl Setting for Switch {
+    fn inline(&self) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        icon_button(
+            IconButtonProps::props()
+                .icon(self.icon.clone())
+                .label(self.label())
+                .pressed(self.is_on())
+                .on_press(Rc::clone(&self.flip))
+                .build(),
+            Children::default(),
+        )
+    }
+
+    fn menu_rows(&self, slots: &mut Slots) -> Result<(), LayoutError> {
+        let row = item(
+            ItemProps::props()
+                .label(self.label())
+                .checked(self.is_on())
+                .on_press(Rc::clone(&self.flip))
+                .build(),
+            Children::default(),
+        )?;
+        slots.push(None, row);
+        Ok(())
+    }
+
+    fn is_switch(&self) -> bool {
+        true
+    }
+}
+
+/// A setting that takes one of `rows`' values: a select named `name` and `width` wide, or a heading over a menu row per value with the one `current` reads ticked. Either calls `pick` with the value of the row picked.
+struct Choice<T> {
+    name: &'static str,
+    width: f32,
+    rows: Rc<[Row<T>]>,
+    current: Rc<dyn Fn() -> T>,
+    pick: Rc<dyn Fn(T)>,
+}
+
+impl<T: Clone + PartialEq + 'static> Choice<T> {
+    fn new(
+        name: &'static str,
+        width: f32,
+        rows: Vec<Row<T>>,
+        current: impl Fn() -> T + 'static,
+        pick: impl Fn(T) + 'static,
+    ) -> Self {
+        Self {
+            name,
+            width,
+            rows: rows.into(),
+            current: Rc::new(current),
+            pick: Rc::new(pick),
+        }
+    }
+
+    fn menu_row(&self, row: &Row<T>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let Row::Choice { value, label, hint } = row else {
+            return row.build();
+        };
+        let (held, current) = (value.clone(), Rc::clone(&self.current));
+        let (value, pick) = (value.clone(), Rc::clone(&self.pick));
+        let props = ItemProps::props()
+            .label(label.reactive())
+            .checked(Reactive::of(move || current() == held))
+            .on_press(Rc::new(move || pick(value.clone())));
+        let props = match hint.clone() {
+            Some(hint) => props.hint(Reactive::of(move || hint.clone())),
+            None => props,
+        };
+        item(props.build(), Children::default())
+    }
+}
+
+impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
+    fn inline(&self) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let selected = signal(NO_ROW);
+        let (shown, current) = (Rc::clone(&self.rows), Rc::clone(&self.current));
+        effect(move || {
+            let current = current();
+            let at = shown
+                .iter()
+                .position(|row| row.holds(&current))
+                .map_or(NO_ROW, |at| at as u32);
+            selected.set_if_changed(at);
+        });
+        let (picked, pick) = (Rc::clone(&self.rows), Rc::clone(&self.pick));
+        let on_select: Rc<dyn Fn(u32)> = Rc::new(move |at| {
+            if let Some(Row::Choice { value, .. }) = picked.get(at as usize) {
+                pick(value.clone());
+            }
+        });
+        let (rows, name) = (Rc::clone(&self.rows), self.name);
+        let field = select(
+            SelectProps::props()
+                .selected(selected)
+                .stretch(true)
+                .on_select(on_select)
+                .build(),
+            Children::new(move || {
+                let mut slots = Slots::new();
+                for row in rows.iter() {
+                    slots.push(None, row.build()?);
+                }
+                Ok(slots)
+            }),
+        )?
+        .a11y_label(move || strings::text(name));
+        // A row, so the stretched select grows along the width it is given: in a column it grew along the height instead, leaving this box no height and the select spilling out below it.
+        let sized = StyledContainer::new(
+            LayoutStyle::new()
+                .flex_row()
+                .width(self.width)
+                .flex_shrink(0.0),
+            |_| RectStyle::default(),
+            vec![field],
+        )?;
+        Ok(box_item(sized))
+    }
+
+    fn menu_rows(&self, slots: &mut Slots) -> Result<(), LayoutError> {
+        let name = self.name;
+        let heading = group(
+            GroupProps::props()
+                .label(Reactive::of(move || strings::text(name)))
+                .build(),
+            Children::default(),
+        )?;
+        slots.push(None, heading);
+        for row in self.rows.iter() {
+            slots.push(None, self.menu_row(row)?);
+        }
+        Ok(())
+    }
 }
 
 /// What a viewport select shows: the size settings name, with every custom size one choice.
@@ -400,57 +604,6 @@ impl<T: PartialEq> Row<T> {
             ),
         }
     }
-}
-
-/// A select named `name`, `width` wide, showing the row holding what `current` reads and calling `pick` with the value of the row picked.
-fn choice<T: Clone + PartialEq + 'static>(
-    name: &'static str,
-    width: f32,
-    rows: Vec<Row<T>>,
-    current: impl Fn() -> T + 'static,
-    pick: impl Fn(T) + 'static,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let rows: Rc<[Row<T>]> = rows.into();
-    let selected = signal(NO_ROW);
-    let shown = Rc::clone(&rows);
-    effect(move || {
-        let current = current();
-        let at = shown
-            .iter()
-            .position(|row| row.holds(&current))
-            .map_or(NO_ROW, |at| at as u32);
-        selected.set_if_changed(at);
-    });
-    let picked = Rc::clone(&rows);
-    let on_select: Rc<dyn Fn(u32)> = Rc::new(move |at| {
-        if let Some(Row::Choice { value, .. }) = picked.get(at as usize) {
-            pick(value.clone());
-        }
-    });
-    let field = select(
-        SelectProps::props()
-            .selected(selected)
-            .stretch(true)
-            .on_select(on_select)
-            .build(),
-        Children::new(move || {
-            let mut slots = Slots::new();
-            for row in rows.iter() {
-                slots.push(None, row.build()?);
-            }
-            Ok(slots)
-        }),
-    )?
-    .a11y_label(move || strings::text(name));
-    let sized = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
-            .width(width)
-            .flex_shrink(0.0),
-        |_| RectStyle::default(),
-        vec![field],
-    )?;
-    Ok(box_item(sized))
 }
 
 fn group_of(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {

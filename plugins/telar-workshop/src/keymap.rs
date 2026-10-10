@@ -21,8 +21,9 @@ use crate::state::{PanelPosition, ViewMode, WorkshopState};
 use crate::strings::{
     CYCLE_DIRECTION, CYCLE_LOCALE, CYCLE_MODE, FIND, FULLSCREEN, GROUP_CANVAS, GROUP_NAVIGATE,
     GROUP_VIEW, KEYBOARD_SHORTCUTS, MOVE_PANELS, NEXT_COMPONENT, NEXT_PREVIEW, PREVIOUS_COMPONENT,
-    PREVIOUS_PREVIEW, REMOUNT, SEARCH, SHOW_CANVAS, SHOW_DOCS, TOGGLE_GRID, TOGGLE_PANELS,
-    TOGGLE_RULERS, TOGGLE_SIDEBAR, ZOOM_IN, ZOOM_OUT, ZOOM_RESET,
+    PREVIOUS_PREVIEW, REMOUNT, SEARCH, SHOW_CANVAS, SHOW_DOCS, SHOW_MATRIX, TOGGLE_GRID,
+    TOGGLE_MEASURE, TOGGLE_OUTLINE, TOGGLE_PANELS, TOGGLE_RULERS, TOGGLE_SIDEBAR, ZOOM_IN,
+    ZOOM_OUT, ZOOM_RESET,
 };
 
 /// Something the workshop does on a shortcut, from the palette or both.
@@ -36,6 +37,7 @@ pub(crate) enum Action {
     NextComponent,
     Search,
     ShowCanvas,
+    ShowMatrix,
     ShowDocs,
     ToggleSidebar,
     TogglePanels,
@@ -49,11 +51,13 @@ pub(crate) enum Action {
     ZoomReset,
     ToggleGrid,
     ToggleRulers,
+    ToggleMeasure,
+    ToggleOutline,
     Remount,
 }
 
 /// Every action, in the order the palette and the shortcuts overlay list them.
-pub(crate) const ACTIONS: [Action; 22] = [
+pub(crate) const ACTIONS: [Action; 25] = [
     Action::Find,
     Action::Shortcuts,
     Action::PreviousPreview,
@@ -62,6 +66,7 @@ pub(crate) const ACTIONS: [Action; 22] = [
     Action::NextComponent,
     Action::Search,
     Action::ShowCanvas,
+    Action::ShowMatrix,
     Action::ShowDocs,
     Action::ToggleSidebar,
     Action::TogglePanels,
@@ -75,6 +80,8 @@ pub(crate) const ACTIONS: [Action; 22] = [
     Action::ZoomReset,
     Action::ToggleGrid,
     Action::ToggleRulers,
+    Action::ToggleMeasure,
+    Action::ToggleOutline,
     Action::Remount,
 ];
 
@@ -93,6 +100,7 @@ impl Action {
             Self::NextComponent => "workshop:next-component",
             Self::Search => "workshop:search",
             Self::ShowCanvas => "workshop:show-canvas",
+            Self::ShowMatrix => "workshop:show-matrix",
             Self::ShowDocs => "workshop:show-docs",
             Self::ToggleSidebar => "workshop:toggle-sidebar",
             Self::TogglePanels => "workshop:toggle-panels",
@@ -106,6 +114,8 @@ impl Action {
             Self::ZoomReset => "workshop:zoom-reset",
             Self::ToggleGrid => "workshop:toggle-grid",
             Self::ToggleRulers => "workshop:toggle-rulers",
+            Self::ToggleMeasure => "workshop:toggle-measure",
+            Self::ToggleOutline => "workshop:toggle-outline",
             Self::Remount => "workshop:remount",
         }
     }
@@ -121,6 +131,7 @@ impl Action {
             Self::NextComponent => NEXT_COMPONENT,
             Self::Search => SEARCH,
             Self::ShowCanvas => SHOW_CANVAS,
+            Self::ShowMatrix => SHOW_MATRIX,
             Self::ShowDocs => SHOW_DOCS,
             Self::ToggleSidebar => TOGGLE_SIDEBAR,
             Self::TogglePanels => TOGGLE_PANELS,
@@ -134,6 +145,8 @@ impl Action {
             Self::ZoomReset => ZOOM_RESET,
             Self::ToggleGrid => TOGGLE_GRID,
             Self::ToggleRulers => TOGGLE_RULERS,
+            Self::ToggleMeasure => TOGGLE_MEASURE,
+            Self::ToggleOutline => TOGGLE_OUTLINE,
             Self::Remount => REMOUNT,
         }
     }
@@ -149,6 +162,7 @@ impl Action {
             | Self::NextComponent
             | Self::Search => GROUP_NAVIGATE,
             Self::ShowCanvas
+            | Self::ShowMatrix
             | Self::ShowDocs
             | Self::ToggleSidebar
             | Self::TogglePanels
@@ -162,6 +176,8 @@ impl Action {
             | Self::ZoomReset
             | Self::ToggleGrid
             | Self::ToggleRulers
+            | Self::ToggleMeasure
+            | Self::ToggleOutline
             | Self::Remount => GROUP_CANVAS,
         }
     }
@@ -177,6 +193,7 @@ impl Action {
             Self::NextComponent => &["Alt+→"],
             Self::Search => &[],
             Self::ShowCanvas => &["Alt+1"],
+            Self::ShowMatrix => &["Alt+2"],
             Self::ShowDocs => &["Alt+3"],
             Self::ToggleSidebar => &["Alt+S"],
             Self::TogglePanels => &["Alt+A"],
@@ -190,6 +207,8 @@ impl Action {
             Self::ZoomReset => &["Alt+0"],
             Self::ToggleGrid => &["Alt+G"],
             Self::ToggleRulers => &["Alt+Shift+G"],
+            Self::ToggleMeasure => &["Alt+M"],
+            Self::ToggleOutline => &["Alt+O"],
             Self::Remount => &["Alt+Shift+R"],
         }
     }
@@ -229,6 +248,7 @@ fn alt_action(key: &Key, shift: bool) -> Option<Action> {
         Key::Named(NamedKey::NumpadSubtract) => Action::ZoomOut,
         Key::Char(c) => match (c.to_ascii_lowercase(), shift) {
             ('1', false) => Action::ShowCanvas,
+            ('2', false) => Action::ShowMatrix,
             ('3', false) => Action::ShowDocs,
             ('s', false) => Action::ToggleSidebar,
             ('a', false) => Action::TogglePanels,
@@ -240,6 +260,8 @@ fn alt_action(key: &Key, shift: bool) -> Option<Action> {
             ('r', true) => Action::Remount,
             ('g', false) => Action::ToggleGrid,
             ('g', true) => Action::ToggleRulers,
+            ('m', false) => Action::ToggleMeasure,
+            ('o', false) => Action::ToggleOutline,
             ('=' | '+', _) => Action::ZoomIn,
             ('-', false) => Action::ZoomOut,
             ('0', false) => Action::ZoomReset,
@@ -307,10 +329,9 @@ impl Keymap {
             Action::NextComponent => self.step_component(1),
             Action::Search => state.focus_search(),
             Action::ShowCanvas => state.view().set(ViewMode::Canvas),
+            Action::ShowMatrix => state.view().set(ViewMode::Matrix),
             Action::ShowDocs => state.view().set(ViewMode::Docs),
-            Action::ToggleSidebar => state
-                .sidebar_collapsed()
-                .update(|folded| *folded = !*folded),
+            Action::ToggleSidebar => state.toggle_sidebar(),
             Action::TogglePanels => state.panel_collapsed().update(|folded| *folded = !*folded),
             Action::MovePanels => state.panel_position().update(|position| {
                 *position = match position {
@@ -337,6 +358,8 @@ impl Keymap {
             Action::ZoomReset => settings.update(|settings| settings.zoom = Zoom::Fit),
             Action::ToggleGrid => settings.update(|settings| settings.grid = !settings.grid),
             Action::ToggleRulers => settings.update(|settings| settings.rulers = !settings.rulers),
+            Action::ToggleMeasure => state.inspection().measure().update(|on| *on = !*on),
+            Action::ToggleOutline => state.inspection().outline().update(|on| *on = !*on),
             Action::Remount => state.remount(),
         }
     }

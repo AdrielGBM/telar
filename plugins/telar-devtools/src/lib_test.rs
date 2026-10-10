@@ -396,3 +396,62 @@ fn the_stats_and_the_inspector_drawer_share_the_window_without_covering_each_oth
         "one badge, not one per place"
     );
 }
+
+#[test]
+fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    drawn(&mut dev);
+    assert!(!dev.wants_access(), "the components tab reads no audit");
+
+    let (x, y) = centre_of(&mut dev, "Accessibility");
+    dev.on_event(&press(x, y));
+    dev.on_event(&release(x, y));
+    assert!(
+        shows(&mut dev, "Nothing to show"),
+        "until the runner reports, there is nothing to show"
+    );
+    assert!(
+        dev.wants_access(),
+        "the accessibility tab asks for the audit"
+    );
+
+    dev.on_access(&[telar::AccessNode {
+        id: Some(4),
+        role: telar::Role::Button,
+        name: String::new(),
+        rect: Rect::new(520.0, 120.0, 120.0, 32.0),
+        focused: false,
+        enabled: true,
+        toggled: None,
+        value: None,
+        lang: None,
+        url: None,
+        current: None,
+        orientation: None,
+        expanded: None,
+        position: None,
+        active_descendant: None,
+    }]);
+    dev.on_violations(&[telar::AccessViolation::new(
+        telar::AccessRule::UnnamedControl,
+        "a button has no name, so a reader announces only its role",
+        Some(Rect::new(520.0, 120.0, 120.0, 32.0)),
+    )]);
+    let text = texts(&mut dev);
+    for expected in [
+        "1 errors · 0 warnings",
+        "a button has no name, so a reader announces only its role",
+        "No name",
+    ] {
+        assert!(
+            text.iter().any(|t| t == expected),
+            "{expected:?} is shown: {text:?}"
+        );
+    }
+
+    dev.on_event(&chord('i'));
+    drawn(&mut dev);
+    assert!(!dev.wants_access(), "a closed drawer reads nothing");
+}

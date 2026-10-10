@@ -7,21 +7,27 @@ mod inspector;
 mod stats;
 
 use std::cell::Ref;
-use std::collections::HashSet;
-use std::rc::Rc;
-use std::sync::Arc;
 
 use telar::{
     Container, DevAction, Direction, DrawCommand, Event, EventResult, LayoutError, LayoutItem,
-    LayoutStyle, OverlayResponse, ReactiveList, RwSignal, SegmentNodeInfo, Size, SizeDimension,
-    SurfaceCanvas, box_item, focus, interactive_rects, signal,
+    LayoutStyle, OverlayResponse, RwSignal, Size, SizeDimension, SurfaceCanvas, box_item, focus,
+    interactive_rects, signal,
 };
 
+use crate::inspect::{InspectSource, Inspection};
 use crate::meter::Reading;
+use crate::panels::mounted_while;
 use crate::workbench::{WORKBENCH_CONTROL_SIZE, workbench_scope};
 
 const DRAWER_WIDTH: f32 = 320.0;
-const DETAILS_HEIGHT: f32 = 220.0;
+
+/// Which panel the inspector drawer shows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub(crate) enum DrawerTab {
+    #[default]
+    Components,
+    Accessibility,
+}
 
 /// Everything the widgets read, as signals owned by the canvas: written from outside by [`Overlay`], and by the widgets themselves for what they own, such as the selection.
 #[derive(Clone, Copy)]
@@ -31,11 +37,9 @@ pub(crate) struct Model {
     pub build_error: RwSignal<Option<String>>,
     pub panel_open: RwSignal<bool>,
     pub inspector_open: RwSignal<bool>,
-    pub nodes: RwSignal<Rc<[SegmentNodeInfo]>>,
-    pub selected: RwSignal<Option<Arc<str>>>,
-    pub expanded: RwSignal<HashSet<Arc<str>>>,
+    pub drawer_tab: RwSignal<DrawerTab>,
+    pub inspection: Inspection,
     pub drawer_width: RwSignal<f32>,
-    pub details_height: RwSignal<f32>,
 }
 
 impl Model {
@@ -46,26 +50,16 @@ impl Model {
             build_error: signal(None),
             panel_open: signal(false),
             inspector_open: signal(false),
-            nodes: signal(Rc::from([])),
-            selected: signal(None),
-            expanded: signal(HashSet::new()),
+            drawer_tab: signal(DrawerTab::default()),
+            inspection: Inspection::new(),
             drawer_width: signal(DRAWER_WIDTH),
-            details_height: signal(DETAILS_HEIGHT),
         }
-    }
-
-    /// The node the inspector has selected, as the last walk reported it.
-    pub fn selected_node(&self) -> Option<SegmentNodeInfo> {
-        let id: u64 = self.selected.get()?.parse().ok()?;
-        self.nodes
-            .with(|nodes| nodes.iter().find(|node| node.id == id).cloned())
     }
 }
 
 pub(crate) struct Overlay {
     canvas: SurfaceCanvas,
     model: Model,
-    seen_branches: HashSet<u64>,
     captured: bool,
     hovered: bool,
     keyboard: bool,
@@ -85,7 +79,6 @@ impl Overlay {
         Ok(Self {
             canvas,
             model,
-            seen_branches: HashSet::new(),
             captured: false,
             hovered: false,
             keyboard: false,
@@ -119,24 +112,15 @@ impl Overlay {
         self.model.build_error.set_if_changed(error);
     }
 
-    /// Takes the walk the runner made of the app this frame, which only reaches the widgets when it differs from the last one.
-    pub fn set_nodes(&mut self, nodes: &[SegmentNodeInfo]) {
-        if self
-            .model
-            .nodes
-            .peek_with(|current| same_walk(current, nodes))
-        {
-            return;
-        }
+    /// Reads what the runner reported of the app this frame, which only reaches the widgets where it differs from the last.
+    pub fn refresh(&self, source: &dyn InspectSource) {
         let _entered = self.canvas.enter();
-        let opened: Vec<Arc<str>> = branches(nodes)
-            .filter(|id| self.seen_branches.insert(*id))
-            .map(|id| Arc::from(id.to_string()))
-            .collect();
-        if !opened.is_empty() {
-            self.model.expanded.update(|open| open.extend(opened));
-        }
-        self.model.nodes.set(Rc::from(nodes));
+        self.model.inspection.refresh(source);
+    }
+
+    /// Whether an accessibility panel is open, which is what the runner reads the app's audit for.
+    pub fn wants_audit(&self) -> bool {
+        self.model.inspection.wants_audit()
     }
 
     /// Lays the canvas out at the window's logical size whenever that changes.
@@ -253,7 +237,11 @@ const REDRAWN: OverlayResponse = OverlayResponse {
 
 fn root(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let layers = vec![
-        inspector::highlight(model)?,
+        mounted_while(
+            LayoutStyle::new().absolute_fill(),
+            move || model.inspector_open.get(),
+            move || crate::panels::inspection_marks(model.inspection),
+        )?,
         inspector::drawer(model)?,
         stats::corner(model)?,
         banner::banner(model)?,
@@ -267,39 +255,6 @@ fn root(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(root))
 }
 
-/// A layer mounted only while `shown` says so, positioned by `style`.
-fn mounted_while(
-    style: LayoutStyle,
-    shown: impl Fn() -> bool + 'static,
-    build: impl Fn() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let layer = ReactiveList::with_style(
-        style,
-        move || if shown() { vec![()] } else { Vec::new() },
-        |_: &()| (),
-        move |()| build(),
-    )?;
-    Ok(box_item(layer))
-}
-
-fn same_walk(a: &[SegmentNodeInfo], b: &[SegmentNodeInfo]) -> bool {
-    a.len() == b.len()
-        && a.iter().zip(b).all(|(a, b)| {
-            a.id == b.id
-                && a.name == b.name
-                && a.depth == b.depth
-                && a.rect == b.rect
-                && a.padding == b.padding
-                && a.margin == b.margin
-                && a.border == b.border
-                && a.gap == b.gap
-        })
-}
-
-/// The ids of the nodes in a pre-order walk that have nodes under them.
-fn branches(nodes: &[SegmentNodeInfo]) -> impl Iterator<Item = u64> + '_ {
-    nodes
-        .windows(2)
-        .filter(|pair| pair[1].depth > pair[0].depth)
-        .map(|pair| pair[0].id)
-}
+#[cfg(test)]
+#[path = "overlay_test.rs"]
+mod tests;

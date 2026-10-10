@@ -1,4 +1,6 @@
-//! The dev overlay `cargo telar dev` draws over a running application: an FPS badge and panel, the renderer in use, a component inspector and the build-error banner.
+//! The dev overlay `cargo telar dev` draws over a running application: an FPS badge and panel, the renderer in use, the inspection panels and the build-error banner.
+//!
+//! The inspection panels are public: an [`Inspection`] reads an [`InspectSource`] — the whole window under the overlay, or a canvas a workshop shows — and [`inspector_panel`], [`accessibility_panel`], [`inspection_toggles`] and [`inspection_marks`] show it, in the overlay and in the workshop alike.
 //!
 //! The overlay is a widget tree built from `telar-components` in the workbench theme, on a window-sized [`SurfaceCanvas`](telar::SurfaceCanvas) of its own in the host's runtime. The host owns it, so it outlives every hot reload and every failed build, and it never reads the application's theme, direction or control size.
 //!
@@ -7,10 +9,14 @@
 //! Its text is in English under the `telar_devtools` namespace, which an application translates or overrides from its own catalog with `telar_devtools.<key>`.
 #![warn(rustdoc::broken_intra_doc_links)]
 
+mod inspect;
 mod meter;
 mod overlay;
+mod panels;
 mod strings;
 mod workbench;
+pub use inspect::{InspectSource, InspectedNode, Inspection, WindowSource};
+pub use panels::{accessibility_panel, inspection_marks, inspection_toggles, inspector_panel};
 pub use workbench::{
     WORKBENCH_CONTROL_SIZE, WORKBENCH_GRID, WORKBENCH_RADIUS, WORKBENCH_TEXT_SIZE, WorkbenchTheme,
     WorkbenchTokens, use_workbench_tokens, workbench_card, workbench_fill, workbench_mono,
@@ -20,14 +26,14 @@ pub use workbench::{
 use std::borrow::Cow;
 
 use telar::{
-    DevAction, DevOverlay, DrawCommand, Event, Key, ModifiersState, OverlayResponse,
-    SegmentNodeInfo, Size,
+    AccessNode, AccessViolation, DevAction, DevOverlay, DrawCommand, Event, Key, ModifiersState,
+    OverlayResponse, SegmentNodeInfo, Size,
 };
 
 use meter::{Clock, FrameMeter};
 use overlay::Overlay;
 
-/// The dev overlay: an FPS badge and panel, a component inspector and the build-error banner.
+/// The dev overlay: an FPS badge and panel, the inspection panels and the build-error banner.
 ///
 /// It takes the pointer only over its own panels and the keyboard only while one of them holds focus; everything else reaches the application. Ctrl+Shift+B switches the renderer, Ctrl+Shift+D opens the panel and Ctrl+Shift+I the inspector, and the application hears those chords too.
 #[derive(Default)]
@@ -35,6 +41,7 @@ pub struct DevTools {
     meter: FrameMeter,
     clock: Clock,
     overlay: Built,
+    window: WindowSource,
 }
 
 /// The widget tree is built on first use rather than in `Default`, which the runner may call on another thread than the one that drives it.
@@ -46,10 +53,10 @@ enum Built {
     Failed,
 }
 
-impl DevTools {
-    fn overlay(&mut self) -> Option<&mut Overlay> {
-        if matches!(self.overlay, Built::Pending) {
-            self.overlay = match Overlay::new() {
+impl Built {
+    fn ready(&mut self) -> Option<&mut Overlay> {
+        if matches!(self, Built::Pending) {
+            *self = match Overlay::new() {
                 Ok(overlay) => Built::Ready(Box::new(overlay)),
                 Err(error) => {
                     tracing::error!("the devtools overlay could not be built: {error}");
@@ -57,9 +64,21 @@ impl DevTools {
                 }
             };
         }
-        match &mut self.overlay {
+        match self {
             Built::Ready(overlay) => Some(overlay),
             _ => None,
+        }
+    }
+}
+
+impl DevTools {
+    fn overlay(&mut self) -> Option<&mut Overlay> {
+        self.overlay.ready()
+    }
+
+    fn show_window(&mut self) {
+        if let Some(overlay) = self.overlay.ready() {
+            overlay.refresh(&self.window);
         }
     }
 
@@ -91,7 +110,7 @@ impl DevOverlay for DevTools {
         tree_dirty: bool,
     ) -> Cow<'a, [DrawCommand]> {
         let reading = self.meter.sample(self.clock.now(), tree_dirty);
-        let Some(overlay) = self.overlay() else {
+        let Some(overlay) = self.overlay.ready() else {
             return Cow::Borrowed(base);
         };
         overlay.show_reading(reading);
@@ -143,9 +162,25 @@ impl DevOverlay for DevTools {
     }
 
     fn on_tree(&mut self, nodes: &[SegmentNodeInfo]) {
-        if let Some(overlay) = self.overlay() {
-            overlay.set_nodes(nodes);
+        self.window.set_nodes(nodes);
+        self.show_window();
+    }
+
+    fn wants_access(&self) -> bool {
+        match &self.overlay {
+            Built::Ready(overlay) => overlay.wants_audit(),
+            _ => false,
         }
+    }
+
+    fn on_access(&mut self, nodes: &[AccessNode]) {
+        self.window.set_access(nodes);
+        self.show_window();
+    }
+
+    fn on_violations(&mut self, violations: &[AccessViolation]) {
+        self.window.set_violations(violations);
+        self.show_window();
     }
 }
 

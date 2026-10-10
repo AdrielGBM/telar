@@ -20,7 +20,7 @@ use crate::strings::{self, BUILD_FAILED, NO_PREVIEWS, NO_PREVIEWS_HINT, OPEN_IN_
 
 const CARD_MAX_WIDTH: f32 = 480.0;
 
-pub(super) fn empty() -> Result<Box<dyn LayoutItem>, LayoutError> {
+pub(crate) fn empty() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let title = Text::declaring(
         || strings::text(NO_PREVIEWS),
         LayoutStyle::new(),

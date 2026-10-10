@@ -69,10 +69,15 @@ fn the_shell_lays_out_every_region() {
         assert!(find_text(&tree, text), "{text} is not drawn");
     }
     assert_eq!(width_of(&tree, "Previews"), SIDEBAR_DEFAULT_WIDTH);
+    let panels = region(&runtime, &tree, "Panels");
+    assert_eq!(panels.x + panels.width, WIDTH as f32);
+    // The splitter is announced by its grab area, which reaches over both neighbours, so only its middle marks the gap.
+    let splitter = region(&runtime, &tree, "Resize the sidebar");
     assert_eq!(
-        region_width(&runtime, &tree, "Panels"),
-        WIDTH as f32 - SIDEBAR_DEFAULT_WIDTH - region_width(&runtime, &tree, "Resize the sidebar")
+        splitter.x + splitter.width / 2.0,
+        (SIDEBAR_DEFAULT_WIDTH + panels.x) / 2.0
     );
+    assert!(panels.x > SIDEBAR_DEFAULT_WIDTH);
 }
 
 #[test]
