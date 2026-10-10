@@ -2,10 +2,11 @@
 
 use std::rc::Rc;
 use telar::{
-    AlignItems, Border, BorderRadius, Children, Clip, ClippedItem, Color, ConsumedKeys, Container,
-    DismissRegistration, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Overlay, Reactive,
-    ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, Stroke, StyledContainer, SurfaceStyle,
-    Text, TextWrap, amend_surface, box_item, effect, focus::Role, signal, track_layout,
+    AlignItems, AvailableSpace, Border, BorderRadius, Children, Clip, ClippedItem, Color,
+    ConsumedKeys, Container, DismissRegistration, Key, LayoutError, LayoutItem, LayoutScrollArea,
+    LayoutStyle, NamedKey, Overlay, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle,
+    Stroke, StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface, box_item, compute_layout,
+    effect, focus::Role, signal, track_layout,
 };
 
 use crate::shared;
@@ -243,24 +244,57 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 PANEL_WIDTH
             };
             // A trigger near the right edge would otherwise open a panel that runs past it, and one near the bottom would open below the window.
-            let viewport =
-                telar::overlay_viewport().unwrap_or(Rect::new(0.0, 0.0, f32::MAX, f32::MAX));
+            let viewport = telar::overlay_viewport().unwrap_or_else(unbounded);
             let left = (anchor.x)
                 .min(viewport.x + viewport.width - width - EDGE_MARGIN)
                 .max(viewport.x);
-            let below = anchor.y + anchor.height;
+            let row_column = Container::new(LayoutStyle::new().flex_column(), row_items)?;
+            let rows_node = row_column.layout_node();
+            let content = track_layout(rows_node).expect("rows node is registered");
+            let mut view = None;
+            let scroll = LayoutScrollArea::new_with(
+                LayoutStyle::new().flex_grow(1.0).min_height(0.0),
+                |viewport| {
+                    view = Some(viewport);
+                    Ok(box_item(row_column))
+                },
+            )?;
+            let viewport = view.expect("a scroll area builds its content before it returns");
+            let _ = compute_layout(
+                rows_node,
+                AvailableSpace::Definite(width - panel_pad() * 2.0),
+                AvailableSpace::MaxContent,
+            );
+            {
+                let list = list.clone();
+                let viewport = viewport.clone();
+                effect(move || {
+                    content.get();
+                    viewport.rect().get();
+                    if let Some(node) = highlighted.get().and_then(|i| list.node_of(i)) {
+                        viewport.reveal(node, 0.0);
+                    }
+                });
+            }
             let sheet = move || {
+                let spot = panel_spot(
+                    anchor,
+                    telar::overlay_viewport().unwrap_or_else(unbounded),
+                    content.get().height + panel_pad() * 2.0,
+                );
                 LayoutStyle::new()
                     .flex_column()
                     .width(width)
+                    .height(spot.height)
                     .padding_all(panel_pad())
                     .margin_from_left(left)
-                    .margin_block_start(below)
+                    .margin_block_start(spot.top)
             };
-            let panel = StyledContainer::new(sheet(), |_r| panel_rect_style(), row_items)?
-                .styled_by(sheet)
-                // Swallow clicks on the panel's own padding, so they do not dismiss via the backdrop.
-                .on_press(|| {});
+            let panel =
+                StyledContainer::new(sheet(), |_r| panel_rect_style(), vec![box_item(scroll)])?
+                    .styled_by(sheet)
+                    // Swallow clicks on the panel's own padding, so they do not dismiss via the backdrop.
+                    .on_press(|| {});
             // A transparent full-viewport backdrop inside a blocking overlay: stops hover and clicks bleeding through to the page behind, and dismisses when a click lands outside the panel.
             let close = {
                 let open = open;
@@ -272,7 +306,8 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 vec![box_item(panel)],
             )?
             .on_press(close);
-            let overlay = Overlay::new(LayoutStyle::new().flex_column(), vec![box_item(backdrop)])?;
+            let overlay = Overlay::new(LayoutStyle::new().flex_column(), vec![box_item(backdrop)])?
+                .owned_by(trigger_node);
             Ok(box_item(overlay))
         },
         0.0,
@@ -287,7 +322,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             if open.get() {
                 let held = registered
                     .take()
-                    .unwrap_or_else(|| DismissRegistration::new(close.clone()));
+                    .unwrap_or_else(|| DismissRegistration::within(trigger_node, close.clone()));
                 registered.set(Some(held));
             } else {
                 drop(registered.take());
@@ -370,3 +405,36 @@ pub(crate) fn option_row_hover_style(color: &Reactive<Color>) -> RectStyle {
         .with_fill(accent.with_alpha(0.10))
         .with_radius(BorderRadius::all(4.0))
 }
+
+fn unbounded() -> Rect {
+    Rect::new(0.0, 0.0, f32::MAX, f32::MAX)
+}
+
+/// Where the panel's top edge goes and how tall it may be.
+pub(crate) struct PanelSpot {
+    pub top: f32,
+    pub height: f32,
+}
+
+/// Opens below the trigger unless the panel does not fit there and the room above is larger; either way the height is capped to the room on the chosen side, which is what makes the rows scroll instead of running off the surface.
+pub(crate) fn panel_spot(anchor: Rect, viewport: Rect, wanted: f32) -> PanelSpot {
+    let anchor_bottom = anchor.y + anchor.height;
+    let below_room = (viewport.y + viewport.height - anchor_bottom - EDGE_MARGIN).max(0.0);
+    let above_room = (anchor.y - viewport.y - EDGE_MARGIN).max(0.0);
+    if wanted <= below_room || below_room >= above_room {
+        PanelSpot {
+            top: anchor_bottom,
+            height: wanted.min(below_room),
+        }
+    } else {
+        let height = wanted.min(above_room);
+        PanelSpot {
+            top: anchor.y - height,
+            height,
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "dropdown_test.rs"]
+mod tests;

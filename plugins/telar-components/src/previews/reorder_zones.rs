@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Container, LayoutError, LayoutStyle, Reactive, signal};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Container, Key, LayoutError, LayoutStyle, NamedKey, Reactive, Role, signal};
 
 use super::sample;
 use crate::reorder_zones::{ReorderGroup, ReorderZoneProps, apply_zone_move};
@@ -51,6 +51,18 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Layout/Reorder zones")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.click(by_role(Role::ListItem).named("Design"))?;
+            canvas.press(Key::Named(NamedKey::Space))?;
+            canvas.press(Key::Named(NamedKey::ArrowDown))?;
+            canvas.press(Key::Named(NamedKey::Space))?;
+            sample::expect_names(
+                canvas,
+                &by_role(Role::ListItem),
+                &["Review", "Build", "Design", "Test", "Ship"],
+            )
+        }),
     ]
 }
+

@@ -25,11 +25,15 @@ struct Split {
 
 impl Split {
     fn build(props: SplitPaneProps) -> Self {
+        Self::holding(props, pane_content)
+    }
+
+    fn holding(props: SplitPaneProps, content: impl FnOnce() -> Slots) -> Self {
         crate::test_support::fresh_layout_runtime();
         ui_core::reset_keyboard();
         focus::clear();
         let (direction, sized) = (props.direction, props.sized);
-        let item = split_pane(props, Children::from(pane_content())).unwrap();
+        let item = split_pane(props, Children::from(content())).unwrap();
         let node = item.layout_node();
         let root = telar::track_layout(node).unwrap();
         telar::testing::lay_out(node, WIDTH, HEIGHT);
@@ -62,11 +66,24 @@ impl Split {
         }
     }
 
-    fn drag_by(&mut self, dx: f64) {
+    fn across(&self, offset: f64) -> (f64, f64) {
         let (x, y) = self.bar_centre();
+        match self.direction {
+            SplitDirection::Row => (x + offset, y),
+            SplitDirection::Column => (x, y + offset),
+        }
+    }
+
+    fn drag_by(&mut self, by: f64) {
+        self.drag_from(0.0, by);
+    }
+
+    fn drag_from(&mut self, offset: f64, by: f64) {
+        let (x, y) = self.across(offset);
+        let (to_x, to_y) = self.across(offset + by);
         self.item.on_event(&press(x, y));
-        self.item.on_event(&moved(x + dx, y));
-        self.item.on_event(&release(x + dx, y));
+        self.item.on_event(&moved(to_x, to_y));
+        self.item.on_event(&release(to_x, to_y));
     }
 
     fn key(&mut self, key: NamedKey) {
@@ -434,4 +451,168 @@ fn a_collapsed_pane_takes_its_controls_out_of_the_tab_order() {
         .find(|e| Some(e.id) == focus::current())
         .map(|e| e.role);
     assert_eq!(first, Some(Role::Splitter));
+}
+
+fn splitter_rect() -> Rect {
+    let node = focus::exposed()
+        .iter()
+        .find(|e| e.role == Role::Splitter)
+        .expect("the splitter is exposed")
+        .node;
+    telar::track_layout(node).unwrap().get()
+}
+
+/// Just inside the far edge of the grab area, measured from the middle of the bar: over a pane, not over the bar.
+fn grab_edge() -> f64 {
+    let reach = (shared::MIN_TARGET - bar_thickness()) / 2.0;
+    (bar_thickness() / 2.0 + reach - 1.0) as f64
+}
+
+fn sized(direction: SplitDirection, size: RwSignal<f32>) -> SplitPaneProps {
+    SplitPaneProps::props()
+        .direction(direction)
+        .size(size)
+        .collapsible(false)
+        .build()
+}
+
+#[derive(Default)]
+struct Heard {
+    presses: Cell<u32>,
+    wheels: Cell<u32>,
+    laid: Cell<Option<RwSignal<Rect>>>,
+}
+
+fn heard() -> [Rc<Heard>; 2] {
+    [Rc::new(Heard::default()), Rc::new(Heard::default())]
+}
+
+/// Each pane filled by a box that counts the presses and the wheel turns it hears.
+fn listening(heard: &[Rc<Heard>; 2]) -> Slots {
+    let mut slots = Slots::new();
+    for pane in heard {
+        let (pressed, wheeled) = (pane.clone(), pane.clone());
+        let fill = StyledContainer::new(
+            LayoutStyle::new().flex_grow(1.0),
+            |_| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .on_press(move || pressed.presses.set(pressed.presses.get() + 1))
+        .on_scroll(move |_, _| wheeled.wheels.set(wheeled.wheels.get() + 1));
+        pane.laid.set(telar::track_layout(fill.layout_node()));
+        slots.push(None, box_item(fill));
+    }
+    slots
+}
+
+#[test]
+fn the_thin_bar_alone_divides_the_panes() {
+    for direction in [SplitDirection::Row, SplitDirection::Column] {
+        divided_by_the_thin_bar_alone(direction);
+    }
+}
+
+fn divided_by_the_thin_bar_alone(direction: SplitDirection) {
+    let panes = heard();
+    let split = Split::holding(sized(direction, signal(200.0)), || listening(&panes));
+    let bar = splitter_rect();
+    assert_eq!(direction.main(bar), bar_thickness());
+    assert_eq!(direction.along(bar.x, bar.y), 200.0);
+    let second = panes[1]
+        .laid
+        .get()
+        .expect("the second pane is laid out")
+        .get();
+    assert_eq!(
+        direction.along(second.x, second.y),
+        200.0 + bar_thickness(),
+        "the second pane starts where the bar ends"
+    );
+    let range = focus::exposed()
+        .iter()
+        .find(|e| e.role == Role::Splitter)
+        .and_then(|e| e.value)
+        .map(|value| value.max as f32);
+    assert_eq!(
+        range,
+        Some(direction.main(split.root.get()) - bar_thickness()),
+        "the pane may take all but the bar"
+    );
+}
+
+#[test]
+fn the_splitter_is_a_full_size_target_though_its_bar_is_thin() {
+    for direction in [SplitDirection::Row, SplitDirection::Column] {
+        a_full_size_target_though_the_bar_is_thin(direction);
+    }
+}
+
+fn a_full_size_target_though_the_bar_is_thin(direction: SplitDirection) {
+    let split = Split::build(SplitPaneProps::props().direction(direction).build());
+    let tree = telar::ComponentList::new(split.item);
+    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let target = nodes
+        .iter()
+        .find(|node| node.role == Role::Splitter)
+        .expect("the splitter is announced")
+        .rect;
+    assert_eq!(direction.main(target), shared::MIN_TARGET);
+    let drawn = tree
+        .commands()
+        .iter()
+        .filter_map(|c| match c {
+            telar::DrawCommand::Rect { rect, .. } => Some(direction.main(*rect)),
+            _ => None,
+        })
+        .any(|main| main == bar_thickness());
+    assert!(drawn, "the drawn bar keeps its thickness");
+}
+
+#[test]
+fn dragging_from_either_edge_of_the_grab_area_resizes() {
+    for direction in [SplitDirection::Row, SplitDirection::Column] {
+        drags_from_either_edge_of_the_grab_area(direction);
+    }
+}
+
+fn drags_from_either_edge_of_the_grab_area(direction: SplitDirection) {
+    let size = signal(200.0f32);
+    let mut split = Split::build(sized(direction, size));
+    split.drag_from(-grab_edge(), 40.0);
+    assert_eq!(size.get(), 240.0, "from the edge over the first pane");
+    telar::testing::lay_out(split.item.layout_node(), WIDTH, HEIGHT);
+    split.drag_from(grab_edge(), 40.0);
+    assert_eq!(size.get(), 280.0, "from the edge over the second pane");
+}
+
+#[test]
+fn the_grab_area_takes_the_press_but_not_the_wheel_from_the_pane_beneath() {
+    for direction in [SplitDirection::Row, SplitDirection::Column] {
+        takes_the_press_but_not_the_wheel(direction);
+    }
+}
+
+fn takes_the_press_but_not_the_wheel(direction: SplitDirection) {
+    let size = signal(200.0f32);
+    let panes = heard();
+    let mut split = Split::holding(sized(direction, size), || listening(&panes));
+    for (pane, side) in panes.iter().zip([-1.0, 1.0]) {
+        let (x, y) = split.across(side * grab_edge());
+        split.item.on_event(&telar::Event::Scrolled {
+            delta: telar::ScrollDelta::Pixels { x: 0.0, y: -40.0 },
+            x,
+            y,
+        });
+        assert_eq!(
+            pane.wheels.get(),
+            1,
+            "{side}: the pane under the grab area scrolls"
+        );
+        split.item.on_event(&press(x, y));
+        split.item.on_event(&release(x, y));
+        assert_eq!(pane.presses.get(), 0, "{side}: the splitter took the press");
+    }
+    assert!(focus::current().is_some(), "the press focused the splitter");
+    assert_eq!(size.get(), 200.0);
 }

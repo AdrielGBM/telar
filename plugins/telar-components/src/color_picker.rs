@@ -208,7 +208,6 @@ pub fn color_picker(
     let slider_column = Container::new(
         LayoutStyle::new()
             .flex_column()
-            .gap(gap())
             .justify_content(telar::JustifyContent::CENTER),
         sliders,
     )?;
@@ -471,6 +470,15 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
         LayoutStyle::new().width(width).height(TRACK_HEIGHT),
         |_r| RectStyle::default(),
         layers,
+    )?;
+    let track = StyledContainer::new(
+        LayoutStyle::new()
+            .width(width)
+            .height(shared::MIN_TARGET)
+            .flex_column()
+            .justify_content(telar::JustifyContent::CENTER),
+        |_r| RectStyle::default(),
+        vec![box_item(track)],
     )?
     .control(Role::Slider)
     .a11y_label(move || strings::text(name))

@@ -55,7 +55,7 @@ workbench = ["icons", "overlays"]
 icons = ["dep:telar-icons"]
 
 [dependencies]
-telar = { workspace = true, features = ["runtime"] }
+telar = { workspace = true, features = ["runtime", "svg"] }
 telar-icons = { workspace = true, optional = true }
 
 web-time = { workspace = true }
@@ -63,10 +63,6 @@ web-time = { workspace = true }
 [[test]]
 name = "reachable"
 path = "src/reachable_test.rs"
-
-[[test]]
-name = "widget_gallery"
-path = "src/widget_gallery_test.rs"
 
 [[test]]
 name = "audit"
@@ -89,7 +85,6 @@ name = "play"
 path = "src/play_test.rs"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-image = { workspace = true, features = ["png"] }
 telar = { workspace = true, features = ["headless"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]

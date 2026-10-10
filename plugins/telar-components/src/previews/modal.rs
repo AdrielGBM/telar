@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color, Container, LayoutError, LayoutStyle, Slots, Text, box_item};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role, Slots, Text, box_item};
 
 use crate::button::{ButtonProps, button};
 use crate::modal::{ModalProps, modal};
@@ -46,6 +46,16 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Overlays/Modal")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.expect(by_role(Role::Dialog).named("Confirm"))?;
+            canvas.expect_text("This dialog stays inside the canvas.")?;
+            canvas.click(by_role(Role::Button).named("Close"))?;
+            canvas.expect_absent(by_role(Role::Dialog))?;
+            canvas.expect_no_text("This dialog stays inside the canvas.")?;
+            canvas.expect_action("on_close", 1)?;
+            canvas.click(by_role(Role::Button).named("Reopen"))?;
+            canvas.expect(by_role(Role::Dialog).named("Confirm"))
+        }),
     ]
 }

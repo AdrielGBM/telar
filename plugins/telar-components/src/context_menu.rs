@@ -8,7 +8,7 @@ use std::rc::Rc;
 use telar::{
     AlignItems, Children, Color, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle,
     NamedKey, Overlay, PointerButton, Props, Rect, RectStyle, RwSignal, SizeDimension,
-    StyledContainer, Text, TextStyle, box_item, signal,
+    StyledContainer, Text, TextStyle, box_item, focus::Role, signal,
 };
 
 use crate::shared;
@@ -92,7 +92,7 @@ pub struct MenuStyle {
     pub highlight: Color,
     pub radius: f32,
     pub font_size: f32,
-    /// The height of a row the component draws itself. A `Custom` row is whatever its widget measures.
+    /// The height of a row the component draws itself, which is at least a pointer target tall by default. A `Custom` row is whatever its widget measures.
     pub row_height: f32,
     pub padding: f32,
     /// The mark a row wears to say it opens another panel.
@@ -111,7 +111,7 @@ impl Default for MenuStyle {
             highlight: Color::rgba(0.20, 0.20, 0.24, 1.0),
             radius: 4.0,
             font_size: 13.0,
-            row_height: 22.0,
+            row_height: shared::MIN_TARGET,
             padding: 4.0,
             submenu: "›",
         }
@@ -651,7 +651,13 @@ fn line(
             false if opened.peek() != Some(index) => opened.set(None),
             false => {}
         }
-    });
+    })
+    .disabled(move || !enabled)
+    .presented(Role::MenuItem);
+    let row = match opens {
+        true => row.expanded(move || opened.get() == Some(index)),
+        false => row,
+    };
     Ok(box_item(match enabled {
         true => row.on_press(act).cursor(telar::Cursor::Pointer),
         false => row,

@@ -101,7 +101,7 @@ pub struct CommandPaletteProps {
     /// Bound open state. `None` (the default) leaves it to [`id`](Self::id), and with neither it never opens.
     #[props(some, into, default)]
     pub open: Option<RwSignal<bool>>,
-    /// Names the palette, so anything can open it with `open_overlay(id)` without holding its signal. Ignored when `open` is bound.
+    /// Names the palette, so anything on the same surface can open it with `open_overlay(id)` without holding its signal; another surface has its own `id`. Ignored when `open` is bound.
     #[props(default = "")]
     pub id: &'static str,
     #[props(into, default)]

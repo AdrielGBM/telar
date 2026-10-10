@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, Border, BorderRadius, Children, Color, Container, Cursor, Key, LayoutError,
-    LayoutItem, LayoutStyle, NamedKey, Props, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    box_item, focus::Role, signal,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Cursor,
+    JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Props, RectStyle,
+    RwSignal, ShapeStyle, StyledContainer, box_item, focus::Role, signal,
 };
 
 use crate::shared;
@@ -16,8 +16,12 @@ const HAIRLINE_WIDTH: f32 = 1.0;
 fn gap() -> f32 {
     shared::spacing() * 0.5
 }
-fn row() -> LayoutStyle {
-    LayoutStyle::new().flex_row().flex_wrap().gap(gap())
+fn hit_size(size: f32) -> f32 {
+    size.max(shared::MIN_TARGET)
+}
+fn row(size: f32) -> LayoutStyle {
+    let spacing = (gap() - (hit_size(size) - size)).max(0.0);
+    LayoutStyle::new().flex_row().flex_wrap().gap(spacing)
 }
 
 /// A row of colour swatches selecting one of them, or none: the picker for a value drawn from a fixed palette (a theme's accents, a set of tokens).
@@ -32,7 +36,7 @@ pub struct SwatchesProps {
     /// Bound selection: the index of the chosen colour, `None` for none of them. `None` for the prop itself (the default) is uncontrolled.
     #[props(some, into, default)]
     pub selected: Option<RwSignal<Option<u32>>>,
-    /// Each swatch's diameter. Default 20.
+    /// Each swatch's drawn diameter. Default 20. What takes the press around it is never smaller than 24 px, so a small swatch stays easy to hit.
     #[props(default = 20.0)]
     pub size: f32,
     /// Fires with the index a press or a key selected.
@@ -67,10 +71,20 @@ pub fn swatches(
         let press_cb = on_select.clone();
         let key_cb = on_select.clone();
 
-        let swatch = StyledContainer::new(
+        let disc = StyledContainer::new(
             LayoutStyle::new().width(size).height(size),
             move |_r| swatch_rect(color, size, paint_selected.get() == Some(idx)),
             vec![],
+        )?;
+        let hit = hit_size(size);
+        let swatch = StyledContainer::new(
+            LayoutStyle::new()
+                .width(hit)
+                .height(hit)
+                .align_items(AlignItems::CENTER)
+                .justify_content(JustifyContent::CENTER),
+            |_r| RectStyle::default(),
+            vec![box_item(disc)],
         )?
         .a11y_label(move || name.clone())
         .control(Role::Radio)
@@ -95,7 +109,9 @@ pub fn swatches(
         cells.push(box_item(swatch));
     }
 
-    Ok(box_item(Container::new(row(), cells)?.styled_by(row)))
+    Ok(box_item(
+        Container::new(row(size), cells)?.styled_by(move || row(size)),
+    ))
 }
 
 fn choose(selected: RwSignal<Option<u32>>, idx: u32, on_select: Option<&dyn Fn(u32)>) {

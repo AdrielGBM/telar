@@ -5769,7 +5769,6 @@ dependencies = [
 name = "telar-components"
 version = "0.2.2"
 dependencies = [
- "image",
  "js-sys",
  "telar",
  "telar-icons",

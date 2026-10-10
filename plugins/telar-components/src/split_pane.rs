@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use telar::{
     Accessible, BorderRadius, Children, Clip, ClippedItem, Container, Cursor, Direction, DragAxis,
-    Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, NumericValue, Orientation, Props,
+    Insets, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, NumericValue, Orientation, Props,
     Reactive, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer, Transaction,
     box_item, current_direction, drag_start, focus::Role, signal, step_factor, track_layout,
 };
@@ -104,13 +104,12 @@ struct Limits {
     max: f32,
     min_fraction: f32,
     max_fraction: f32,
-    bar: f32,
 }
 
 impl Limits {
-    fn range(self, total: f32) -> (f32, f32) {
+    fn range(self, total: f32, bar: f32) -> (f32, f32) {
         let room = if total > 0.0 {
-            (total - self.bar).max(0.0)
+            (total - bar).max(0.0)
         } else {
             f32::INFINITY
         };
@@ -215,7 +214,6 @@ pub fn split_pane(
         max,
         min_fraction,
         max_fraction,
-        bar: bar_thickness(),
     };
 
     let mut slots = children.build()?.take_default().into_iter();
@@ -261,7 +259,7 @@ pub fn split_pane(
         true => 0.0,
         false => direction.main(sized_rect.get()),
     };
-    let total = move || applied() + direction.main(other_rect.get()) + limits.bar;
+    let total = move || applied() + direction.main(other_rect.get()) + bar_thickness();
     let toward_end = sized.toward_end();
     let sign = move || {
         let reading = if direction.inverted() { -1.0 } else { 1.0 };
@@ -277,13 +275,13 @@ pub fn split_pane(
         }
     };
     let move_to = move |raw: f32| {
-        let (lo, hi) = limits.range(total());
+        let (lo, hi) = limits.range(total(), bar_thickness());
         collapsed.set(false);
         write_through(transaction, raw.clamp(lo, hi));
     };
 
     let bar = StyledContainer::new(
-        bar_box(direction, limits.bar),
+        bar_box(direction),
         move |_| {
             let fill = match dragging.get() {
                 true => shared::accent(),
@@ -291,18 +289,19 @@ pub fn split_pane(
             };
             RectStyle::default()
                 .with_fill(fill)
-                .with_radius(BorderRadius::all(limits.bar / 2.0))
+                .with_radius(BorderRadius::all(bar_thickness() / 2.0))
         },
         vec![],
     )?
-    .styled_by(move || bar_box(direction, limits.bar))
+    .styled_by(move || bar_box(direction))
+    .hit_outset(Reactive::of(move || grab_outset(direction)))
     .control(Role::Splitter)
     .oriented(match direction {
         SplitDirection::Row => Orientation::Vertical,
         SplitDirection::Column => Orientation::Horizontal,
     })
     .valued(move || {
-        let (lo, hi) = limits.range(total());
+        let (lo, hi) = limits.range(total(), bar_thickness());
         NumericValue {
             now: applied() as f64,
             min: lo as f64,
@@ -381,8 +380,16 @@ fn bar_thickness() -> f32 {
     (shared::spacing() * 0.75).max(4.0)
 }
 
-fn bar_box(direction: SplitDirection, thickness: f32) -> LayoutStyle {
-    direction.sized(LayoutStyle::new().flex_shrink(0.0), thickness)
+fn grab_outset(direction: SplitDirection) -> Insets {
+    let reach = ((shared::MIN_TARGET - bar_thickness()) / 2.0).max(0.0);
+    match direction {
+        SplitDirection::Row => Insets::new(0.0, reach, 0.0, reach),
+        SplitDirection::Column => Insets::new(reach, 0.0, reach, 0.0),
+    }
+}
+
+fn bar_box(direction: SplitDirection) -> LayoutStyle {
+    direction.sized(LayoutStyle::new().flex_shrink(0.0), bar_thickness())
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 //! The text the catalogue draws itself, in the locales it ships, and the one way a widget asks for it.
 
-use telar::i18n::{Catalog, Entry, Message, translate_with_override};
+use telar::i18n::{Catalog, Entry, Message, Part, translate_with_override};
 
 const NAMESPACE: &str = "telar_components";
 
@@ -8,12 +8,18 @@ pub(crate) const CLOSE: &str = "close";
 pub(crate) const COMMAND_PALETTE: &str = "command_palette";
 pub(crate) const COPIED: &str = "copied";
 pub(crate) const COPY: &str = "copy";
+pub(crate) const DECREASE: &str = "decrease";
 pub(crate) const DISMISS: &str = "dismiss";
+pub(crate) const DRAWER: &str = "drawer";
 pub(crate) const HEX: &str = "hex";
 pub(crate) const HUE: &str = "hue";
+pub(crate) const INCREASE: &str = "increase";
+pub(crate) const MAXIMIZE: &str = "maximize";
+pub(crate) const MINIMIZE: &str = "minimize";
 pub(crate) const NO_RESULTS: &str = "no_results";
 pub(crate) const NOTIFICATIONS: &str = "notifications";
 pub(crate) const OPACITY: &str = "opacity";
+pub(crate) const REMOVE: &str = "remove";
 pub(crate) const RESIZE: &str = "resize";
 pub(crate) const SATURATION_BRIGHTNESS: &str = "saturation_brightness";
 pub(crate) const SEARCH_COMMANDS: &str = "search_commands";
@@ -57,11 +63,27 @@ static CATALOG: Catalog = Catalog {
             ],
         },
         Entry {
+            key: DECREASE,
+            messages: &[
+                ("ar", Message::Plain("إنقاص")),
+                ("en", Message::Plain("Decrease")),
+                ("es", Message::Plain("Disminuir")),
+            ],
+        },
+        Entry {
             key: DISMISS,
             messages: &[
                 ("ar", Message::Plain("تجاهل")),
                 ("en", Message::Plain("Dismiss")),
                 ("es", Message::Plain("Descartar")),
+            ],
+        },
+        Entry {
+            key: DRAWER,
+            messages: &[
+                ("ar", Message::Plain("درج جانبي")),
+                ("en", Message::Plain("Drawer")),
+                ("es", Message::Plain("Panel lateral")),
             ],
         },
         Entry {
@@ -78,6 +100,30 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("درجة اللون")),
                 ("en", Message::Plain("Hue")),
                 ("es", Message::Plain("Tono")),
+            ],
+        },
+        Entry {
+            key: INCREASE,
+            messages: &[
+                ("ar", Message::Plain("زيادة")),
+                ("en", Message::Plain("Increase")),
+                ("es", Message::Plain("Aumentar")),
+            ],
+        },
+        Entry {
+            key: MAXIMIZE,
+            messages: &[
+                ("ar", Message::Plain("تكبير")),
+                ("en", Message::Plain("Maximize")),
+                ("es", Message::Plain("Maximizar")),
+            ],
+        },
+        Entry {
+            key: MINIMIZE,
+            messages: &[
+                ("ar", Message::Plain("تصغير")),
+                ("en", Message::Plain("Minimize")),
+                ("es", Message::Plain("Minimizar")),
             ],
         },
         Entry {
@@ -102,6 +148,23 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("العتامة")),
                 ("en", Message::Plain("Opacity")),
                 ("es", Message::Plain("Opacidad")),
+            ],
+        },
+        Entry {
+            key: REMOVE,
+            messages: &[
+                (
+                    "ar",
+                    Message::Format(&[Part::Lit("إزالة "), Part::Arg("label")]),
+                ),
+                (
+                    "en",
+                    Message::Format(&[Part::Lit("Remove "), Part::Arg("label")]),
+                ),
+                (
+                    "es",
+                    Message::Format(&[Part::Lit("Quitar "), Part::Arg("label")]),
+                ),
             ],
         },
         Entry {
@@ -142,6 +205,11 @@ static CATALOG: Catalog = Catalog {
 /// Resolves `key` for the active locale, preferring the application's `telar_components.<key>` message over the one shipped here. Call it inside a reactive closure so a locale switch re-renders.
 pub(crate) fn text(key: &str) -> String {
     translate_with_override(NAMESPACE, &CATALOG, key, &[])
+}
+
+/// [`text`] for a message with named placeholders, filled from `args`.
+pub(crate) fn text_with(key: &str, args: &[(&str, &str)]) -> String {
+    translate_with_override(NAMESPACE, &CATALOG, key, args)
 }
 
 #[cfg(test)]

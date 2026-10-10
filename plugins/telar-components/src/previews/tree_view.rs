@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color, Container, LayoutError, LayoutStyle, signal};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
 use crate::tree_view::{TreeNode, TreeViewProps, tree_view};
 
@@ -46,6 +46,18 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Workbench/Tree view")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            let tests = by_role(Role::TreeItem).named("tests");
+            canvas.click(by_role(Role::TreeItem).named("main.rs"))?;
+            canvas.expect_toggled(by_role(Role::TreeItem).named("main.rs"), true)?;
+            canvas.expect_toggled(by_role(Role::TreeItem).named("lib.rs M"), false)?;
+            canvas.expect_action("on_select", 1)?;
+            canvas.expect_absent(by_role(Role::TreeItem).named("smoke.rs"))?;
+            canvas.click(tests.clone())?;
+            canvas.press(Key::Named(NamedKey::ArrowRight))?;
+            canvas.expect_expanded(tests, true)?;
+            canvas.expect(by_role(Role::TreeItem).named("smoke.rs"))
+        }),
     ]
 }

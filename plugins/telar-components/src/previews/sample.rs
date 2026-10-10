@@ -1,5 +1,7 @@
 #[cfg(feature = "advanced")]
 use telar::{Border, BorderRadius, RectStyle, ShapeStyle, StyledContainer};
+#[cfg(feature = "advanced")]
+use telar::preview::{Play, PlayError, PlayResult, Query};
 use telar::{Children, LayoutError, LayoutItem, LayoutStyle, Reactive, Slots, Text, box_item};
 
 pub(super) fn text(content: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -46,4 +48,21 @@ pub(super) fn tile(label: Reactive<String>) -> Result<Box<dyn LayoutItem>, Layou
         vec![text],
     )?;
     Ok(box_item(tile))
+}
+
+#[cfg(feature = "advanced")]
+/// That the nodes `query` matches are named `names`, in reading order: the order a reader meets a list in after it was rearranged.
+pub(super) fn expect_names(canvas: &mut Play, query: &Query, names: &[&str]) -> PlayResult {
+    let read: Vec<String> = canvas
+        .find_all(query)
+        .into_iter()
+        .map(|node| node.name)
+        .collect();
+    if read == names {
+        Ok(())
+    } else {
+        Err(PlayError::new(format!(
+            "expected {query} to read {names:?}, but it reads {read:?}"
+        )))
+    }
 }

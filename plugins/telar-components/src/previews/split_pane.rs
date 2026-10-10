@@ -1,4 +1,5 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
+use telar::{Key, NamedKey, Role};
 
 use super::sample;
 use crate::split_pane::{SizedPane, SplitDirection, SplitPaneProps, split_pane};
@@ -27,6 +28,18 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Workbench/Split pane")
         .layout(Layout::Fullscreen)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            let splitter = by_role(Role::Splitter);
+            canvas.tab()?;
+            canvas.expect_focused(splitter.clone())?;
+            canvas.press(Key::Named(NamedKey::Home))?;
+            canvas.expect_value(splitter.clone(), 120.0)?;
+            canvas.press(Key::Named(NamedKey::Enter))?;
+            canvas.expect_absent(by_text("Sidebar"))?;
+            canvas.press(Key::Named(NamedKey::ArrowRight))?;
+            canvas.expect(by_text("Sidebar"))?;
+            canvas.expect_value(splitter, 120.0)
+        }),
     ]
 }

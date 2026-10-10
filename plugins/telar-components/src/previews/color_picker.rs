@@ -1,5 +1,5 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Role};
 
 use crate::color_picker::{ColorPickerProps, color_picker};
 
@@ -38,6 +38,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Workbench/Color picker")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.click(by_role(Role::Radio).named("Success"))?;
+            canvas.expect_toggled(by_role(Role::Radio).named("Success"), true)?;
+            canvas.expect_toggled(by_role(Role::Radio).named("Primary"), false)?;
+            canvas.expect_action("on_change", 1)
+        }),
     ]
 }

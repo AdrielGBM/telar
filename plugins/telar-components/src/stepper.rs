@@ -2,12 +2,13 @@
 
 use std::rc::Rc;
 use telar::{
-    AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Text, box_item,
-    focus::Role, signal,
+    Accessible, AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError,
+    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
+    Text, box_item, focus::Role, signal,
 };
 
 use crate::shared;
+use crate::strings;
 
 /// − / + button side length (px) — square, small enough to sit beside the value without dominating it.
 fn button_size() -> f32 {
@@ -75,7 +76,7 @@ pub fn stepper(
     let value = value.unwrap_or_else(|| signal(min));
     // Shared across the − and + buttons' fill closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is). Re-erased to `Rc` so both buttons' `on_press` closures can hold a copy (the field itself is a one-shot `Box`).
 
-    let minus = stepper_button("−", color.clone(), {
+    let minus = stepper_button("−", strings::DECREASE, color.clone(), {
         let on_change = on_change.clone();
         move || {
             let v = (value.get() - step).clamp(min, max);
@@ -86,7 +87,7 @@ pub fn stepper(
         }
     })?;
 
-    let plus = stepper_button("+", color.clone(), {
+    let plus = stepper_button("+", strings::INCREASE, color.clone(), {
         let on_change = on_change.clone();
         move || {
             let v = (value.get() + step).clamp(min, max);
@@ -127,6 +128,7 @@ fn button_fill(color: &Reactive<Color>) -> Color {
 /// A small square pressable box with a centred glyph — the − / + buttons, built on the same box + on_press + centred-label shape as `button.rs`'s `ButtonProps` filled variant.
 fn stepper_button(
     glyph: &'static str,
+    name: &'static str,
     color: Reactive<Color>,
     on_press: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -148,6 +150,7 @@ fn stepper_button(
     )?
     .styled_by(button_box)
     .control(Role::Button)
+    .a11y_label(move || strings::text(name))
     .on_press(on_press);
     Ok(box_item(container))
 }

@@ -1,5 +1,5 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Role};
 
 use crate::tabs::{TabsProps, tabs};
 
@@ -24,7 +24,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Navigation/Tabs")
         .layout(Layout::Centered)
-        .matrix(Matrix::Named("themes")),
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            canvas.click(by_role(Role::Tab).named("Activity"))?;
+            canvas.expect_toggled(by_role(Role::Tab).named("Activity"), true)?;
+            canvas.expect_toggled(by_role(Role::Tab).named("Overview"), false)
+        }),
         preview!(tabs: TabsProps, "Bound selection", |p| {
             let selected = p.signal("selected", 0u32);
             tabs(
@@ -34,6 +39,13 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Navigation/Tabs")
         .layout(Layout::Centered)
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.click(by_role(Role::Tab).named("Billing"))?;
+            canvas.expect_toggled(by_role(Role::Tab).named("Billing"), true)?;
+            canvas.click(by_role(Role::Tab).named("Settings"))?;
+            canvas.expect_toggled(by_role(Role::Tab).named("Settings"), true)?;
+            canvas.expect_toggled(by_role(Role::Tab).named("Billing"), false)
+        }),
     ]
 }

@@ -1,5 +1,5 @@
-use telar::Children;
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Role};
 use telar_icons::IconName;
 
 use crate::icon_button::{IconButtonProps, icon_button};
@@ -38,7 +38,11 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Workbench/Icon button")
         .layout(Layout::Centered)
-        .matrix(Matrix::Named("themes")),
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            canvas.click(by_role(Role::Button).named("Search"))?;
+            canvas.expect_action("on_press", 1)
+        }),
         preview!(icon_button: IconButtonProps, "Toggle", |p| {
             let pressed = p.signal("pressed", false);
             icon_button(
@@ -53,6 +57,13 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Workbench/Icon button")
         .layout(Layout::Centered)
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            let favourite = by_role(Role::Button).named("Favourite");
+            canvas.click(favourite.clone())?;
+            canvas.expect_toggled(favourite.clone(), true)?;
+            canvas.click(favourite.clone())?;
+            canvas.expect_toggled(favourite, false)
+        }),
     ]
 }

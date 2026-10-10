@@ -58,7 +58,7 @@ pub struct ModalProps {
     /// Bound open/close state. `None` (the default) never opens (no signal to read); `Some` drives the modal.
     #[props(some, into, default)]
     pub open: Option<RwSignal<bool>>,
-    /// Names this dialog, so anything can open it with `open_overlay(id)` without holding its signal. `""` (the default) leaves it unnamed. Ignored when `open` is bound — an explicit signal wins, so the two forms never disagree about which state is authoritative.
+    /// Names this dialog, so anything on the same surface can open it with `open_overlay(id)` without holding its signal; another surface has its own `id`. `""` (the default) leaves it unnamed. Ignored when `open` is bound — an explicit signal wins, so the two forms never disagree about which state is authoritative.
     #[props(default = "")]
     pub id: &'static str,
     /// The dialog's heading, shown beside its Close affordance.
@@ -77,7 +77,6 @@ pub struct ModalProps {
 
 /// A dialog portaled over the page, dismissed by its scrim, its Close or Escape.
 pub fn modal(props: ModalProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut slots = children.build()?;
     let ModalProps {
         open,
         id,
@@ -86,10 +85,11 @@ pub fn modal(props: ModalProps, children: Children) -> Result<Box<dyn LayoutItem
         close_label,
         color,
     } = props;
-    let body = slots.take_default();
     let open = shared::resolve_open(open, id);
 
     scrim::scrim_overlay(open, on_close, move |dismiss| {
+        // Built on the first open rather than here: a body built while the dialog has never opened would register its focus stops with nothing on screen to take them.
+        let body = children.build()?.take_default();
         build_open_modal(title, close_label, body, color, dismiss)
     })
 }

@@ -1,7 +1,9 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Container, LayoutError, LayoutItem, LayoutStyle, ReactiveList, box_item};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{
+    Children, Container, LayoutError, LayoutItem, LayoutStyle, ReactiveList, Role, box_item,
+};
 
 use crate::button::{ButtonProps, button};
 use crate::context_menu::{ContextMenuProps, Entry, context_menu};
@@ -61,6 +63,15 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Overlays/Context menu")
         .layout(Layout::Padded)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.expect(by_role(Role::MenuItem).containing("Cut"))?;
+            canvas.expect(by_role(Role::MenuItem).containing("Paste"))?;
+            canvas.expect_expanded(by_role(Role::MenuItem).containing("Share"), false)?;
+            canvas.click(by_role(Role::MenuItem).containing("Copy"))?;
+            canvas.expect_no_text("Cut")?;
+            canvas.click(by_role(Role::Button).named("Show the menu"))?;
+            canvas.expect_text("Cut")
+        }),
     ]
 }

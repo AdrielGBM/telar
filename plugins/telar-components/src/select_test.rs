@@ -359,3 +359,71 @@ fn a_stretched_select_in_a_content_sized_row_is_as_wide_as_what_it_shows() {
         field_rect.get()
     );
 }
+
+fn many(count: u32) -> Children {
+    Children::new(move || {
+        let mut slots = Slots::new();
+        for n in 0..count {
+            slots.push(
+                None,
+                crate::list::item(
+                    crate::list::ItemProps::props()
+                        .label(Reactive::of(move || format!("Row {n}")))
+                        .build(),
+                    Children::default(),
+                )?,
+            );
+        }
+        Ok(slots)
+    })
+}
+
+/// A 25-row panel is 800px; in a 300px window it has to be cut to the room and scroll, with the keyboard cursor kept on screen.
+#[test]
+fn a_tall_panel_is_capped_to_the_window_and_follows_the_keyboard() {
+    crate::test_support::fresh_layout_runtime();
+    let picked = signal(0u32);
+    let item = select(SelectProps::props().selected(picked).build(), many(25)).unwrap();
+    compute_layout(
+        item.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(300.0),
+    )
+    .unwrap();
+    let mut tree = ComponentList::new(item);
+    let _ = tree.commands();
+
+    let settle = |tree: &ComponentList| {
+        for _ in 0..3 {
+            relayout_if_dirty();
+            let _ = tree.commands();
+        }
+    };
+    let down = telar::testing::named(telar::NamedKey::ArrowDown);
+
+    telar::focus::focus_next();
+    route(&mut tree, &down);
+    settle(&tree);
+
+    let panel = drawn_rects(&tree)[2];
+    assert!(
+        panel.y + panel.height <= 300.0,
+        "the panel stays inside the window: {panel:?}"
+    );
+    assert!(panel.height < 800.0, "and is cut to the room: {panel:?}");
+
+    for _ in 0..24 {
+        route(&mut tree, &down);
+    }
+    settle(&tree);
+
+    let tx = (PANEL_WIDTH / 2.0) as f64;
+    let last_visible = (panel.y + panel.height - panel_pad() - ROW_HEIGHT / 2.0) as f64;
+    route(&mut tree, &press(tx, last_visible));
+    route(&mut tree, &release(tx, last_visible));
+    assert_eq!(
+        picked.get(),
+        24,
+        "the cursor on the last row scrolled it to the bottom of the panel"
+    );
+}

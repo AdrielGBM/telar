@@ -8,8 +8,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use telar::{
     AlignItems, Children, Color, Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Margin, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Text, TextWrap,
-    box_item, focus::Role, use_context,
+    Margin, NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Text,
+    TextWrap, box_item, focus::Role, use_context,
 };
 
 use crate::shared;
@@ -45,6 +45,7 @@ struct Row {
     reachable: Reactive<bool>,
     /// What type-ahead matches against, for the same reason a closure: a row whose label tracks a signal is findable by what it says now. Empty for a piece that is not a destination, and for a row written with markup children instead of a label — there is no text to match, so nothing claims to match it.
     label: Reactive<String>,
+    node: Cell<Option<NodeId>>,
 }
 
 impl ListContext {
@@ -110,6 +111,7 @@ impl ListContext {
             rows.push(Row {
                 reachable: reachable.clone(),
                 label,
+                node: Cell::new(None),
             });
             rows.len() as u32 - 1
         };
@@ -124,6 +126,16 @@ impl ListContext {
     /// Registers a piece that holds a position without being one — a rule, a heading. It takes an index so the rows around it keep the ones they commit with, and the keyboard passes straight over it.
     fn claim_unreachable(&self) {
         self.claim(Reactive::of(|| false), Reactive::default());
+    }
+
+    fn attach(&self, index: u32, node: NodeId) {
+        if let Some(row) = self.0.rows.borrow().get(index as usize) {
+            row.node.set(Some(node));
+        }
+    }
+
+    pub(crate) fn node_of(&self, index: u32) -> Option<NodeId> {
+        self.0.rows.borrow().get(index as usize)?.node.get()
     }
 
     pub(crate) fn len(&self) -> u32 {
@@ -286,6 +298,9 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         .disabled(move || disabled.get())
         .on_press(commit);
     // Announced without becoming a Tab stop: the list is driven by arrows from the trigger, so a reader can describe the open panel while Tab keeps treating it as one control.
+    if let (Some(ctx), Some(i)) = (&list, index) {
+        ctx.attach(i, row.layout_node());
+    }
     if list.is_some() {
         telar::focus::register_presented(
             telar::focus::next_id(),

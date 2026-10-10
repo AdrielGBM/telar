@@ -3,12 +3,13 @@
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Border, BorderRadius, Children, Color, Container, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, Text, box_item,
-    focus::Role,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, LayoutError,
+    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, Text,
+    box_item, focus::Role,
 };
 
 use crate::shared;
+use crate::strings;
 
 fn pad_x() -> f32 {
     shared::spacing() * 1.25
@@ -76,6 +77,7 @@ pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>
         children.push(box_item(dot));
     }
 
+    let name = label.clone();
     let label_widget = Text::declaring(
         move || label.get(),
         LayoutStyle::new(),
@@ -95,6 +97,7 @@ pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>
             vec![box_item(close_label)],
         )?
         .control(Role::Button)
+        .a11y_label(move || strings::text_with(strings::REMOVE, &[("label", &name.get())]))
         .on_press(move || cb());
         children.push(box_item(close));
     }

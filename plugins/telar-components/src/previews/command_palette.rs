@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Container, LayoutError, LayoutStyle, box_item};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, box_item};
 
 use crate::button::{ButtonProps, button};
 use crate::command_palette::{Command, CommandPaletteProps, command_palette};
@@ -63,6 +63,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Overlays/Command palette")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.type_text(by_role(Role::TextInput), "zoom")?;
+            canvas.expect(by_role(Role::MenuItem).containing("Zoom in"))?;
+            canvas.expect_absent(by_role(Role::MenuItem).containing("Save"))?;
+            canvas.press(Key::Named(NamedKey::Enter))?;
+            canvas.expect_absent(by_role(Role::Dialog))?;
+            canvas.expect_action("on_run", 1)
+        }),
     ]
 }

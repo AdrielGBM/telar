@@ -20,15 +20,16 @@ fn pad_y() -> f32 {
 }
 const DEFAULT_WIDTH: f32 = 300.0;
 
+/// The input takes the box's vertical padding as its own height, so the press and the audit see the whole field rather than the bare line inside it.
 fn line_box(text_size: f32) -> LayoutStyle {
-    LayoutStyle::new().height(telar::single_line_box(text_size))
+    let padded = telar::single_line_box(text_size) + pad_y() * 2.0;
+    LayoutStyle::new().height(padded.max(shared::MIN_TARGET))
 }
 fn field_box(width: f32) -> LayoutStyle {
     LayoutStyle::new()
         .flex_column()
         .width(width)
         .padding_horizontal(pad_x())
-        .padding_vertical(pad_y())
         // The border below is unconditional, and on a surface that draws one in whole cells it needs a cell to draw in — without it a field whose padding quantised away had its frame and its own text on the same row.
         .bordered()
 }

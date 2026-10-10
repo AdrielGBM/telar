@@ -1,4 +1,4 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_text, preview};
 use telar::{Children, Container, LayoutError, LayoutStyle};
 
 use crate::list::{GroupProps, ItemProps, SeparatorProps, group, item, separator};
@@ -18,7 +18,11 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Layout/List")
         .layout(Layout::Padded)
-        .matrix(Matrix::Named("themes")),
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            canvas.click(by_text("Rename"))?;
+            canvas.expect_action("on_press", 1)
+        }),
         preview!(group: GroupProps, "Grouped rows", |p| {
             let row = |label: &'static str, hint: &'static str| {
                 crate::list::item(

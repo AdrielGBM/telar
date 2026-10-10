@@ -11,6 +11,10 @@ use super::*;
 // Returns the field and its absolute box rect. Valid only when `label` is empty: a labelled field's outer node is the wrapping column, offset above the box by the caption row.
 fn laid_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, telar::Rect) {
     crate::test_support::fresh_layout_runtime();
+    lay_out_field(props)
+}
+
+fn lay_out_field(props: TextFieldProps) -> (Box<dyn LayoutItem>, telar::Rect) {
     let field = text_field(props, Children::default()).unwrap();
     let root = new_container(
         LayoutStyle::new().flex_column().width(400.0).height(200.0),
@@ -204,11 +208,12 @@ fn a_key_hook_hears_keys_first_and_takes_only_the_ones_it_answers() {
 
 #[test]
 fn a_field_points_a_reader_at_the_suggestion_its_cursor_is_on() {
+    crate::test_support::fresh_layout_runtime();
     let row = StyledContainer::new(LayoutStyle::new(), |_r| RectStyle::default(), vec![])
         .unwrap()
         .presented(telar::focus::Role::MenuItem);
     let suggestion = row.focus_id().expect("a presented row has an id");
-    let (_field, _) = laid_out_field(
+    let (_field, _) = lay_out_field(
         TextFieldProps::props()
             .active_descendant(Rc::new(move || Some(suggestion)))
             .build(),
@@ -222,5 +227,40 @@ fn a_field_points_a_reader_at_the_suggestion_its_cursor_is_on() {
     assert_eq!(
         telar::focus::active_descendant_state(input),
         Some(suggestion)
+    );
+}
+
+/// The control is the input, and an input as tall as its bare line (18px at the workbench's 13) was a target too small to be sure of — while the box drawn around it, padding included, was not.
+#[test]
+fn the_input_is_as_tall_as_the_box_so_the_whole_field_is_the_target() {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let field = text_field(TextFieldProps::props().build(), Children::default()).unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(400.0).height(200.0),
+        &[field.layout_node()],
+    )
+    .unwrap();
+    telar::declare(root, telar::Declared::default().with_font_size(13.0));
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+
+    let input = telar::focus::exposed()
+        .into_iter()
+        .find(|e| e.role == telar::focus::Role::TextInput)
+        .expect("the field exposes its input");
+    let target = track_layout(input.node).unwrap().get();
+    let boxed = track_layout(field.layout_node()).unwrap().get();
+    assert!(
+        target.height >= shared::MIN_TARGET,
+        "the input is a full-size target: {target:?}"
+    );
+    assert!(
+        target.height >= boxed.height - 2.0,
+        "and fills the box but for its border: {target:?} in {boxed:?}"
     );
 }

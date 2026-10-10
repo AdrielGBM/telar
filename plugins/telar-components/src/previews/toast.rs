@@ -1,8 +1,8 @@
 use std::rc::Rc;
 use std::time::Duration;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Container, LayoutError, LayoutStyle, box_item};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Container, LayoutError, LayoutStyle, Role, box_item};
 
 use crate::button::{ButtonProps, button};
 use crate::toast::{Toast, ToastKind, ToasterProps, Toasts, toaster};
@@ -63,6 +63,17 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Overlays/Toast")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.click(by_role(Role::Button).named("Info"))?;
+            canvas.expect_text("A new version is available.")?;
+            canvas.advance(Duration::from_secs(4))?;
+            canvas.expect_text("A new version is available.")?;
+            canvas.advance(Duration::from_secs(1))?;
+            canvas.expect_no_text("A new version is available.")?;
+            canvas.expect_text("Your changes are saved.")?;
+            canvas.click(by_role(Role::Button).named("Dismiss"))?;
+            canvas.expect_no_text("Your changes are saved.")
+        }),
     ]
 }

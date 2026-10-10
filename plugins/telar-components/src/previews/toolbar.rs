@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, signal};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Role, signal};
 
 use super::sample;
 use crate::icon_button::{IconButtonProps, icon_button};
@@ -62,6 +62,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Workbench/Toolbar")
         .layout(Layout::Centered)
-        .matrix(Matrix::Named("themes")),
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            let run = by_role(Role::Button).named("Run");
+            canvas.expect(by_role(Role::Toolbar).named("Debug"))?;
+            canvas.click(run.clone())?;
+            canvas.expect_toggled(run.clone(), true)?;
+            canvas.click(by_role(Role::Button).named("Stop"))?;
+            canvas.expect_toggled(run, false)
+        }),
     ]
 }

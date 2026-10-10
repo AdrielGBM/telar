@@ -41,10 +41,11 @@ fn build(
 }
 
 fn swatch_centre(row: Rect, index: u32) -> (f64, f64) {
-    let step = SIZE + shared::spacing() * 0.5;
+    let hit = SIZE.max(shared::MIN_TARGET);
+    let step = hit + (shared::spacing() * 0.5 - (hit - SIZE)).max(0.0);
     (
-        (row.x + index as f32 * step + SIZE / 2.0) as f64,
-        (row.y + SIZE / 2.0) as f64,
+        (row.x + index as f32 * step + hit / 2.0) as f64,
+        (row.y + hit / 2.0) as f64,
     )
 }
 
@@ -147,4 +148,18 @@ fn empty_colours_build_an_empty_row() {
     crate::test_support::fresh_layout_runtime();
     let item = swatches(SwatchesProps::props().build(), Children::default()).unwrap();
     let _ = item.view();
+}
+
+#[test]
+fn a_swatch_smaller_than_a_pointer_target_is_pressed_from_the_margin_around_it() {
+    let selected = signal(None::<u32>);
+    let (mut item, row) = build(selected, &Rc::default());
+    let margin = (shared::MIN_TARGET - SIZE) / 4.0;
+
+    tap(
+        &mut item,
+        ((row.x + margin) as f64, (row.y + margin) as f64),
+    );
+
+    assert_eq!(selected.peek(), Some(0));
 }

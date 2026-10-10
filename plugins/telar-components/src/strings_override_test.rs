@@ -1,5 +1,6 @@
 //! An application catalog overriding what the catalogue says. Its own binary because the installed catalog is process-wide.
 
+#[path = "strings_support_test.rs"]
 mod strings_support;
 
 use strings_support::*;

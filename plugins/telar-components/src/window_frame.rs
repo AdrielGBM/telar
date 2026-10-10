@@ -6,12 +6,13 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Reactive, Rect,
-    RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer, Text, TextStyle, box_item,
-    track_layout,
+    Accessible, AlignItems, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Reactive,
+    Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer, Text, TextStyle,
+    box_item, focus::Role, signal, track_layout,
 };
 
 use crate::shared;
+use crate::strings;
 
 /// Which window-management controls a frame draws, beside the close button it always has.
 ///
@@ -44,6 +45,9 @@ pub struct SurfaceFrameStyle {
     /// Both default to transparent, i.e. no hover feedback, because a panel whose only control is a ✕ in the corner of a translucent surface has nothing to highlight against. A real window title bar sets them.
     pub control_hover: Reactive<Color>,
     pub close_hover: Reactive<Color>,
+    /// The glyph's colour while the pointer is over the control, for a hover fill the resting glyph colour cannot be read against. `None` keeps the glyph as it is.
+    pub control_hover_glyph: Option<Reactive<Color>>,
+    pub close_hover_glyph: Option<Reactive<Color>>,
 }
 
 /// The smallest a frame will ask to become. A window dragged to nothing is a window the user cannot get hold of again — its own grip goes with it.
@@ -120,44 +124,23 @@ pub fn window_frame(
     )?);
 
     let close_color = style.close.clone();
-    let close_glyph_color = close_color.clone();
-    let close_label = box_item(Text::declaring(
-        || "\u{2715}".to_string(),
-        LayoutStyle::new(),
-        move |inherited| {
-            shared::in_family_of(
-                TextStyle::new(font_size, close_glyph_color.get()),
-                inherited,
-            )
-        },
-    )?);
-    let close_hover = style.close_hover.clone();
-    let close_button = box_item(
-        StyledContainer::new(
-            LayoutStyle::new()
-                .align_items(AlignItems::CENTER)
-                .justify_content(JustifyContent::CENTER)
-                .padding_horizontal(8.0)
-                .padding_vertical(2.0),
-            |_| RectStyle::default(),
-            vec![close_label],
-        )?
-        .hover_style(move |_| RectStyle::default().with_fill(close_hover.get()))
-        .on_press(move || close()),
-    );
-
-    // The same shape as the close button beside them, so a frame with three controls reads as one strip rather than a button and two additions.
-    let control_hover = style.control_hover.clone();
     let control_button = |glyph: &'static str,
-                          command: telar::WindowCommand|
+                          name: &'static str,
+                          hover: Reactive<Color>,
+                          hover_glyph: Option<Reactive<Color>>,
+                          press: Rc<dyn Fn()>|
      -> Result<Box<dyn LayoutItem>, LayoutError> {
         let glyph_color = close_color.clone();
-        let hover = control_hover.clone();
+        let hovered = signal(false);
         let label = box_item(Text::declaring(
             move || glyph.to_string(),
             LayoutStyle::new(),
             move |inherited| {
-                shared::in_family_of(TextStyle::new(font_size, glyph_color.get()), inherited)
+                let color = match &hover_glyph {
+                    Some(hover_glyph) if hovered.get() => hover_glyph.get(),
+                    _ => glyph_color.get(),
+                };
+                shared::in_family_of(TextStyle::new(font_size, color), inherited)
             },
         )?);
         Ok(box_item(
@@ -171,21 +154,43 @@ pub fn window_frame(
                 vec![label],
             )?
             .hover_style(move |_| RectStyle::default().with_fill(hover.get()))
-            .on_press(move || telar::push_window_command(command.clone())),
+            .on_hover(move |over| hovered.set(over))
+            .control(Role::Button)
+            .a11y_label(move || strings::text(name))
+            .on_press(move || press()),
         ))
+    };
+
+    let window_command = |command: telar::WindowCommand| -> Rc<dyn Fn()> {
+        Rc::new(move || telar::push_window_command(command.clone()))
     };
 
     let mut controls: Vec<Box<dyn LayoutItem>> = Vec::new();
     if style.controls.minimize {
-        controls.push(control_button("\u{2013}", telar::WindowCommand::Minimize)?);
+        controls.push(control_button(
+            "\u{2013}",
+            strings::MINIMIZE,
+            style.control_hover.clone(),
+            style.control_hover_glyph.clone(),
+            window_command(telar::WindowCommand::Minimize),
+        )?);
     }
     if style.controls.maximize {
         controls.push(control_button(
             "\u{25a1}",
-            telar::WindowCommand::ToggleMaximize,
+            strings::MAXIMIZE,
+            style.control_hover.clone(),
+            style.control_hover_glyph.clone(),
+            window_command(telar::WindowCommand::ToggleMaximize),
         )?);
     }
-    controls.push(close_button);
+    controls.push(control_button(
+        "\u{2715}",
+        strings::CLOSE,
+        style.close_hover.clone(),
+        style.close_hover_glyph.clone(),
+        close,
+    )?);
     let controls = box_item(StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -301,6 +306,16 @@ impl SurfaceFrameStyle {
         self.close_hover = color.into();
         self
     }
+
+    pub fn control_hover_glyph(mut self, color: impl Into<Reactive<Color>>) -> Self {
+        self.control_hover_glyph = Some(color.into());
+        self
+    }
+
+    pub fn close_hover_glyph(mut self, color: impl Into<Reactive<Color>>) -> Self {
+        self.close_hover_glyph = Some(color.into());
+        self
+    }
 }
 
 /// A frame with no colours of its own and no controls — what a caller fills in. Exists so adding a field to this struct does not break every construction of it.
@@ -317,6 +332,8 @@ impl Default for SurfaceFrameStyle {
             body_inset: 12.0,
             control_hover: Color::TRANSPARENT.into(),
             close_hover: Color::TRANSPARENT.into(),
+            control_hover_glyph: None,
+            close_hover_glyph: None,
         }
     }
 }

@@ -1,5 +1,5 @@
-use telar::Children;
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Key, NamedKey, Role};
 
 use crate::scrub_field::{ScrubFieldProps, scrub_field};
 
@@ -21,6 +21,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Inputs/Scrub field")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.tab()?;
+            canvas.press(Key::Named(NamedKey::ArrowUp))?;
+            canvas.expect_value(by_role(Role::SpinButton).named("Width 13"), 13.0)?;
+            canvas.press(Key::Named(NamedKey::ArrowDown))?;
+            canvas.press(Key::Named(NamedKey::ArrowDown))?;
+            canvas.expect_value(by_role(Role::SpinButton), 11.0)
+        }),
     ]
 }

@@ -22,6 +22,8 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+telar::rsx_modules!();
+
 #[cfg(feature = "advanced")]
 mod accordion;
 mod badge;
@@ -160,8 +162,8 @@ pub use window_frame::{MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, window
 telar::__previews! {
     mod previews;
 
-    /// Every preview this crate carries: the one fn an application collects a library's previews through.
+    /// Every preview this crate carries, its `.rsx` ones first: the one fn an application collects a library's previews through.
     pub fn telar_all_previews() -> Vec<telar::preview::PreviewEntry> {
-        previews::previews()
+        [telar_rsx_previews(), previews::previews()].concat()
     }
 }

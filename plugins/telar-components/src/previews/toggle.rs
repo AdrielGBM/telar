@@ -1,5 +1,5 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Role};
 
 use crate::toggle::{ToggleProps, toggle};
 
@@ -18,6 +18,13 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Inputs/Toggle")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            let notifications = by_role(Role::Switch).named("Notifications");
+            canvas.expect_toggled(notifications.clone(), true)?;
+            canvas.click(notifications.clone())?;
+            canvas.expect_toggled(notifications, false)?;
+            canvas.expect_action("on_toggle", 1)
+        }),
     ]
 }

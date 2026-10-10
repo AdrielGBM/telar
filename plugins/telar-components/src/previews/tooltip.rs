@@ -1,5 +1,7 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color};
+use std::time::Duration;
+
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Role};
 
 use super::sample;
 use crate::button::{ButtonProps, button};
@@ -40,6 +42,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Overlays/Tooltip")
         .layout(Layout::Centered)
-        .matrix(Matrix::Named("themes")),
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            canvas.expect_no_text("Writes the file to disk.")?;
+            canvas.hover(by_role(Role::Button).named("Hover me"))?;
+            canvas.advance(Duration::from_secs(1))?;
+            canvas.expect_text("Writes the file to disk.")
+        }),
     ]
 }

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color, Reactive};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Reactive, Role};
 
 use crate::chip::{ChipProps, chip};
 
@@ -30,6 +30,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )
         })
         .title("Display/Chip")
-        .layout(Layout::Centered),
+        .layout(Layout::Centered)
+        .play(|canvas| {
+            canvas.click(by_role(Role::Button).named("Remove Rust"))?;
+            canvas.expect_action("on_close", 1)
+        }),
     ]
 }

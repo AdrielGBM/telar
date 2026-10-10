@@ -1,5 +1,5 @@
-use telar::Children;
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Role};
 
 use crate::code_view::{CodeSpan, CodeViewProps, TokenKind, code_view};
 
@@ -42,6 +42,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Workbench/Code view")
         .layout(Layout::Padded)
-        .matrix(Matrix::Named("themes")),
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            canvas.click(by_role(Role::Button).named("Copy"))?;
+            canvas.expect_action("on_copy", 1)
+        }),
     ]
 }

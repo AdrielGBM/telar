@@ -38,13 +38,13 @@ impl LayoutItem for Dismissible {
 }
 
 /// Keeps the dismiss stack in step with `open`: on the transition into open the overlay becomes the stack's top, and on the way out it withdraws — including when it was closed by its own Close button rather than by a dismissal, which is why the entry is tracked by id instead of assumed to still be on top.
-fn track_dismissible(open: RwSignal<bool>, dismiss: DismissFn) -> Effect {
+fn track_dismissible(open: RwSignal<bool>, within: NodeId, dismiss: DismissFn) -> Effect {
     let registered: Cell<Option<DismissRegistration>> = Cell::new(None);
     effect(move || {
         if open.get() {
             let held = registered
                 .take()
-                .unwrap_or_else(|| DismissRegistration::new(dismiss.clone()));
+                .unwrap_or_else(|| DismissRegistration::within(within, dismiss.clone()));
             registered.set(Some(held));
         } else {
             drop(registered.take());
@@ -129,13 +129,13 @@ pub(crate) fn scrim_overlay(
             };
             let inner = build_inner(dismiss.clone())?;
             // Kept mounted; shown only while `open`. So the pre-built body survives a close/reopen (not rebuilt).
-            let registration = track_dismissible(open, dismiss.clone());
             let open = open;
             let overlay = Overlay::toggleable(
                 LayoutStyle::new().flex_column(),
                 vec![box_item(inner)],
                 move || open.get(),
             )?;
+            let registration = track_dismissible(open, overlay.layout_node(), dismiss.clone());
             let focus_handover = track_focus_handover(open, overlay.content_node());
             Ok(box_item(Dismissible {
                 inner: box_item(overlay),

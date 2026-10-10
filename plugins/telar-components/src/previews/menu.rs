@@ -1,5 +1,5 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Role};
 
 use super::sample;
 use crate::list::{ItemProps, SeparatorProps, item, separator};
@@ -41,6 +41,17 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Overlays/Menu")
         .layout(Layout::Centered)
-        .matrix(Matrix::Named("themes")),
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            let file = by_role(Role::Button).named("File");
+            canvas.expect_expanded(file.clone(), false)?;
+            canvas.click(file.clone())?;
+            canvas.expect_expanded(file.clone(), true)?;
+            canvas.expect(by_role(Role::MenuItem).containing("New file"))?;
+            canvas.click(by_role(Role::MenuItem).containing("Open"))?;
+            canvas.expect_absent(by_role(Role::MenuItem))?;
+            canvas.expect_expanded(file, false)?;
+            canvas.expect_action("on_select", 1)
+        }),
     ]
 }

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Container, LayoutError, LayoutItem, LayoutStyle, Reactive, Text, box_item};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Container, LayoutError, LayoutItem, LayoutStyle, Reactive, Role, Text, box_item};
 
 use crate::window_frame::{SurfaceFrameStyle, WindowControls, window_frame};
 
@@ -37,7 +37,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             .title_text(token(|t| t.ink()))
             .close(token(|t| t.ink()))
             .control_hover(token(|t| t.highlight_med()))
-            .close_hover(token(|t| t.error()));
+            .close_hover(token(|t| t.error()))
+            .close_hover_glyph(token(|t| t.on_error()));
             let body = Container::new(
                 LayoutStyle::new()
                     .flex_column()
@@ -49,17 +50,24 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     line("Drag the corner grip to resize.")?,
                 ],
             )?;
+            let actions = p.actions();
             window_frame(
                 p.arg("title", "Settings"),
                 None,
                 style,
-                Rc::new(|| {}),
+                Rc::new(move || actions.log("on_close", Vec::new())),
                 Box::new(body),
                 Some(Rc::new(|_, _| {})),
             )
         })
         .title("Chrome/Window frame")
         .layout(Layout::Centered)
-        .matrix(Matrix::Named("themes")),
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            canvas.expect(by_role(Role::Button).named("Minimize"))?;
+            canvas.expect(by_role(Role::Button).named("Maximize"))?;
+            canvas.click(by_role(Role::Button).named("Close"))?;
+            canvas.expect_action("on_close", 1)
+        }),
     ]
 }

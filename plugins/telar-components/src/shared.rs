@@ -26,6 +26,9 @@ pub(crate) fn ink_on(fill: Color) -> Color {
     }
 }
 
+/// The smallest a pointer target is made on either side, whatever is drawn inside it.
+pub(crate) const MIN_TARGET: f32 = 24.0;
+
 /// The panel surface a floating thing sits on.
 pub(crate) fn surface() -> Color {
     use_theme_tokens().surface()

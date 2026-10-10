@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{
-    BorderRadius, Children, LayoutError, LayoutStyle, RectStyle, ShapeStyle, StyledContainer,
-    box_item,
+    BorderRadius, Children, Key, LayoutError, LayoutStyle, NamedKey, RectStyle, Role, ShapeStyle,
+    StyledContainer, box_item,
 };
 
 use crate::handle::{HandleProps, handle};
@@ -40,6 +40,16 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Inputs/Handle")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            let opacity = by_role(Role::Slider).named("Opacity");
+            canvas.tab()?;
+            canvas.expect_focused(opacity.clone())?;
+            canvas.press(Key::Named(NamedKey::ArrowRight))?;
+            canvas.expect_value(opacity.clone(), 41.0)?;
+            canvas.press(Key::Named(NamedKey::ArrowLeft))?;
+            canvas.press(Key::Named(NamedKey::ArrowLeft))?;
+            canvas.expect_value(opacity, 39.0)
+        }),
     ]
 }

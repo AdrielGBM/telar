@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Reactive, signal};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
+use telar::{Children, Reactive, Role, signal};
 
 use super::sample;
 use crate::reorderable::{ReorderableProps, reorderable};
@@ -31,6 +31,15 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Layout/Reorderable")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.drag(by_text("Inbox"), 90.0, 0.0)?;
+            sample::expect_names(
+                canvas,
+                &by_role(Role::Label),
+                &["Drafts", "Inbox", "Sent", "Archive"],
+            )?;
+            canvas.expect_action("on_move", 1)
+        }),
     ]
 }

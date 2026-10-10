@@ -11,6 +11,7 @@ use telar::{
 
 use crate::scrim;
 use crate::shared;
+use crate::strings;
 
 /// Panel width when `width` is unset (`0.0`).
 const DEFAULT_WIDTH: f32 = 280.0;
@@ -29,7 +30,7 @@ pub struct DrawerProps {
     /// Bound open/close state. `None` (the default) never opens; `Some` drives the drawer.
     #[props(some, into, default)]
     pub open: Option<RwSignal<bool>>,
-    /// Names this drawer, so anything can open it with `open_overlay(id)` without holding its signal. `""` (the default) leaves it unnamed. Ignored when `open` is bound.
+    /// Names this drawer, so anything on the same surface can open it with `open_overlay(id)` without holding its signal; another surface has its own `id`. `""` (the default) leaves it unnamed. Ignored when `open` is bound.
     #[props(default = "")]
     pub id: &'static str,
     /// Which edge the panel is pinned to: `"left"` (the default) or `"right"`.
@@ -41,7 +42,7 @@ pub struct DrawerProps {
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
     #[props(some, default)]
     pub on_close: Option<Rc<dyn Fn()>>,
-    /// Names the panel for a reader. `None` (the default) leaves it announced by what it holds.
+    /// Names the panel for a reader. `None` (the default) uses the localized `telar_components.drawer` message, which an application can override in its catalog.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
     /// Panel surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live.
@@ -51,7 +52,6 @@ pub struct DrawerProps {
 
 /// A panel that slides in from an edge over a dismissing scrim.
 pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut slots = children.build()?;
     let DrawerProps {
         open,
         id,
@@ -61,7 +61,6 @@ pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutIt
         label,
         color,
     } = props;
-    let body = slots.take_default();
     let open = shared::resolve_open(open, id);
     let width = if width > 0.0 { width } else { DEFAULT_WIDTH };
     // "right" pins the panel to the trailing edge; anything else (incl. the default "left") to the leading edge.
@@ -72,6 +71,8 @@ pub fn drawer(props: DrawerProps, children: Children) -> Result<Box<dyn LayoutIt
     };
 
     scrim::scrim_overlay(open, on_close, move |dismiss| {
+        // Built on the first open rather than here: a body built while the drawer has never opened would register its focus stops with nothing on screen to take them.
+        let body = children.build()?.take_default();
         build_open_drawer(width, justify, body, label, color, dismiss)
     })
 }
@@ -103,7 +104,10 @@ fn build_open_drawer(
     )?
     .styled_by(sheet)
     .role(Role::Dialog)
-    .a11y_label(move || label.as_ref().map(|label| label.get()).unwrap_or_default())
+    .a11y_label(move || match &label {
+        Some(label) => label.get(),
+        None => strings::text(strings::DRAWER),
+    })
     // Swallow taps on the panel so only the scrim dismisses.
     .on_press(|| {});
 

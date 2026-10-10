@@ -1,5 +1,6 @@
 //! What the catalogue says by itself, with no application catalog installed.
 
+#[path = "strings_support_test.rs"]
 mod strings_support;
 
 use strings_support::*;

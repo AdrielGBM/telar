@@ -1,5 +1,5 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Role};
 
 use crate::stepper::{StepperProps, stepper};
 
@@ -20,6 +20,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Inputs/Stepper")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.click(by_role(Role::Button).named("Increase"))?;
+            canvas.expect(by_role(Role::Label).named("3"))?;
+            canvas.click(by_role(Role::Button).named("Decrease"))?;
+            canvas.click(by_role(Role::Button).named("Decrease"))?;
+            canvas.expect(by_role(Role::Label).named("1"))?;
+            canvas.expect_action("on_change", 3)
+        }),
     ]
 }

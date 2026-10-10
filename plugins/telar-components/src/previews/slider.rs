@@ -1,5 +1,5 @@
-use telar::preview::{Layout, Matrix, PreviewEntry, preview};
-use telar::{Children, Color};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Key, NamedKey, Role};
 
 use crate::slider::{SliderProps, slider};
 
@@ -20,7 +20,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .title("Inputs/Slider")
         .layout(Layout::Centered)
         .matrix(Matrix::Named("themes"))
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.tab()?;
+            canvas.expect_focused(by_role(Role::Slider).named("Volume"))?;
+            canvas.press(Key::Named(NamedKey::ArrowRight))?;
+            canvas.expect_value(by_role(Role::Slider), 0.45)?;
+            canvas.expect_action("on_change", 1)
+        }),
         preview!(slider: SliderProps, "Stepped range", |p| {
             slider(
                 SliderProps::props()
@@ -35,6 +42,15 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Inputs/Slider")
         .layout(Layout::Centered)
-        .tags(&["stateful"]),
+        .tags(&["stateful"])
+        .play(|canvas| {
+            let brightness = by_role(Role::Slider).named("Brightness");
+            canvas.tab()?;
+            canvas.press(Key::Named(NamedKey::ArrowRight))?;
+            canvas.expect_value(brightness.clone(), 50.0)?;
+            canvas.press(Key::Named(NamedKey::ArrowLeft))?;
+            canvas.press(Key::Named(NamedKey::ArrowLeft))?;
+            canvas.expect_value(brightness, 30.0)
+        }),
     ]
 }
