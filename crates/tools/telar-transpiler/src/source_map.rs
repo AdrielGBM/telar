@@ -70,7 +70,7 @@ impl SourceMap {
 
     /// Maps a byte range in the generated Rust back onto the `.rsx`.
     ///
-    /// Three outcomes, and the difference between the last two is the whole point. A verbatim `[view]` fragment maps byte for byte through its [`ExprSpan`]. A `[logic]` line maps by line plus the indentation the transpiler added, which holds because `[logic]` is transpiled 1:1. Anything else in `[view]` widens to its line. A generated line with no origin at all — boilerplate — maps to nothing.
+    /// Three outcomes, and the difference between the last two is the whole point. A verbatim `[view]` fragment maps byte for byte through its [`ExprSpan`]. A `[logic]` line maps by line plus the indentation the transpiler added, which holds because both are copied 1:1. Anything else in `[view]` widens to its line. A generated line with no origin at all — boilerplate — maps to nothing.
     pub fn locate(
         &self,
         generated: &str,
@@ -92,7 +92,10 @@ impl SourceMap {
 
         let (gen_line, gen_line_start) = line_at(generated, gen_start)?;
         let rsx_line = (*self.lines.get(gen_line)?)?;
-        if find_section_at(rsx, rsx_line) != Section::Logic {
+        if !matches!(
+            find_section_at(rsx, rsx_line),
+            Section::Logic | Section::Play
+        ) {
             return Some(RsxSpan::Line(rsx_line));
         }
 

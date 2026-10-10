@@ -323,11 +323,6 @@ fn an_entry_carries_its_source_and_where_it_starts() {
     );
     let two = "[preview \\\"Two\\\"]\\ncheckbox\\n\\n[play]\\ncanvas.click(by_text(\\\"A\\\"))?;\"";
     assert!(out.rust_code.contains(two), "{}", out.rust_code);
-    assert!(
-        !out.rust_code.contains("canvas.click(by_text(\"A\"))?;\n"),
-        "a play zone is not emitted yet:\n{}",
-        out.rust_code
-    );
 }
 
 #[test]
@@ -370,4 +365,41 @@ fn a_meta_section_with_no_preview_under_it_is_still_checked() {
 fn a_file_without_prose_carries_no_docs() {
     let code = code("[previews \"Forms\"]\n\n[preview \"Default\"]\ncheckbox\n");
     assert!(!code.contains(".docs("), "{code}");
+}
+
+const PLAYED: &str = "[preview \"One\"]\ncheckbox label:\"A\"\n\n[play]\ncanvas.click(by_text(\"A\"))?;\n\ncanvas.expect_text(\"A\")?;\n\n[preview \"Two\"]\ncheckbox\n";
+
+#[test]
+fn a_play_zone_becomes_a_fn_the_entry_runs() {
+    let code = code(PLAYED);
+    assert!(
+        code.contains("pub fn checkbox_play_0(canvas: &mut ::telar::preview::Play) -> ::telar::preview::PlayResult {"),
+        "{code}"
+    );
+    assert!(
+        code.contains(
+            "    canvas.click(by_text(\"A\"))?;\n\n    canvas.expect_text(\"A\")?;\n    Ok(())\n}"
+        ),
+        "{code}"
+    );
+    assert!(code.contains(".play(checkbox_play_0)"), "{code}");
+    assert!(
+        !code.contains("checkbox_play_1") && code.matches(".play(").count() == 1,
+        "a preview with no play zone gets none:\n{code}"
+    );
+}
+
+#[test]
+fn an_empty_play_zone_emits_nothing() {
+    let code = code("[preview \"One\"]\ncheckbox\n\n[play]\n\n");
+    assert!(!code.contains("_play_"), "{code}");
+}
+
+#[test]
+fn every_play_line_maps_to_the_line_that_wrote_it() {
+    let out = transpiled(PLAYED);
+    let first = line_in(PLAYED, "canvas.click");
+    assert_eq!(rsx_line_of(&out, "canvas.click(by_text"), Some(first));
+    assert_eq!(rsx_line_of(&out, "canvas.expect_text"), Some(first + 2));
+    assert_eq!(rsx_line_of(&out, "Ok(())"), None);
 }

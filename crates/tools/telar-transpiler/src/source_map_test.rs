@@ -105,3 +105,20 @@ fn offsets_stay_right_after_a_multibyte_line() {
         })
     );
 }
+
+#[test]
+fn a_play_span_comes_back_minus_the_indent_the_transpiler_added() {
+    let rsx = "[view]\ncol\n\n[preview \"A\"]\ncol\n\n[play]\ncanvas.click(by_text(\"Go\"))?;\n";
+    let generated = "fn play(canvas: &mut Play) {\n    canvas.click(by_text(\"Go\"))?;\n}\n";
+    let map = SourceMap::new(vec![None, Some(7), None], vec![]);
+
+    let at = generated.find("by_text").unwrap() as u32;
+    let start = rsx.find("by_text").unwrap() as u32;
+    assert_eq!(
+        map.locate(generated, at, at + 7, rsx),
+        Some(RsxSpan::Exact {
+            start,
+            end: start + 7
+        })
+    );
+}

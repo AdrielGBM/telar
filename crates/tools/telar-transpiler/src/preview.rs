@@ -6,7 +6,7 @@
 //! - each literal attribute of the root component call becomes a value its control can change, through `::telar::__preview_arg!`, unless the header says `args:none`;
 //! - the root's builder logs every callback it holds in the canvas's action log.
 //!
-//! A `[play]` zone is part of its preview's source, and is not compiled.
+//! A `[play]` zone is part of its preview's source and is also compiled, into a `{component}_play_{i}` fn the entry's `.play(…)` runs against the mounted preview.
 
 use std::fmt::Write;
 
@@ -109,6 +109,7 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
             &body,
             &mut mapped,
         );
+        emit_play_fn(code, previews.component, preview, index);
         push_errors(code, &errors, preview.line);
 
         let entry = match id_suffix(previews.component, &doc.previews, index) {
@@ -143,6 +144,42 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
     }
     code.push("];\n", None);
     mapped
+}
+
+fn has_play(preview: &Preview) -> bool {
+    preview
+        .play
+        .as_ref()
+        .is_some_and(|play| !play.source.trim().is_empty())
+}
+
+fn emit_play_fn(code: &mut Code, component: &str, preview: &Preview, index: usize) {
+    let Some(play) = preview.play.as_ref().filter(|_| has_play(preview)) else {
+        return;
+    };
+    code.push("\n", None);
+    code.push(
+        "#[allow(dead_code, unused_imports, unused_variables)]\n",
+        None,
+    );
+    code.push(
+        &format!("pub fn {component}_play_{index}(canvas: &mut ::telar::preview::Play) -> ::telar::preview::PlayResult {{\n"),
+        None,
+    );
+    code.push(
+        "    use ::telar::Role;\n    use ::telar::preview::*;\n",
+        None,
+    );
+    for (offset, line) in play.source.lines().enumerate() {
+        let src = Some((play.start_line - 1 + offset) as u32);
+        if !line.trim().is_empty() {
+            code.push("    ", src);
+        }
+        code.push(line, src);
+        code.push("\n", src);
+    }
+    code.push("    Ok(())\n", None);
+    code.push("}\n", None);
 }
 
 /// The root of a preview's body when it is one component call: the call whose literal attributes are args and whose callbacks are logged.
@@ -293,6 +330,9 @@ impl Entry<'_> {
             source.len(),
             preview.line
         ));
+        if has_play(preview) {
+            push(format!("play({component}_play_{})", self.index));
+        }
         push(format!(
             "props(<{} as ::telar::preview::HasPropsSchema>::schema)",
             self.props_type()

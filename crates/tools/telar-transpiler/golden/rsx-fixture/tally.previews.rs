@@ -20,6 +20,14 @@ pub fn tally_preview_1(__preview: &::telar::preview::PreviewCtx) -> Result<Box<d
     Ok(Box::new(__node_0))
 }
 
+#[allow(dead_code, unused_imports, unused_variables)]
+pub fn tally_play_1(canvas: &mut ::telar::preview::Play) -> ::telar::preview::PlayResult {
+    use ::telar::Role;
+    use ::telar::preview::*;
+    canvas.expect_text("Plums · 3")?;
+    Ok(())
+}
+
 pub const TALLY_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--tally--rsx-literal"), "tally", "Rsx literal", tally_preview_0)
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/tally.previews.rsx"), 4)
@@ -36,6 +44,7 @@ pub const TALLY_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
         .title("Fixture/Tally")
         .docs("The tally written in Rust, previewed from `.rsx`.")
         .source("[preview \"Rsx bound\" args(count:3u32) layout:padded]\ntally label:\"Plums\" count:$count\n\n[play]\ncanvas.expect_text(\"Plums · 3\")?;", &[::telar::preview::SourceSpan::new(0, 128, 7)])
+        .play(tally_play_1)
         .props(<TallyProps as ::telar::preview::HasPropsSchema>::schema)
         .args(&[::telar::preview::ArgSpec::new("count").binding(::telar::preview::ArgBinding::Live).default("3"), ::telar::preview::ArgSpec::new("label").default("\"Plums\"")])
         .layout(::telar::preview::Layout::Padded)
