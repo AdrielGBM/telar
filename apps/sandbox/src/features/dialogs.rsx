@@ -13,7 +13,7 @@ col gap:20
             button label:"Open modal" fill:$theme.primary on_press:(|| open_overlay("confirm"))
             modal id:"confirm" title:"Confirm"
                 text "Body content here" font_size:14 color:$theme.ink
-        code_line code:"modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere"
+        code_line code:"modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere on this surface"
     example title:"Drawer — a full-height side panel pinned to an edge, over the same scrim"
         card gap:10
             button label:"Open drawer" fill:$theme.primary on_press:(|| open_overlay("nav"))

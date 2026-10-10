@@ -1,0 +1,27 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 354,286 92x28
+            element button
+              rect 354,286 92x28 fill=#4261edff radius=10
+              element group
+                matrix 1,0,0,1,368,292
+                  text 0,0 64x16.8 "Hover me" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+                end
+              end
+            end
+          end
+          element group
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

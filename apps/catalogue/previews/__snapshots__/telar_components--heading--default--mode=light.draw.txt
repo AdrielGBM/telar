@@ -1,0 +1,15 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          matrix 1,0,0,1,320,288
+            text 0,0 161x23.52 "Account settings" size=19.6 family=sans-serif weight=600 color=#4261edff lang=en
+          end
+        end
+      end
+    end
+  end
+end

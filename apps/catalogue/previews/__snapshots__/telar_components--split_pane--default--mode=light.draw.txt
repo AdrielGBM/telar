@@ -1,0 +1,31 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          clip 0,0 240x600
+            element group
+              matrix 1,0,0,1,0,0
+                text 0,0 240x16.8 "Sidebar" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+        end
+        element separator
+          rect 240,0 6x600 fill=#dbdeedff radius=3
+        end
+        element group
+          clip 246,0 554x600
+            element group
+              matrix 1,0,0,1,246,0
+                text 0,0 554x16.8 "Editor" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

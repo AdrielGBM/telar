@@ -1,0 +1,86 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element button
+            rect 16,16 131x29 fill=#4261edff radius=10
+            element group
+              matrix 1,0,0,1,30,22
+                text 0,0 103x16.8 "Show the menu" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+              end
+            end
+          end
+          element group
+          end
+        end
+      end
+    end
+  end
+end
+element group
+  rect 0,0 800x600
+  element button
+    rect 24,64 180x109 fill=#1a1a1fff border=1 border-color=#404047ff radius=4
+    element menuitem
+      rect 28,68 172x24
+      element group
+        matrix 1,0,0,1,34,68
+          text 0,3 22x15.6 "Cut" size=13 family=sans-serif weight=400 color=#e6e6ebff
+        end
+      end
+      element group
+        matrix 1,0,0,1,154,68
+          text 0,3 40x15.6 "Ctrl+X" size=13 family=sans-serif weight=400 color=#8c8c94ff
+        end
+      end
+    end
+    element menuitem
+      rect 28,92 172x24
+      element group
+        matrix 1,0,0,1,34,92
+          text 0,3 33x15.6 "Copy" size=13 family=sans-serif weight=400 color=#e6e6ebff
+        end
+      end
+      element group
+        matrix 1,0,0,1,153,92
+          text 0,3 41x15.6 "Ctrl+C" size=13 family=sans-serif weight=400 color=#8c8c94ff
+        end
+      end
+    end
+    element menuitem
+      rect 28,116 172x24
+      element group
+        matrix 1,0,0,1,34,116
+          text 0,3 35x15.6 "Paste" size=13 family=sans-serif weight=400 color=#8c8c94ff
+        end
+      end
+      element group
+        matrix 1,0,0,1,155,116
+          text 0,3 39x15.6 "Ctrl+V" size=13 family=sans-serif weight=400 color=#8c8c94ff
+        end
+      end
+    end
+    element group
+      rect 28,142 172x1 fill=#404047ff
+    end
+    element group
+      rect 28,145 172x24
+      element menuitem
+        rect 28,145 172x24
+        element group
+          matrix 1,0,0,1,34,145
+            text 0,3 36x15.6 "Share" size=13 family=sans-serif weight=400 color=#e6e6ebff
+          end
+        end
+        element group
+          matrix 1,0,0,1,185,145
+            text 0,3 9x15.6 "›" size=13 family=sans-serif weight=400 color=#8c8c94ff
+          end
+        end
+      end
+    end
+  end
+end

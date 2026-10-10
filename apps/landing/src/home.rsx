@@ -74,7 +74,7 @@ col @page
                         button label:"Read the docs" outline:PRIMARY
                     text "{$spots_left} of 200 early-access seats left" font_size:13 color:$theme.accent
                 col grow:1 min_width:320
-                    img src:gradient_img width:100% height:320
+                    img src:gradient_img width:100% height:320 label:"Blue to violet linear gradient"
     box @band fill:$theme.surface_alt
         col @wrap gap:24
             text "Trusted primitives" font_size:14 color:$theme.muted
@@ -108,19 +108,19 @@ col @page
                 text "Gradients, images, paths and shadows — all GPU-accelerated." font_size:16 color:$theme.muted
             row gap:20 wrap
                 col grow:1 min_width:280 gap:8
-                    img src:gradient_img width:100% height:200
+                    img src:gradient_img width:100% height:200 label:"Linear gradient"
                     text "Linear gradients" font_size:13 color:$theme.muted
                 col grow:1 min_width:280 gap:8
-                    img src:checker_img width:100% height:200
+                    img src:checker_img width:100% height:200 label:"Checkerboard bitmap"
                     text "Bitmap images" font_size:13 color:$theme.muted
                 col grow:1 min_width:280 gap:8
-                    img src:radial_img width:100% height:200
+                    img src:radial_img width:100% height:200 label:"Radial gradient fading to transparent"
                     text "Radial alpha" font_size:13 color:$theme.muted
     box @band fill:$theme.surface
         col @wrap
             row gap:48 wrap align:center
                 col grow:1 min_width:300
-                    img src:checker_img width:100% height:280
+                    img src:checker_img width:100% height:280 label:"Checkerboard bitmap"
                 col grow:1 min_width:300 gap:14
                     text "Reactivity that stays out of your way" font_size:26 color:$theme.dark
                     text "Fine-grained signals update only the widgets that depend on them — no virtual DOM, no diffing, no re-render storms." font_size:16 color:$theme.muted

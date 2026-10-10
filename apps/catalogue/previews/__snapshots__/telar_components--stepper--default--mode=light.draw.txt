@@ -1,0 +1,33 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element button
+            rect 364,288 24x24 fill=#4261edff radius=10
+            element group
+              matrix 1,0,0,1,371,288
+                text 0,3 10x16.8 "−" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+              end
+            end
+          end
+          element group
+            matrix 1,0,0,1,396,288
+              text 0,3 9x16.8 "2" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+            end
+          end
+          element button
+            rect 413,288 24x24 fill=#4261edff radius=10
+            element group
+              matrix 1,0,0,1,420,288
+                text 0,3 10x16.8 "+" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

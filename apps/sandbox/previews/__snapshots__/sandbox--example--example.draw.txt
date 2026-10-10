@@ -1,0 +1,33 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            matrix 1,0,0,1,16,16
+              text 0,0 294x15.6 "justify — distribute along the main axis" size=13 family=sans-serif weight=400 color=#14161fff lang=en
+            end
+          end
+          element group
+            rect 16,40 294x47 fill=#ffffffff border=1 border-color=#e2e5eeff radius=12
+            element group
+              matrix 1,0,0,1,32,56
+                text 0,0 262x15.6 "The demo and its code snippet stack here." size=13 family=sans-serif weight=400 color=#686d82ff lang=en
+              end
+            end
+          end
+          element group
+            rect 16,95 294x31 fill=#1b1e2bff radius=8
+            element group
+              matrix 1,0,0,1,28,103
+                text 0,0 270x14.4 "row justify:between" size=12 family=sans-serif weight=400 color=#d7dcecff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

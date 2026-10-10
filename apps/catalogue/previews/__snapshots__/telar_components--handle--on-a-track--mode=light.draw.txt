@@ -1,0 +1,18 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 280,288 240x24 fill=#f5f7fcff radius=12
+          element slider
+            matrix 1,0,0,1,90,6
+              rect 280,288 12x12 fill=#4261edff border=2 border-color=#ffffffff radius=6
+            end
+          end
+        end
+      end
+    end
+  end
+end

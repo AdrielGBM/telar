@@ -84,7 +84,7 @@ pub fn dialogs(props: DialogsProps, children: Children) -> Result<Box<dyn Layout
                             card(CardProps::props().gap(10.0).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
-                        let __node_5 = code_line(CodeLineProps::props().code("modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere").build(), Children::default())?;
+                        let __node_5 = code_line(CodeLineProps::props().code("modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere on this surface").build(), Children::default())?;
                         __children.push(box_item(__node_5));
                     }
                     __slots.extend_default(__children);

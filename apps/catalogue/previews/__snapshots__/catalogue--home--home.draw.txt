@@ -1,0 +1,28 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 16,16 650x165 fill=#f5f7fcff
+          element group
+            matrix 1,0,0,1,48,48
+              text 0,0 586x38.4 "Telar component catalogue" size=32 family=sans-serif weight=400 color=#171a2eff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,48,98
+              text 0,0 586x19.2 "The first-party components, each with its previews and args in the workshop." size=16 family=sans-serif weight=400 color=#616680ff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,48,130
+              text 0,0 586x19.2 "Run cargo telar preview in this directory to open it." size=16 family=sans-serif weight=400 color=#616680ff lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

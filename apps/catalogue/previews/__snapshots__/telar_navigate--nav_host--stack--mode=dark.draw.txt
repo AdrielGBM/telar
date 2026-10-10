@@ -1,0 +1,20 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          matrix 1,0,0,1,16,16
+            text 0,0 768x23.52 "Inbox" size=19.6 family=sans-serif weight=400 color=#ebedf5ff lang=en
+          end
+        end
+        element group
+          matrix 1,0,0,1,16,48
+            text 0,0 768x16.8 "Three unread messages." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+          end
+        end
+      end
+    end
+  end
+end

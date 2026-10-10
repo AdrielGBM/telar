@@ -1,0 +1,34 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element button
+            rect 16,16 355x37
+            element group
+              matrix 1,0,0,1,30,26
+                text 0,0 106x16.8 "Shipping details" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,349,26
+                text 0,1 8x14.28 "▾" size=11.9 family=sans-serif weight=400 color=#4261edff lang=en
+              end
+            end
+          end
+          element group
+            clip 16,53 355x17
+              element group
+                matrix 1,0,0,1,16,53
+                  text 0,0 355x16.8 "Orders leave the warehouse within two working days." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

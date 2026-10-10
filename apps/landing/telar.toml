@@ -3,3 +3,9 @@ backend = "auto"
 prelude = ["telar_components"]
 # The crate declares no `mod` statements of its own: `app.rs`, `theme.rs` and `demo_images.rs` are found by
 # walking `src/`, the same way the `.rsx` files beside them are.
+
+# The face every snapshot sets its text in, so goldens match on any machine.
+[[telar.fonts]]
+family = "Telar Test"
+src = "../../crates/renderer/renderer-text/test-fonts/TelarTest.ttf"
+axes = { wght = [100, 900], opsz = [14, 32] }

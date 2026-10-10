@@ -21,6 +21,8 @@ jobs:
       # still resolves against an artifact that is there before anything reads it.
       - run: cargo run -q -p cargo-telar -- transpile
       - run: .github/scripts/check-layering.sh
+      - name: No outside tool names
+        run: "! git grep -il 'story[b]ook' -- ':!docs/plans'"
       # Not `-D warnings`: the tree carries 247 of them today. This catches the `deny`-level lints, which is
       # what went unnoticed for two days when a `never_loop` in `telar-macros` stopped clippy reaching
       # anything downstream of it.
@@ -268,6 +270,24 @@ jobs:
       # Same reason, for the half of `telar-embed` only a host enables: nothing in this workspace loads a
       # plugin, so the loader compiles nowhere else.
       - run: cargo test -p telar-embed --all-features
+
+  # Every preview of the three sample apps, built, played, audited and compared with its golden. Snapshots are drawn on the CPU rasteriser in each app's declared fonts, so one runner decides and no GPU adapter is needed.
+  previews:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run -q -p cargo-telar -- transpile
+      - run: cargo run -q -p cargo-telar -- test -p catalogue --a11y error --report junit target/telar-snapshots/catalogue.xml
+      - run: cargo run -q -p cargo-telar -- test -p sandbox --a11y error --report junit target/telar-snapshots/sandbox.xml
+      - run: cargo run -q -p cargo-telar -- test -p landing --a11y error --report junit target/telar-snapshots/landing.xml
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: telar-snapshots
+          path: target/telar-snapshots/
+          if-no-files-found: ignore
 
   # Exercises `cargo telar build` per host OS: the raw binary everywhere plus each platform's native installer formats.
   package:

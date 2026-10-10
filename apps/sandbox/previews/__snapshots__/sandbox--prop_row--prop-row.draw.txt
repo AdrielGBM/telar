@@ -1,0 +1,27 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            matrix 1,0,0,1,16,16
+              text 0,0 120x15.6 "align" size=13 family=sans-serif weight=400 color=#14161fff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,148,16
+              text 0,0 190x15.6 "start · center · end · stretch" size=13 family=sans-serif weight=400 color=#3b5bdbff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,350,16
+              text 0,0 203x15.6 "Cross-axis alignment of children." size=13 family=sans-serif weight=400 color=#686d82ff lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

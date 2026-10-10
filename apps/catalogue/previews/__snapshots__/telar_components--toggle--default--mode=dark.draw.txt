@@ -1,0 +1,26 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element switch
+          rect 333,289 134x22
+          element group
+            rect 333,289 40x22 fill=#7394ffff radius=11
+            element group
+              matrix 1,0,0,1,18,0
+                rect 336,292 16x16 fill=#ffffffff radius=8
+              end
+            end
+          end
+          element group
+            matrix 1,0,0,1,383,289
+              text 0,2 84x16.8 "Notifications" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

@@ -1,0 +1,20 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 16,16 280x45 fill=#ffffffff radius=10
+          element group
+            element group
+              matrix 1,0,0,1,30,30
+                text 0,0 252x16.8 "Nested at the call site, drawn in Pastel" size=14 family=sans-serif weight=400 color=#3a2f47ff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

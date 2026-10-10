@@ -1,0 +1,95 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element toolbar
+          rect 341,286 118x28
+          element group
+            element group
+              rect 341,286 28x28
+              element button
+                rect 341,286 28x28 radius=10
+                element group
+                  rect 347,292 16x16
+                  element group
+                    matrix 1,0,0,1,347,292
+                      path M3.33,3.33 C3.33,2.86 3.59,2.41 4,2.18 C4.42,1.94 4.93,1.94 5.34,2.18 L13.34,6.85 C13.75,7.09 14,7.52 14,8 C14,8.47 13.75,8.91 13.34,9.15 L5.34,13.82 C4.93,14.06 4.42,14.06 4,13.82 C3.59,13.59 3.33,13.14 3.33,12.67 Z stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              element group
+              end
+            end
+          end
+          element group
+            element group
+              rect 371,286 28x28
+              element button
+                rect 371,286 28x28 radius=10
+                element group
+                  rect 377,292 16x16
+                  element group
+                    matrix 1,0,0,1,377,292
+                      path M3.33,2 L12.67,2 C13.4,2 14,2.6 14,3.33 L14,12.67 C14,13.4 13.4,14 12.67,14 L3.33,14 C2.6,14 2,13.4 2,12.67 L2,3.33 C2,2.6 2.6,2 3.33,2 Z stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              element group
+              end
+            end
+          end
+          element group
+            element group
+              rect 401,286 28x28
+              element button
+                rect 401,286 28x28 radius=10
+                element group
+                  rect 407,292 16x16
+                  element group
+                    matrix 1,0,0,1,407,292
+                      path M14,8 C14,11.31 11.31,14 8,14 C4.69,14 2,11.31 2,8 C2,4.69 4.69,2 8,2 C9.68,2 11.29,2.67 12.49,3.83 L14,5.33 stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                      path M14,2 L14,5.33 L10.67,5.33 stroke=1.33 stroke-color=#171a2eff cap=round join=round
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              element group
+              end
+            end
+          end
+          element group
+            element group
+              rect 431,286 28x28
+              element button
+                rect 431,286 28x28 radius=10
+                element group
+                  rect 437,292 16x16
+                  element group
+                    matrix 1,0,0,1,437,292
+                      path M6.45,2.76 C6.52,1.96 7.2,1.34 8,1.34 C8.8,1.34 9.48,1.96 9.55,2.76 C9.6,3.26 9.89,3.72 10.33,3.97 C10.77,4.23 11.3,4.25 11.77,4.03 C12.5,3.7 13.36,3.98 13.76,4.67 C14.16,5.37 13.97,6.26 13.32,6.72 C12.9,7.01 12.66,7.49 12.66,8 C12.66,8.51 12.9,8.98 13.32,9.28 C13.97,9.74 14.16,10.63 13.76,11.33 C13.36,12.02 12.5,12.3 11.77,11.97 C11.3,11.75 10.77,11.77 10.33,12.03 C9.89,12.28 9.6,12.74 9.55,13.24 C9.48,14.04 8.8,14.65 8,14.65 C7.2,14.65 6.52,14.04 6.45,13.24 C6.4,12.74 6.11,12.28 5.67,12.03 C5.23,11.77 4.7,11.75 4.23,11.97 C3.5,12.3 2.64,12.02 2.24,11.33 C1.84,10.63 2.03,9.74 2.68,9.28 C3.1,8.98 3.34,8.51 3.34,8 C3.34,7.49 3.1,7.01 2.68,6.72 C2.03,6.26 1.84,5.37 2.24,4.68 C2.64,3.98 3.5,3.7 4.23,4.03 C4.69,4.25 5.23,4.23 5.67,3.97 C6.11,3.72 6.4,3.26 6.45,2.76 stroke=1.33 stroke-color=#61668080 cap=round join=round
+                      path M10,8 C10,9.1 9.1,10 8,10 C6.9,10 6,9.1 6,8 C6,6.9 6.9,6 8,6 C9.1,6 10,6.9 10,8 Z stroke=1.33 stroke-color=#61668080 cap=round join=round
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              element group
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

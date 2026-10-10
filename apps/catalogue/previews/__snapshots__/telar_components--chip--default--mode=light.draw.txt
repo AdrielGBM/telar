@@ -1,0 +1,28 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 362,288 77x24 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=30
+          element group
+            element group
+              matrix 1,0,0,1,372,292
+                text 0,0 43x15.62 "Design" size=13.02 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element button
+              rect 421,293 8x14
+              element group
+                matrix 1,0,0,1,421,293
+                  text 0,0 8x14.28 "×" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

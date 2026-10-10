@@ -1,0 +1,44 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 284,291 38x18 fill=#3d8ce6ff radius=25
+            element group
+              matrix 1,0,0,1,292,293
+                text 0,0 22x14.28 "Info" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+          element group
+            rect 330,291 64x18 fill=#2eb073ff radius=25
+            element group
+              matrix 1,0,0,1,338,293
+                text 0,0 48x14.28 "Success" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+          element group
+            rect 402,291 63x18 fill=#e69e29ff radius=25
+            element group
+              matrix 1,0,0,1,410,293
+                text 0,0 47x14.28 "Warning" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+          element group
+            rect 473,291 44x18 fill=#cc3342ff radius=25
+            element group
+              matrix 1,0,0,1,481,293
+                text 0,0 28x14.28 "Error" size=11.9 family=sans-serif weight=400 color=#ffffffff lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

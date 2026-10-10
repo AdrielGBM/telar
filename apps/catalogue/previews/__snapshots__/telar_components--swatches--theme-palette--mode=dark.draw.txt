@@ -1,0 +1,42 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element radio
+            rect 340,288 24x24
+            element group
+              rect 340,288 20x20 fill=#7394ffff border=2 border-color=#ebedf5ff radius=10
+            end
+          end
+          element radio
+            rect 364,288 24x24
+            element group
+              rect 364,288 20x20 fill=#6badfaff border=1 border-color=#3d4252ff radius=10
+            end
+          end
+          element radio
+            rect 388,288 24x24
+            element group
+              rect 388,288 20x20 fill=#4dc78cff border=1 border-color=#3d4252ff radius=10
+            end
+          end
+          element radio
+            rect 412,288 24x24
+            element group
+              rect 412,288 20x20 fill=#f5b847ff border=1 border-color=#3d4252ff radius=10
+            end
+          end
+          element radio
+            rect 436,288 24x24
+            element group
+              rect 436,288 20x20 fill=#f06b70ff border=1 border-color=#3d4252ff radius=10
+            end
+          end
+        end
+      end
+    end
+  end
+end

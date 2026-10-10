@@ -1,0 +1,56 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 261,286 61x28
+            element group
+              rect 261,286 61x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+              element group
+                matrix 1,0,0,1,273,292
+                  text 0,0 37x16.8 "Inbox" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                end
+              end
+            end
+          end
+          element group
+            rect 330,286 64x28
+            element group
+              rect 330,286 64x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+              element group
+                matrix 1,0,0,1,342,292
+                  text 0,0 40x16.8 "Drafts" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                end
+              end
+            end
+          end
+          element group
+            rect 402,286 54x28
+            element group
+              rect 402,286 54x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+              element group
+                matrix 1,0,0,1,414,292
+                  text 0,0 30x16.8 "Sent" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                end
+              end
+            end
+          end
+          element group
+            rect 464,286 75x28
+            element group
+              rect 464,286 75x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+              element group
+                matrix 1,0,0,1,476,292
+                  text 0,0 51x16.8 "Archive" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

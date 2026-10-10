@@ -177,6 +177,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 move || ObjectFit::Contain,
                             )?
                         };
+                        let __img_0 = __img_0.a11y_label(|| "Blue to violet linear gradient");
                         Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(320.0), children![__img_0])?
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(48.0).flex_wrap().align_items(AlignItems::CENTER), children![__col_2, __col_3])?
@@ -329,6 +330,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 move || ObjectFit::Contain,
                             )?
                         };
+                        let __img_1 = __img_1.a11y_label(|| "Linear gradient");
                         let __text_20 = {
                             Text::declaring(
                                 || "Linear gradients".to_string(),
@@ -348,6 +350,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 move || ObjectFit::Contain,
                             )?
                         };
+                        let __img_2 = __img_2.a11y_label(|| "Checkerboard bitmap");
                         let __text_21 = {
                             Text::declaring(
                                 || "Bitmap images".to_string(),
@@ -367,6 +370,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 move || ObjectFit::Contain,
                             )?
                         };
+                        let __img_3 = __img_3.a11y_label(|| "Radial gradient fading to transparent");
                         let __text_22 = {
                             Text::declaring(
                                 || "Radial alpha".to_string(),
@@ -395,6 +399,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 move || ObjectFit::Contain,
                             )?
                         };
+                        let __img_4 = __img_4.a11y_label(|| "Checkerboard bitmap");
                         Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(300.0), children![__img_4])?
                     };
                     let __col_14 = {

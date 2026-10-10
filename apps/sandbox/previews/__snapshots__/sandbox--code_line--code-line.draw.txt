@@ -1,0 +1,18 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 16,16 273x30 fill=#1b1e2bff radius=8
+          element group
+            matrix 1,0,0,1,28,24
+              text 0,0 249x14.4 "box fill:primary radius:8 width:120 height:80" size=12 family=sans-serif weight=400 color=#d7dcecff lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

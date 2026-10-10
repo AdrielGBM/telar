@@ -1,0 +1,83 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 324,249 72x102
+            element group
+              element listitem
+                rect 324,249 72x29
+                element group
+                  rect 324,249 72x29 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+                  element group
+                    matrix 1,0,0,1,336,255
+                      text 0,0 48x16.8 "Design" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                    end
+                  end
+                end
+              end
+              element listitem
+                rect 324,286 72x28
+                element group
+                  rect 324,286 72x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+                  element group
+                    matrix 1,0,0,1,336,292
+                      text 0,0 48x16.8 "Review" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              rect 324,249 72x2
+            end
+          end
+          element group
+            rect 420,249 57x102
+            element group
+              element listitem
+                rect 420,249 57x29
+                element group
+                  rect 420,249 57x29 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+                  element group
+                    matrix 1,0,0,1,432,255
+                      text 0,0 33x16.8 "Build" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                    end
+                  end
+                end
+              end
+              element listitem
+                rect 420,286 57x28
+                element group
+                  rect 420,286 57x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+                  element group
+                    matrix 1,0,0,1,432,292
+                      text 0,0 33x16.8 "Test" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                    end
+                  end
+                end
+              end
+              element listitem
+                rect 420,323 57x29
+                element group
+                  rect 420,323 57x29 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+                  element group
+                    matrix 1,0,0,1,432,329
+                      text 0,0 33x16.8 "Ship" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                    end
+                  end
+                end
+              end
+            end
+            element group
+              rect 420,249 57x2
+            end
+          end
+        end
+      end
+    end
+  end
+end

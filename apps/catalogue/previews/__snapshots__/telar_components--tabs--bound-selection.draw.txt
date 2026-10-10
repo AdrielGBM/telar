@@ -1,0 +1,44 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element tablist
+          element tab
+            rect 227,284 95x32 fill=#4261edff radius=15
+            element group
+              matrix 1,0,0,1,243,292
+                text 0,0 63x16.8 "Overview" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+              end
+            end
+          end
+          element tab
+            rect 326,284 82x32 radius=15
+            element group
+              matrix 1,0,0,1,342,292
+                text 0,0 50x16.8 "Activity" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+              end
+            end
+          end
+          element tab
+            rect 412,284 86x32 radius=15
+            element group
+              matrix 1,0,0,1,428,292
+                text 0,0 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+              end
+            end
+          end
+          element tab
+            rect 502,284 72x32 radius=15
+            element group
+              matrix 1,0,0,1,518,292
+                text 0,0 40x16.8 "Billing" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

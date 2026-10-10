@@ -1,0 +1,30 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            matrix 1,0,0,1,290,285
+              text 0,0 220x14.28 "Volume" size=11.9 family=sans-serif weight=400 color=#99a1b8ff lang=en
+            end
+          end
+          element slider
+            rect 290,308 220x8 fill=#99a1b8ff radius=4
+            element group
+              matrix 0.4,0,0,1,174,0
+                rect 290,308 220x8 fill=#7394ffff radius=4
+              end
+            end
+            element group
+              matrix 1,0,0,1,81.6,-4
+                rect 290,308 16x16 fill=#7394ffff border=2 border-color=#ffffffff radius=8
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

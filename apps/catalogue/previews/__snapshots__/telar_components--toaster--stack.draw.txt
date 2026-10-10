@@ -1,0 +1,65 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element button
+              rect 339,286 54x28 fill=#4261edff radius=10
+              element group
+                matrix 1,0,0,1,353,292
+                  text 0,0 26x16.8 "Info" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+                end
+              end
+            end
+            element button
+              rect 401,286 61x28 fill=#4261edff radius=10
+              element group
+                matrix 1,0,0,1,415,292
+                  text 0,0 33x16.8 "Error" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+                end
+              end
+            end
+          end
+          element group
+          end
+        end
+      end
+    end
+  end
+end
+element group
+  element status
+    rect 424,528 360x56
+    element group
+      element group
+        rect 424,528 360x56 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
+        element group
+          rect 434,538 3x36 fill=#2eb073ff radius=1.5
+        end
+        element group
+          element group
+            matrix 1,0,0,1,445,538
+              text 0,0 303x16.8 "Saved" size=14 family=sans-serif weight=600 color=#171a2eff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,445,557
+              text 0,0 303x16.8 "Your changes are saved." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+            end
+          end
+        end
+        element button
+          rect 756,538 18x17 radius=6
+          element group
+            matrix 1,0,0,1,760,538
+              text 0,0 10x16.8 "✕" size=14 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

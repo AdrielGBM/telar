@@ -1,0 +1,72 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          rect 228,181 344x238 fill=#1c1f29ff radius=10
+          element group
+            rect 228,181 344x36 fill=#12141cff
+            element group
+              rect 240,191 51x16
+              element group
+                matrix 1,0,0,1,240,191
+                  text 0,0 51x15.6 "Settings" size=13 family=sans-serif weight=400 color=#ebedf5ff
+                end
+              end
+            end
+            element group
+              rect 485,189 75x20
+              element button
+                rect 485,189 25x20
+                element group
+                  matrix 1,0,0,1,493,191
+                    text 0,0 9x15.6 "–" size=13 family=sans-serif weight=400 color=#ebedf5ff
+                  end
+                end
+              end
+              element button
+                rect 510,189 25x20
+                element group
+                  matrix 1,0,0,1,518,191
+                    text 0,0 9x15.6 "□" size=13 family=sans-serif weight=400 color=#ebedf5ff
+                  end
+                end
+              end
+              element button
+                rect 535,189 25x20
+                element group
+                  matrix 1,0,0,1,543,191
+                    text 0,0 9x15.6 "✕" size=13 family=sans-serif weight=400 color=#ebedf5ff
+                  end
+                end
+              end
+            end
+          end
+          element group
+            rect 228,217 344x184
+            element group
+              element group
+                matrix 1,0,0,1,240,229
+                  text 0,0 320x16.8 "Telar can draw its own window chrome." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                end
+              end
+              element group
+                matrix 1,0,0,1,240,254
+                  text 0,0 320x16.8 "Drag the corner grip to resize." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                end
+              end
+            end
+          end
+          element group
+            rect 228,401 344x18
+            element group
+              rect 554,401 14x14 fill=#ebedf5ff radius=2
+            end
+          end
+        end
+      end
+    end
+  end
+end

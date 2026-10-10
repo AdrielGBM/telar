@@ -11,3 +11,9 @@ height = 700
 
 [telar.previews]
 include = ["telar-components", "telar-navigate"]
+
+# The face every snapshot sets its text in, so goldens match on any machine.
+[[telar.fonts]]
+family = "Telar Test"
+src = "../../crates/renderer/renderer-text/test-fonts/TelarTest.ttf"
+axes = { wght = [100, 900], opsz = [14, 32] }
