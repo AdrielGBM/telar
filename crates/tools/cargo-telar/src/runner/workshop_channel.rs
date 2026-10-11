@@ -7,43 +7,24 @@ use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use telar_project::protocol::GOTO_PREFIX;
+use telar_project::protocol::{GOTO_PREFIX, preview_location};
 
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(2);
 const ACCEPTED: &str = "ok";
 const REFUSED: &str = "no";
 
-/// Where the session running `package`'s workshop writes its port.
-pub(crate) fn channel_file(workspace_root: &Path, package: &str) -> PathBuf {
-    workspace_root
-        .join(".telar")
-        .join("workshop")
-        .join(format!("{package}.channel"))
-}
-
 /// What `cargo telar preview <target>` asks the workshop to open: a link it copied, which already is a location, or a preview's id.
 pub(crate) fn location_of(target: &str) -> String {
-    if target.starts_with('/') {
-        return target.to_string();
+    if is_preview_id(target) {
+        preview_location(target)
+    } else {
+        target.to_string()
     }
-    format!("/preview/{}", encode_segment(target))
 }
 
 /// Whether `target` is a preview's id rather than a copied link.
 pub(crate) fn is_preview_id(target: &str) -> bool {
     !target.starts_with('/')
-}
-
-fn encode_segment(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'=' | b'+') {
-            out.push(byte as char);
-        } else {
-            out.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    out
 }
 
 /// Asks the workshop the channel at `file` names to open `location`, and answers whether it said it would. A file left behind by a session that is gone is removed.

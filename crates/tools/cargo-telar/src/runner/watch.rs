@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use telar_project::protocol::{
     BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR,
+    workshop_channel_file,
 };
 use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE};
 
@@ -19,7 +20,7 @@ use super::config::{
 };
 use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
-use super::workshop_channel::{WorkshopChannel, channel_file};
+use super::workshop_channel::WorkshopChannel;
 
 fn inject_feature(args: &mut Vec<String>, feature: &str) {
     if let Some(pos) = args.iter().position(|a| a == "--features" || a == "-F")
@@ -688,7 +689,9 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         if bin_path.exists() && lib_path.exists() {
             let lib_build_args = make_lib_build_args(&rest, &hot_features);
             let workshop = is_preview
-                .then(|| WorkshopChannel::open(channel_file(&workspace_root, &package_name)))
+                .then(|| {
+                    WorkshopChannel::open(workshop_channel_file(&workspace_root, &package_name))
+                })
                 .flatten();
 
             watch_and_hot_reload(

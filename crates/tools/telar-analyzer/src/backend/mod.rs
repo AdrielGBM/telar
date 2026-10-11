@@ -16,6 +16,7 @@ use crate::analysis::completions::{
 };
 use crate::analysis::definition::goto_definition;
 use crate::analysis::hover::hover_info;
+use crate::analysis::preview_target::{PreviewHost, PreviewTarget};
 use crate::index::WorkspaceIndex;
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
@@ -804,11 +805,24 @@ impl Backend {
     /// `textDocument/codeLens`: "▶ Open in workshop" over each `[preview …]` section and "▶ Run play" over each `[play]`.
     pub async fn code_lens(&self, params: CodeLensParams) -> Option<Vec<CodeLens>> {
         let uri = &params.text_document.uri;
-        let host = crate::uri::to_path(uri)
-            .and_then(|path| crate::analysis::lens::PreviewHost::discover(&path))?;
+        let host = crate::uri::to_path(uri).and_then(|path| PreviewHost::discover(&path))?;
         let store = self.store.read().await;
         let parsed = store.get(uri)?;
         Some(crate::analysis::lens::code_lenses(&parsed.document, &host))
+    }
+
+    /// `telar/previewAt`: the `[preview]` whose zone holds the cursor, for the editor to show in the workshop; `null` anywhere else.
+    pub async fn preview_at(&self, params: TextDocumentPositionParams) -> Option<PreviewTarget> {
+        let uri = &params.text_document.uri;
+        let host = crate::uri::to_path(uri).and_then(|path| PreviewHost::discover(&path))?;
+        let store = self.store.read().await;
+        let parsed = store.get(uri)?;
+        crate::analysis::preview_target::preview_at(
+            &parsed.document,
+            &parsed.source,
+            params.position.line,
+            &host,
+        )
     }
 
     /// `textDocument/documentLink`: clickable links for `img src:"…"` asset paths that exist on disk.

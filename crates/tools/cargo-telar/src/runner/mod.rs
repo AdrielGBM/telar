@@ -3,7 +3,7 @@
 use std::process::Command;
 
 use clap::Parser;
-use telar_project::protocol::{PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR};
+use telar_project::protocol::{PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, workshop_channel_file};
 
 mod android;
 mod bake;
@@ -249,7 +249,7 @@ fn open_in_running_workshop(args: &PreviewArgs) -> bool {
     };
     let common = &args.hot.common;
     let resolved = resolve_package(&build_cargo_args(&common.package, false, &None));
-    let file = workshop_channel::channel_file(&resolved.workspace_root, &resolved.name());
+    let file = workshop_channel_file(&resolved.workspace_root, &resolved.name());
     let opened = workshop_channel::send(&file, &workshop_channel::location_of(target));
     if opened {
         eprintln!("[cargo-telar] Opened {target} in the running workshop.");

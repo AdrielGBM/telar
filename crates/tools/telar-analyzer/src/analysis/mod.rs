@@ -10,6 +10,7 @@ pub mod lens;
 pub mod links;
 pub mod occurrences;
 pub mod preview_header;
+pub mod preview_target;
 pub mod selection_range;
 pub mod semantic_tokens;
 pub mod symbols;

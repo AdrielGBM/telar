@@ -12,7 +12,7 @@ The extension talks to `telar-analyzer`, a language server that embeds rust-anal
 - **Rename and find references** — component tags and signals, across the workspace
 - **Formatting** — whole document or selection
 - **Inlay hints, code lenses, code actions, document links and folding ranges**
-- **Previews** — `▶ Open in workshop` above each `[preview]` and `▶ Run play` above each `[play]`, each run in a terminal in the package; completion and hover for header options, `args(…)` and the matrices `telar.toml` names
+- **Previews** — `▶ Open in workshop` above each `[preview]` moves the package's running workshop to it, or starts one on it; `▶ Run play` above each `[play]` runs it in a terminal in the package; the workshop can follow the cursor from preview to preview; completion and hover for header options, `args(…)` and the matrices `telar.toml` names
 - **Semantic highlighting** and color swatches for theme values
 - **Workspace symbols** — components and `@classes` across the project
 
@@ -22,16 +22,18 @@ A Rust toolchain on `PATH`. The server discovers the sysroot through `rustc` and
 
 ## Settings
 
-| Setting            | Description                                                                                                                                                |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `telar.serverPath` | Path to a `telar-analyzer` binary. Takes precedence over everything else — point it at a local `cargo build --release` while working on the server itself. |
+| Setting                       | Description                                                                                                                                                |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `telar.serverPath`            | Path to a `telar-analyzer` binary. Takes precedence over everything else — point it at a local `cargo build --release` while working on the server itself. |
+| `telar.workshop.followCursor` | Moves the running workshop to each `[preview]` the cursor enters. Off by default; it never starts a workshop.                                              |
 
 ## Commands
 
-| Command                    | Description                                |
-| -------------------------- | ------------------------------------------ |
-| `Telar: Preview component` | Opens the workshop on the file's component |
-| `Telar: Show server log`   | Opens the language server's output channel |
+| Command                                     | Description                                                                      |
+| ------------------------------------------- | -------------------------------------------------------------------------------- |
+| `Telar: Show preview at cursor in workshop` | Moves the running workshop to the `[preview]` at the cursor, or starts one on it |
+| `Telar: Open workshop`                      | Starts the workshop of the active file's package                                 |
+| `Telar: Show server log`                    | Opens the language server's output channel                                       |
 
 ## How the server is found
 

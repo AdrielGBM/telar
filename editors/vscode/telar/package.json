@@ -45,7 +45,12 @@
     "commands": [
       {
         "command": "telar.preview",
-        "title": "Preview component",
+        "title": "Show preview at cursor in workshop",
+        "category": "Telar"
+      },
+      {
+        "command": "telar.openWorkshop",
+        "title": "Open workshop",
         "category": "Telar"
       }
     ],
@@ -56,6 +61,11 @@
           "type": "string",
           "default": "",
           "description": "Path to the telar-analyzer binary. Takes precedence over everything else. If empty, uses the bundled server/ binary (patched for NixOS when needed), then searches PATH, then ~/.cargo/bin/telar-analyzer."
+        },
+        "telar.workshop.followCursor": {
+          "type": "boolean",
+          "default": false,
+          "description": "Move the running workshop to each [preview] the cursor enters in a .rsx file. Never starts a workshop: run \"Telar: Open workshop\" or a preview's \"Open in workshop\" lens for that."
         }
       }
     },

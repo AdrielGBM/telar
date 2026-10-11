@@ -1,4 +1,6 @@
-//! The names `cargo telar` and the app it launches agree on: the environment variables it sets for a preview host, and the prefixes of the lines it sends over the hot-reload channel.
+//! The names `cargo telar` and the app it launches agree on: the environment variables it sets for a preview host, the prefixes of the lines it sends over the hot-reload channel, and where a running workshop can be reached.
+
+use std::path::{Path, PathBuf};
 
 /// The env var naming the preview to open first.
 pub const PREVIEW_ID_VAR: &str = "TELAR_PREVIEW_ID";
@@ -50,3 +52,37 @@ pub const TEST_REPORT_FILE: &str = "report.json";
 
 /// The name of the test `rsx_modules!` emits in a library's preview build, which `cargo telar test -p <library>` runs.
 pub const LIBRARY_TEST_NAME: &str = "telar_previews";
+
+/// Where the session running `package`'s workshop names the loopback port it takes `goto:` lines on.
+pub fn workshop_channel_file(workspace_root: &Path, package: &str) -> PathBuf {
+    workspace_root
+        .join(".telar")
+        .join("workshop")
+        .join(format!("{package}.channel"))
+}
+
+/// The channel file of the workshop `cargo telar preview` runs for the package at `package_dir`. `None` when its manifest names no package.
+pub fn package_workshop_channel_file(package_dir: &Path) -> Option<PathBuf> {
+    let manifest = crate::cargo_manifest::read_manifest(package_dir)?;
+    let package = manifest.get("package")?.get("name")?.as_str()?;
+    let workspace_root =
+        crate::find_workspace_root(package_dir).unwrap_or_else(|| package_dir.to_path_buf());
+    Some(workshop_channel_file(&workspace_root, package))
+}
+
+/// The location a workshop opens to show the preview `id`.
+pub fn preview_location(id: &str) -> String {
+    let mut location = String::from("/preview/");
+    for byte in id.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'=' | b'+') {
+            location.push(byte as char);
+        } else {
+            location.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    location
+}
+
+#[cfg(test)]
+#[path = "protocol_test.rs"]
+mod tests;
