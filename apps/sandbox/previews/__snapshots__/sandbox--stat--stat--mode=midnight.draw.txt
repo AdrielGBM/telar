@@ -1,0 +1,23 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#181b26ff
+  element group
+    element group
+      element group
+        element group
+          rect 334,256 132x88 fill=#181b26ff border=1 border-color=#262a38ff radius=14
+          element group
+            matrix 1,0,0,1,352,274
+              text 0,0 96x33.6 "60 fps" size=28 family=sans-serif weight=400 color=#5b7cfaff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,352,312
+              text 0,0 96x14.4 "software + wgpu" size=12 family=sans-serif weight=400 color=#8b93a7ff lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

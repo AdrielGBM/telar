@@ -61,9 +61,12 @@ pub fn prop_row_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Bo
 
 pub const PROP_ROW_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--prop_row--prop-row"), "prop_row", "Prop row", prop_row_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/prop_row.rsx"), 16)
-        .source("[preview \"Prop row\"]\nprop_row name:\"align\" values:\"start · center · end · stretch\" about:\"Cross-axis alignment of children.\"", &[::telar::preview::SourceSpan::new(0, 127, 16)])
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/prop_row.rsx"), 19)
+        .title("Sandbox/Prop row")
+        .docs("One documentation row for an attribute: its name, accepted values and a short description.")
+        .source("[preview \"Prop row\"]\nprop_row name:\"align\" values:\"start · center · end · stretch\" about:\"Cross-axis alignment of children.\"", &[::telar::preview::SourceSpan::new(0, 127, 19)])
         .props(<PropRowProps as ::telar::preview::HasPropsSchema>::schema)
-        .args(&[::telar::preview::ArgSpec::new("name").default("\"align\""), ::telar::preview::ArgSpec::new("values").default("\"start · center · end · stretch\""), ::telar::preview::ArgSpec::new("about").default("\"Cross-axis alignment of children.\"")]),
+        .args(&[::telar::preview::ArgSpec::new("name").default("\"align\""), ::telar::preview::ArgSpec::new("values").default("\"start · center · end · stretch\""), ::telar::preview::ArgSpec::new("about").default("\"Cross-axis alignment of children.\"")])
+        .layout(::telar::preview::Layout::Padded),
 ];
 }

@@ -5,408 +5,406 @@ element group
     element group
       element group
         element group
+          rect 0,0 800x57 fill=#ffffffff
           element group
-            rect 16,16 1160x57 fill=#ffffffff
+            element group
+              matrix 1,0,0,1,24,14
+                text 0,1 48x24 "▲ rsx" size=20 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
             element group
               element group
-                matrix 1,0,0,1,40,30
-                  text 0,1 48x24 "▲ rsx" size=20 family=sans-serif weight=400 color=#171a2eff lang=en
+                matrix 1,0,0,1,451,14
+                  text 0,6 58x16.8 "Features" size=14 family=sans-serif weight=400 color=#545973ff lang=en
                 end
               end
               element group
-                element group
-                  matrix 1,0,0,1,827,30
-                    text 0,6 58x16.8 "Features" size=14 family=sans-serif weight=400 color=#545973ff lang=en
-                  end
+                matrix 1,0,0,1,533,14
+                  text 0,6 47x16.8 "Gallery" size=14 family=sans-serif weight=400 color=#545973ff lang=en
                 end
-                element group
-                  matrix 1,0,0,1,909,30
-                    text 0,6 47x16.8 "Gallery" size=14 family=sans-serif weight=400 color=#545973ff lang=en
-                  end
+              end
+              element group
+                matrix 1,0,0,1,604,14
+                  text 0,6 46x16.8 "Pricing" size=14 family=sans-serif weight=400 color=#545973ff lang=en
                 end
+              end
+              element button
+                rect 674,14 102x29 fill=#4361eeff radius=4
                 element group
-                  matrix 1,0,0,1,980,30
-                    text 0,6 46x16.8 "Pricing" size=14 family=sans-serif weight=400 color=#545973ff lang=en
-                  end
-                end
-                element button
-                  rect 1050,30 102x29 fill=#4361eeff radius=4
-                  element group
-                    matrix 1,0,0,1,1064,36
-                      text 0,0 74x16.8 "Get started" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
-                    end
+                  matrix 1,0,0,1,688,20
+                    text 0,0 74x16.8 "Get started" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
                   end
                 end
               end
             end
           end
+        end
+        element group
+          rect 0,57 800x739 fill=#ffffffff
           element group
-            rect 16,73 1160x670 fill=#ffffffff
             element group
               element group
                 element group
-                  element group
-                    matrix 1,0,0,1,40,137
-                      text 0,0 1112x48 "Native UIs in Rust, without the boilerplate" size=40 family=sans-serif weight=400 color=#171a2eff lang=en
-                    end
+                  matrix 1,0,0,1,24,121
+                    text 0,0 752x96 "Native UIs in Rust, without the boilerplate" size=40 family=sans-serif weight=400 color=#171a2eff lang=en
                   end
-                  element group
-                    matrix 1,0,0,1,40,205
-                      text 0,0 1112x21.6 "rsx compiles declarative .rsx markup to GPU-accelerated widgets — signals, layout and theming included, from desktop to Android." size=18 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                end
+                element group
+                  matrix 1,0,0,1,24,237
+                    text 0,0 752x43.2 "rsx compiles declarative .rsx markup to GPU-accelerated widgets — signals, layout and theming included, from desktop to Android." size=18 family=sans-serif weight=400 color=#545973ff lang=en
                   end
-                  element group
-                    element button
-                      rect 40,247 102x29 fill=#4361eeff radius=4
-                      element group
-                        matrix 1,0,0,1,54,253
-                          text 0,0 74x16.8 "Get started" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
-                        end
-                      end
-                    end
-                    element button
-                      rect 154,247 123x29 border=1.5 border-color=#4361eeff radius=4
-                      element group
-                        matrix 1,0,0,1,168,253
-                          text 0,0 95x16.8 "Read the docs" size=14 family=sans-serif weight=400 color=#4361eeff lang=en
-                        end
+                end
+                element group
+                  element button
+                    rect 24,300 102x29 fill=#4361eeff radius=4
+                    element group
+                      matrix 1,0,0,1,38,306
+                        text 0,0 74x16.8 "Get started" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
                       end
                     end
                   end
-                  element group
-                    matrix 1,0,0,1,40,295
-                      text 0,0 1112x15.6 "200 of 200 early-access seats left" size=13 family=sans-serif weight=400 color=#bd2461ff lang=en
+                  element button
+                    rect 138,300 123x29 border=1.5 border-color=#4361eeff radius=4
+                    element group
+                      matrix 1,0,0,1,152,306
+                        text 0,0 95x16.8 "Read the docs" size=14 family=sans-serif weight=400 color=#4361eeff lang=en
+                      end
                     end
                   end
                 end
                 element group
-                  element group
-                    matrix 1,0,0,1,40,359
-                      image 300,0 512x320 source=640x400
-                    end
+                  matrix 1,0,0,1,24,349
+                    text 0,0 752x15.6 "200 of 200 early-access seats left" size=13 family=sans-serif weight=400 color=#bd2461ff lang=en
+                  end
+                end
+              end
+              element group
+                element group
+                  matrix 1,0,0,1,24,413
+                    image 120,0 512x320 source=640x400
                   end
                 end
               end
             end
           end
+        end
+        element group
+          rect 0,796 800x275 fill=#f2f5fcff
           element group
-            rect 16,743 1160x274 fill=#f2f5fcff
+            element group
+              matrix 1,0,0,1,24,860
+                text 0,0 752x16.8 "Trusted primitives" size=14 family=sans-serif weight=400 color=#545973ff lang=en
+              end
+            end
             element group
               element group
-                matrix 1,0,0,1,40,807
-                  text 0,0 1112x16.8 "Trusted primitives" size=14 family=sans-serif weight=400 color=#545973ff lang=en
+                rect 24,901 173x106 fill=#ffffffff border=1 border-color=#dbdeedff radius=14
+                element group
+                  matrix 1,0,0,1,48,925
+                    text 0,0 125x36 "60 fps" size=30 family=sans-serif weight=400 color=#4361eeff lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,48,967
+                    text 0,0 125x15.6 "software + wgpu" size=13 family=sans-serif weight=400 color=#545973ff lang=en
+                  end
                 end
               end
               element group
+                rect 217,901 173x106 fill=#ffffffff border=1 border-color=#dbdeedff radius=14
                 element group
-                  rect 40,848 263x105 fill=#ffffffff border=1 border-color=#dbdeedff radius=14
-                  element group
-                    matrix 1,0,0,1,64,872
-                      text 0,0 215x36 "60 fps" size=30 family=sans-serif weight=400 color=#4361eeff lang=en
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,64,914
-                      text 0,0 215x15.6 "software + wgpu" size=13 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                  matrix 1,0,0,1,241,925
+                    text 0,0 125x36 "25" size=30 family=sans-serif weight=400 color=#4361eeff lang=en
                   end
                 end
                 element group
-                  rect 323,848 263x105 fill=#ffffffff border=1 border-color=#dbdeedff radius=14
-                  element group
-                    matrix 1,0,0,1,347,872
-                      text 0,0 215x36 "25" size=30 family=sans-serif weight=400 color=#4361eeff lang=en
-                    end
+                  matrix 1,0,0,1,241,967
+                    text 0,0 125x15.6 "modular crates" size=13 family=sans-serif weight=400 color=#545973ff lang=en
                   end
-                  element group
-                    matrix 1,0,0,1,347,914
-                      text 0,0 215x15.6 "modular crates" size=13 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                end
+              end
+              element group
+                rect 410,901 173x106 fill=#ffffffff border=1 border-color=#dbdeedff radius=14
+                element group
+                  matrix 1,0,0,1,434,925
+                    text 0,0 125x36 "2" size=30 family=sans-serif weight=400 color=#4361eeff lang=en
                   end
                 end
                 element group
-                  rect 606,848 263x105 fill=#ffffffff border=1 border-color=#dbdeedff radius=14
-                  element group
-                    matrix 1,0,0,1,630,872
-                      text 0,0 215x36 "2" size=30 family=sans-serif weight=400 color=#4361eeff lang=en
-                    end
+                  matrix 1,0,0,1,434,967
+                    text 0,0 125x15.6 "render backends" size=13 family=sans-serif weight=400 color=#545973ff lang=en
                   end
-                  element group
-                    matrix 1,0,0,1,630,914
-                      text 0,0 215x15.6 "render backends" size=13 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                end
+              end
+              element group
+                rect 603,901 173x106 fill=#ffffffff border=1 border-color=#dbdeedff radius=14
+                element group
+                  matrix 1,0,0,1,627,925
+                    text 0,0 125x36 "0" size=30 family=sans-serif weight=400 color=#4361eeff lang=en
                   end
                 end
                 element group
-                  rect 889,848 263x105 fill=#ffffffff border=1 border-color=#dbdeedff radius=14
-                  element group
-                    matrix 1,0,0,1,913,872
-                      text 0,0 215x36 "0" size=30 family=sans-serif weight=400 color=#4361eeff lang=en
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,913,914
-                      text 0,0 215x15.6 "runtime GC pauses" size=13 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                  matrix 1,0,0,1,627,967
+                    text 0,0 125x15.6 "runtime GC pauses" size=13 family=sans-serif weight=400 color=#545973ff lang=en
                   end
                 end
               end
             end
           end
+        end
+        element group
+          rect 0,1071 800x564 fill=#ffffffff
           element group
-            rect 16,1017 1160x564 fill=#ffffffff
             element group
               element group
+                matrix 1,0,0,1,24,1135
+                  text 0,0 752x33.6 "Everything you need" size=28 family=sans-serif weight=400 color=#171a2eff lang=en
+                end
+              end
+              element group
+                matrix 1,0,0,1,24,1177
+                  text 0,0 752x19.2 "Composable building blocks that scale from a button to a full app." size=16 family=sans-serif weight=400 color=#545973ff lang=en
+                end
+              end
+            end
+            element group
+              element group
+                rect 24,1224 364x161 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
                 element group
-                  matrix 1,0,0,1,40,1081
-                    text 0,0 1112x33.6 "Everything you need" size=28 family=sans-serif weight=400 color=#171a2eff lang=en
+                  matrix 1,0,0,1,48,1248
+                    text 0,0 316x38.4 "⚡" size=32 family=sans-serif weight=400 color=#262633ff lang=en
                   end
                 end
                 element group
-                  matrix 1,0,0,1,40,1123
-                    text 0,0 1112x19.2 "Composable building blocks that scale from a button to a full app." size=16 family=sans-serif weight=400 color=#545973ff lang=en
+                  matrix 1,0,0,1,48,1296
+                    text 0,0 316x21.6 "Fast" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,48,1328
+                    text 0,0 316x33.6 "Software and wgpu renderers with dirty-tracking and scroll-blit detection." size=14 family=sans-serif weight=400 color=#545973ff lang=en
                   end
                 end
               end
               element group
+                rect 412,1224 364x161 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
                 element group
-                  rect 40,1170 355x178 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
-                  element group
-                    matrix 1,0,0,1,64,1194
-                      text 0,0 307x38.4 "⚡" size=32 family=sans-serif weight=400 color=#262633ff lang=en
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,64,1242
-                      text 0,0 307x21.6 "Fast" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,64,1274
-                      text 0,0 307x33.6 "Software and wgpu renderers with dirty-tracking and scroll-blit detection." size=14 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                  matrix 1,0,0,1,436,1248
+                    text 0,0 316x38.4 "🧩" size=32 family=sans-serif weight=400 color=#262633ff lang=en
                   end
                 end
                 element group
-                  rect 419,1170 354x178 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
-                  element group
-                    matrix 1,0,0,1,443,1194
-                      text 0,0 306x38.4 "🧩" size=32 family=sans-serif weight=400 color=#262633ff lang=en
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,443,1242
-                      text 0,0 306x21.6 "Composable" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,443,1274
-                      text 0,0 306x50.4 "Signals, memos and reusable .rsx components compose right inside the markup." size=14 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                  matrix 1,0,0,1,436,1296
+                    text 0,0 316x21.6 "Composable" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
                   end
                 end
                 element group
-                  rect 797,1170 355x178 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
-                  element group
-                    matrix 1,0,0,1,821,1194
-                      text 0,0 307x38.4 "🎨" size=32 family=sans-serif weight=400 color=#262633ff lang=en
-                    end
+                  matrix 1,0,0,1,436,1328
+                    text 0,0 316x33.6 "Signals, memos and reusable .rsx components compose right inside the markup." size=14 family=sans-serif weight=400 color=#545973ff lang=en
                   end
-                  element group
-                    matrix 1,0,0,1,821,1242
-                      text 0,0 307x21.6 "Themeable" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,821,1274
-                      text 0,0 307x33.6 "Semantic color tokens resolve reactively, so dark mode is a single swap." size=14 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                end
+              end
+              element group
+                rect 24,1410 364x162 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
+                element group
+                  matrix 1,0,0,1,48,1434
+                    text 0,0 316x38.4 "🎨" size=32 family=sans-serif weight=400 color=#262633ff lang=en
                   end
                 end
                 element group
-                  rect 40,1372 1112x145 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
-                  element group
-                    matrix 1,0,0,1,64,1396
-                      text 0,0 1064x38.4 "📱" size=32 family=sans-serif weight=400 color=#262633ff lang=en
-                    end
+                  matrix 1,0,0,1,48,1482
+                    text 0,0 316x21.6 "Themeable" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
                   end
-                  element group
-                    matrix 1,0,0,1,64,1444
-                      text 0,0 1064x21.6 "Cross-platform" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
-                    end
+                end
+                element group
+                  matrix 1,0,0,1,48,1514
+                    text 0,0 316x33.6 "Semantic color tokens resolve reactively, so dark mode is a single swap." size=14 family=sans-serif weight=400 color=#545973ff lang=en
                   end
-                  element group
-                    matrix 1,0,0,1,64,1476
-                      text 0,0 1064x16.8 "One codebase targets desktop and Android with native event loops." size=14 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                end
+              end
+              element group
+                rect 412,1410 364x162 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
+                element group
+                  matrix 1,0,0,1,436,1434
+                    text 0,0 316x38.4 "📱" size=32 family=sans-serif weight=400 color=#262633ff lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,436,1482
+                    text 0,0 316x21.6 "Cross-platform" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,436,1514
+                    text 0,0 316x33.6 "One codebase targets desktop and Android with native event loops." size=14 family=sans-serif weight=400 color=#545973ff lang=en
                   end
                 end
               end
             end
           end
+        end
+        element group
+          rect 0,1635 800x684 fill=#f2f5fcff
           element group
-            rect 16,1581 1160x441 fill=#f2f5fcff
+            element group
+              element group
+                matrix 1,0,0,1,24,1699
+                  text 0,0 752x33.6 "Built-in rendering" size=28 family=sans-serif weight=400 color=#171a2eff lang=en
+                end
+              end
+              element group
+                matrix 1,0,0,1,24,1741
+                  text 0,0 752x19.2 "Gradients, images, paths and shadows — all GPU-accelerated." size=16 family=sans-serif weight=400 color=#545973ff lang=en
+                end
+              end
+            end
             element group
               element group
                 element group
-                  matrix 1,0,0,1,40,1645
-                    text 0,0 1112x33.6 "Built-in rendering" size=28 family=sans-serif weight=400 color=#171a2eff lang=en
+                  matrix 1,0,0,1,24,1788
+                    image 23,0 320x200 source=640x400
                   end
                 end
                 element group
-                  matrix 1,0,0,1,40,1687
-                    text 0,0 1112x19.2 "Gradients, images, paths and shadows — all GPU-accelerated." size=16 family=sans-serif weight=400 color=#545973ff lang=en
+                  matrix 1,0,0,1,24,1996
+                    text 0,0 366x15.6 "Linear gradients" size=13 family=sans-serif weight=400 color=#545973ff lang=en
                   end
                 end
               end
               element group
                 element group
-                  element group
-                    matrix 1,0,0,1,40,1734
-                      image 18.5,0 320x200 source=640x400
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,40,1942
-                      text 0,0 357x15.6 "Linear gradients" size=13 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                  matrix 1,0,0,1,410,1788
+                    image 23,0 320x200 source=640x400
                   end
                 end
                 element group
-                  element group
-                    matrix 1,0,0,1,417,1734
-                      image 19,0 320x200 source=640x400
-                    end
+                  matrix 1,0,0,1,410,1996
+                    text 0,0 366x15.6 "Bitmap images" size=13 family=sans-serif weight=400 color=#545973ff lang=en
                   end
-                  element group
-                    matrix 1,0,0,1,417,1942
-                      text 0,0 358x15.6 "Bitmap images" size=13 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                end
+              end
+              element group
+                element group
+                  matrix 1,0,0,1,24,2032
+                    image 216,0 320x200 source=640x400
                   end
                 end
                 element group
-                  element group
-                    matrix 1,0,0,1,795,1734
-                      image 18.5,0 320x200 source=640x400
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,795,1942
-                      text 0,0 357x15.6 "Radial alpha" size=13 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
+                  matrix 1,0,0,1,24,2240
+                    text 0,0 752x15.6 "Radial alpha" size=13 family=sans-serif weight=400 color=#545973ff lang=en
                   end
                 end
               end
             end
           end
+        end
+        element group
+          rect 0,2319 800x570 fill=#ffffffff
           element group
-            rect 16,2022 1160x551 fill=#ffffffff
             element group
               element group
                 element group
-                  element group
-                    matrix 1,0,0,1,40,2086
-                      image 332,0 448x280 source=640x400
-                    end
+                  matrix 1,0,0,1,24,2383
+                    image 152,0 448x280 source=640x400
+                  end
+                end
+              end
+              element group
+                element group
+                  matrix 1,0,0,1,24,2711
+                    text 0,0 752x31.2 "Reactivity that stays out of your way" size=26 family=sans-serif weight=400 color=#171a2eff lang=en
                   end
                 end
                 element group
-                  element group
-                    matrix 1,0,0,1,40,2414
-                      text 0,0 1112x31.2 "Reactivity that stays out of your way" size=26 family=sans-serif weight=400 color=#171a2eff lang=en
-                    end
+                  matrix 1,0,0,1,24,2756
+                    text 0,0 752x38.4 "Fine-grained signals update only the widgets that depend on them — no virtual DOM, no diffing, no re-render storms." size=16 family=sans-serif weight=400 color=#545973ff lang=en
                   end
-                  element group
-                    matrix 1,0,0,1,40,2459
-                      text 0,0 1112x19.2 "Fine-grained signals update only the widgets that depend on them — no virtual DOM, no diffing, no re-render storms." size=16 family=sans-serif weight=400 color=#545973ff lang=en
-                    end
-                  end
-                  element group
-                    matrix 1,0,0,1,40,2492
-                      text 0,0 1112x16.8 "→ signal, memo, effect" size=14 family=sans-serif weight=400 color=#4361eeff lang=en
-                    end
+                end
+                element group
+                  matrix 1,0,0,1,24,2809
+                    text 0,0 752x16.8 "→ signal, memo, effect" size=14 family=sans-serif weight=400 color=#4361eeff lang=en
                   end
                 end
               end
             end
           end
+        end
+        element group
+          rect 0,2889 800x244 fill=#4361eeff
           element group
-            rect 16,2573 1160x244 fill=#4361eeff
             element group
-              element group
-                matrix 1,0,0,1,40,2637
-                  text 0,0 1112x36 "Join the private beta" size=30 family=sans-serif weight=400 color=#ffffffff lang=en
-                end
+              matrix 1,0,0,1,24,2953
+                text 0,0 752x36 "Join the private beta" size=30 family=sans-serif weight=400 color=#ffffffff lang=en
               end
-              element group
-                matrix 1,0,0,1,40,2689
-                  text 0,0 1112x19.2 "200 of 200 seats remaining" size=16 family=sans-serif weight=400 color=#ffffffff lang=en
-                end
+            end
+            element group
+              matrix 1,0,0,1,24,3005
+                text 0,0 752x19.2 "200 of 200 seats remaining" size=16 family=sans-serif weight=400 color=#ffffffff lang=en
               end
-              element group
-                element button
-                  rect 453,2724 126x29 fill=#bd2461ff radius=4
-                  element group
-                    matrix 1,0,0,1,467,2730
-                      text 0,0 98x16.8 "Reserve a seat" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
-                    end
-                  end
-                end
+            end
+            element group
+              element button
+                rect 257,3040 126x29 fill=#bd2461ff radius=4
                 element group
-                  matrix 1,0,0,1,591,2724
-                    text 0,6 149x16.8 "0 developers reserved" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+                  matrix 1,0,0,1,271,3046
+                    text 0,0 98x16.8 "Reserve a seat" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
                   end
+                end
+              end
+              element group
+                matrix 1,0,0,1,395,3040
+                  text 0,6 149x16.8 "0 developers reserved" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
                 end
               end
             end
           end
+        end
+        element group
+          rect 0,3133 800x139 fill=#171a2eff
           element group
-            rect 16,2817 1160x139 fill=#171a2eff
             element group
               element group
-                element group
-                  matrix 1,0,0,1,40,2857
-                    text 0,0 768x21.6 "▲ rsx" size=18 family=sans-serif weight=400 color=#ffffffff lang=en
-                  end
-                end
-                element group
-                  matrix 1,0,0,1,40,2887
-                    text 0,0 768x15.6 "Native UI framework for Rust." size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
-                  end
+                matrix 1,0,0,1,24,3173
+                  text 0,0 408x21.6 "▲ rsx" size=18 family=sans-serif weight=400 color=#ffffffff lang=en
                 end
               end
               element group
-                element group
-                  matrix 1,0,0,1,840,2857
-                    text 0,0 140x15.6 "Product" size=13 family=sans-serif weight=400 color=#ffffffff lang=en
-                  end
+                matrix 1,0,0,1,24,3203
+                  text 0,0 408x15.6 "Native UI framework for Rust." size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
                 end
-                element group
-                  matrix 1,0,0,1,840,2879
-                    text 0,0 140x15.6 "Features" size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
-                  end
-                end
-                element group
-                  matrix 1,0,0,1,840,2900
-                    text 0,0 140x15.6 "Gallery" size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
-                  end
+              end
+            end
+            element group
+              element group
+                matrix 1,0,0,1,464,3173
+                  text 0,0 140x15.6 "Product" size=13 family=sans-serif weight=400 color=#ffffffff lang=en
                 end
               end
               element group
-                element group
-                  matrix 1,0,0,1,1012,2857
-                    text 0,0 140x15.6 "Developers" size=13 family=sans-serif weight=400 color=#ffffffff lang=en
-                  end
+                matrix 1,0,0,1,464,3195
+                  text 0,0 140x15.6 "Features" size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
                 end
-                element group
-                  matrix 1,0,0,1,1012,2879
-                    text 0,0 140x15.6 "Docs" size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
-                  end
+              end
+              element group
+                matrix 1,0,0,1,464,3216
+                  text 0,0 140x15.6 "Gallery" size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
                 end
-                element group
-                  matrix 1,0,0,1,1012,2900
-                    text 0,0 140x15.6 "Examples" size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
-                  end
+              end
+            end
+            element group
+              element group
+                matrix 1,0,0,1,636,3173
+                  text 0,0 140x15.6 "Developers" size=13 family=sans-serif weight=400 color=#ffffffff lang=en
+                end
+              end
+              element group
+                matrix 1,0,0,1,636,3195
+                  text 0,0 140x15.6 "Docs" size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
+                end
+              end
+              element group
+                matrix 1,0,0,1,636,3216
+                  text 0,0 140x15.6 "Examples" size=13 family=sans-serif weight=400 color=#c7cce0ff lang=en
                 end
               end
             end

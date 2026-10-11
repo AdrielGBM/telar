@@ -5,14 +5,14 @@ element group
     element group
       element group
         element group
-          rect 16,16 132x88 fill=#ffffffff border=1 border-color=#e2e5eeff radius=14
+          rect 334,256 132x88 fill=#ffffffff border=1 border-color=#e2e5eeff radius=14
           element group
-            matrix 1,0,0,1,34,34
+            matrix 1,0,0,1,352,274
               text 0,0 96x33.6 "60 fps" size=28 family=sans-serif weight=400 color=#3b5bdbff lang=en
             end
           end
           element group
-            matrix 1,0,0,1,34,72
+            matrix 1,0,0,1,352,312
               text 0,0 96x14.4 "software + wgpu" size=12 family=sans-serif weight=400 color=#686d82ff lang=en
             end
           end

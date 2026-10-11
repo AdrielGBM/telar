@@ -13,5 +13,8 @@ row gap:12 align:start
     text "{props.values}" font_size:13 color:$theme.primary width:190
     text "{props.about}" font_size:13 color:$theme.muted grow:1
 
+[previews "Sandbox/Prop row" layout:padded]
+One documentation row for an attribute: its name, accepted values and a short description.
+
 [preview "Prop row"]
 prop_row name:"align" values:"start · center · end · stretch" about:"Cross-axis alignment of children."

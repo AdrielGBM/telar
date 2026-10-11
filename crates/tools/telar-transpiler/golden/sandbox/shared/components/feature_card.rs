@@ -60,9 +60,13 @@ pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
 
 pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--feature-card"), "feature_card", "Feature card", feature_card_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/feature_card.rsx"), 15)
-        .source("[preview \"Feature card\"]\nfeature_card icon:\"⚡\" title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"", &[::telar::preview::SourceSpan::new(0, 143, 15)])
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/feature_card.rsx"), 18)
+        .title("Sandbox/Feature card")
+        .docs("An icon, title and body on a bordered surface, for the feature grid.")
+        .source("[preview \"Feature card\" matrix:(mode:[modern midnight])]\nfeature_card icon:\"⚡\" title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"", &[::telar::preview::SourceSpan::new(0, 175, 18)])
         .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
-        .args(&[::telar::preview::ArgSpec::new("icon").default("\"⚡\""), ::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")]),
+        .args(&[::telar::preview::ArgSpec::new("icon").default("\"⚡\""), ::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")])
+        .layout(::telar::preview::Layout::Centered)
+        .matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Mode(&["modern", "midnight"])])),
 ];
 }

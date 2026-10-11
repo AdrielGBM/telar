@@ -44,9 +44,12 @@ pub fn code_line_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<B
 
 pub const CODE_LINE_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--code_line--code-line"), "code_line", "Code line", code_line_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/code_line.rsx"), 13)
-        .source("[preview \"Code line\"]\ncode_line code:\"box fill:primary radius:8 width:120 height:80\"", &[::telar::preview::SourceSpan::new(0, 84, 13)])
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/code_line.rsx"), 16)
+        .title("Sandbox/Code line")
+        .docs("A one-line code snippet in a dark pill, used under each documented example.")
+        .source("[preview \"Code line\"]\ncode_line code:\"box fill:primary radius:8 width:120 height:80\"", &[::telar::preview::SourceSpan::new(0, 84, 16)])
         .props(<CodeLineProps as ::telar::preview::HasPropsSchema>::schema)
-        .args(&[::telar::preview::ArgSpec::new("code").default("\"box fill:primary radius:8 width:120 height:80\"")]),
+        .args(&[::telar::preview::ArgSpec::new("code").default("\"box fill:primary radius:8 width:120 height:80\"")])
+        .layout(::telar::preview::Layout::Padded),
 ];
 }

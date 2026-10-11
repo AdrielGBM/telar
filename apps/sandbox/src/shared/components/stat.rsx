@@ -10,5 +10,8 @@ box fill:$theme.surface stroke:$theme.border radius:14 grow:1 min_width:130 pad:
     text "{props.value}" font_size:28 color:$theme.primary
     text "{props.label}" font_size:12 color:$theme.muted
 
-[preview "Stat"]
+[previews "Sandbox/Stat" layout:centered]
+A highlighted figure with a caption beneath it.
+
+[preview "Stat" matrix:(mode:[modern midnight])]
 stat value:"60 fps" label:"software + wgpu"

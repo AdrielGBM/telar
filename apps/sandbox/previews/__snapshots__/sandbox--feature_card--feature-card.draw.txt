@@ -5,19 +5,19 @@ element group
     element group
       element group
         element group
-          rect 16,16 492x124 fill=#ffffffff border=1 border-color=#e2e5eeff radius=16
+          rect 154,238 492x124 fill=#ffffffff border=1 border-color=#e2e5eeff radius=16
           element group
-            matrix 1,0,0,1,36,36
+            matrix 1,0,0,1,174,258
               text 0,0 452x33.6 "⚡" size=28 family=sans-serif weight=400 color=#14161fff lang=en
             end
           end
           element group
-            matrix 1,0,0,1,36,78
+            matrix 1,0,0,1,174,300
               text 0,0 452x19.2 "Fast" size=16 family=sans-serif weight=400 color=#14161fff lang=en
             end
           end
           element group
-            matrix 1,0,0,1,36,105
+            matrix 1,0,0,1,174,327
               text 0,0 452x15.6 "Software and wgpu renderers with dirty-tracking and scroll-blit detection." size=13 family=sans-serif weight=400 color=#686d82ff lang=en
             end
           end

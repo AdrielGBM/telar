@@ -71,14 +71,21 @@ pub fn feature_card_preview_1(__preview: &::telar::preview::PreviewCtx) -> Resul
 
 pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--fast"), "feature_card", "Fast", feature_card_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 19)
-        .source("[preview \"Fast\"]\nfeature_card icon:\"⚡\" title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"", &[::telar::preview::SourceSpan::new(0, 135, 19)])
-        .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
-        .args(&[::telar::preview::ArgSpec::new("icon").default("\"⚡\""), ::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")]),
-    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--long-body"), "feature_card", "Long body", feature_card_preview_1)
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 22)
-        .source("[preview \"Long body\"]\nfeature_card icon:\"📱\" title:\"Cross-platform\" body:\"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.\"", &[::telar::preview::SourceSpan::new(0, 205, 22)])
+        .title("Landing/Feature card")
+        .docs("A feature highlighted on the landing page: a glyph, a one-line heading and a supporting sentence that wraps.")
+        .source("[preview \"Fast\"]\nfeature_card icon:\"⚡\" title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"", &[::telar::preview::SourceSpan::new(0, 135, 22)])
         .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
-        .args(&[::telar::preview::ArgSpec::new("icon").default("\"📱\""), ::telar::preview::ArgSpec::new("title").default("\"Cross-platform\""), ::telar::preview::ArgSpec::new("body").default("\"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.\"")]),
+        .args(&[::telar::preview::ArgSpec::new("icon").default("\"⚡\""), ::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")])
+        .layout(::telar::preview::Layout::Centered),
+    ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--long-body"), "feature_card", "Long body", feature_card_preview_1)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 25)
+        .title("Landing/Feature card")
+        .docs("A feature highlighted on the landing page: a glyph, a one-line heading and a supporting sentence that wraps.")
+        .source("[preview \"Long body\" viewport:360x640]\nfeature_card icon:\"📱\" title:\"Cross-platform\" body:\"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.\"", &[::telar::preview::SourceSpan::new(0, 222, 25)])
+        .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
+        .args(&[::telar::preview::ArgSpec::new("icon").default("\"📱\""), ::telar::preview::ArgSpec::new("title").default("\"Cross-platform\""), ::telar::preview::ArgSpec::new("body").default("\"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text.\"")])
+        .layout(::telar::preview::Layout::Centered)
+        .viewport(360.0, 640.0),
 ];
 }

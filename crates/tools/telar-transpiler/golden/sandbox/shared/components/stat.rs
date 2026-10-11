@@ -51,9 +51,13 @@ pub fn stat_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
 
 pub const STAT_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--stat--stat"), "stat", "Stat", stat_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/stat.rsx"), 13)
-        .source("[preview \"Stat\"]\nstat value:\"60 fps\" label:\"software + wgpu\"", &[::telar::preview::SourceSpan::new(0, 60, 13)])
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/stat.rsx"), 16)
+        .title("Sandbox/Stat")
+        .docs("A highlighted figure with a caption beneath it.")
+        .source("[preview \"Stat\" matrix:(mode:[modern midnight])]\nstat value:\"60 fps\" label:\"software + wgpu\"", &[::telar::preview::SourceSpan::new(0, 92, 16)])
         .props(<StatProps as ::telar::preview::HasPropsSchema>::schema)
-        .args(&[::telar::preview::ArgSpec::new("value").default("\"60 fps\""), ::telar::preview::ArgSpec::new("label").default("\"software + wgpu\"")]),
+        .args(&[::telar::preview::ArgSpec::new("value").default("\"60 fps\""), ::telar::preview::ArgSpec::new("label").default("\"software + wgpu\"")])
+        .layout(::telar::preview::Layout::Centered)
+        .matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Mode(&["modern", "midnight"])])),
 ];
 }

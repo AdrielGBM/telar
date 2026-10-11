@@ -1,0 +1,28 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#181b26ff
+  element group
+    element group
+      element group
+        element group
+          rect 154,238 492x124 fill=#181b26ff border=1 border-color=#262a38ff radius=16
+          element group
+            matrix 1,0,0,1,174,258
+              text 0,0 452x33.6 "⚡" size=28 family=sans-serif weight=400 color=#e7eaf3ff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,174,300
+              text 0,0 452x19.2 "Fast" size=16 family=sans-serif weight=400 color=#e7eaf3ff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,174,327
+              text 0,0 452x15.6 "Software and wgpu renderers with dirty-tracking and scroll-blit detection." size=13 family=sans-serif weight=400 color=#8b93a7ff lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

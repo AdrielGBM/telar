@@ -16,8 +16,11 @@ box fill:$theme.surface stroke:$theme.border radius:16 width:300 min_width:260 g
     text "{props.title}" font_size:18 color:$theme.dark
     text "{props.body}" font_size:14 color:$theme.muted
 
+[previews "Landing/Feature card" layout:centered]
+A feature highlighted on the landing page: a glyph, a one-line heading and a supporting sentence that wraps.
+
 [preview "Fast"]
 feature_card icon:"⚡" title:"Fast" body:"Software and wgpu renderers with dirty-tracking and scroll-blit detection."
 
-[preview "Long body"]
+[preview "Long body" viewport:360x640]
 feature_card icon:"📱" title:"Cross-platform" body:"One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text."

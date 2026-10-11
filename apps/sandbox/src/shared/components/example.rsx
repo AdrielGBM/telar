@@ -14,6 +14,9 @@ col gap:8
     text "{props.title}" font_size:13 color:$theme.ink
     children
 
+[previews "Sandbox/Example" layout:padded]
+A titled block that stacks a demo above its code snippet.
+
 [preview "Example"]
 example title:"justify — distribute along the main axis"
     card gap:10

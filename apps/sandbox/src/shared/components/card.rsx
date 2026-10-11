@@ -14,7 +14,10 @@ box fill:$theme.surface stroke:$theme.border radius:12 pad:props.pad gap:props.g
     children name:"header"
     children
 
-[preview "Card"]
+[previews "Sandbox/Card" layout:centered]
+The standard surface panel: a rounded, bordered container with an optional header slot above its stacked body.
+
+[preview "Card" matrix:(mode:[modern midnight])]
 card gap:8
     text "Header" font_size:16 color:$theme.ink slot:"header"
     text "A card is the standard surface panel." font_size:13 color:$theme.muted

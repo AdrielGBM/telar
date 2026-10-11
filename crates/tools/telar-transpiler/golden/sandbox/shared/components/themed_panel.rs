@@ -81,9 +81,12 @@ pub fn themed_panel_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
 
 pub const THEMED_PANEL_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--themed_panel--themed-panel"), "themed_panel", "Themed panel", themed_panel_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/themed_panel.rsx"), 21)
-        .source("[preview \"Themed panel\"]\nthemed_panel mode:\"pastel\"\n    text \"Nested at the call site, drawn in {$theme.name}\" font_size:14 color:$theme.ink", &[::telar::preview::SourceSpan::new(0, 140, 21)])
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/themed_panel.rsx"), 24)
+        .title("Sandbox/Themed panel")
+        .docs("A panel drawn in a theme of its own; whatever the call site nests inside it reads that theme.")
+        .source("[preview \"Themed panel\"]\nthemed_panel mode:\"pastel\"\n    text \"Nested at the call site, drawn in {$theme.name}\" font_size:14 color:$theme.ink", &[::telar::preview::SourceSpan::new(0, 140, 24)])
         .props(<ThemedPanelProps as ::telar::preview::HasPropsSchema>::schema)
-        .args(&[::telar::preview::ArgSpec::new("mode").default("\"pastel\"")]),
+        .args(&[::telar::preview::ArgSpec::new("mode").default("\"pastel\"")])
+        .layout(::telar::preview::Layout::Centered),
 ];
 }

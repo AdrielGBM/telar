@@ -553,8 +553,12 @@ pub fn home_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
 
 pub const HOME_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--home--landing-full-page"), "home", "Landing — full page", home_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/home.rsx"), 149)
-        .source("[preview \"Landing — full page\"]\nhome", &[::telar::preview::SourceSpan::new(0, 38, 149)])
-        .props(<HomeProps as ::telar::preview::HasPropsSchema>::schema),
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/home.rsx"), 152)
+        .title("Landing/Home")
+        .docs("The whole landing page, from the hero down to the footer.")
+        .source("[preview \"Landing — full page\" matrix:(viewport:[390x844 1280x800])]\nhome", &[::telar::preview::SourceSpan::new(0, 75, 152)])
+        .props(<HomeProps as ::telar::preview::HasPropsSchema>::schema)
+        .layout(::telar::preview::Layout::Fullscreen)
+        .matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Viewport(&["390x844", "1280x800"])])),
 ];
 }

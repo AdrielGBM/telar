@@ -1,23 +1,23 @@
-frame 800x600 lang=en
+frame 360x640 lang=en
 element group
-  rect 0,0 800x600 fill=#ffffffff
+  rect 0,0 360x640 fill=#ffffffff
   element group
     element group
       element group
         element group
-          rect 16,16 300x195 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
+          rect 30,222 300x196 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
           element group
-            matrix 1,0,0,1,40,40
+            matrix 1,0,0,1,54,246
               text 0,0 252x38.4 "📱" size=32 family=sans-serif weight=400 color=#262633ff lang=en
             end
           end
           element group
-            matrix 1,0,0,1,40,88
+            matrix 1,0,0,1,54,294
               text 0,0 252x21.6 "Cross-platform" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
             end
           end
           element group
-            matrix 1,0,0,1,40,120
+            matrix 1,0,0,1,54,326
               text 0,0 252x67.2 "One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text." size=14 family=sans-serif weight=400 color=#545973ff lang=en
             end
           end

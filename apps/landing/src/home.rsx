@@ -146,5 +146,8 @@ col @page
                 text "Docs" font_size:13 color:$theme.on_dark
                 text "Examples" font_size:13 color:$theme.on_dark
 
-[preview "Landing — full page"]
+[previews "Landing/Home" layout:fullscreen]
+The whole landing page, from the hero down to the footer.
+
+[preview "Landing — full page" matrix:(viewport:[390x844 1280x800])]
 home

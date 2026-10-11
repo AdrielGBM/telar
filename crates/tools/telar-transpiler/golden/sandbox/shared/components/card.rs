@@ -86,9 +86,13 @@ pub fn card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
 
 pub const CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--card--card"), "card", "Card", card_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/card.rsx"), 17)
-        .source("[preview \"Card\"]\ncard gap:8\n    text \"Header\" font_size:16 color:$theme.ink slot:\"header\"\n    text \"A card is the standard surface panel.\" font_size:13 color:$theme.muted\n    text \"Bare children stack with the gap you pass; slot:\\\"header\\\" pins a header on top.\" font_size:13 color:$theme.muted", &[::telar::preview::SourceSpan::new(0, 294, 17)])
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/card.rsx"), 20)
+        .title("Sandbox/Card")
+        .docs("The standard surface panel: a rounded, bordered container with an optional header slot above its stacked body.")
+        .source("[preview \"Card\" matrix:(mode:[modern midnight])]\ncard gap:8\n    text \"Header\" font_size:16 color:$theme.ink slot:\"header\"\n    text \"A card is the standard surface panel.\" font_size:13 color:$theme.muted\n    text \"Bare children stack with the gap you pass; slot:\\\"header\\\" pins a header on top.\" font_size:13 color:$theme.muted", &[::telar::preview::SourceSpan::new(0, 326, 20)])
         .props(<CardProps as ::telar::preview::HasPropsSchema>::schema)
-        .args(&[::telar::preview::ArgSpec::new("gap").default("8.0")]),
+        .args(&[::telar::preview::ArgSpec::new("gap").default("8.0")])
+        .layout(::telar::preview::Layout::Centered)
+        .matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Mode(&["modern", "midnight"])])),
 ];
 }
