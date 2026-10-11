@@ -54,8 +54,7 @@ pub fn generated_target(
             assets: Some(&assets),
             prelude: &prelude,
             library,
-            // With previews, unlike a shipping build: a `[preview]` block is markup the author is looking at while they type, and leaving it out would stop reporting an error inside one — the diagnostic would simply never be produced, which reads as a preview that is fine.
-            flavour: BuildFlavour::Preview,
+            flavour: BuildFlavour::Plain,
         },
     )
     .ok()?;

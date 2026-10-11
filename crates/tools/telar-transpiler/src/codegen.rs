@@ -183,12 +183,6 @@ pub(crate) struct TranspileInput<'a> {
     pub library: bool,
     /// Emit signal declarations in the keyed form the dev host restores across a dylib swap. An argument rather than an ambient one: this was read from the environment, which made the generated code depend on who ran the process — the editor mirror, the golden snapshots and the build could each produce a different file from the same source and none of them was wrong to.
     pub hot_reload: bool,
-    /// Emit a build fn per `[preview]` block, and the entry table naming them.
-    ///
-    /// Off for anything that ships. A `[preview]` is a thing to look at while writing the component, and it used to reach the binary a user installs: the fns are `pub`, the table is `pub`, and `telar::dev_entry` referenced the table from every `run()` — so the preview bodies were live code, and `TELAR_TEST=1 ./app` ran the preview harness in a shipped application. Not emitting them is the only version of "off" that costs nothing to compile and cannot be reached by an environment variable.
-    ///
-    /// An argument for the same reason [`Self::hot_reload`] is one: it decides what the generated Rust *is*, so the artifact records which way it was written and a build wanting the other one re-transpiles rather than wiring the wrong shape.
-    pub previews: bool,
     /// The `.rsx` file's path relative to its package root, `/`-separated, which each preview entry records as where it is written. `None` when no package anchors this transpile.
     pub rsx_path: Option<&'a str>,
 }
@@ -227,7 +221,6 @@ pub fn transpile_source(
         prelude: &[],
         library: false,
         hot_reload: false,
-        previews: true,
         rsx_path: None,
     })
 }
@@ -513,7 +506,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     }
     code.push("}\n", None);
 
-    if input.previews && (!doc.previews.is_empty() || doc.previews_meta.is_some()) {
+    if !doc.previews.is_empty() || doc.previews_meta.is_some() {
         code.push("\n", None);
         code.push(crate::preview::OPEN, None);
         let mapped = crate::preview::emit_variants(
@@ -536,11 +529,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
 
     Ok(TranspiledSource {
         rust_code: code.out,
-        // What was emitted, not what the document declared: a caller reads this to decide whether to wire a preview table, and a name here with no fn behind it wires one that does not exist.
-        preview_names: match input.previews {
-            true => doc.previews.iter().map(|p| p.name.clone()).collect(),
-            false => Vec::new(),
-        },
+        preview_names: doc.previews.iter().map(|p| p.name.clone()).collect(),
         source_map: code.map,
         expr_spans,
         shadows,
@@ -841,7 +830,7 @@ fn field_line(lines: &[&str], name: &str) -> Option<usize> {
 
 /// The module a `*.previews.rsx` compiles to: previews of a component written elsewhere, beside it, under the component's name.
 ///
-/// Everything in it exists for its previews, so its `[logic]` — the `use` lines and the items its previews name, such as a `fixture:` or a `decorator:` — and its `[style]` sit inside the same `::telar::__previews!` as the previews. In a build that emits no previews the module is empty. A `[view]` is refused rather than compiled into a component nothing calls.
+/// Everything in it exists for its previews, so its `[logic]` — the `use` lines and the items its previews name, such as a `fixture:` or a `decorator:` — and its `[style]` sit inside the same `::telar::__previews!` as the previews. In a build without `telar/previews` the module is empty. A `[view]` is refused rather than compiled into a component nothing calls.
 pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSource, TranspileError> {
     let doc = input.document;
     if !doc.view.nodes.is_empty() {
@@ -855,7 +844,7 @@ pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSourc
         None,
     );
     let mut mapped = crate::preview::Mapped::default();
-    if input.previews && (!doc.previews.is_empty() || doc.previews_meta.is_some()) {
+    if !doc.previews.is_empty() || doc.previews_meta.is_some() {
         let fn_name = to_snake_case(input.component_name);
         let theme = ThemeAccess::for_library(input.library);
         let theme_type = match theme {
@@ -903,10 +892,7 @@ pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSourc
     }
     Ok(TranspiledSource {
         rust_code: code.out,
-        preview_names: match input.previews {
-            true => doc.previews.iter().map(|p| p.name.clone()).collect(),
-            false => Vec::new(),
-        },
+        preview_names: doc.previews.iter().map(|p| p.name.clone()).collect(),
         source_map: code.map,
         expr_spans: mapped.expr_spans,
         shadows: mapped.shadows,

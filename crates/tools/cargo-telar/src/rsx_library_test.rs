@@ -1,6 +1,6 @@
 //! The end-to-end proof that a `[telar] library` builds from the package it publishes: `plugins/telar-rsx-fixture` passes `cargo telar package --check`, is packaged by cargo, unpacked read-only, and compiled as a dependency of a generated application that the CLI transpiles while never running on the library.
 //!
-//! The application overrides one of the library's strings from a catalog it never installs by hand, names a theme of its own, ships the licence notice of the icons the library baked, draws the library's `.rsx` component headlessly and the icon its Rust names with `telar_icons::icon!`, once with the Plain flavour and once with the features `cargo telar dev` and `cargo telar preview` turn on. Afterwards the unpacked library has to be byte-for-byte what cargo packaged.
+//! The application overrides one of the library's strings from a catalog it never installs by hand, names a theme of its own, ships the licence notice of the icons the library baked, draws the library's `.rsx` component headlessly and the icon its Rust names with `telar_icons::icon!`, once with the Plain flavour and once with the features `cargo telar dev` and `cargo telar preview` turn on, under which the library's `.rsx` previews, wired from the same Plain artifact, reach the application and build. Afterwards the unpacked library has to be byte-for-byte what cargo packaged.
 //!
 //! It compiles a few hundred crates into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p cargo-telar --test rsx_library -- --ignored`. Every cargo it starts runs offline, so the registry has to hold what `Cargo.lock` names first (`cargo fetch`).
 
@@ -290,6 +290,7 @@ pub struct ConsumerTheme {
     pub success: Color,
     pub warning: Color,
     pub error: Color,
+    pub on_error: Color,
     pub info: Color,
     pub highlight_low: Color,
     pub highlight_med: Color,
@@ -316,6 +317,7 @@ impl ConsumerTheme {
             success: grey,
             warning: grey,
             error: grey,
+            on_error: Color::WHITE,
             info: grey,
             highlight_low: grey,
             highlight_med: grey,
@@ -384,5 +386,29 @@ fn the_icon_the_library_names_from_rust_draws_from_its_shipped_artifact() {
     let tree = mount(WindowRoot::new(marker), 64, 64);
     let commands = tree.commands();
     assert!(commands.iter().any(|command| matches!(command, DrawCommand::Path { .. })), "{commands:?}");
+}
+
+telar::__previews! {
+    #[test]
+    fn the_library_rsx_previews_reach_the_application_and_build() {
+        let previews = telar_rsx_fixture::telar_all_previews();
+        let ids: Vec<&str> = previews.iter().map(|entry| entry.id).collect();
+        for id in [
+            "telar_rsx_fixture--greeting_card--ada",
+            "telar_rsx_fixture--tally--rsx-literal",
+            "telar_rsx_fixture--tally--rsx-bound",
+        ] {
+            assert!(ids.contains(&id), "the library's `.rsx` preview `{id}` is listed: {ids:?}");
+        }
+
+        telar::set_theme(ConsumerTheme::new());
+        telar::set_locale("en");
+        telar::install_default_text_metrics();
+        reset_layout_runtime();
+        let ada = previews.iter().find(|entry| entry.id == "telar_rsx_fixture--greeting_card--ada").unwrap();
+        let root = ada.build_root(&telar::preview::PreviewCtx::for_entry(ada)).expect("the preview builds");
+        let drawn = texts(&mount(WindowRoot::new(root), 480, 160));
+        assert!(drawn.iter().any(|text| text == "Welcome aboard, Ada!"), "{drawn:?}");
+    }
 }
 "#;

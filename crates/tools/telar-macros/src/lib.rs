@@ -216,9 +216,9 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     // Decided at macro expansion time by the features cargo-telar names on the build, which cargo tracks — unlike the environment variables these were, which it does not — and by whether the package is a library compiled for another one.
     let is_hot_reload = flavour.is_hot();
-    let is_preview = flavour.has_previews();
+    let is_preview = runs_previews();
 
-    let preview_table = previews_table(is_preview, &preview_const_idents);
+    let preview_table = previews_table(&preview_const_idents);
     let app_previews = match is_preview {
         true => app_previews_fn(&previews_include),
         false => quote! {},
@@ -594,7 +594,12 @@ fn with_overlay(
 ///
 /// It was an environment variable, and cargo does not track a proc macro's env reads — so the flavour needed something cargo *does* track to move the fingerprint by, and that was `--cfg=telar_hot_reload` pushed into `RUSTFLAGS`. Rustflags are hashed into every unit in the graph, so alternating `cargo telar check` and `cargo telar dev` recompiled all four hundred dependencies each way to change which directory this function names. A feature is tracked too, and reaches only the crates that enable it.
 fn build_flavour() -> telar_project::BuildFlavour {
-    telar_project::BuildFlavour::new(cfg!(feature = "hot-reload"), cfg!(feature = "preview"))
+    telar_project::BuildFlavour::new(cfg!(feature = "hot-reload"))
+}
+
+/// Whether the application runner answers the preview tools: `telar/previews` is on, which turns on the feature read here. Not part of the flavour, because the transpiled Rust is the same either way — its previews sit behind `::telar::__previews!` — and only the runner `app!` generates differs.
+fn runs_previews() -> bool {
+    cfg!(feature = "preview")
 }
 
 /// The `telar` version every artifact this macro wires must have been written against: its own.
@@ -615,7 +620,7 @@ impl Wiring {
     ///
     /// cargo sets `CARGO_PRIMARY_PACKAGE` when compiling a package the command selected — by `-p`, by `--workspace`, or as the package in the current directory or a default member — and leaves it unset for every dependency, including a workspace member pulled in by another one. A registry or git dependency is never selected short of naming it with `-p`, so a published library always reads as a dependency.
     ///
-    /// A dependency gets the Plain flavour whatever `hot-reload` or `preview` asked for: features unify across the graph, so the application's `cargo telar dev` turns them on for every crate, and a published library ships the Plain artifact alone. Selected, a library is being developed and gets the flavour asked for, like any other package.
+    /// A dependency gets the Plain flavour whatever `hot-reload` asked for: features unify across the graph, so the application's `cargo telar dev` turns them on for every crate, and a published library ships the Plain artifact alone. Selected, a library is being developed and gets the flavour asked for, like any other package.
     ///
     /// cargo does not hash `CARGO_PRIMARY_PACKAGE` into a unit, nor compare a proc macro's reads of it, so a workspace library compiled once selected and once as a dependency, with the same features, reuses whichever expansion ran first until one of its sources changes. Harmless: `cargo telar transpile` writes every flavour for a workspace member, and the features that let one flavour compile are the same in both builds.
     fn decide(library: bool, primary: bool, requested: telar_project::BuildFlavour) -> Self {
@@ -757,6 +762,8 @@ struct TranspileOutput {
     previews_include: Vec<Ident>,
     /// Whether the package is a `[telar] library`, which has no binary for `cargo telar test` to start.
     library: bool,
+    /// Whether that library is compiled for another package, which never builds its tests.
+    library_dependency: bool,
 }
 
 /// The package an expansion compiles: where it is, what cargo calls it, and how it is wired.
@@ -1072,7 +1079,7 @@ fn wire_package(
     }
 
     // A library has no matrices of its own to install: an application lists its previews and resolves their names against its own table.
-    if !manifest.telar.library && flavour.has_previews() {
+    if !manifest.telar.library {
         let install = preview_matrices::matrices_install(&manifest.telar.previews, invocation)
             .map_err(|problems| {
                 let msg = format!("rsx: {problems}");
@@ -1126,6 +1133,7 @@ fn wire_package(
             .map(|entry| Ident::new(entry.crate_name(), Span::call_site()))
             .collect(),
         library: manifest.telar.library,
+        library_dependency: package.wiring.library_dependency,
     })
 }
 
@@ -1150,15 +1158,15 @@ pub fn rsx_modules(input: TokenStream) -> TokenStream {
         include_stmts,
         rerun_stmts,
         preview_const_idents,
-        flavour,
         library,
+        library_dependency,
         ..
     } = match transpile_project(Invocation::Modules, theme_type_str.as_deref()) {
         Ok(o) => o,
         Err(err) => return err.into(),
     };
-    let preview_fn = previews_table(flavour.has_previews(), &preview_const_idents);
-    let previews_test = match library && flavour.has_previews() {
+    let preview_fn = previews_table(&preview_const_idents);
+    let previews_test = match library && !library_dependency {
         true => match declared_fonts() {
             Ok(fonts) => library_previews_test(fonts),
             Err(err) => return err.into(),
@@ -1180,9 +1188,8 @@ mod tests;
 
 /// The crate's `telar_all_previews`, listing its `.rsx` previews, inside `::telar::__previews!` so it exists exactly when the previews a crate writes in Rust do.
 ///
-/// It is defined in a hidden module and glob-imported where the macro is called, so a crate with Rust previews defines its own `telar_all_previews` beside the call, which shadows this one, and lists the `.rsx` previews in it through `telar_rsx_previews()`. Only the flavours that emit `[preview]` blocks have consts to name, so a library compiled as a dependency lists none of its `.rsx` previews.
-fn previews_table(previews: bool, consts: &[TokenStream2]) -> TokenStream2 {
-    let consts = if previews { consts } else { &[] };
+/// It is defined in a hidden module and glob-imported where the macro is called, so a crate with Rust previews defines its own `telar_all_previews` beside the call, which shadows this one, and lists the `.rsx` previews in it through `telar_rsx_previews()`. Every flavour emits the consts it names behind the same gate, so a library compiled as a dependency lists its `.rsx` previews too.
+fn previews_table(consts: &[TokenStream2]) -> TokenStream2 {
     quote! {
         ::telar::__previews! {
             #[doc(hidden)]

@@ -528,7 +528,7 @@ pub fn is_generated_output(path: &Path) -> bool {
 
 /// Splits `<crate>/.telar/<flavour>/<rel>.rs` into its package root and the path under the flavour directory.
 ///
-/// Every flavour, from [`BuildFlavour::DIR_NAMES`](crate::BuildFlavour::DIR_NAMES) — a fifth one added there is recognised here without being told.
+/// Every flavour, from [`BuildFlavour::DIR_NAMES`](crate::BuildFlavour::DIR_NAMES) — one added there is recognised here without being told.
 fn split_at_generated_dir(path: &Path) -> Option<(PathBuf, PathBuf)> {
     let parts: Vec<Component> = path.components().collect();
     let at = parts.windows(2).position(|pair| {

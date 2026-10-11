@@ -694,7 +694,7 @@ fn pruning_removes_orphans_across_flavours() {
     for dir in [
         root.join("build/core"),
         root.join("build-hot/core"),
-        root.join("build-preview/core"),
+        root.join("build-hot/widgets"),
     ] {
         std::fs::create_dir_all(&dir).unwrap();
     }
@@ -713,8 +713,8 @@ fn pruning_removes_orphans_across_flavours() {
             false,
         ),
         (
-            "build-preview/core/icon.rs",
-            "build-preview/core/icon.rs.map",
+            "build-hot/widgets/icon.rs",
+            "build-hot/widgets/icon.rs.map",
             false,
         ),
     ];

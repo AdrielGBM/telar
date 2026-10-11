@@ -15,8 +15,6 @@ include = [
     "/telar.toml",
     "/src/**",
     "!/src/**/.telar/modules-hot.rs",
-    "!/src/**/.telar/modules-preview.rs",
-    "!/src/**/.telar/modules-hot-preview.rs",
     "/.telar/build/**",
     "/.telar/build.json",
     "/.telar/i18n.rs",

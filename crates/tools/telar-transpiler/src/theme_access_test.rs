@@ -12,7 +12,6 @@ fn transpiled(source: &str, theme_type: Option<&str>, library: bool) -> Transpil
         prelude: &[],
         library,
         hot_reload: false,
-        previews: true,
         rsx_path: None,
     })
     .expect("the fixture transpiles");

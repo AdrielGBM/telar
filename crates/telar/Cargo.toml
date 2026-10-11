@@ -291,7 +291,8 @@ hot-reload = ["dev", "desktop-bare", "telar-macros/hot-reload"]
 ## Emitting the `[preview]` blocks at all, and the entry point that runs them. Every preview tool turns it on.
 ##
 ## The one that matters, because without it a `[preview]` is not compiled into anything: the transpiler emits
-## a build fn per block only for the flavours that ask, and this is what asks. A build without it also has no
+## a build fn per block in every flavour, inside `__previews!`, which expands to nothing unless this is on. That
+## is how a library compiled as a dependency carries its previews to an application. A build without it also has no
 ## `telar::dev_entry` in its `run()` — which is why a shipped binary no longer answers `TELAR_TEST=1` from
 ## whoever sets it, and no longer carries the preview harness or the markup of every block.
 ##

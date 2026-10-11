@@ -137,8 +137,12 @@ fn a_record_for_an_edited_source_is_not_reported() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// An artifact exactly as `cargo telar transpile` would leave it for one `home.rsx`, recorded under `prelude`.
 fn transpiled_under(name: &str, prelude: &[&str]) -> std::path::PathBuf {
+    transpiled(name, prelude, false)
+}
+
+/// An artifact exactly as `cargo telar transpile` would leave it for one `home.rsx`, recorded under `prelude`, declaring `[preview]` blocks or not.
+fn transpiled(name: &str, prelude: &[&str], previews: bool) -> std::path::PathBuf {
     let root = package(name);
     let source = "[view]\ntext \"a\"\n";
     let output = "// generated\n";
@@ -158,7 +162,7 @@ fn transpiled_under(name: &str, prelude: &[&str]) -> std::path::PathBuf {
             source: "home.rsx".to_string(),
             hash: telar_project::content_hash(source.as_bytes()),
             output_hash: telar_project::content_hash(output.as_bytes()),
-            previews: false,
+            previews,
         }],
     };
     telar_project::write_build_index(&root, flavour, &index).unwrap();
@@ -232,7 +236,7 @@ fn a_library_compiled_for_another_package_is_plain_whatever_was_asked() {
     }
 }
 
-/// Selected on the command line, a library is being developed — its previews checked, its signals hot — so it gets what the build asked for, like an application.
+/// Selected on the command line, a library is being developed — its signals hot — so it gets what the build asked for, like an application.
 #[test]
 fn a_selected_library_and_any_application_get_the_flavour_asked_for() {
     for requested in BuildFlavour::ALL {
@@ -385,7 +389,7 @@ fn a_library_dependency_is_wired_from_a_read_only_package_without_writing() {
         root.clone(),
         "kit".into(),
         false,
-        BuildFlavour::HotPreview,
+        BuildFlavour::Hot,
         super::Invocation::Modules,
         None,
     );
@@ -393,7 +397,7 @@ fn a_library_dependency_is_wired_from_a_read_only_package_without_writing() {
         root.clone(),
         "kit".into(),
         true,
-        BuildFlavour::HotPreview,
+        BuildFlavour::Hot,
         super::Invocation::Modules,
         None,
     );
@@ -415,7 +419,7 @@ fn a_library_dependency_is_wired_from_a_read_only_package_without_writing() {
     assert_eq!(before, after, "nothing under the package was written");
     let refused = selected
         .err()
-        .expect("selected, it asks for the hot preview artifact it was never given")
+        .expect("selected, it asks for the hot artifact it was never given")
         .to_string();
     assert!(refused.contains("no transpiled `.rsx`"), "{refused}");
 }
@@ -527,11 +531,7 @@ fn catalog_installer(
 #[test]
 fn an_application_catalog_is_installed_as_its_binary_loads_in_every_flavour() {
     use telar_project::BuildFlavour;
-    for flavour in [
-        BuildFlavour::Plain,
-        BuildFlavour::Hot,
-        BuildFlavour::HotPreview,
-    ] {
+    for flavour in BuildFlavour::ALL {
         let root = with_baked_catalog(
             &format!("installs_{flavour:?}"),
             "[telar]\n",
@@ -618,11 +618,7 @@ fn write_icon_notice(root: &std::path::Path) {
 #[test]
 fn an_application_compiles_its_icon_notice_in_and_installs_it_as_its_binary_loads() {
     use telar_project::BuildFlavour;
-    for flavour in [
-        BuildFlavour::Plain,
-        BuildFlavour::Hot,
-        BuildFlavour::HotPreview,
-    ] {
+    for flavour in BuildFlavour::ALL {
         let root = with_baked_catalog(
             &format!("icon_notice_{flavour:?}"),
             "[telar]\n",
@@ -685,7 +681,7 @@ fn spaced(tokens: proc_macro2::TokenStream) -> String {
 #[test]
 fn the_rsx_table_is_a_default_a_crate_can_shadow() {
     let consts = [quote::quote! { crate::card::CARD_PREVIEW_ENTRIES }];
-    let table = spaced(super::previews_table(true, &consts));
+    let table = spaced(super::previews_table(&consts));
     assert!(table.starts_with(":: telar :: __previews !"), "{table}");
     assert!(table.contains("pub use __telar_previews :: * ;"), "{table}");
     assert!(
@@ -699,13 +695,41 @@ fn the_rsx_table_is_a_default_a_crate_can_shadow() {
     assert!(table.contains("pub fn telar_all_previews ()"), "{table}");
 }
 
-/// A library compiled as a dependency is wired from its Plain artifact, which holds no `[preview]`, so its table names no const even when previews are on.
+/// A library compiled as a dependency is wired from its Plain artifact whatever the build asked for, and that artifact carries its previews behind the gate, so its table names them for the application that lists it.
 #[test]
-fn a_flavour_without_previews_lists_no_rsx_preview() {
-    let consts = [quote::quote! { crate::card::CARD_PREVIEW_ENTRIES }];
-    let table = spaced(super::previews_table(false, &consts));
-    assert!(!table.contains("CARD_PREVIEW_ENTRIES"), "{table}");
-    assert!(table.contains("pub fn telar_all_previews ()"), "{table}");
+fn a_library_dependency_lists_its_rsx_previews() {
+    let root = transpiled("dependency_previews", &[], true);
+    std::fs::write(root.join("src/lib.rs"), "telar::rsx_modules!();\n").unwrap();
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        "[telar]\nlibrary = true\n",
+    )
+    .unwrap();
+    telar_project::ModuleTree::discover(
+        &root.join("src"),
+        &telar_project::generated_dir(&root, BuildFlavour::Plain),
+        BuildFlavour::Plain.site_file_name(),
+    )
+    .write()
+    .unwrap();
+
+    let output = super::wire_package(
+        root.clone(),
+        "kit".into(),
+        false,
+        BuildFlavour::Hot,
+        super::Invocation::Modules,
+        None,
+    );
+    let _ = std::fs::remove_dir_all(&root);
+
+    let output = output.unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(output.flavour, BuildFlavour::Plain);
+    let table = spaced(super::previews_table(&output.preview_const_idents));
+    assert!(
+        table.contains("crate :: home :: HOME_PREVIEW_ENTRIES"),
+        "{table}"
+    );
 }
 
 #[test]

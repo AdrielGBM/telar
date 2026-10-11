@@ -125,12 +125,10 @@ fn writing_reports_what_it_wrote() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// The whole point of the flavour: a build that does not ask for previews gets none generated.
-///
-/// Not a size optimisation. These fns used to be emitted into every build, `telar_all_preview_entries` named them from the crate root, and `telar::dev_entry` called that from the `run()` of every application — so the markup of every `[preview]` block was live code in a shipped binary, and `TELAR_TEST=1 ./app` ran the preview harness and exited for anyone who set it.
+/// A dependency is always compiled from its Plain artifact, so a flavour that left previews out would keep a library's previews from every application that lists it. Every flavour emits them, and `::telar::__previews!` is what keeps them out of a build that does not ask: the component stays outside the gate, every preview item inside it.
 #[test]
-fn a_flavour_without_previews_generates_none() {
-    let root = package("no_previews");
+fn every_flavour_emits_its_previews_behind_the_gate() {
+    let root = package("gated_previews");
     let src = root.join("src");
     std::fs::write(
         src.join("card.rsx"),
@@ -138,26 +136,26 @@ fn a_flavour_without_previews_generates_none() {
     )
     .unwrap();
 
-    let with = transpile_package(&options(&src, BuildFlavour::Preview)).unwrap();
-    let without = transpile_package(&options(&src, BuildFlavour::Plain)).unwrap();
+    for flavour in BuildFlavour::ALL {
+        let files = transpile_package(&options(&src, flavour)).unwrap();
+        let code = &files[0].source.rust_code;
+        assert_eq!(files[0].source.preview_names, ["Default"], "{flavour:?}");
+        let (component, gated) = code
+            .split_once("::telar::__previews! {\n")
+            .unwrap_or_else(|| panic!("{flavour:?} gates its previews:\n{code}"));
+        assert!(component.contains("pub fn card("), "{flavour:?}:\n{code}");
+        assert!(!component.contains("preview"), "{flavour:?}:\n{code}");
+        assert!(
+            gated.contains("pub fn card_preview_0("),
+            "{flavour:?}:\n{code}"
+        );
+        assert!(
+            gated.contains("pub const CARD_PREVIEW_ENTRIES"),
+            "{flavour:?}:\n{code}"
+        );
+    }
 
-    assert!(
-        with[0].source.rust_code.contains("card_preview_0"),
-        "the preview flavour emits a build fn per block:\n{}",
-        with[0].source.rust_code
-    );
-    assert_eq!(with[0].source.preview_names, ["Default"]);
-
-    assert!(
-        !without[0].source.rust_code.contains("preview"),
-        "a plain build must carry no trace of one:\n{}",
-        without[0].source.rust_code
-    );
-    assert!(
-        without[0].source.preview_names.is_empty(),
-        "and must not report previews a reader would then wire to nothing"
-    );
-    assert!(without[0].source.rust_code.contains("pub fn card("));
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 const BROKEN_VIEW: &str = "[view]\ncol\n    text \"fine\"\n    text \"oops\n";
@@ -283,7 +281,7 @@ fn a_buffer_transpiles_as_the_saved_file_would() {
     let options = PackageOptions {
         prelude: &prelude,
         library: false,
-        ..options(&src_dir, BuildFlavour::Preview)
+        ..options(&src_dir, BuildFlavour::Plain)
     };
 
     let walked = transpile_package(&options).unwrap();
@@ -294,7 +292,7 @@ fn a_buffer_transpiles_as_the_saved_file_would() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// A previews file previews the component beside it, in a module of its own: its previews are named after that component, its `[logic]` and its `[style]` exist for them alone, and a build without previews gets an empty module.
+/// A previews file previews the component beside it, in a module of its own: its previews are named after that component, its `[logic]` and its `[style]` exist for them alone, and all of it sits behind the gate.
 #[test]
 fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
     let root = package("previews_file");
@@ -306,7 +304,7 @@ fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
     )
     .unwrap();
 
-    let files = transpile_package(&options(&src, BuildFlavour::Preview)).unwrap();
+    let files = transpile_package(&options(&src, BuildFlavour::Plain)).unwrap();
     let previews = files
         .iter()
         .find(|file| file.rel_out == std::path::Path::new("card.previews.rs"))
@@ -346,20 +344,8 @@ fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
         "the logic maps back to its line"
     );
 
-    let plain = transpile_package(&options(&src, BuildFlavour::Plain)).unwrap();
-    let plain = plain
-        .iter()
-        .find(|file| file.rel_out == std::path::Path::new("card.previews.rs"))
-        .unwrap();
-    assert!(plain.source.preview_names.is_empty());
-    assert!(
-        !plain.source.rust_code.contains("framed"),
-        "{}",
-        plain.source.rust_code
-    );
-
     std::fs::write(src.join("card.previews.rsx"), "[view]\ncol\n").unwrap();
-    let error = transpile_package(&options(&src, BuildFlavour::Preview)).unwrap_err();
+    let error = transpile_package(&options(&src, BuildFlavour::Plain)).unwrap_err();
     assert!(error.to_string().contains("no `[view]`"), "{error}");
 
     let _ = std::fs::remove_dir_all(&root);

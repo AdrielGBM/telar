@@ -2,7 +2,7 @@
 //!
 //! The same discipline as the bake next door, and downstream of it: a `src:"…"` resolves against the baked artifact, so transpiling first would freeze whatever the last bake left. Every route in this binary that spawns `cargo` bakes and then transpiles, in that order.
 //!
-//! Every flavour is written on every run. Which one a build will read is not known here — `cargo telar dev` picks one, a plain `cargo build` after it picks another, `cargo telar test` a third — and producing one is a parse and a codegen over files that are already in the page cache. Guessing wrong would be worse than free: the build would be refused for an artifact this could have written.
+//! Every flavour is written on every run. Which one a build will read is not known here — `cargo telar dev` picks one, a plain `cargo build` after it picks the other — and producing one is a parse and a codegen over files that are already in the page cache. Guessing wrong would be worse than free: the build would be refused for an artifact this could have written.
 //!
 //! **The CLI produces, the build wires.** Beside the Rust of every `.rsx` this writes the module tree that wires it and the hand-written `.rs` modules, and sweeps what neither accounts for. The macro reads all of it and writes nothing, which is what lets a published library be compiled from a registry copy no build may modify.
 
@@ -37,7 +37,7 @@ pub(crate) fn transpile_workspace() -> bool {
 
 /// Transpiles one member in every flavour and writes the module tree each flavour's placement sites `include!`. `false` when a `.rsx` was refused or the output could not be written; a package with no markup and no placement macro is trivially fine.
 ///
-/// Every flavour, a `[telar] library` included: the workspace's own `cargo telar dev` builds a sibling library as a dependency, which the macro wires from its Plain output, and the library's own `cargo telar check` builds it selected, which reads the Preview one.
+/// Every flavour, a `[telar] library` included: the workspace's own `cargo telar dev` builds a sibling library as a dependency, which the macro wires from its Plain output whatever was asked, and a build that selects the library reads the flavour it asked for.
 ///
 /// This is the only writer of a member's generated directories, so it also sweeps them: whatever a flavour's directory holds that this run neither transpiled nor placed belongs to a `.rsx` or a module that is gone. A flavour that failed keeps its last output, which the build is refused against anyway.
 pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &str) -> bool {

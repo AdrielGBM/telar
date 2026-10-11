@@ -80,25 +80,25 @@ fn rsx_modules_only_fills_an_empty_slot() {
     );
 }
 
+/// Behind `::telar::__previews!` in every flavour, so a build without previews compiles no constructor at all.
 #[test]
-fn an_application_installs_its_matrices_only_in_a_build_with_previews() {
-    let previewing = wired(
-        "app_preview",
-        MATRICES_TOML,
-        BuildFlavour::Preview,
-        Invocation::App,
-    );
-    assert!(
-        previewing.contains("__install_matrices (MATRICES"),
-        "{previewing}"
-    );
-    let plain = wired(
-        "app_plain",
-        MATRICES_TOML,
-        BuildFlavour::Plain,
-        Invocation::App,
-    );
-    assert!(!plain.contains("__install_matrices"), "{plain}");
+fn an_application_installs_its_matrices_behind_the_previews_gate_in_every_flavour() {
+    for flavour in BuildFlavour::ALL {
+        let wired = wired(
+            &format!("app_{flavour:?}"),
+            MATRICES_TOML,
+            flavour,
+            Invocation::App,
+        );
+        let gated = wired
+            .split_once(":: telar :: __previews !")
+            .map(|(_, gated)| gated)
+            .unwrap_or_else(|| panic!("{flavour:?}: {wired}"));
+        assert!(
+            gated.contains("__install_matrices (MATRICES"),
+            "{flavour:?}: {wired}"
+        );
+    }
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn a_library_never_installs_matrices() {
     let wired = wired(
         "library",
         &library,
-        BuildFlavour::Preview,
+        BuildFlavour::Plain,
         Invocation::Modules,
     );
     assert!(!wired.contains("__install_matrices"), "{wired}");

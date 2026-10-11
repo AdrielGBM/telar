@@ -2860,7 +2860,6 @@ fn transpile_logic(logic: &str, hot_reload: bool) -> String {
         prelude: &[],
         library: false,
         hot_reload,
-        previews: true,
         rsx_path: None,
     })
     .unwrap()

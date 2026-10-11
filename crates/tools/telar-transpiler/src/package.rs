@@ -27,7 +27,7 @@ pub struct PackageOptions<'a> {
     pub prelude: &'a [PreludeEntry],
     /// Whether the package is a `[telar] library`, whose `$theme` reads the shared `ThemeTokens` because it cannot name its application's theme type: the `library` key of [`telar_project::TelarManifest`], which every writer reads from the package's own `telar.toml`.
     pub library: bool,
-    /// Which shape to produce. Carries whether the build is hot-reloadable *and* whether it emits `[preview]` fns, because both change the Rust for the same source and each pair needs its own output directory.
+    /// Which shape to produce: whether the build is hot-reloadable, which changes the Rust for the same source and so needs its own output directory.
     pub flavour: BuildFlavour,
 }
 
@@ -180,7 +180,6 @@ fn generate(
         prelude: options.prelude,
         library: options.library,
         hot_reload: options.flavour.is_hot(),
-        previews: options.flavour.has_previews(),
         rsx_path: package_path.as_deref(),
     };
     match telar_project::is_previews_file(rsx_path) {
