@@ -122,8 +122,33 @@ pub(crate) const SHOW_CANVAS: &str = "show_canvas";
 pub(crate) const SHOW_DOCS: &str = "show_docs";
 pub(crate) const SHOW_MATRIX: &str = "show_matrix";
 pub(crate) const SHOWING_STEP: &str = "showing_step";
+pub(crate) const SNAPSHOT: &str = "snapshot";
+pub(crate) const SNAPSHOT_ACCEPT: &str = "snapshot_accept";
+pub(crate) const SNAPSHOT_ACCEPT_FAILED: &str = "snapshot_accept_failed";
+pub(crate) const SNAPSHOT_BASELINE: &str = "snapshot_baseline";
+pub(crate) const SNAPSHOT_COMPARE: &str = "snapshot_compare";
+pub(crate) const SNAPSHOT_CURRENT: &str = "snapshot_current";
+pub(crate) const SNAPSHOT_DIFF: &str = "snapshot_diff";
+pub(crate) const SNAPSHOT_DRAW_CHANGED: &str = "snapshot_draw_changed";
+pub(crate) const SNAPSHOT_DRAW_DIFF: &str = "snapshot_draw_diff";
+pub(crate) const SNAPSHOT_DRIFT: &str = "snapshot_drift";
 pub(crate) const SNAPSHOT_DRIFTED: &str = "snapshot_drifted";
+pub(crate) const SNAPSHOT_FAILED: &str = "snapshot_failed";
 pub(crate) const SNAPSHOT_MATCHES: &str = "snapshot_matches";
+pub(crate) const SNAPSHOT_NO_GOLDEN: &str = "snapshot_no_golden";
+pub(crate) const SNAPSHOT_NO_REPORT: &str = "snapshot_no_report";
+pub(crate) const SNAPSHOT_NO_REPORT_HINT: &str = "snapshot_no_report_hint";
+pub(crate) const SNAPSHOT_NOT_TAKEN: &str = "snapshot_not_taken";
+pub(crate) const SNAPSHOT_OPACITY: &str = "snapshot_opacity";
+pub(crate) const SNAPSHOT_OVERLAY: &str = "snapshot_overlay";
+pub(crate) const SNAPSHOT_PIXELS: &str = "snapshot_pixels";
+pub(crate) const SNAPSHOT_RELOAD: &str = "snapshot_reload";
+pub(crate) const SNAPSHOT_RESIZED: &str = "snapshot_resized";
+pub(crate) const SNAPSHOT_SIDE_BY_SIDE: &str = "snapshot_side_by_side";
+pub(crate) const SNAPSHOT_SWIPE: &str = "snapshot_swipe";
+pub(crate) const SNAPSHOT_SWIPE_POSITION: &str = "snapshot_swipe_position";
+pub(crate) const SNAPSHOT_UNREADABLE: &str = "snapshot_unreadable";
+pub(crate) const SNAPSHOT_WRITTEN: &str = "snapshot_written";
 pub(crate) const SOURCE_OF: &str = "source_of";
 pub(crate) const STEP: &str = "step";
 pub(crate) const STEP_FAILED: &str = "step_failed";
@@ -301,8 +326,65 @@ static CATALOG: Catalog = Catalog {
         english!(SHOWING_STEP, "Step ", { step }, " of ", { total }, ": ", {
             action
         }),
+        english!(SNAPSHOT, "Snapshot"),
+        english!(SNAPSHOT_ACCEPT, "Accept"),
+        english!(
+            SNAPSHOT_ACCEPT_FAILED,
+            "The snapshot could not be accepted: ",
+            { arg }
+        ),
+        english!(SNAPSHOT_BASELINE, "Baseline"),
+        english!(SNAPSHOT_COMPARE, "Comparison"),
+        english!(SNAPSHOT_CURRENT, "Current"),
+        english!(SNAPSHOT_DIFF, "Diff"),
+        english!(SNAPSHOT_DRAW_CHANGED, "The draw text changed"),
+        english!(SNAPSHOT_DRAW_DIFF, "Draw text diff"),
+        english!(SNAPSHOT_DRIFT, "Drifted"),
         english!(SNAPSHOT_DRIFTED, "Snapshot drifted"),
+        english!(SNAPSHOT_FAILED, "The snapshot could not be taken: ", {
+            arg
+        }),
         english!(SNAPSHOT_MATCHES, "Snapshot matches"),
+        english!(SNAPSHOT_NO_GOLDEN, "No golden yet"),
+        english!(SNAPSHOT_NO_REPORT, "No test report yet"),
+        english!(
+            SNAPSHOT_NO_REPORT_HINT,
+            "Run cargo telar test, and the snapshots it compares are reviewed here."
+        ),
+        english!(
+            SNAPSHOT_NOT_TAKEN,
+            "The last test run has no snapshot of this preview or cell"
+        ),
+        english!(SNAPSHOT_OPACITY, "Current picture opacity"),
+        english!(SNAPSHOT_OVERLAY, "Overlay"),
+        english!(
+            SNAPSHOT_PIXELS,
+            { count },
+            " pixels differ, by up to ",
+            { delta },
+            " a channel"
+        ),
+        english!(SNAPSHOT_RELOAD, "Reload report"),
+        english!(
+            SNAPSHOT_RESIZED,
+            "The picture is ",
+            { size },
+            " and its golden ",
+            { golden }
+        ),
+        english!(SNAPSHOT_SIDE_BY_SIDE, "Side by side"),
+        english!(SNAPSHOT_SWIPE, "Swipe"),
+        english!(
+            SNAPSHOT_SWIPE_POSITION,
+            "Baseline up to here, current past it"
+        ),
+        english!(SNAPSHOT_UNREADABLE, "The test report cannot be read: ", {
+            arg
+        }),
+        english!(
+            SNAPSHOT_WRITTEN,
+            "The goldens were written from this snapshot"
+        ),
         english!(SOURCE_OF, "Source of ", { arg }),
         english!(STEP, "Step ", { step }, ": ", { action }, ", ", { status }),
         english!(STEP_FAILED, "failed"),

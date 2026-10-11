@@ -4,14 +4,14 @@ use std::path::{Path, PathBuf};
 
 use crate::AppConfig;
 use crate::preview::snapshot::{
-    FileStatus, SnapshotError, SnapshotMode, SnapshotPaths, SnapshotReport, SnapshotResult,
-    SnapshotStatus, SnapshotSummary, Snapshots, Tolerance,
+    SnapshotError, SnapshotMode, SnapshotPaths, SnapshotReport, SnapshotSummary, Snapshots,
+    Tolerance,
 };
 use crate::preview::{Frame, MatrixCell, PlayError, PreviewEntry};
 
 use super::options::{SnapshotSetting, TestOptions};
-use super::report::{CheckStatus, SnapshotCheck, TestReport, TestRun};
-use super::shown;
+use super::report::{SnapshotCheck, TestReport, TestRun};
+use super::snapshot_check::describe;
 
 pub(super) struct SnapshotRun(Snapshots);
 
@@ -97,84 +97,6 @@ fn tolerance(options: &TestOptions) -> Tolerance {
         options.channel_tolerance.unwrap_or(default.channel),
         options.max_differing_pixels.unwrap_or(default.max_pixels),
     )
-}
-
-/// The result as a test run reports it: passed or failed, and what was found, in words.
-pub(super) fn describe(result: &SnapshotResult) -> SnapshotCheck {
-    let (status, detail) = match result.status {
-        SnapshotStatus::Matched => (CheckStatus::Passed, String::from("matched")),
-        SnapshotStatus::Updated => (CheckStatus::Passed, String::from("written")),
-        SnapshotStatus::Missing => (CheckStatus::Failed, missing(result)),
-        SnapshotStatus::Changed => (CheckStatus::Failed, changed(result)),
-        SnapshotStatus::Failed => (
-            CheckStatus::Failed,
-            result
-                .error
-                .clone()
-                .unwrap_or_else(|| String::from("the snapshot could not be taken")),
-        ),
-    };
-    SnapshotCheck {
-        status,
-        detail: Some(detail),
-    }
-}
-
-fn missing(result: &SnapshotResult) -> String {
-    let png = result.png.as_ref().map(|png| (png.status, &png.golden));
-    let draw = result.draw.as_ref().map(|draw| (draw.status, &draw.golden));
-    let goldens: Vec<String> = [png, draw]
-        .into_iter()
-        .flatten()
-        .filter(|(status, _)| *status == FileStatus::Missing)
-        .map(|(_, golden)| shown(golden))
-        .collect();
-    format!(
-        "no golden yet: {}; write it with `cargo telar test --update-snapshots`",
-        goldens.join(", ")
-    )
-}
-
-fn changed(result: &SnapshotResult) -> String {
-    let mut parts = Vec::new();
-    if let Some(png) = result
-        .png
-        .as_ref()
-        .filter(|png| png.status == FileStatus::Changed)
-    {
-        let mut part = match png.golden_size {
-            Some(golden) if golden != png.size => format!(
-                "the picture is {}x{} and its golden {}x{}",
-                png.size[0], png.size[1], golden[0], golden[1]
-            ),
-            _ => format!(
-                "{} pixel(s) moved past the tolerance, by up to {} a channel",
-                png.differing_pixels, png.max_channel_delta
-            ),
-        };
-        if let Some(diff) = &png.diff {
-            part.push_str(&format!(" (diff: {})", shown(diff)));
-        }
-        parts.push(part);
-    }
-    if let Some(draw) = result
-        .draw
-        .as_ref()
-        .filter(|draw| draw.status == FileStatus::Changed)
-    {
-        let mut part = String::from("the draw text changed");
-        if let Some(diff) = &draw.diff {
-            part.push_str(&format!(" (diff: {})", shown(diff)));
-        }
-        parts.push(part);
-    }
-    match parts.is_empty() {
-        true => String::from("it no longer matches its goldens"),
-        false => format!(
-            "{}; accept it with `cargo telar test --update-snapshots`",
-            parts.join("; ")
-        ),
-    }
 }
 
 #[cfg(test)]

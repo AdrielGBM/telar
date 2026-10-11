@@ -28,6 +28,7 @@ mod settings;
 mod settle;
 mod shell;
 mod sidebar;
+mod snapshot;
 mod state;
 mod store;
 mod strings;

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use telar::preview::snapshot::{
     FileStatus, SnapshotError, SnapshotMode, SnapshotPaths, SnapshotReport, SnapshotStatus,
-    Snapshots, Tolerance, accept,
+    Snapshots, Tolerance,
 };
 use telar::preview::{Axis, Matrices, Matrix, PreviewCtx, PreviewEntry};
 use telar::{
@@ -250,9 +250,17 @@ fn an_update_rewrites_both_goldens_and_accepting_copies_what_was_captured() {
         SnapshotStatus::Matched
     );
 
-    let drifted = run(&dirs, SnapshotMode::Compare, &entry(padded_8));
-    accept(&drifted.snapshots[0]).expect("a changed snapshot can be accepted");
+    let mut drifted = run(&dirs, SnapshotMode::Compare, &entry(padded_8));
+    let accepted = drifted
+        .accept(ID)
+        .expect("a changed snapshot can be accepted");
+    assert_eq!(accepted.status, SnapshotStatus::Updated);
     assert_eq!(read(&paths.golden_draw(ID)), before.1);
+    assert_eq!(std::fs::read(paths.golden_png(ID)).unwrap(), before.0);
+    assert!(
+        !paths.out.join(format!("{ID}.png")).exists(),
+        "what was captured is the golden now, not a finding"
+    );
     assert_eq!(
         run(&dirs, SnapshotMode::Compare, &entry(padded_8)).snapshots[0].status,
         SnapshotStatus::Matched

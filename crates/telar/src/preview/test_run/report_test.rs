@@ -74,7 +74,6 @@ fn the_details_name_the_check_each_line_comes_from() {
     assert_eq!(cell.details().last().unwrap(), "snapshot: matched");
 }
 
-#[cfg(feature = "preview-snapshots")]
 #[test]
 fn the_written_report_still_reads_as_a_snapshot_report() {
     use crate::preview::snapshot::{SnapshotMode, SnapshotPaths, SnapshotReport, Tolerance};
@@ -111,5 +110,112 @@ fn the_written_report_still_reads_as_a_snapshot_report() {
     assert!(json.contains("\"test\": {"), "{json}");
     assert!(json.contains("\"a11y\": \"error\""), "{json}");
     assert!(json.contains("\"status\": \"skipped\""), "{json}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn accepting_a_drift_writes_both_goldens_and_passes_its_cell() {
+    use crate::preview::snapshot::{
+        DrawCheck, FileStatus, PngCheck, SnapshotError, SnapshotMode, SnapshotPaths,
+        SnapshotReport, SnapshotResult, SnapshotStatus, SnapshotSummary, Tolerance,
+    };
+
+    let root =
+        std::env::temp_dir().join(format!("telar_test_report_accept_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let paths = SnapshotPaths::new(&root.join("package"), &root.join("target"));
+    let id = "demo--card--a--mode=dark";
+    let captured = |suffix: &str| paths.out.join(format!("{id}{suffix}"));
+    std::fs::create_dir_all(&paths.out).unwrap();
+    std::fs::create_dir_all(&paths.goldens).unwrap();
+    std::fs::write(captured(".png"), b"the picture captured").unwrap();
+    std::fs::write(captured(".draw.txt"), "frame 160x80\n").unwrap();
+    std::fs::write(captured(".diff.png"), b"where it differs").unwrap();
+    std::fs::write(paths.golden_png(id), b"the old picture").unwrap();
+    std::fs::write(paths.golden_draw(id), "frame 100x80\n").unwrap();
+    let drifted = SnapshotResult {
+        id: id.to_string(),
+        preview: String::from("demo--card--a"),
+        cell: vec![(String::from("mode"), String::from("dark"))],
+        status: SnapshotStatus::Changed,
+        png: Some(PngCheck {
+            status: FileStatus::Changed,
+            golden: paths.golden_png(id),
+            actual: Some(captured(".png")),
+            diff: Some(captured(".diff.png")),
+            size: [160, 80],
+            golden_size: Some([100, 80]),
+            differing_pixels: 3,
+            max_channel_delta: 255,
+        }),
+        draw: Some(DrawCheck {
+            status: FileStatus::Changed,
+            golden: paths.golden_draw(id),
+            actual: Some(captured(".draw.txt")),
+            diff: None,
+        }),
+        error: None,
+    };
+    let snapshots = vec![drifted];
+    let snapshot_report = SnapshotReport {
+        version: SnapshotReport::VERSION,
+        mode: SnapshotMode::Compare,
+        goldens: paths.goldens.clone(),
+        out: paths.out.clone(),
+        tolerance: Tolerance::default(),
+        summary: SnapshotSummary::of(&snapshots),
+        snapshots,
+    };
+    let mut test = TestRun {
+        previews: vec![PreviewReport {
+            id: String::from("demo--card--a"),
+            cells: vec![
+                cell("demo--card--a", [Passed, Skipped, Passed, Passed]),
+                cell(id, [Passed, Skipped, Passed, Failed]),
+            ],
+            ..PreviewReport::default()
+        }],
+        ..TestRun::default()
+    };
+    test.summarize();
+    let mut report = TestReport::new(snapshot_report, test);
+    assert!(report.snapshots.snapshots[0].acceptable());
+
+    report.accept(id).expect("a drifted snapshot is accepted");
+
+    assert_eq!(
+        std::fs::read(paths.golden_png(id)).unwrap(),
+        b"the picture captured"
+    );
+    assert_eq!(
+        std::fs::read_to_string(paths.golden_draw(id)).unwrap(),
+        "frame 160x80\n"
+    );
+    for suffix in [".png", ".draw.txt", ".diff.png"] {
+        assert!(
+            !captured(suffix).exists(),
+            "{suffix} goes once it is the golden"
+        );
+    }
+    let accepted = &report.snapshots.snapshots[0];
+    assert_eq!(accepted.status, SnapshotStatus::Updated);
+    assert_eq!(accepted.png.as_ref().unwrap().status, FileStatus::Written);
+    assert_eq!(accepted.draw.as_ref().unwrap().status, FileStatus::Written);
+    assert!(!accepted.acceptable());
+    assert!(report.snapshots.passed());
+    assert_eq!(report.snapshots.summary.updated, 1);
+    let cell = &report.test.previews[0].cells[1];
+    assert!(cell.passed);
+    assert_eq!(cell.snapshot.detail.as_deref(), Some("written"));
+    assert!(report.test.passed(), "{:?}", report.test.summary);
+
+    assert!(matches!(
+        report.accept(id),
+        Err(SnapshotError::NothingToAccept(_))
+    ));
+    assert!(matches!(
+        report.accept("demo--card--b"),
+        Err(SnapshotError::NotInReport(_))
+    ));
     let _ = std::fs::remove_dir_all(&root);
 }

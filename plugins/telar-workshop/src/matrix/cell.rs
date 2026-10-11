@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::preview::a11y::Severity;
-use telar::preview::test_run::CheckStatus;
+use telar::preview::snapshot::SnapshotStatus;
 use telar::preview::{Globals, MatrixCell, Play, PreviewEntry};
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Direction, LayoutError,
@@ -86,12 +86,11 @@ impl Status {
         }
     }
 
-    /// What the last test run found of the cell's snapshot; `None` for a check it did not reach a verdict on.
-    pub(super) fn of_snapshot(status: CheckStatus) -> Option<Self> {
-        match status {
-            CheckStatus::Passed | CheckStatus::Warned => Some(Self::SnapshotMatches),
-            CheckStatus::Failed => Some(Self::SnapshotDrifted),
-            CheckStatus::Skipped => None,
+    /// What the last test run found of the cell's snapshot: a match, or one that failed the run.
+    pub(super) fn of_snapshot(status: SnapshotStatus) -> Self {
+        match status.is_failure() {
+            false => Self::SnapshotMatches,
+            true => Self::SnapshotDrifted,
         }
     }
 }
@@ -149,7 +148,6 @@ pub(super) fn cell(
     entry: PreviewEntry,
     cell: MatrixCell,
     settings: Rc<CanvasSettings>,
-    snapshot: Option<CheckStatus>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label = cell_label(&cell);
     let focus = state.matrix_focus();
@@ -161,7 +159,13 @@ pub(super) fn cell(
             focus.set_if_changed(Some(id.clone()));
         }
     };
-    let statuses = signal(snapshot.and_then(Status::of_snapshot).into_iter().collect());
+    let checks = signal(Vec::new());
+    let review = state.snapshots().clone();
+    let snapshot_id = cell.id.clone();
+    let statuses = memo(move || {
+        let snapshot = review.status(&snapshot_id).map(Status::of_snapshot);
+        checks.get().into_iter().chain(snapshot).collect::<Vec<_>>()
+    });
     let (viewport, scale) = sizing(&entry, &cell);
     let seen = signal(false);
     let mounting = state.clone();
@@ -175,7 +179,7 @@ pub(super) fn cell(
                 &cell,
                 &settings,
                 Mount {
-                    statuses,
+                    checks,
                     focused,
                     viewport,
                     scale,
@@ -257,7 +261,7 @@ fn focus_toggle(
     Ok(box_item(toggle))
 }
 
-fn badges(statuses: RwSignal<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn badges(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let row = ReactiveList::with_style(
         LayoutStyle::new()
             .flex_row()
@@ -280,7 +284,7 @@ fn badges(statuses: RwSignal<Vec<Status>>) -> Result<Box<dyn LayoutItem>, Layout
 }
 
 /// Why a cell failed, under its badges.
-fn details(statuses: RwSignal<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn details(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let lines = ReactiveList::with_style(
         LayoutStyle::new().flex_column(),
         move || {
@@ -314,7 +318,7 @@ fn tone_color(tone: Tone) -> Color {
 }
 
 struct Mount {
-    statuses: RwSignal<Vec<Status>>,
+    checks: RwSignal<Vec<Status>>,
     focused: Memo<bool>,
     viewport: Size,
     scale: f32,
@@ -329,13 +333,13 @@ fn mounted(
     mount: Mount,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Mount {
-        statuses,
+        checks,
         focused,
         viewport,
         scale,
     } = mount;
     let failed = |message: String| {
-        statuses.update(|statuses| statuses.insert(0, Status::BuildFailed(message)));
+        checks.update(|checks| checks.insert(0, Status::BuildFailed(message)));
         empty()
     };
     let ctx = match cell.ctx(entry) {
@@ -352,11 +356,7 @@ fn mounted(
     let held: Rc<RefCell<Option<Play>>> = Rc::default();
     let keeper = Rc::clone(&held);
     run_when_sized(play, move |mut play| {
-        let found = checks(&mut play);
-        statuses.update(|statuses| {
-            let snapshot = std::mem::take(statuses);
-            *statuses = found.into_iter().chain(snapshot).collect();
-        });
+        checks.set(run_checks(&mut play));
         held.replace(Some(play));
     });
     on_cleanup(move || drop(keeper.take()));
@@ -386,7 +386,7 @@ fn mounted(
     Ok(box_item(stack))
 }
 
-fn checks(play: &mut Play) -> Vec<Status> {
+fn run_checks(play: &mut Play) -> Vec<Status> {
     let mut found = Vec::new();
     if play.entry().play.is_some() {
         found.push(match guarded(|| play.run()) {

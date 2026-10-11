@@ -63,7 +63,7 @@ mod across_runs {
     }
 
     fn run(keeper: &Keeper, requested: &PreviewRequest) -> WorkshopState {
-        WorkshopState::kept_in(entries(), requested, keeper)
+        WorkshopState::kept_in(entries(), requested, keeper, None)
     }
 
     #[test]

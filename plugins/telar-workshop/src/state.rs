@@ -2,6 +2,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -18,6 +19,7 @@ use crate::matrix::{CustomAxis, MatrixSource};
 use crate::route::{Link, Page, WorkshopRoute};
 use crate::settings::CanvasSettings;
 use crate::sidebar::{group_ids, listed};
+use crate::snapshot::SnapshotReview;
 use crate::store::{self, Keeper};
 
 /// The `hot_signal` keys the workshop's state is kept under. A hot reload restores each by key, so renaming one forgets what it held.
@@ -39,6 +41,7 @@ pub(crate) mod keys {
     pub(crate) const MATRIX_AXES: &str = "@workshop/matrix.axes";
     pub(crate) const MATRIX_FOCUS: &str = "@workshop/matrix.focus";
     pub(crate) const PLAY_AUTO_RUN: &str = "@workshop/play.auto_run";
+    pub(crate) const SNAPSHOT_MODE: &str = "@workshop/snapshot.mode";
 }
 
 pub(crate) const SIDEBAR_DEFAULT_WIDTH: f32 = 240.0;
@@ -74,11 +77,12 @@ pub(crate) enum PanelTab {
     Interactions,
     Layout,
     Accessibility,
+    Snapshot,
 }
 
-/// What the sidebar, the canvas and the panels share: the previews, which one is selected, which groups are open, the pane sizes, the view, the search, the panel shown and the actions filter, each preview's args, the canvas toolbar's settings, the matrix the Matrix view shows and its focused cell, the calls the mounted preview's callbacks received and what the inspection panels read of its canvas.
+/// What the sidebar, the canvas and the panels share: the previews, which one is selected, which groups are open, the pane sizes, the view, the search, the panel shown and the actions filter, each preview's args, the canvas toolbar's settings, the matrix the Matrix view shows and its focused cell, the calls the mounted preview's callbacks received, what the inspection panels read of its canvas and what the last test run found of each snapshot.
 ///
-/// A cheap handle: clones share one state. Everything but the previews, the remount count, the action log, the inspection and the search field is a `@workshop/…` hot signal, so it is made where the tree is built, after a hot reload has restored the values it carries.
+/// A cheap handle: clones share one state. Everything but the previews, the remount count, the action log, the inspection, the test report and the search field is a `@workshop/…` hot signal, so it is made where the tree is built, after a hot reload has restored the values it carries.
 #[derive(Clone)]
 pub(crate) struct WorkshopState {
     entries: Rc<[PreviewEntry]>,
@@ -104,6 +108,7 @@ pub(crate) struct WorkshopState {
     actions: ActionLog,
     inspection: Inspection,
     interactions: Interactions,
+    snapshots: SnapshotReview,
     search_field: Rc<Cell<Option<FocusId>>>,
     args: Rc<RefCell<HashMap<&'static str, Args>>>,
     // Args are made lazily, often from inside a canvas, and would otherwise be freed with whichever canvas asked first.
@@ -111,19 +116,22 @@ pub(crate) struct WorkshopState {
 }
 
 impl WorkshopState {
-    /// [`Self::kept_in`] keeping nothing between runs: the state a test builds.
+    /// [`Self::kept_in`] keeping nothing between runs and reading no test report: the state a test builds.
     #[cfg(test)]
     pub(crate) fn new(entries: Rc<[PreviewEntry]>, requested: &PreviewRequest) -> Self {
-        Self::kept_in(entries, requested, &Keeper::none())
+        Self::kept_in(entries, requested, &Keeper::none(), None)
     }
 
     /// The state for `entries`, with what a hot reload restored, and otherwise what `keeper` kept on the last run: the selection, the view, the pane sizes and the canvas toolbar's settings, each kept there again as it changes.
     ///
     /// The selection a hot reload restored wins while it still names a preview. Otherwise it is the preview `requested` names by id, else the stored one, else the first; where the requested component, read as a title filter, keeps any previews, the stored and the first are chosen among those. The search starts as that filter.
+    ///
+    /// The Snapshot panel reviews the `report.json` at `report`, read now.
     pub(crate) fn kept_in(
         entries: Rc<[PreviewEntry]>,
         requested: &PreviewRequest,
         keeper: &Keeper,
+        report: Option<PathBuf>,
     ) -> Self {
         let filter = requested.component.clone().unwrap_or_default();
         let filtered = match filter.is_empty() {
@@ -202,6 +210,7 @@ impl WorkshopState {
                 store::keys::PLAY_AUTO_RUN,
                 true,
             )),
+            snapshots: SnapshotReview::reading(report),
             search_field: Rc::default(),
             args: Rc::default(),
             owner: owner_scope().id(),
@@ -432,6 +441,11 @@ impl WorkshopState {
     /// The play the canvas runs: the steps of its last run, the one picked to show, and whether it runs as the canvas mounts.
     pub(crate) fn interactions(&self) -> &Interactions {
         &self.interactions
+    }
+
+    /// What the last test run found of each snapshot, as the Snapshot panel, the matrix cells and the sidebar show it.
+    pub(crate) fn snapshots(&self) -> &SnapshotReview {
+        &self.snapshots
     }
 
     /// The calls the mounted preview's callbacks received. One log for as long as the workshop lives, so a panel reading it outlives each canvas, and emptied as each canvas mounts.

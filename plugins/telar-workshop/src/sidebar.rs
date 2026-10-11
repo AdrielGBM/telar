@@ -12,11 +12,12 @@ use telar::{
     LayoutStyle, Memo, NamedKey, NodeId, Reactive, ReactiveList, RectStyle, StyledContainer, Text,
     box_item, effect, memo, single_line_box, use_theme_tokens,
 };
-use telar_components::{TreeNode, TreeViewProps, tree_view};
+use telar_components::{TrailingBuilder, TreeNode, TreeViewProps, tree_view};
 use telar_devtools::{
     WORKBENCH_GRID, WORKBENCH_RADIUS, WORKBENCH_TEXT_SIZE, workbench_card, workbench_muted,
 };
 
+use crate::snapshot::drift_badge;
 use crate::state::WorkshopState;
 use crate::strings::{self, CLEAR_SEARCH, NO_MATCHES, NO_PREVIEWS, PREVIEWS, SEARCH};
 
@@ -227,6 +228,12 @@ fn empty(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(column))
 }
 
+/// Marks each preview a snapshot of which the last test run failed.
+fn drift_badges(state: &WorkshopState) -> TrailingBuilder {
+    let review = state.snapshots().clone();
+    Rc::new(move |node: &TreeNode| drift_badge(&review, &node.id))
+}
+
 fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let state = &panel.state;
     let picked = panel.clone();
@@ -239,6 +246,7 @@ fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 picked.close_drawer();
             }))
             .select_branches(false)
+            .trailing(drift_badges(state))
             .label(Reactive::of(|| strings::text(PREVIEWS)))
             .build(),
         Children::default(),

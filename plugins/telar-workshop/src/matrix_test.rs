@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use telar::preview::test_run::{CellReport, CheckStatus, PreviewReport, TestRun};
+use telar::preview::snapshot::SnapshotStatus;
 use telar::preview::{
     ArgSpec, ArgValue, Axis, ControlKind, Globals, Matrices, Matrix, Play, PreviewCtx,
     PreviewEntry, PreviewEnv, ViewportPreset,
@@ -15,7 +15,6 @@ use telar_components::{ButtonProps, ModalProps, button, modal};
 
 use super::cell::{Status, seed, sizing};
 use super::plan::{self, CustomAxis, MatrixSource, Problem, grid, toggled};
-use super::report::Snapshots;
 use super::*;
 use crate::settings::{Background, CanvasSettings};
 use crate::state::{PanelTab, WorkshopState};
@@ -623,37 +622,17 @@ fn a_cell_is_set_up_in_the_toolbar_settings_under_its_own() {
 }
 
 #[test]
-fn the_last_test_runs_snapshots_are_read_by_cell() {
-    let mut matched = CellReport::default();
-    matched.id = "kit--badge--themed--mode=day".into();
-    matched.snapshot.status = CheckStatus::Passed;
-    let mut drifted = CellReport::default();
-    drifted.id = "kit--badge--themed--mode=night".into();
-    drifted.snapshot.status = CheckStatus::Failed;
-    let mut skipped = CellReport::default();
-    skipped.id = "kit--badge--themed".into();
-    let mut preview = PreviewReport::default();
-    preview.cells = vec![skipped, matched, drifted];
-    let mut run = TestRun::default();
-    run.previews.push(preview);
-    let written = serde_json::json!({ "version": 1, "test": run }).to_string();
-
-    let snapshots = Snapshots::parse(&written);
-    assert_eq!(
-        snapshots.status("kit--badge--themed--mode=day"),
-        Some(CheckStatus::Passed)
-    );
-    assert_eq!(
-        snapshots.status("kit--badge--themed--mode=night"),
-        Some(CheckStatus::Failed)
-    );
-    assert_eq!(snapshots.status("kit--badge--themed"), None);
-    assert_eq!(Snapshots::parse("not json"), Snapshots::default());
-    assert_eq!(
-        Status::of_snapshot(CheckStatus::Failed),
-        Some(Status::SnapshotDrifted)
-    );
-    assert_eq!(Status::of_snapshot(CheckStatus::Skipped), None);
+fn a_snapshot_that_failed_the_run_reads_as_drifted() {
+    for status in [SnapshotStatus::Matched, SnapshotStatus::Updated] {
+        assert_eq!(Status::of_snapshot(status), Status::SnapshotMatches);
+    }
+    for status in [
+        SnapshotStatus::Changed,
+        SnapshotStatus::Missing,
+        SnapshotStatus::Failed,
+    ] {
+        assert_eq!(Status::of_snapshot(status), Status::SnapshotDrifted);
+    }
 }
 
 #[test]

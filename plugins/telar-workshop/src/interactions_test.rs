@@ -357,7 +357,7 @@ fn whether_a_play_runs_on_mount_is_kept_between_runs_of_the_workshop() {
 
     let store = Arc::new(MemoryStore::default());
     let keeper = Keeper::in_store(store.clone());
-    let state = WorkshopState::kept_in(entries().into(), &PreviewRequest::default(), &keeper);
+    let state = WorkshopState::kept_in(entries().into(), &PreviewRequest::default(), &keeper, None);
     assert!(
         state.interactions().auto_run().get(),
         "a play runs on mount at first"
@@ -374,6 +374,7 @@ fn whether_a_play_runs_on_mount_is_kept_between_runs_of_the_workshop() {
         entries().into(),
         &PreviewRequest::default(),
         &Keeper::in_store(store),
+        None,
     );
     assert!(!next.interactions().auto_run().get());
 }

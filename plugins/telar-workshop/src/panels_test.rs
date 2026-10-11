@@ -574,14 +574,14 @@ fn the_arrows_move_along_the_tabs() {
     workshop.click(Role::Tab, "Controls");
     workshop.key(Key::Named(NamedKey::ArrowRight));
     assert!(workshop.shows_tab("Actions"));
-    for tab in ["Interactions", "Layout", "Accessibility"] {
+    for tab in ["Interactions", "Layout", "Accessibility", "Snapshot"] {
         workshop.key(Key::Named(NamedKey::ArrowRight));
         assert!(workshop.shows_tab(tab));
     }
     workshop.key(Key::Named(NamedKey::ArrowRight));
     assert!(workshop.shows_tab("Controls"), "the strip wraps at its end");
     workshop.key(Key::Named(NamedKey::End));
-    assert!(workshop.shows_tab("Accessibility"));
+    assert!(workshop.shows_tab("Snapshot"));
 }
 
 #[test]

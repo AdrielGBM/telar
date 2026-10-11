@@ -1,10 +1,11 @@
 //! [`WorkshopApp`]: the workshop as the application a preview build runs.
 
 use std::cell::RefCell;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use telar::preview::PreviewEntry;
-use telar::preview::host::{PreviewRequest, duplicate_ids, requested_preview};
+use telar::preview::host::{PreviewRequest, duplicate_ids, requested_preview, test_report_path};
 use telar::{
     App, Color, Component, LayoutError, LayoutItem, LayoutStyle, ReactiveList, RectStyle,
     ShapeStyle, SizeDimension, StyledContainer, WindowRoot, box_item, reset_layout_runtime,
@@ -24,11 +25,12 @@ use crate::{address, canvas, store};
 ///
 /// It opens where the location it was started at points (`--location`, a link the workshop copied), else on the preview [`requested_preview`] names by id, else where it was when it last closed, else on the first preview; the component the request names narrows the sidebar. After a hot reload it stays where it was. A `goto:` line on the hot-reload channel moves it while it runs.
 ///
-/// Under `cargo telar preview` it keeps the selection, the view, the pane sizes and the canvas toolbar's settings between runs in `<workspace>/.telar/workshop/state`; edited args last the run, or travel in a copied link.
+/// Under `cargo telar preview` it keeps the selection, the view, the pane sizes and the canvas toolbar's settings between runs in `<workspace>/.telar/workshop/state`; edited args last the run, or travel in a copied link. Its Snapshot panel reviews the `report.json` the workspace's last `cargo telar test` wrote.
 pub struct WorkshopApp {
     entries: Rc<[PreviewEntry]>,
     requested: PreviewRequest,
     project_name: Option<String>,
+    report: Option<PathBuf>,
     keeper: RefCell<Keeper>,
 }
 
@@ -46,6 +48,7 @@ impl WorkshopApp {
             project_name: std::env::var("CARGO_PKG_NAME")
                 .ok()
                 .filter(|name| !name.is_empty()),
+            report: test_report_path(),
             keeper: RefCell::new(Keeper::none()),
         }
     }
@@ -61,6 +64,13 @@ impl WorkshopApp {
         self.project_name = Some(name.into());
         self
     }
+
+    /// Reviews the test report at `path` in place of the workspace's.
+    #[cfg(test)]
+    pub(crate) fn test_report(mut self, path: impl Into<PathBuf>) -> Self {
+        self.report = Some(path.into());
+        self
+    }
 }
 
 impl App for WorkshopApp {
@@ -70,7 +80,12 @@ impl App for WorkshopApp {
         theme_core::set_surface_control_size(Some(WORKBENCH_CONTROL_SIZE));
         let keeper = store::install();
         self.keeper.replace(keeper.clone()).flush();
-        let state = WorkshopState::kept_in(Rc::clone(&self.entries), &self.requested, &keeper);
+        let state = WorkshopState::kept_in(
+            Rc::clone(&self.entries),
+            &self.requested,
+            &keeper,
+            self.report.clone(),
+        );
         follow_reduced_motion(&state);
         address::follow(&state);
         let project_name = self.project_name.clone();

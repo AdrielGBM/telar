@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::{SnapshotMode, Tolerance};
+use super::{SnapshotError, SnapshotMode, SnapshotPaths, Tolerance};
 
 /// The `report.json` a run writes beside its diffs. [`SnapshotReport::VERSION`] moves whenever a field changes meaning or goes away, so a reader can refuse a report it does not understand.
 ///
@@ -74,6 +74,30 @@ impl SnapshotReport {
     pub fn passed(&self) -> bool {
         self.summary.failed == 0
     }
+
+    /// Where the run read its goldens and wrote what it found.
+    pub fn paths(&self) -> SnapshotPaths {
+        SnapshotPaths {
+            goldens: self.goldens.clone(),
+            out: self.out.clone(),
+        }
+    }
+
+    /// Makes what the run captured for the snapshot `id` its goldens, as an update run would have written them, and records it as written: what accepting a drift from a review panel does. Only a changed or missing snapshot has captured files to accept; they are removed once they are the goldens.
+    pub fn accept(&mut self, id: &str) -> Result<&SnapshotResult, SnapshotError> {
+        let at = self
+            .snapshots
+            .iter()
+            .position(|result| result.id == id)
+            .ok_or_else(|| SnapshotError::NotInReport(id.to_string()))?;
+        let paths = self.paths();
+        let (png, draw) = self.snapshots[at].captured()?;
+        paths.write_goldens(id, &png, &draw)?;
+        paths.forget_findings(id)?;
+        self.snapshots[at].mark_written();
+        self.summary = SnapshotSummary::of(&self.snapshots);
+        Ok(&self.snapshots[at])
+    }
 }
 
 /// How many snapshots ended in each state.
@@ -115,6 +139,48 @@ pub struct SnapshotResult {
     pub draw: Option<DrawCheck>,
     /// Why nothing was captured, or why a file could not be read or written.
     pub error: Option<String>,
+}
+
+impl SnapshotResult {
+    /// Whether [`SnapshotReport::accept`] can make what was captured the goldens: the snapshot is changed or missing, and the run wrote both of its captured files.
+    pub fn acceptable(&self) -> bool {
+        matches!(
+            self.status,
+            SnapshotStatus::Changed | SnapshotStatus::Missing
+        ) && self.actual_files().is_some()
+    }
+
+    fn actual_files(&self) -> Option<(&PathBuf, &PathBuf)> {
+        let png = self.png.as_ref()?.actual.as_ref()?;
+        let draw = self.draw.as_ref()?.actual.as_ref()?;
+        Some((png, draw))
+    }
+
+    /// The picture and the draw text the run captured, read back from beside the diffs.
+    fn captured(&self) -> Result<(Vec<u8>, String), SnapshotError> {
+        let (png, draw) = self
+            .actual_files()
+            .filter(|_| self.acceptable())
+            .ok_or_else(|| SnapshotError::NothingToAccept(self.id.clone()))?;
+        let png = std::fs::read(png).map_err(|error| SnapshotError::io(png, error))?;
+        let draw = std::fs::read_to_string(draw).map_err(|error| SnapshotError::io(draw, error))?;
+        Ok((png, draw))
+    }
+
+    /// Records both goldens as written from what was captured, as an update run records each it writes.
+    pub(super) fn mark_written(&mut self) {
+        self.status = SnapshotStatus::Updated;
+        if let Some(png) = &mut self.png {
+            png.status = FileStatus::Written;
+            png.actual = None;
+            png.diff = None;
+        }
+        if let Some(draw) = &mut self.draw {
+            draw.status = FileStatus::Written;
+            draw.actual = None;
+            draw.diff = None;
+        }
+    }
 }
 
 /// Where a snapshot stands against its goldens.

@@ -6375,6 +6375,7 @@ dependencies = [
  "telar-icons",
  "telar-navigate",
  "telar-theme-core",
+ "tiny-skia 0.12.0",
 ]
 
 [[package]]

@@ -1,9 +1,14 @@
 //! What a test run found, preview by preview and cell by cell, as `report.json` carries it beside the snapshot report.
 
+use std::io;
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 use super::options::{A11yLevel, SnapshotSetting};
+use super::snapshot_check::describe;
 use crate::preview::a11y;
+use crate::preview::snapshot::{SnapshotError, SnapshotReport};
 
 /// A whole test run: what it was asked to do, each preview and cell it checked, and what failed outside any of them.
 #[non_exhaustive]
@@ -230,66 +235,69 @@ pub struct SnapshotCheck {
     pub detail: Option<String>,
 }
 
-#[cfg(feature = "preview-snapshots")]
-pub use written::TestReport;
+/// `report.json`: the snapshot report, which a review panel reads as it is, with the test run beside it under `test`.
+///
+/// ```json
+/// {
+///   "version": 1, "mode": "compare", "goldens": "…", "out": "…", "tolerance": { … }, "summary": { … }, "snapshots": [ … ],
+///   "test": {
+///     "filter": null, "a11y": "warn", "snapshots": "compare",
+///     "summary": { "previews": 1, "checked": 2, "passed": 1, "failed": 1, "warned": 0 },
+///     "errors": [],
+///     "previews": [{
+///       "id": "catalogue--button--primary", "title": "Button", "component": "button", "name": "Primary", "file": "…/button.rsx", "line": 12,
+///       "cells": [{
+///         "id": "catalogue--button--primary--mode=dark", "cell": [["mode", "dark"]], "passed": false,
+///         "build": { "status": "passed", "draw_commands": 14, "error": null },
+///         "play": { "status": "failed", "steps": [{ "action": "click button \"Save\"", "error": "found no button \"Save\"" }], "error": "found no button \"Save\"" },
+///         "a11y": { "status": "passed", "violations": [], "error": null },
+///         "snapshot": { "status": "passed", "detail": "matched" }
+///       }]
+///     }]
+///   }
+/// }
+/// ```
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TestReport {
+    #[serde(flatten)]
+    pub snapshots: SnapshotReport,
+    pub test: TestRun,
+}
 
-#[cfg(feature = "preview-snapshots")]
-mod written {
-    use std::io;
-    use std::path::Path;
-
-    use serde::{Deserialize, Serialize};
-
-    use super::TestRun;
-    use crate::preview::snapshot::SnapshotReport;
-
-    /// `report.json`: the snapshot report, which a review panel reads as it is, with the test run beside it under `test`.
-    ///
-    /// ```json
-    /// {
-    ///   "version": 1, "mode": "compare", "goldens": "…", "out": "…", "tolerance": { … }, "summary": { … }, "snapshots": [ … ],
-    ///   "test": {
-    ///     "filter": null, "a11y": "warn", "snapshots": "compare",
-    ///     "summary": { "previews": 1, "checked": 2, "passed": 1, "failed": 1, "warned": 0 },
-    ///     "errors": [],
-    ///     "previews": [{
-    ///       "id": "catalogue--button--primary", "title": "Button", "component": "button", "name": "Primary", "file": "…/button.rsx", "line": 12,
-    ///       "cells": [{
-    ///         "id": "catalogue--button--primary--mode=dark", "cell": [["mode", "dark"]], "passed": false,
-    ///         "build": { "status": "passed", "draw_commands": 14, "error": null },
-    ///         "play": { "status": "failed", "steps": [{ "action": "click button \"Save\"", "error": "found no button \"Save\"" }], "error": "found no button \"Save\"" },
-    ///         "a11y": { "status": "passed", "violations": [], "error": null },
-    ///         "snapshot": { "status": "passed", "detail": "matched" }
-    ///       }]
-    ///     }]
-    ///   }
-    /// }
-    /// ```
-    #[non_exhaustive]
-    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-    pub struct TestReport {
-        #[serde(flatten)]
-        pub snapshots: SnapshotReport,
-        pub test: TestRun,
+impl TestReport {
+    pub fn new(snapshots: SnapshotReport, test: TestRun) -> Self {
+        Self { snapshots, test }
     }
 
-    impl TestReport {
-        pub fn new(snapshots: SnapshotReport, test: TestRun) -> Self {
-            Self { snapshots, test }
-        }
+    pub fn read(path: &Path) -> io::Result<Self> {
+        let text = std::fs::read_to_string(path)?;
+        serde_json::from_str(&text).map_err(io::Error::other)
+    }
 
-        pub fn read(path: &Path) -> io::Result<Self> {
-            let text = std::fs::read_to_string(path)?;
-            serde_json::from_str(&text).map_err(io::Error::other)
+    pub fn write(&self, path: &Path) -> io::Result<()> {
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
         }
+        let json = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
+        std::fs::write(path, json)
+    }
 
-        pub fn write(&self, path: &Path) -> io::Result<()> {
-            if let Some(dir) = path.parent() {
-                std::fs::create_dir_all(dir)?;
-            }
-            let json = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
-            std::fs::write(path, json)
+    /// [`SnapshotReport::accept`], with the cell the snapshot `id` is of reported as a run that wrote its goldens reports it, and the run counted again.
+    pub fn accept(&mut self, id: &str) -> Result<(), SnapshotError> {
+        let check = describe(self.snapshots.accept(id)?);
+        let cells = self
+            .test
+            .previews
+            .iter_mut()
+            .flat_map(|preview| preview.cells.iter_mut())
+            .filter(|cell| cell.id == id);
+        for cell in cells {
+            cell.snapshot = check.clone();
+            *cell = std::mem::take(cell).settle();
         }
+        self.test.summarize();
+        Ok(())
     }
 }
 

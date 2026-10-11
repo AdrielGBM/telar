@@ -1,10 +1,9 @@
 //! The Matrix view: the selected preview once per cell of its matrix, or of one built from the axes picked, side by side under headings for the axes.
 //!
-//! Each cell mounts the first time it scrolls into view, on a canvas of its own in the cell's environment over the toolbar's, and runs the preview's play and accessibility checks there; its badges say how they came out, with the snapshot status the last `cargo telar test` recorded. Pressing a cell focuses it: the Layout and Accessibility panels and the measure and outline marks follow its canvas, and "Open in canvas" opens the preview on the Canvas view in the cell's globals and args.
+//! Each cell mounts the first time it scrolls into view, on a canvas of its own in the cell's environment over the toolbar's, and runs the preview's play and accessibility checks there; its badges say how they came out, with the snapshot status the last `cargo telar test` recorded. Pressing a cell focuses it: the Layout and Accessibility panels and the measure and outline marks follow its canvas, the Snapshot panel reviews its snapshot, and "Open in canvas" opens the preview on the Canvas view in the cell's globals and args.
 
 mod cell;
 mod plan;
-mod report;
 
 use std::rc::Rc;
 
@@ -21,7 +20,6 @@ pub(crate) use plan::{CustomAxis, MatrixSource};
 
 use self::cell::CELL_OUTER_WIDTH;
 use self::plan::{GLOBAL_AXES, Grid, MATRIX_WARN_AT, Plan, Problem, grid, toggled, varied_args};
-use self::report::Snapshots;
 use crate::canvas::{HEADER_HEIGHT, states};
 use crate::settings::{CanvasSettings, CanvasSize};
 use crate::state::{ViewMode, WorkshopState};
@@ -352,18 +350,11 @@ fn planned_cells(
     plan: &Plan,
     settings: Rc<CanvasSettings>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let snapshots = Snapshots::read();
     let mut items = Vec::new();
     if let Some(warning) = warning(plan) {
         items.push(warning);
     }
-    items.push(table(
-        state,
-        entry,
-        &grid(&plan.cells),
-        &settings,
-        &snapshots,
-    )?);
+    items.push(table(state, entry, &grid(&plan.cells), &settings)?);
     let column = StyledContainer::new(
         LayoutStyle::new()
             .flex_column()
@@ -411,7 +402,6 @@ fn table(
     entry: PreviewEntry,
     grid: &Grid,
     settings: &Rc<CanvasSettings>,
-    snapshots: &Snapshots,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let headed = grid.rows.iter().any(|row| row.heading.is_some());
     let mut lines = Vec::new();
@@ -429,13 +419,11 @@ fn table(
             items.push(heading(row.heading.clone(), ROW_HEADING_WIDTH)?);
         }
         for matrix_cell in &row.cells {
-            let snapshot = snapshots.status(&matrix_cell.id);
             items.push(cell::cell(
                 state,
                 entry,
                 matrix_cell.clone(),
                 Rc::clone(settings),
-                snapshot,
             )?);
         }
         lines.push(line(items)?);

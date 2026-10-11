@@ -1,4 +1,4 @@
-//! The panels along the canvas: a strip of tabs over the panel it shows, Controls, Actions, Interactions, Layout or Accessibility. Layout and Accessibility are the devtools' inspection panels over the mounted canvas, the same ones the overlay shows over a whole window. Source joins the strip as it lands.
+//! The panels along the canvas: a strip of tabs over the panel it shows, Controls, Actions, Interactions, Layout, Accessibility or Snapshot. Layout and Accessibility are the devtools' inspection panels over the mounted canvas, the same ones the overlay shows over a whole window. Source joins the strip as it lands.
 
 mod actions;
 mod controls;
@@ -19,18 +19,19 @@ use telar_devtools::{
 
 pub(crate) use controls::arg_table;
 
-use crate::interactions;
 use crate::state::{PanelTab, WorkshopState};
 use crate::strings::{
-    self, ACCESSIBILITY, ACTIONS, CONTROLS, INTERACTIONS, LAYOUT, PANELS, RESET_ALL,
+    self, ACCESSIBILITY, ACTIONS, CONTROLS, INTERACTIONS, LAYOUT, PANELS, RESET_ALL, SNAPSHOT,
 };
+use crate::{interactions, snapshot};
 
-const TABS: [PanelTab; 5] = [
+const TABS: [PanelTab; 6] = [
     PanelTab::Controls,
     PanelTab::Actions,
     PanelTab::Interactions,
     PanelTab::Layout,
     PanelTab::Accessibility,
+    PanelTab::Snapshot,
 ];
 
 /// What fills the panels pane the shell sizes.
@@ -74,6 +75,7 @@ fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
             Ok(match tab {
                 PanelTab::Actions => named.trailing(actions::count_badge(state.actions())?),
                 PanelTab::Interactions => named.trailing(interactions::tab_badge(state)?),
+                PanelTab::Snapshot => named.trailing(snapshot::tab_badge(state)?),
                 PanelTab::Controls | PanelTab::Layout | PanelTab::Accessibility => named,
             })
         })
@@ -93,6 +95,7 @@ fn tab_key(tab: PanelTab) -> &'static str {
         PanelTab::Interactions => INTERACTIONS,
         PanelTab::Layout => LAYOUT,
         PanelTab::Accessibility => ACCESSIBILITY,
+        PanelTab::Snapshot => SNAPSHOT,
     }
 }
 
@@ -112,6 +115,7 @@ fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
             PanelTab::Interactions => interactions::tools(&state),
             PanelTab::Layout => inspection_toggles(state.inspection()),
             PanelTab::Accessibility => nothing(),
+            PanelTab::Snapshot => snapshot::tools(&state),
         },
     )?;
     Ok(box_item(tools))
@@ -130,6 +134,7 @@ fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
             PanelTab::Interactions => interactions::panel(&building),
             PanelTab::Layout => inspector_panel(building.inspection()),
             PanelTab::Accessibility => accessibility_panel(building.inspection()),
+            PanelTab::Snapshot => snapshot::panel(&building),
         },
     )?;
     let body = StyledContainer::new(

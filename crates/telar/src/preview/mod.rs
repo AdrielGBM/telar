@@ -20,7 +20,7 @@
 //!
 //! A preview's play, [`PreviewEntry::play`], drives it as a person would through a [`Play`], and [`a11y::check`] reports what would keep someone from using it.
 //!
-//! Under `preview-snapshots`, the `snapshot` module compares each preview and each cell of its matrix against the picture and the draw text kept for it.
+//! The [`snapshot`] module compares each preview and each cell of its matrix against the picture and the draw text kept for it, under `preview-snapshots`, and reads and accepts what a run found in any preview build.
 //!
 //! [`test_run`] is what `cargo telar test` runs over them all.
 //!
@@ -44,7 +44,6 @@ mod mount;
 mod play;
 mod props;
 mod query;
-#[cfg(feature = "preview-snapshots")]
 pub mod snapshot;
 mod value;
 

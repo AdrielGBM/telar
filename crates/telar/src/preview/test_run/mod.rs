@@ -2,6 +2,7 @@
 
 mod options;
 mod report;
+mod snapshot_check;
 
 #[cfg(feature = "preview-snapshots")]
 #[path = "snapshots.rs"]
@@ -20,11 +21,9 @@ use super::host::duplicate_ids;
 use super::{Matrices, MatrixCell, Play, PlayStep, PreviewEntry};
 
 pub use options::{A11yLevel, OptionsError, PreviewFilter, SnapshotSetting, TestOptions};
-#[cfg(feature = "preview-snapshots")]
-pub use report::TestReport;
 pub use report::{
     A11yCheck, A11yFinding, BuildCheck, CellReport, CheckStatus, PlayCheck, PlayStepReport,
-    PreviewReport, SnapshotCheck, TestRun, TestSummary,
+    PreviewReport, SnapshotCheck, TestReport, TestRun, TestSummary,
 };
 
 use snapshots::SnapshotRun;
