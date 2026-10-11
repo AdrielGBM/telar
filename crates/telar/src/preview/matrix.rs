@@ -38,9 +38,9 @@ pub enum Axis {
     /// BCP 47 language tags.
     Locale(&'static [&'static str]),
     Dir(&'static [Direction]),
-    /// Canvas sizes, each written `"390x844"` or named in `[telar.previews] viewports`.
+    /// Canvas sizes, each written `"390x844"` or named in `[telar.previews.viewports]`.
     Viewport(&'static [&'static str]),
-    /// Every viewport `[telar.previews] viewports` names, by name, as [`Matrices::installed`] reads them.
+    /// Every viewport `[telar.previews.viewports]` names, by name, as [`Matrices::installed`] reads them.
     ProjectViewports,
     ControlSize(&'static [ControlSize]),
     /// An arg, by name, and its values in [`ArgValue`]'s text form: `"12"`, `"true"`, `"Primary"`, `"\"Save\""`.
@@ -206,7 +206,7 @@ impl NamedMatrix {
     }
 }
 
-/// A canvas size named in `[telar.previews] viewports`.
+/// A canvas size named in `[telar.previews.viewports]`.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewportPreset {
@@ -276,7 +276,7 @@ impl Matrices {
             .map(|matrix| matrix.axes)
     }
 
-    /// The size a viewport axis value stands for: `"390x844"`, or a name in `[telar.previews] viewports`.
+    /// The size a viewport axis value stands for: `"390x844"`, or a name in `[telar.previews.viewports]`.
     pub fn viewport(&self, text: &str) -> Option<Size> {
         let text = text.trim();
         self.viewports
@@ -552,7 +552,7 @@ pub enum MatrixError {
     RepeatedValue { axis: &'static str, value: String },
     /// A value with no letter or digit to name its cell by.
     Unnamed { axis: &'static str, value: String },
-    /// A viewport that is neither a size nor a name in `[telar.previews] viewports`.
+    /// A viewport that is neither a size nor a name in `[telar.previews.viewports]`.
     Viewport { text: &'static str },
     /// An arg value that is not in [`ArgValue`]'s text form.
     ArgValue {
@@ -578,7 +578,7 @@ impl fmt::Display for MatrixError {
             ),
             Self::Viewport { text } => write!(
                 f,
-                "matrix viewport \"{text}\" is neither a size like \"390x844\" nor a name in `[telar.previews] viewports`"
+                "matrix viewport \"{text}\" is neither a size like \"390x844\" nor a name in `[telar.previews.viewports]`"
             ),
             Self::ArgValue { axis, text } => {
                 write!(f, "matrix axis `{axis}` value `{text}` is not an arg value")

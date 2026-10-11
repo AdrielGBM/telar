@@ -32,7 +32,7 @@ box fill:$theme.surface stroke:$theme.border radius:16 width:300 pad:24 gap:10 a
 feature_card icon:"⚡" title:"Fast" body:"Software and wgpu renderers with dirty tracking."
 ```
 
-A `.rsx` file has up to four sections: `[logic]` for verbatim Rust (a `pub struct Props` declares the component's props), `[style]` for reusable style classes, `[view]` for the node tree, and `[preview]` blocks that the tooling can render in isolation.
+A `.rsx` file has up to four sections: `[logic]` for verbatim Rust (a `pub struct Props` declares the component's props), `[style]` for reusable style classes, `[view]` for the node tree, and `[preview]` blocks that the tooling renders in isolation, with live controls, a `[play]` that drives them and snapshots that guard them ([docs/previews.md](docs/previews.md)).
 
 ## Quick start
 
@@ -97,7 +97,7 @@ Then:
 
 ```sh
 cargo telar dev        # run with hot reload
-cargo telar preview    # render every [preview] block, hot-reloaded
+cargo telar preview    # open the component workshop on every [preview], hot-reloaded
 cargo telar preview <ID>         # open the workshop on one preview, or move the open one there
 cargo telar preview --png out/   # render each one, and each matrix cell, to a PNG instead, with no window
 cargo telar test       # build, play, a11y-check and snapshot every preview and matrix cell, headlessly
@@ -218,6 +218,7 @@ Both are baked by the CLI, and so is the `.rsx` itself: build through `cargo tel
 - **Assets that arrive later**, behind a transport-agnostic reactive seam: a signal that advances `Loading` → `Ready`/`Failed`, with the transport, the cache and the decoder each yours to choose. → `async-assets`
 - **Decoders and transports for that seam** — SVG, bitmaps, translation catalogs, over HTTP or from a directory — in the companion crate [`telar-dynamic`](plugins/telar-dynamic), one feature each. Yours plugs in the same way.
 - **Hot reload** in `cargo telar dev`, and an in-app devtools overlay for inspecting the live component tree — the plugin [`telar-devtools`](plugins/telar-devtools), an optional dependency `cargo telar new` declares and `cargo telar dev` turns on — or one of your own, through the same seam. *(the CLI sets this one)*
+- **Previews and a component workshop**: write a component in a state once, as a `[preview]` in `.rsx` or `preview!` in Rust, and see it in the workshop with live controls, across themes, languages and sizes, play it, check it for accessibility, and snapshot it. → `cargo telar preview`, `cargo telar test` ([docs/previews.md](docs/previews.md))
 - **Packaging** to native installers per platform, plus Android APKs. → `cargo telar build --format …` For the browser, a static site from a page template with content-hashed assets, an `asset-manifest.json` and a verbatim `web/public/` → `cargo telar build --target web`, configured under `[telar.web]` ([docs/web-packaging.md](docs/web-packaging.md)). With `--prerender`, every page and locale written ahead of time, readable before the module loads and naming each element for the client that takes it over → [docs/prerender.md](docs/prerender.md). Each page carries its description, canonical, alternate-language and link-preview tags, derived from `[telar.web]`, the catalogs and the routes, with a `sitemap.xml`, a root that negotiates the reader's locale, and host profiles (`static`, `cloudflare-pages`) for the files a host reads beside the site.
 
 The complete list, with what each feature pulls in and why, is on **[docs.rs](https://docs.rs/telar#feature-flags)**.
@@ -257,8 +258,9 @@ Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 | [`telar-i18n`](plugins/telar-i18n) | CLDR plural rules for catalogs, and number and date formatting in the active locale, from ICU4X |
 | [`telar-expression`](plugins/telar-expression) | A typed, pure expression language bound to signals |
 | [`telar-devtools`](plugins/telar-devtools) | The dev overlay: FPS counter, node inspector, build-error banner — an optional dependency `cargo telar dev` turns on, so no shipping build compiles it |
+| [`telar-workshop`](plugins/telar-workshop) | The component workshop `cargo telar preview` opens: a sidebar of every preview, a canvas of its own for each, live controls, a matrix view and the panels that review a play and a snapshot — an optional dependency `cargo telar preview` turns on, so no shipping build compiles it |
 
-**The layout rule.** `plugins/` holds every crate built on top of the facade, including what the tooling adds on its own, such as the devtools overlay `cargo telar dev` turns on. `crates/` holds `telar`, the kernel crates behind it and host-side tooling (`crates/tools/`); a crate a `telar` feature pulls in and compiles into the target is core, even when it is opt-in. Nothing under `crates/` depends on `plugins/`, which `.github/scripts/check-layering.sh` enforces in CI.
+**The layout rule.** `plugins/` holds every crate built on top of the facade, including what the tooling adds on its own, such as the devtools overlay `cargo telar dev` turns on and the workshop `cargo telar preview` opens. `crates/` holds `telar`, the kernel crates behind it and host-side tooling (`crates/tools/`); a crate a `telar` feature pulls in and compiles into the target is core, even when it is opt-in. Nothing under `crates/` depends on `plugins/`, which `.github/scripts/check-layering.sh` enforces in CI.
 
 **Adding one.** Add the crate, name the feature groups you draw, and, for a plugin that ships `.rsx` tags, list it in `telar.toml` so every `.rsx` file sees them without a `use`:
 

@@ -84,7 +84,7 @@ pub(crate) enum CanvasSize {
     Fill,
     /// One of [`PRESETS`], by id.
     Preset(String),
-    /// One of the project's `[telar.previews] viewports`, by name.
+    /// One of the project's `[telar.previews.viewports]`, by name.
     Project(String),
     /// One of [`DEVICES`], by id: its size, its safe area and a bezel around it.
     Device(String),

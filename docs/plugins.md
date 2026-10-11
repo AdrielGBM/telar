@@ -17,9 +17,10 @@ design: a plugin is a component crate that happens to be somebody else's.
 ## Where a plugin lives
 
 `plugins/` holds every crate built on top of the facade: the ones an application author adds to their own
-`Cargo.toml`, and the ones the tooling adds on its own. `telar-devtools` is one of the latter: an application
-declares it as an optional dependency (`cargo telar new` writes it), `cargo telar dev` turns its feature on,
-and `telar::app!` installs its overlay only under that feature, so no shipping build compiles it.
+`Cargo.toml`, and the ones the tooling adds on its own. `telar-devtools` and `telar-workshop` are the latter: an
+application declares each as an optional dependency (`cargo telar new` writes both), `cargo telar dev` turns the
+devtools feature on and `cargo telar preview` the workshop's, and `telar::app!` installs the overlay or the
+workshop only under its feature, so no shipping build compiles either.
 
 `crates/` holds `telar`, the kernel crates behind it, and host-side tooling in `crates/tools/`. A crate that a
 `telar` feature pulls in and compiles into the target is core and lives there, even when it is opt-in.
@@ -373,7 +374,7 @@ When a library is among what they ship, both transpile and bake first, then chec
 carries the whole artifact and that the artifact answers for the sources on disk. Cargo leaves every
 dot-directory out of a package unless `include` names it, and `.telar/` is one, so a library on cargo's defaults publishes a crate no build can compile. The `include`
 list is the exact one `cargo telar new --lib` writes: `telar.toml`, `src/**` minus the module trees of the
-hot-reload and preview flavours, and the Plain flavour's generated directory, index, baked catalog, baked
+hot-reload flavour, and the Plain flavour's generated directory, index, baked catalog, baked
 assets and icon record under `.telar/`. The icon record also has to answer for the icons the artifact baked. `package --check` names what to add when the list falls behind. `telar_project::library_include()` is where the list is defined.
 
 Cargo refuses a package with uncommitted files, and the gitignored `.telar/` is exactly that, so `package` and
@@ -397,10 +398,29 @@ refuses an artifact or module tree that disagrees with `src/`. So adding, moving
 `.rs` module needs `cargo telar transpile` before the next build (`cargo telar check`, `dev`, `build` and `test`
 run it for you); a plain `cargo build` is refused with a message naming the command.
 
+### Shipping previews
+
+A plugin, Rust or `.rsx`, shows its components in the workshop of every application that wants them. It carries
+the previews in its own source: `[preview]` blocks in `.rsx`, or `preview!` in Rust inside `telar::__previews!`,
+listed by a `telar_all_previews()` at the crate's root (`app!` and `rsx_modules!` define one for the `.rsx`
+previews). They compile to nothing unless `telar/previews` is on, so a consumer's shipping build pays for none of
+them. The application names the plugin once to see them:
+
+```toml
+# telar.toml
+[telar.previews]
+include = ["my-plugin"]
+```
+
+A `.rsx` library needs nothing else: its previews are in the Plain artifact it publishes, the only one a library
+has. `cargo telar test -p my-plugin` plays, accessibility-checks and snapshots them without an application. The
+goldens stay in the library's own `previews/__snapshots__/`, in the repository rather than the published
+package. See [docs/previews.md](previews.md) for writing previews.
+
 ### The `CARGO_PRIMARY_PACKAGE` caveat
 
-A library compiled as a dependency always gets the Plain flavour, whatever `hot-reload` or `preview` asked
-for, because that is the only artifact a published library carries. Cargo sets `CARGO_PRIMARY_PACKAGE` for the
+A library compiled as a dependency always gets the Plain flavour, whatever `hot-reload` asked for, because
+that is the only artifact a published library carries. Cargo sets `CARGO_PRIMARY_PACKAGE` for the
 package the command selected (`-p`, `--workspace`, the current directory or a default member) and leaves it
 unset for every dependency, including a workspace member that another member pulls in; that is how the macro
 tells the two apart. Cargo does not fingerprint that variable, so a workspace library built once selected and

@@ -79,22 +79,27 @@ tooling = ["telar/dev", "telar/hot-reload", "telar/previews", "telar/preview", "
 No build turns `tooling` on; it is there for the lockfile. Without it those dependencies are resolved against
 whatever copy of the crates.io index the machine last fetched, so after a `telar` upgrade `cargo telar dev`
 can fail with `failed to select a version for the requirement …` until something refreshes that
-copy. `cargo telar` warns when no member of the workspace names them.
+copy. `cargo telar` warns when no member of the workspace names them. The preview features are `check`'s `telar/previews`, `preview`'s `telar/preview`, `preview --png`'s `telar/preview-headless` and `test`'s `telar/preview-snapshots`, which it turns on whether or not the run takes snapshots.
 
-`cargo telar dev` also turns on one feature of your app's own: `telar-devtools`, the overlay. It needs no
-entry here. The app declares the crate as an optional dependency, which `cargo telar new` writes:
+`cargo telar dev` also turns on `telar-devtools`, the overlay, a feature of your app's own, and `cargo telar preview`
+turns on that one and `telar-workshop`, the component workshop. Neither needs an entry here. The app declares each as
+an optional dependency, which `cargo telar new` writes:
 
 ```toml
 [dependencies]
 telar-devtools = { version = "0.2.2", optional = true }
+telar-workshop = { version = "0.2.2", optional = true }
 
 [features]
 telar-devtools = ["dep:telar-devtools"]
+telar-workshop = ["dep:telar-workshop"]
 ```
 
 Cargo.lock pins an optional dependency a member declares whether or not a build enables it, and only
-`cargo telar dev` and `cargo telar preview` enable this one. Without the declaration the session runs without
-the overlay and says so; `cargo telar dev --devtools off` leaves it out of the build even when it is declared.
+`cargo telar dev` and `cargo telar preview` enable the devtools, and only `cargo telar preview` the workshop.
+Without the declaration the session runs without the overlay or the workshop and says so (`preview` falls back to a
+plain page that lists every preview); `cargo telar dev --devtools off` leaves the overlay out of the build even
+when it is declared.
 
 ## Do not set `panic = "abort"` on `[profile.dev]` or `[profile.release]`
 
