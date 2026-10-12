@@ -9,7 +9,7 @@ element group
             rect 360,286 28x28 fill=#4261edff radius=10
             element group
               matrix 1,0,0,1,369,286
-                text 0,5 9.19x16.8 "−" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+                text 0,5 9.27x16.8 "−" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
               end
             end
           end

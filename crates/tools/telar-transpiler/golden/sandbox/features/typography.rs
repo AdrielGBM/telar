@@ -386,7 +386,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                             card(CardProps::props().gap(6.0).build(), __deferred)?
                         };
                         __children.push(box_item(__node_14));
-                        let __node_15 = code_line(CodeLineProps::props().code("[[telar.fonts]]   family = 'Telar Test'   src = 'assets/fonts/TelarTest.ttf'").build(), Children::default())?;
+                        let __node_15 = code_line(CodeLineProps::props().code("[[telar.fonts]]   family = 'Telar Test'   src = '../../crates/renderer/renderer-text/test-fonts/TelarTest.ttf'").build(), Children::default())?;
                         __children.push(box_item(__node_15));
                     }
                     __slots.extend_default(__children);

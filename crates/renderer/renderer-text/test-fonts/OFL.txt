@@ -1,6 +1,6 @@
 Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
 
-Telar Test (TelarTest.ttf) is a Basic Latin subset of Inter 4.1, renamed. It is used by the Telar test suite and demo.
+Telar Test (TelarTest.ttf) is a subset of Inter 4.1 (nixpkgs `inter`, InterVariable.ttf), renamed: Basic Latin plus typographic punctuation, currency, math, arrows, spaces and the macOS key symbols. It is used by the Telar test suite and demo and is regenerated with build.py.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at: https://openfontlicense.org

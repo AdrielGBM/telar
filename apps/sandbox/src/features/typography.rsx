@@ -48,7 +48,7 @@ col gap:20
             text "Telar Test at 400 — a variable face from [[telar.fonts]]" font_size:18 color:$theme.ink font_family:"Telar Test, sans_serif"
             text "Telar Test at 800" font_size:18 color:$theme.ink font_weight:800 font_family:"Telar Test, sans_serif"
             text "The page does not wait for it: text shows in the fallback and is measured again once, when the face lands." font_size:13 color:$theme.muted
-        code_line code:"[[telar.fonts]]   family = 'Telar Test'   src = 'assets/fonts/TelarTest.ttf'"
+        code_line code:"[[telar.fonts]]   family = 'Telar Test'   src = '../../crates/renderer/renderer-text/test-fonts/TelarTest.ttf'"
     example title:"Sizes relative to the surface and to what is inherited"
         card gap:6
             text "Resize the window" font_size:5sw letter_spacing:-0.03em color:$theme.ink
