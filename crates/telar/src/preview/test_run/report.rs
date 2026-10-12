@@ -96,6 +96,7 @@ pub struct CellReport {
 }
 
 impl CellReport {
+    #[cfg(not(target_os = "android"))]
     pub(super) fn new(id: String, cell: Vec<(String, String)>) -> Self {
         Self {
             id,
@@ -208,8 +209,8 @@ pub struct A11yFinding {
     pub rect: Option<[f32; 4]>,
 }
 
-impl A11yFinding {
-    pub(super) fn of(violation: &a11y::Violation) -> Self {
+impl From<&a11y::Violation> for A11yFinding {
+    fn from(violation: &a11y::Violation) -> Self {
         Self {
             rule: violation.rule.id().to_string(),
             severity: violation.severity.as_str().to_string(),
@@ -219,7 +220,9 @@ impl A11yFinding {
                 .map(|rect| [rect.x, rect.y, rect.width, rect.height]),
         }
     }
+}
 
+impl A11yFinding {
     /// The finding as a run prints it.
     pub fn line(&self) -> String {
         format!("{:<7}  {:<16}  {}", self.severity, self.rule, self.message)

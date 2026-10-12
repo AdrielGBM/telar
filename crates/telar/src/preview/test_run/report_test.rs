@@ -54,7 +54,7 @@ fn the_summary_counts_cells_and_every_error_outside_them() {
 fn the_details_name_the_check_each_line_comes_from() {
     let mut cell = CellReport::new(String::from("demo--card--a"), Vec::new());
     cell.play.error = Some(String::from("found no button \"Save\""));
-    cell.a11y.violations = vec![A11yFinding::of(&Violation::new(
+    cell.a11y.violations = vec![A11yFinding::from(&Violation::new(
         Rule::Contrast,
         "text at 2.1:1",
         Some(Rect::new(1.0, 2.0, 30.0, 12.0)),

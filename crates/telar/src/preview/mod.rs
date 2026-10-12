@@ -51,7 +51,6 @@ mod value;
 mod app;
 #[cfg(not(target_os = "android"))]
 mod runner;
-#[cfg(not(target_os = "android"))]
 pub mod test_run;
 
 pub use actions::{ActionCall, ActionLog, IntoAction, PreviewActions};

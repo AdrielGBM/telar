@@ -488,6 +488,7 @@ impl MatrixCell {
         }
     }
 
+    #[cfg(any(feature = "preview-snapshots", not(target_os = "android")))]
     /// The axis and value pairs a report records for `cell`, in axis order; none for the preview itself.
     pub(crate) fn owned_coordinates(cell: Option<&Self>) -> Vec<(String, String)> {
         cell.map_or_else(Vec::new, |cell| {

@@ -14,7 +14,7 @@ mod desktop;
         not(target_os = "android"),
         not(target_arch = "wasm32")
     ),
-    target_os = "android"
+    all(feature = "android-bare", target_os = "android")
 ))]
 mod dev_window;
 pub mod font_config;
@@ -57,7 +57,7 @@ fn resolved_window<A: crate::app::App + ?Sized>(
         not(target_os = "android"),
         not(target_arch = "wasm32")
     ),
-    target_os = "android"
+    all(feature = "android-bare", target_os = "android")
 ))]
 pub(crate) fn overlay_disabled() -> bool {
     std::env::var("TELAR_DEVTOOLS").as_deref() == Ok("0")
