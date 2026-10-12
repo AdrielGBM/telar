@@ -244,6 +244,35 @@ fn every_page_an_export_writes_opens_its_own_route_at_the_directory_a_static_hos
     }
 }
 
+#[test]
+fn the_address_a_static_host_redirects_to_opens_the_same_page_and_is_written_without_the_slash() {
+    let route = WorkshopRoute::new(Page::Preview("demo--card--a".into()), true);
+    for reference in ["/preview/demo--card--a/", "/preview/demo--card--a//"] {
+        let opened = WorkshopRoute::from_location(&at(reference)).unwrap();
+        assert_eq!(opened, route, "{reference}");
+        assert_eq!(written(&opened.to_location()), "/preview/demo--card--a");
+    }
+    let canvas = WorkshopRoute::from_location(&at("/matrix/a/?chrome=0&cell=size=large")).unwrap();
+    assert_eq!(canvas.page, Page::Matrix("a".into()));
+    assert!(!canvas.chrome);
+    assert_eq!(canvas.cell.as_deref(), Some("a--size=large"));
+}
+
+#[test]
+fn a_slash_closed_address_under_a_base_opens_the_same_page_and_is_written_below_the_base() {
+    let format = LocationFormat::new("/workshop/");
+    let route = WorkshopRoute::new(Page::Docs("Forms/Text field".into()), true);
+    let opened = format
+        .parse("/workshop/docs/Forms/Text%20field/")
+        .and_then(|location| WorkshopRoute::from_location(&location));
+    assert_eq!(opened.as_ref(), Some(&route));
+    assert_eq!(
+        format.format(&route.to_location()),
+        "/workshop/docs/Forms/Text%20field"
+    );
+    assert_eq!(format.parse("/docs/Forms/"), None);
+}
+
 const AWKWARD_TITLES: [&str; 7] = [
     "Forms / Button",
     "Forms/Button",

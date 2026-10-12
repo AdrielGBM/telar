@@ -110,6 +110,25 @@ async fn a_fragment_the_browser_opens_by_itself_is_a_new_entry_on_top() {
     );
 }
 
+#[wasm_bindgen_test]
+async fn an_address_closed_with_a_slash_by_a_static_host_opens_the_same_page_and_is_replaced_without_it()
+ {
+    window()
+        .history()
+        .unwrap()
+        .replace_state_with_url(
+            &wasm_bindgen::JsValue::NULL,
+            "",
+            Some("/telar-test/preview/card/?chrome=0"),
+        )
+        .unwrap();
+    let mut source = WebLocation::new(Some(LocationFormat::new("/telar-test/")));
+    let opened = source.initial();
+    assert_eq!(opened, [at("/preview/card?chrome=0")]);
+    source.replace(&opened);
+    assert_eq!(path_now(), "/telar-test/preview/card?chrome=0");
+}
+
 async fn wait(ms: i32) {
     let promise = js_sys::Promise::new(&mut |resolve, _| {
         let _ = window().set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms);
