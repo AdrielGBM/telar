@@ -72,7 +72,11 @@ struct CargoMetadata {
 /// that resolution already done. Falls back to the plain join only when cargo cannot be run at all, which
 /// is the same fallback [`resolve_telar_version`] uses for the same reason.
 pub fn find_target_dir(workspace_root: &Path) -> PathBuf {
-    std::process::Command::new("cargo")
+    target_dir_reported_by(std::process::Command::new("cargo"), workspace_root)
+}
+
+fn target_dir_reported_by(mut cargo: std::process::Command, workspace_root: &Path) -> PathBuf {
+    cargo
         .args(["metadata", "--format-version", "1", "--no-deps"])
         .current_dir(workspace_root)
         .output()

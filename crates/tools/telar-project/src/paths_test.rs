@@ -15,17 +15,9 @@ fn find_target_dir_honours_cargo_target_dir() {
             .as_nanos()
     ));
 
-    let previous = std::env::var_os("CARGO_TARGET_DIR");
-    unsafe {
-        std::env::set_var("CARGO_TARGET_DIR", &custom);
-    }
-    let resolved = find_target_dir(&root);
-    unsafe {
-        match &previous {
-            Some(value) => std::env::set_var("CARGO_TARGET_DIR", value),
-            None => std::env::remove_var("CARGO_TARGET_DIR"),
-        }
-    }
+    let mut cargo = std::process::Command::new("cargo");
+    cargo.env("CARGO_TARGET_DIR", &custom);
+    let resolved = target_dir_reported_by(cargo, &root);
 
     assert_eq!(
         resolved, custom,
@@ -38,17 +30,10 @@ fn find_target_dir_honours_cargo_target_dir() {
 #[test]
 fn find_target_dir_falls_back_when_cargo_is_unavailable() {
     let root = Path::new("/nonexistent/workspace/for/telar-target-dir-test");
-    let previous = std::env::var_os("PATH");
-    unsafe {
-        std::env::set_var("PATH", "");
-    }
-    let resolved = find_target_dir(root);
-    unsafe {
-        match &previous {
-            Some(value) => std::env::set_var("PATH", value),
-            None => std::env::remove_var("PATH"),
-        }
-    }
+    let resolved = target_dir_reported_by(
+        std::process::Command::new("/nonexistent/cargo-for-telar-target-dir-test"),
+        root,
+    );
 
     assert_eq!(resolved, root.join("target"));
 }
