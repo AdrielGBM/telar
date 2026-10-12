@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use telar::preview::{Frame, PreviewCtx, PreviewEntry, by_role};
+use telar::preview::{ArgValue, Frame, PreviewCtx, PreviewEntry, by_role};
 use telar::testing::{centre, key_with, mount, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Children, ComponentList, DrawCommand, Event, Key, LayoutError,
@@ -8,6 +8,7 @@ use telar::{
 };
 use telar_components::{ButtonProps, button};
 
+use super::Verdict;
 use super::frame::drawn;
 use crate::WorkshopApp;
 use crate::test_support::{control, control_matching, settle};
@@ -377,4 +378,138 @@ fn whether_a_play_runs_on_mount_is_kept_between_runs_of_the_workshop() {
         None,
     );
     assert!(!next.interactions().auto_run().get());
+}
+
+const STEPPER: &str = "plays--stepper--default";
+
+fn stepper(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let count = ctx.signal("count", 0_i64);
+    button(
+        ButtonProps::props()
+            .label(Reactive::of(move || format!("Count {}", count.get())))
+            .on_press(std::rc::Rc::new(move || count.update(|count| *count += 1)))
+            .build(),
+        Children::default(),
+    )
+}
+
+fn stepping_entries() -> Vec<PreviewEntry> {
+    vec![
+        PreviewEntry::new(STEPPER, "stepper", "Default", stepper).play(|canvas| {
+            canvas.click(by_role(Role::Button).named("Count 0"))?;
+            canvas.expect_text("Count 1")
+        }),
+    ]
+}
+
+struct Stepping {
+    runtime: LocalApp<crate::test_support::Shell>,
+    tree: ComponentList,
+}
+
+impl Stepping {
+    fn open() -> Self {
+        telar::reset_layout_runtime();
+        telar::focus::clear();
+        telar::install_default_text_metrics();
+        let request = telar::preview::host::PreviewRequest::new(Some(STEPPER), None);
+        let state = crate::state::WorkshopState::new(stepping_entries().into(), &request);
+        let runtime = LocalApp(crate::test_support::Shell { state });
+        let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+        let mut stepping = Self { runtime, tree };
+        stepping.next_turn();
+        stepping
+    }
+
+    fn state(&self) -> &crate::state::WorkshopState {
+        &self.runtime.0.state
+    }
+
+    fn next_turn(&mut self) {
+        settle(&self.tree);
+        telar::testing::advance_time(Duration::ZERO);
+        settle(&self.tree);
+    }
+
+    fn remount(&mut self) {
+        self.state().remount();
+        self.next_turn();
+    }
+
+    fn count(&self) -> ArgValue {
+        let entry = self.state().selected().expect("a preview is selected");
+        self.state()
+            .args(&entry)
+            .get("count")
+            .expect("the arg is read")
+    }
+
+    fn verdict(&self) -> Verdict {
+        self.state()
+            .interactions()
+            .run()
+            .expect("the play ran")
+            .verdict()
+    }
+
+    fn drawn(&self, text: &str) -> bool {
+        texts(&self.tree).iter().any(|drawn| drawn == text)
+    }
+}
+
+#[test]
+fn a_play_passes_on_every_remount_because_each_starts_from_the_same_args() {
+    let mut stepping = Stepping::open();
+    assert_eq!(stepping.verdict(), Verdict::Passed);
+    for _ in 0..3 {
+        stepping.remount();
+        assert_eq!(stepping.verdict(), Verdict::Passed);
+        assert_eq!(stepping.count(), ArgValue::Int(1));
+    }
+}
+
+#[test]
+fn what_a_play_changes_stays_until_the_next_remount_and_is_no_edit() {
+    let mut stepping = Stepping::open();
+    assert!(stepping.drawn("Count 1"), "the play's effect stays visible");
+    let entry = stepping.state().selected().expect("a preview is selected");
+    let args = stepping.state().args(&entry);
+    assert!(args.overrides().is_empty(), "a play's write is not an edit");
+    assert!(!args.states().iter().any(|arg| arg.edited));
+
+    stepping.state().interactions().auto_run().set(false);
+    stepping.remount();
+    assert!(stepping.drawn("Count 0"), "a remount restores the defaults");
+    assert_eq!(stepping.count(), ArgValue::Int(0));
+}
+
+#[test]
+fn a_users_edit_survives_remounts_and_the_play_starts_from_it() {
+    let mut stepping = Stepping::open();
+    let entry = stepping.state().selected().expect("a preview is selected");
+    let args = stepping.state().args(&entry);
+    stepping.state().interactions().auto_run().set(false);
+    stepping.remount();
+    args.set("count", ArgValue::Int(5))
+        .expect("the arg takes it");
+    stepping.next_turn();
+    assert!(stepping.drawn("Count 5"));
+
+    stepping.remount();
+    assert!(stepping.drawn("Count 5"), "a remount keeps the user's edit");
+    assert_eq!(
+        args.overrides(),
+        [(String::from("count"), ArgValue::Int(5))]
+    );
+
+    crate::interactions::replay(stepping.state());
+    stepping.next_turn();
+    assert_eq!(
+        stepping.count(),
+        ArgValue::Int(5),
+        "the failed click found no `Count 0`"
+    );
+    assert!(matches!(stepping.verdict(), Verdict::Failed(_)));
+    stepping.remount();
+    assert!(stepping.drawn("Count 5"));
 }

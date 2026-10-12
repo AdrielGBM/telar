@@ -170,7 +170,8 @@ impl Play {
         let Some(play) = self.entry.play else {
             return Ok(());
         };
-        let outcome = self.built().and_then(|()| play(self));
+        let args = self.ctx.args().clone();
+        let outcome = args.driven(|| self.built().and_then(|()| play(self)));
         if let Err(error) = &outcome
             && self
                 .steps

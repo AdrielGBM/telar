@@ -70,7 +70,9 @@ fn mount(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let actions = state.actions();
     actions.clear();
-    let ctx = PreviewCtx::for_entry_with(&entry, state.args(&entry)).with_actions(actions);
+    let args = state.args(&entry);
+    args.restore();
+    let ctx = PreviewCtx::for_entry_with(&entry, args).with_actions(actions);
     let globals = ctx.globals();
     let failing = state.clone();
     let failures = CaughtFailures::default();

@@ -149,6 +149,7 @@ struct ArgsState {
     /// Every value that differs from its default, by name: what a hot reload carries and a link encodes.
     overrides: RwSignal<Overrides>,
     remounts: RwSignal<u64>,
+    driven: Cell<bool>,
     /// Bumped when what a panel lists of the args changes, so it lists rows it has not seen.
     rows: RwSignal<u64>,
     /// The component's props, which an arg of the same name takes its doc, control and default from.
@@ -363,6 +364,7 @@ impl Args {
             owner,
             overrides: overrides(),
             remounts: signal(0),
+            driven: Cell::new(false),
             rows: signal(0),
             props: Cell::new(None),
             slots: RefCell::new(Vec::new()),
@@ -426,11 +428,15 @@ impl Args {
         let initial = self.override_or(name, default);
         let mirrored = self.row(name).and_then(|row| row.default);
         let overrides = self.0.overrides;
+        let state = Rc::downgrade(&self.0);
         let live = with_owner(Some(self.0.owner), || {
             let live = signal(initial);
             effect(move || {
                 let value = live.with(T::to_arg_value);
-                store_override(overrides, name, mirrored.as_ref(), value);
+                let driven = state.upgrade().is_some_and(|state| state.driven.get());
+                if !driven {
+                    store_override(overrides, name, mirrored.as_ref(), value);
+                }
             });
             live
         });
@@ -542,6 +548,40 @@ impl Args {
         Ok(())
     }
 
+    /// Runs `drive`, which writes live args the way a play does: what it writes shows in the preview and the controls but is not an edit, so it is not kept as an override. See [`restore`](Self::restore).
+    pub fn driven<R>(&self, drive: impl FnOnce() -> R) -> R {
+        let outer = self.0.driven.replace(true);
+        let result = drive();
+        self.0.driven.set(outer);
+        result
+    }
+
+    /// Puts every live arg back to what the controls set, or else its default, undoing what [`driven`](Self::driven) wrote.
+    pub fn restore(&self) {
+        let props = self.0.props.get();
+        let live: Vec<(Rc<dyn LiveArg>, &'static str, Option<ArgValue>)> = self
+            .0
+            .slots
+            .borrow()
+            .iter()
+            .filter_map(|slot| Some((slot.live.clone()?, slot.name, slot.row(props).default)))
+            .collect();
+        batch(|| {
+            for (live, name, default) in live {
+                let wanted = self
+                    .0
+                    .overrides
+                    .peek_with(|overrides| overrides.get(name).cloned())
+                    .or(default);
+                if let Some(wanted) = wanted
+                    && live.read() != wanted
+                {
+                    live.write(&wanted);
+                }
+            }
+        });
+    }
+
     /// Puts every arg back to its default, building the preview again if one it reads at build had changed.
     pub fn reset(&self) {
         let held = self.0.overrides.peek();
@@ -607,7 +647,7 @@ impl Args {
                     binding: row.binding,
                     control: row.control,
                     doc: row.doc,
-                    edited: value.is_some() && value != row.default,
+                    edited: self.0.overrides.with(|held| held.contains_key(name)),
                     default: row.default,
                     value,
                     shown: row.shown,

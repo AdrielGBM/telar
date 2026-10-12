@@ -355,3 +355,24 @@ fn an_entry_s_args_are_declared_and_linked_to_its_props() {
     assert_eq!(label.doc, "What it says.");
     assert!(std::ptr::eq(label.prop.unwrap(), &FIELDS[2]));
 }
+
+#[test]
+fn a_driven_write_is_no_override_and_restore_puts_the_edit_back() {
+    let args = Args::new();
+    let count = args.signal("count", 0u32);
+    args.driven(|| count.set(3));
+    assert_eq!(args.get("count"), Some(ArgValue::Int(3)));
+    assert!(args.overrides().is_empty());
+    assert!(!state(&args, "count").edited);
+    args.restore();
+    assert_eq!(count.peek(), 0);
+
+    args.set("count", ArgValue::Int(5)).unwrap();
+    args.driven(|| count.set(7));
+    args.restore();
+    assert_eq!(count.peek(), 5);
+    assert_eq!(
+        args.overrides(),
+        [(String::from("count"), ArgValue::Int(5))]
+    );
+}
