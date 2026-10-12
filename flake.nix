@@ -97,6 +97,9 @@
               # What `wasm-bindgen-test-runner` drives: the browser tests are the only place Taffy is held to what CSS actually lays out, and without a driver `cargo test --target wasm32-unknown-unknown` has nowhere to run the module.
               pkgs.chromedriver
               pkgs.ungoogled-chromium
+              # Page Down is only drivable from wasm through Firefox's `scrollByPages`, so the arrival margin's page-down test runs there.
+              pkgs.geckodriver
+              pkgs.firefox
               pkgs.jq
             ];
             buildInputs = desktopDeps;
@@ -107,6 +110,7 @@
             "CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS" =
               "-C link-arg=-fuse-ld=mold";
             CHROMEDRIVER = "${pkgs.chromedriver}/bin/chromedriver";
+            GECKODRIVER = "${pkgs.geckodriver}/bin/geckodriver";
             # Read at compile time by the browser tests that audit with axe (`include_str!`), so the script reaches the page without a server.
             TELAR_AXE_CORE = "${axeCore}/axe.min.js";
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath desktopDeps;

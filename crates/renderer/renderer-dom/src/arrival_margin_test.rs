@@ -17,7 +17,7 @@ use ui_core::{
     StyledContainer, box_item,
 };
 use wasm_bindgen::JsCast;
-use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
+use wasm_bindgen_test::{console_log, wasm_bindgen_test, wasm_bindgen_test_configure};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -303,30 +303,37 @@ async fn a_control_under_the_bar_is_scrolled_out_from_under_it_when_focused() {
     let _ = element_of(control).blur();
 }
 
-/// How far one page down moves the document from the top, through Firefox's `scrollByPages`, the step Page Down takes.
-async fn one_page_down() -> f64 {
-    scroll_to(0.0).await;
+/// How far one page down moves the document from the top, through `scrollByPages`, the step Page Down takes; `None` where the browser has no such method.
+async fn one_page_down() -> Option<f64> {
     let by_pages: js_sys::Function = js_sys::Reflect::get(&window(), &"scrollByPages".into())
-        .expect("a window property")
+        .ok()?
         .dyn_into()
-        .expect("Firefox pages a window with scrollByPages");
+        .ok()?;
+    scroll_to(0.0).await;
     by_pages
         .call1(&window(), &1.into())
         .expect("the page moves down");
     next_frames().await;
-    window().scroll_y().unwrap_or_default()
+    Some(window().scroll_y().unwrap_or_default())
 }
 
 #[wasm_bindgen_test]
 async fn a_page_down_leaves_the_bar_out_of_its_step() {
     render();
-    let padded = one_page_down().await;
+    let Some(padded) = one_page_down().await else {
+        console_log!(
+            "skipped: this browser has no `scrollByPages`, so only the Firefox run holds a page down to the bar"
+        );
+        return;
+    };
     let style = document()
         .get_element_by_id("telar-arrival")
         .expect("the arrival margin's style is in the document");
     let rule = style.text_content();
     style.set_text_content(None);
-    let bare = one_page_down().await;
+    let bare = one_page_down()
+        .await
+        .expect("a page down moved the document the first time");
     style.set_text_content(rule.as_deref());
     assert!(
         (bare - padded - BAR_HEIGHT as f64).abs() < 1.0,
