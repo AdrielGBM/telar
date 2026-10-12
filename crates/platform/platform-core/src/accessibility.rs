@@ -39,6 +39,8 @@ pub struct AccessNode {
     pub position: Option<SetPosition>,
     /// The [`id`](Self::id) of the node in this snapshot that the keyboard's cursor rests on while this one keeps focus: the row of a tree, the item of a toolbar. A reader announces it as though it held focus itself.
     pub active_descendant: Option<u64>,
+    /// The [`id`](Self::id) of the node in this snapshot whose content this one decides: the list a combobox opens, the menu a button drops.
+    pub controls: Option<u64>,
 }
 
 /// The snapshot as a reader would speak it, one line per node in reading order: what a terminal, a log or a test can carry where there is no accessibility API to hand the nodes to.

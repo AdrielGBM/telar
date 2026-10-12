@@ -168,6 +168,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-selected",
             "aria-expanded",
             "aria-current",
+            "aria-controls",
             "aria-activedescendant",
             "aria-valuenow",
             "aria-valuemin",
@@ -562,6 +563,10 @@ fn the_workbench_roles_are_the_aria_roles_of_the_same_name() {
         (Role::Splitter, "separator"),
         (Role::Status, "status"),
         (Role::Log, "log"),
+        (Role::Menu, "menu"),
+        (Role::MenuItem, "menuitem"),
+        (Role::ListBox, "listbox"),
+        (Role::Option, "option"),
     ] {
         assert_eq!(aria_role(role), Some(aria), "{role:?}");
         assert_eq!(tag_of(&role), "div", "{role:?}");
@@ -1178,4 +1183,151 @@ fn what_the_box_paints_before_the_surface_is_still_its_own() {
         window_box.style
     );
     assert_eq!(children(window_box)[0].key, in_nested(1));
+}
+
+fn roots(frame: &Frame) -> Vec<&BoxNode> {
+    frame.children.iter().filter_map(Node::as_box).collect()
+}
+
+/// An open combobox keeps focus on itself and names the list it opened, which is laid over the page far from it: the list gets an `id` to be named by, wherever it is in the frame, and the combobox's cursor is looked for inside that list.
+#[test]
+fn a_combobox_names_the_list_it_controls_and_points_into_it() {
+    let combobox = Semantics {
+        controls: Some(3),
+        active_descendant: Some(5),
+        ..Semantics::of(Role::ComboBox)
+    };
+    let frame = describe_frame(
+        &[
+            open(1, Semantics::group()),
+            open(2, combobox),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            open(3, Semantics::of(Role::ListBox)),
+            open(
+                4,
+                Semantics::of(Role::Option).in_state(false, Some(true), false),
+            ),
+            DrawCommand::PopElement,
+            open(
+                5,
+                Semantics::of(Role::Option).in_state(false, Some(false), false),
+            ),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let roots = roots(&frame);
+    let combobox = children(roots[0])[0];
+    let list = roots[1];
+    assert_eq!(attribute(list, "role").as_deref(), Some("listbox"));
+    let options = children(list);
+    assert_eq!(attribute(options[0], "role").as_deref(), Some("option"));
+    assert_eq!(
+        attribute(options[0], "aria-selected").as_deref(),
+        Some("true")
+    );
+    assert_eq!(
+        attribute(options[1], "aria-selected").as_deref(),
+        Some("false"),
+        "an option says it is not the chosen one rather than nothing"
+    );
+    assert_eq!(
+        attribute(combobox, "aria-controls").as_deref(),
+        Some("telar-box-3")
+    );
+    assert_eq!(attribute(list, "id").as_deref(), Some("telar-box-3"));
+    assert_eq!(
+        attribute(combobox, "aria-activedescendant").as_deref(),
+        Some("telar-box-5")
+    );
+    let rows = children(list);
+    assert_eq!(attribute(rows[1], "id").as_deref(), Some("telar-box-5"));
+    assert_eq!(attribute(rows[0], "id"), None);
+}
+
+/// The list is named the same way when it comes first in the frame, and named by its anchor when it has one.
+#[test]
+fn a_controlled_box_before_its_control_or_with_an_anchor_is_named_too() {
+    let mut list = Semantics::of(Role::Menu);
+    list.anchor = Some("choices".into());
+    let frame = describe_frame(
+        &[
+            open(3, list),
+            DrawCommand::PopElement,
+            open(
+                2,
+                Semantics {
+                    controls: Some(3),
+                    ..Semantics::of(Role::Button)
+                },
+            ),
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let roots = roots(&frame);
+    assert_eq!(
+        attribute(roots[1], "aria-controls").as_deref(),
+        Some("choices")
+    );
+}
+
+/// A box that controls one the frame did not draw names nothing, and a cursor it names outside both itself and what it controls points at nothing.
+#[test]
+fn a_control_naming_a_box_the_frame_did_not_draw_names_nothing() {
+    let frame = describe_frame(
+        &[
+            open(
+                2,
+                Semantics {
+                    controls: Some(9),
+                    active_descendant: Some(4),
+                    ..Semantics::of(Role::ComboBox)
+                },
+            ),
+            DrawCommand::PopElement,
+            open(4, Semantics::of(Role::MenuItem)),
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let roots = roots(&frame);
+    assert_eq!(attribute(roots[0], "aria-controls"), None);
+    assert_eq!(attribute(roots[0], "aria-activedescendant"), None);
+    assert_eq!(attribute(roots[1], "id"), None);
+}
+
+/// A box of a nested surface names only a box of its own surface, which numbers its boxes from its own counter.
+#[test]
+fn a_control_names_only_a_box_of_its_own_surface() {
+    let frame = describe_frame(
+        &[
+            open(
+                1,
+                Semantics {
+                    controls: Some(2),
+                    ..Semantics::of(Role::ComboBox)
+                },
+            ),
+            DrawCommand::PushSurface { surface: NESTED },
+            open(2, Semantics::of(Role::Menu)),
+            DrawCommand::PopElement,
+            DrawCommand::PopSurface,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let root = only_box(&frame);
+    assert_eq!(attribute(root, "aria-controls"), None);
+    assert_eq!(attribute(children(root)[0], "id"), None);
 }

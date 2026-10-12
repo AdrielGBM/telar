@@ -499,7 +499,57 @@ fn a_focused_tree_names_the_row_its_cursor_rests_on() {
     focus::clear();
 }
 
-/// A scroll area lays its content out as a root of its own and moves it by the scroll offset, so a control inside one is reported where it is drawn: in window space, the same space its label is read in.
+/// An open combobox keeps focus and names the list it opened, which is somewhere else on the screen; a list that is gone is named by nobody.
+#[test]
+fn a_combobox_names_the_list_it_controls() {
+    reset_layout_runtime();
+    focus::clear();
+    let list = StyledContainer::new(
+        LayoutStyle::new().width(100.0).height(40.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .presented(Role::ListBox);
+    let list_id = list.focus_id().unwrap();
+    let gone = focus::next_id();
+    let target = reactive_core::signal(list_id);
+    let combobox = StyledContainer::new(
+        LayoutStyle::new().width(100.0).height(20.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(Role::ComboBox)
+    .controls(move || Some(target.get()));
+    let combobox_id = combobox.focus_id().unwrap();
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(combobox), box_item(list)],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    focus::request(combobox_id);
+
+    let combobox = |nodes: &[AccessNode]| {
+        nodes
+            .iter()
+            .find(|n| n.role == Role::ComboBox)
+            .cloned()
+            .expect("the combobox is exposed")
+    };
+    assert_eq!(combobox(&snapshot(&[])).controls, Some(list_id));
+    target.set(gone);
+    assert_eq!(combobox(&snapshot(&[])).controls, None);
+    focus::clear();
+}
+
+/// A scroll area places its content in a space of its own and moves it by the scroll offset, so a control inside one is reported where it is drawn: in window space, the same space its label is read in.
 #[test]
 fn a_control_inside_a_scrolled_area_is_named_where_it_is_drawn() {
     use crate::scroll_area::LayoutScrollArea;
@@ -951,6 +1001,7 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
         url: None,
         current: None,
         active_descendant: None,
+        controls: None,
     };
     let nested = |surface| NestedSurface {
         surface,

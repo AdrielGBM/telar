@@ -257,3 +257,71 @@ fn a_reader_meets_the_dialog_under_its_title() {
         .collect();
     assert_eq!(dialogs, ["Confirm"]);
 }
+
+/// A button outside the dialog that held the keyboard before it opened, and a dialog bound to `open`.
+fn opener_and_dialog(open: telar::RwSignal<bool>) -> (ComponentList, telar::focus::FocusId) {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let opener = StyledContainer::new(
+        LayoutStyle::new().width(80.0).height(30.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .on_press(|| {})
+    .control(Role::Button);
+    let opener_id = opener.focus_id().expect("a control");
+    let dialog = modal(
+        ModalProps::props().open(open).title("Confirm").build(),
+        Children::from(slot_with_body("Body")),
+    )
+    .unwrap();
+    let root = Container::new(
+        LayoutStyle::new().flex_column().width(400.0).height(400.0),
+        vec![box_item(opener), dialog],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(root);
+    telar::focus::request_from_pointer(opener_id);
+    (tree, opener_id)
+}
+
+/// Closing a dialog gives the keyboard back to what opened it, as it held it: a button pressed open gets no ring.
+#[test]
+fn closing_gives_the_keyboard_back_to_the_opener() {
+    let open = signal(false);
+    let (tree, opener) = opener_and_dialog(open);
+    open.set(true);
+    relayout_if_dirty();
+    let _ = tree.commands();
+    assert_ne!(telar::focus::current(), Some(opener), "into the dialog");
+
+    open.set(false);
+    relayout_if_dirty();
+    assert_eq!(telar::focus::current(), Some(opener));
+    assert!(!telar::focus::is_focus_visible(opener));
+}
+
+/// A dialog whose action sent the keyboard somewhere else on its way out leaves it there.
+#[test]
+fn closing_leaves_the_keyboard_where_the_dialog_sent_it() {
+    let open = signal(false);
+    let (tree, _opener) = opener_and_dialog(open);
+    let elsewhere = telar::focus::next_id();
+    telar::focus::register_as(elsewhere, telar::focus::FocusKind::Widget);
+    open.set(true);
+    relayout_if_dirty();
+    let _ = tree.commands();
+
+    telar::focus::request(elsewhere);
+    open.set(false);
+    relayout_if_dirty();
+    assert_eq!(telar::focus::current(), Some(elsewhere));
+    telar::focus::unregister(elsewhere);
+}

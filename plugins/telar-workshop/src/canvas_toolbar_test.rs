@@ -117,7 +117,7 @@ impl Workshop {
 
     fn pick(&mut self, select: &str, row: &str) {
         self.click(Role::ComboBox, select);
-        self.click(Role::MenuItem, row);
+        self.click(Role::Option, row);
     }
 
     fn rect_of(&self, needle: &str) -> Rect {

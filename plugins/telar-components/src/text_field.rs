@@ -61,6 +61,9 @@ pub struct TextFieldProps {
     /// The suggestion a field like that has its cursor on, so a reader announces it while the keyboard stays in the field. `None` (the default) points at nothing.
     #[props(some, default)]
     pub active_descendant: Option<Rc<dyn Fn() -> Option<FocusId>>>,
+    /// The list of suggestions such a field opens, so a reader is told where they are and the row [`active_descendant`](Self::active_descendant) names is looked for in it. `None` (the default) names none.
+    #[props(some, default)]
+    pub controls: Option<Rc<dyn Fn() -> Option<FocusId>>>,
 }
 
 /// What [`TextFieldProps::on_key`] is called with: the key and the modifiers held with it.
@@ -80,6 +83,7 @@ pub fn text_field(
         on_submit,
         on_key,
         active_descendant,
+        controls,
     } = props;
     let value = value.unwrap_or_else(|| signal(String::new()));
     let width = if width > 0.0 { width } else { DEFAULT_WIDTH };
@@ -108,6 +112,9 @@ pub fn text_field(
     }
     if let Some(read) = active_descendant {
         telar::focus::set_active_descendant(input.focus_id(), move || read());
+    }
+    if let Some(read) = controls {
+        telar::focus::set_controls(input.focus_id(), move || read());
     }
     // The input is a leaf, so its node's style is followed from the box that outlives it.
     let line_node = input.layout_node();

@@ -98,6 +98,7 @@ struct Entry {
     orientation: Option<Orientation>,
     outline: Outline,
     active_descendant: Option<Rc<dyn Fn() -> Option<FocusId>>>,
+    controls: Option<Rc<dyn Fn() -> Option<FocusId>>>,
     /// The surface that answers for this entry's keyboard while it holds focus. See [`delegate_keyboard`].
     keyboard: Option<KeyboardDelegate>,
 }
@@ -448,6 +449,16 @@ pub(crate) fn host_scroller(id: FocusId, role: Role) {
     });
 }
 
+/// [`host_scroller`] for a control that is announced and never holds focus, as [`register_presented`] registers one: the list a combobox opens, which the combobox keeps the keyboard for.
+pub(crate) fn present_scroller(id: FocusId, role: Role) {
+    host_scroller(id, role);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.tabbable = false;
+        }
+    });
+}
+
 /// What a widget is taken to be when it has not said: the reading that matches what the keyboard does with it.
 fn default_role(kind: FocusKind) -> Role {
     match kind {
@@ -479,6 +490,7 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                 orientation: None,
                 outline: Outline::default(),
                 active_descendant: None,
+                controls: None,
                 keyboard: None,
             }),
         }
@@ -843,6 +855,18 @@ pub fn set_active_descendant(container: FocusId, read: impl Fn() -> Option<Focus
     });
 }
 
+/// Declares that `id` decides what another control shows, and how to read which one that is now: the list a combobox opens, the menu a button drops. `None` while there is none, or it is not built.
+///
+/// What tells a reader where the list it was told is open went, and what lets the control's [cursor](set_active_descendant) rest on a row of that list rather than only on one inside the control itself.
+pub fn set_controls(id: FocusId, read: impl Fn() -> Option<FocusId> + 'static) {
+    let read: Rc<dyn Fn() -> Option<FocusId>> = Rc::new(read);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.controls = Some(read);
+        }
+    });
+}
+
 /// One focusable as the accessibility layer sees it: where it is, what it is, and whether it is available.
 pub struct Exposed {
     pub id: FocusId,
@@ -961,6 +985,39 @@ pub fn focus_first_in(node: NodeId) -> bool {
     }
 }
 
+/// Where focus was before something that holds it for a while took it — a dialog, a menu — and how it got there: what that thing gives back when it closes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Remembered {
+    id: FocusId,
+    from_pointer: bool,
+}
+
+/// Where focus is now, read without subscribing: what a dialog or a menu remembers as it opens. `None` with nothing focused.
+pub fn remember() -> Option<Remembered> {
+    let id = focused_signal().peek()?;
+    Some(Remembered {
+        id,
+        from_pointer: pointer_focus_signal().peek(),
+    })
+}
+
+impl Remembered {
+    /// Gives focus back the way it was held: with its ring if the keyboard put it there, without if a press did, as a browser hands `:focus-visible` on. Nothing if the widget is gone.
+    pub fn restore(self) {
+        if is_registered(self.id) {
+            take(self.id, self.from_pointer);
+        }
+    }
+}
+
+/// Whether the keyboard is inside `node` or nowhere at all, read without subscribing: whether something closing now has the keyboard to give back, or it went somewhere else on its own while the thing was open.
+pub fn left_within(node: NodeId) -> bool {
+    match focused_signal().peek() {
+        None => true,
+        Some(id) => node_of(id).is_some_and(|at| crate::input_region::is_inside(at, node)),
+    }
+}
+
 /// Writes into `semantics` everything the focus order knows of the control `id`: whether it holds focus, the state and number it carries, where it sits, the row its cursor rests on, and how the keyboard reaches it.
 pub(crate) fn describe(
     id: FocusId,
@@ -974,6 +1031,7 @@ pub(crate) fn describe(
     semantics.expanded = expanded_state(id);
     semantics.position = position_state(id);
     semantics.active_descendant = active_descendant_state(id).and_then(node_of).map(u64::from);
+    semantics.controls = controls_state(id).and_then(node_of).map(u64::from);
     semantics.focusable = Some(focusable_of(id, semantics.role, declared));
 }
 
@@ -1141,5 +1199,11 @@ pub fn position_state(id: FocusId) -> Option<SetPosition> {
 /// The control the cursor of `container` rests on, read now; `None` when it declared no cursor, or names a control no longer registered. Read inside `view()` for the same reason as [`toggled_state`].
 pub fn active_descendant_state(container: FocusId) -> Option<FocusId> {
     let read = with_focus(|s| s.entry(container).and_then(|e| e.active_descendant.clone()))?;
+    read().filter(|item| is_registered(*item))
+}
+
+/// The control `id` decides what is shown in, read now; `None` when it declared none, or names a control no longer registered. Read inside `view()` for the same reason as [`toggled_state`].
+pub fn controls_state(id: FocusId) -> Option<FocusId> {
+    let read = with_focus(|s| s.entry(id).and_then(|e| e.controls.clone()))?;
     read().filter(|item| is_registered(*item))
 }

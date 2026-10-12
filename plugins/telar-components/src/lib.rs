@@ -56,6 +56,7 @@ mod list;
 mod menu;
 #[cfg(feature = "overlays")]
 mod modal;
+mod popup;
 mod progress;
 mod radio;
 #[cfg(feature = "advanced")]

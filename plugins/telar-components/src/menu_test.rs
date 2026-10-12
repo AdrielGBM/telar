@@ -459,3 +459,114 @@ fn a_modified_character_is_not_a_search() {
         "the cursor stayed on Rename, where opening put it"
     );
 }
+
+/// A menu of three rows in a 400px square, laid out and drawn, with nothing focused.
+fn mounted_menu() -> ComponentList {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let item = menu(
+        MenuProps::props().label("Actions").build(),
+        rows(&["Rename", "Duplicate", "Delete"]),
+    )
+    .unwrap();
+    compute_layout(
+        item.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(item);
+    settle(&tree);
+    tree
+}
+
+fn settle(tree: &ComponentList) {
+    for _ in 0..3 {
+        relayout_if_dirty();
+        let _ = tree.commands();
+    }
+}
+
+fn exposed(role: telar::focus::Role) -> Option<telar::focus::FocusId> {
+    telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == role)
+        .map(|exposed| exposed.id)
+}
+
+/// A menu button hands the keyboard to the menu it opens, which points a reader at the row its cursor is on; the trigger names that menu as what it controls.
+#[test]
+fn an_open_menu_takes_the_keyboard_into_its_list() {
+    use telar::NamedKey;
+
+    let mut tree = mounted_menu();
+    telar::focus::focus_next();
+    let trigger = telar::focus::current().expect("the trigger is a stop");
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    settle(&tree);
+
+    let list = exposed(telar::focus::Role::Menu).expect("the list is open");
+    assert_eq!(telar::focus::current(), Some(list));
+    assert_eq!(telar::focus::controls_state(trigger), Some(list));
+    assert!(
+        telar::focus::exposed()
+            .iter()
+            .all(|row| row.role != telar::focus::Role::Option
+                && row.role != telar::focus::Role::ListBox),
+        "a menu's rows are actions, not options of a list box"
+    );
+    assert!(
+        telar::focus::active_descendant_state(list).is_some(),
+        "the list points at the row its cursor is on"
+    );
+    telar::focus::focus_next();
+    assert_eq!(
+        telar::focus::current(),
+        Some(list),
+        "Tab stays in the menu, the one stop it has"
+    );
+}
+
+/// However the menu goes — Escape, a pick, a press away — the keyboard comes back to the trigger, which is where it was before the menu took it.
+#[test]
+fn every_way_of_closing_a_menu_gives_the_keyboard_back_to_its_trigger() {
+    use telar::NamedKey;
+
+    let mut tree = mounted_menu();
+    telar::focus::focus_next();
+    let trigger = telar::focus::current().expect("the trigger is a stop");
+
+    route(&mut tree, &named(NamedKey::Enter));
+    settle(&tree);
+    route(&mut tree, &named(NamedKey::Escape));
+    settle(&tree);
+    assert_eq!(telar::focus::current(), Some(trigger), "after Escape");
+    assert!(telar::focus::is_focus_visible(trigger));
+    assert_eq!(telar::focus::controls_state(trigger), None, "shut");
+
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    settle(&tree);
+    route(&mut tree, &named(NamedKey::Enter));
+    settle(&tree);
+    assert_eq!(telar::focus::current(), Some(trigger), "after a pick");
+
+    let (tx, ty) = ((PANEL_WIDTH / 2.0) as f64, (TRIGGER_HEIGHT / 2.0) as f64);
+    route(&mut tree, &press(tx, ty));
+    route(&mut tree, &release(tx, ty));
+    settle(&tree);
+    assert_eq!(
+        telar::focus::current(),
+        exposed(telar::focus::Role::Menu),
+        "a menu opened by a press takes the keyboard too"
+    );
+    let away = (390.0, 390.0);
+    telar::focus::blur_from_pointer(away.0 as f32, away.1 as f32);
+    route(&mut tree, &press(away.0, away.1));
+    route(&mut tree, &release(away.0, away.1));
+    settle(&tree);
+    assert_eq!(telar::focus::current(), Some(trigger), "after a press away");
+    assert!(
+        !telar::focus::is_focus_visible(trigger),
+        "and without a ring, as the press that opened it left it"
+    );
+}

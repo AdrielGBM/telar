@@ -878,6 +878,7 @@ pub struct LayoutScrollArea {
 /// What a scroll area that is a control of its own keeps: see [`LayoutScrollArea::control`].
 struct Host {
     role: focus::Role,
+    presented: bool,
     ring: Option<Box<dyn Fn(Rect) -> RectStyle>>,
     keys: Option<KeyRule>,
     _focus_effect: Option<Effect>,
@@ -1042,6 +1043,7 @@ impl LayoutScrollArea {
             focus::host_scroller(id, role);
             self.host = Some(Host {
                 role,
+                presented: false,
                 ring: None,
                 keys: None,
                 _focus_effect: None,
@@ -1050,7 +1052,17 @@ impl LayoutScrollArea {
         self
     }
 
-    /// The focus id this control holds focus by; `None` unless it is a [`control`](Self::control).
+    /// Makes this scroll area the control `role` itself, as [`control`](Self::control) does, for a control that is announced and never takes focus: the list a combobox opens, whose keyboard stays on the combobox that [controls](crate::StyledContainer::controls) it and points into it. It is no Tab stop and a press does not focus it.
+    pub fn presented(self, role: focus::Role) -> Self {
+        let mut this = self.control(role);
+        if let (Some(host), Some(id)) = (&mut this.host, this.focus) {
+            focus::present_scroller(id, role);
+            host.presented = true;
+        }
+        this
+    }
+
+    /// The focus id this control holds focus by, or is announced by when it is [`presented`](Self::presented); `None` unless it is a [`control`](Self::control).
     pub fn focus_id(&self) -> Option<FocusId> {
         self.host.as_ref().and(self.focus)
     }
@@ -1242,6 +1254,7 @@ impl Component for LayoutScrollArea {
         } = event
             && result != EventResult::Handled
             && let Some(id) = self.focus_id()
+            && !self.host.as_ref().is_some_and(|host| host.presented)
             && self.leaf.rect.get().contains(*x as f32, *y as f32)
         {
             focus::request_from_pointer(id);

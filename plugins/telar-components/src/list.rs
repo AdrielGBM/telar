@@ -9,7 +9,9 @@ use std::rc::Rc;
 use telar::{
     AlignItems, Children, Color, Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
     Margin, NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Text,
-    TextWrap, box_item, focus::Role, use_context,
+    TextWrap, box_item,
+    focus::{FocusId, Role},
+    use_context,
 };
 
 use crate::shared;
@@ -46,6 +48,7 @@ struct Row {
     /// What type-ahead matches against, for the same reason a closure: a row whose label tracks a signal is findable by what it says now. Empty for a piece that is not a destination, and for a row written with markup children instead of a label — there is no text to match, so nothing claims to match it.
     label: Reactive<String>,
     node: Cell<Option<NodeId>>,
+    focus: Cell<Option<FocusId>>,
 }
 
 impl ListContext {
@@ -112,6 +115,7 @@ impl ListContext {
                 reachable: reachable.clone(),
                 label,
                 node: Cell::new(None),
+                focus: Cell::new(None),
             });
             rows.len() as u32 - 1
         };
@@ -128,14 +132,20 @@ impl ListContext {
         self.claim(Reactive::of(|| false), Reactive::default());
     }
 
-    fn attach(&self, index: u32, node: NodeId) {
+    fn attach(&self, index: u32, node: NodeId, focus: FocusId) {
         if let Some(row) = self.0.rows.borrow().get(index as usize) {
             row.node.set(Some(node));
+            row.focus.set(Some(focus));
         }
     }
 
     pub(crate) fn node_of(&self, index: u32) -> Option<NodeId> {
         self.0.rows.borrow().get(index as usize)?.node.get()
+    }
+
+    /// The control a reader is pointed at for the row at `index`.
+    pub(crate) fn focus_of(&self, index: u32) -> Option<FocusId> {
+        self.0.rows.borrow().get(index as usize)?.focus.get()
     }
 
     pub(crate) fn len(&self) -> u32 {
@@ -298,16 +308,16 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         .disabled(move || disabled.get())
         .on_press(commit);
     // Announced without becoming a Tab stop: the list is driven by arrows from the trigger, so a reader can describe the open panel while Tab keeps treating it as one control.
-    if let (Some(ctx), Some(i)) = (&list, index) {
-        ctx.attach(i, row.layout_node());
-    }
-    if list.is_some() {
-        telar::focus::register_presented(
-            telar::focus::next_id(),
-            row.layout_node(),
-            Role::MenuItem,
-        );
-    }
+    let row = match (&list, index) {
+        (Some(ctx), Some(i)) => {
+            let row = ctx.present(row, i);
+            if let Some(focus) = row.focus_id() {
+                ctx.attach(i, row.layout_node(), focus);
+            }
+            row
+        }
+        _ => row,
+    };
     Ok(box_item(row))
 }
 
@@ -389,6 +399,15 @@ fn row_layout() -> LayoutStyle {
 }
 
 impl ListContext {
+    fn present(&self, row: StyledContainer, index: u32) -> StyledContainer {
+        match self.0.selected {
+            Some(selected) => row
+                .presented(Role::Option)
+                .toggled(move || selected.get() == index),
+            None => row.presented(Role::MenuItem),
+        }
+    }
+
     fn row_style(&self, index: u32) -> RectStyle {
         // The keyboard cursor wears the hover paint on purpose: it says the same thing, and a look of its own would have the list report two different places at once.
         if self.0.highlighted.get() == Some(index) {

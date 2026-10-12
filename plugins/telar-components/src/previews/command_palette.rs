@@ -66,8 +66,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .tags(&["stateful"])
         .play(|canvas| {
             canvas.type_text(by_role(Role::TextInput), "zoom")?;
-            canvas.expect(by_role(Role::MenuItem).containing("Zoom in"))?;
-            canvas.expect_absent(by_role(Role::MenuItem).containing("Save"))?;
+            canvas.expect(by_role(Role::Option).containing("Zoom in"))?;
+            canvas.expect_absent(by_role(Role::Option).containing("Save"))?;
             canvas.press(Key::Named(NamedKey::Enter))?;
             canvas.expect_absent(by_role(Role::Dialog))?;
             canvas.expect_action("on_run", 1)

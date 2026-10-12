@@ -6,6 +6,7 @@ const NAMESPACE: &str = "telar_components";
 
 pub(crate) const CLOSE: &str = "close";
 pub(crate) const COMMAND_PALETTE: &str = "command_palette";
+pub(crate) const COMMANDS: &str = "commands";
 pub(crate) const COPIED: &str = "copied";
 pub(crate) const COPY: &str = "copy";
 pub(crate) const DECREASE: &str = "decrease";
@@ -44,6 +45,14 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("لوحة الأوامر")),
                 ("en", Message::Plain("Command palette")),
                 ("es", Message::Plain("Paleta de comandos")),
+            ],
+        },
+        Entry {
+            key: COMMANDS,
+            messages: &[
+                ("ar", Message::Plain("الأوامر")),
+                ("en", Message::Plain("Commands")),
+                ("es", Message::Plain("Comandos")),
             ],
         },
         Entry {

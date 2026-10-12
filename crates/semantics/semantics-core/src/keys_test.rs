@@ -46,6 +46,17 @@ fn a_pressable_control_keeps_the_keys_that_press_it_and_leaves_scrolling_alone()
 }
 
 #[test]
+fn a_list_box_and_its_options_keep_what_a_menu_keeps() {
+    assert_eq!(Role::ListBox.consumed_keys(), Role::Menu.consumed_keys());
+    assert_eq!(Role::Option.consumed_keys(), Role::MenuItem.consumed_keys());
+    assert!(
+        !Role::ListBox
+            .consumed_keys()
+            .intersects(ConsumedKeys::HORIZONTAL_ARROWS | ConsumedKeys::TAB)
+    );
+}
+
+#[test]
 fn a_link_leaves_its_keys_to_the_host_that_follows_it() {
     assert_eq!(Role::Link.consumed_keys(), ConsumedKeys::EMPTY);
 }
@@ -72,7 +83,11 @@ fn a_scroller_keeps_what_scrolls() {
 #[test]
 fn what_is_only_read_keeps_nothing() {
     for role in ALL_ROLES.into_iter().filter(|role| {
-        !role.is_control() && !matches!(role, Role::ScrollArea | Role::Tree | Role::Toolbar)
+        !role.is_control()
+            && !matches!(
+                role,
+                Role::ScrollArea | Role::Tree | Role::Toolbar | Role::Menu | Role::ListBox
+            )
     }) {
         assert!(role.consumed_keys().is_empty(), "{role:?}");
     }
@@ -88,7 +103,7 @@ fn every_control_but_a_link_keeps_something() {
     }
 }
 
-const ALL_ROLES: [Role; 39] = [
+const ALL_ROLES: [Role; 42] = [
     Role::Group,
     Role::Banner,
     Role::Navigation,
@@ -113,7 +128,10 @@ const ALL_ROLES: [Role; 39] = [
     Role::TabList,
     Role::Tab,
     Role::TabPanel,
+    Role::Menu,
     Role::MenuItem,
+    Role::ListBox,
+    Role::Option,
     Role::Slider,
     Role::SpinButton,
     Role::TextInput,

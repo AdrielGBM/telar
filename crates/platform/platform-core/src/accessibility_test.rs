@@ -19,6 +19,7 @@ fn node(role: Role, name: &str) -> AccessNode {
         expanded: None,
         position: None,
         active_descendant: None,
+        controls: None,
     }
 }
 

@@ -433,6 +433,7 @@ fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
         expanded: None,
         position: None,
         active_descendant: None,
+        controls: None,
     }]);
     dev.on_violations(&[telar::AccessViolation::new(
         telar::AccessRule::UnnamedControl,

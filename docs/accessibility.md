@@ -45,7 +45,7 @@ there, which is why the letters are hidden rather than left for the name to cove
 
 `role:` on a `box`, `col`, `row` or `grid` says what the box is. A region or a heading (`role:navigation`,
 `role:h2`) only describes it. A role a person operates — `button`, `switch` (or `toggle`), `checkbox`,
-`radio`, `tab`, `menuitem`, `slider`, `spinbutton`, `link` — also makes the box a control, as
+`radio`, `tab`, `menuitem`, `option`, `slider`, `spinbutton`, `link` — also makes the box a control, as
 `StyledContainer::control` does from Rust: a Tab stop that wears the theme's focus ring when the keyboard
 reaches it, pressed by Enter and Space the way a tap presses it (Enter only for a link), and announced with
 that role. A plain `col` or `row` with such a role becomes a styled box, since only a styled box can be one.
@@ -57,7 +57,7 @@ says what it means, the way AccessKit models it:
 | --- | --- |
 | `switch`, `checkbox`, `radio` | checked |
 | `button` | pressed: a toggle button, such as bold in a toolbar |
-| `tab` | selected |
+| `tab`, `option` | selected |
 
 ```text
 box role:button label:"Add one" on_press:(|| $count += 1)
@@ -78,8 +78,8 @@ the catalogue's accordion uses the same flag for expanded.
 
 | Target | Role | State |
 | --- | --- | --- |
-| Browser, document (`web-dom`) | A button is a `<button>`, a link an `<a>`; any other control is a `div` with the ARIA `role`. `tabindex="0"`, and the platform keeps Space and Enter from the page while the box holds focus. | `aria-checked` on a switch, checkbox or radio, `aria-pressed` on a button, `aria-selected` on a tab, `aria-expanded` on a disclosure; only the one the role carries, so a box whose role changes drops the old one. |
-| Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus` and `Click` actions. | AccessKit `toggled` for checked and pressed (it reads the flag through the role, as Telar does), `selected` for a tab, `expanded` for a disclosure. |
+| Browser, document (`web-dom`) | A button is a `<button>`, a link an `<a>`; any other control is a `div` with the ARIA `role`. `tabindex="0"`, and the platform keeps Space and Enter from the page while the box holds focus. | `aria-checked` on a switch, checkbox or radio, `aria-pressed` on a button, `aria-selected` on a tab or an option, `aria-expanded` on a disclosure; only the one the role carries, so a box whose role changes drops the old one. |
+| Desktop | The AccessKit role (`Switch`, `Button`, `CheckBox`…), with `Focus` and `Click` actions. | AccessKit `toggled` for checked and pressed (it reads the flag through the role, as Telar does), `selected` for a tab or an option, `expanded` for a disclosure. |
 | Terminal | In the plain-text reading (`Reduce motion, switch`). | `checked`/`not checked`, `pressed`/`not pressed`, `selected` (an unselected tab says nothing), `expanded`/`collapsed`. |
 | Android | Focus and keyboard activation as on the desktop; no accessibility bridge yet, so the role and state reach no reader. | — |
 | Browser, canvas (`web`) and headless | Focus and keyboard activation as on the desktop. The snapshot carries role and state for tests; there is no reader to hand them to. | — |
@@ -87,6 +87,28 @@ the catalogue's accordion uses the same flag for expanded.
 A link has one state of its own: `current:` marks it as the current one of its set, the page being shown or
 the place on the page the reader is at. It is `aria-current` in a document, AccessKit's `aria_current` on the
 desktop and `, current` in the terminal's reading; see [docs/links.md](links.md#the-current-link).
+
+## Lists that open from a control
+
+A list that drops from a control is one of two things, and the catalogue says which. A `menu` (and a context
+menu) is a `menu` of `menuitem`s: actions, run when chosen, and the list takes the keyboard as it opens. A
+`select` is a `combobox` whose list is a `listbox` of `option`s, the select-only combobox of WAI-ARIA: the
+keyboard stays on the combobox, and each option is `selected` while it is the bound choice, not while the
+cursor is on it. The command palette's results are a `listbox` named "Commands" that its search field
+controls; there nothing is chosen until it runs, so the option the cursor is on is the selected one.
+
+Two relations carry the rest, from Rust `StyledContainer::controls(|| …)` and `active_descendant(|| …)`
+(a scroll area takes the second, a `text_field` both as props): the list a control opened, and the row its
+cursor rests on while focus stays where it is. The row may sit inside the control or inside the list it
+controls.
+
+| Target | `controls` | `active_descendant` |
+| --- | --- | --- |
+| Browser, document (`web-dom`) | `aria-controls`, naming the list by its anchor or by an `id` Telar gives it. | `aria-activedescendant`, naming the row the same way. |
+| Desktop | AccessKit `controls`. | AccessKit `active_descendant`. |
+| Terminal | Not in the reading. | The reading says `, focused` on the row rather than on the control (`Large, option, selected, focused`). |
+
+Either names nothing when the box it names is not drawn: a shut select controls no list.
 
 ## What each target does with them
 

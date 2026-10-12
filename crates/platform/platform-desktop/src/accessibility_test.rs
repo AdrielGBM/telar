@@ -19,6 +19,7 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         expanded: None,
         position: None,
         active_descendant: None,
+        controls: None,
     }
 }
 
@@ -265,6 +266,35 @@ fn a_focused_tree_names_the_row_its_cursor_is_on() {
 
     let update = tree_update(&[tree], "Explorer", None);
     assert_eq!(update.nodes[0].1.active_descendant(), None);
+}
+
+/// An open combobox names the list it opened as what it controls, and its cursor rests on a row of that list; one naming a list the update does not carry names nothing.
+#[test]
+fn an_open_combobox_names_the_list_it_controls() {
+    let combobox = AccessNode {
+        focused: true,
+        controls: Some(7),
+        active_descendant: Some(8),
+        ..node(Some(3), Role::ComboBox, "Size")
+    };
+    let list = node(Some(7), Role::ListBox, "Size");
+    let row = AccessNode {
+        toggled: Some(true),
+        ..node(Some(8), Role::Option, "Large")
+    };
+    let update = tree_update(&[combobox.clone(), list, row], "Form", None);
+    assert_eq!(update.nodes[0].1.controls(), [control_id(7)]);
+    assert_eq!(update.nodes[0].1.active_descendant(), Some(control_id(8)));
+    assert_eq!(update.nodes[1].1.role(), AkRole::ListBox);
+    assert_eq!(update.nodes[2].1.role(), AkRole::ListBoxOption);
+    assert_eq!(
+        update.nodes[2].1.is_selected(),
+        Some(true),
+        "the chosen option is selected"
+    );
+
+    let update = tree_update(&[combobox], "Form", None);
+    assert!(update.nodes[0].1.controls().is_empty());
 }
 
 mod from_a_screen {
@@ -712,6 +742,10 @@ fn the_workbench_roles_are_published_as_the_roles_a_reader_knows_them_by() {
         (Role::Splitter, AkRole::Splitter),
         (Role::Status, AkRole::Status),
         (Role::Log, AkRole::Log),
+        (Role::Menu, AkRole::Menu),
+        (Role::MenuItem, AkRole::MenuItem),
+        (Role::ListBox, AkRole::ListBox),
+        (Role::Option, AkRole::ListBoxOption),
     ] {
         let update = tree_update(&[node(Some(1), role, "Item")], "Workbench", None);
         assert_eq!(update.nodes[0].1.role(), expected, "{role:?}");

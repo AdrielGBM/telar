@@ -34,8 +34,8 @@ pub(crate) const RESET_ID: &str = "telar-reset";
 /// The `<style>` that gives the document scroller the primary scroll's arrival margin, so the browser's own scrolling into view stops short of the bars fixed over the page: a fragment followed before the app has loaded, focus moved by Tab, the keyboard paging.
 pub(crate) const ARRIVAL_ID: &str = "telar-arrival";
 
-/// What the `id` of a box a cursor rests on starts with, when no anchor names it already: what the box holding focus points at with `aria-activedescendant`.
-pub(crate) const DESCENDANT_ID_PREFIX: &str = "telar-box-";
+/// What the `id` of a box another one points at starts with, when no anchor names it already: the row a box holding focus points at with `aria-activedescendant`, the list a combobox names with `aria-controls`.
+pub(crate) const BOX_ID_PREFIX: &str = "telar-box-";
 
 /// Where a box was told to be, beside where the browser put it. See `reconcile.rs`.
 pub(crate) const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
@@ -193,12 +193,18 @@ pub(crate) struct Described {
     /// Whether a tree row with rows under it shows them, beside the selection its `toggled` carries.
     pub expanded: Option<bool>,
     pub position: Option<SetPosition>,
-    /// The box under this one that its cursor rests on, as the element says it. Written as nothing itself: it is resolved into [`active_descendant`](Self::active_descendant) once that box turns up inside this one.
+    /// The box that its cursor rests on, as the element says it. Written as nothing itself: it is resolved into [`active_descendant`](Self::active_descendant) once that box turns up inside this one, or inside the box it controls.
     pub descendant_box: Option<u64>,
     /// The `id` of the element this one's cursor rests on, once that element is in the frame.
     pub active_descendant: Option<String>,
     /// Whether a box holding focus points at this one with `aria-activedescendant`, which takes an `id` to point at.
     pub is_active_descendant: bool,
+    /// The box whose content this one decides, as the element says it: resolved into [`controls`](Self::controls) once that box turns up anywhere in the frame.
+    pub controls_box: Option<u64>,
+    /// The `id` of the element this one controls, once that element is in the frame.
+    pub controls: Option<String>,
+    /// Whether a box points at this one with `aria-controls`, which takes an `id` to point at.
+    pub is_controlled: bool,
     pub disabled: bool,
     /// Part of the record even though it writes no attribute: a box that has just become the focused one is a box the reconcile has to act on, and comparing without it made the acting unreachable.
     pub focused: bool,
@@ -253,6 +259,7 @@ impl Described {
                 self.current
                     .map(|current| aria_current(current).to_string()),
             ),
+            ("aria-controls", self.controls.clone()),
             ("aria-activedescendant", self.active_descendant.clone()),
             ("aria-valuenow", self.value.map(|v| v.now.to_string())),
             (
@@ -285,11 +292,11 @@ impl Described {
         attributes
     }
 
-    /// The element's `id`: the anchor that reaches it, or, for a box a cursor rests on, one named after the box so it stays the same for as long as the box lives.
+    /// The element's `id`: the anchor that reaches it, or, for a box a cursor rests on or another box controls, one named after the box so it stays the same for as long as the box lives.
     fn element_id(&self, key: BoxKey) -> Option<String> {
         self.anchor.clone().or_else(|| {
-            self.is_active_descendant
-                .then(|| format!("{DESCENDANT_ID_PREFIX}{key}"))
+            (self.is_active_descendant || self.is_controlled)
+                .then(|| format!("{BOX_ID_PREFIX}{key}"))
         })
     }
 
@@ -407,6 +414,7 @@ pub(crate) fn describe_frame(
             roots.push(Node::Box(layer));
         }
     }
+    point_at_controlled(&mut roots);
     name_by_drawn_text(&mut roots);
     Frame {
         background: clear.filter(|color| color.a > 0.0),
@@ -459,6 +467,77 @@ fn lift_into(
         paint::declare(&mut node.style, "isolation", "isolate");
     }
     Ok(())
+}
+
+/// One box that says it controls another, as [`point_at_controlled`] resolves it.
+struct Controlling {
+    owner: BoxKey,
+    target: BoxKey,
+    /// The box its cursor rests on, when the walk found none under it: the row of the list it controls.
+    cursor: Option<BoxKey>,
+}
+
+/// Points every box that controls another at that box's element by `id`, wherever in the frame it is: the list a combobox opens is laid over the page, far from the combobox. A cursor the walk found nowhere under its box is looked for inside the box it controls, as a combobox's rests on a row of its list.
+fn point_at_controlled(roots: &mut [Node]) {
+    let mut found = Vec::new();
+    controlling(roots, &mut found);
+    for Controlling {
+        owner,
+        target,
+        cursor,
+    } in found
+    {
+        let Some(controlled) = find_box(roots, target) else {
+            continue;
+        };
+        controlled.described.is_controlled = true;
+        let controls = controlled.described.element_id(target);
+        let row = cursor
+            .and_then(|cursor| box_within(controlled, cursor))
+            .map(|row| {
+                row.described.is_active_descendant = true;
+                row.described.element_id(row.key)
+            });
+        if let Some(owner) = find_box(roots, owner) {
+            owner.described.controls = controls;
+            if let Some(row) = row {
+                owner.described.active_descendant = row;
+            }
+        }
+    }
+}
+
+fn controlling(nodes: &[Node], found: &mut Vec<Controlling>) {
+    for node in nodes.iter().filter_map(Node::as_box) {
+        let described = &node.described;
+        if let Some(target) = described.controls_box {
+            let surface = node.key.surface;
+            found.push(Controlling {
+                owner: node.key,
+                target: BoxKey::new(surface, target),
+                cursor: described
+                    .descendant_box
+                    .filter(|_| described.active_descendant.is_none())
+                    .map(|cursor| BoxKey::new(surface, cursor)),
+            });
+        }
+        if let Content::Children { children, .. } = &node.content {
+            controlling(children, found);
+        }
+    }
+}
+
+/// The box `key` among `nodes` or anywhere beneath them.
+fn find_box(nodes: &mut [Node], key: BoxKey) -> Option<&mut BoxNode> {
+    for node in nodes.iter_mut().filter_map(Node::as_box_mut) {
+        if node.key == key {
+            return Some(node);
+        }
+        if let Some(found) = box_within(node, key) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 /// The box `key` somewhere beneath `node`.
@@ -1225,6 +1304,9 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         descendant_box: semantics.active_descendant,
         active_descendant: None,
         is_active_descendant: false,
+        controls_box: semantics.controls,
+        controls: None,
+        is_controlled: false,
         disabled: semantics.disabled,
         focused: semantics.focused,
         control: semantics.role.is_control(),

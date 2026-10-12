@@ -54,9 +54,9 @@ fn track_dismissible(open: RwSignal<bool>, within: NodeId, dismiss: DismissFn) -
 
 /// Hands the keyboard to the dialog on open and gives it back on close.
 ///
-/// Both halves matter and only together: now that a modal traps focus, opening one without moving the keyboard inside leaves Tab with nowhere to go, and closing one without putting the focus back leaves it on a widget the user can no longer see. The remembered id is checked before being restored, because the thing that opened the dialog may not have survived it.
+/// Both halves matter and only together: now that a modal traps focus, opening one without moving the keyboard inside leaves Tab with nowhere to go, and closing one without putting the focus back leaves it on a widget the user can no longer see. Given back only from inside the dialog or from nowhere, so a dialog whose action moved the keyboard elsewhere leaves it there, and only to a widget that survived the dialog.
 fn track_focus_handover(open: RwSignal<bool>, content: telar::NodeId) -> Effect {
-    let previous: Cell<Option<telar::focus::FocusId>> = Cell::new(None);
+    let previous: Cell<Option<telar::focus::Remembered>> = Cell::new(None);
     let was_open = Cell::new(false);
     effect(move || {
         let is_open = open.get();
@@ -65,12 +65,12 @@ fn track_focus_handover(open: RwSignal<bool>, content: telar::NodeId) -> Effect 
         }
         was_open.set(is_open);
         if is_open {
-            previous.set(telar::focus::current());
+            previous.set(telar::focus::remember());
             telar::focus::focus_first_in(content);
-        } else if let Some(id) = previous.take()
-            && telar::focus::is_registered(id)
+        } else if let Some(back) = previous.take()
+            && telar::focus::left_within(content)
         {
-            telar::focus::request(id);
+            back.restore();
         }
     })
 }

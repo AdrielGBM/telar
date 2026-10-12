@@ -92,14 +92,13 @@ pub struct Input {
 }
 
 impl Input {
-    /// A single-line field, and whether the keyboard is in it.
+    /// A single-line field, whether the keyboard is in it, and the suggestion it points a reader at.
     ///
-    /// A target that draws its own caret needs neither; one that hands the box to a document needs both, so the document's own focus lands on the field a person clicked into rather than beside it.
+    /// A target that draws its own caret has no use for where the keyboard is; one that hands the box to a document does, so the document's own focus lands on the field a person clicked into rather than beside it.
     fn semantics(&self) -> renderer_core::Semantics {
-        let role = renderer_core::Role::TextInput;
-        renderer_core::Semantics::of(role)
-            .in_state(focus::is_focused(self.id), None, false)
-            .focusable(focus::focusable_of(self.id, role, None))
+        let mut semantics = renderer_core::Semantics::of(renderer_core::Role::TextInput);
+        focus::describe(self.id, &mut semantics, None);
+        semantics
     }
 
     pub fn new(

@@ -33,260 +33,258 @@ element group
         end
       end
     end
-    element group
-      element scrollarea
-        clip 128,152 544x256
-          matrix 1,0,0,1,128,152
+    element listbox
+      clip 128,152 544x256
+        matrix 1,0,0,1,128,152
+          element group
             element group
               element group
+                rect 0,14 544x19
                 element group
-                  rect 0,14 544x19
-                  element group
-                    matrix 1,0,0,1,10,16
-                      text 0,0 20x14.28 "File" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                    end
+                  matrix 1,0,0,1,10,16
+                    text 0,0 20x14.28 "File" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                   end
                 end
               end
-              element menuitem
-                rect 0,32 544x32 fill=#7394ff1a radius=4
-                element group
-                  clip 10,32 464x32
-                    matrix 1,0,0,1,10,32
-                      text 0,7 464x16.8 "Open file" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
-                    end
-                  end
-                end
-                element group
-                  rect 482,40 52x16
-                  element group
-                    element group
-                      rect 482,40 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,487,41
-                          text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                    element group
-                      rect 514,40 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,520,41
-                          text 0,0 9x13.44 "O" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                  end
-                end
-              end
-              element menuitem
-                rect 0,64 544x32 radius=6
-                element group
-                  clip 10,64 464x32
-                    matrix 1,0,0,1,10,64
-                      text 0,7 464x16.8 "Save" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
-                    end
-                  end
-                end
-                element group
-                  rect 482,72 52x16
-                  element group
-                    element group
-                      rect 482,72 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,487,73
-                          text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                    element group
-                      rect 514,72 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,520,73
-                          text 0,0 8x13.44 "S" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                  end
-                end
-              end
-              element menuitem
-                rect 0,96 544x32 radius=6
-                element group
-                  clip 10,96 427x32
-                    matrix 1,0,0,1,10,96
-                      text 0,7 427x16.8 "Save as…" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
-                    end
-                  end
-                end
-                element group
-                  rect 445,104 89x16
-                  element group
-                    element group
-                      rect 445,104 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,450,105
-                          text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                    element group
-                      rect 477,104 34x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,482,105
-                          text 0,0 24x13.44 "Shift" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                    element group
-                      rect 514,104 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,520,105
-                          text 0,0 8x13.44 "S" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                  end
-                end
-              end
-              element menuitem
-                rect 0,128 544x32 radius=6
-                element group
-                  clip 10,128 524x32
-                    matrix 1,0,0,1,10,128
-                      text 0,7 524x16.8 "Print" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
-                    end
+            end
+            element option
+              rect 0,32 544x32 fill=#7394ff1a radius=4
+              element group
+                clip 10,32 464x32
+                  matrix 1,0,0,1,10,32
+                    text 0,7 464x16.8 "Open file" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                   end
                 end
               end
               element group
+                rect 482,40 52x16
                 element group
-                  rect 0,174 544x19
                   element group
-                    matrix 1,0,0,1,10,176
-                      text 0,0 28x14.28 "View" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                    rect 482,40 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,487,41
+                        text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
                     end
                   end
-                end
-              end
-              element menuitem
-                rect 0,192 544x32 radius=6
-                element group
-                  clip 10,192 524x32
-                    matrix 1,0,0,1,10,192
-                      text 0,7 524x16.8 "Toggle dark mode" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
-                    end
-                  end
-                end
-              end
-              element menuitem
-                rect 0,224 544x32 radius=6
-                element group
-                  clip 10,224 464x32
-                    matrix 1,0,0,1,10,224
-                      text 0,7 464x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
-                    end
-                  end
-                end
-                element group
-                  rect 482,232 52x16
                   element group
+                    rect 514,40 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
                     element group
-                      rect 482,232 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,487,233
-                          text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                    element group
-                      rect 514,232 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,520,233
-                          text 0,0 8x13.44 "=" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
+                      matrix 1,0,0,1,520,41
+                        text 0,0 9x13.44 "O" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                       end
                     end
                   end
                 end
               end
-              element menuitem
-                rect 0,256 544x32 radius=6
-                element group
-                  clip 10,256 464x32
-                    matrix 1,0,0,1,10,256
-                      text 0,7 464x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
-                    end
+            end
+            element option
+              rect 0,64 544x32 radius=6
+              element group
+                clip 10,64 464x32
+                  matrix 1,0,0,1,10,64
+                    text 0,7 464x16.8 "Save" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                   end
                 end
+              end
+              element group
+                rect 482,72 52x16
                 element group
-                  rect 482,264 52x16
                   element group
+                    rect 482,72 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
                     element group
-                      rect 482,264 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,487,265
-                          text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                    element group
-                      rect 514,264 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,521,265
-                          text 0,0 6x13.44 "-" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
+                      matrix 1,0,0,1,487,73
+                        text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                       end
                     end
                   end
-                end
-              end
-              element menuitem
-                rect 0,288 544x32 radius=6
-                element group
-                  clip 10,288 468x32
-                    matrix 1,0,0,1,10,288
-                      text 0,7 468x16.8 "Toggle sidebar" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
-                    end
-                  end
-                end
-                element group
-                  rect 486,296 48x16
                   element group
+                    rect 514,72 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
                     element group
-                      rect 486,296 25x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,491,297
-                          text 0,0 15x13.44 "Alt" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
-                      end
-                    end
-                    element group
-                      rect 514,296 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
-                      element group
-                        matrix 1,0,0,1,520,297
-                          text 0,0 8x13.44 "S" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
-                        end
+                      matrix 1,0,0,1,520,73
+                        text 0,0 8x13.44 "S" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                       end
                     end
                   end
                 end
               end
-              element menuitem
-                rect 0,320 544x32 radius=6
+            end
+            element option
+              rect 0,96 544x32 radius=6
+              element group
+                clip 10,96 427x32
+                  matrix 1,0,0,1,10,96
+                    text 0,7 427x16.8 "Save as…" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+              end
+              element group
+                rect 445,104 89x16
                 element group
-                  clip 10,320 524x32
-                    matrix 1,0,0,1,10,320
-                      text 0,7 524x16.8 "About" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  element group
+                    rect 445,104 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,450,105
+                        text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
                     end
+                  end
+                  element group
+                    rect 477,104 34x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,482,105
+                        text 0,0 24x13.44 "Shift" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
+                    end
+                  end
+                  element group
+                    rect 514,104 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,520,105
+                        text 0,0 8x13.44 "S" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            element option
+              rect 0,128 544x32 radius=6
+              element group
+                clip 10,128 524x32
+                  matrix 1,0,0,1,10,128
+                    text 0,7 524x16.8 "Print" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+              end
+            end
+            element group
+              element group
+                rect 0,174 544x19
+                element group
+                  matrix 1,0,0,1,10,176
+                    text 0,0 28x14.28 "View" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                  end
+                end
+              end
+            end
+            element option
+              rect 0,192 544x32 radius=6
+              element group
+                clip 10,192 524x32
+                  matrix 1,0,0,1,10,192
+                    text 0,7 524x16.8 "Toggle dark mode" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+              end
+            end
+            element option
+              rect 0,224 544x32 radius=6
+              element group
+                clip 10,224 464x32
+                  matrix 1,0,0,1,10,224
+                    text 0,7 464x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+              end
+              element group
+                rect 482,232 52x16
+                element group
+                  element group
+                    rect 482,232 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,487,233
+                        text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
+                    end
+                  end
+                  element group
+                    rect 514,232 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,520,233
+                        text 0,0 8x13.44 "=" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            element option
+              rect 0,256 544x32 radius=6
+              element group
+                clip 10,256 464x32
+                  matrix 1,0,0,1,10,256
+                    text 0,7 464x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+              end
+              element group
+                rect 482,264 52x16
+                element group
+                  element group
+                    rect 482,264 29x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,487,265
+                        text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
+                    end
+                  end
+                  element group
+                    rect 514,264 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,521,265
+                        text 0,0 6x13.44 "-" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            element option
+              rect 0,288 544x32 radius=6
+              element group
+                clip 10,288 468x32
+                  matrix 1,0,0,1,10,288
+                    text 0,7 468x16.8 "Toggle sidebar" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+              end
+              element group
+                rect 486,296 48x16
+                element group
+                  element group
+                    rect 486,296 25x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,491,297
+                        text 0,0 15x13.44 "Alt" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
+                    end
+                  end
+                  element group
+                    rect 514,296 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+                    element group
+                      matrix 1,0,0,1,520,297
+                        text 0,0 8x13.44 "S" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            element option
+              rect 0,320 544x32 radius=6
+              element group
+                clip 10,320 524x32
+                  matrix 1,0,0,1,10,320
+                    text 0,7 524x16.8 "About" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                   end
                 end
               end
             end
           end
         end
-        rect 664,152 6x186.18 fill=#5c6175ff radius=3
       end
+      rect 664,152 6x186.18 fill=#5c6175ff radius=3
     end
     element group
       element group

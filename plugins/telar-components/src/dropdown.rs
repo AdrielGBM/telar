@@ -2,19 +2,19 @@
 
 use std::rc::Rc;
 use telar::{
-    AlignItems, AvailableSpace, Border, BorderRadius, Children, Clip, ClippedItem, Color,
-    ConsumedKeys, Container, DismissRegistration, Key, LayoutError, LayoutItem, LayoutScrollArea,
-    LayoutStyle, NamedKey, Overlay, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle,
-    Stroke, StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface, box_item, compute_layout,
-    effect, focus::Role, signal, track_layout,
+    AlignItems, Anchoring, Border, BorderRadius, Children, Clip, ClippedItem, Color, ConsumedKeys,
+    Container, DismissRegistration, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Overlay,
+    Placement, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, Stroke,
+    StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface, box_item, effect,
+    focus::{self, FocusId, Role},
+    signal, track_layout,
 };
 
+use crate::popup;
 use crate::shared;
 
 /// The trigger's fixed size and the dropdown panel's geometry. Kept as constants (not content-sized) so the panel lines up under the trigger and so the widgets' hit geometry is deterministic (their tests compute click points from these).
 pub(crate) const PANEL_WIDTH: f32 = 180.0;
-/// Gap kept between the panel and the window edge it was pushed off.
-const EDGE_MARGIN: f32 = 4.0;
 pub(crate) const TRIGGER_HEIGHT: f32 = 36.0;
 pub(crate) const ROW_HEIGHT: f32 = 32.0;
 pub(crate) fn panel_pad() -> f32 {
@@ -82,6 +82,8 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     };
     // Made here rather than per open, so the key handler — which lives as long as the trigger — asks the same registry the last build filled.
     let list = crate::list::ListContext::new(pick.clone(), highlighted, selected, color.clone());
+    let open_list: RwSignal<Option<FocusId>> = signal(None);
+    let handback = popup::Handback::default();
 
     let trigger_label: Reactive<String> = match trigger_label {
         TriggerLabel::Fixed(fixed) => fixed,
@@ -143,7 +145,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         let pick = pick.clone();
         let toggle = toggle.clone();
         let list = list.clone();
-        move |key: &Key| {
+        move |key: &Key| -> bool {
             let is_open = open.peek();
             let mods = telar::modifiers();
             // The registry the last build filled, so the cursor walks the rows that exist and steps over the ones it may not stop on.
@@ -194,8 +196,10 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                         list.seed_cursor();
                     }
                 }
-                _ => {}
+                _ => return false,
             }
+            // Taken, so the list the panel scrolls does not also answer an arrow by scrolling when it holds focus.
+            true
         }
     };
     let trigger = StyledContainer::new(trigger_box, trigger_style, trigger_children)?
@@ -218,12 +222,27 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             } else {
                 ConsumedKeys::ARROW_DOWN | ConsumedKeys::ACTIVATION
             }
-        });
+        })
+        .controls(move || open_list.get());
+    // A select keeps the keyboard while its list is open, so it is what points a reader at the row the cursor is on; a menu hands the keyboard to its list, which points at it instead.
+    let trigger = match selected {
+        Some(_) => {
+            let list = list.clone();
+            trigger.active_descendant(move || {
+                open.get()
+                    .then(|| highlighted.get())
+                    .flatten()
+                    .and_then(|i| list.focus_of(i))
+            })
+        }
+        None => trigger,
+    };
     let trigger_node = trigger.layout_node();
     // `track_layout` returns the signal now and layout fills it in, so the trigger's rect is known by the time the panel is built.
     let trigger_rect = track_layout(trigger_node).expect("trigger node is registered");
 
     // Modelled exactly like a reactive `if $open`: a single-item list keyed on the boolean. Building the overlay lazily is what lets it portal correctly, since the page has been laid out by then.
+    let remembering = handback.clone();
     let overlay_holder = ReactiveList::new(
         move || vec![open.get()],
         |o: &bool| *o,
@@ -235,67 +254,46 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             // The registry is cleared first: this builder runs again on every open, and rows left over from the last would leave the keyboard walking positions that no longer exist.
             list.begin();
             let row_items = rows.build_with(list.clone())?.take_default();
-            // Positioning by layout keeps the panel's hit rects in world space, so the rows dispatch correctly. The trigger's rect is window-absolute, falling back to the local rect.
-            let anchor = telar::anchor_rect(trigger_node, &trigger_rect);
-            // The anchor is the trigger's rect as it stands when the panel opens. A filled trigger widens the panel to match, since a narrower list would read as a different control — but only ever widens it: taking the trigger's width outright turned a compact `File` button into a 40px sheet with one character per line.
+            // A filled trigger widens the panel to match, since a narrower list would read as a different control — but only ever widens it: taking the trigger's width outright turned a compact `File` button into a 40px sheet with one character per line.
             let width = if stretch {
-                anchor.width.max(PANEL_WIDTH)
+                telar::anchor_rect(trigger_node, &trigger_rect)
+                    .width
+                    .max(PANEL_WIDTH)
             } else {
                 PANEL_WIDTH
             };
-            // A trigger near the right edge would otherwise open a panel that runs past it, and one near the bottom would open below the window.
-            let viewport = telar::overlay_viewport().unwrap_or_else(unbounded);
-            let left = (anchor.x)
-                .min(viewport.x + viewport.width - width - EDGE_MARGIN)
-                .max(viewport.x);
             let row_column = Container::new(LayoutStyle::new().flex_column(), row_items)?;
-            let rows_node = row_column.layout_node();
-            let content = track_layout(rows_node).expect("rows node is registered");
-            let mut view = None;
-            let scroll = LayoutScrollArea::new_with(
-                LayoutStyle::new().flex_grow(1.0).min_height(0.0),
-                |viewport| {
-                    view = Some(viewport);
-                    Ok(box_item(row_column))
-                },
-            )?;
-            let viewport = view.expect("a scroll area builds its content before it returns");
-            let _ = compute_layout(
-                rows_node,
-                AvailableSpace::Definite(width - panel_pad() * 2.0),
-                AvailableSpace::MaxContent,
-            );
-            {
+            let anchoring = Rc::new(move || {
+                trigger_rect.get();
+                Anchoring::new(
+                    telar::anchor_rect(trigger_node, &trigger_rect),
+                    Placement::Below,
+                    popup::viewport(),
+                )
+            });
+            let cursor = {
                 let list = list.clone();
-                let viewport = viewport.clone();
-                effect(move || {
-                    content.get();
-                    viewport.rect().get();
-                    if let Some(node) = highlighted.get().and_then(|i| list.node_of(i)) {
-                        viewport.reveal(node, 0.0);
-                    }
-                });
-            }
-            let sheet = move || {
-                let spot = panel_spot(
-                    anchor,
-                    telar::overlay_viewport().unwrap_or_else(unbounded),
-                    content.get().height + panel_pad() * 2.0,
-                );
-                LayoutStyle::new()
-                    .flex_column()
-                    .width(width)
-                    .height(spot.height)
-                    .padding_all(panel_pad())
-                    .margin_from_left(left)
-                    .margin_block_start(spot.top)
+                Rc::new(move || highlighted.get().and_then(|i| list.node_of(i)))
             };
-            let panel =
-                StyledContainer::new(sheet(), |_r| panel_rect_style(), vec![box_item(scroll)])?
-                    .styled_by(sheet)
-                    .role(Role::Menu)
-                    // Swallow clicks on the panel's own padding, so they do not dismiss via the backdrop.
-                    .on_press(|| {});
+            let keyboard = match selected {
+                Some(_) => popup::Keyboard::Stays,
+                None => {
+                    let list = list.clone();
+                    popup::Keyboard::Held {
+                        pointed: Rc::new(move || highlighted.get().and_then(|i| list.focus_of(i))),
+                    }
+                }
+            };
+            let placed = popup::Popup {
+                anchoring,
+                width,
+                padding: panel_pad(),
+                cursor,
+                keyboard,
+            };
+            let opened = popup::popup(placed, box_item(row_column), |_r| panel_rect_style())?;
+            let (panel, opened_list) = (opened.panel, opened.list);
+            open_list.set(Some(opened_list));
             // A transparent full-viewport backdrop inside a blocking overlay: stops hover and clicks bleeding through to the page behind, and dismisses when a click lands outside the panel.
             let close = {
                 let open = open;
@@ -309,10 +307,24 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             let backdrop = shared::dismissed_by_press(backdrop, close);
             let overlay = Overlay::new(LayoutStyle::new().flex_column(), vec![box_item(backdrop)])?
                 .owned_by(trigger_node);
+            remembering.remember(overlay.content_node());
+            if selected.is_none() {
+                focus::request(opened_list);
+            }
             Ok(box_item(overlay))
         },
         0.0,
     )?;
+
+    // Every way of closing comes through `open`, and each has to leave the keyboard where it was before the list opened rather than nowhere: on the trigger, whether it stayed there or went into the list.
+    effect(move || {
+        if !open.get() {
+            handback.give_back();
+            if open_list.peek().is_some() {
+                open_list.set(None);
+            }
+        }
+    });
 
     // On the dismiss stack while up, so Escape and the platform Back gesture reach it in the order things were opened. The stack is keyed by open and close rather than build order for exactly that reason.
     {
@@ -405,35 +417,6 @@ pub(crate) fn option_row_hover_style(color: &Reactive<Color>) -> RectStyle {
     RectStyle::default()
         .with_fill(accent.with_alpha(0.10))
         .with_radius(BorderRadius::all(4.0))
-}
-
-fn unbounded() -> Rect {
-    Rect::new(0.0, 0.0, f32::MAX, f32::MAX)
-}
-
-/// Where the panel's top edge goes and how tall it may be.
-pub(crate) struct PanelSpot {
-    pub top: f32,
-    pub height: f32,
-}
-
-/// Opens below the trigger unless the panel does not fit there and the room above is larger; either way the height is capped to the room on the chosen side, which is what makes the rows scroll instead of running off the surface.
-pub(crate) fn panel_spot(anchor: Rect, viewport: Rect, wanted: f32) -> PanelSpot {
-    let anchor_bottom = anchor.y + anchor.height;
-    let below_room = (viewport.y + viewport.height - anchor_bottom - EDGE_MARGIN).max(0.0);
-    let above_room = (anchor.y - viewport.y - EDGE_MARGIN).max(0.0);
-    if wanted <= below_room || below_room >= above_room {
-        PanelSpot {
-            top: anchor_bottom,
-            height: wanted.min(below_room),
-        }
-    } else {
-        let height = wanted.min(above_room);
-        PanelSpot {
-            top: anchor.y - height,
-            height,
-        }
-    }
 }
 
 #[cfg(test)]

@@ -404,7 +404,7 @@ fn a_long_choice_is_a_select() {
         .find(|node| node.role == Role::ComboBox && node.name.starts_with("day"))
         .expect("the day select is listed");
     workshop.click(Role::ComboBox, &day.name);
-    workshop.click(Role::MenuItem, "Friday");
+    workshop.click(Role::Option, "Friday");
     assert!(workshop.draws("day=Friday"));
 }
 

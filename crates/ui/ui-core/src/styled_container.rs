@@ -699,6 +699,14 @@ impl StyledContainer {
         self
     }
 
+    /// Declares the control whose content this one decides, and how to read which one it is now: the list a combobox opens, the menu a button drops. `None` names none. The cursor [`active_descendant`](Self::active_descendant) reads may then rest on a row of that list. See [`focus::set_controls`].
+    pub fn controls(self, read: impl Fn() -> Option<FocusId> + 'static) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_controls(id, read);
+        }
+        self
+    }
+
     /// Draws the focus ring while `inner` — a focusable inside this box — shows focus, for a box that frames a control without being one: a field's border around the line it types into.
     ///
     /// The box joins no tab order and takes no keys; `inner` keeps both. The ring is the theme's unless [`focus_style`](Self::focus_style) names one, which makes this box focusable too.

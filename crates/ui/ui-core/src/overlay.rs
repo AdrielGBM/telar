@@ -3,7 +3,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use geometry_core::Rect;
+use geometry_core::{Rect, Size};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::Event;
 use reactive_core::RwSignal;
@@ -77,43 +77,140 @@ fn anchor_viewport() -> Rect {
     crate::context::overlay_viewport().unwrap_or(Rect::new(0.0, 0.0, f32::MAX, f32::MAX))
 }
 
-/// The translate that moves `panel` from where it was laid out (near the host origin) to its anchored spot next to `trigger`. Placement picks the target top-left; the offset is that target minus the panel origin.
-///
-/// Then the panel is kept on screen, which is the half that was missing: **flip** to the other side of the trigger when the asked-for one does not fit and the opposite does, and **shift** along the trigger's edge when it overflows sideways. Without it the placement is read off the trigger alone, so a tooltip on the rightmost button of a toolbar runs past the window and the text wraps into a column — which is not a rare case but the common one. The trigger is never covered: a flip moves the panel to its other side, and a shift only slides along the edge it is already on.
+/// The translate that moves `panel` from where it was laid out (near the host origin) to its anchored spot next to `trigger`, by the rule [`Anchoring::place`] states.
 fn anchor_translate(
     trigger: Rect,
     panel: Rect,
     placement: Placement,
     viewport: Rect,
 ) -> (f32, f32) {
-    let fits_below =
-        trigger.y + trigger.height + ANCHOR_GAP + panel.height <= viewport.y + viewport.height;
-    let fits_above = trigger.y - ANCHOR_GAP - panel.height >= viewport.y;
-    let fits_after =
-        trigger.x + trigger.width + ANCHOR_GAP + panel.width <= viewport.x + viewport.width;
-    let fits_before = trigger.x - ANCHOR_GAP - panel.width >= viewport.x;
-    let placement = match placement {
-        Placement::Below if !fits_below && fits_above => Placement::Above,
-        Placement::Above if !fits_above && fits_below => Placement::Below,
-        Placement::Start if !fits_before && fits_after => Placement::End,
-        Placement::End if !fits_after && fits_before => Placement::Start,
-        other => other,
-    };
-    // Sideways placement centres on the trigger; the vertical ones align to its leading edge. LTR throughout, so RTL is one place to change.
-    let centre_y = trigger.y + (trigger.height - panel.height) / 2.0;
-    let (target_x, target_y) = match placement {
-        Placement::Below => (trigger.x, trigger.y + trigger.height + ANCHOR_GAP),
-        Placement::Above => (trigger.x, trigger.y - panel.height - ANCHOR_GAP),
-        Placement::Start => (trigger.x - panel.width - ANCHOR_GAP, centre_y),
-        Placement::End => (trigger.x + trigger.width + ANCHOR_GAP, centre_y),
-    };
-    // Slid along the edge rather than clamped blindly, so a panel wider than the viewport keeps its left edge — where its content starts — visible.
-    let max_x = viewport.x + viewport.width - panel.width - EDGE_MARGIN;
-    let target_x = target_x.min(max_x).max(viewport.x + EDGE_MARGIN);
-    let max_y = viewport.y + viewport.height - panel.height - EDGE_MARGIN;
-    let target_y = target_y.min(max_y.max(viewport.y)).max(viewport.y);
-    // A sideways placement centres on the trigger, landing on a half pixel whenever the two differ by an odd height, and a surface at a half pixel has soft edges and softer text.
-    ((target_x - panel.x).round(), (target_y - panel.y).round())
+    let spot = Anchoring::new(trigger, placement, viewport)
+        .gap(ANCHOR_GAP)
+        .place(Size::new(panel.width, panel.height));
+    ((spot.x - panel.x).round(), (spot.y - panel.y).round())
+}
+
+/// Which part of the anchor's edge a panel lines up with, across the side it opens on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnchorAlign {
+    /// The anchor's leading edge: a menu under its button, a submenu level with its row.
+    Start,
+    /// The anchor's middle: a tooltip beside a button in a rail.
+    Center,
+}
+
+/// How a panel is set beside the thing it belongs to and kept inside the area it may occupy: one rule for every anchored panel, whether a transform moves it there (a tooltip) or it is sized to the room it has (a dropdown's list, a context menu and its submenus).
+///
+/// A panel is placed from its anchor and then kept on screen. It **flips** to the other side when the asked-for one is too small for it and the other has more room, it is **capped** to the room on the side it ends up on — which is what makes a long list scroll instead of running off the surface — and it **shifts** along the anchor's edge when it overflows across it. Without the second half a tooltip on the rightmost button of a toolbar runs past the window, which is not a rare case but the common one. The anchor is never covered: a flip moves the panel to its other side, and a shift only slides along the edge it is already on.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Anchoring {
+    /// What the panel opens beside, as drawn: a trigger's on-screen rect, or a rect of no size at the point a context menu was asked for.
+    pub anchor: Rect,
+    pub placement: Placement,
+    pub align: AnchorAlign,
+    /// Between the anchor and the panel.
+    pub gap: f32,
+    /// The area the panel has to stay inside: the overlay's, see [`overlay_viewport`](crate::overlay_viewport).
+    pub viewport: Rect,
+}
+
+impl Anchoring {
+    /// No gap, and the alignment `placement` reads as: a panel above or below its anchor starts where the anchor starts, one beside it is centred on it.
+    pub fn new(anchor: Rect, placement: Placement, viewport: Rect) -> Self {
+        let align = match placement {
+            Placement::Below | Placement::Above => AnchorAlign::Start,
+            Placement::Start | Placement::End => AnchorAlign::Center,
+        };
+        Self {
+            anchor,
+            placement,
+            align,
+            gap: 0.0,
+            viewport,
+        }
+    }
+
+    pub fn gap(mut self, gap: f32) -> Self {
+        self.gap = gap;
+        self
+    }
+
+    pub fn align(mut self, align: AnchorAlign) -> Self {
+        self.align = align;
+        self
+    }
+
+    /// The largest panel [`place`](Self::place) sets down without leaving the viewport: the roomier side of the anchor along the placement, the whole viewport across it.
+    ///
+    /// What a panel is capped to *before* it is laid out, so it can be sized by its content and placed after. The roomier side and not the side it opens on, because that side is not known until its size is — and it does not have to be: a panel that fits where it was asked to open is no bigger than the room there, and one that does not opens on the roomier side, which is this.
+    pub fn room(&self) -> Size {
+        let (after, before) = self.rooms();
+        let along = after.max(before);
+        match self.placement {
+            Placement::Below | Placement::Above => Size::new(across(self.viewport.width), along),
+            Placement::Start | Placement::End => Size::new(along, across(self.viewport.height)),
+        }
+    }
+
+    /// Where a panel of `size` goes and how big it may be there: the rect to draw it in, on whole pixels.
+    pub fn place(&self, size: Size) -> Rect {
+        let (after, before) = self.rooms();
+        let vertical = matches!(self.placement, Placement::Below | Placement::Above);
+        let (along, across_size) = match vertical {
+            true => (size.height, size.width),
+            false => (size.width, size.height),
+        };
+        let asked_after = matches!(self.placement, Placement::Below | Placement::End);
+        let (asked, other) = match asked_after {
+            true => (after, before),
+            false => (before, after),
+        };
+        let stays = along <= asked || asked >= other;
+        let opens_after = asked_after == stays;
+        let along = along.min(if opens_after { after } else { before });
+
+        let (a, v) = (self.anchor, self.viewport);
+        let (a_start, a_extent, a_cross, a_cross_extent, v_cross, v_cross_extent) = match vertical {
+            true => (a.y, a.height, a.x, a.width, v.x, v.width),
+            false => (a.x, a.width, a.y, a.height, v.y, v.height),
+        };
+        let main = match opens_after {
+            true => a_start + a_extent + self.gap,
+            false => a_start - self.gap - along,
+        };
+        let across_size = across_size.min(across(v_cross_extent));
+        let cross = match self.align {
+            AnchorAlign::Start => a_cross,
+            AnchorAlign::Center => a_cross + (a_cross_extent - across_size) / 2.0,
+        };
+        // Slid along the edge rather than clamped blindly, so a panel wider than the viewport keeps its leading edge — where its content starts — visible. LTR throughout, so RTL is one place to change.
+        let cross = cross
+            .min(v_cross + v_cross_extent - EDGE_MARGIN - across_size)
+            .max(v_cross + EDGE_MARGIN);
+        // A centred panel lands on a half pixel whenever the two differ by an odd size, and a surface at a half pixel has soft edges and softer text.
+        let (main, cross) = (main.round(), cross.round());
+        match vertical {
+            true => Rect::new(cross, main, across_size, along),
+            false => Rect::new(main, cross, along, across_size),
+        }
+    }
+
+    /// The room past the anchor's far edge along the placement (below it, or after it) and before its near edge, each short of the gap and the edge margin.
+    fn rooms(&self) -> (f32, f32) {
+        let (a, v) = (self.anchor, self.viewport);
+        let (a_start, a_end, v_start, v_end) = match self.placement {
+            Placement::Below | Placement::Above => (a.y, a.y + a.height, v.y, v.y + v.height),
+            Placement::Start | Placement::End => (a.x, a.x + a.width, v.x, v.x + v.width),
+        };
+        let after = v_end - EDGE_MARGIN - (a_end + self.gap);
+        let before = a_start - self.gap - (v_start + EDGE_MARGIN);
+        (after.max(0.0), before.max(0.0))
+    }
+}
+
+/// What a viewport `extent` across leaves a panel once the edge margin is kept on both sides.
+fn across(extent: f32) -> f32 {
+    (extent - EDGE_MARGIN * 2.0).max(0.0)
 }
 
 /// The content rect an anchored overlay actually occupies on screen: its panel translated to the trigger. This is the hit-test barrier the registry sees, so only the visible panel blocks — clicks elsewhere fall through even though the underlying content node fills the viewport. Where the anchored panel ends up, and the translate that put it there.

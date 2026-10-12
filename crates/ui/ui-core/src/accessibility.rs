@@ -97,6 +97,8 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 current: link.and_then(|(_, current)| *current),
                 active_descendant: focus::active_descendant_state(e.id)
                     .filter(|item| controls.iter().any(|(c, _)| c.id == *item)),
+                controls: focus::controls_state(e.id)
+                    .filter(|item| controls.iter().any(|(c, _)| c.id == *item)),
             }
         })
         .collect();
@@ -162,6 +164,7 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 url: piece.url,
                 current: None,
                 active_descendant: None,
+                controls: None,
             }),
         }
     }
@@ -605,12 +608,13 @@ impl NestedSurface {
         renderer_core::transform_clip_rect(self.placement, rect)
     }
 
-    /// A node read inside the surface, as the frame around it shows it: at its place in the frame, with its id and the one it names as its active descendant made distinct from every id of the frame's own.
+    /// A node read inside the surface, as the frame around it shows it: at its place in the frame, with its id and the ones it names as its active descendant and as what it controls made distinct from every id of the frame's own.
     pub fn place(&self, node: AccessNode) -> AccessNode {
         AccessNode {
             rect: self.place_rect(node.rect),
             id: node.id.map(|id| self.qualify(id)),
             active_descendant: node.active_descendant.map(|id| self.qualify(id)),
+            controls: node.controls.map(|id| self.qualify(id)),
             ..node
         }
     }

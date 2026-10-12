@@ -87,6 +87,12 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         {
             ak.set_active_descendant(control_id(item));
         }
+        if let Some(target) = node
+            .controls
+            .filter(|target| nodes.iter().any(|other| other.id == Some(*target)))
+        {
+            ak.set_controls(vec![control_id(target)]);
+        }
         // AccessKit counts from zero, and reads a set's size off a container this flat tree does not have, so only the level and the place are said.
         if let Some(place) = node.position {
             ak.set_level(place.level.saturating_sub(1) as usize);
@@ -144,6 +150,8 @@ fn role_of(role: Role) -> AkRole {
         Role::TabPanel => AkRole::TabPanel,
         Role::Menu => AkRole::Menu,
         Role::MenuItem => AkRole::MenuItem,
+        Role::ListBox => AkRole::ListBox,
+        Role::Option => AkRole::ListBoxOption,
         Role::Slider => AkRole::Slider,
         Role::SpinButton => AkRole::SpinButton,
         Role::TextInput => AkRole::TextInput,

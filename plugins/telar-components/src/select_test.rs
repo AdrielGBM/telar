@@ -405,9 +405,9 @@ fn a_tall_panel_is_capped_to_the_window_and_follows_the_keyboard() {
     route(&mut tree, &down);
     settle(&tree);
 
-    let panel = drawn_rects(&tree)[2];
+    let panel = crate::test_support::drawn(telar::focus::Role::ListBox)[0];
     assert!(
-        panel.y + panel.height <= 300.0,
+        panel.y + panel.height + panel_pad() <= 300.0,
         "the panel stays inside the window: {panel:?}"
     );
     assert!(panel.height < 800.0, "and is cut to the room: {panel:?}");
@@ -417,8 +417,8 @@ fn a_tall_panel_is_capped_to_the_window_and_follows_the_keyboard() {
     }
     settle(&tree);
 
-    let tx = (PANEL_WIDTH / 2.0) as f64;
-    let last_visible = (panel.y + panel.height - panel_pad() - ROW_HEIGHT / 2.0) as f64;
+    let tx = (panel.x + panel.width / 2.0) as f64;
+    let last_visible = (panel.y + panel.height - ROW_HEIGHT / 2.0) as f64;
     route(&mut tree, &press(tx, last_visible));
     route(&mut tree, &release(tx, last_visible));
     assert_eq!(

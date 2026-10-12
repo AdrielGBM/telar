@@ -21,7 +21,10 @@ fn a_role_reads_back_as_the_name_it_was_written_with() {
         "tablist",
         "tab",
         "tabpanel",
+        "menu",
         "menuitem",
+        "listbox",
+        "option",
         "slider",
         "spinbutton",
         "combobox",
@@ -90,8 +93,20 @@ fn the_role_says_what_its_on_off_state_is() {
         Some(ToggleKind::Selected),
         "a tree row's on/off state is being the chosen one; whether it is open is a state of its own"
     );
+    assert_eq!(
+        Role::Option.toggle_kind(),
+        Some(ToggleKind::Selected),
+        "an option is the chosen one of its list box or not"
+    );
     assert_eq!(Role::Disclosure.toggle_kind(), Some(ToggleKind::Expanded));
-    for role in [Role::Link, Role::Slider, Role::Navigation, Role::Group] {
+    for role in [
+        Role::Link,
+        Role::Slider,
+        Role::Navigation,
+        Role::Group,
+        Role::MenuItem,
+        Role::ListBox,
+    ] {
         assert_eq!(role.toggle_kind(), None, "{role:?} has no on/off state");
     }
 }

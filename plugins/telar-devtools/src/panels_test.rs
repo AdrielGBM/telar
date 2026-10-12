@@ -75,6 +75,7 @@ fn access_node(name: &str, role: Role, rect: Rect) -> AccessNode {
         expanded: None,
         position: None,
         active_descendant: None,
+        controls: None,
     }
 }
 

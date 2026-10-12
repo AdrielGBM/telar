@@ -86,10 +86,14 @@ pub enum Role {
     Tab,
     /// The panel a [`Tab`](Self::Tab) picks.
     TabPanel,
-    /// The panel [`MenuItem`](Self::MenuItem)s are chosen from: a context menu, the list a dropdown opens.
+    /// The panel [`MenuItem`](Self::MenuItem)s are chosen from: a context menu, the list a menu button drops.
     Menu,
-    /// A row of a menu or a bound list.
+    /// A row of a menu: an action, run when it is chosen.
     MenuItem,
+    /// The list [`Option`](Self::Option)s are chosen from: what a select opens, the results a search field filters.
+    ListBox,
+    /// A choice in a [`ListBox`](Self::ListBox), selected or not.
+    Option,
     /// A continuous value dragged along a track.
     Slider,
     /// A discrete value with a step, typed or nudged.
@@ -150,6 +154,7 @@ impl Role {
                 | Self::Switch
                 | Self::Tab
                 | Self::MenuItem
+                | Self::Option
                 | Self::Slider
                 | Self::SpinButton
                 | Self::TextInput
@@ -201,6 +206,8 @@ impl Role {
             Self::TabPanel => "tabpanel",
             Self::Menu => "menu",
             Self::MenuItem => "menuitem",
+            Self::ListBox => "listbox",
+            Self::Option => "option",
             Self::Slider => "slider",
             Self::SpinButton => "spinbutton",
             Self::TextInput => "textbox",
@@ -225,7 +232,7 @@ impl Role {
         match self {
             Self::CheckBox | Self::Radio | Self::Switch => Some(ToggleKind::Checked),
             Self::Button => Some(ToggleKind::Pressed),
-            Self::Tab | Self::TreeItem => Some(ToggleKind::Selected),
+            Self::Tab | Self::TreeItem | Self::Option => Some(ToggleKind::Selected),
             Self::Disclosure => Some(ToggleKind::Expanded),
             _ => None,
         }
@@ -267,6 +274,8 @@ impl Role {
             "tabpanel" => Self::TabPanel,
             "menu" => Self::Menu,
             "menuitem" => Self::MenuItem,
+            "listbox" => Self::ListBox,
+            "option" => Self::Option,
             "slider" => Self::Slider,
             "spinbutton" | "stepper" => Self::SpinButton,
             "textbox" | "textinput" => Self::TextInput,
@@ -293,7 +302,7 @@ pub enum ToggleKind {
     Checked,
     /// A toggle button held down: a button that stays pressed until pressed again, such as bold in a toolbar.
     Pressed,
-    /// The tab whose panel is showing, or the chosen row of a tree.
+    /// The tab whose panel is showing, the chosen row of a tree, or the chosen option of a list box.
     Selected,
     /// A disclosure whose content is showing.
     Expanded,
@@ -341,6 +350,8 @@ pub struct Semantics {
     pub position: Option<SetPosition>,
     /// The box under this one, by its element id, that the keyboard's cursor rests on while focus stays here: the row of a tree, the item of a toolbar. `None` where there is no cursor, or its box is not built.
     pub active_descendant: Option<u64>,
+    /// The box, by its element id, whose content this one decides: the list a combobox opens, the panel a menu button drops. Its [`active_descendant`](Self::active_descendant) may rest inside that box rather than under this one. `None` where it controls nothing, or that box is not built.
+    pub controls: Option<u64>,
 }
 
 /// What an application said about a box, laid over what the widget derived.

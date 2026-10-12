@@ -253,3 +253,210 @@ fn declaring_the_rows_leaves_no_layout_nodes_behind() {
     assert_eq!(entries.len(), 3);
     assert_eq!(ui_core::live_node_count(), baseline);
 }
+
+fn rows(count: usize) -> Vec<Entry> {
+    (0..count)
+        .map(|n| Entry::row(format!("fila {n}"), "", || {}))
+        .collect()
+}
+
+/// A menu of `entries` asked for at `at` in [`WINDOW`], laid out and drawn.
+fn opened_at(at: (f32, f32), entries: Vec<Entry>) -> ComponentList {
+    fresh_layout_runtime();
+    let menu = context_menu(
+        ContextMenuProps::props()
+            .at(at)
+            .entries(entries)
+            .width(120.0)
+            .within(WINDOW)
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+    let tree = ComponentList::new(menu);
+    settle(&tree);
+    tree
+}
+
+fn settle(tree: &ComponentList) {
+    for _ in 0..3 {
+        telar::relayout_if_dirty();
+        let _ = tree.commands();
+    }
+}
+
+fn panels() -> Vec<Rect> {
+    crate::test_support::drawn(Role::Menu)
+}
+
+fn bottom(rect: Rect) -> f32 {
+    rect.y + rect.height
+}
+
+/// Thirty rows are taller than the window; the panel used to be pushed up to its top edge and still run off the bottom.
+#[test]
+fn a_long_menu_is_capped_to_the_window_and_scrolls_to_the_keyboard() {
+    let mut tree = opened_at((40.0, 30.0), rows(30));
+    let panel = panels()[0];
+    assert_eq!(panel.y, 30.0 + MenuStyle::default().padding, "at the point");
+    assert!(
+        bottom(panel) <= WINDOW.height,
+        "inside the window: {panel:?}"
+    );
+
+    route(&mut tree, &named(NamedKey::End));
+    settle(&tree);
+    let last = *crate::test_support::drawn(Role::MenuItem)
+        .last()
+        .expect("the rows are announced");
+    assert!(
+        last.y >= panel.y - 0.5 && bottom(last) <= bottom(panel) + 0.5,
+        "the highlighted row is scrolled into the panel: {last:?} in {panel:?}"
+    );
+}
+
+#[test]
+fn a_menu_asked_for_near_the_bottom_opens_above_the_point() {
+    let point = (40.0, 280.0);
+    let tree = opened_at(point, rows(3));
+    let panel = panels()[0];
+    assert!(
+        bottom(panel) <= point.1,
+        "above the point it was asked at: {panel:?}"
+    );
+    assert!(
+        drawn_texts(&tree).contains(&"fila 0".to_string()),
+        "and whole"
+    );
+}
+
+/// Beside the right edge a submenu opens on the left of its row, and one low in the window is lifted to stay in it.
+#[test]
+fn a_submenu_opens_on_the_side_with_room_and_stays_in_the_window() {
+    let mut entries = rows(4);
+    entries.push(Entry::Sub {
+        label: "más".into(),
+        entries: rows(6),
+    });
+    let mut tree = opened_at((300.0, 120.0), entries);
+    route(&mut tree, &named(NamedKey::End));
+    route(&mut tree, &named(NamedKey::ArrowRight));
+    settle(&tree);
+
+    let found = panels();
+    assert_eq!(found.len(), 2, "the submenu opened: {found:?}");
+    let (menu, sub) = (found[0], found[1]);
+    assert!(
+        sub.x + sub.width <= menu.x,
+        "left of the menu: {sub:?} beside {menu:?}"
+    );
+    assert!(bottom(sub) <= WINDOW.height, "inside the window: {sub:?}");
+}
+
+/// A button that had the keyboard, and a menu shown while `open` holds, the way an application hosts one: closing it is the caller taking it out of the tree.
+fn hosted(open: RwSignal<bool>, entries: Vec<Entry>) -> (ComponentList, FocusId) {
+    fresh_layout_runtime();
+    focus::clear();
+    let button = StyledContainer::new(
+        LayoutStyle::new().width(80.0).height(30.0),
+        |_| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .on_press(|| {})
+    .control(Role::Button);
+    let button_id = button.focus_id().expect("a control");
+    let menu = telar::ReactiveList::new(
+        move || vec![open.get()],
+        |shown: &bool| *shown,
+        move |shown| -> Result<Box<dyn LayoutItem>, LayoutError> {
+            if !shown {
+                return Ok(box_item(Container::new(LayoutStyle::new(), vec![])?));
+            }
+            context_menu(
+                ContextMenuProps::props()
+                    .at((40.0, 60.0))
+                    .entries(entries.clone())
+                    .on_close(Rc::new(move || open.set(false)))
+                    .width(120.0)
+                    .within(WINDOW)
+                    .build(),
+                Children::default(),
+            )
+        },
+        0.0,
+    )
+    .unwrap();
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(button), box_item(menu)],
+    )
+    .unwrap();
+    lay_out(root.layout_node(), WINDOW.width, WINDOW.height);
+    let tree = ComponentList::new(root);
+    settle(&tree);
+    focus::request(button_id);
+    (tree, button_id)
+}
+
+fn lists() -> Vec<FocusId> {
+    focus::exposed()
+        .into_iter()
+        .filter(|exposed| exposed.role == Role::Menu)
+        .map(|exposed| exposed.id)
+        .collect()
+}
+
+/// A context menu takes the keyboard as it opens, hands it to a submenu as the keys go there and back as they return, and gives it back to whatever held it when the menu goes.
+#[test]
+fn the_keyboard_goes_into_the_menu_follows_its_submenus_and_comes_back() {
+    let mut entries = rows(2);
+    entries.push(Entry::Sub {
+        label: "más".into(),
+        entries: rows(2),
+    });
+    let open = telar::signal(false);
+    let (mut tree, button) = hosted(open, entries);
+
+    open.set(true);
+    settle(&tree);
+    let menu = lists()[0];
+    assert_eq!(focus::current(), Some(menu), "into the menu");
+
+    route(&mut tree, &named(NamedKey::End));
+    route(&mut tree, &named(NamedKey::ArrowRight));
+    settle(&tree);
+    let opened = lists();
+    assert_eq!(opened.len(), 2, "the submenu opened: {opened:?}");
+    assert_eq!(focus::current(), Some(opened[1]), "into the submenu");
+
+    route(&mut tree, &named(NamedKey::ArrowLeft));
+    settle(&tree);
+    assert_eq!(focus::current(), Some(menu), "back to the menu");
+
+    route(&mut tree, &named(NamedKey::ArrowRight));
+    settle(&tree);
+    route(&mut tree, &named(NamedKey::Escape));
+    settle(&tree);
+    assert!(!open.get(), "Escape asked to be closed");
+    assert_eq!(
+        focus::current(),
+        Some(button),
+        "and the keyboard is back where it was, from as deep as a submenu"
+    );
+}
+
+/// A pick closes the menu as Escape does, and the keyboard comes back the same way.
+#[test]
+fn a_pick_gives_the_keyboard_back_too() {
+    let open = telar::signal(false);
+    let (mut tree, button) = hosted(open, rows(3));
+    open.set(true);
+    settle(&tree);
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::Enter));
+    settle(&tree);
+    assert!(!open.get());
+    assert_eq!(focus::current(), Some(button));
+}

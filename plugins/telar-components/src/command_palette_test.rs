@@ -105,6 +105,10 @@ impl Mounted {
     }
 
     fn with(commands: Vec<Command>) -> Self {
+        Self::in_window(commands, 600.0)
+    }
+
+    fn in_window(commands: Vec<Command>, height: f32) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::set_locale("en");
         ui_core::reset_keyboard();
@@ -126,14 +130,14 @@ impl Mounted {
         )
         .unwrap();
         let root = new_container(
-            LayoutStyle::new().flex_column().width(800.0).height(600.0),
+            LayoutStyle::new().flex_column().width(800.0).height(height),
             &[palette.layout_node()],
         )
         .unwrap();
         compute_layout(
             root,
             AvailableSpace::Definite(800.0),
-            AvailableSpace::Definite(600.0),
+            AvailableSpace::Definite(height),
         )
         .unwrap();
         let tree = ComponentList::new(palette);
@@ -304,7 +308,7 @@ fn clicking_a_row_runs_its_command_and_clicking_the_scrim_runs_nothing() {
     let mut mounted = Mounted::opened();
     let save = ui_core::accessibility::snapshot(&mounted.tree.commands())
         .into_iter()
-        .find(|node| node.role == Role::MenuItem && node.name.starts_with("Save"))
+        .find(|node| node.role == Role::Option && node.name.starts_with("Save"))
         .expect("the row is on screen")
         .rect;
     let (x, y) = centre(save);
@@ -338,7 +342,7 @@ fn a_reader_hears_the_dialog_s_name_and_each_row_with_its_shortcut() {
     };
     let rows: Vec<&str> = nodes
         .iter()
-        .filter(|node| node.role == Role::MenuItem)
+        .filter(|node| node.role == Role::Option)
         .map(|node| node.name.as_str())
         .collect();
     assert_eq!(
@@ -370,7 +374,151 @@ fn a_long_list_scrolls_to_keep_the_cursor_in_view() {
     );
     let rows = ui_core::accessibility::snapshot(&mounted.tree.commands())
         .into_iter()
-        .filter(|node| node.role == Role::MenuItem)
+        .filter(|node| node.role == Role::Option)
         .count();
     assert!(rows < 40, "only the rows on screen are built: {rows}");
+}
+
+fn numbered(count: usize) -> Vec<Command> {
+    (0..count)
+        .map(|i| Command::new(format!("c{i}"), format!("Command {i}")))
+        .collect()
+}
+
+fn bottom(rect: telar::Rect) -> f32 {
+    rect.y + rect.height
+}
+
+impl Mounted {
+    fn rect_of(&self, role: Role, name: Option<&str>) -> telar::Rect {
+        ui_core::accessibility::snapshot(&self.tree.commands())
+            .into_iter()
+            .find(|node| node.role == role && name.is_none_or(|name| node.name == name))
+            .unwrap_or_else(|| panic!("a {role:?} named {name:?} is drawn"))
+            .rect
+    }
+
+    /// Whether the list holds focus, and the name of the row it points a reader at.
+    fn list_pointing(&self) -> (bool, Option<String>) {
+        let nodes = ui_core::accessibility::snapshot(&self.tree.commands());
+        let list = nodes
+            .iter()
+            .find(|node| node.role == Role::ListBox)
+            .expect("the list is drawn");
+        let pointed = list.active_descendant.and_then(|row| {
+            nodes
+                .iter()
+                .find(|node| node.id == Some(row))
+                .map(|node| node.name.clone())
+        });
+        (list.focused, pointed)
+    }
+}
+
+#[test]
+fn a_short_list_is_as_tall_as_its_rows() {
+    let mounted = Mounted::opened();
+    assert_eq!(
+        mounted.rect_of(Role::ListBox, None).height,
+        7.0 * row_height()
+    );
+}
+
+/// Eight rows under a field, below the offset the dialog keeps from the top, are more than a short window holds: the list used to run out of the bottom of the surface.
+#[test]
+fn in_a_short_window_the_list_gives_up_rows_to_fit_and_keeps_the_cursor_in_view() {
+    let height = 300.0;
+    let mut mounted = Mounted::in_window(numbered(40), height);
+    mounted.open.set(true);
+    mounted.settle();
+    let card = mounted.rect_of(Role::Dialog, None);
+    let list = mounted.rect_of(Role::ListBox, None);
+    assert!(bottom(card) <= height, "the dialog fits: {card:?}");
+    assert!(
+        list.height < VISIBLE_ROWS as f32 * row_height(),
+        "the list gave up rows: {list:?}"
+    );
+    assert!(
+        list.height >= row_height(),
+        "and still shows some: {list:?}"
+    );
+
+    mounted.key(NamedKey::ArrowUp);
+    let last = mounted.rect_of(Role::Option, Some("Command 39"));
+    assert!(
+        last.y >= list.y - 0.5 && bottom(last) <= bottom(list) + 0.5,
+        "the cursor's row is in view: {last:?} in {list:?}"
+    );
+}
+
+/// The list scrolls, so it is a stop of its own: the one control a reader meets for it, walked by the cursor the field walks.
+#[test]
+fn the_list_is_one_stop_that_walks_the_cursor_the_field_does() {
+    let mut mounted = Mounted::opened();
+    mounted.key(NamedKey::Tab);
+    let (focused, pointed) = mounted.list_pointing();
+    assert!(focused, "Tab moves from the field to the list");
+    assert!(pointed.is_some_and(|name| name.starts_with("Open file")));
+
+    mounted.key(NamedKey::ArrowDown);
+    let (_, pointed) = mounted.list_pointing();
+    assert!(
+        pointed
+            .as_deref()
+            .is_some_and(|name| name.starts_with("Save")),
+        "{pointed:?}"
+    );
+    mounted.key(NamedKey::Enter);
+    assert_eq!(*mounted.ran.borrow(), ["save"]);
+}
+
+/// The field names the list of results as the one it controls, so a reader knows where the row it points at is, and the document can find that row there.
+#[test]
+fn the_field_names_the_list_of_results_it_controls() {
+    let mounted = Mounted::opened();
+    let nodes = ui_core::accessibility::snapshot(&mounted.tree.commands());
+    let field = nodes
+        .iter()
+        .find(|node| node.role == Role::TextInput && node.focused)
+        .expect("the field holds the keyboard");
+    let list = nodes
+        .iter()
+        .find(|node| node.role == Role::ListBox)
+        .expect("the results are one list");
+    assert_eq!(field.controls, list.id);
+}
+
+/// The results are a named list box, and the option the cursor is on is the selected one, as the list autocomplete pattern has it: the one Enter runs.
+#[test]
+fn the_results_are_a_named_list_box_whose_cursor_row_is_selected() {
+    let mut mounted = Mounted::opened();
+    let selected = |mounted: &Mounted| -> Vec<String> {
+        ui_core::accessibility::snapshot(&mounted.tree.commands())
+            .into_iter()
+            .filter(|node| node.role == Role::Option && node.toggled == Some(true))
+            .map(|node| node.name)
+            .collect()
+    };
+    let nodes = ui_core::accessibility::snapshot(&mounted.tree.commands());
+    let list = nodes
+        .iter()
+        .find(|node| node.role == Role::ListBox)
+        .expect("the results are one list");
+    assert_eq!(list.name, "Commands");
+    assert!(
+        nodes
+            .iter()
+            .all(|node| node.role != Role::Menu && node.role != Role::MenuItem),
+        "nothing in the palette is announced as a menu"
+    );
+    assert_eq!(
+        selected(&mounted),
+        [mounted.pointed().expect("a cursor row")]
+    );
+
+    mounted.key(NamedKey::ArrowDown);
+    assert_eq!(
+        selected(&mounted),
+        [mounted.pointed().expect("a cursor row")]
+    );
 }

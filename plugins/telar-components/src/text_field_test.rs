@@ -211,7 +211,7 @@ fn a_field_points_a_reader_at_the_suggestion_its_cursor_is_on() {
     crate::test_support::fresh_layout_runtime();
     let row = StyledContainer::new(LayoutStyle::new(), |_r| RectStyle::default(), vec![])
         .unwrap()
-        .presented(telar::focus::Role::MenuItem);
+        .presented(telar::focus::Role::Option);
     let suggestion = row.focus_id().expect("a presented row has an id");
     let (_field, _) = lay_out_field(
         TextFieldProps::props()

@@ -14,6 +14,8 @@ use telar_components::{
     ButtonProps, CheckboxProps, ItemProps, ScrubFieldProps, SelectProps, TabsProps, TextFieldProps,
     button, checkbox, item, scrub_field, select, tabs, text_field,
 };
+#[cfg(feature = "overlays")]
+use telar_components::{Command, CommandPaletteProps, MenuProps, command_palette, menu};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -198,6 +200,8 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
     controls.extend(labelled_fields()?);
     #[cfg(feature = "workbench")]
     controls.extend([tree()?, tools()?, split()?]);
+    #[cfg(feature = "overlays")]
+    controls.extend(overlays()?);
     let column = Container::new(
         LayoutStyle::new().flex_column().gap(12.0).padding_all(16.0),
         controls,
@@ -466,7 +470,7 @@ async fn a_tree_s_rows_carry_their_state_into_the_document() {
 }
 
 /// The element the box of `role` points a reader at with `aria-activedescendant`, which has to be inside it.
-#[cfg(feature = "workbench")]
+#[cfg(any(feature = "workbench", feature = "overlays"))]
 fn pointed_at(host: &web_sys::HtmlElement, role: &str) -> web_sys::Element {
     let container = host
         .query_selector(&format!(r#"[role="{role}"]"#))
@@ -588,4 +592,210 @@ fn a_named_box_around_a_field_names_the_field() {
         )
         .expect("a valid selector");
     assert_eq!(groups.length(), 0, "the wrapper does not name itself too");
+}
+
+fn key(key: telar::NamedKey) {
+    PAGE.with(|page| {
+        let mut page = page.borrow_mut();
+        let page = page.as_mut().expect("mounted");
+        page.tree.on_event(&Event::KeyPressed {
+            key: telar::Key::Named(key),
+            modifiers: telar::ModifiersState::default(),
+            unmodified: None,
+        });
+    });
+}
+
+/// A menu of more rows than the page holds and a command palette, both shut until a test opens them.
+#[cfg(feature = "overlays")]
+fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+    let rows = Children::new(|| {
+        let mut slots = Slots::new();
+        for n in 1..=40 {
+            let row = ItemProps::props()
+                .label(Reactive::of(move || format!("Action {n}")))
+                .build();
+            slots.push(None, item(row, Children::default())?);
+        }
+        Ok(slots)
+    });
+    let actions = menu(MenuProps::props().label("Actions").build(), rows)?;
+    let commands: Vec<Command> = [Command::new("zoom", "Zoom in").in_group("View")]
+        .into_iter()
+        .chain((1..=20).map(|n| Command::new(format!("c{n}"), format!("Command {n}"))))
+        .collect();
+    let palette = command_palette(
+        CommandPaletteProps::props()
+            .id(PALETTE)
+            .commands(commands)
+            .build(),
+        Children::default(),
+    )?;
+    Ok(vec![actions, palette])
+}
+
+#[cfg(feature = "overlays")]
+const PALETTE: &str = "commands";
+
+/// A list that scrolls is one control that takes focus, drawn where it opened; focused, it points a reader at the row its cursor is on, a `menuitem` of a menu or an `option` of a list box.
+#[cfg(feature = "overlays")]
+async fn assert_list_points_at_its_cursor(list: Role, row_role: &str, what: &str) {
+    focus::request(focusable(list).id);
+    key(telar::NamedKey::ArrowDown);
+    let host = render();
+    let row = pointed_at(&host, list.as_str());
+    assert_eq!(row.get_attribute("role").as_deref(), Some(row_role));
+    assert_clean(&host, what).await;
+}
+
+#[cfg(feature = "overlays")]
+#[wasm_bindgen_test]
+async fn an_open_menu_too_long_for_the_page_adds_no_violations() {
+    let trigger = focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::Button && exposed.expanded.is_some())
+        .expect("the menu's trigger is on the page");
+    focus::request(trigger.id);
+    key(telar::NamedKey::Enter);
+    let host = render();
+    let list = focusable(Role::Menu);
+    assert_eq!(
+        focus::current(),
+        Some(list.id),
+        "the menu took the keyboard"
+    );
+    let (named, _) = controlled(&element_of(trigger.node));
+    assert!(named.is_same_node(Some(element_of(list.node).as_ref())));
+    assert_clean(&host, "with a long menu open").await;
+    assert_list_points_at_its_cursor(Role::Menu, "menuitem", "with the menu's list focused").await;
+    key(telar::NamedKey::Escape);
+    assert_eq!(
+        focus::current(),
+        Some(trigger.id),
+        "Escape gives the keyboard back to the trigger"
+    );
+    focus::clear();
+    render();
+}
+
+#[cfg(feature = "overlays")]
+#[wasm_bindgen_test]
+async fn an_open_command_palette_adds_no_violations() {
+    telar::open_overlay(PALETTE);
+    let host = render();
+    let field = focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::TextInput && focus::current() == Some(exposed.id))
+        .expect("the palette's field holds the keyboard");
+    let (list, row) = controlled(&element_of(field.node));
+    assert_eq!(list.get_attribute("role").as_deref(), Some("listbox"));
+    assert_eq!(
+        list.get_attribute("aria-label").as_deref(),
+        Some("Commands")
+    );
+    let row = row.expect("the field points at the row its cursor is on");
+    assert_eq!(row.get_attribute("role").as_deref(), Some("option"));
+    assert_eq!(
+        row.get_attribute("aria-selected").as_deref(),
+        Some("true"),
+        "the row the cursor is on is the selected option"
+    );
+    assert_clean(&host, "with the command palette open").await;
+    assert_list_points_at_its_cursor(Role::ListBox, "option", "with the palette's list focused")
+        .await;
+    telar::close_overlay(PALETTE);
+    focus::clear();
+    render();
+}
+
+/// An open select keeps the document's focus on its combobox, which names the list it opened with `aria-controls` and points at the row its cursor is on inside that list; shut again, the keyboard is still on it.
+#[wasm_bindgen_test]
+async fn an_open_select_names_its_list_and_adds_no_violations() {
+    let combobox = focusable(Role::ComboBox);
+    focus::request(combobox.id);
+    key(telar::NamedKey::Enter);
+    let host = render();
+    let trigger = element_of(combobox.node);
+    assert_eq!(
+        trigger.get_attribute("aria-expanded").as_deref(),
+        Some("true")
+    );
+    let (list, row) = controlled(&trigger);
+    assert!(
+        !trigger.contains(Some(list.as_ref())),
+        "the list is laid over the page, not inside the combobox"
+    );
+    assert_eq!(list.get_attribute("role").as_deref(), Some("listbox"));
+    let row = row.expect("the combobox points at the row its cursor is on");
+    assert_eq!(row.get_attribute("role").as_deref(), Some("option"));
+    let row_id = row.id();
+    let selected: Vec<Option<String>> = {
+        let options = list
+            .query_selector_all(r#"[role="option"]"#)
+            .expect("a valid selector");
+        (0..options.length())
+            .filter_map(|i| options.item(i)?.dyn_into::<web_sys::Element>().ok())
+            .map(|option| option.get_attribute("aria-selected"))
+            .collect()
+    };
+    assert_eq!(
+        selected,
+        [Some("true".to_string()), Some("false".to_string())],
+        "each option says whether it is the choice"
+    );
+    assert_ne!(
+        list.get_attribute("tabindex").as_deref(),
+        Some("0"),
+        "the list is no Tab stop"
+    );
+    assert_clean(&host, "with a select open").await;
+
+    key(telar::NamedKey::ArrowDown);
+    let host = render();
+    assert_ne!(
+        element_of(combobox.node)
+            .get_attribute("aria-activedescendant")
+            .as_deref(),
+        Some(row_id.as_str()),
+        "the arrow moved what the combobox points at"
+    );
+    assert_clean(&host, "with the select's cursor moved").await;
+
+    key(telar::NamedKey::Escape);
+    let host = render();
+    assert_eq!(
+        focus::current(),
+        Some(combobox.id),
+        "Escape leaves it focused"
+    );
+    assert!(
+        element_of(combobox.node)
+            .get_attribute("aria-controls")
+            .is_none(),
+        "and a shut select names no list"
+    );
+    assert_clean(&host, "with the select shut again").await;
+    focus::clear();
+    render();
+}
+
+/// The element `control` names with `aria-controls`, and the row inside it that `control` points at with `aria-activedescendant`, if it points at one.
+fn controlled(control: &web_sys::Element) -> (web_sys::Element, Option<web_sys::Element>) {
+    let id = control
+        .get_attribute("aria-controls")
+        .expect("the control names what it controls");
+    let list = document()
+        .get_element_by_id(&id)
+        .unwrap_or_else(|| panic!("`{id}` names an element"));
+    let row = control.get_attribute("aria-activedescendant").map(|id| {
+        let row = document()
+            .get_element_by_id(&id)
+            .unwrap_or_else(|| panic!("`{id}` names an element"));
+        assert!(
+            list.contains(Some(row.as_ref())),
+            "the row pointed at is one of the list it controls"
+        );
+        row
+    });
+    (list, row)
 }

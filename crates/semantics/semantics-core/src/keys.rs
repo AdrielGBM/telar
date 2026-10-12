@@ -131,7 +131,7 @@ impl Role {
             | Self::Switch
             | Self::Tab
             | Self::Disclosure => K::ACTIVATION,
-            Self::Menu | Self::MenuItem | Self::ComboBox => {
+            Self::Menu | Self::MenuItem | Self::ListBox | Self::Option | Self::ComboBox => {
                 K::ACTIVATION | K::VERTICAL_ARROWS | K::EDGES
             }
             Self::Slider | Self::Toolbar => K::ARROWS,

@@ -274,3 +274,95 @@ fn a_primary_scroll_cannot_be_a_control() {
     let area = scroll(1000.0).into_primary().control(Role::Tree);
     assert_eq!(area.focus_id(), None);
 }
+
+/// The list a combobox opens is announced and scrolls, but the keyboard stays on the combobox: no Tab stop, and a press in it leaves focus alone.
+#[test]
+fn a_presented_list_is_announced_but_neither_tab_nor_a_press_focuses_it() {
+    reset_layout_runtime();
+    focus::clear();
+    let _document = AsADocument::new();
+    let area = scroll(1000.0).presented(Role::ListBox);
+    let id = area
+        .focus_id()
+        .expect("a presented list is announced by an id");
+    let mut tree = mounted(area);
+
+    assert!(
+        focus::exposed()
+            .iter()
+            .any(|e| e.id == id && e.role == Role::ListBox),
+        "a reader is told what it is"
+    );
+    let element = &elements(&tree)[0];
+    assert_eq!(element.semantics.role, Role::ListBox);
+    assert!(element.scrolls);
+    assert!(element.semantics.focusable.is_some_and(|f| !f.tab_stop));
+
+    focus::focus_next();
+    assert_eq!(focus::current(), None, "Tab does not stop on it");
+    tree.on_event(&Event::PointerPressed {
+        x: 20.0,
+        y: 20.0,
+        button: PointerButton::Primary,
+        source: PointerSource::Mouse,
+    });
+    assert_eq!(focus::current(), None, "a press does not focus it");
+}
+
+/// A combobox names the list it opens, wherever that list is, and its cursor may rest on a row of that list.
+#[test]
+fn a_control_names_the_list_it_controls_and_points_into_it() {
+    reset_layout_runtime();
+    focus::clear();
+    let _document = AsADocument::new();
+    let target = row(30.0);
+    let (row_id, row_node) = (target.focus_id(), target.layout_node());
+    let rows = Container::new(LayoutStyle::new().flex_column(), vec![box_item(target)]).unwrap();
+    let list = LayoutScrollArea::new(
+        LayoutStyle::new().width(200.0).height(100.0),
+        box_item(rows),
+    )
+    .unwrap()
+    .presented(Role::ListBox);
+    let (list_id, list_node) = (list.focus_id(), list.layout_node());
+    let open = reactive_core::signal(true);
+    let combobox = StyledContainer::new(
+        LayoutStyle::new().width(200.0).height(30.0),
+        |_| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(Role::ComboBox)
+    .controls(move || open.get().then_some(list_id).flatten())
+    .active_descendant(move || open.get().then_some(row_id).flatten());
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(combobox), box_item(list)],
+    )
+    .unwrap();
+    let tree = mounted_root(root);
+
+    let combobox = &elements(&tree)[1];
+    assert_eq!(combobox.semantics.role, Role::ComboBox);
+    assert_eq!(combobox.semantics.controls, Some(u64::from(list_node)));
+    assert_eq!(
+        combobox.semantics.active_descendant,
+        Some(u64::from(row_node))
+    );
+
+    open.set(false);
+    let combobox = &elements(&tree)[1];
+    assert_eq!(combobox.semantics.controls, None, "a closed one names none");
+    assert_eq!(combobox.semantics.active_descendant, None);
+    focus::clear();
+}
+
+fn mounted_root(root: Container) -> ui_tree::ComponentList {
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    ui_tree::ComponentList::new(root)
+}

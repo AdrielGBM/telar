@@ -135,7 +135,115 @@ fn an_anchored_panel_shifts_and_flips_to_stay_on_screen() {
 
     let tall = Rect::new(0.0, 0.0, 120.0, 400.0);
     let (_, dy) = anchor_translate(low, tall, Placement::Below, viewport);
-    assert_eq!(dy, 0.0);
+    assert_eq!(dy, EDGE_MARGIN, "the roomier side, as far up as the margin");
+}
+
+fn trigger_at(y: f32) -> Rect {
+    Rect::new(10.0, y, 100.0, 36.0)
+}
+
+fn window(height: f32) -> Rect {
+    Rect::new(0.0, 0.0, 400.0, height)
+}
+
+fn below(anchor: Rect, viewport: Rect) -> Anchoring {
+    Anchoring::new(anchor, Placement::Below, viewport)
+}
+
+#[test]
+fn a_panel_that_fits_opens_below_at_its_size() {
+    let spot = below(trigger_at(0.0), window(400.0)).place(Size::new(180.0, 100.0));
+    assert_eq!(spot, Rect::new(10.0, 36.0, 180.0, 100.0));
+}
+
+/// A list longer than the window used to open at its full height and run off the bottom; capped to the room, it scrolls inside it instead.
+#[test]
+fn a_panel_taller_than_the_room_below_is_capped_to_it() {
+    let spot = below(trigger_at(0.0), window(200.0)).place(Size::new(180.0, 800.0));
+    assert_eq!(spot.y, 36.0);
+    assert_eq!(spot.y + spot.height, 200.0 - EDGE_MARGIN);
+}
+
+#[test]
+fn a_panel_flips_above_when_it_does_not_fit_below_and_there_is_more_room_there() {
+    let spot = below(trigger_at(300.0), window(400.0)).place(Size::new(180.0, 250.0));
+    assert_eq!(spot.height, 250.0);
+    assert_eq!(
+        spot.y + spot.height,
+        300.0,
+        "its bottom edge meets the trigger"
+    );
+}
+
+#[test]
+fn a_flipped_panel_is_capped_to_the_room_above() {
+    let spot = below(trigger_at(300.0), window(400.0)).place(Size::new(180.0, 800.0));
+    assert_eq!(spot.y, EDGE_MARGIN);
+    assert_eq!(spot.y + spot.height, 300.0);
+}
+
+#[test]
+fn a_panel_too_tall_for_either_side_stays_where_it_was_asked_when_that_side_is_roomier() {
+    let spot = below(trigger_at(150.0), window(400.0)).place(Size::new(180.0, 800.0));
+    assert_eq!(spot.y, 186.0);
+    assert_eq!(spot.y + spot.height, 400.0 - EDGE_MARGIN);
+}
+
+/// The cap a panel is laid out under is the roomier side, and whatever it measures under it is placed without a second pass: it either fits where it was asked to open, or it is no taller than the side it flips to.
+#[test]
+fn the_room_is_the_roomier_side_and_what_fits_it_is_placed_in_full() {
+    let anchoring = below(trigger_at(300.0), window(400.0));
+    let room = anchoring.room();
+    assert_eq!(room.height, 300.0 - EDGE_MARGIN);
+    assert_eq!(room.width, 400.0 - EDGE_MARGIN * 2.0);
+    for height in [20.0, 60.0, 61.0, 200.0, room.height] {
+        let spot = anchoring.place(Size::new(180.0, height));
+        assert_eq!(spot.height, height, "a panel of {height} is drawn whole");
+    }
+}
+
+/// A context menu opens at a point, which is an anchor of no size: below and after it, or above it when the room is there.
+#[test]
+fn a_point_anchor_opens_below_it_and_flips_above_it() {
+    let viewport = window(300.0);
+    let point = Rect::new(40.0, 30.0, 0.0, 0.0);
+    let spot = below(point, viewport).place(Size::new(120.0, 100.0));
+    assert_eq!((spot.x, spot.y), (40.0, 30.0));
+
+    let low = Rect::new(390.0, 280.0, 0.0, 0.0);
+    let spot = below(low, viewport).place(Size::new(120.0, 100.0));
+    assert_eq!(spot.y + spot.height, 280.0, "above the point");
+    assert_eq!(
+        spot.x,
+        400.0 - 120.0 - EDGE_MARGIN,
+        "and back inside the window"
+    );
+}
+
+/// A submenu opens beside its row and level with it, rather than centred on it.
+#[test]
+fn a_panel_beside_its_anchor_can_line_up_with_its_start() {
+    let row = Rect::new(100.0, 250.0, 120.0, 30.0);
+    let spot = Anchoring::new(row, Placement::End, window(300.0))
+        .align(AnchorAlign::Start)
+        .place(Size::new(120.0, 30.0));
+    assert_eq!((spot.x, spot.y), (220.0, 250.0));
+
+    let spot = Anchoring::new(row, Placement::End, window(300.0))
+        .align(AnchorAlign::Start)
+        .place(Size::new(120.0, 100.0));
+    assert_eq!(
+        spot.y + spot.height,
+        300.0 - EDGE_MARGIN,
+        "shifted up to stay on screen"
+    );
+}
+
+#[test]
+fn an_unbounded_viewport_never_constrains() {
+    let unbounded = Rect::new(0.0, 0.0, f32::MAX, f32::MAX);
+    let spot = below(trigger_at(0.0), unbounded).place(Size::new(180.0, 800.0));
+    assert_eq!(spot, Rect::new(10.0, 36.0, 180.0, 800.0));
 }
 
 /// Beside the trigger, the panel centres on it and flips across it when its own side runs out — the same two rules the vertical placements follow, on the other axis. A control in a vertical rail has no room below it and all the room in the world beside it, which is why the sideways pair exists at all.

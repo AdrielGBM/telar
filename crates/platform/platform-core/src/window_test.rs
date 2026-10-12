@@ -37,6 +37,7 @@ impl EventHandler<TestWindow> for TestHandler {
             expanded: None,
             position: None,
             active_descendant: None,
+            controls: None,
         }]
     }
 }

@@ -440,12 +440,6 @@ fn build_open_palette(
     let cursor = signal(None::<Arc<str>>);
 
     let mut made: Option<Rc<Palette>> = None;
-    let list_height = move || {
-        let count = results.with(|results| results.0.len()).min(VISIBLE_ROWS);
-        LayoutStyle::new()
-            .flex_column()
-            .height(count as f32 * row_height())
-    };
     let run: Rc<dyn Fn(&Command)> = {
         let dismiss = dismiss.clone();
         Rc::new(move |command: &Command| {
@@ -458,8 +452,12 @@ fn build_open_palette(
             }
         })
     };
+    // Short of the room as well as of eight rows: the card shrinks to the window it is in, and this is what gives.
     let scroll = LayoutScrollArea::new_with(
-        LayoutStyle::new().flex_grow(1.0).min_height(0.0),
+        LayoutStyle::new()
+            .max_height(VISIBLE_ROWS as f32 * row_height())
+            .flex_shrink(1.0)
+            .min_height(0.0),
         |viewport| {
             let palette = Rc::new(Palette {
                 results,
@@ -487,7 +485,18 @@ fn build_open_palette(
         },
     )?;
     let palette = made.expect("a scroll area builds its content before it returns");
-    let scroll = Container::new(list_height(), vec![box_item(scroll)])?.styled_by(list_height);
+    let scroll = {
+        let keys = palette.clone();
+        let cursor = palette.clone();
+        let dismiss = dismiss.clone();
+        scroll
+            .control(Role::ListBox)
+            .focus_style(|_r| RectStyle::default())
+            .on_focused_key(move |key: &Key| keys.on_key(key, telar::modifiers(), &*dismiss))
+            .active_descendant(move || cursor.cursor_row())
+            .a11y_label(|| strings::text(strings::COMMANDS))
+    };
+    let list = scroll.focus_id();
 
     {
         let palette = palette.clone();
@@ -532,6 +541,7 @@ fn build_open_palette(
             .width(field_width)
             .on_key(keys)
             .active_descendant(pointed)
+            .controls(Rc::new(move || list))
             .build(),
         Children::default(),
     )?;
@@ -549,6 +559,7 @@ fn build_open_palette(
             .width(width)
             .padding_all(card_pad())
             .gap(card_pad())
+            .min_height(0.0)
     };
     let name = label.clone();
     let card = StyledContainer::new(
@@ -573,9 +584,11 @@ fn build_open_palette(
         LayoutStyle::new()
             .flex_column()
             .flex_grow(1.0)
+            .min_height(0.0)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::START)
             .padding_top(top_offset())
+            .padding_bottom(card_pad())
             .padding_horizontal(card_pad())
     };
     let backdrop = StyledContainer::new(
@@ -720,10 +733,16 @@ fn build_row(
             .padding_horizontal(10.0)
             .gap(8.0)
     };
+    let selected = {
+        let (palette, id) = (palette.clone(), id.clone());
+        move || palette.is_cursor(&id)
+    };
+    // Selected while the cursor is on it, as the list autocomplete pattern has it: nothing is chosen until it is run, and the cursor is what Enter runs.
     let row = StyledContainer::new(row_box(), paint(false), content)?
         .hover_style(paint(true))
         .disabled(move || disabled)
-        .presented(Role::MenuItem)
+        .presented(Role::Option)
+        .toggled(selected)
         .a11y_label(move || name.clone())
         .on_hover(hover)
         .on_press(press);

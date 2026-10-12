@@ -530,3 +530,69 @@ fn a_fresh_layout_runtime_forgets_the_focusables_of_the_tree_it_replaced() {
     unregister(token);
     unregister(id);
 }
+
+/// What a menu or a dialog gives back as it closes is focus as it was: a button a press focused comes back without its ring, one Tab reached with it.
+#[test]
+fn remembered_focus_comes_back_the_way_it_was_held() {
+    clear();
+    let opener = next_id();
+    register_as(opener, FocusKind::Widget);
+    let inside = next_id();
+    register_as(inside, FocusKind::Widget);
+
+    request_from_pointer(opener);
+    let back = remember().expect("something is focused");
+    request(inside);
+    back.restore();
+    assert!(is_focused(opener));
+    assert!(!is_focus_visible(opener), "a press focused it, so no ring");
+
+    request(opener);
+    let back = remember().expect("something is focused");
+    request_from_pointer(inside);
+    back.restore();
+    assert!(is_focus_visible(opener), "Tab reached it, so the ring");
+
+    let back = remember().expect("something is focused");
+    unregister(opener);
+    request(inside);
+    back.restore();
+    assert!(
+        is_focused(inside),
+        "a widget that is gone takes nothing back"
+    );
+
+    clear();
+    assert_eq!(remember(), None);
+    unregister(inside);
+}
+
+/// A popup closing gives the keyboard back only when the keyboard is still inside it or nowhere: one that went somewhere else on its own stays there.
+#[test]
+fn the_keyboard_is_left_within_a_region_while_inside_it_or_nowhere() {
+    use crate::container::Container;
+    use crate::context::{compute_layout, reset_layout_runtime};
+    use crate::{LayoutItem, box_item};
+    use layout_core::{AvailableSpace, LayoutStyle};
+
+    reset_layout_runtime();
+    clear();
+    let inside = laid_out_box().on_focus(|_| {});
+    let inside_id = inside.focus_id().expect("focusable");
+    let region = Container::new(LayoutStyle::new(), vec![box_item(inside)]).unwrap();
+    let outside = laid_out_box().on_focus(|_| {});
+    let outside_id = outside.focus_id().expect("focusable");
+    compute_layout(
+        region.layout_node(),
+        AvailableSpace::Definite(50.0),
+        AvailableSpace::Definite(20.0),
+    )
+    .unwrap();
+
+    assert!(left_within(region.layout_node()), "nowhere");
+    request(inside_id);
+    assert!(left_within(region.layout_node()), "inside it");
+    request(outside_id);
+    assert!(!left_within(region.layout_node()), "gone elsewhere");
+    clear();
+}
