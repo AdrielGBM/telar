@@ -190,6 +190,9 @@ for (const [path, language] of [
 "#,
     )
     .unwrap();
+    let _forking = crate::runner::workshop_channel::CHILD_PROCESSES
+        .write()
+        .unwrap();
     let output = Command::new("node")
         .arg(dir.join("harness.mjs"))
         .output()

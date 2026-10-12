@@ -235,6 +235,7 @@ fn serving_at_an_address_forgets_whoever_named_it_before() {
 
 #[test]
 fn a_session_that_ends_removes_its_server_file_and_frees_the_workshop() {
+    let _no_forks = CHILD_PROCESSES.read().unwrap();
     let dir = scratch("retired");
     let file = workshop_server_file(&dir, "demo");
     let claim = ServerClaim::claim(&file).expect("an unclaimed file");
@@ -263,6 +264,7 @@ fn hold_a_server_file_until_interrupted() {
 #[test]
 fn an_interrupted_session_removes_its_server_file() {
     for signal in ["INT", "TERM", "HUP"] {
+        let spawning = CHILD_PROCESSES.write().unwrap();
         let dir = scratch(&format!("interrupted-{signal}"));
         let file = workshop_server_file(&dir, "demo");
         let mut session = std::process::Command::new(std::env::current_exe().unwrap())
@@ -277,6 +279,7 @@ fn an_interrupted_session_removes_its_server_file() {
             .stderr(std::process::Stdio::null())
             .spawn()
             .unwrap();
+        drop(spawning);
         let starting = format!("starting {}\n", session.id());
         let deadline = std::time::Instant::now() + Duration::from_secs(20);
         while std::fs::read_to_string(&file).ok().as_deref() != Some(starting.as_str()) {
@@ -294,6 +297,7 @@ fn an_interrupted_session_removes_its_server_file() {
             "another process finds the session running"
         );
 
+        let _forking = CHILD_PROCESSES.write().unwrap();
         let sent = std::process::Command::new("kill")
             .args([format!("-{signal}"), session.id().to_string()])
             .status()

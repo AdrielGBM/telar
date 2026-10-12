@@ -4,6 +4,9 @@ use super::*;
 
 /// What `script` prints, run by Node.js, which the project's dev shell provides.
 fn node(script: &str) -> String {
+    let _forking = crate::runner::workshop_channel::CHILD_PROCESSES
+        .write()
+        .unwrap();
     let output = Command::new("node")
         .arg("-e")
         .arg(script)

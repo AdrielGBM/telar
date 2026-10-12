@@ -267,39 +267,59 @@ fn the_page_rebuilds_on_what_the_desktop_loop_watches_and_on_its_own_files() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-fn taken_port() -> (TcpListener, u16) {
-    let holder = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
-    let port = holder.local_addr().unwrap().port();
-    (holder, port)
+fn any_port() -> std::io::Result<TcpListener> {
+    TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+}
+
+fn bind_recording(
+    requested: Option<u16>,
+    preferred: u16,
+    taken: &[u16],
+) -> (std::io::Result<TcpListener>, Vec<u16>) {
+    let asked = std::cell::RefCell::new(Vec::new());
+    let result = bind_dev_listener_with(requested, preferred, |port| {
+        asked.borrow_mut().push(port);
+        if taken.contains(&port) {
+            return Err(std::io::ErrorKind::AddrInUse.into());
+        }
+        any_port()
+    });
+    (result, asked.into_inner())
 }
 
 #[test]
 fn the_preferred_port_is_used_when_it_is_free() {
-    let (holder, port) = taken_port();
-    drop(holder);
-    let listener = bind_dev_listener(None, port).unwrap();
-    assert_eq!(listener.local_addr().unwrap().port(), port);
+    let (listener, asked) = bind_recording(None, 4100, &[]);
+    assert!(listener.is_ok());
+    assert_eq!(asked, [4100]);
 }
 
 #[test]
 fn a_taken_default_port_falls_back_to_a_free_one() {
-    let (_holder, port) = taken_port();
-    let listener = bind_dev_listener(None, port).unwrap();
-    let chosen = listener.local_addr().unwrap().port();
-    assert_ne!(chosen, port);
-    assert_ne!(chosen, 0);
+    let (listener, asked) = bind_recording(None, 4100, &[4100]);
+    assert_ne!(listener.unwrap().local_addr().unwrap().port(), 0);
+    assert_eq!(asked, [4100, 0]);
 }
 
 #[test]
 fn a_taken_port_the_user_asked_for_is_an_error() {
-    let (_holder, port) = taken_port();
-    assert!(bind_dev_listener(Some(port), 8080).is_err());
+    let (listener, asked) = bind_recording(Some(4200), 4100, &[4200]);
+    assert!(listener.is_err());
+    assert_eq!(asked, [4200]);
 }
 
 #[test]
 fn a_free_port_the_user_asked_for_is_used() {
-    let (holder, port) = taken_port();
-    drop(holder);
-    let listener = bind_dev_listener(Some(port), 8080).unwrap();
-    assert_eq!(listener.local_addr().unwrap().port(), port);
+    let (listener, asked) = bind_recording(Some(4200), 4100, &[]);
+    assert!(listener.is_ok());
+    assert_eq!(asked, [4200]);
+}
+
+#[test]
+fn a_port_held_by_another_listener_is_refused_for_real() {
+    let holder = any_port().unwrap();
+    let port = holder.local_addr().unwrap().port();
+    assert!(bind_dev_listener(Some(port), 8080).is_err());
+    let fallback = bind_dev_listener(None, port).unwrap();
+    assert_ne!(fallback.local_addr().unwrap().port(), port);
 }

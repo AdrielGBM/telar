@@ -26,10 +26,19 @@ pub(crate) const DEFAULT_PORT: u16 = 8080;
 
 /// Listens on `requested`, failing when it is taken. Without one, on `preferred` when free and otherwise on a port the system picks, so a port held by something else costs a different address rather than the session.
 fn bind_dev_listener(requested: Option<u16>, preferred: u16) -> std::io::Result<TcpListener> {
+    bind_dev_listener_with(requested, preferred, |port| {
+        TcpListener::bind((Ipv4Addr::LOCALHOST, port))
+    })
+}
+
+fn bind_dev_listener_with(
+    requested: Option<u16>,
+    preferred: u16,
+    bind: impl Fn(u16) -> std::io::Result<TcpListener>,
+) -> std::io::Result<TcpListener> {
     match requested {
-        Some(port) => TcpListener::bind((Ipv4Addr::LOCALHOST, port)),
-        None => TcpListener::bind((Ipv4Addr::LOCALHOST, preferred))
-            .or_else(|_| TcpListener::bind((Ipv4Addr::LOCALHOST, 0))),
+        Some(port) => bind(port),
+        None => bind(preferred).or_else(|_| bind(0)),
     }
 }
 

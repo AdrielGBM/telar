@@ -8,6 +8,8 @@ use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::RwLock;
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -275,3 +277,7 @@ fn answers(address: &str) -> bool {
 #[cfg(test)]
 #[path = "workshop_channel_test.rs"]
 mod tests;
+
+/// A child forked while a lock is held keeps it until it execs, so a test that expects a lock to be free again takes the read side and every test that starts a process takes the write side.
+#[cfg(test)]
+pub(crate) static CHILD_PROCESSES: RwLock<()> = RwLock::new(());

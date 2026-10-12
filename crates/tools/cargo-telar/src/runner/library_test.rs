@@ -384,6 +384,9 @@ fn a_committed_artifact_is_accepted_and_uncommitted_sources_are_not() {
 }
 
 fn git(dir: &Path, args: &[&str]) {
+    let _forking = crate::runner::workshop_channel::CHILD_PROCESSES
+        .write()
+        .unwrap();
     let status = Command::new("git")
         .arg("-C")
         .arg(dir)
