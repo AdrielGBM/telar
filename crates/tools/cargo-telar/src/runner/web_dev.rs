@@ -13,6 +13,7 @@ use super::cli::WebRenderer;
 use super::config::{TelarSection, find_package_dir, resolve_package};
 use super::package::{build_web_bundle, compressible, media_type};
 use super::watch::WatchSet;
+use super::workshop_channel::ServerClaim;
 
 /// How long to let a burst of file events settle before rebuilding. An editor writing a file produces several, and a save that touches a whole directory produces one per file.
 const SETTLE: Duration = Duration::from_millis(150);
@@ -32,20 +33,21 @@ fn bind_dev_listener(requested: Option<u16>, preferred: u16) -> std::io::Result<
     }
 }
 
-/// `requested` is the port the user asked for, which the session fails on when it is taken. `opening` is the location the session was asked to show, which it prints the address of beside the site's own. `server_file` is where it names the site's address, for the editor and a later `cargo telar preview` to find: `starting` from the moment it listens, the address once the first build is done.
+/// `requested` is the port the user asked for, which the session fails on when it is taken. `opening` is the location the session was asked to show, which it prints the address of beside the site's own. `claim` is the server file the session names the site's address in once the first build is done, for the editor and a later `cargo telar preview` to find; it is removed when the session gives up.
 pub(crate) fn run_web_dev(
     cargo_args: Vec<String>,
     config: TelarSection,
     requested: Option<u16>,
     renderer: Option<WebRenderer>,
     opening: Option<&str>,
-    server_file: Option<&Path>,
+    claim: Option<ServerClaim>,
 ) -> ! {
     let listener = match bind_dev_listener(requested, DEFAULT_PORT) {
         Ok(listener) => listener,
         Err(e) => {
             let port = requested.unwrap_or(DEFAULT_PORT);
             eprintln!("[cargo-telar] could not listen on port {port}: {e}");
+            drop(claim);
             std::process::exit(1);
         }
     };
@@ -53,26 +55,32 @@ pub(crate) fn run_web_dev(
     if requested.is_none() && port != DEFAULT_PORT {
         eprintln!("[cargo-telar] Port {DEFAULT_PORT} is taken; serving on port {port} instead.");
     }
-    if let Some(file) = server_file {
-        super::workshop_channel::announce_starting(file);
-    }
 
     let dist = match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer, false) {
         Ok(dist) => dist,
         Err(e) => {
             eprintln!("[cargo-telar] {e}");
-            if let Some(file) = server_file {
-                super::workshop_channel::retire_server(file);
-            }
+            drop(claim);
             std::process::exit(1);
         }
     };
     inject_reload_poll(&dist);
 
     let base = config.web.base_path();
+    let serve_from = dist.clone();
+    let served_base = base.clone();
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            let root = serve_from.clone();
+            let base = served_base.clone();
+            // One thread per request: a page pulls a handful of files and then holds a poll open, and a sequential server would make the poll block the next reload's fetches.
+            std::thread::spawn(move || serve(stream, &root, &base));
+        }
+    });
+
     eprintln!("[cargo-telar] Serving http://localhost:{port}{base}");
-    if let Some(file) = server_file {
-        super::workshop_channel::announce_server(file, &format!("http://localhost:{port}{base}"));
+    if let Some(claim) = &claim {
+        claim.serve(&format!("http://localhost:{port}{base}"));
     }
     if let Some(location) = opening {
         eprintln!(
@@ -80,16 +88,6 @@ pub(crate) fn run_web_dev(
             address_under(&base, location)
         );
     }
-
-    let serve_from = dist.clone();
-    std::thread::spawn(move || {
-        for stream in listener.incoming().flatten() {
-            let root = serve_from.clone();
-            let base = base.clone();
-            // One thread per request: a page pulls a handful of files and then holds a poll open, and a sequential server would make the poll block the next reload's fetches.
-            std::thread::spawn(move || serve(stream, &root, &base));
-        }
-    });
 
     watch_and_rebuild(cargo_args, config, &dist, renderer)
 }

@@ -121,20 +121,46 @@ function isAlive(pid: number): boolean {
   }
 }
 
-// Follows the session launched for `file` from now on, and answers whether it is gone: it announced itself as starting under a process that has died, or its file appeared and was removed. What the file held when watching began is a leftover of an earlier session and says nothing about this one.
-export async function watchSession(
-  file: string,
-): Promise<() => Promise<boolean>> {
-  const leftover = await readServerFile(file);
-  let announced = false;
-  return async () => {
-    const text = await readServerFile(file);
-    if (text === leftover) return false;
-    if (text === undefined) return announced;
-    announced = true;
+function readServerFileNow(file: string): string | undefined {
+  try {
+    return fs.readFileSync(file, "utf8").trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isLiveStart(text: string | undefined): boolean {
+  const state = text === undefined ? undefined : parseServerFile(text);
+  return state?.kind === "starting" && isAlive(state.pid);
+}
+
+// Follows what the file a session names itself in says from now on. What it held when following began is a leftover of an earlier session, unless it names a live session that is still starting, which is then the session followed.
+class SessionFile {
+  private constructor(
+    private readonly file: string,
+    private readonly initial: string | undefined,
+    private announced: boolean,
+  ) {}
+
+  // Read at once, so a launch is known before anything else can start one.
+  static follow(file: string): SessionFile {
+    const initial = readServerFileNow(file);
+    return new SessionFile(file, initial, isLiveStart(initial));
+  }
+
+  get hasAnnounced(): boolean {
+    return this.announced;
+  }
+
+  // Whether the session is gone: it announced itself, then removed its file or left it naming a process that has died.
+  async gone(): Promise<boolean> {
+    const text = await readServerFile(this.file);
+    if (text !== undefined && text !== this.initial) this.announced = true;
+    if (!this.announced) return false;
+    if (text === undefined) return true;
     const state = parseServerFile(text);
     return state?.kind === "starting" && !isAlive(state.pid);
-  };
+  }
 }
 
 export async function servedAt(workshop: Workshop): Promise<URL | undefined> {
@@ -169,10 +195,29 @@ function answers(address: URL): Promise<boolean> {
   });
 }
 
+export type Stopped =
+  | { kind: "exited"; code: number | undefined }
+  | { kind: "closed" }
+  | { kind: "lost" }
+  | { kind: "silent" }
+  | { kind: "timeout" };
+
+export type Outcome<T> = { up: T } | { down: Stopped };
+
 interface Launch {
-  terminal: vscode.Terminal;
+  // Absent for a session started elsewhere, which is followed through its file alone.
+  terminal?: vscode.Terminal;
+  session: SessionFile;
   until: number;
+  announceBy: number;
+  ended?: Stopped;
 }
+
+// A shell that reports its commands says when the launched one ends; without that, a session that has not named itself in its file by then is taken for one that never started, such as a `cargo` the shell cannot find.
+const ANNOUNCE_MS = 60 * 1000;
+
+// What VS Code's own sample waits for shell integration before falling back to typing the command.
+const SHELL_INTEGRATION_MS = 3000;
 
 // Keyed by the file each session writes once it is up, so a request made while one boots waits for it instead of starting a second.
 export class Launches implements vscode.Disposable {
@@ -182,35 +227,56 @@ export class Launches implements vscode.Disposable {
   constructor() {
     this.subscriptions.push(
       vscode.window.onDidCloseTerminal((terminal) =>
-        this.forgetTerminal(terminal),
+        this.end(terminal, { kind: "closed" }),
       ),
     );
-    // Shell integration says when the command ends, which a session that failed to build does long before its terminal closes; older editors have no such event.
+    // Older editors have no such event, and a shell without integration never fires it.
     const ended = vscode.window.onDidEndTerminalShellExecution as
       typeof vscode.window.onDidEndTerminalShellExecution | undefined;
     if (ended) {
       this.subscriptions.push(
-        ended((event) => this.forgetTerminal(event.terminal)),
+        ended((event) =>
+          this.end(event.terminal, { kind: "exited", code: event.exitCode }),
+        ),
       );
     }
   }
 
-  start(
+  async start(
     file: string,
     name: string,
     cwd: string,
     command: string,
     bootMs: number,
-  ): void {
+  ): Promise<void> {
+    const session = SessionFile.follow(file);
     const terminal = vscode.window.createTerminal({ name, cwd });
     terminal.show(true);
-    terminal.sendText(command);
-    this.starting.set(file, { terminal, until: Date.now() + bootMs });
+    const now = Date.now();
+    this.starting.set(file, {
+      terminal,
+      session,
+      until: now + bootMs,
+      announceBy: now + ANNOUNCE_MS,
+    });
+    const integration = await shellIntegrationOf(terminal);
+    if (integration) integration.executeCommand(command);
+    else terminal.sendText(command);
+  }
+
+  // Follows a session that `file` names as starting under a live process, which something other than this editor launched, and answers whether there is one.
+  follow(file: string, bootMs: number): boolean {
+    if (this.isStarting(file)) return true;
+    const session = SessionFile.follow(file);
+    if (!session.hasAnnounced) return false;
+    const now = Date.now();
+    this.starting.set(file, { session, until: now + bootMs, announceBy: now });
+    return true;
   }
 
   isStarting(file: string): boolean {
     const launch = this.starting.get(file);
-    if (launch && Date.now() < launch.until) return true;
+    if (launch && !launch.ended && !this.overdue(launch)) return true;
     this.starting.delete(file);
     return false;
   }
@@ -222,32 +288,80 @@ export class Launches implements vscode.Disposable {
   async whenUp<T>(
     file: string,
     probe: () => Promise<T | undefined>,
-    lost: () => Promise<boolean> = async () => false,
-  ): Promise<T | undefined> {
+  ): Promise<Outcome<T>> {
+    let launch = this.starting.get(file);
     for (;;) {
       const answer = await probe();
       if (answer !== undefined) {
         this.forget(file);
-        return answer;
+        return { up: answer };
       }
-      if (await lost()) {
-        this.forget(file);
-        return undefined;
+      const stopped: Stopped | undefined = launch
+        ? await this.stopped(launch)
+        : { kind: "lost" };
+      if (stopped) {
+        if (this.starting.get(file) === launch) this.starting.delete(file);
+        const remaining = (launch?.until ?? 0) - Date.now();
+        // A second launch ends at once when another session got there first, which is then the one to wait for.
+        if (launch?.terminal && remaining > 0 && this.follow(file, remaining)) {
+          launch = this.starting.get(file);
+          continue;
+        }
+        return { down: stopped };
       }
-      if (!this.isStarting(file)) return undefined;
       await new Promise((resolve) => setTimeout(resolve, POLL_MS));
     }
   }
 
-  private forgetTerminal(terminal: vscode.Terminal): void {
-    for (const [file, launch] of this.starting) {
-      if (launch.terminal === terminal) this.starting.delete(file);
+  private async stopped(launch: Launch): Promise<Stopped | undefined> {
+    if (launch.ended) return launch.ended;
+    if (await launch.session.gone()) return { kind: "lost" };
+    if (Date.now() >= launch.until) return { kind: "timeout" };
+    if (this.overdue(launch)) return { kind: "silent" };
+    return undefined;
+  }
+
+  private overdue(launch: Launch): boolean {
+    const now = Date.now();
+    if (now >= launch.until) return true;
+    const unobserved =
+      launch.terminal !== undefined &&
+      launch.terminal.shellIntegration === undefined;
+    return (
+      unobserved && !launch.session.hasAnnounced && now >= launch.announceBy
+    );
+  }
+
+  private end(terminal: vscode.Terminal, why: Stopped): void {
+    for (const launch of this.starting.values()) {
+      if (launch.terminal === terminal) launch.ended ??= why;
     }
   }
 
   dispose(): void {
     for (const subscription of this.subscriptions) subscription.dispose();
   }
+}
+
+function shellIntegrationOf(
+  terminal: vscode.Terminal,
+): Promise<vscode.TerminalShellIntegration | undefined> {
+  if (terminal.shellIntegration)
+    return Promise.resolve(terminal.shellIntegration);
+  const changed = vscode.window.onDidChangeTerminalShellIntegration as
+    typeof vscode.window.onDidChangeTerminalShellIntegration | undefined;
+  if (!changed) return Promise.resolve(undefined);
+  return new Promise((resolve) => {
+    const settle = (integration?: vscode.TerminalShellIntegration) => {
+      clearTimeout(timer);
+      subscription.dispose();
+      resolve(integration);
+    };
+    const subscription = changed((event) => {
+      if (event.terminal === terminal) settle(event.shellIntegration);
+    });
+    const timer = setTimeout(() => settle(), SHELL_INTEGRATION_MS);
+  });
 }
 
 const POLL_MS = 500;
@@ -274,7 +388,7 @@ export class WindowWorkshops {
       return;
     }
     const [host] = workshops;
-    this.launches.start(
+    await this.launches.start(
       host.channel,
       "Telar workshop",
       host.packageDir,
@@ -293,7 +407,7 @@ export class WindowWorkshops {
     )
       return;
     const [host] = workshops;
-    this.launches.start(
+    await this.launches.start(
       host.channel,
       "Telar workshop",
       host.packageDir,

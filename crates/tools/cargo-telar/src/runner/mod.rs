@@ -17,6 +17,7 @@ mod config;
 mod diagnostics;
 mod doctor;
 mod fmt;
+mod interrupt;
 mod junit;
 mod library;
 mod migrate;
@@ -47,21 +48,19 @@ use test_cmd::run_test_cmd;
 use transpile::transpile_workspace;
 use watch::{HotLoopOpts, HotMode, run_hot_loop, with_web_features};
 use web_dev::run_web_dev;
-use workshop_channel::WorkshopChannel;
+use workshop_channel::{ServedElsewhere, ServerClaim, WorkshopChannel};
 use workshop_export::run_workshop_export;
 
 /// Dispatches a `cargo telar` invocation to its subcommand.
 pub fn run(args: Vec<String>) {
     let cli = Cli::parse_from(std::iter::once("cargo-telar".to_string()).chain(args));
     let command = cli.command.unwrap_or_else(default_dev_command);
-    if let TelarCommand::Preview(args) = &command
-        && open_in_running_workshop(args)
-    {
-        return;
-    }
     let workshop = match &command {
-        TelarCommand::Preview(args) => open_workshop_channel(args),
-        _ => None,
+        TelarCommand::Preview(args) => match hold_workshop(args) {
+            Some(workshop) => workshop,
+            None => return,
+        },
+        _ => HeldWorkshop::default(),
     };
     // The one place `cargo telar` prepares a build, rather than at each of the nine sites that spawn `cargo`; the ones excluded here compile nothing or prepare for themselves. Bake first: a `src:"…"` transpiles against the artifact the bake writes.
     if !matches!(
@@ -77,6 +76,7 @@ pub fn run(args: Vec<String>) {
             | TelarCommand::Publish(_)
     ) {
         if !bake_workspace() {
+            drop(workshop);
             std::process::exit(1);
         }
         transpile_workspace();
@@ -208,7 +208,7 @@ fn run_dev_cmd(args: DevArgs) {
     );
 }
 
-fn run_preview_cmd(args: PreviewArgs, workshop: Option<WorkshopChannel>) {
+fn run_preview_cmd(args: PreviewArgs, workshop: HeldWorkshop) {
     let PreviewArgs {
         hot,
         preview,
@@ -249,15 +249,13 @@ fn run_preview_cmd(args: PreviewArgs, workshop: Option<WorkshopChannel>) {
             );
         }
         let opening = preview.as_deref().map(workshop_channel::location_of);
-        let resolved = resolve_package(&plan.cargo_args);
-        let server_file = workshop_server_file(&resolved.workspace_root, &resolved.name());
         run_web_dev(
             with_web_features(&HotMode::Preview, plan.cargo_args),
             plan.config,
             port,
             plan.renderer,
             opening.as_deref(),
-            Some(&server_file),
+            workshop.page,
         );
     }
     // The preview host process inherits our env, and reads both of these as it starts.
@@ -283,41 +281,70 @@ fn run_preview_cmd(args: PreviewArgs, workshop: Option<WorkshopChannel>) {
             app_args,
             config: plan.config,
             no_hot_reload,
-            workshop,
+            workshop: workshop.window,
         },
     );
 }
 
-/// Hands the request to the workshop a running `cargo telar preview` already shows for the package, and answers whether there was one: moved to the preview `args` names, or brought forward when it names none. Asked before anything is built: a workshop that is already open needs nothing rebuilt. A page is not moved, since the browser showing it holds its address: where to open the preview is printed instead.
-fn open_in_running_workshop(args: &PreviewArgs) -> bool {
-    // A `--component` narrows the list a workshop starts with, which one already running cannot be asked to do.
-    if args.list
-        || args.png.is_some()
-        || args.build.is_some()
-        || (args.preview.is_none() && args.component.is_some())
-    {
-        return false;
+/// What a `cargo telar preview` holds from before it builds anything until it ends, so a later one finds the workshop it runs rather than starting a second: the channel a window takes requests on, or the claim on the page's server file.
+#[derive(Default)]
+struct HeldWorkshop {
+    window: Option<WorkshopChannel>,
+    page: Option<ServerClaim>,
+}
+
+/// What this `cargo telar preview` holds for the workshop it is about to run, or `None` when one already runs for the package and the request was handed to it. Asked before anything is built: a workshop that is already running needs nothing rebuilt.
+fn hold_workshop(args: &PreviewArgs) -> Option<HeldWorkshop> {
+    if args.list || args.png.is_some() || args.build.is_some() {
+        return Some(HeldWorkshop::default());
     }
     let common = &args.hot.common;
     let resolved = resolve_package(&build_cargo_args(&common.package, false, &None));
     let (root, package) = (&resolved.workspace_root, resolved.name());
     if common.target == Some(Target::Web) {
-        return show_served_workshop(
-            &workshop_server_file(root, &package),
-            args.preview.as_deref(),
-        );
+        return match ServerClaim::claim(&workshop_server_file(root, &package)) {
+            Ok(claim) => Some(HeldWorkshop {
+                page: Some(claim),
+                ..HeldWorkshop::default()
+            }),
+            Err(session) => {
+                show_served_workshop(&session, args.preview.as_deref());
+                None
+            }
+        };
     }
     let file = workshop_channel_file(root, &package);
+    if open_in_running_window(&file, args) {
+        return None;
+    }
+    // Only a hot-reload session in a window hands requests on, and only a cdylib reloads.
+    let takes_requests = matches!(common.target, None | Some(Target::Desktop))
+        && !args.hot.no_hot_reload
+        && resolved.produces_cdylib;
+    Some(HeldWorkshop {
+        window: takes_requests
+            .then(|| WorkshopChannel::open(file))
+            .flatten(),
+        ..HeldWorkshop::default()
+    })
+}
+
+/// Hands the request to the window a running `cargo telar preview` already shows for the package through the channel at `file`, and answers whether there was one: moved to the preview `args` names, or brought forward when it names none.
+fn open_in_running_window(file: &Path, args: &PreviewArgs) -> bool {
+    // A `--component` narrows the list a workshop starts with, which one already running cannot be asked to do.
+    if args.preview.is_none() && args.component.is_some() {
+        return false;
+    }
     match &args.preview {
         Some(target) => {
-            let opened = workshop_channel::goto(&file, &workshop_channel::location_of(target));
+            let opened = workshop_channel::goto(file, &workshop_channel::location_of(target));
             if opened {
                 eprintln!("[cargo-telar] Opened {target} in the running workshop.");
             }
             opened
         }
         None => {
-            let focused = workshop_channel::focus(&file);
+            let focused = workshop_channel::focus(file);
             if focused {
                 eprintln!("[cargo-telar] Brought the running workshop forward.");
             }
@@ -326,42 +353,25 @@ fn open_in_running_workshop(args: &PreviewArgs) -> bool {
     }
 }
 
-/// Says where the page a running `cargo telar preview --target web` serves for the package is, and where it opens `preview`, and answers whether one is served.
-fn show_served_workshop(file: &Path, preview: Option<&str>) -> bool {
-    let Some(address) = workshop_channel::serving(file) else {
-        return false;
+/// Says where the page another `cargo telar preview --target web` serves for the package is, and where it opens `preview`, or that it is still starting. A page is not moved, since the browser showing it holds its address.
+fn show_served_workshop(session: &ServedElsewhere, preview: Option<&str>) {
+    let address = match session {
+        ServedElsewhere::Serving(address) => address,
+        ServedElsewhere::Starting { pid } => {
+            let process = pid.map_or(String::new(), |pid| format!(" (process {pid})"));
+            eprintln!(
+                "[cargo-telar] The workshop is already starting in another session{process}, which prints its address once it serves."
+            );
+            return;
+        }
     };
     eprintln!("[cargo-telar] The workshop is already served at {address}");
     if let Some(target) = preview {
         eprintln!(
             "[cargo-telar] Open {}",
-            web_dev::address_under(&address, &workshop_channel::location_of(target))
+            web_dev::address_under(address, &workshop_channel::location_of(target))
         );
     }
-    true
-}
-
-/// The channel a workshop that opens in a window takes requests on, open before anything is built so a request sent while it builds reaches it rather than starting a second one. `None` for a run that opens no such workshop.
-fn open_workshop_channel(args: &PreviewArgs) -> Option<WorkshopChannel> {
-    let common = &args.hot.common;
-    let windowed = matches!(common.target, None | Some(Target::Desktop));
-    if args.list
-        || args.png.is_some()
-        || args.build.is_some()
-        || args.hot.no_hot_reload
-        || !windowed
-    {
-        return None;
-    }
-    let resolved = resolve_package(&build_cargo_args(&common.package, false, &None));
-    // Only a hot-reload session hands requests on, and only a cdylib reloads.
-    if !resolved.produces_cdylib {
-        return None;
-    }
-    WorkshopChannel::open(workshop_channel_file(
-        &resolved.workspace_root,
-        &resolved.name(),
-    ))
 }
 
 /// Runs the app binary once with `var` set, under the `telar` feature that makes it answer, and exits with its code.

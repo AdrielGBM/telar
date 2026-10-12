@@ -4,13 +4,15 @@ import * as vscode from "vscode";
 import {
   Launches,
   PreviewTarget,
+  Stopped,
   Workshop,
   servedAt,
-  watchSession,
 } from "./workshop";
 
 // A first build of the workshop for the browser compiles the whole crate graph to WebAssembly.
 const PAGE_BOOT_MS = 20 * 60 * 1000;
+
+const TERMINAL_NAME = "Telar workshop (web)";
 
 type PanelMessage =
   | { type: "show"; href: string; origin: string }
@@ -78,46 +80,48 @@ export class PreviewPanel implements vscode.Disposable {
       return;
     }
     const address = await firstServed(target.workshops);
-    if (this.disposed || this.wanted !== target) return;
+    if (this.disposed || this.wanted !== target || this.booting) return;
     if (address) return this.load(target, address);
-    const host =
-      target.workshops.find((workshop) =>
-        this.launches.isStarting(workshop.server),
-      ) ?? target.workshops[0];
-    const launching = !this.launches.isStarting(host.server);
-    const lost = launching ? await watchSession(host.server) : undefined;
-    if (this.disposed || this.wanted !== target) return;
-    if (launching) {
-      this.launches.start(
+    this.booting = true;
+    let host = this.bootingHost(target.workshops);
+    if (host) {
+      this.post({
+        type: "status",
+        text: "The workshop for the browser is starting in another terminal. A first build takes a while; its progress is in that terminal.",
+      });
+    } else {
+      host = target.workshops[0];
+      await this.launches.start(
         host.server,
-        "Telar workshop (web)",
+        TERMINAL_NAME,
         host.packageDir,
         "cargo telar preview --target web",
         PAGE_BOOT_MS,
       );
+      this.post({
+        type: "status",
+        text: `Starting the workshop for the browser. A first build takes a while; its progress is in the ${TERMINAL_NAME} terminal.`,
+      });
     }
-    this.post({
-      type: "status",
-      text: "Starting the workshop for the browser. A first build takes a while; its progress is in the Telar workshop (web) terminal.",
-    });
-    this.booting = true;
-    const started = await this.launches.whenUp(
-      host.server,
-      () => servedAt(host),
-      lost,
+    const served = host;
+    const outcome = await this.launches.whenUp(served.server, () =>
+      servedAt(served),
     );
     this.booting = false;
     if (this.disposed) return;
-    if (!started) {
-      this.post({
-        type: "status",
-        text: "The workshop stopped before serving its page. Its terminal says why.",
-      });
+    if ("down" in outcome) {
+      this.post({ type: "status", text: stoppedText(outcome.down) });
       return;
     }
     // The cursor may have moved on while the workshop built, to a preview another application shows.
     const latest = this.wanted;
     if (latest) await this.follow(latest);
+  }
+
+  private bootingHost(workshops: Workshop[]): Workshop | undefined {
+    return workshops.find((workshop) =>
+      this.launches.follow(workshop.server, PAGE_BOOT_MS),
+    );
   }
 
   private load(target: PreviewTarget, address: URL): void {
@@ -149,6 +153,21 @@ export class PreviewPanel implements vscode.Disposable {
     if (PreviewPanel.current === this) PreviewPanel.current = undefined;
     for (const subscription of this.subscriptions) subscription.dispose();
     this.panel.dispose();
+  }
+}
+
+function stoppedText(stopped: Stopped): string {
+  switch (stopped.kind) {
+    case "exited":
+      return `The workshop stopped before serving its page${stopped.code === undefined ? "" : ` (exit code ${stopped.code})`}. Its terminal says why.`;
+    case "closed":
+      return "The workshop's terminal was closed before it served its page.";
+    case "lost":
+      return "The workshop stopped before serving its page. Its terminal says why.";
+    case "silent":
+      return `\`cargo telar\` has not started in the ${TERMINAL_NAME} terminal, and that shell does not report when a command ends. Its terminal says why; once the workshop runs, put the cursor in a preview again.`;
+    case "timeout":
+      return `The workshop has not served its page after ${PAGE_BOOT_MS / 60000} minutes. Its terminal says why.`;
   }
 }
 

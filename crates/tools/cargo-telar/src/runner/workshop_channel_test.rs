@@ -1,3 +1,4 @@
+use super::super::interrupt::removes_on_interrupt;
 use super::*;
 use telar_project::protocol::{workshop_channel_file, workshop_server_file};
 
@@ -130,25 +131,90 @@ fn serve_build_counter() -> u16 {
 }
 
 #[test]
-fn a_served_workshop_is_found_at_the_address_its_session_named() {
-    let dir = scratch("serving");
-    let file = workshop_server_file(&dir, "demo");
-    let address = format!("http://localhost:{}/", serve_build_counter());
-    announce_server(&file, &address);
-    assert_eq!(serving(&file), Some(address));
+fn an_open_channel_is_removed_on_an_interruption_and_a_closed_one_is_not() {
+    let dir = scratch("channel-interrupt");
+    let file = workshop_channel_file(&dir, "demo");
+    let channel = WorkshopChannel::open(file.clone()).expect("a loopback port");
+    assert!(removes_on_interrupt(&file));
+    drop(channel);
+    assert!(!removes_on_interrupt(&file));
 }
 
 #[test]
-fn an_address_nothing_serves_any_more_is_forgotten() {
+fn a_claim_marks_the_server_file_with_its_process_and_serves_nothing_yet() {
+    let dir = scratch("starting");
+    let file = workshop_server_file(&dir, "demo");
+    let _claim = ServerClaim::claim(&file).expect("an unclaimed file");
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        format!("starting {}\n", std::process::id())
+    );
+    assert!(removes_on_interrupt(&file));
+}
+
+#[test]
+fn a_second_session_finds_the_first_still_starting() {
+    let dir = scratch("second-while-starting");
+    let file = workshop_server_file(&dir, "demo");
+    let _first = ServerClaim::claim(&file).expect("an unclaimed file");
+    assert_eq!(
+        ServerClaim::claim(&file).err(),
+        Some(ServedElsewhere::Starting {
+            pid: Some(std::process::id())
+        })
+    );
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        format!("starting {}\n", std::process::id()),
+        "the second session leaves the file to the first"
+    );
+}
+
+#[test]
+fn a_second_session_finds_the_first_at_the_address_it_serves() {
+    let dir = scratch("second-while-serving");
+    let file = workshop_server_file(&dir, "demo");
+    let first = ServerClaim::claim(&file).expect("an unclaimed file");
+    let address = format!("http://localhost:{}/", serve_build_counter());
+    first.serve(&address);
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        format!("{address}\n")
+    );
+    assert_eq!(
+        ServerClaim::claim(&file).err(),
+        Some(ServedElsewhere::Serving(address))
+    );
+}
+
+#[test]
+fn an_address_the_holder_has_not_overwritten_yet_reads_as_starting() {
+    let dir = scratch("held-stale-address");
+    let file = workshop_server_file(&dir, "demo");
+    let first = ServerClaim::claim(&file).expect("an unclaimed file");
+    std::fs::write(&file, format!("http://localhost:{}/\n", free_port())).unwrap();
+    assert_eq!(
+        ServerClaim::claim(&file).err(),
+        Some(ServedElsewhere::Starting { pid: None })
+    );
+    drop(first);
+}
+
+#[test]
+fn a_file_left_by_a_session_that_is_gone_is_claimed_over() {
     let dir = scratch("unserved");
     let file = workshop_server_file(&dir, "demo");
-    announce_server(&file, &format!("http://localhost:{}/", free_port()));
-    assert_eq!(serving(&file), None);
-    assert!(!file.exists());
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, format!("http://localhost:{}/\n", free_port())).unwrap();
+    let _claim = ServerClaim::claim(&file).expect("no live session holds it");
+    assert_eq!(
+        std::fs::read_to_string(&file).unwrap(),
+        format!("starting {}\n", std::process::id())
+    );
 }
 
 #[test]
-fn starting_to_serve_at_an_address_forgets_whoever_named_it_before() {
+fn serving_at_an_address_forgets_whoever_named_it_before() {
     let dir = scratch("announce");
     let earlier = workshop_server_file(&dir, "gallery");
     let elsewhere = workshop_server_file(&dir, "other");
@@ -157,7 +223,8 @@ fn starting_to_serve_at_an_address_forgets_whoever_named_it_before() {
     std::fs::write(&elsewhere, "http://localhost:8081/\n").unwrap();
 
     let file = workshop_server_file(&dir, "catalogue");
-    announce_server(&file, "http://localhost:8080/");
+    let claim = ServerClaim::claim(&file).expect("an unclaimed file");
+    claim.serve("http://localhost:8080/");
     assert!(!earlier.exists());
     assert!(elsewhere.exists());
     assert_eq!(
@@ -167,33 +234,77 @@ fn starting_to_serve_at_an_address_forgets_whoever_named_it_before() {
 }
 
 #[test]
-fn a_session_that_is_starting_announces_its_process_and_serves_nothing_yet() {
-    let dir = scratch("starting");
-    let file = workshop_server_file(&dir, "demo");
-    announce_starting(&file);
-    assert_eq!(
-        std::fs::read_to_string(&file).unwrap(),
-        format!("starting {}\n", std::process::id())
-    );
-    assert_eq!(serving(&file), None);
-    assert!(file.exists());
-}
-
-#[test]
-fn serving_replaces_the_starting_marker_with_the_address() {
-    let dir = scratch("starting-then-serving");
-    let file = workshop_server_file(&dir, "demo");
-    announce_starting(&file);
-    let address = format!("http://localhost:{}/", serve_build_counter());
-    announce_server(&file, &address);
-    assert_eq!(serving(&file), Some(address));
-}
-
-#[test]
-fn a_session_that_gives_up_removes_its_server_file() {
+fn a_session_that_ends_removes_its_server_file_and_frees_the_workshop() {
     let dir = scratch("retired");
     let file = workshop_server_file(&dir, "demo");
-    announce_starting(&file);
-    retire_server(&file);
+    let claim = ServerClaim::claim(&file).expect("an unclaimed file");
+    drop(claim);
     assert!(!file.exists());
+    assert!(!removes_on_interrupt(&file));
+    assert!(ServerClaim::claim(&file).is_ok());
+}
+
+const HELD_FILE_VAR: &str = "TELAR_TEST_HELD_SERVER_FILE";
+
+/// Not a test of its own: the process [`an_interrupted_session_removes_its_server_file`] interrupts, which claims the file it is given and waits.
+#[test]
+#[ignore = "run by an_interrupted_session_removes_its_server_file"]
+fn hold_a_server_file_until_interrupted() {
+    let Some(file) = std::env::var_os(HELD_FILE_VAR) else {
+        return;
+    };
+    let _claim = ServerClaim::claim(Path::new(&file)).expect("an unclaimed file");
+    loop {
+        std::thread::sleep(Duration::from_secs(1));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn an_interrupted_session_removes_its_server_file() {
+    for signal in ["INT", "TERM", "HUP"] {
+        let dir = scratch(&format!("interrupted-{signal}"));
+        let file = workshop_server_file(&dir, "demo");
+        let mut session = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "runner::workshop_channel::tests::hold_a_server_file_until_interrupted",
+                "--ignored",
+                "--test-threads=1",
+            ])
+            .env(HELD_FILE_VAR, &file)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let starting = format!("starting {}\n", session.id());
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        while std::fs::read_to_string(&file).ok().as_deref() != Some(starting.as_str()) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the session never claimed its file"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            ServerClaim::claim(&file).err(),
+            Some(ServedElsewhere::Starting {
+                pid: Some(session.id())
+            }),
+            "another process finds the session running"
+        );
+
+        let sent = std::process::Command::new("kill")
+            .args([format!("-{signal}"), session.id().to_string()])
+            .status()
+            .unwrap();
+        assert!(sent.success());
+        let status = session.wait().unwrap();
+        assert_eq!(status.code(), Some(130), "SIG{signal} ends the session");
+        assert!(!file.exists(), "SIG{signal} leaves no server file");
+        assert!(
+            ServerClaim::claim(&file).is_ok(),
+            "SIG{signal} frees the workshop"
+        );
+    }
 }

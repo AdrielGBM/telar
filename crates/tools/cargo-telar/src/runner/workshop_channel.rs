@@ -2,8 +2,9 @@
 //!
 //! The session that runs a workshop in a window listens on a loopback port from the moment it starts, before anything is built, and writes it to `<workspace>/.telar/workshop/<package>.channel`. A request is one line, `goto:<location>` or `focus`, answered `ok` once the session has taken it. What arrives before the workshop is up waits for it, and a later location replaces one still waiting. Anything else — no file, a port nobody listens on, a listener that never answers — means no workshop is running, and the invocation opens one.
 //!
-//! The session serving the workshop as a page writes `starting <pid>` to `<package>.server` as it launches and its address once it serves, and is reached in a browser instead: the address answers for as long as the page is served. A session that fails removes the file; one that is killed leaves its pid for the editor to find dead.
+//! The session serving the workshop as a page is reached in a browser instead. Before it builds anything it claims `<package>.server` by locking `<package>.server.lock` for as long as it runs, and writes `starting <pid>` there, then its address once it serves, which answers for as long as the page is served. A later invocation that finds the lock held says where that session serves, or that it is starting, instead of starting a second one. Both files naming a session are removed when it ends, interrupted or not; one that is killed outright leaves its pid for the editor to find dead, and its lock released.
 
+use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -13,6 +14,8 @@ use std::time::Duration;
 use telar_project::protocol::{
     FOCUS_LINE, GOTO_PREFIX, ServerFile, parse_server_file, preview_location, starting_server_line,
 };
+
+use super::interrupt::{keep_on_interrupt, remove_on_interrupt};
 
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(2);
 const ACCEPTED: &str = "ok";
@@ -78,7 +81,7 @@ pub(crate) fn supersede(waiting: Option<String>, line: String) -> Option<String>
     }
 }
 
-/// The listening half, held by the session running a workshop in a window. Requests are answered on a thread of its own, so one sent while the session is still building is taken rather than left to time out. Dropping it removes the file that names the port.
+/// The listening half, held by the session running a workshop in a window. Requests are answered on a thread of its own, so one sent while the session is still building is taken rather than left to time out. Dropping it removes the file that names the port, and so does an interruption.
 pub(crate) struct WorkshopChannel {
     requests: mpsc::Receiver<String>,
     file: PathBuf,
@@ -90,8 +93,10 @@ impl WorkshopChannel {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).ok()?;
         let port = listener.local_addr().ok()?.port();
         std::fs::create_dir_all(file.parent()?).ok()?;
-        std::fs::write(&file, format!("{port}\n")).ok()?;
         let (taken, requests) = mpsc::channel();
+        remove_on_interrupt(&file);
+        let channel = Self { requests, file };
+        std::fs::write(&channel.file, format!("{port}\n")).ok()?;
         std::thread::Builder::new()
             .name("telar-workshop-channel".to_string())
             .spawn(move || {
@@ -102,7 +107,7 @@ impl WorkshopChannel {
                 }
             })
             .ok()?;
-        Some(Self { requests, file })
+        Some(channel)
     }
 
     /// `waiting` with every request taken since folded in by [`supersede`]. Never blocks.
@@ -138,58 +143,107 @@ fn answer(stream: TcpStream, taken: &mpsc::Sender<String>) -> bool {
 impl Drop for WorkshopChannel {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.file);
+        keep_on_interrupt(&self.file);
     }
 }
 
-/// Names `address` in `file` for the session that has just started serving the workshop there. Every other server file naming the same address is removed: the session could only listen there because nothing else does, so those were left by sessions that are gone.
-pub(crate) fn announce_server(file: &Path, address: &str) {
-    let Some(dir) = file.parent() else {
-        return;
+/// The hold a session serving the workshop as a page has on the package's server file, from before it builds anything until it ends: no other session serves the package's workshop meanwhile. Dropping it removes the file, and an interruption removes it too.
+pub(crate) struct ServerClaim {
+    file: PathBuf,
+    _lock: Option<File>,
+}
+
+/// The live session another one found serving the package's workshop as a page.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ServedElsewhere {
+    /// Serving at this address.
+    Serving(String),
+    /// Still building, as process `pid` once its file names it.
+    Starting { pid: Option<u32> },
+}
+
+impl ServerClaim {
+    /// Claims `file` for this session and marks it starting, or says which live session holds it. Where no lock can be taken at all, the session runs on unguarded rather than not at all.
+    pub(crate) fn claim(file: &Path) -> Result<Self, ServedElsewhere> {
+        let lock = match lock_server_file(file) {
+            Ok(lock) => lock,
+            Err(TryLockError::WouldBlock) => return Err(held_by(file)),
+            Err(TryLockError::Error(_)) => None,
+        };
+        remove_on_interrupt(file);
+        if let Some(dir) = file.parent()
+            && std::fs::create_dir_all(dir).is_ok()
+        {
+            let line = starting_server_line(std::process::id());
+            let _ = std::fs::write(file, format!("{line}\n"));
+        }
+        Ok(Self {
+            file: file.to_path_buf(),
+            _lock: lock,
+        })
+    }
+
+    /// Names `address` in the file once the session serves the workshop there. Every other server file naming the same address is removed: the session could only listen there because nothing else does, so those were left by sessions that are gone.
+    pub(crate) fn serve(&self, address: &str) {
+        let Some(dir) = self.file.parent() else {
+            return;
+        };
+        let stale = std::fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| {
+                *path != self.file && path.extension().is_some_and(|ext| ext == "server")
+            })
+            .filter(|path| {
+                std::fs::read_to_string(path).is_ok_and(|named| named.trim() == address)
+            });
+        for path in stale {
+            let _ = std::fs::remove_file(path);
+        }
+        let _ = std::fs::write(&self.file, format!("{address}\n"));
+    }
+}
+
+impl Drop for ServerClaim {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.file);
+        keep_on_interrupt(&self.file);
+    }
+}
+
+/// Locks the file guarding the server file at `file`, held for as long as the returned file is open and released by the system when the process ends, however it ends. `Ok(None)` where no lock file can be made.
+fn lock_server_file(file: &Path) -> Result<Option<File>, TryLockError> {
+    let opened = file
+        .parent()
+        .filter(|dir| std::fs::create_dir_all(dir).is_ok())
+        .and_then(|_| {
+            OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .open(file.with_extension("server.lock"))
+                .ok()
+        });
+    let Some(lock) = opened else {
+        return Ok(None);
     };
-    if std::fs::create_dir_all(dir).is_err() {
-        return;
-    }
-    let stale = std::fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path != file && path.extension().is_some_and(|ext| ext == "server"))
-        .filter(|path| std::fs::read_to_string(path).is_ok_and(|named| named.trim() == address));
-    for path in stale {
-        let _ = std::fs::remove_file(path);
-    }
-    let _ = std::fs::write(file, format!("{address}\n"));
+    lock.try_lock()?;
+    Ok(Some(lock))
 }
 
-/// Marks `file` as the server file of a session that has launched and serves nothing yet.
-pub(crate) fn announce_starting(file: &Path) {
-    let Some(dir) = file.parent() else {
-        return;
-    };
-    if std::fs::create_dir_all(dir).is_ok() {
-        let line = starting_server_line(std::process::id());
-        let _ = std::fs::write(file, format!("{line}\n"));
-    }
-}
-
-/// Removes the server file of a session that is giving up.
-pub(crate) fn retire_server(file: &Path) {
-    let _ = std::fs::remove_file(file);
-}
-
-/// The address the server file at `file` names, when a session still serves the workshop there. A file left behind by a session that is gone is removed; one of a session that is still starting is left alone.
-pub(crate) fn serving(file: &Path) -> Option<String> {
-    let Some(ServerFile::Serving(address)) =
-        parse_server_file(&std::fs::read_to_string(file).ok()?)
-    else {
-        return None;
-    };
-    if answers(&address) {
-        Some(address)
-    } else {
-        let _ = std::fs::remove_file(file);
-        None
+/// What the server file at `file` says of the live session holding its lock. An address that does not answer is one that session has not overwritten yet, or is about to serve.
+fn held_by(file: &Path) -> ServedElsewhere {
+    let named = std::fs::read_to_string(file)
+        .ok()
+        .and_then(|text| parse_server_file(&text));
+    match named {
+        Some(ServerFile::Serving(address)) if answers(&address) => {
+            ServedElsewhere::Serving(address)
+        }
+        Some(ServerFile::Starting { pid }) => ServedElsewhere::Starting { pid: Some(pid) },
+        _ => ServedElsewhere::Starting { pid: None },
     }
 }
 

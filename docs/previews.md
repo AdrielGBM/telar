@@ -397,7 +397,7 @@ args and the canvas settings; `cargo telar preview '<link>'` opens it again.
 page keeps the same state in the browser's `localStorage`, and its address carries the preview, the view, the edited
 args and the Matrix view's axes and focused cell, so a reload, or the address pasted elsewhere, comes back to the
 same place. Run again while the page is served, it prints the page's address, and the preview's when given one,
-instead of building a second.
+instead of building a second; run while the first is still building, it says so and leaves the build to it.
 
 ### Exporting the workshop
 
