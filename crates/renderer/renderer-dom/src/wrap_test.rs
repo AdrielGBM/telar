@@ -71,3 +71,10 @@ fn the_widest_word_wraps_every_word_whole() {
     assert_eq!(widest, 70.0);
     assert_eq!(greedy(text, widest, monospace), (70.0, 3));
 }
+
+#[test]
+fn each_line_is_handed_over_without_the_space_it_broke_on() {
+    let mut lines = Vec::new();
+    each_line("ab cd ef\n\ngh", 50.0, monospace, |line| lines.push(line));
+    assert_eq!(lines, ["ab cd", "ef", "", "gh"]);
+}

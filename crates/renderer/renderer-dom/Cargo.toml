@@ -33,7 +33,7 @@ wasm-bindgen-futures.workspace = true
 
 # Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin in [workspace.dependencies]. The two move together.
 wasm-bindgen-test = "=0.3.77"
-web-sys = { workspace = true, features = ["KeyboardEventInit", "EventInit", "NodeList", "FocusEvent", "FontFace", "FontFaceSet", "Blob", "BlobPropertyBag", "Url", "MouseEvent", "MouseEventInit", "PointerEvent", "PointerEventInit", "MutationObserver", "MutationObserverInit", "MutationRecord"] }
+web-sys = { workspace = true, features = ["KeyboardEventInit", "EventInit", "NodeList", "FocusEvent", "FontFace", "FontFaceSet", "Blob", "BlobPropertyBag", "Url", "MouseEvent", "MouseEventInit", "PointerEvent", "PointerEventInit", "MutationObserver", "MutationObserverInit", "MutationRecord", "Range"] }
 
 [[test]]
 name = "layout_parity"
@@ -122,3 +122,7 @@ path = "src/surface_test.rs"
 [[test]]
 name = "frame_tab"
 path = "src/frame_tab_test.rs"
+
+[[test]]
+name = "text_placement"
+path = "src/text_placement_test.rs"

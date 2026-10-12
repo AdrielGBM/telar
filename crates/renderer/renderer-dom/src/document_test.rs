@@ -72,6 +72,53 @@ fn a_single_run_of_text_is_the_elements_own_text() {
 }
 
 #[test]
+fn a_line_drawn_inside_its_box_is_set_in_from_the_edges_it_was_drawn_away_from() {
+    let line = DrawCommand::Text {
+        text: Arc::from("Workshop"),
+        spans: None,
+        rect: Rect::new(0.0, 11.0, 50.0, 17.0),
+        style: Arc::new(TextStyle::new(14.0, Color::BLACK)),
+    };
+    let stretched = DrawCommand::PushElement {
+        element: Arc::new(Element::new(
+            ElementId(1),
+            Semantics::group(),
+            "padding:4px;",
+            Rect::new(12.0, 0.0, 50.0, 40.0),
+        )),
+    };
+    let frame = describe_frame(
+        &[stretched, line, DrawCommand::PopElement],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let node = only_box(&frame);
+    assert!(matches!(&node.content, Content::Text { text, .. } if text == "Workshop"));
+    assert!(
+        node.style.ends_with("padding:11px 0px 12px 0px;"),
+        "the line's own rect is the content box, over whatever padding layout asked for: {}",
+        node.style
+    );
+
+    let frame = describe_frame(
+        &[
+            open(1, Semantics::group()),
+            text("Hello"),
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    assert!(
+        !only_box(&frame).style.contains("padding"),
+        "a line that fills its box needs no padding: {}",
+        only_box(&frame).style
+    );
+}
+
+#[test]
 fn two_runs_of_text_are_pieces_placed_inside_their_box() {
     let frame = describe_frame(
         &[

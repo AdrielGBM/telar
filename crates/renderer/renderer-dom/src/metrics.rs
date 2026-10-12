@@ -175,18 +175,68 @@ pub(crate) fn baseline(style: &TextStyle) -> f32 {
 
 /// The paragraph as the browser would break it, in the style it will be drawn in.
 fn wrap(text: &str, max_width: f32, style: &TextStyle) -> (f32, usize) {
-    // Text that must stay on one line, and a column nothing could overflow, are the same instruction to a wrap.
-    let column =
-        if style.text_wrap == TextWrap::NoWrap || !max_width.is_finite() || max_width >= 1.0e5 {
-            f32::INFINITY
-        } else {
-            max_width
-        };
-    let (widest, mut lines) = crate::wrap::greedy(text, column, |run| width_of(run, style));
+    let (widest, mut lines) =
+        crate::wrap::greedy(text, column(max_width, style), |run| width_of(run, style));
     if let Some(max) = style.clamp.max_lines() {
         lines = lines.min(max);
     }
     (widest, lines.max(1))
+}
+
+/// The width a paragraph in `style` wraps at, given `max_width`.
+fn column(max_width: f32, style: &TextStyle) -> f32 {
+    // Text that must stay on one line, and a column nothing could overflow, are the same instruction to a wrap.
+    if style.text_wrap == TextWrap::NoWrap || !max_width.is_finite() || max_width >= 1.0e5 {
+        f32::INFINITY
+    } else {
+        max_width
+    }
+}
+
+/// Where the glyphs of the paragraph are drawn, as `(ink_top, ink_height)` from the top of its first line box: each line's ink measured on its baseline, the lines a clamp hides left out. `(0, 0)` for a paragraph that draws nothing.
+fn ink(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
+    let line = line_height(style);
+    let baseline = baseline(style);
+    let shown = style.clamp.max_lines().unwrap_or(usize::MAX);
+    let mut index = 0usize;
+    let mut extent: Option<(f32, f32)> = None;
+    crate::wrap::each_line(
+        text,
+        column(max_width, style),
+        |run| width_of(run, style),
+        |run| {
+            if index < shown
+                && let Some((ascent, descent)) = ink_of(run, style)
+            {
+                let on = index as f32 * line + baseline;
+                extent = Some(match extent {
+                    Some((top, bottom)) => (top.min(on - ascent), bottom.max(on + descent)),
+                    None => (on - ascent, on + descent),
+                });
+            }
+            index += 1;
+        },
+    );
+    extent.map_or((0.0, 0.0), |(top, bottom)| (top, bottom - top))
+}
+
+/// How far the glyphs of one line reach above and below its baseline, or `None` for a line that draws none.
+fn ink_of(run: &str, style: &TextStyle) -> Option<(f32, f32)> {
+    if run.trim().is_empty() {
+        return None;
+    }
+    with_context(|ctx| {
+        let (font, scale) = canvas_font(style);
+        ctx.set_font(&font);
+        ctx.measure_text(run).ok().map(|m| {
+            (
+                m.actual_bounding_box_ascent() as f32 * scale,
+                m.actual_bounding_box_descent() as f32 * scale,
+            )
+        })
+    })
+    .flatten()
+    .filter(|(ascent, descent)| ascent + descent > 0.0)
 }
 
 /// How wide and tall `text` comes out on one line when the browser lays it out in `font` and `settings`, asked of the browser.
@@ -240,7 +290,7 @@ impl TextMetrics for CanvasTextMetrics {
     }
 
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
-        self.measure(text, None, max_width, style)
+        ink(&case_text(text, None, style).text, max_width, style)
     }
 
     /// Asked with a size and nothing else, which is the default face at that size.

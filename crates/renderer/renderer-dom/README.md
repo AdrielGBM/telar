@@ -90,6 +90,11 @@ in a served page, rather than becoming the background of the box the surface is 
 it, and takes the browser's Tab one step at a time: the walk runs through the frame's controls with no stop
 for the frame itself, as Telar's own Tab does on a desktop, and the app's focus follows each step into the
 frame and out of it again.
+`src/text_placement_test.rs` mounts a bar's title cut at its ends and a button's label, both stretched across
+a row that centres what it holds: the browser lays each line out where the frame drew it, in the middle of
+its box, rather than at the top of the element. That takes the canvas measurer answering `ink_bounds` with
+where the glyphs are on their baseline, and a box whose own text is drawn inside it taking that rect as its
+content box.
 
 The dev shell's chromedriver may not match its Chromium. In that case run the tests in Firefox:
 

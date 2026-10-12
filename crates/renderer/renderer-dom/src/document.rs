@@ -1039,8 +1039,11 @@ impl Walk<'_> {
                     ..
                 }
             );
-        if inline_text && let Painted::Text { style, .. } = &open.pieces[0] {
+        if inline_text && let Painted::Text { rect, style, .. } = &open.pieces[0] {
             open.style.push_str(style);
+            if let Some(padding) = padding_around(*rect, open.box_rect) {
+                paint::declare(&mut open.style, "padding", &padding);
+            }
         } else if !open.pieces.is_empty() && !open.style.contains("position:") {
             // Paint placed inside a box is placed against that box. Without this it is placed against whatever the nearest positioned ancestor happens to be, and a field's own text went to the corner of the page.
             paint::declare(&mut open.style, "position", "relative");
@@ -1239,6 +1242,21 @@ fn add_word(name: &mut String, text: &str) {
         name.push(' ');
     }
     name.push_str(text);
+}
+
+/// The padding that makes a box's content box the rect its own text was drawn in, or `None` where that is the whole box. A text leaf is stretched across its row and centres its lines in what it is given, and a field sets its line in from its edges; written as the element's own text and nothing more, the line went to the top corner of the element.
+fn padding_around(drawn: Rect, box_rect: Rect) -> Option<String> {
+    let edges = [
+        drawn.y,
+        box_rect.width - drawn.x - drawn.width,
+        box_rect.height - drawn.y - drawn.height,
+        drawn.x,
+    ]
+    .map(|edge| edge.max(0.0));
+    edges
+        .iter()
+        .any(|edge| *edge >= 0.01)
+        .then(|| edges.map(paint::px).join(" "))
 }
 
 /// A piece as the positioned element that stands for it.

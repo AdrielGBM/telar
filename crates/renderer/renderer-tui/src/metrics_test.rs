@@ -56,3 +56,28 @@ fn min_content_is_the_widest_word_never_a_piece_of_one() {
     assert_eq!(w, 7.0 * 8.0);
     assert_eq!(h, 3.0 * 16.0);
 }
+
+#[test]
+fn ink_starts_at_the_top_and_spans_the_rows_drawn() {
+    assert_eq!(metrics().ink_bounds("hello", 1000.0, &style()), (0.0, 16.0));
+    assert_eq!(
+        metrics().ink_bounds("the quick brown fox", 10.0 * 8.0, &style()),
+        (0.0, 32.0)
+    );
+}
+
+#[test]
+fn ink_skips_the_lines_a_clamp_hides() {
+    let mut s = style();
+    s.clamp = Clamp::lines(1, true);
+    assert_eq!(
+        metrics().ink_bounds("the quick brown fox", 10.0 * 8.0, &s),
+        (0.0, 16.0)
+    );
+}
+
+#[test]
+fn a_paragraph_that_draws_nothing_has_no_ink() {
+    assert_eq!(metrics().ink_bounds("", 1000.0, &style()), (0.0, 0.0));
+    assert_eq!(metrics().ink_bounds("\n\n", 1000.0, &style()), (0.0, 0.0));
+}

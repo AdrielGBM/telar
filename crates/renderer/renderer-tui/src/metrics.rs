@@ -81,6 +81,15 @@ impl CellMetrics {
             lines.len() as f32 * self.cell.height,
         )
     }
+
+    fn ink(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
+        let mut lines = Vec::new();
+        self.lines(text, max_width, style, &mut lines);
+        if lines.iter().all(|line| line.cols == 0) {
+            return (0.0, 0.0);
+        }
+        (0.0, lines.len() as f32 * self.cell.height)
+    }
 }
 
 impl TextMetrics for CellMetrics {
@@ -103,7 +112,7 @@ impl TextMetrics for CellMetrics {
     }
 
     fn ink_bounds(&self, text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
-        self.extent(&case_text(text, None, style).text, max_width, style)
+        self.ink(&case_text(text, None, style).text, max_width, style)
     }
 
     fn line_height(&self, _font_size: f32) -> f32 {

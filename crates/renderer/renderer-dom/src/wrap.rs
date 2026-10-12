@@ -8,11 +8,23 @@
 pub fn greedy(text: &str, max_width: f32, width_of: impl Fn(&str) -> f32) -> (f32, usize) {
     let mut widest: f32 = 0.0;
     let mut lines = 0usize;
+    each_line(text, max_width, &width_of, |line| {
+        widest = widest.max(width_of(line));
+        lines += 1;
+    });
+    (widest, lines)
+}
 
+/// Hands `on_line` each line `text` wraps to at `max_width`, in order and without the space it broke on.
+pub fn each_line<'a>(
+    text: &'a str,
+    max_width: f32,
+    width_of: impl Fn(&str) -> f32,
+    mut on_line: impl FnMut(&'a str),
+) {
     // A newline at the very end closes the last line rather than opening another: a document lays out no line box for it, and counting one made every text that ends in a break a line taller than it is drawn.
     let body = text.strip_suffix('\n').unwrap_or(text);
     for hard in body.split('\n') {
-        lines += 1;
         let mut line_start = 0usize;
         let mut last_break: Option<usize> = None;
         for (offset, c) in hard.char_indices() {
@@ -33,18 +45,15 @@ pub fn greedy(text: &str, max_width: f32, width_of: impl Fn(&str) -> f32) -> (f3
                 // A word wider than the column breaks inside itself, as `overflow-wrap` does.
                 _ => offset.max(line_start + c.len_utf8()),
             };
-            widest = widest.max(width_of(hard[line_start..cut].trim_end()));
+            on_line(hard[line_start..cut].trim_end());
             line_start = hard[cut..]
                 .find(|c: char| !c.is_whitespace())
                 .map(|skip| cut + skip)
                 .unwrap_or(hard.len());
             last_break = None;
-            lines += 1;
         }
-        widest = widest.max(width_of(hard[line_start..].trim_end()));
+        on_line(hard[line_start..].trim_end());
     }
-
-    (widest, lines)
 }
 
 /// The widest run `text` has between spaces: the narrowest column [`greedy`] wraps it into without breaking inside a word.

@@ -6346,6 +6346,7 @@ dependencies = [
  "telar-renderer-assets",
  "telar-renderer-core",
  "telar-renderer-text",
+ "telar-renderer-tui",
  "telar-services-core",
  "telar-theme-core",
  "telar-ui-tree",
