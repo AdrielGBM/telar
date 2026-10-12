@@ -77,7 +77,7 @@ fn a_short_list_is_as_tall_as_its_rows() {
     assert_eq!(list.height, 3.0 * row_height());
     assert_eq!(
         list.y,
-        crate::shared::control_height() + panel_pad(),
+        crate::shared::control_height() + crate::shared::popup_offset() + panel_pad(),
         "under its trigger"
     );
 }
@@ -324,4 +324,48 @@ fn controls_of_every_kind_standing_in_a_row_are_drawn_at_one_height() {
             .all(|height| *height == crate::shared::control_height()),
         "{heights:?}"
     );
+}
+
+/// A select's list keeps the popup offset from its field on whichever side it opens, and its tokens name one of their own.
+#[test]
+fn a_list_keeps_the_popup_offset_from_its_field_on_either_side() {
+    let offset = crate::shared::popup_offset();
+    let (_tree, _) = opened(5, 220.0);
+    let flipped = list();
+    assert_eq!(
+        bottom(flipped) + panel_pad(),
+        220.0 - offset,
+        "over the field, flipped"
+    );
+
+    fresh_layout_runtime();
+    telar::set_theme(crate::test_support::TokensTheme {
+        role: 4.0,
+        tokens: Some(crate::SelectTokens {
+            offset: Some(20.0),
+            ..crate::SelectTokens::default()
+        }),
+    });
+    let picked = signal(0u32);
+    let field = select(SelectProps::props().selected(picked).build(), rows(3)).unwrap();
+    compute_layout(
+        field.layout_node(),
+        AvailableSpace::Definite(WINDOW_WIDTH),
+        AvailableSpace::Definite(WINDOW_HEIGHT),
+    )
+    .unwrap();
+    let mut tree = ComponentList::new(field);
+    settle(&tree);
+    telar::focus::focus_next();
+    route(&mut tree, &named(NamedKey::Enter));
+    settle(&tree);
+    let shown = list();
+    assert_eq!(
+        shown.y - panel_pad(),
+        crate::shared::control_height() + 20.0
+    );
+    telar::set_theme(crate::test_support::TokensTheme::<crate::SelectTokens> {
+        role: 4.0,
+        tokens: None,
+    });
 }

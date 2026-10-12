@@ -7,16 +7,17 @@ use telar::preview::{
 };
 use telar::testing::{centre, mount, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Children, Color, ComponentList, ControlSize, Direction,
-    DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, LocalApp, Rect, Role, Size, Text,
-    TextStyle, box_item, focus, for_each_with_matrix, reset_layout_runtime, transform_clip_rect,
+    AccessNode, App, AppRuntime, Children, Color, ColorScheme, ComponentList, ControlSize,
+    Direction, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, LocalApp, Rect, Role,
+    Size, SystemPreferences, Text, TextStyle, box_item, focus, for_each_with_matrix,
+    reset_layout_runtime, set_system_preferences, transform_clip_rect,
 };
 use telar_components::{ButtonProps, ModalProps, button, modal};
 
 use super::cell::{Status, seed, sizing};
 use super::plan::{self, CustomAxis, MatrixSource, Problem, grid, toggled};
 use super::*;
-use crate::settings::{Background, CanvasSettings};
+use crate::settings::{Background, CanvasSettings, ModeChoice};
 use crate::state::{PanelTab, WorkshopState};
 use crate::test_support::{Shell, settle};
 
@@ -243,6 +244,28 @@ fn the_themes_matrix_shows_the_preview_in_every_registered_mode_side_by_side() {
     };
     assert!(night.x > day.x + day.width - 1.0, "{day:?} then {night:?}");
     assert!((night.y - day.y).abs() < 1.0, "on one row");
+}
+
+#[test]
+fn the_cells_follow_the_system_scheme_as_it_changes() {
+    register_modes();
+    theme_core::set_mode_scheme("day", ColorScheme::Light);
+    theme_core::set_mode_scheme("night", ColorScheme::Dark);
+    let workshop = Workshop::open(BOTH_WAYS);
+    assert_eq!(workshop.fills(DAY).len(), 2, "{:?}", workshop.texts());
+    assert!(workshop.fills(NIGHT).is_empty());
+
+    set_system_preferences(SystemPreferences {
+        color_scheme: Some(ColorScheme::Dark),
+        ..SystemPreferences::default()
+    });
+    workshop.next_turn();
+    assert_eq!(
+        workshop.fills(NIGHT).len(),
+        2,
+        "each cell is mounted again in the dark mode"
+    );
+    assert!(workshop.fills(DAY).is_empty());
 }
 
 #[test]
@@ -594,14 +617,14 @@ fn a_cell_is_set_up_in_the_toolbar_settings_under_its_own() {
         .unwrap()
         .remove(0);
     let settings = CanvasSettings {
-        mode: Some("night".into()),
+        mode: ModeChoice::Named("night".into()),
         locale: Some("fr".into()),
         control_size: Some(ControlSize::Small),
         background: Background::Dark,
         ..CanvasSettings::default()
     };
     let globals = Globals::seeded(&entry.env);
-    seed(&globals, &settings, &entry, &cell);
+    seed(&globals, &settings, ColorScheme::Light, &entry, &cell);
     assert_eq!(globals.mode().peek().as_deref(), Some("night"));
     assert_eq!(
         globals.locale().peek().as_deref(),

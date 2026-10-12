@@ -11,6 +11,7 @@ use super::*;
 use crate::matrix::CustomAxis;
 use crate::route::Page;
 use crate::settings::CanvasSettings;
+use crate::settings::ModeChoice;
 use crate::state::ViewMode;
 
 fn body(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -175,7 +176,7 @@ fn a_copied_link_opens_the_same_preview_args_and_settings() {
         .unwrap();
     state
         .canvas_settings()
-        .update(|settings| settings.mode = Some("dark".into()));
+        .update(|settings| settings.mode = ModeChoice::Dark);
     let link = state.link().unwrap();
 
     let other = workshop();
@@ -186,7 +187,7 @@ fn a_copied_link_opens_the_same_preview_args_and_settings() {
         other.args(&entry).overrides(),
         [("label".to_string(), ArgValue::Text("Save; \"all\"".into()))]
     );
-    assert_eq!(other.canvas_settings().peek().mode.as_deref(), Some("dark"));
+    assert_eq!(other.canvas_settings().peek().mode, ModeChoice::Dark);
 }
 
 #[test]

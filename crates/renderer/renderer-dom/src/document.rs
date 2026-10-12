@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use geometry_core::{Insets, Rect};
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
-use platform_core::{Destination, NumericValue, Orientation, SetPosition};
+use platform_core::{Destination, HasPopup, NumericValue, Orientation, SetPosition};
 use renderer_core::{
     BlendMode, Color, CurrentKind, DrawCommand, Element, Focusable, ImageData, Picture, Role,
     TextStyle, ToggleKind,
@@ -192,6 +192,8 @@ pub(crate) struct Described {
     pub orientation: Option<Orientation>,
     /// Whether a tree row with rows under it shows them, beside the selection its `toggled` carries.
     pub expanded: Option<bool>,
+    /// What the box opens, beside whether it is open now.
+    pub has_popup: Option<HasPopup>,
     pub position: Option<SetPosition>,
     /// The box that its cursor rests on, as the element says it. Written as nothing itself: it is resolved into [`active_descendant`](Self::active_descendant) once that box turns up inside this one, or inside the box it controls.
     pub descendant_box: Option<u64>,
@@ -253,6 +255,10 @@ impl Described {
                 "aria-expanded",
                 self.state_of(ToggleKind::Expanded)
                     .or_else(|| self.expanded.map(|open| open.to_string())),
+            ),
+            (
+                "aria-haspopup",
+                self.has_popup.map(|popup| popup.as_str().to_string()),
             ),
             (
                 "aria-current",
@@ -1318,6 +1324,7 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         value: semantics.value,
         orientation: semantics.orientation,
         expanded: semantics.expanded,
+        has_popup: semantics.has_popup,
         position: semantics.position,
         descendant_box: semantics.active_descendant,
         active_descendant: None,

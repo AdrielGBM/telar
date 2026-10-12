@@ -161,6 +161,8 @@ fn activates(role: Role) -> bool {
             | Role::Switch
             | Role::Tab
             | Role::MenuItem
+            | Role::MenuItemCheckBox
+            | Role::MenuItemRadio
             | Role::Option
             | Role::Disclosure
             | Role::TreeItem

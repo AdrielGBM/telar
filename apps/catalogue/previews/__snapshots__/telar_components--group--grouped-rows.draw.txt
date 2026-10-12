@@ -16,8 +16,11 @@ element group
           element button
             rect 16,34 240x32
             element group
+              rect 16,34 0x0
+            end
+            element group
               matrix 1,0,0,1,24,34
-                text 0,7 36x16.8 "Undo" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                text 0,7 178.41x16.8 "Undo" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
               end
             end
             element group
@@ -29,8 +32,11 @@ element group
           element button
             rect 16,66 240x32
             element group
+              rect 16,66 0x0
+            end
+            element group
               matrix 1,0,0,1,24,66
-                text 0,7 34x16.8 "Redo" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                text 0,7 179x16.8 "Redo" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
               end
             end
             element group
@@ -53,8 +59,11 @@ element group
           element button
             rect 16,122 240x32
             element group
+              rect 16,122 0x0
+            end
+            element group
               matrix 1,0,0,1,24,122
-                text 0,7 53.47x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                text 0,7 178x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
               end
             end
             element group
@@ -66,8 +75,11 @@ element group
           element button
             rect 16,154 240x32
             element group
+              rect 16,154 0x0
+            end
+            element group
               matrix 1,0,0,1,24,154
-                text 0,7 63.06x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                text 0,7 181x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
               end
             end
             element group

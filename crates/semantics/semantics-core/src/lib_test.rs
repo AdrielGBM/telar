@@ -23,6 +23,8 @@ fn a_role_reads_back_as_the_name_it_was_written_with() {
         "tabpanel",
         "menu",
         "menuitem",
+        "menuitemcheckbox",
+        "menuitemradio",
         "listbox",
         "option",
         "slider",
@@ -79,7 +81,13 @@ fn a_region_is_not_a_control_and_neither_is_a_plain_box() {
 
 #[test]
 fn the_role_says_what_its_on_off_state_is() {
-    for role in [Role::CheckBox, Role::Radio, Role::Switch] {
+    for role in [
+        Role::CheckBox,
+        Role::Radio,
+        Role::Switch,
+        Role::MenuItemCheckBox,
+        Role::MenuItemRadio,
+    ] {
         assert_eq!(role.toggle_kind(), Some(ToggleKind::Checked), "{role:?}");
     }
     assert_eq!(
@@ -257,6 +265,26 @@ fn the_box_a_cursor_rests_on_is_part_of_what_a_container_says() {
         Some(4),
         "naming the container keeps where its cursor is"
     );
+}
+
+#[test]
+fn what_a_control_opens_is_part_of_what_it_says_and_reads_as_the_aria_word() {
+    let opening = |popup: Option<HasPopup>| Semantics {
+        has_popup: popup,
+        ..Semantics::of(Role::Button)
+    };
+    assert_eq!(
+        Semantics::default().has_popup,
+        None,
+        "a box opens nothing until it says it does"
+    );
+    assert_ne!(opening(Some(HasPopup::Menu)), opening(None));
+    assert_ne!(
+        opening(Some(HasPopup::Menu)),
+        opening(Some(HasPopup::ListBox))
+    );
+    assert_eq!(HasPopup::Menu.as_str(), "menu");
+    assert_eq!(HasPopup::ListBox.as_str(), "listbox");
 }
 
 #[test]

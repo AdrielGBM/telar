@@ -38,6 +38,7 @@ impl EventHandler<TestWindow> for TestHandler {
             position: None,
             active_descendant: None,
             controls: None,
+            has_popup: None,
         }]
     }
 }

@@ -9,6 +9,11 @@ let action = signal(0u32);
 // Driven from the toggles below, so the disabled row and the ticked one can be seen changing.
 let cant_redo = signal(false);
 let ruler = signal(true);
+let shade = signal(0usize);
+let shade_name = Reactive::of(move || ["System", "Light", "Dark"][shade.get()].to_string());
+let on_system = Reactive::of(move || shade.get() == 0);
+let on_light = Reactive::of(move || shade.get() == 1);
+let on_dark = Reactive::of(move || shade.get() == 2);
 
 [view]
 col gap:20
@@ -41,3 +46,13 @@ col gap:20
                 toggle checked:$cant_redo label:"Disable Redo"
                 toggle checked:$ruler label:"Ruler"
         code_line code:"item label:'Redo' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on"
+    example title:"A row can open a submenu — its rows are its children"
+        card gap:10
+            menu label:"View"
+                submenu label:"Theme" hint:$shade_name
+                    item label:"System" checked:$on_system radio on_press:(|| $shade.set(0))
+                    item label:"Light" checked:$on_light radio on_press:(|| $shade.set(1))
+                    item label:"Dark" checked:$on_dark radio on_press:(|| $shade.set(2))
+                item label:"Show ruler" checked:$ruler on_press:(|| $ruler.set(!$ruler.get()))
+            text "Theme · {$shade_name}" font_size:14 color:$theme.muted
+        code_line code:"submenu label:'Theme' hint:$name   >   item label:'Dark' checked:$on radio"

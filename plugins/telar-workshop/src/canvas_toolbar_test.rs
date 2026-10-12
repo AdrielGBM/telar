@@ -1,11 +1,11 @@
 use telar::preview::{Layout, PreviewCtx, PreviewEntry};
 use telar::testing::{centre, mount, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Color, ComponentList, Container, DrawCommand, LayoutError,
-    LayoutItem, LayoutStyle, LocalApp, Rect, Role, Text, TextStyle, box_item, effect,
-    for_each_with_matrix, high_contrast_override, reduced_motion_override,
-    set_high_contrast_override, set_reduced_motion_override, transform_clip_rect, use_direction,
-    use_high_contrast, use_locale, use_safe_area_insets,
+    AccessNode, App, AppRuntime, Color, ColorScheme, ComponentList, Container, DrawCommand,
+    LayoutError, LayoutItem, LayoutStyle, LocalApp, Rect, Role, SystemPreferences, Text, TextStyle,
+    box_item, effect, for_each_with_matrix, high_contrast_override, reduced_motion_override,
+    set_high_contrast_override, set_reduced_motion_override, set_system_preferences,
+    transform_clip_rect, use_direction, use_high_contrast, use_locale, use_safe_area_insets,
 };
 
 use crate::WorkshopApp;
@@ -120,10 +120,22 @@ impl Workshop {
         self.click(Role::Option, row);
     }
 
-    /// Picks `row` from the top bar's preview settings.
-    fn pick(&mut self, row: &str) {
+    /// Picks `row` from the submenu of the preview setting `setting`, in the top bar's settings menu.
+    fn pick(&mut self, setting: &str, row: &str) {
         self.click(Role::Button, "Settings");
-        self.click(Role::MenuItem, row);
+        let nodes = self.runtime.access_snapshot(&self.tree.commands());
+        let (x, y) = centre(crate::test_support::setting_row(&nodes, setting).rect);
+        for event in [press(x, y), release(x, y)] {
+            route(&mut self.tree, &event);
+            settle(&self.tree);
+        }
+        self.click(Role::MenuItemRadio, row);
+    }
+
+    /// Turns the preview setting `row` on or off from the top bar's settings menu.
+    fn switch(&mut self, row: &str) {
+        self.click(Role::Button, "Settings");
+        self.click(Role::MenuItemCheckBox, row);
     }
 
     fn rect_of(&self, needle: &str) -> Rect {
@@ -199,8 +211,8 @@ fn mode_locale_and_direction_restyle_the_canvas_and_never_the_chrome() {
         "the canvas starts in the application's theme"
     );
 
-    workshop.pick("night");
-    workshop.pick("ar");
+    workshop.pick("Mode", "night");
+    workshop.pick("Locale", "ar");
 
     assert!(
         workshop.draws("env Rtl ar"),
@@ -239,18 +251,72 @@ fn mode_locale_and_direction_restyle_the_canvas_and_never_the_chrome() {
 }
 
 #[test]
+fn the_canvas_follows_the_system_scheme_as_it_changes_until_a_scheme_is_picked() {
+    theme_core::register_mode("day", || {});
+    theme_core::set_mode_scheme("day", ColorScheme::Light);
+    theme_core::register_mode_theme("night", Night);
+    theme_core::set_mode_scheme("night", ColorScheme::Dark);
+    theme_core::register_mode("dusk", || {});
+    let mut workshop = Workshop::open(entries(environment));
+    let canvas = workshop.canvas_rect("env");
+    let night = |workshop: &Workshop| {
+        workshop
+            .fills(canvas)
+            .iter()
+            .any(|(_, color, in_canvas)| *color == NIGHT && *in_canvas)
+    };
+    assert!(!night(&workshop), "a light system shows the light mode");
+
+    set_system_preferences(SystemPreferences {
+        color_scheme: Some(ColorScheme::Dark),
+        ..SystemPreferences::default()
+    });
+    settle(&workshop.tree);
+    assert!(night(&workshop), "the system turning dark turns the canvas");
+
+    workshop.pick("Mode", "Light");
+    assert!(
+        !night(&workshop),
+        "a picked scheme holds whatever the system's"
+    );
+
+    workshop.pick("Mode", "System");
+    assert!(night(&workshop), "following the system again");
+    set_system_preferences(SystemPreferences {
+        color_scheme: Some(ColorScheme::Light),
+        ..SystemPreferences::default()
+    });
+    settle(&workshop.tree);
+    assert!(!night(&workshop));
+
+    workshop.pick("Mode", "Dark");
+    assert!(
+        night(&workshop),
+        "a picked dark scheme holds on a light system"
+    );
+    workshop.pick("Mode", "dusk");
+    assert!(!night(&workshop), "a named mode holds too");
+    set_system_preferences(SystemPreferences {
+        color_scheme: Some(ColorScheme::Dark),
+        ..SystemPreferences::default()
+    });
+    settle(&workshop.tree);
+    assert!(!night(&workshop));
+}
+
+#[test]
 fn the_preview_locale_is_the_default_and_a_chosen_direction_wins_over_the_locale() {
     let mut workshop = Workshop::open(vec![
         PreviewEntry::new("fake--probe--arabic", "probe", "Arabic", environment).locale("ar"),
         PreviewEntry::new("fake--probe--english", "probe", "English", environment).locale("en"),
     ]);
     assert!(workshop.draws("env Rtl ar"), "the preview's own locale");
-    workshop.pick("en");
+    workshop.pick("Locale", "en");
     assert!(workshop.draws("env Ltr en"), "the toolbar's, over it");
-    workshop.pick("Right to left");
+    workshop.pick("Direction", "Right to left");
     assert!(workshop.draws("env Rtl en"), "a chosen direction wins");
-    workshop.pick("Auto direction");
-    workshop.pick("Default locale");
+    workshop.pick("Direction", "Auto direction");
+    workshop.pick("Locale", "Default locale");
     assert!(workshop.draws("env Rtl ar"), "and back to the preview's");
 }
 
@@ -311,16 +377,18 @@ fn reduced_motion_is_switched_for_the_whole_application() {
     set_reduced_motion_override(None);
     let mut workshop = Workshop::open(entries(environment));
     assert_eq!(reduced_motion_override(), None);
-    workshop.pick("Reduce motion");
+    workshop.switch("Reduce motion");
     assert_eq!(reduced_motion_override(), Some(true));
     workshop.click(Role::Button, "Settings");
     assert_eq!(
-        workshop.control(Role::MenuItem, "Reduce motion").toggled,
+        workshop
+            .control(Role::MenuItemCheckBox, "Reduce motion")
+            .toggled,
         Some(true),
         "the row is announced as on, under the name it had while off"
     );
     workshop.click(Role::Button, "Settings");
-    workshop.pick("Reduce motion");
+    workshop.switch("Reduce motion");
     assert_eq!(reduced_motion_override(), None);
 }
 
@@ -335,7 +403,7 @@ fn high_contrast_is_switched_for_the_canvas_and_never_the_chrome() {
     let mut workshop = Workshop::open(entries(contrast));
     assert!(workshop.draws("contrast None"));
 
-    workshop.pick("High contrast");
+    workshop.switch("High contrast");
     assert!(
         workshop.draws("contrast Some(true)"),
         "the canvas is shown in high contrast: {:?}",
@@ -348,7 +416,7 @@ fn high_contrast_is_switched_for_the_canvas_and_never_the_chrome() {
     );
     assert_eq!(*chrome.borrow(), vec![None], "the chrome never hears of it");
 
-    workshop.pick("High contrast");
+    workshop.switch("High contrast");
     assert!(
         workshop.draws("contrast None"),
         "released, the canvas follows the application again"
@@ -377,13 +445,13 @@ fn reduced_motion_is_followed_while_the_workshop_shows_docs() {
     set_reduced_motion_override(None);
     telar::hot_restore_json(r#"{"@workshop/view":"\"Docs\""}"#);
     let mut workshop = Workshop::open(entries(environment));
-    workshop.pick("Reduce motion");
+    workshop.switch("Reduce motion");
     assert_eq!(
         reduced_motion_override(),
         Some(true),
         "no canvas is mounted, and motion is still switched"
     );
-    workshop.pick("Reduce motion");
+    workshop.switch("Reduce motion");
     assert_eq!(reduced_motion_override(), None);
 }
 
@@ -452,4 +520,48 @@ fn a_fullscreen_preview_offers_the_grid_but_no_rulers() {
     let nodes = workshop.runtime.access_snapshot(&workshop.tree.commands());
     assert!(nodes.iter().any(|node| named(node, "Grid")));
     assert!(!nodes.iter().any(|node| named(node, "Rulers")));
+}
+
+/// The settings menu is short: a row per setting that takes one of several values, naming the one it holds and opening a submenu of the rest, then the switches, each ticked while on.
+#[test]
+fn the_settings_menu_holds_a_submenu_per_choice_and_the_switches() {
+    let mut workshop = Workshop::open(entries(environment));
+    workshop.click(Role::Button, "Settings");
+    let nodes = workshop.runtime.access_snapshot(&workshop.tree.commands());
+    let rows: Vec<(Role, String)> = nodes
+        .iter()
+        .filter(|node| {
+            matches!(
+                node.role,
+                Role::MenuItem | Role::MenuItemCheckBox | Role::MenuItemRadio
+            )
+        })
+        .map(|node| (node.role, node.name.clone()))
+        .collect();
+    let expected = [
+        (Role::MenuItem, "Mode System"),
+        (Role::MenuItem, "Locale Default locale"),
+        (Role::MenuItem, "Direction Auto direction"),
+        (Role::MenuItem, "Control size Default size"),
+        (Role::MenuItem, "Background Preview background"),
+        (Role::MenuItemCheckBox, "Reduce motion"),
+        (Role::MenuItemCheckBox, "High contrast"),
+    ];
+    assert_eq!(
+        rows,
+        expected
+            .iter()
+            .map(|(role, name)| (*role, name.to_string()))
+            .collect::<Vec<_>>()
+    );
+    for (role, name) in &expected[..5] {
+        let row = workshop.control(*role, name);
+        assert_eq!(row.has_popup, Some(telar::HasPopup::Menu), "{name}");
+        assert_eq!(row.expanded, Some(false), "{name}");
+    }
+    workshop.click(Role::Button, "Settings");
+
+    workshop.pick("Direction", "Right to left");
+    workshop.click(Role::Button, "Settings");
+    workshop.control(Role::MenuItem, "Direction Right to left");
 }

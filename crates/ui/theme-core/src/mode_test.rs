@@ -251,3 +251,45 @@ fn declaring_a_scheme_re_runs_what_reads_the_active_mode() {
     set_mode_scheme("dusk", ColorScheme::Dark);
     assert_eq!(*seen.borrow(), [false, true]);
 }
+
+#[test]
+fn the_mode_for_a_scheme_is_the_first_registered_one_declaring_it() {
+    reset();
+    assert_eq!(scheme_mode(ColorScheme::Light), None);
+    register_mode_theme("contrast", Plain);
+    register_mode_theme("paper", Plain);
+    register_mode_theme("ink", Plain);
+    register_mode_theme("coal", Plain);
+    set_mode_scheme("coal", ColorScheme::Dark);
+    set_mode_scheme("ink", ColorScheme::Dark);
+    set_mode_scheme("paper", ColorScheme::Light);
+    assert_eq!(scheme_mode(ColorScheme::Light).as_deref(), Some("paper"));
+    assert_eq!(
+        scheme_mode(ColorScheme::Dark).as_deref(),
+        Some("ink"),
+        "registration order decides, not declaration order"
+    );
+}
+
+#[test]
+fn the_follow_system_pair_stands_for_its_schemes() {
+    reset();
+    register_mode("paper", || {});
+    register_mode("day", || {});
+    register_mode("night", || {});
+    set_mode_scheme("paper", ColorScheme::Light);
+    follow_system("day", "night");
+    assert_eq!(scheme_mode(ColorScheme::Light).as_deref(), Some("day"));
+    assert_eq!(scheme_mode(ColorScheme::Dark).as_deref(), Some("night"));
+}
+
+#[test]
+fn declaring_a_scheme_re_runs_what_reads_the_mode_for_it() {
+    reset();
+    register_mode("dusk", || {});
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let log = Rc::clone(&seen);
+    reactive_core::effect(move || log.borrow_mut().push(scheme_mode(ColorScheme::Dark)));
+    set_mode_scheme("dusk", ColorScheme::Dark);
+    assert_eq!(*seen.borrow(), [None, Some("dusk".to_string())]);
+}

@@ -79,6 +79,13 @@ pub fn control(nodes: &[AccessNode], role: Role, name: &str) -> AccessNode {
     control_matching(nodes, role, name, |node| node.name == name)
 }
 
+/// The row of the preview settings menu that opens the submenu of the setting `name`, announced by its name and then the value it holds.
+pub fn setting_row(nodes: &[AccessNode], name: &str) -> AccessNode {
+    control_matching(nodes, Role::MenuItem, name, |node| {
+        node.name == name || node.name.starts_with(&format!("{name} "))
+    })
+}
+
 fn sample_button(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label = ctx.arg("label", "Save".to_string());
     button(

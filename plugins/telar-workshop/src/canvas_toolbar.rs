@@ -5,18 +5,18 @@ use std::rc::Rc;
 use telar::preview::{Matrices, PreviewEntry, ViewportPreset};
 use telar::{
     Accessible, AlignItems, Children, ControlSize, Direction, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, RectStyle, Role, RwSignal, Size, Slots, StyledContainer, box_item, effect,
-    registered_modes, signal,
+    Reactive, RectStyle, Role, RwSignal, Size, Slots, StyledContainer, box_item, effect, signal,
 };
 use telar_components::{
-    GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, group,
-    icon_button, item, menu, select, separator,
+    GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, SubmenuProps,
+    group, icon_button, item, menu, select, separator, submenu,
 };
 use telar_devtools::WORKBENCH_GRID;
 use telar_icons::icon;
 
 use crate::settings::{
-    Background, CUSTOM_DEFAULT, CanvasSettings, CanvasSize, DEVICES, PRESETS, ZOOM_STEPS, Zoom,
+    Background, CUSTOM_DEFAULT, CanvasSettings, CanvasSize, DEVICES, ModeChoice, PRESETS,
+    ZOOM_STEPS, Zoom, mode_choices,
 };
 use crate::state::WorkshopState;
 use crate::strings::{
@@ -24,9 +24,9 @@ use crate::strings::{
     BACKGROUND_TRANSPARENT, CONTROL_SIZE, CONTROL_SIZE_DEFAULT, CONTROL_SIZE_LARGE,
     CONTROL_SIZE_MINI, CONTROL_SIZE_REGULAR, CONTROL_SIZE_SMALL, DEVICE_FRAMES, DIRECTION,
     DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL, FRAME_SETTINGS, GRID, HIGH_CONTRAST, LOCALE,
-    LOCALE_DEFAULT, MODE, MODE_DEFAULT, PROJECT_VIEWPORTS, REDUCED_MOTION, ROTATE, RULERS,
-    SETTINGS, VIEWPORT, VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM,
-    ZOOM_FIT, ZOOM_PERCENT,
+    LOCALE_DEFAULT, MODE, PROJECT_VIEWPORTS, REDUCED_MOTION, ROTATE, RULERS, SETTINGS, VIEWPORT,
+    VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM, ZOOM_FIT,
+    ZOOM_PERCENT,
 };
 
 const NARROW: f32 = WORKBENCH_GRID * 11.0;
@@ -35,7 +35,7 @@ const WIDE: f32 = WORKBENCH_GRID * 22.0;
 /// The index a select shows as nothing chosen.
 const NO_ROW: u32 = u32::MAX;
 
-/// The top bar's preview settings as one menu: the mode, locale, direction, control size and background every canvas is shown in, each a heading over its choices with the one in use ticked, then reduced motion and high contrast, ticked while on.
+/// The top bar's preview settings as one menu: the mode, locale, direction, control size and background every canvas is shown in, each a row naming the one in use that opens a submenu of its choices, then reduced motion and high contrast, ticked while on.
 pub(crate) fn environment_menu(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let settings: Rc<[Box<dyn Setting>]> = environment_settings(state).into();
     menu(
@@ -64,13 +64,18 @@ pub(crate) fn environment_menu(state: &WorkshopState) -> Result<Box<dyn LayoutIt
 
 fn environment_settings(state: &WorkshopState) -> Vec<Box<dyn Setting>> {
     let settings = state.canvas_settings();
-    let modes = listed(registered_modes(), settings.peek().mode);
+    let modes = mode_choices();
+    let unlisted = Some(settings.peek().mode).filter(|current| !modes.contains(current));
     let locales = listed(locales(state), settings.peek().locale);
     vec![
         Box::new(Choice::new(
             MODE,
             REGULAR,
-            optional(MODE_DEFAULT, modes),
+            modes
+                .into_iter()
+                .chain(unlisted)
+                .map(|mode| Row::choice(mode.clone(), Label::Mode(mode)))
+                .collect(),
             move || settings.with(|settings| settings.mode.clone()),
             move |mode| settings.update(|settings| settings.mode = mode),
         )),
@@ -311,7 +316,7 @@ impl Setting for Switch {
     }
 }
 
-/// A setting that takes one of `rows`' values: a select named `name` and `width` wide, or a heading over a menu row per value with the one `current` reads ticked. Either calls `pick` with the value of the row picked.
+/// A setting that takes one of `rows`' values: a select named `name` and `width` wide, or a menu row named `name` and showing the value `current` reads, which opens a submenu of a row per value with that one ticked. Either calls `pick` with the value of the row picked.
 struct Choice<T> {
     name: &'static str,
     width: f32,
@@ -337,22 +342,58 @@ impl<T: Clone + PartialEq + 'static> Choice<T> {
         }
     }
 
-    fn menu_row(&self, row: &Row<T>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-        let Row::Choice { value, label, hint } = row else {
-            return row.build();
-        };
-        let (held, current) = (value.clone(), Rc::clone(&self.current));
-        let (value, pick) = (value.clone(), Rc::clone(&self.pick));
-        let props = ItemProps::props()
-            .label(label.reactive())
-            .checked(Reactive::of(move || current() == held))
-            .on_press(Rc::new(move || pick(value.clone())));
-        let props = match hint.clone() {
-            Some(hint) => props.hint(Reactive::of(move || hint.clone())),
-            None => props,
-        };
-        item(props.build(), Children::default())
+    /// What the setting holds now, in the words of its row: the hint its submenu's row shows.
+    fn shown(&self) -> Reactive<String> {
+        let (rows, current) = (Rc::clone(&self.rows), Rc::clone(&self.current));
+        Reactive::of(move || {
+            let current = current();
+            rows.iter()
+                .find_map(|row| match row {
+                    Row::Choice { value, label, .. } if *value == current => Some(label.text()),
+                    _ => None,
+                })
+                .unwrap_or_default()
+        })
     }
+
+    /// The rows of its submenu: one per value, the one it holds ticked, and the headings between them.
+    fn choices(&self) -> Children {
+        let (rows, current, pick) = (
+            Rc::clone(&self.rows),
+            Rc::clone(&self.current),
+            Rc::clone(&self.pick),
+        );
+        Children::new(move || {
+            let mut slots = Slots::new();
+            for row in rows.iter() {
+                slots.push(None, choice_row(row, &current, &pick)?);
+            }
+            Ok(slots)
+        })
+    }
+}
+
+/// One value of a setting as a row of its submenu, one of a set with the value held ticked; a heading as a heading.
+fn choice_row<T: Clone + PartialEq + 'static>(
+    row: &Row<T>,
+    current: &Rc<dyn Fn() -> T>,
+    pick: &Rc<dyn Fn(T)>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let Row::Choice { value, label, hint } = row else {
+        return row.build();
+    };
+    let (held, current) = (value.clone(), Rc::clone(current));
+    let (value, pick) = (value.clone(), Rc::clone(pick));
+    let props = ItemProps::props()
+        .label(label.reactive())
+        .checked(Reactive::of(move || current() == held))
+        .radio(true)
+        .on_press(Rc::new(move || pick(value.clone())));
+    let props = match hint.clone() {
+        Some(hint) => props.hint(Reactive::of(move || hint.clone())),
+        None => props,
+    };
+    item(props.build(), Children::default())
 }
 
 impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
@@ -403,16 +444,14 @@ impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
 
     fn menu_rows(&self, slots: &mut Slots) -> Result<(), LayoutError> {
         let name = self.name;
-        let heading = group(
-            GroupProps::props()
+        let row = submenu(
+            SubmenuProps::props()
                 .label(Reactive::of(move || strings::text(name)))
+                .hint(self.shown())
                 .build(),
-            Children::default(),
+            self.choices(),
         )?;
-        slots.push(None, heading);
-        for row in self.rows.iter() {
-            slots.push(None, self.menu_row(row)?);
-        }
+        slots.push(None, row);
         Ok(())
     }
 }
@@ -540,6 +579,7 @@ enum Label {
     Key(&'static str),
     Text(String),
     Percent(u16),
+    Mode(ModeChoice),
 }
 
 impl Label {
@@ -548,6 +588,7 @@ impl Label {
             Self::Key(key) => strings::text(key),
             Self::Text(text) => text.clone(),
             Self::Percent(percent) => strings::text_with(ZOOM_PERCENT, &percent.to_string()),
+            Self::Mode(mode) => mode.label(),
         }
     }
 

@@ -239,6 +239,30 @@ fn a_panel_beside_its_anchor_can_line_up_with_its_start() {
     );
 }
 
+/// The gap between a panel and its anchor is kept on whichever side the panel ends up: a gap below a trigger it drops from, a gap above one it flips over, and the room on each side is what is left once the gap is kept.
+#[test]
+fn the_gap_is_kept_on_the_side_the_panel_opens_on() {
+    let gap = 8.0;
+    let spot = below(trigger_at(0.0), window(400.0))
+        .gap(gap)
+        .place(Size::new(180.0, 100.0));
+    assert_eq!(spot.y, 36.0 + gap, "a gap under the trigger");
+
+    let flipped = below(trigger_at(300.0), window(400.0)).gap(gap);
+    assert_eq!(flipped.room().height, 300.0 - gap - EDGE_MARGIN);
+    let spot = flipped.place(Size::new(180.0, 250.0));
+    assert_eq!(spot.y + spot.height, 300.0 - gap, "a gap over the trigger");
+
+    let spot = flipped.place(Size::new(180.0, 60.0));
+    assert_eq!(
+        spot.y + spot.height,
+        300.0 - gap,
+        "sixty fit below the trigger only without the gap, so it flips"
+    );
+    let spot = below(trigger_at(300.0), window(400.0)).place(Size::new(180.0, 60.0));
+    assert_eq!(spot.y, 336.0, "and with none it stays below");
+}
+
 #[test]
 fn an_unbounded_viewport_never_constrains() {
     let unbounded = Rect::new(0.0, 0.0, f32::MAX, f32::MAX);

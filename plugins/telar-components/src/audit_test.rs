@@ -15,7 +15,9 @@ use telar_components::{
     button, checkbox, item, scrub_field, select, tabs, text_field,
 };
 #[cfg(feature = "overlays")]
-use telar_components::{Command, CommandPaletteProps, MenuProps, command_palette, menu};
+use telar_components::{
+    Command, CommandPaletteProps, MenuProps, SubmenuProps, command_palette, menu, submenu,
+};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
@@ -620,6 +622,7 @@ fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
         Ok(slots)
     });
     let actions = menu(MenuProps::props().label("Actions").build(), rows)?;
+    let view = menu(MenuProps::props().label("View").build(), view_rows())?;
     let commands: Vec<Command> = [Command::new("zoom", "Zoom in").in_group("View")]
         .into_iter()
         .chain((1..=20).map(|n| Command::new(format!("c{n}"), format!("Command {n}"))))
@@ -631,7 +634,37 @@ fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
             .build(),
         Children::default(),
     )?;
-    Ok(vec![actions, palette])
+    Ok(vec![actions, view, palette])
+}
+
+/// A submenu of choices, one of them on, and a row beside it.
+#[cfg(feature = "overlays")]
+fn view_rows() -> Children {
+    Children::new(|| {
+        let mut slots = Slots::new();
+        let choices = Children::new(|| {
+            let mut slots = Slots::new();
+            for (label, on) in [("System", true), ("Light", false), ("Dark", false)] {
+                let row = ItemProps::props()
+                    .label(label)
+                    .checked(on)
+                    .radio(true)
+                    .build();
+                slots.push(None, item(row, Children::default())?);
+            }
+            Ok(slots)
+        });
+        let theme = SubmenuProps::props().label("Theme").hint("System").build();
+        slots.push(None, submenu(theme, choices)?);
+        slots.push(
+            None,
+            item(
+                ItemProps::props().label("Rulers").build(),
+                Children::default(),
+            )?,
+        );
+        Ok(slots)
+    })
 }
 
 #[cfg(feature = "overlays")]
@@ -674,6 +707,61 @@ async fn an_open_menu_too_long_for_the_page_adds_no_violations() {
         Some(trigger.id),
         "Escape gives the keyboard back to the trigger"
     );
+    focus::clear();
+    render();
+}
+
+/// A menu button and the row of its menu that opens a submenu each say what they open and whether it is open; the submenu is a menu of its own whose choices say which one is on, and the keyboard goes into it, back out of it and back to the button.
+#[cfg(feature = "overlays")]
+#[wasm_bindgen_test]
+async fn an_open_submenu_says_what_opened_it_and_adds_no_violations() {
+    let trigger = focus::exposed()
+        .into_iter()
+        .filter(|exposed| exposed.role == Role::Button && exposed.expanded.is_some())
+        .nth(1)
+        .expect("the View menu's trigger is on the page");
+    let button = element_of(trigger.node);
+    assert_eq!(
+        button.get_attribute("aria-haspopup").as_deref(),
+        Some("menu")
+    );
+    focus::request(trigger.id);
+    key(telar::NamedKey::ArrowDown);
+    key(telar::NamedKey::ArrowRight);
+    let host = render();
+    let menus = focus::exposed()
+        .into_iter()
+        .filter(|exposed| exposed.role == Role::Menu)
+        .collect::<Vec<_>>();
+    assert_eq!(menus.len(), 2, "the submenu opened beside the menu");
+    assert_eq!(focus::current(), Some(menus[1].id), "and took the keyboard");
+    let row = host
+        .query_selector(r#"[role="menuitem"][aria-haspopup="menu"]"#)
+        .expect("a valid selector")
+        .expect("the submenu's row says it opens a menu");
+    assert_eq!(row.get_attribute("aria-expanded").as_deref(), Some("true"));
+    let choices = host
+        .query_selector_all(r#"[role="menuitemradio"]"#)
+        .expect("a valid selector");
+    assert_eq!(choices.length(), 3);
+    let on = host
+        .query_selector(r#"[role="menuitemradio"][aria-checked="true"]"#)
+        .expect("a valid selector")
+        .expect("the choice that is on says so");
+    assert_eq!(on.text_content().as_deref().map(str::trim), Some("System"));
+    assert_clean(&host, "with a submenu open").await;
+
+    key(telar::NamedKey::ArrowLeft);
+    let host = render();
+    assert_eq!(focus::current(), Some(menus[0].id), "back to the menu");
+    let row = host
+        .query_selector(r#"[role="menuitem"][aria-haspopup="menu"]"#)
+        .expect("a valid selector")
+        .expect("the row is still there");
+    assert_eq!(row.get_attribute("aria-expanded").as_deref(), Some("false"));
+    key(telar::NamedKey::Escape);
+    render();
+    assert_eq!(focus::current(), Some(trigger.id), "and back to the button");
     focus::clear();
     render();
 }

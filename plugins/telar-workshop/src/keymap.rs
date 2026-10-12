@@ -15,7 +15,7 @@ use telar::{
 };
 
 use crate::canvas_toolbar::locales;
-use crate::settings::Zoom;
+use crate::settings::{Zoom, mode_choices};
 use crate::sidebar::listed;
 use crate::state::{PanelPosition, ViewMode, WorkshopState};
 use crate::strings::{
@@ -341,8 +341,11 @@ impl Keymap {
             }),
             Action::Fullscreen => self.toggle_fullscreen(),
             Action::CycleMode => {
-                let modes = telar::registered_modes();
-                settings.update(|settings| settings.mode = cycle(&modes, &settings.mode));
+                let choices = mode_choices();
+                settings.update(|settings| {
+                    settings.mode =
+                        cycle(&choices, &Some(settings.mode.clone())).unwrap_or_default();
+                });
             }
             Action::CycleLocale => {
                 let locales = locales(state);

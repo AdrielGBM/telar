@@ -25,6 +25,15 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
     // Driven from the toggles below, so the disabled row and the ticked one can be seen changing.
     let cant_redo = signal(false);
     let ruler = signal(true);
+    let shade = signal(0usize);
+    let shade_rsx_mv = shade.clone();
+    let shade_name = Reactive::of(move || ["System", "Light", "Dark"][shade_rsx_mv.get()].to_string());
+    let shade_rsx_mv = shade.clone();
+    let on_system = Reactive::of(move || shade_rsx_mv.get() == 0);
+    let shade_rsx_mv = shade.clone();
+    let on_light = Reactive::of(move || shade_rsx_mv.get() == 1);
+    let shade_rsx_mv = shade.clone();
+    let on_dark = Reactive::of(move || shade_rsx_mv.get() == 2);
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Menus & Selects").desc("select and menu are components (from the components feature, not base tags) built on the overlay anchor: a trigger button opens a panel positioned next to it, and only that panel blocks clicks — taps elsewhere fall through and dismiss it.").build(), Children::default())?;
@@ -245,7 +254,137 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
             );
             example(ExampleProps::props().title("A menu is a compound component — its rows are markup, not a list of strings").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_14])?
+        let __node_26 = {
+            let __deferred = Children::per_slot(
+                {
+                    let shade_name = shade_name.clone();
+                    let on_system = on_system.clone();
+                    let shade = shade.clone();
+                    let on_light = on_light.clone();
+                    let on_dark = on_dark.clone();
+                    let ruler = ruler.clone();
+                    let theme = theme.clone();
+                move |__request: SlotRequest<'_>| {
+                    let shade_name = shade_name.clone();
+                    let on_system = on_system.clone();
+                    let shade = shade.clone();
+                    let on_light = on_light.clone();
+                    let on_dark = on_dark.clone();
+                    let ruler = ruler.clone();
+                    let theme = theme.clone();
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    if __request.includes(None) {
+                        let __node_27 = {
+                            let __deferred = Children::per_slot(
+                                {
+                                    let shade_name = shade_name.clone();
+                                    let on_system = on_system.clone();
+                                    let shade = shade.clone();
+                                    let on_light = on_light.clone();
+                                    let on_dark = on_dark.clone();
+                                    let ruler = ruler.clone();
+                                    let theme = theme.clone();
+                                move |__request: SlotRequest<'_>| {
+                                    let shade_name = shade_name.clone();
+                                    let on_system = on_system.clone();
+                                    let shade = shade.clone();
+                                    let on_light = on_light.clone();
+                                    let on_dark = on_dark.clone();
+                                    let ruler = ruler.clone();
+                                    let theme = theme.clone();
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __node_28 = {
+                                            let __deferred = Children::per_slot(
+                                                {
+                                                    let shade_name = shade_name.clone();
+                                                    let on_system = on_system.clone();
+                                                    let shade = shade.clone();
+                                                    let on_light = on_light.clone();
+                                                    let on_dark = on_dark.clone();
+                                                    let ruler = ruler.clone();
+                                                move |__request: SlotRequest<'_>| {
+                                                    let shade_name = shade_name.clone();
+                                                    let on_system = on_system.clone();
+                                                    let shade = shade.clone();
+                                                    let on_light = on_light.clone();
+                                                    let on_dark = on_dark.clone();
+                                                    let ruler = ruler.clone();
+                                                    let mut __slots = Slots::new();
+                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                    if __request.includes(None) {
+                                                        let __node_29 = {
+                                                            let __deferred = Children::per_slot(
+                                                                {
+                                                                    let on_system = on_system.clone();
+                                                                    let shade = shade.clone();
+                                                                    let on_light = on_light.clone();
+                                                                    let on_dark = on_dark.clone();
+                                                                move |__request: SlotRequest<'_>| {
+                                                                    let on_system = on_system.clone();
+                                                                    let shade = shade.clone();
+                                                                    let on_light = on_light.clone();
+                                                                    let on_dark = on_dark.clone();
+                                                                    let mut __slots = Slots::new();
+                                                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                                    if __request.includes(None) {
+                                                                        let __node_30 = item(ItemProps::props().label("System").checked(on_system.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(0) })).build(), Children::default())?;
+                                                                        __children.push(box_item(__node_30));
+                                                                        let __node_31 = item(ItemProps::props().label("Light").checked(on_light.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(1) })).build(), Children::default())?;
+                                                                        __children.push(box_item(__node_31));
+                                                                        let __node_32 = item(ItemProps::props().label("Dark").checked(on_dark.clone()).radio(true).on_press(std::rc::Rc::new({ let shade = shade.clone(); move || shade.set(2) })).build(), Children::default())?;
+                                                                        __children.push(box_item(__node_32));
+                                                                    }
+                                                                    __slots.extend_default(__children);
+                                                                    Ok(__slots)
+                                                                }
+                                                                }
+                                                            );
+                                                            submenu(SubmenuProps::props().label("Theme").hint(shade_name.clone()).build(), __deferred)?
+                                                        };
+                                                        __children.push(box_item(__node_29));
+                                                        let __node_33 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build(), Children::default())?;
+                                                        __children.push(box_item(__node_33));
+                                                    }
+                                                    __slots.extend_default(__children);
+                                                    Ok(__slots)
+                                                }
+                                                }
+                                            );
+                                            menu(MenuProps::props().label("View").build(), __deferred)?
+                                        };
+                                        __children.push(box_item(__node_28));
+                                        let __text_2 = {
+                                            let shade_name = shade_name.clone();
+                                            Text::declaring(
+                                                move || format!("Theme · {}", { shade_name.get() }),
+                                                LayoutStyle::new(),
+                                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_2));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                                }
+                            );
+                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                        };
+                        __children.push(box_item(__node_27));
+                        let __node_34 = code_line(CodeLineProps::props().code("submenu label:'Theme' hint:$name   >   item label:'Dark' checked:$on radio").build(), Children::default())?;
+                        __children.push(box_item(__node_34));
+                    }
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+                }
+            );
+            example(ExampleProps::props().title("A row can open a submenu — its rows are its children").build(), __deferred)?
+        };
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_14, __node_26])?
     };
     Ok(Box::new(__col_0))
 }

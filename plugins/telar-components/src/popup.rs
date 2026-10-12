@@ -11,16 +11,27 @@ use telar::{
 pub(crate) struct Popup {
     /// Read whenever the panel is laid out or drawn, so a panel follows an anchor that moves and a surface that is resized.
     pub anchoring: Rc<dyn Fn() -> Anchoring>,
-    pub width: f32,
+    pub width: Width,
     pub padding: f32,
     /// The row the keyboard is on: kept scrolled into view.
     pub cursor: Rc<dyn Fn() -> Option<NodeId>>,
     pub keyboard: Keyboard,
 }
 
+/// How wide a panel is.
+#[derive(Clone, Copy)]
+pub(crate) enum Width {
+    /// As wide as this, whatever its rows say: a select's list, lined up under its field.
+    Exactly(f32),
+    /// As wide as its widest row, and never narrower than this: a menu, whose rows say what they say in full. Never wider than the room the panel has.
+    #[cfg(feature = "overlays")]
+    AtLeast(f32),
+}
+
 /// Where the keyboard is while a list is open, which is what the widget it belongs to is: the two patterns a list that drops from a control comes in.
 pub(crate) enum Keyboard {
     /// A menu's: the list is a menu that takes focus as it opens and points a reader at the row its cursor is on, `pointed`.
+    #[cfg(feature = "overlays")]
     Held {
         pointed: Rc<dyn Fn() -> Option<FocusId>>,
     },
@@ -69,6 +80,7 @@ pub(crate) fn popup(
     )?;
     let view = handed.expect("a scroll area builds its content before it returns");
     let scroll = match keyboard {
+        #[cfg(feature = "overlays")]
         Keyboard::Held { pointed } => scroll
             .control(Role::Menu)
             .focus_style(|_r| RectStyle::default())
@@ -93,14 +105,20 @@ pub(crate) fn popup(
         move || {
             telar::use_surface_size();
             let room = anchoring().room();
-            LayoutStyle::new()
+            let sheet = LayoutStyle::new()
                 .absolute()
                 .inset_top(0.0)
                 .inset_start(0.0)
                 .flex_column()
-                .width(width)
                 .max_height(room.height)
-                .padding_all(padding)
+                .padding_all(padding);
+            match width {
+                Width::Exactly(width) => sheet.width(width),
+                #[cfg(feature = "overlays")]
+                Width::AtLeast(width) => {
+                    sheet.min_width(width.min(room.width)).max_width(room.width)
+                }
+            }
         }
     };
     let panel = StyledContainer::new(sheet(), paint, vec![box_item(scroll)])?

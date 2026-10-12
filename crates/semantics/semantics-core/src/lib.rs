@@ -90,6 +90,10 @@ pub enum Role {
     Menu,
     /// A row of a menu: an action, run when it is chosen.
     MenuItem,
+    /// A row of a menu that carries a tick of its own, toggled when it is chosen.
+    MenuItemCheckBox,
+    /// A row of a menu that is one of a set of mutually exclusive choices: choosing it unchooses the others.
+    MenuItemRadio,
     /// The list [`Option`](Self::Option)s are chosen from: what a select opens, the results a search field filters.
     ListBox,
     /// A choice in a [`ListBox`](Self::ListBox), selected or not.
@@ -154,6 +158,8 @@ impl Role {
                 | Self::Switch
                 | Self::Tab
                 | Self::MenuItem
+                | Self::MenuItemCheckBox
+                | Self::MenuItemRadio
                 | Self::Option
                 | Self::Slider
                 | Self::SpinButton
@@ -206,6 +212,8 @@ impl Role {
             Self::TabPanel => "tabpanel",
             Self::Menu => "menu",
             Self::MenuItem => "menuitem",
+            Self::MenuItemCheckBox => "menuitemcheckbox",
+            Self::MenuItemRadio => "menuitemradio",
             Self::ListBox => "listbox",
             Self::Option => "option",
             Self::Slider => "slider",
@@ -230,7 +238,11 @@ impl Role {
     /// One flag read through the role, as AccessKit models it, rather than a flag per meaning: a pressed checkbox or a checked tab is a state no target can say, and a single flag cannot be set to one.
     pub fn toggle_kind(&self) -> Option<ToggleKind> {
         match self {
-            Self::CheckBox | Self::Radio | Self::Switch => Some(ToggleKind::Checked),
+            Self::CheckBox
+            | Self::Radio
+            | Self::Switch
+            | Self::MenuItemCheckBox
+            | Self::MenuItemRadio => Some(ToggleKind::Checked),
             Self::Button => Some(ToggleKind::Pressed),
             Self::Tab | Self::TreeItem | Self::Option => Some(ToggleKind::Selected),
             Self::Disclosure => Some(ToggleKind::Expanded),
@@ -274,6 +286,8 @@ impl Role {
             "tabpanel" => Self::TabPanel,
             "menu" => Self::Menu,
             "menuitem" => Self::MenuItem,
+            "menuitemcheckbox" => Self::MenuItemCheckBox,
+            "menuitemradio" => Self::MenuItemRadio,
             "listbox" => Self::ListBox,
             "option" => Self::Option,
             "slider" => Self::Slider,
@@ -298,7 +312,7 @@ impl Role {
 /// What a control's on/off state is, as its [`Role::toggle_kind`] decides.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum ToggleKind {
-    /// A checkbox ticked, a radio chosen, a switch on.
+    /// A checkbox ticked, a radio chosen, a switch on, a menu row ticked or chosen.
     Checked,
     /// A toggle button held down: a button that stays pressed until pressed again, such as bold in a toolbar.
     Pressed,
@@ -306,6 +320,24 @@ pub enum ToggleKind {
     Selected,
     /// A disclosure whose content is showing.
     Expanded,
+}
+
+/// What a control opens, as ARIA's `aria-haspopup` says it: a reader names the kind before the control is pressed, so the user knows what Enter is about to put in front of them.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum HasPopup {
+    /// A menu of commands: what a menu button drops and a submenu row opens.
+    Menu,
+    /// A list of options to choose one from: what a select's combobox opens.
+    ListBox,
+}
+
+impl HasPopup {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Menu => "menu",
+            Self::ListBox => "listbox",
+        }
+    }
 }
 
 /// What a box is, and what should be said about it.
@@ -352,6 +384,8 @@ pub struct Semantics {
     pub active_descendant: Option<u64>,
     /// The box, by its element id, whose content this one decides: the list a combobox opens, the panel a menu button drops. Its [`active_descendant`](Self::active_descendant) may rest inside that box rather than under this one. `None` where it controls nothing, or that box is not built.
     pub controls: Option<u64>,
+    /// What the box opens: the menu a menu button drops, the list a combobox opens. `None` where it opens nothing.
+    pub has_popup: Option<HasPopup>,
 }
 
 /// What an application said about a box, laid over what the widget derived.

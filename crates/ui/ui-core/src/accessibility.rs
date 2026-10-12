@@ -91,6 +91,7 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 value: e.value,
                 orientation: e.orientation,
                 expanded: e.expanded,
+                has_popup: e.has_popup,
                 position: e.position,
                 lang: reading.scope(e.node).lang.as_deref().map(str::to_string),
                 url: link.map(|(destination, _)| platform_core::address_of(destination)),
@@ -165,6 +166,7 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 current: None,
                 active_descendant: None,
                 controls: None,
+                has_popup: None,
             }),
         }
     }

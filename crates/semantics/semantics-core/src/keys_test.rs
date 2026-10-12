@@ -46,6 +46,17 @@ fn a_pressable_control_keeps_the_keys_that_press_it_and_leaves_scrolling_alone()
 }
 
 #[test]
+fn a_menu_row_with_a_tick_or_a_choice_keeps_what_a_plain_one_keeps() {
+    for row in [Role::MenuItemCheckBox, Role::MenuItemRadio] {
+        assert_eq!(
+            row.consumed_keys(),
+            Role::MenuItem.consumed_keys(),
+            "{row:?}"
+        );
+    }
+}
+
+#[test]
 fn a_list_box_and_its_options_keep_what_a_menu_keeps() {
     assert_eq!(Role::ListBox.consumed_keys(), Role::Menu.consumed_keys());
     assert_eq!(Role::Option.consumed_keys(), Role::MenuItem.consumed_keys());
@@ -103,7 +114,7 @@ fn every_control_but_a_link_keeps_something() {
     }
 }
 
-const ALL_ROLES: [Role; 42] = [
+const ALL_ROLES: [Role; 44] = [
     Role::Group,
     Role::Banner,
     Role::Navigation,
@@ -130,6 +141,8 @@ const ALL_ROLES: [Role; 42] = [
     Role::TabPanel,
     Role::Menu,
     Role::MenuItem,
+    Role::MenuItemCheckBox,
+    Role::MenuItemRadio,
     Role::ListBox,
     Role::Option,
     Role::Slider,

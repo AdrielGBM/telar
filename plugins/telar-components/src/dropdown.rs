@@ -1,13 +1,14 @@
-//! Shared dropdown scaffold (geometry, style fns, trigger + overlay/backdrop/anchoring) behind `menu` and `select`.
+//! What a control that drops a panel is made of — its trigger, the overlay shown while it is open, the dismissal, the panel's place under it — shared by `menu` and `select`, and the list box a `select` opens.
 
 use std::rc::Rc;
 use telar::{
     AlignItems, Anchoring, Border, BorderRadius, Children, Clip, ClippedItem, Color, ConsumedKeys,
-    Container, DismissRegistration, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle,
-    NamedKey, Overlay, Placement, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle,
-    StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface, box_item, effect,
-    focus::{self, FocusId, Role},
-    signal, track_layout,
+    Container, DismissRegistration, HasPopup, JustifyContent, Key, LayoutError, LayoutItem,
+    LayoutStyle, Memo, NamedKey, NodeId, Overlay, Placement, Reactive, ReactiveList, Rect,
+    RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface,
+    box_item, effect,
+    focus::{FocusId, Role},
+    memo, signal, track_layout,
 };
 
 use crate::popup;
@@ -21,7 +22,14 @@ pub(crate) fn width(token: Option<f32>) -> f32 {
     shared::width_or_measure(token, WIDTH_EMS)
 }
 
-/// What a trigger and the panel it opens are drawn at, resolved from the tokens of the component they belong to: a `menu`'s or a `select`'s.
+/// The space between a panel and the control it drops from: what the tokens of the component it belongs to name, at the regular control size and scaled with the control size in force, else [`metrics::popup_offset`](crate::metrics::popup_offset).
+pub(crate) fn offset(token: Option<f32>) -> f32 {
+    token.map_or_else(shared::popup_offset, |offset| {
+        offset * telar::control_scale()
+    })
+}
+
+/// What a trigger is drawn at, resolved from the tokens of the component it belongs to: a `menu`'s or a `select`'s.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Geometry {
     pub radius: f32,
@@ -30,149 +38,234 @@ pub(crate) struct Geometry {
     pub width: f32,
 }
 
-/// What the trigger says, which is the one place a `menu` and a `select` genuinely differ. A menu commits actions, so its trigger is a name the caller fixes; a select holds a choice, so its trigger *is* that choice — and has to say it before the panel has ever been opened.
-pub(crate) enum TriggerLabel {
-    /// Only a menu fixes its label, so without the overlays nothing constructs this — the arm stays because it is part of what a trigger *is*, and threading a `cfg` through the match and the imports would make a shared primitive feature-aware to silence one warning.
-    #[cfg_attr(not(feature = "overlays"), allow(dead_code))]
-    Fixed(Reactive<String>),
-    /// Whatever the chosen row says it is, falling back to `placeholder` for an index naming no row.
-    Selected { placeholder: fn() -> String },
-}
-
-/// The trigger + anchored-panel scaffold shared by `menu` and `select`: a bordered trigger button opens a blocking overlay whose transparent backdrop dismisses on click-away, and whose anchored panel lists `rows`; picking a row optionally writes into `selected`, fires `on_pick`, and closes.
-///
-/// `trigger_label` is a closure so `select` can track its bound signal reactively while `menu` supplies a static label. `selected` drives the bound-selection behaviour: `Some` writes the picked index back and highlights the selected row; `None` (menu) skips both, leaving one-shot actions.
-///
-/// `stretch` gives the trigger the width its row offers instead of the fixed [`Geometry::width`], and the panel then opens at whatever width the trigger was laid out to. That is what a form row wants — a control of fixed width beside fields that span the row reads as a mistake — and it is the caller's choice because a dropdown standing on its own has no row to take a width from.
-///
-/// Everything the scaffold is told, as one value. It outgrew what a positional argument list can be read at a call site — and the two shape flags are the *caller's* to make rather than the component's.
-pub(crate) struct Dropdown {
-    pub label: TriggerLabel,
-    /// The panel's rows, as the recipe for making them rather than the rows themselves — see [`Children`](telar::Children). Two things need it that way: the rows are remade on every open, and each one has to be built inside the [`ListContext`](crate::list::ListContext) this scaffold provides.
-    pub rows: Children,
+/// What a trigger shows and how it is shaped.
+pub(crate) struct Face {
+    pub label: Reactive<String>,
+    /// The colour a bordered trigger is framed in.
     pub color: Reactive<Color>,
-    pub on_pick: Option<Rc<dyn Fn(u32)>>,
-    pub selected: Option<RwSignal<u32>>,
-    pub stretch: bool,
     pub bordered: bool,
     pub caret: bool,
-    pub fit: bool,
-    /// Read wherever the trigger or the panel is laid out or painted, so a theme or a control size that changes moves them.
+    /// Whether the column the trigger stands in decides its width — a stretched or fitted trigger — rather than [`Geometry::width`].
+    pub sized_by_root: bool,
+    /// Read wherever the trigger is laid out or painted, so a theme or a control size that changes moves it.
     pub geometry: fn() -> Geometry,
     pub style: SurfaceStyle,
 }
 
-pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let Dropdown {
-        label: trigger_label,
-        rows,
+/// The button a panel drops from, pressed to toggle it and drawn held while `open`: the caller makes it the control it is.
+pub(crate) fn trigger(
+    face: Face,
+    open: RwSignal<bool>,
+    toggle: Rc<dyn Fn()>,
+) -> Result<StyledContainer, LayoutError> {
+    let Face {
+        label,
         color,
-        on_pick,
-        selected,
-        stretch,
         bordered,
-        caret: with_caret,
-        fit,
+        caret,
+        sized_by_root,
         geometry,
         style: surface,
-    } = props;
-    let open = signal(false);
-    let dismiss_open = open;
-    // Not the same as what is selected: a bound `select` opens with its value under the cursor, and moving off it must not commit anything.
-    let highlighted: RwSignal<Option<u32>> = signal(None);
-    // Built once, so Enter and a tap take the same path instead of two that drift.
-    let pick: Rc<dyn Fn(u32)> = {
-        let on_pick = on_pick.clone();
-        Rc::new(move |idx: u32| {
-            if let Some(sel) = &selected {
-                sel.set(idx);
-            }
-            if let Some(cb) = &on_pick {
-                cb(idx);
-            }
-            open.set(false);
-        })
-    };
-    // Made here rather than per open, so the key handler — which lives as long as the trigger — asks the same registry the last build filled.
-    let list = crate::list::ListContext::new(pick.clone(), highlighted, selected, color.clone());
-    let open_list: RwSignal<Option<FocusId>> = signal(None);
-    let handback = popup::Handback::default();
-
-    let trigger_label: Reactive<String> = match trigger_label {
-        TriggerLabel::Fixed(fixed) => fixed,
-        TriggerLabel::Selected { placeholder } => {
-            // Ask the rows what they say without asking them to be rows: the panel is not open, so there are none, and the trigger has to name the choice from the first frame.
-            list.declare(&rows)?;
-            let list = list.clone();
-            Reactive::of(move || {
-                selected
-                    .as_ref()
-                    .and_then(|s| list.label_of(s.get()))
-                    .unwrap_or_else(placeholder)
-            })
-        }
-    };
+    } = face;
     // `NoWrap`: a trigger's label is the name of a control, and splitting `File` across two lines to make room for the caret beside it turns one word into two.
     let label_text = Text::declaring(
-        move || trigger_label.get(),
+        move || label.get(),
         LayoutStyle::new().min_width(0.0),
         |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap),
     )?;
     // Free to shrink and clipped, so a label longer than the trigger is cut at its edge rather than widening the control or running under the caret.
     let label_text = ClippedItem::new(box_item(label_text), Clip::x());
-    let paint = {
-        let color = color.clone();
-        Rc::new(move |hovered: bool| {
-            let face = Face {
-                bordered,
-                open: open.get(),
-                hovered,
-            };
-            amend_surface(trigger_rect_style(&color, face, geometry()), &surface)
-        })
-    };
+    let paint = Rc::new(move |hovered: bool| {
+        let face = Shown {
+            bordered,
+            open: open.get(),
+            hovered,
+        };
+        amend_surface(trigger_rect_style(&color, face, geometry()), &surface)
+    });
     let (rest, hover) = (paint.clone(), paint);
-    let trigger_style = move |_r: Rect| rest(false);
-    let hover_style = move |_r: Rect| hover(true);
-    // Key events are broadcast, so without this a bare Enter would open every dropdown on the page.
+    let trigger_box = move || trigger_layout(geometry(), caret, sized_by_root);
+    let mut children: Vec<Box<dyn LayoutItem>> = vec![box_item(label_text)];
+    if caret {
+        children.push(shared::mark(
+            || shared::Mark::ChevronDown,
+            |text| text.color.faded(shared::QUIET_ALPHA),
+        )?);
+    }
+    Ok(
+        StyledContainer::new(trigger_box(), move |_r| rest(false), children)?
+            .styled_by(trigger_box)
+            .hover_style(move |_r| hover(true))
+            .on_press(move || toggle()),
+    )
+}
+
+/// Builds `build`'s overlay while `open` holds, and nothing while it does not: modelled exactly like a reactive `if $open`. Building it lazily is what lets it portal correctly, since the page has been laid out by then.
+pub(crate) fn while_open(
+    open: RwSignal<bool>,
+    build: impl Fn() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+) -> Result<ReactiveList, LayoutError> {
+    ReactiveList::new(
+        move || vec![open.get()],
+        |o: &bool| *o,
+        move |is_open: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
+            match is_open {
+                true => build(),
+                // Closed: an empty placeholder, with no overlay registered, so nothing blocks the page.
+                false => Ok(box_item(Container::new(LayoutStyle::new(), vec![])?)),
+            }
+        },
+        0.0,
+    )
+}
+
+/// Keeps a panel on the dismiss stack while `open` holds, so Escape and the platform Back gesture reach it in the order things were opened. The stack is keyed by open and close rather than build order for exactly that reason.
+pub(crate) fn dismissable(open: RwSignal<bool>, trigger: NodeId) {
+    let close: Rc<dyn Fn()> = Rc::new(move || open.set(false));
+    let registered: std::cell::Cell<Option<DismissRegistration>> = std::cell::Cell::new(None);
+    effect(move || {
+        if open.get() {
+            let held = registered
+                .take()
+                .unwrap_or_else(|| DismissRegistration::within(trigger, close.clone()));
+            registered.set(Some(held));
+        } else {
+            drop(registered.take());
+        }
+    });
+}
+
+/// Where a panel drops from its trigger: under it, `offset` away, flipping above it where there is more room there.
+///
+/// The offset is a memo made where the panel is built, so it is read at the control size in force there: the placement is worked out where the panel is drawn, outside any scope a subtree provided.
+pub(crate) fn below(
+    trigger: NodeId,
+    laid: RwSignal<Rect>,
+    offset: Memo<f32>,
+) -> Rc<dyn Fn() -> Anchoring> {
+    Rc::new(move || {
+        laid.get();
+        Anchoring::new(
+            telar::anchor_rect(trigger, &laid),
+            Placement::Below,
+            popup::viewport(),
+        )
+        .gap(offset.get())
+    })
+}
+
+/// The width a panel opens at: its own, widened to a stretched trigger's — a narrower list would read as a different control — but only ever widened: taking the trigger's width outright turned a compact `File` button into a 40px sheet with one character per line.
+pub(crate) fn panel_width(own: f32, stretch: bool, trigger: NodeId, laid: &RwSignal<Rect>) -> f32 {
+    match stretch {
+        true => telar::anchor_rect(trigger, laid).width.max(own),
+        false => own,
+    }
+}
+
+/// The trigger and the overlay holder under one column. The holder's placeholder takes no space in it, so only the trigger participates in flow layout. A stretched root takes the width its row offers and none from what it shows: sized from its label, it widened past a fixed row as soon as a longer choice was picked.
+pub(crate) fn root(
+    trigger: StyledContainer,
+    holder: ReactiveList,
+    stretch: bool,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let root_box = LayoutStyle::new().flex_column();
+    let root_box = match stretch {
+        true => root_box.flex_grow(1.0).flex_basis(0.0).min_width(0.0),
+        false => root_box,
+    };
+    Ok(box_item(Container::new(
+        root_box,
+        vec![box_item(trigger), box_item(holder)],
+    )?))
+}
+
+/// The list box a `select` opens under its field: picking a row writes its index into `selected`, fires `on_pick`, and closes.
+///
+/// `stretch` gives the trigger the width its row offers instead of the fixed [`Geometry::width`], and the panel then opens at whatever width the trigger was laid out to. That is what a form row wants — a control of fixed width beside fields that span the row reads as a mistake — and it is the caller's choice because a select standing on its own has no row to take a width from.
+pub(crate) struct Dropdown {
+    /// Shown when `selected` names no row.
+    pub placeholder: fn() -> String,
+    /// The panel's rows, as the recipe for making them rather than the rows themselves — see [`Children`](telar::Children). Two things need it that way: the rows are remade on every open, and each one has to be built inside the [`ListContext`](crate::list::ListContext) this scaffold provides.
+    pub rows: Children,
+    pub color: Reactive<Color>,
+    pub on_pick: Option<Rc<dyn Fn(u32)>>,
+    pub selected: RwSignal<u32>,
+    pub stretch: bool,
+    pub geometry: fn() -> Geometry,
+    pub offset: fn() -> f32,
+    pub style: SurfaceStyle,
+}
+
+pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let Dropdown {
+        placeholder,
+        rows,
+        color,
+        on_pick,
+        selected,
+        stretch,
+        geometry,
+        offset,
+        style,
+    } = props;
+    let open = signal(false);
+    // Not the same as what is selected: a select opens with its value under the cursor, and moving off it must not commit anything.
+    let highlighted: RwSignal<Option<u32>> = signal(None);
+    let pick: Rc<dyn Fn(u32)> = Rc::new(move |idx: u32| {
+        selected.set(idx);
+        if let Some(cb) = &on_pick {
+            cb(idx);
+        }
+        open.set(false);
+    });
+    // Made here rather than per open, so the key handler — which lives as long as the trigger — asks the same registry the last build filled.
+    let list = crate::list::ListContext::new(pick, highlighted, Some(selected), color.clone());
+    let open_list: RwSignal<Option<FocusId>> = signal(None);
+    let handback = popup::Handback::default();
+
+    // Ask the rows what they say without asking them to be rows: the panel is not open, so there are none, and the trigger has to name the choice from the first frame.
+    list.declare(&rows)?;
+    let label = {
+        let list = list.clone();
+        Reactive::of(move || list.label_of(selected.get()).unwrap_or_else(placeholder))
+    };
+    // Key events are broadcast, so without this a bare Enter would open every select on the page.
     let trigger_focused = signal(false);
     let toggle: Rc<dyn Fn()> = Rc::new(move || {
         let opening = !open.peek();
         if opening {
             // The cursor starts on what is already chosen, so the first arrow moves from there.
-            highlighted.set(selected.as_ref().map(|s| s.peek()));
+            highlighted.set(Some(selected.peek()));
         }
         open.set(opening);
     });
-    let trigger_box = move || trigger_layout(geometry(), with_caret, stretch || fit);
-    let mut trigger_children: Vec<Box<dyn LayoutItem>> = vec![box_item(label_text)];
-    if with_caret {
-        trigger_children.push(shared::mark(
-            || shared::Mark::ChevronDown,
-            |text| text.color.faded(shared::QUIET_ALPHA),
-        )?);
-    }
+    let face = Face {
+        label,
+        color: color.clone(),
+        bordered: true,
+        caret: true,
+        sized_by_root: stretch,
+        geometry,
+        style,
+    };
     // One handler on the trigger, which lives for the widget's whole life. The panel is rebuilt on every open and would lose a handler hung on it.
     let on_key = {
-        let pick = pick.clone();
         let toggle = toggle.clone();
         let list = list.clone();
         move |key: &Key| -> bool {
             let is_open = open.peek();
             let mods = telar::modifiers();
-            // The registry the last build filled, so the cursor walks the rows that exist and steps over the ones it may not stop on.
-            let step = |from: Option<u32>, delta: i64| list.step(from, delta);
             let row_count = list.len();
             match key {
-                // `dispatch_overlays` only dismisses when nothing holds focus — right for a field, which blurs itself first, and wrong here, where the focused thing is the control the dropdown belongs to.
+                // `dispatch_overlays` only dismisses when nothing holds focus — right for a field, which blurs itself first, and wrong here, where the focused thing is the control the list belongs to.
                 Key::Named(NamedKey::Escape) if is_open => open.set(false),
                 Key::Named(NamedKey::ArrowDown) if is_open => {
-                    highlighted.set(step(highlighted.peek(), 1))
+                    highlighted.set(list.step(highlighted.peek(), 1))
                 }
                 Key::Named(NamedKey::ArrowUp) if is_open => {
-                    highlighted.set(step(highlighted.peek(), -1))
+                    highlighted.set(list.step(highlighted.peek(), -1))
                 }
-                // The first and last rows the cursor may stop on, which is not the same as the first and last rows: a menu opening with a group heading has neither at 0.
+                // The first and last rows the cursor may stop on, which is not the same as the first and last rows: a list opening with a group heading has neither at 0.
                 Key::Named(NamedKey::Home) if is_open && row_count > 0 => {
                     highlighted.set(list.edge(1))
                 }
@@ -181,7 +274,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 }
                 Key::Named(NamedKey::Enter) if is_open => {
                     if let Some(idx) = highlighted.peek() {
-                        pick(idx);
+                        list.commit(idx);
                     }
                 }
                 // Ctrl or Meta makes a character a command rather than a query, so Ctrl+S must not walk to the first row starting with "s". Alt is left out, as everywhere here: on many layouts it is how a character is typed.
@@ -196,17 +289,10 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                         highlighted.set(Some(idx));
                     }
                 }
-                // Shut, with the keyboard on the trigger: the openers a native control answers to.
                 Key::Named(NamedKey::ArrowDown | NamedKey::Enter | NamedKey::Space)
                     if !is_open && trigger_focused.peek() =>
                 {
-                    toggle();
-                    // Opening downward lands on the first row, as a native control does. `toggle` only seeds from an existing selection, because opening with the mouse must highlight nothing. Asked for rather than set: the rows do not exist yet — the panel is built on the flush after this handler returns — so the first one that can take the cursor claims it there.
-                    if matches!(key, Key::Named(NamedKey::ArrowDown))
-                        && highlighted.peek().is_none()
-                    {
-                        list.seed_cursor();
-                    }
+                    toggle()
                 }
                 _ => return false,
             }
@@ -214,124 +300,70 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             true
         }
     };
-    let trigger = StyledContainer::new(trigger_box(), trigger_style, trigger_children)?
-        .styled_by(trigger_box)
-        .hover_style(hover_style)
-        .on_press({
-            let toggle = toggle.clone();
-            move || toggle()
-        })
-        // A control, which is what makes every key above addressable. It answers its own keys, so the default Enter-activates-the-press is stood down.
-        .control(if selected.is_some() {
-            Role::ComboBox
-        } else {
-            Role::Button
-        })
-        .expanded(move || open.get())
-        .on_focus(move |now| trigger_focused.set(now))
-        .on_key(on_key)
-        .consumes_keys(move || {
-            if open.get() {
-                ConsumedKeys::VERTICAL_ARROWS | ConsumedKeys::EDGES | ConsumedKeys::ACTIVATION
-            } else {
-                ConsumedKeys::ARROW_DOWN | ConsumedKeys::ACTIVATION
-            }
-        })
-        .controls(move || open_list.get());
-    // A select keeps the keyboard while its list is open, so it is what points a reader at the row the cursor is on; a menu hands the keyboard to its list, which points at it instead.
-    let trigger = match selected {
-        Some(_) => {
-            let list = list.clone();
-            trigger.active_descendant(move || {
+    let trigger = {
+        let list = list.clone();
+        trigger(face, open, toggle)?
+            // A control, which is what makes every key above addressable. It answers its own keys, so the default Enter-activates-the-press is stood down.
+            .control(Role::ComboBox)
+            .has_popup(HasPopup::ListBox)
+            .expanded(move || open.get())
+            .on_focus(move |now| trigger_focused.set(now))
+            .on_key(on_key)
+            .consumes_keys(move || {
+                if open.get() {
+                    ConsumedKeys::VERTICAL_ARROWS | ConsumedKeys::EDGES | ConsumedKeys::ACTIVATION
+                } else {
+                    ConsumedKeys::ARROW_DOWN | ConsumedKeys::ACTIVATION
+                }
+            })
+            .controls(move || open_list.get())
+            // A select keeps the keyboard while its list is open, so it is what points a reader at the row the cursor is on.
+            .active_descendant(move || {
                 open.get()
                     .then(|| highlighted.get())
                     .flatten()
                     .and_then(|i| list.focus_of(i))
             })
-        }
-        None => trigger,
     };
     let trigger_node = trigger.layout_node();
     // `track_layout` returns the signal now and layout fills it in, so the trigger's rect is known by the time the panel is built.
     let trigger_rect = track_layout(trigger_node).expect("trigger node is registered");
 
-    // Modelled exactly like a reactive `if $open`: a single-item list keyed on the boolean. Building the overlay lazily is what lets it portal correctly, since the page has been laid out by then.
     let remembering = handback.clone();
-    let overlay_holder = ReactiveList::new(
-        move || vec![open.get()],
-        |o: &bool| *o,
-        move |is_open: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
-            if !is_open {
-                // Closed: an empty placeholder, with no overlay registered, so nothing blocks the page.
-                return Ok(box_item(Container::new(LayoutStyle::new(), vec![])?));
-            }
-            // The registry is cleared first: this builder runs again on every open, and rows left over from the last would leave the keyboard walking positions that no longer exist.
-            list.begin();
-            let row_items = rows.build_with(list.clone())?.take_default();
-            // A filled trigger widens the panel to match, since a narrower list would read as a different control — but only ever widens it: taking the trigger's width outright turned a compact `File` button into a 40px sheet with one character per line.
-            let width = geometry().width;
-            let width = if stretch {
-                telar::anchor_rect(trigger_node, &trigger_rect)
-                    .width
-                    .max(width)
-            } else {
-                width
-            };
-            let row_column = Container::new(LayoutStyle::new().flex_column(), row_items)?;
-            let anchoring = Rc::new(move || {
-                trigger_rect.get();
-                Anchoring::new(
-                    telar::anchor_rect(trigger_node, &trigger_rect),
-                    Placement::Below,
-                    popup::viewport(),
-                )
-            });
-            let cursor = {
-                let list = list.clone();
-                Rc::new(move || highlighted.get().and_then(|i| list.node_of(i)))
-            };
-            let keyboard = match selected {
-                Some(_) => popup::Keyboard::Stays,
-                None => {
-                    let list = list.clone();
-                    popup::Keyboard::Held {
-                        pointed: Rc::new(move || highlighted.get().and_then(|i| list.focus_of(i))),
-                    }
-                }
-            };
-            let placed = popup::Popup {
-                anchoring,
-                width,
-                padding: shared::panel_pad(),
-                cursor,
-                keyboard,
-            };
-            let opened = popup::popup(placed, box_item(row_column), |_r| panel_rect_style())?;
-            let (panel, opened_list) = (opened.panel, opened.list);
-            open_list.set(Some(opened_list));
-            // A transparent full-viewport backdrop inside a blocking overlay: stops hover and clicks bleeding through to the page behind, and dismisses when a click lands outside the panel.
-            let close = {
-                let open = open;
-                move || open.set(false)
-            };
-            let backdrop = StyledContainer::new(
-                LayoutStyle::new().flex_column().flex_grow(1.0),
-                |_r| RectStyle::default(),
-                vec![box_item(panel)],
-            )?;
-            let backdrop = shared::dismissed_by_press(backdrop, close);
-            let overlay = Overlay::new(LayoutStyle::new().flex_column(), vec![box_item(backdrop)])?
-                .owned_by(trigger_node);
-            remembering.remember(overlay.content_node());
-            if selected.is_none() {
-                focus::request(opened_list);
-            }
-            Ok(box_item(overlay))
-        },
-        0.0,
-    )?;
+    let holder = while_open(open, move || {
+        // The registry is cleared first: this builder runs again on every open, and rows left over from the last would leave the keyboard walking positions that no longer exist.
+        list.begin();
+        let row_items = rows.build_with(list.clone())?.take_default();
+        let width = panel_width(geometry().width, stretch, trigger_node, &trigger_rect);
+        let row_column = Container::new(LayoutStyle::new().flex_column(), row_items)?;
+        let cursor = {
+            let list = list.clone();
+            Rc::new(move || highlighted.get().and_then(|i| list.node_of(i)))
+        };
+        let placed = popup::Popup {
+            anchoring: below(trigger_node, trigger_rect, memo(offset)),
+            width: popup::Width::Exactly(width),
+            padding: shared::panel_pad(),
+            cursor,
+            keyboard: popup::Keyboard::Stays,
+        };
+        let opened = popup::popup(placed, box_item(row_column), |_r| panel_rect_style())?;
+        let (panel, opened_list) = (opened.panel, opened.list);
+        open_list.set(Some(opened_list));
+        // A transparent full-viewport backdrop inside a blocking overlay: stops hover and clicks bleeding through to the page behind, and dismisses when a click lands outside the panel.
+        let backdrop = StyledContainer::new(
+            LayoutStyle::new().flex_column().flex_grow(1.0),
+            |_r| RectStyle::default(),
+            vec![box_item(panel)],
+        )?;
+        let backdrop = shared::dismissed_by_press(backdrop, move || open.set(false));
+        let overlay = Overlay::new(LayoutStyle::new().flex_column(), vec![box_item(backdrop)])?
+            .owned_by(trigger_node);
+        remembering.remember(overlay.content_node());
+        Ok(box_item(overlay))
+    })?;
 
-    // Every way of closing comes through `open`, and each has to leave the keyboard where it was before the list opened rather than nowhere: on the trigger, whether it stayed there or went into the list.
+    // Every way of closing comes through `open`, and each has to leave the keyboard on the field, where it was before the list opened.
     effect(move || {
         if !open.get() {
             handback.give_back();
@@ -340,33 +372,8 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             }
         }
     });
-
-    // On the dismiss stack while up, so Escape and the platform Back gesture reach it in the order things were opened. The stack is keyed by open and close rather than build order for exactly that reason.
-    {
-        let open = dismiss_open;
-        let close: Rc<dyn Fn()> = Rc::new(move || open.set(false));
-        let registered: std::cell::Cell<Option<DismissRegistration>> = std::cell::Cell::new(None);
-        effect(move || {
-            if open.get() {
-                let held = registered
-                    .take()
-                    .unwrap_or_else(|| DismissRegistration::within(trigger_node, close.clone()));
-                registered.set(Some(held));
-            } else {
-                drop(registered.take());
-            }
-        })
-    };
-
-    // The holder's placeholder takes no space in the column, so only the trigger participates in flow layout. A stretched root takes the width its row offers and none from what it shows: sized from its label, it widened past a fixed row as soon as a longer choice was picked.
-    let root_box = LayoutStyle::new().flex_column();
-    let root_box = if stretch {
-        root_box.flex_grow(1.0).flex_basis(0.0).min_width(0.0)
-    } else {
-        root_box
-    };
-    let root = Container::new(root_box, vec![box_item(trigger), box_item(overlay_holder)])?;
-    Ok(box_item(root))
+    dismissable(open, trigger_node);
+    root(trigger, holder, stretch)
 }
 
 /// The trigger's box: as tall as every control, padded by its tokens, and as wide as they say unless the root column decides its width.
@@ -396,14 +403,14 @@ fn trigger_layout(geometry: Geometry, with_caret: bool, sized_by_root: bool) -> 
 
 /// What the trigger's face is showing.
 #[derive(Clone, Copy)]
-struct Face {
+struct Shown {
     bordered: bool,
     open: bool,
     hovered: bool,
 }
 
 /// A select is a form control and wears a border; a **menu** is a button that happens to open a list, so it wears none. A bordered menu trigger reads as a field with the caret in it — or, sitting alone in a header, as a button stuck in its focused state. `bordered` is there for the caller who wants the other reading.
-fn trigger_rect_style(color: &Reactive<Color>, face: Face, geometry: Geometry) -> RectStyle {
+fn trigger_rect_style(color: &Reactive<Color>, face: Shown, geometry: Geometry) -> RectStyle {
     let rect = RectStyle::default().with_radius(BorderRadius::all(geometry.radius));
     if !face.bordered {
         return match (face.open, face.hovered) {

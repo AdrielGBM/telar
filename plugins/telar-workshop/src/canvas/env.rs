@@ -3,7 +3,10 @@
 use std::rc::Rc;
 
 use telar::preview::{Globals, Layout, Matrices, PreviewEntry, PreviewEnv};
-use telar::{LayoutError, LayoutItem, Size, SurfaceCanvas, effect, set_reduced_motion_override};
+use telar::{
+    LayoutError, LayoutItem, Size, SurfaceCanvas, effect, set_reduced_motion_override,
+    use_resolved_scheme,
+};
 
 use crate::state::WorkshopState;
 
@@ -43,7 +46,8 @@ fn resolved_canvas(
     let settings = state.canvas_settings();
     let project = Matrices::installed().viewports();
     effect(move || {
-        let resolved = settings.with(|settings| settings.resolve(&env, framed, project));
+        let scheme = use_resolved_scheme();
+        let resolved = settings.get().resolve(&env, framed, project, scheme);
         globals.mode().set_if_changed(resolved.mode);
         globals.locale().set_if_changed(resolved.locale);
         globals.direction().set_if_changed(resolved.direction);

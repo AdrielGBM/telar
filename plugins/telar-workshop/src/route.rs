@@ -17,7 +17,7 @@ use telar::{Location, Route};
 use telar_project::protocol::title_path;
 
 use crate::matrix::CustomAxis;
-use crate::settings::{Background, CanvasSettings, CanvasSize, Zoom};
+use crate::settings::{Background, CanvasSettings, CanvasSize, ModeChoice, Zoom};
 
 const PREVIEW: &str = "preview";
 const MATRIX: &str = "matrix";
@@ -216,8 +216,8 @@ fn split_outside_quotes(text: &str) -> Vec<&str> {
 /// The settings that differ from the defaults, as `key:value` words joined by `;`, a switch that is on as its bare name.
 pub(crate) fn settings_text(settings: &CanvasSettings) -> String {
     let mut words: Vec<String> = Vec::new();
-    if let Some(mode) = &settings.mode {
-        words.push(format!("mode:{mode}"));
+    if settings.mode != ModeChoice::System {
+        words.push(format!("mode:{}", settings.mode.word()));
     }
     if let Some(locale) = &settings.locale {
         words.push(format!("locale:{locale}"));
@@ -268,7 +268,7 @@ pub(crate) fn parse_settings(text: &str) -> CanvasSettings {
     {
         let (key, value) = word.split_once(':').unwrap_or((word, ""));
         match (key, value) {
-            ("mode", mode) if !mode.is_empty() => settings.mode = Some(mode.to_string()),
+            ("mode", mode) => settings.mode = ModeChoice::parse(mode),
             ("locale", locale) if !locale.is_empty() => settings.locale = Some(locale.to_string()),
             ("dir", direction) => settings.direction = parse_direction(direction),
             ("control_size", size) => settings.control_size = parse_control_size(size),

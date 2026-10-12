@@ -45,17 +45,18 @@ there, which is why the letters are hidden rather than left for the name to cove
 
 `role:` on a `box`, `col`, `row` or `grid` says what the box is. A region or a heading (`role:navigation`,
 `role:h2`) only describes it. A role a person operates — `button`, `switch` (or `toggle`), `checkbox`,
-`radio`, `tab`, `menuitem`, `option`, `slider`, `spinbutton`, `link` — also makes the box a control, as
-`StyledContainer::control` does from Rust: a Tab stop that wears the theme's focus ring when the keyboard
-reaches it, pressed by Enter and Space the way a tap presses it (Enter only for a link), and announced with
-that role. A plain `col` or `row` with such a role becomes a styled box, since only a styled box can be one.
+`radio`, `tab`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `option`, `slider`, `spinbutton`, `link` —
+also makes the box a control, as `StyledContainer::control` does from Rust: a Tab stop that wears the
+theme's focus ring when the keyboard reaches it, pressed by Enter and Space the way a tap presses it (Enter
+only for a link), and announced with that role. A plain `col` or `row` with such a role becomes a styled box,
+since only a styled box can be one.
 
 `toggled:` gives the control an on/off state, re-read whenever what it reads changes. One flag, and the role
 says what it means, the way AccessKit models it:
 
 | Role | `toggled:` is |
 | --- | --- |
-| `switch`, `checkbox`, `radio` | checked |
+| `switch`, `checkbox`, `radio`, `menuitemcheckbox`, `menuitemradio` | checked |
 | `button` | pressed: a toggle button, such as bold in a toolbar |
 | `tab`, `option` | selected |
 
@@ -90,8 +91,16 @@ desktop and `, current` in the terminal's reading; see [docs/links.md](links.md#
 
 ## Lists that open from a control
 
-A list that drops from a control is one of two things, and the catalogue says which. A `menu` (and a context
-menu) is a `menu` of `menuitem`s: actions, run when chosen, and the list takes the keyboard as it opens. A
+A list that drops from a control is one of two things, and the catalogue says which. A `menu` and a
+`context_menu` open one panel, a `menu` of `menuitem`s: actions, run when chosen, and the list takes the keyboard
+as it opens. A row with a tick is a `menuitemcheckbox`, one of a set of choices (`radio`) a `menuitemradio`, each
+`checked` while it is on. A `submenu` row is a `menuitem` that has a menu and is `expanded` while it shows it, and
+the submenu is a `menu` of its own; the deepest panel open holds the keyboard. The rightward arrow, Enter or Space
+open a submenu with its cursor on its first row; the leftward arrow or Escape shut it and hand the keyboard back to
+the panel it opened from; Escape on the first panel closes the menu and gives the keyboard back to what held it
+before, the menu's button or, for a context menu, whatever had it. A context menu asked for from the keyboard —
+the context-menu key or Shift+F10, `is_context_menu_key` — opens under the focused control (`focused_rect`) with
+its cursor on its first row. A
 `select` is a `combobox` whose list is a `listbox` of `option`s, the select-only combobox of WAI-ARIA: the
 keyboard stays on the combobox, and each option is `selected` while it is the bound choice, not while the
 cursor is on it. The command palette's results are a `listbox` named "Commands" that its search field
@@ -109,6 +118,12 @@ controls.
 | Terminal | Not in the reading. | The reading says `, focused` on the row rather than on the control (`Large, option, selected, focused`). |
 
 Either names nothing when the box it names is not drawn: a shut select controls no list.
+
+A control that opens a list also says which kind, so a reader names it before it is pressed: from Rust
+`StyledContainer::has_popup(HasPopup::Menu)` on a menu button or a submenu row, `HasPopup::ListBox` on a
+select's combobox. It never changes; whether the list is open now is `expanded(|| …)`. It is
+`aria-haspopup="menu"` or `"listbox"` in a document, AccessKit `has_popup` on the desktop, and `, has menu` or
+`, has listbox` in the terminal's reading (`File, button, has menu, collapsed`).
 
 ## What each target does with them
 

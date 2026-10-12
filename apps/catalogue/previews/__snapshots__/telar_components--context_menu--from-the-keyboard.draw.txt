@@ -1,0 +1,27 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 16,16 92x28
+            element button
+              rect 16,16 92x28 fill=#4261edff radius=10
+              element group
+                matrix 1,0,0,1,28,16
+                  text 0,5 68.06x16.8 "Document" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                end
+              end
+            end
+          end
+          element group
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

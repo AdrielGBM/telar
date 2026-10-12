@@ -27,7 +27,7 @@ pub enum FocusKind {
 /// What a focusable *is*, for the reader that has to say it out loud — a separate question from [`FocusKind`], which asks what the widget does with a key.
 ///
 /// Defined in `platform-core` because it is the vocabulary the UI and the platform share, the same way [`Key`] is. Re-exported here because this is where it is *authored*: a widget declares its role at the moment it declares itself focusable, and the two are one call.
-pub use platform_core::{Role, SetPosition};
+pub use platform_core::{HasPopup, Role, SetPosition};
 
 /// A cheap, `Copy` handle to a focusable widget's identity, so a caller that has moved the widget into a container (and no longer holds a reference to it) can still drive its focus — e.g. autofocus a hosted editor when its tab activates. Obtain one from the widget (see [`crate::TextArea::focus_handle`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -297,7 +297,8 @@ fn give(id: FocusId, from_pointer: bool) {
     }
 }
 
-pub(crate) fn node_of(id: FocusId) -> Option<NodeId> {
+/// The layout node the control `id` stands on, while it is registered.
+pub fn node_of(id: FocusId) -> Option<NodeId> {
     with_focus_ref(|s| s.entry(id).and_then(|e| e.node))
 }
 
@@ -817,10 +818,11 @@ pub fn set_orientation(id: FocusId, orientation: Orientation) {
     });
 }
 
-/// What a row of a hierarchy says beyond its on/off state: whether it is open, and where it sits.
+/// What a row of a hierarchy, or a control that opens one, says beyond its on/off state: whether it is open, what it opens, and where it sits.
 #[derive(Clone, Default)]
 struct Outline {
     expanded: Option<Rc<dyn Fn() -> bool>>,
+    has_popup: Option<HasPopup>,
     position: Option<SetPosition>,
 }
 
@@ -830,6 +832,15 @@ pub fn set_expanded(id: FocusId, state: impl Fn() -> bool + 'static) {
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.outline.expanded = Some(state);
+        }
+    });
+}
+
+/// Declares what `id` opens: the menu a menu button drops or a submenu row opens, the list a combobox opens. Whether it is open now is [`set_expanded`]'s to say.
+pub fn set_has_popup(id: FocusId, popup: HasPopup) {
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.outline.has_popup = Some(popup);
         }
     });
 }
@@ -881,6 +892,8 @@ pub struct Exposed {
     pub orientation: Option<Orientation>,
     /// Whether a tree row with rows under it shows them; `None` for a leaf and for every other control.
     pub expanded: Option<bool>,
+    /// What it opens; `None` for a control that opens nothing.
+    pub has_popup: Option<HasPopup>,
     pub position: Option<SetPosition>,
 }
 
@@ -962,6 +975,7 @@ pub fn exposed() -> Vec<Exposed> {
                 value: value.as_ref().map(|read| read()),
                 orientation,
                 expanded: outline.expanded.as_ref().map(|read| read()),
+                has_popup: outline.has_popup,
                 position: outline.position,
             })
         })
@@ -1018,7 +1032,7 @@ pub fn left_within(node: NodeId) -> bool {
     }
 }
 
-/// Writes into `semantics` everything the focus order knows of the control `id`: whether it holds focus, the state and number it carries, where it sits, the row its cursor rests on, and how the keyboard reaches it.
+/// Writes into `semantics` everything the focus order knows of the control `id`: whether it holds focus, the state and number it carries, what it opens, where it sits, the row its cursor rests on, and how the keyboard reaches it.
 pub(crate) fn describe(
     id: FocusId,
     semantics: &mut renderer_core::Semantics,
@@ -1029,6 +1043,7 @@ pub(crate) fn describe(
     semantics.value = value_state(id);
     semantics.orientation = orientation_state(id);
     semantics.expanded = expanded_state(id);
+    semantics.has_popup = has_popup_state(id);
     semantics.position = position_state(id);
     semantics.active_descendant = active_descendant_state(id).and_then(node_of).map(u64::from);
     semantics.controls = controls_state(id).and_then(node_of).map(u64::from);
@@ -1189,6 +1204,11 @@ pub fn orientation_state(id: FocusId) -> Option<Orientation> {
 pub fn expanded_state(id: FocusId) -> Option<bool> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.outline.expanded.clone()))?;
     Some(read())
+}
+
+/// What `id` said it opens, if it said.
+pub fn has_popup_state(id: FocusId) -> Option<HasPopup> {
+    with_focus(|s| s.entry(id).and_then(|e| e.outline.has_popup))
 }
 
 /// Where `id` said it sits, if it said.

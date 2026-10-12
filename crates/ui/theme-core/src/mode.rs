@@ -95,6 +95,31 @@ pub fn registered_modes() -> Vec<String> {
     MODES.with(|modes| modes.borrow().iter().map(|(id, _)| id.clone()).collect())
 }
 
+/// The mode that stands for `scheme`: the [`follow_system`] pair's when one is designated, else the first registered mode, in registration order, that declared `scheme` with [`set_mode_scheme`]. `None` where no mode does. Reactive in the schemes modes declare; the pair and the registrations are made while the application sets up, as [`registered_modes`] says.
+pub fn scheme_mode(scheme: ColorScheme) -> Option<String> {
+    let paired = SCHEME_PAIR.with(|pair| {
+        pair.borrow().as_ref().map(|(light, dark)| match scheme {
+            ColorScheme::Light => light.clone(),
+            ColorScheme::Dark => dark.clone(),
+        })
+    });
+    if paired.is_some() {
+        return paired;
+    }
+    MODE_SCHEMES.with(|schemes| {
+        schemes.with(|schemes| {
+            MODES.with(|modes| {
+                modes
+                    .borrow()
+                    .iter()
+                    .map(|(id, _)| id)
+                    .find(|id| schemes.get(*id) == Some(&scheme))
+                    .cloned()
+            })
+        })
+    })
+}
+
 /// The theme `id` was registered with through [`register_mode_theme`], read reactively.
 fn mode_theme(id: &str) -> Option<Installed> {
     MODE_THEMES.with(|themes| themes.with(|themes| themes.get(id).cloned()))

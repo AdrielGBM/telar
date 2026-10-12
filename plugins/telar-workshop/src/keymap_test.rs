@@ -1,13 +1,13 @@
 use telar::preview::{Layout, PreviewCtx};
 use telar::testing::{key_with, mount, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, ComponentList, Container, Event, Input, LayoutStyle, LocalApp,
-    Role, SizeDimension, box_item, reset_layout_runtime,
+    AccessNode, App, AppRuntime, ColorScheme, ComponentList, Container, Event, Input, LayoutStyle,
+    LocalApp, Role, SizeDimension, box_item, reset_layout_runtime,
 };
 
 use super::*;
 use crate::canvas_toolbar::locales;
-use crate::settings::CanvasSettings;
+use crate::settings::{CanvasSettings, ModeChoice};
 use crate::test_support::{Shell, settle};
 
 const WIDTH: u32 = 1400;
@@ -262,9 +262,25 @@ fn alt_t_l_and_r_cycle_the_mode_locale_and_direction_back_to_the_previews_own() 
         assert_eq!(workshop.settings().direction, direction);
     }
 
-    let modes = telar::registered_modes();
-    workshop.alt('t');
-    assert_eq!(workshop.settings().mode, modes.first().cloned());
+    for (id, scheme) in [
+        ("paper", Some(ColorScheme::Light)),
+        ("ink", Some(ColorScheme::Dark)),
+        ("sepia", None),
+    ] {
+        theme_core::register_mode(id, || {});
+        if let Some(scheme) = scheme {
+            theme_core::set_mode_scheme(id, scheme);
+        }
+    }
+    for mode in [
+        ModeChoice::Light,
+        ModeChoice::Dark,
+        ModeChoice::Named("sepia".into()),
+        ModeChoice::System,
+    ] {
+        workshop.alt('t');
+        assert_eq!(workshop.settings().mode, mode);
+    }
 }
 
 #[test]

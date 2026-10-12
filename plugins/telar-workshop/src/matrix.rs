@@ -9,9 +9,9 @@ use std::rc::Rc;
 
 use telar::preview::{Matrices, Matrix, MatrixCell, PreviewEntry, control_size_word};
 use telar::{
-    Accessible, AlignItems, Children, Color, JustifyContent, LayoutError, LayoutItem,
+    Accessible, AlignItems, Children, Color, ColorScheme, JustifyContent, LayoutError, LayoutItem,
     LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, Role, RwSignal, ShapeStyle,
-    StyledContainer, Text, batch, box_item, effect, signal, use_theme_tokens,
+    StyledContainer, Text, batch, box_item, effect, signal, use_resolved_scheme, use_theme_tokens,
 };
 use telar_components::{
     ButtonProps, ButtonVariant, CheckboxProps, Tab, button, checkbox, tab_list,
@@ -23,7 +23,7 @@ pub(crate) use plan::{CustomAxis, MatrixSource};
 use self::cell::CELL_OUTER_WIDTH;
 use self::plan::{GLOBAL_AXES, Grid, MATRIX_WARN_AT, Plan, Problem, grid, toggled, varied_args};
 use crate::canvas::{HEADER_HEIGHT, states};
-use crate::settings::{CanvasSettings, CanvasSize};
+use crate::settings::{CanvasSettings, CanvasSize, ModeChoice};
 use crate::state::{ViewMode, WorkshopState};
 use crate::strings::{
     self, MATRIX_AXES, MATRIX_CAPPED, MATRIX_CELLS, MATRIX_CUSTOM, MATRIX_EMPTY, MATRIX_INVALID,
@@ -237,7 +237,7 @@ fn open_cell(state: &WorkshopState, entry: &PreviewEntry, cell: &MatrixCell) {
         let globals = &cell.globals;
         state.canvas_settings().update(|settings| {
             if let Some(mode) = &globals.mode {
-                settings.mode = Some(mode.clone());
+                settings.mode = ModeChoice::for_mode(mode);
             }
             if let Some(locale) = &globals.locale {
                 settings.locale = Some(locale.clone());
@@ -270,16 +270,18 @@ struct Asked {
     source: MatrixSource,
     axes: Vec<CustomAxis>,
     settings: Rc<CanvasSettings>,
+    scheme: ColorScheme,
     remounts: u64,
 }
 
 impl Asked {
-    fn key(&self) -> impl std::hash::Hash + use<> {
+    /// Keyed on the mode the cells resolve for a preview asking for `asked`, so a change of scheme remounts them only where it changes what they show.
+    fn key(&self, asked: Option<&str>) -> impl std::hash::Hash + use<> {
         let settings = &self.settings;
         (
             self.source,
             self.axes.clone(),
-            settings.mode.clone(),
+            settings.mode.mode(asked, self.scheme),
             settings.locale.clone(),
             settings.direction,
             settings.control_size.map(control_size_word),
@@ -304,10 +306,11 @@ fn cells(
                 source: asking.matrix_source().get(),
                 axes: asking.matrix_axes().get(),
                 settings: Rc::new(asking.canvas_settings().get()),
+                scheme: use_resolved_scheme(),
                 remounts: asking.remounts(),
             }]
         },
-        Asked::key,
+        move |asked: &Asked| asked.key(entry.env.mode),
         move |asked| {
             let args = building.args(&entry).states();
             let planned = plan::plan(
@@ -321,7 +324,7 @@ fn cells(
                 Ok(plan) => {
                     shown.set(Rc::from(plan.cells.as_slice()));
                     keep_focus_on(&building, &plan.cells);
-                    planned_cells(&building, entry, &plan, asked.settings)
+                    planned_cells(&building, entry, &plan, asked.settings, asked.scheme)
                 }
                 Err(problem) => {
                     shown.set(Rc::from([]));
@@ -351,12 +354,13 @@ fn planned_cells(
     entry: PreviewEntry,
     plan: &Plan,
     settings: Rc<CanvasSettings>,
+    scheme: ColorScheme,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let mut items = Vec::new();
     if let Some(warning) = warning(plan) {
         items.push(warning);
     }
-    items.push(table(state, entry, &grid(&plan.cells), &settings)?);
+    items.push(table(state, entry, &grid(&plan.cells), &settings, scheme)?);
     let column = StyledContainer::new(
         LayoutStyle::new()
             .flex_column()
@@ -404,6 +408,7 @@ fn table(
     entry: PreviewEntry,
     grid: &Grid,
     settings: &Rc<CanvasSettings>,
+    scheme: ColorScheme,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let headed = grid.rows.iter().any(|row| row.heading.is_some());
     let mut lines = Vec::new();
@@ -426,6 +431,7 @@ fn table(
                 entry,
                 matrix_cell.clone(),
                 Rc::clone(settings),
+                scheme,
             )?);
         }
         lines.push(line(items)?);

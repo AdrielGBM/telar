@@ -1002,6 +1002,7 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
         current: None,
         active_descendant: None,
         controls: None,
+        has_popup: None,
     };
     let nested = |surface| NestedSurface {
         surface,

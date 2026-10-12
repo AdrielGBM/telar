@@ -108,12 +108,13 @@ So a form can be `Large` while the toolbar beside it stays `Regular`, in one win
 ## Drawing like the catalogue
 
 `telar_components::metrics` is what the catalogue draws from, public for an application's own controls:
-`control_height`, `control_pad_x`, `row_height`, `panel_pad`, `gap_xs/sm/md/lg/xl`, `spacing`, `icon_size`,
+`control_height`, `control_pad_x`, `row_height`, `panel_pad`, `popup_offset`, `gap_xs/sm/md/lg/xl`, `spacing`, `icon_size`,
 `icon_pad`, `measure`, the radius roles and `pill`, `border_width(_strong)`, `focus_ring`, `hover_wash`/`held_wash`/
 `pressed_wash`, `hovered_fill`/`pressed_fill`, `thumb_on`, `strong_weight`, `control_text`, `ink_on` and
 `mark`. Every length is at the control size in force, and the heights and `measure` are in whole pixels. Every single-line control is
 `control_height` tall and centres its line in it, so a button, a field, a select, a tab and a stepper stand level
-in one row; every row of a list, a menu, a select, a tree or a context menu is `row_height` tall.
+in one row; every row of a list, a menu, a select, a tree or a context menu is `row_height` tall; and a panel that drops
+from a control — a menu's, a select's — stands `popup_offset` away from it, on whichever side it opens.
 
 The rules every catalogue component follows, and a control of an application's own should too:
 
@@ -157,18 +158,18 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 | `CodeViewTokens` | `radius` → `radius_surface`; `pad` → `gap_md` |
 | `ColorPickerTokens` | `width` → `measure(16)`; `radius` → `radius_control`; `ring` → `border_width_strong` |
 | `CommandPaletteTokens` | `width` → `measure(40)`; `radius` → `radius_dialog`; `inset_top` → six `gap_xl` |
-| `ContextMenuTokens` | `background` → `surface`; `border` → `border`; `label` → the inherited ink; `faint` → `muted`; `highlight` → `highlight_low`; `radius` → `radius_surface`; `row_height` → `ListTokens::row_height`; `padding` → `panel_pad`; `width` → `MenuTokens::width` |
 | `DrawerTokens` | `radius` → `radius_dialog`; `pad` → `gap_xl`; `width` → `measure(20)` |
 | `HandleTokens` | `size` → a slider's thumb less `gap_sm`; `ring` → `border_width_strong` |
 | `IconButtonTokens` | `radius` → `radius_control` |
 | `KbdTokens` | `radius` → `radius_item`; `border_width` → `border_width` |
 | `ListTokens` | `row_height` → `row_height`; `radius` → `radius_item`; `pad_x` → `gap_md` |
-| `MenuTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(13)` |
+| `MenuTokens` | a `menu`'s and a `context_menu`'s panels alike: `background` → `surface`; `border` → `border`; `label` → the inherited ink; `faint` → `muted`; `highlight` → `highlight_low`; `radius` → `radius_surface`; `row_height` → `ListTokens::row_height`; `padding` → `panel_pad`; `width` (the least; a panel widens to its widest row) → `measure(13)`; `offset` → `popup_offset` |
+| `MenuTriggerTokens` | the button a `menu` drops from: `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(13)` |
 | `ModalTokens` | `radius` → `radius_dialog`; `pad` → `gap_xl`; `min_width` → `measure(24)`; `max_width` → `measure(32)` |
 | `ProgressTokens` | `radius` → a pill; `width` → `measure(16)`; `height` → `gap_md` |
 | `RadioTokens` | `size` → `icon_size`; `border_width` → `border_width_strong` |
 | `ScrubFieldTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x` |
-| `SelectTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(13)` |
+| `SelectTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(13)`; `offset` → `popup_offset` |
 | `SliderTokens` | `width` → `measure(16)`; `track` → `spacing`; `thumb` → `icon_size`; `ring` → `border_width_strong` |
 | `SpinnerTokens` | `size` → `control_height` |
 | `SplitPaneTokens` | `thickness` → `gap_sm`; `radius` → a pill |

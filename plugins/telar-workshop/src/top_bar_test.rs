@@ -163,9 +163,9 @@ fn a_project_with_no_name_shows_the_workshop_in_the_trigger() {
 #[test]
 fn the_preview_settings_are_one_menu_however_wide_the_window() {
     let mut workshop = Workshop::open(Frame::Host, WIDE);
-    assert!(workshop.find(Role::ComboBox, "Mode Default mode").is_none());
+    assert!(workshop.find(Role::ComboBox, "Mode System").is_none());
     workshop.click(Role::Button, "Settings");
-    assert!(workshop.find(Role::MenuItem, "Right to left").is_some());
+    crate::test_support::setting_row(&workshop.nodes(), "Direction");
 }
 
 #[test]
@@ -322,7 +322,7 @@ fn the_start_of_the_bar_has_a_preview_label_before_the_settings_button() {
     assert!(texts(&workshop.tree).iter().any(|text| text == "Preview"));
     assert!(workshop.find(Role::Button, "Preview").is_none());
     workshop.click(Role::Button, "Settings");
-    assert!(workshop.find(Role::MenuItem, "Right to left").is_some());
+    crate::test_support::setting_row(&workshop.nodes(), "Direction");
 }
 
 #[test]

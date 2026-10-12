@@ -456,14 +456,10 @@ fn row_probes() -> Vec<Rows> {
                 crate::context_menu(
                     crate::ContextMenuProps::props()
                         .at((40.0, 30.0))
-                        .entries(vec![
-                            crate::MenuEntry::row("Cut", "", || {}),
-                            crate::MenuEntry::row("Copy", "", || {}),
-                        ])
                         .on_close(std::rc::Rc::new(|| {}))
                         .within(Rect::new(0.0, 0.0, 800.0, 600.0))
                         .build(),
-                    Children::default(),
+                    two_items(),
                 )
             },
             open: nothing_to_open,
@@ -626,11 +622,10 @@ fn panel_probes() -> Vec<Panel> {
                     crate::context_menu(
                         crate::ContextMenuProps::props()
                             .at((40.0, 30.0))
-                            .entries(vec![crate::MenuEntry::row("Cut", "", || {})])
                             .on_close(std::rc::Rc::new(|| {}))
                             .within(Rect::new(0.0, 0.0, 800.0, 600.0))
                             .build(),
-                        Children::default(),
+                        two_items(),
                     )
                 })
             },

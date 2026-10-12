@@ -17,7 +17,7 @@ use crate::WorkshopApp;
 use crate::arrangement::PANES_FROM;
 use crate::settings::CanvasSettings;
 use crate::state::{PANEL_DEFAULT_SIZE, PanelPosition, WorkshopState};
-use crate::test_support::{Shell, control, sample_previews, settle};
+use crate::test_support::{Shell, control, sample_previews, setting_row, settle};
 use telar::Direction;
 
 const HEIGHT: u32 = 800;
@@ -171,6 +171,13 @@ impl<A: App> Workshop<A> {
         self.send(release(x, y));
     }
 
+    /// Opens the submenu of the preview setting `name`, in the settings menu already open.
+    fn open_setting(&mut self, name: &str) {
+        let (x, y) = centre(setting_row(&self.nodes(), name).rect);
+        self.send(press(x, y));
+        self.send(release(x, y));
+    }
+
     fn alt(&mut self, key: Key) {
         let modifiers = ModifiersState {
             is_alt: true,
@@ -245,8 +252,13 @@ fn the_chrome_passes_its_own_accessibility_checks_in_a_wide_window() {
     let mut workshop = Workshop::app(WIDE, PROJECT);
     workshop.assert_passes("the workshop");
     workshop.click(Role::Button, "Settings");
-    assert!(workshop.find(Role::MenuItem, "Right to left").is_some());
-    workshop.assert_passes("the preview settings menu");
+    workshop.open_setting("Direction");
+    assert!(
+        workshop
+            .find(Role::MenuItemRadio, "Right to left")
+            .is_some()
+    );
+    workshop.assert_passes("the preview settings menu, a submenu open");
 }
 
 #[test]
@@ -254,8 +266,13 @@ fn the_chrome_passes_its_own_accessibility_checks_in_a_medium_window() {
     let mut workshop = Workshop::app(MEDIUM, PROJECT);
     workshop.assert_passes("the workshop");
     workshop.click(Role::Button, "Settings");
-    assert!(workshop.find(Role::MenuItem, "Right to left").is_some());
-    workshop.assert_passes("the preview settings menu");
+    workshop.open_setting("Direction");
+    assert!(
+        workshop
+            .find(Role::MenuItemRadio, "Right to left")
+            .is_some()
+    );
+    workshop.assert_passes("the preview settings menu, a submenu open");
 }
 
 #[test]
@@ -285,15 +302,18 @@ fn a_long_project_name_is_cut_short_rather_than_pushing_the_top_bar_out_of_the_w
 fn the_preview_settings_menu_sets_the_environment_of_every_canvas() {
     let mut workshop = Workshop::shell(MEDIUM);
     workshop.click(Role::Button, "Settings");
-    workshop.click(Role::MenuItem, "Right to left");
+    workshop.open_setting("Direction");
+    workshop.click(Role::MenuItemRadio, "Right to left");
     assert_eq!(workshop.settings().direction, Some(Direction::Rtl));
     assert!(
-        workshop.find(Role::MenuItem, "Right to left").is_none(),
+        workshop
+            .find(Role::MenuItemRadio, "Right to left")
+            .is_none(),
         "picking a row shuts the menu"
     );
 
     workshop.click(Role::Button, "Settings");
-    workshop.click(Role::MenuItem, "High contrast");
+    workshop.click(Role::MenuItemCheckBox, "High contrast");
     assert_eq!(workshop.settings().high_contrast, Some(true));
 }
 

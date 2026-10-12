@@ -59,7 +59,7 @@ fn an_address_the_workshop_has_no_page_for_is_none() {
 #[test]
 fn a_copied_link_carries_args_and_settings() {
     let settings = CanvasSettings {
-        mode: Some("dark".into()),
+        mode: ModeChoice::Named("dusk".into()),
         locale: Some("ar".into()),
         direction: Some(Direction::Rtl),
         control_size: Some(ControlSize::Large),
@@ -203,7 +203,7 @@ fn words_a_link_cannot_mean_are_passed_over() {
     assert_eq!(
         settings,
         CanvasSettings {
-            mode: Some("dark".into()),
+            mode: ModeChoice::Dark,
             ..CanvasSettings::default()
         }
     );
@@ -313,4 +313,26 @@ fn every_awkward_title_an_export_writes_opens_its_own_route() {
         let page = workshop_pages(&previews[at..=at]).pop().unwrap();
         assert_eq!(route.to_location().segments(), page.segments.as_slice());
     }
+}
+
+#[test]
+fn each_mode_choice_is_written_as_its_word_and_read_back() {
+    for (mode, text) in [
+        (ModeChoice::System, ""),
+        (ModeChoice::Light, "mode:light"),
+        (ModeChoice::Dark, "mode:dark"),
+        (ModeChoice::Named("dusk".into()), "mode:dusk"),
+    ] {
+        let settings = CanvasSettings {
+            mode,
+            ..CanvasSettings::default()
+        };
+        assert_eq!(settings_text(&settings), text);
+        assert_eq!(parse_settings(&settings_text(&settings)), settings);
+    }
+    assert_eq!(
+        parse_settings("mode:system"),
+        CanvasSettings::default(),
+        "following the system is the default"
+    );
 }

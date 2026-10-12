@@ -214,6 +214,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-pressed",
             "aria-selected",
             "aria-expanded",
+            "aria-haspopup",
             "aria-current",
             "aria-controls",
             "aria-activedescendant",
@@ -289,6 +290,14 @@ fn a_state_is_the_attribute_its_role_carries_it_in() {
     assert_eq!(
         state_attributes(Role::Disclosure, true),
         ("div", on("aria-expanded"))
+    );
+    assert_eq!(
+        state_attributes(Role::MenuItemCheckBox, true),
+        ("div", on("aria-checked"))
+    );
+    assert_eq!(
+        state_attributes(Role::MenuItemRadio, false),
+        ("div", vec![("aria-checked", "false".to_string())])
     );
     assert_eq!(
         state_attributes(Role::Slider, true),
@@ -612,6 +621,8 @@ fn the_workbench_roles_are_the_aria_roles_of_the_same_name() {
         (Role::Log, "log"),
         (Role::Menu, "menu"),
         (Role::MenuItem, "menuitem"),
+        (Role::MenuItemCheckBox, "menuitemcheckbox"),
+        (Role::MenuItemRadio, "menuitemradio"),
         (Role::ListBox, "listbox"),
         (Role::Option, "option"),
     ] {
@@ -654,6 +665,38 @@ fn a_splitter_writes_its_value_and_its_orientation() {
             ("aria-orientation", "vertical".to_string()),
         ]
     );
+}
+
+/// A menu button and a select's combobox write the kind of popup they open, beside whether it is open; a control that opens nothing writes no `aria-haspopup` at all.
+#[test]
+fn a_control_writes_what_it_opens() {
+    let popup_of = |semantics: Semantics| {
+        let frame = describe_frame(
+            &[open(1, semantics), DrawCommand::PopElement],
+            None,
+            &mut Fixed,
+            false,
+        );
+        let node = only_box(&frame);
+        (
+            attribute(node, "aria-haspopup"),
+            attribute(node, "aria-expanded"),
+        )
+    };
+    let opening = |role: Role, popup: HasPopup, open: bool| Semantics {
+        has_popup: Some(popup),
+        expanded: Some(open),
+        ..Semantics::of(role)
+    };
+    assert_eq!(
+        popup_of(opening(Role::Button, HasPopup::Menu, false)),
+        (Some("menu".to_string()), Some("false".to_string()))
+    );
+    assert_eq!(
+        popup_of(opening(Role::ComboBox, HasPopup::ListBox, true)),
+        (Some("listbox".to_string()), Some("true".to_string()))
+    );
+    assert_eq!(popup_of(Semantics::of(Role::Button)), (None, None));
 }
 
 fn attribute(node: &BoxNode, name: &str) -> Option<String> {

@@ -161,9 +161,9 @@ pub use licenses::icon_licenses;
 pub use licenses::install_icon_licenses as __install_icon_licenses;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    ConsumedKeys, Cursor, Event, FullscreenMode, Key, NamedKey, NumericValue, Orientation,
-    ResizeEdge, ScrollDelta, WindowCommand, WindowConfig, WindowPosition, push_window_command,
-    take_window_commands,
+    ConsumedKeys, Cursor, Event, FullscreenMode, HasPopup, Key, NamedKey, NumericValue,
+    Orientation, ResizeEdge, ScrollDelta, WindowCommand, WindowConfig, WindowPosition,
+    push_window_command, take_window_commands,
 };
 // The seam for an application rendering its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on. Two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
 #[cfg(feature = "hardware")]
@@ -303,7 +303,7 @@ pub use theme_core::{
     ControlSize, ResolvedScheme, SchemePreference, ScopedControlSize, ScopedTheme, Theme,
     ThemeExtensions, ThemeTokens, active_mode, control_scale, current_control_size, follow_system,
     is_dark, nearest_control_size, nearest_theme, register_mode, register_mode_theme,
-    registered_modes, scheme_preference, set_control_size, set_mode, set_mode_scheme,
+    registered_modes, scheme_mode, scheme_preference, set_control_size, set_mode, set_mode_scheme,
     set_scheme_preference, set_theme, use_control_size, use_mode, use_resolved_scheme,
     use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
 };

@@ -20,6 +20,7 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         position: None,
         active_descendant: None,
         controls: None,
+        has_popup: None,
     }
 }
 
@@ -211,6 +212,13 @@ fn a_state_lands_where_its_role_is_read_from() {
     assert_eq!(disclosure.is_expanded(), Some(false));
     assert_eq!(disclosure.toggled(), None);
 
+    let ticked = published(toggled(Role::MenuItemCheckBox, true));
+    assert_eq!(ticked.role(), AkRole::MenuItemCheckBox);
+    assert_eq!(ticked.toggled(), Some(Toggled::True));
+    let choice = published(toggled(Role::MenuItemRadio, false));
+    assert_eq!(choice.role(), AkRole::MenuItemRadio);
+    assert_eq!(choice.toggled(), Some(Toggled::False));
+
     let slider = published(toggled(Role::Slider, true));
     assert_eq!(
         slider.toggled(),
@@ -249,6 +257,26 @@ fn a_tree_row_says_it_is_chosen_open_and_where_it_sits() {
     let ak = &update.nodes[0].1;
     assert_eq!(ak.is_expanded(), None, "a leaf is neither open nor shut");
     assert_eq!(ak.is_selected(), Some(false));
+}
+
+/// A menu button and a select's combobox publish what they open beside whether it is open; a control that opens nothing publishes no popup.
+#[test]
+fn a_control_publishes_what_it_opens() {
+    let opening = |id: u64, role: Role, popup: HasPopup| AccessNode {
+        has_popup: Some(popup),
+        expanded: Some(false),
+        ..node(Some(id), role, "Opens")
+    };
+    let nodes = [
+        opening(1, Role::Button, HasPopup::Menu),
+        opening(2, Role::ComboBox, HasPopup::ListBox),
+        node(Some(3), Role::Button, "Save"),
+    ];
+    let update = tree_update(&nodes, "Editor", None);
+    assert_eq!(update.nodes[0].1.has_popup(), Some(AkHasPopup::Menu));
+    assert_eq!(update.nodes[0].1.is_expanded(), Some(false));
+    assert_eq!(update.nodes[1].1.has_popup(), Some(AkHasPopup::Listbox));
+    assert_eq!(update.nodes[2].1.has_popup(), None);
 }
 
 /// A tree keeps focus while its cursor walks the rows, so the row the cursor is on is named to the reader as the tree's active descendant; one that names a row the update does not carry names nothing.
@@ -744,6 +772,8 @@ fn the_workbench_roles_are_published_as_the_roles_a_reader_knows_them_by() {
         (Role::Log, AkRole::Log),
         (Role::Menu, AkRole::Menu),
         (Role::MenuItem, AkRole::MenuItem),
+        (Role::MenuItemCheckBox, AkRole::MenuItemCheckBox),
+        (Role::MenuItemRadio, AkRole::MenuItemRadio),
         (Role::ListBox, AkRole::ListBox),
         (Role::Option, AkRole::ListBoxOption),
     ] {

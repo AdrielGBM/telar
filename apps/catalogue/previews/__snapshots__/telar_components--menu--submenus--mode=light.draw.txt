@@ -1,0 +1,31 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element button
+            rect 16,16 182x28 radius=10
+            element group
+              clip 28,-1000000 32x2000000
+                matrix 1,0,0,1,28,16
+                  text 0,5 32.42x16.8 "View" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                end
+              end
+            end
+            element group
+              matrix 1,0,0,1,174,27
+                path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#171a2eb3
+              end
+            end
+          end
+          element group
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

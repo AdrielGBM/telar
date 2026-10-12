@@ -5,10 +5,11 @@
 //! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
 
 use accesskit::{
-    Action, ActionRequest, AriaCurrent, Node, NodeId, Orientation as AkOrientation, Rect as AkRect,
-    Role as AkRole, Toggled, TreeId, TreeInfo, TreeUpdate,
+    Action, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Node, NodeId,
+    Orientation as AkOrientation, Rect as AkRect, Role as AkRole, Toggled, TreeId, TreeInfo,
+    TreeUpdate,
 };
-use platform_core::{AccessNode, CurrentKind, Orientation, Role, ToggleKind};
+use platform_core::{AccessNode, CurrentKind, HasPopup, Orientation, Role, ToggleKind};
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
 const ROOT: NodeId = NodeId(0);
@@ -80,6 +81,12 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         if let Some(open) = node.expanded {
             ak.set_expanded(open);
         }
+        if let Some(popup) = node.has_popup {
+            ak.set_has_popup(match popup {
+                HasPopup::Menu => AkHasPopup::Menu,
+                HasPopup::ListBox => AkHasPopup::Listbox,
+            });
+        }
         // AccessKit rejects a reference to a node the update does not carry.
         if let Some(item) = node
             .active_descendant
@@ -150,6 +157,8 @@ fn role_of(role: Role) -> AkRole {
         Role::TabPanel => AkRole::TabPanel,
         Role::Menu => AkRole::Menu,
         Role::MenuItem => AkRole::MenuItem,
+        Role::MenuItemCheckBox => AkRole::MenuItemCheckBox,
+        Role::MenuItemRadio => AkRole::MenuItemRadio,
         Role::ListBox => AkRole::ListBox,
         Role::Option => AkRole::ListBoxOption,
         Role::Slider => AkRole::Slider,

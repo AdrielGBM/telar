@@ -7,10 +7,10 @@ use telar::preview::a11y::Severity;
 use telar::preview::snapshot::SnapshotStatus;
 use telar::preview::{Globals, MatrixCell, Play, PreviewEntry};
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, Direction, LayoutError,
-    LayoutItem, LayoutStyle, Lazy, Memo, Reactive, ReactiveList, RectStyle, RelayoutHook, Role,
-    RwSignal, ShapeStyle, Size, StyledContainer, SurfaceFrame, Text, ViewRange, box_item, effect,
-    memo, on_cleanup, scroll_progress, signal, use_theme_tokens,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, ColorScheme, Direction,
+    LayoutError, LayoutItem, LayoutStyle, Lazy, Memo, Reactive, ReactiveList, RectStyle,
+    RelayoutHook, Role, RwSignal, ShapeStyle, Size, StyledContainer, SurfaceFrame, Text, ViewRange,
+    box_item, effect, memo, on_cleanup, scroll_progress, signal, use_theme_tokens,
 };
 use telar_components::{BadgeProps, badge};
 use telar_devtools::{
@@ -95,15 +95,16 @@ impl Status {
     }
 }
 
-/// Gives `globals`, already holding what the preview asks for, the toolbar's settings over it and then the cell's own; a canvas left with no direction reads in its locale's.
+/// Gives `globals`, already holding what the preview asks for, the toolbar's settings over it, its mode as the workshop's `scheme` resolves it, and then the cell's own; a canvas left with no direction reads in its locale's.
 pub(crate) fn seed(
     globals: &Globals,
     settings: &CanvasSettings,
+    scheme: ColorScheme,
     entry: &PreviewEntry,
     cell: &MatrixCell,
 ) {
-    if let Some(mode) = &settings.mode {
-        globals.mode().set(Some(mode.clone()));
+    if let Some(mode) = settings.mode.mode(entry.env.mode, scheme) {
+        globals.mode().set(Some(mode));
     }
     if let Some(locale) = &settings.locale {
         globals.locale().set(Some(locale.clone()));
@@ -148,6 +149,7 @@ pub(super) fn cell(
     entry: PreviewEntry,
     cell: MatrixCell,
     settings: Rc<CanvasSettings>,
+    scheme: ColorScheme,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label = cell_label(&cell);
     let focus = state.matrix_focus();
@@ -178,6 +180,7 @@ pub(super) fn cell(
                 &entry,
                 &cell,
                 &settings,
+                scheme,
                 Mount {
                     checks,
                     focused,
@@ -330,6 +333,7 @@ fn mounted(
     entry: &PreviewEntry,
     cell: &MatrixCell,
     settings: &CanvasSettings,
+    scheme: ColorScheme,
     mount: Mount,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Mount {
@@ -346,7 +350,7 @@ fn mounted(
         Ok(ctx) => ctx,
         Err(error) => return failed(error.to_string()),
     };
-    seed(&ctx.globals(), settings, entry, cell);
+    seed(&ctx.globals(), settings, scheme, entry, cell);
     let play = match Play::mount_with(entry, ctx, viewport) {
         Ok(play) => play,
         Err(error) => return failed(error.message),

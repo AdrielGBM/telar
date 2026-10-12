@@ -4,7 +4,7 @@ const RED: Color = Color::rgb(1.0, 0.0, 0.0);
 const PROJECT: &[ViewportPreset] = &[ViewportPreset::new("watch", 198.0, 242.0)];
 
 fn resolve(settings: &CanvasSettings, env: PreviewEnv) -> CanvasEnv {
-    settings.resolve(&env, true, PROJECT)
+    settings.resolve(&env, true, PROJECT, ColorScheme::Light)
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn settings_left_at_their_defaults_take_what_the_preview_asks_for() {
 #[test]
 fn a_setting_wins_over_what_the_preview_asks_for() {
     let settings = CanvasSettings {
-        mode: Some("day".into()),
+        mode: ModeChoice::Named("day".into()),
         locale: Some("en".into()),
         control_size: Some(ControlSize::Small),
         background: Background::Dark,
@@ -170,7 +170,12 @@ fn a_fullscreen_preview_takes_no_size_and_no_safe_area() {
         locale: Some("ar".into()),
         ..CanvasSettings::default()
     };
-    let resolved = settings.resolve(&PreviewEnv::NONE.viewport(300.0, 200.0), false, PROJECT);
+    let resolved = settings.resolve(
+        &PreviewEnv::NONE.viewport(300.0, 200.0),
+        false,
+        PROJECT,
+        ColorScheme::Light,
+    );
     assert_eq!(resolved.viewport, None);
     assert_eq!(resolved.safe_area, Insets::default());
     assert_eq!(resolved.direction, Some(Direction::Rtl));
@@ -205,7 +210,7 @@ fn fitting_never_zooms_in_and_shrinks_what_the_room_cannot_hold() {
 #[test]
 fn the_settings_are_kept_as_one_json_value() {
     let settings = CanvasSettings {
-        mode: Some("night".into()),
+        mode: ModeChoice::Named("night".into()),
         locale: Some("ar".into()),
         direction: Some(Direction::Rtl),
         control_size: Some(ControlSize::Large),
@@ -283,4 +288,151 @@ fn the_preset_viewports_a_matrix_varies_are_the_presets_sizes() {
         .collect();
     let presets: Vec<Size> = PRESETS.iter().map(|preset| preset.size).collect();
     assert_eq!(written, presets);
+}
+
+/// Registers `paper` as the application's light mode, `ink` as its dark one and `sepia` beside them.
+fn register_modes() {
+    for (id, scheme) in [
+        ("paper", Some(ColorScheme::Light)),
+        ("sepia", None),
+        ("ink", Some(ColorScheme::Dark)),
+    ] {
+        theme_core::register_mode(id, || {});
+        if let Some(scheme) = scheme {
+            theme_core::set_mode_scheme(id, scheme);
+        }
+    }
+}
+
+fn mode_under(mode: ModeChoice, env: PreviewEnv, scheme: ColorScheme) -> Option<String> {
+    let settings = CanvasSettings {
+        mode,
+        ..CanvasSettings::default()
+    };
+    settings.resolve(&env, true, PROJECT, scheme).mode
+}
+
+#[test]
+fn the_system_choice_shows_the_application_s_mode_for_the_scheme_the_workshop_is_in() {
+    register_modes();
+    let system = |scheme| mode_under(ModeChoice::System, PreviewEnv::NONE, scheme);
+    assert_eq!(system(ColorScheme::Light).as_deref(), Some("paper"));
+    assert_eq!(system(ColorScheme::Dark).as_deref(), Some("ink"));
+    assert_eq!(
+        mode_under(
+            ModeChoice::System,
+            PreviewEnv::NONE.mode("sepia"),
+            ColorScheme::Dark
+        )
+        .as_deref(),
+        Some("sepia"),
+        "a preview asking for a mode keeps it"
+    );
+}
+
+#[test]
+fn a_picked_mode_holds_whatever_the_scheme_and_the_preview_ask_for() {
+    register_modes();
+    let asking = PreviewEnv::NONE.mode("sepia");
+    for scheme in [ColorScheme::Light, ColorScheme::Dark] {
+        assert_eq!(
+            mode_under(ModeChoice::Light, asking, scheme).as_deref(),
+            Some("paper")
+        );
+        assert_eq!(
+            mode_under(ModeChoice::Dark, asking, scheme).as_deref(),
+            Some("ink")
+        );
+        assert_eq!(
+            mode_under(ModeChoice::Named("ink".into()), asking, scheme).as_deref(),
+            Some("ink")
+        );
+    }
+}
+
+#[test]
+fn a_scheme_the_application_has_no_mode_for_leaves_the_preview_its_own() {
+    theme_core::register_mode("sepia", || {});
+    let asking = PreviewEnv::NONE.mode("sepia");
+    assert_eq!(
+        mode_under(ModeChoice::Dark, asking, ColorScheme::Light).as_deref(),
+        Some("sepia")
+    );
+    assert_eq!(
+        mode_under(ModeChoice::Dark, PreviewEnv::NONE, ColorScheme::Light),
+        None
+    );
+    assert_eq!(
+        mode_under(ModeChoice::System, PreviewEnv::NONE, ColorScheme::Dark),
+        None,
+        "nothing to show the scheme with leaves the canvas to the application"
+    );
+}
+
+#[test]
+fn the_mode_choices_are_the_system_the_application_s_schemes_and_its_other_modes() {
+    theme_core::register_mode("dark", || {});
+    theme_core::register_mode("sepia", || {});
+    assert_eq!(
+        mode_choices(),
+        [ModeChoice::System, ModeChoice::Named("sepia".into())],
+        "a scheme with no mode for it is not offered, and the word for it names no mode"
+    );
+    register_modes();
+    assert_eq!(
+        mode_choices(),
+        [
+            ModeChoice::System,
+            ModeChoice::Light,
+            ModeChoice::Dark,
+            ModeChoice::Named("sepia".into()),
+        ]
+    );
+    assert_eq!(
+        mode_choices()
+            .iter()
+            .map(ModeChoice::label)
+            .collect::<Vec<_>>(),
+        ["System", "Light", "Dark", "sepia"]
+    );
+}
+
+#[test]
+fn a_kept_mode_reads_back_from_what_earlier_workshops_kept() {
+    let kept = |json: &str| serde_json::from_str::<CanvasSettings>(json).unwrap().mode;
+    assert_eq!(kept(r#"{"mode":null}"#), ModeChoice::System);
+    assert_eq!(kept("{}"), ModeChoice::System);
+    assert_eq!(
+        kept(r#"{"mode":"night"}"#),
+        ModeChoice::Named("night".into())
+    );
+    assert_eq!(kept(r#"{"mode":"dark"}"#), ModeChoice::Dark);
+    for mode in [
+        ModeChoice::System,
+        ModeChoice::Light,
+        ModeChoice::Dark,
+        ModeChoice::Named("night".into()),
+    ] {
+        let settings = CanvasSettings {
+            mode: mode.clone(),
+            ..CanvasSettings::default()
+        };
+        let json = serde_json::to_string(&settings).unwrap();
+        assert!(
+            json.starts_with(&format!(r#"{{"mode":"{}""#, mode.word())),
+            "{json}"
+        );
+        assert_eq!(kept(&json), mode);
+    }
+}
+
+#[test]
+fn a_mode_is_chosen_as_the_scheme_it_stands_for() {
+    register_modes();
+    assert_eq!(ModeChoice::for_mode("paper"), ModeChoice::Light);
+    assert_eq!(ModeChoice::for_mode("ink"), ModeChoice::Dark);
+    assert_eq!(
+        ModeChoice::for_mode("sepia"),
+        ModeChoice::Named("sepia".into())
+    );
 }

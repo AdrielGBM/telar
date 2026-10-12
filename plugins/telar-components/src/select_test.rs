@@ -81,9 +81,11 @@ fn selecting_an_option_sets_the_signal_and_closes() {
     relayout_if_dirty();
 
     let ox = panel_width() / 2.0;
-    let oy =
-        (crate::shared::control_height() + panel_pad() + 2.0 * row_height() + row_height() / 2.0)
-            as f64;
+    let oy = (crate::shared::control_height()
+        + crate::shared::popup_offset()
+        + panel_pad()
+        + 2.0 * row_height()
+        + row_height() / 2.0) as f64;
     route(&mut tree, &press(ox as f64, oy));
     route(&mut tree, &release(ox as f64, oy));
 
@@ -174,8 +176,11 @@ fn a_choice_can_be_disabled_which_a_list_of_strings_could_not_say() {
     );
     relayout_if_dirty();
 
-    let oy =
-        (crate::shared::control_height() + panel_pad() + row_height() + row_height() / 2.0) as f64;
+    let oy = (crate::shared::control_height()
+        + crate::shared::popup_offset()
+        + panel_pad()
+        + row_height()
+        + row_height() / 2.0) as f64;
     route(&mut tree, &press(tx, oy));
     route(&mut tree, &release(tx, oy));
 
@@ -252,9 +257,11 @@ fn a_stretched_select_keeps_the_width_of_its_row_after_a_longer_pick() {
     route(&mut tree, &press(20.0, ty));
     route(&mut tree, &release(20.0, ty));
     relayout_if_dirty();
-    let oy =
-        (crate::shared::control_height() + panel_pad() + 2.0 * row_height() + row_height() / 2.0)
-            as f64;
+    let oy = (crate::shared::control_height()
+        + crate::shared::popup_offset()
+        + panel_pad()
+        + 2.0 * row_height()
+        + row_height() / 2.0) as f64;
     route(&mut tree, &press(20.0, oy));
     route(&mut tree, &release(20.0, oy));
     relayout_if_dirty();

@@ -34,6 +34,8 @@ pub struct SelectTokens {
     pub border_width: Option<f32>,
     /// Width of the trigger, unless it is stretched, and of the list it opens, at the regular control size and scaled with the control size in force. `None` is 13 ems of the document's text.
     pub width: Option<f32>,
+    /// Space between the list and the trigger it drops from, at the regular control size and scaled with the control size in force. `None` is [`metrics::popup_offset`](crate::metrics::popup_offset).
+    pub offset: Option<f32>,
 }
 
 impl SelectTokens {
@@ -57,6 +59,14 @@ impl SelectTokens {
 
     pub fn width(&self) -> f32 {
         dropdown::width(self.width)
+    }
+
+    pub fn offset(&self) -> f32 {
+        dropdown::offset(self.offset)
+    }
+
+    fn current_offset() -> f32 {
+        Self::current().offset()
     }
 
     fn geometry() -> dropdown::Geometry {
@@ -98,21 +108,15 @@ pub fn select(props: SelectProps, children: Children) -> Result<Box<dyn LayoutIt
     // `None` selection is uncontrolled: own an internal signal so the trigger still tracks a choice.
     let selected = props.selected.unwrap_or_else(|| signal(0u32));
     dropdown::dropdown(dropdown::Dropdown {
-        style: props.style,
-        // Also tells the dropdown to write the picked index back and highlight the chosen row, which is the rest of what makes this a bound list rather than a menu.
-        label: dropdown::TriggerLabel::Selected {
-            placeholder: || strings::text(strings::SELECT),
-        },
+        placeholder: || strings::text(strings::SELECT),
         rows,
         color: props.color,
         on_pick: props.on_select,
-        selected: Some(selected),
+        selected,
         stretch: props.stretch,
-        // A select is a field: it wears the border and the caret, and a bare one is indistinguishable from a label.
-        bordered: true,
-        caret: true,
-        fit: false,
         geometry: SelectTokens::geometry,
+        offset: SelectTokens::current_offset,
+        style: props.style,
     })
 }
 

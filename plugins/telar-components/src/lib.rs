@@ -39,8 +39,6 @@ mod command_palette;
 #[cfg(test)]
 mod consistency_test;
 #[cfg(feature = "overlays")]
-mod context_menu;
-#[cfg(feature = "overlays")]
 mod drawer;
 mod dropdown;
 mod edit;
@@ -56,6 +54,8 @@ mod line_gutter;
 mod list;
 #[cfg(feature = "overlays")]
 mod menu;
+#[cfg(feature = "overlays")]
+mod menu_panel;
 #[cfg(feature = "overlays")]
 mod modal;
 mod popup;
@@ -117,12 +117,6 @@ pub use command_palette::{
     Command, CommandPaletteProps, CommandPaletteTokens, RunHandler, command_palette,
 };
 #[cfg(feature = "overlays")]
-pub use context_menu::{
-    ContextMenuProps, ContextMenuTokens, Entry as MenuEntry, MenuCustomProps, MenuRowProps,
-    MenuSeparatorProps, MenuSubProps, context_menu, menu_custom, menu_row, menu_separator,
-    menu_sub,
-};
-#[cfg(feature = "overlays")]
 pub use drawer::{DrawerProps, DrawerTokens, drawer};
 #[cfg(feature = "overlays")]
 pub use fuzzy::{FuzzyMatch, fuzzy_match};
@@ -135,7 +129,12 @@ pub use kbd::{KbdProps, KbdTokens, kbd};
 pub use line_gutter::LineGutter;
 pub use list::{GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator};
 #[cfg(feature = "overlays")]
-pub use menu::{MenuProps, MenuTokens, menu};
+pub use menu::{
+    ContextMenuProps, MenuProps, MenuTokens, MenuTriggerTokens, context_menu, focused_rect,
+    is_context_menu_key, menu,
+};
+#[cfg(feature = "overlays")]
+pub use menu_panel::{SubmenuProps, submenu};
 #[cfg(feature = "overlays")]
 pub use modal::{ModalProps, ModalTokens, modal};
 pub use progress::{ProgressProps, ProgressTokens, progress};
@@ -200,8 +199,8 @@ pub mod metrics {
         MIN_TARGET, Mark, border_width, border_width_strong, control_height, control_pad_x,
         control_text, focus_ring, gap_lg, gap_md, gap_sm, gap_xl, gap_xs, held_wash, hover_wash,
         hovered_fill, icon_pad, icon_size, ink_on, mark, measure, panel_pad, pill, pill_radius,
-        pressed_fill, pressed_wash, radius_control, radius_dialog, radius_item, radius_surface,
-        row_height, spacing, strong_weight, thumb_on,
+        popup_offset, pressed_fill, pressed_wash, radius_control, radius_dialog, radius_item,
+        radius_surface, row_height, spacing, strong_weight, thumb_on,
     };
 }
 telar::__previews! {

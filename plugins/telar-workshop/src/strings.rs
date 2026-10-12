@@ -76,7 +76,9 @@ pub(crate) const MATRIX_SOURCE: &str = "matrix_source";
 pub(crate) const MAXIMIZE: &str = "maximize";
 pub(crate) const MINIMIZE: &str = "minimize";
 pub(crate) const MODE: &str = "mode";
-pub(crate) const MODE_DEFAULT: &str = "mode_default";
+pub(crate) const MODE_DARK: &str = "mode_dark";
+pub(crate) const MODE_LIGHT: &str = "mode_light";
+pub(crate) const MODE_SYSTEM: &str = "mode_system";
 pub(crate) const MOVE_PANELS: &str = "move_panels";
 pub(crate) const NEXT_COMPONENT: &str = "next_component";
 pub(crate) const NEXT_PREVIEW: &str = "next_preview";
@@ -278,7 +280,9 @@ static CATALOG: Catalog = Catalog {
         english!(MAXIMIZE, "Maximize"),
         english!(MINIMIZE, "Minimize"),
         english!(MODE, "Mode"),
-        english!(MODE_DEFAULT, "Default mode"),
+        english!(MODE_DARK, "Dark"),
+        english!(MODE_LIGHT, "Light"),
+        english!(MODE_SYSTEM, "System"),
         english!(MOVE_PANELS, "Move the panels"),
         english!(NEXT_COMPONENT, "Next component"),
         english!(NEXT_PREVIEW, "Next preview"),

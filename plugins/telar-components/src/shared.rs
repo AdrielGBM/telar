@@ -213,6 +213,10 @@ pub fn row_height() -> f32 {
 pub fn panel_pad() -> f32 {
     gap_sm()
 }
+/// The space between a panel that drops from a control and the control: a menu's list under its button, a select's options under its field.
+pub fn popup_offset() -> f32 {
+    gap_md()
+}
 
 /// A caption's share of the text it labels.
 pub(crate) const CAPTION_RATIO: f32 = 0.85;

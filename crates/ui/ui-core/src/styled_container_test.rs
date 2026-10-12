@@ -2288,6 +2288,52 @@ fn a_presented_box_is_announced_but_a_tap_leaves_focus_alone() {
     assert_eq!(focus::current(), None, "nor is the box a Tab stop");
 }
 
+/// A menu button and a submenu row say what they open beside whether it is open, to the element and to the reader alike; a box that opens nothing says nothing.
+#[test]
+fn a_control_says_what_it_opens() {
+    focus::clear();
+    let open = reactive_core::signal(false);
+    let mut button = laid_out_box()
+        .control(focus::Role::Button)
+        .has_popup(focus::HasPopup::Menu)
+        .expanded(move || open.get());
+    settle(&mut button);
+
+    let said = semantics_of(&button);
+    assert_eq!(said.has_popup, Some(focus::HasPopup::Menu));
+    assert_eq!(said.expanded, Some(false));
+    open.set(true);
+    assert_eq!(
+        semantics_of(&button).has_popup,
+        Some(focus::HasPopup::Menu),
+        "what it opens stays the same while it opens and shuts"
+    );
+    let exposed = focus::exposed();
+    assert_eq!(exposed.len(), 1);
+    assert_eq!(exposed[0].has_popup, Some(focus::HasPopup::Menu));
+    assert_eq!(exposed[0].expanded, Some(true));
+
+    focus::clear();
+    let mut row = laid_out_box()
+        .presented(focus::Role::MenuItem)
+        .has_popup(focus::HasPopup::Menu);
+    settle(&mut row);
+    assert_eq!(semantics_of(&row).has_popup, Some(focus::HasPopup::Menu));
+
+    focus::clear();
+    let mut plain = laid_out_box().control(focus::Role::Button);
+    settle(&mut plain);
+    assert_eq!(semantics_of(&plain).has_popup, None);
+
+    let mut unfocusable = laid_out_box().has_popup(focus::HasPopup::ListBox);
+    settle(&mut unfocusable);
+    assert_eq!(
+        semantics_of(&unfocusable).has_popup,
+        None,
+        "a box with no focus id has no control to say it of"
+    );
+}
+
 /// A tree keeps focus while its cursor walks the rows: the box says which row the cursor is on, by the row's element, and stops saying it once that row is gone.
 #[test]
 fn a_control_names_the_presented_box_its_cursor_rests_on() {

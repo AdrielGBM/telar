@@ -26,10 +26,15 @@ fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
         &[root_node],
     )
     .unwrap();
+    let window = telar::new_container(
+        LayoutStyle::new().flex_column().width(400.0).height(400.0),
+        &[row],
+    )
+    .unwrap();
     let mut tree = ComponentList::new(item);
     compute_layout(
-        row,
-        AvailableSpace::Definite(44.0),
+        window,
+        AvailableSpace::Definite(400.0),
         AvailableSpace::Definite(400.0),
     )
     .unwrap();
@@ -188,8 +193,11 @@ fn selecting_an_item_fires_on_select_and_closes() {
     relayout_if_dirty();
 
     let ox = (panel_width() / 2.0) as f64;
-    let oy =
-        (crate::shared::control_height() + panel_pad() + row_height() + row_height() / 2.0) as f64;
+    let oy = (crate::shared::control_height()
+        + crate::shared::popup_offset()
+        + panel_pad()
+        + row_height()
+        + row_height() / 2.0) as f64;
     route(&mut tree, &press(ox, oy));
     route(&mut tree, &release(ox, oy));
 
@@ -318,8 +326,11 @@ fn a_disabled_row_does_not_commit_on_a_tap() {
     route(&mut tree, &release(tx, ty));
     relayout_if_dirty();
 
-    let oy =
-        (crate::shared::control_height() + panel_pad() + row_height() + row_height() / 2.0) as f64;
+    let oy = (crate::shared::control_height()
+        + crate::shared::popup_offset()
+        + panel_pad()
+        + row_height()
+        + row_height() / 2.0) as f64;
     route(&mut tree, &press(tx, oy));
     route(&mut tree, &release(tx, oy));
     assert_eq!(seen.get(), None, "a disabled row commits nothing");
@@ -658,7 +669,7 @@ fn a_trigger_without_a_caret_pads_its_label_evenly_on_both_sides() {
 #[derive(Clone)]
 struct Themed {
     control: f32,
-    menus: Option<MenuTokens>,
+    menus: Option<MenuTriggerTokens>,
 }
 
 impl telar::ThemeTokens for Themed {
@@ -683,7 +694,7 @@ fn bordered_trigger(tree: &ComponentList) -> telar::RectStyle {
 }
 
 #[test]
-fn the_trigger_follows_the_control_role_until_the_menu_tokens_name_their_own() {
+fn the_trigger_follows_the_control_role_until_the_trigger_tokens_name_their_own() {
     use telar::{Border, BorderRadius};
 
     crate::test_support::fresh_layout_runtime();
@@ -719,11 +730,11 @@ fn the_trigger_follows_the_control_role_until_the_menu_tokens_name_their_own() {
 
     telar::set_theme(Themed {
         control: 7.0,
-        menus: Some(MenuTokens {
+        menus: Some(MenuTriggerTokens {
             radius: Some(2.0),
             border_width: Some(3.0),
             width: Some(150.0),
-            ..MenuTokens::default()
+            ..MenuTriggerTokens::default()
         }),
     });
     relayout_if_dirty();
@@ -935,4 +946,84 @@ fn a_menu_trigger_is_washed_while_the_pointer_rests_on_it() {
     assert_eq!(filled(&tree), 1);
     route(&mut tree, &moved(390.0, 79.0));
     assert_eq!(filled(&tree), 0);
+}
+
+/// A menu of three rows whose trigger stands `top` px down a 400 × 300 window, opened from the keyboard, with the trigger's box and the panel's list.
+fn opened_under(
+    top: f32,
+    size: telar::ControlSize,
+    tokens: MenuTokens,
+) -> (telar::Rect, telar::Rect, f32, f32) {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let (mut offset, mut pad) = (0.0, 0.0);
+    let item = telar::provide_control_size(size, || {
+        offset = crate::shared::popup_offset();
+        pad = panel_pad();
+        menu(
+            MenuProps::props().label("File").tokens(tokens).build(),
+            rows(&["New", "Open", "Close"]),
+        )
+    })
+    .unwrap();
+    let root = telar::Container::new(
+        LayoutStyle::new().flex_column().padding_top(top),
+        vec![telar::box_item(item)],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(300.0),
+    )
+    .unwrap();
+    let mut tree = ComponentList::new(root);
+    settle(&tree);
+    telar::focus::focus_next();
+    route(&mut tree, &named(telar::NamedKey::Enter));
+    settle(&tree);
+    let trigger = crate::test_support::drawn(telar::focus::Role::Button)[0];
+    let list = crate::test_support::drawn(telar::focus::Role::Menu)[0];
+    (trigger, list, offset, pad)
+}
+
+/// The panel stands the theme's popup offset away from its trigger — under it, or over it once it flips — so it reads as a surface the button opened rather than one grown out of it.
+#[test]
+fn the_panel_keeps_the_popup_offset_from_its_trigger_on_either_side() {
+    use telar::ControlSize;
+
+    let offset = crate::shared::popup_offset();
+    assert!(offset > 0.0);
+    let (trigger, list, _, _) = opened_under(0.0, ControlSize::Regular, MenuTokens::default());
+    assert_eq!(
+        list.y - panel_pad(),
+        trigger.y + trigger.height + offset,
+        "under it"
+    );
+
+    let (trigger, list, _, _) = opened_under(240.0, ControlSize::Regular, MenuTokens::default());
+    assert_eq!(
+        list.y + list.height + panel_pad(),
+        trigger.y - offset,
+        "over it, flipped"
+    );
+}
+
+/// The offset is a length of the control size in force, and the menu's tokens name one of their own at the regular size.
+#[test]
+fn the_popup_offset_scales_with_the_control_size_and_follows_the_tokens() {
+    use telar::ControlSize;
+
+    let gap = |size: ControlSize, tokens: MenuTokens| {
+        let (trigger, list, offset, pad) = opened_under(0.0, size, tokens);
+        (list.y - pad - (trigger.y + trigger.height), offset)
+    };
+    let (large, offset) = gap(ControlSize::Large, MenuTokens::default());
+    assert_eq!(large, offset, "the offset at the size in force");
+    assert!(large > gap(ControlSize::Regular, MenuTokens::default()).0);
+    let own = MenuTokens {
+        offset: Some(20.0),
+        ..MenuTokens::default()
+    };
+    assert_eq!(gap(ControlSize::Regular, own).0, 20.0);
 }

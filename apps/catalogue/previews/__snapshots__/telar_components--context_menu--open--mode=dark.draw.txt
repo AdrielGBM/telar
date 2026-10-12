@@ -30,41 +30,50 @@ element group
           matrix 1,0,0,1,4,4
             element group
               element menuitem
-                rect 0,0 174x32
+                rect 0,0 174x32 radius=6
+                element group
+                  rect 0,0 0x0
+                end
                 element group
                   matrix 1,0,0,1,8,0
-                    text 0,7 23.09x16.8 "Cut" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                    text 0,7 112.17x16.8 "Cut" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                   end
                 end
                 element group
-                  matrix 1,0,0,1,124,0
-                    text 0,7 42.03x16.8 "Ctrl+X" size=14 family=sans-serif weight=400 color=#99a1b8ff lang=en
+                  matrix 1,0,0,1,128,0
+                    text 0,7 38x15.12 "Ctrl+X" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
                   end
                 end
               end
               element menuitem
-                rect 0,32 174x32
+                rect 0,32 174x32 radius=6
+                element group
+                  rect 0,32 0x0
+                end
                 element group
                   matrix 1,0,0,1,8,32
-                    text 0,7 35x16.8 "Copy" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                    text 0,7 111.14x16.8 "Copy" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                   end
                 end
                 element group
-                  matrix 1,0,0,1,123,32
-                    text 0,7 43.19x16.8 "Ctrl+C" size=14 family=sans-serif weight=400 color=#99a1b8ff lang=en
+                  matrix 1,0,0,1,127,32
+                    text 0,7 39x15.12 "Ctrl+C" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
                   end
                 end
               end
               element menuitem
-                rect 0,64 174x32
+                rect 0,64 174x32 radius=6
+                element group
+                  rect 0,64 0x0
+                end
                 element group
                   matrix 1,0,0,1,8,64
-                    text 0,7 37x16.8 "Paste" size=14 family=sans-serif weight=400 color=#99a1b8ff lang=en
+                    text 0,7 112.28x16.8 "Paste" size=14 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
                   end
                 end
                 element group
-                  matrix 1,0,0,1,124,64
-                    text 0,7 42x16.8 "Ctrl+V" size=14 family=sans-serif weight=400 color=#99a1b8ff lang=en
+                  matrix 1,0,0,1,128,64
+                    text 0,7 38x15.12 "Ctrl+V" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
                   end
                 end
               end
@@ -72,10 +81,13 @@ element group
                 rect 0,98 174x1 fill=#3d4252ff
               end
               element menuitem
-                rect 0,101 174x32
+                rect 0,101 174x32 radius=6
+                element group
+                  rect 0,101 0x0
+                end
                 element group
                   matrix 1,0,0,1,8,101
-                    text 0,7 38.33x16.8 "Share" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                    text 0,7 144x16.8 "Share" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                   end
                 end
                 element group

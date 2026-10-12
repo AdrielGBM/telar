@@ -683,6 +683,14 @@ impl StyledContainer {
         self
     }
 
+    /// Declares what this control opens, so a reader names it before the control is pressed: a menu for a menu button or a submenu row, a list box for a select's combobox. Whether it is open now is [`expanded`](Self::expanded)'s to say. See [`focus::set_has_popup`].
+    pub fn has_popup(self, popup: focus::HasPopup) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_has_popup(id, popup);
+        }
+        self
+    }
+
     /// Declares where this control sits in its hierarchy and among its siblings, for a reader that cannot count them: a row of a virtualised tree, whose neighbours may not be built.
     pub fn positioned(self, position: focus::SetPosition) -> Self {
         if let Some(id) = self.focusable.id {

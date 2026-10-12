@@ -1,12 +1,14 @@
 //! [`CanvasSettings`]: what the canvas toolbar sets, and how it combines with what a preview asks for into the environment its canvas gets.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use telar::preview::{PreviewEnv, ViewportPreset};
-use telar::{Color, ControlSize, Direction, Insets, Size};
+use telar::{
+    Color, ColorScheme, ControlSize, Direction, Insets, Size, registered_modes, scheme_mode,
+};
 
 use crate::strings::{
-    DEVICE_COMPACT_PHONE, DEVICE_PHONE, DEVICE_TABLET, PRESET_DESKTOP, PRESET_LAPTOP,
-    PRESET_MOBILE, PRESET_TABLET,
+    self, DEVICE_COMPACT_PHONE, DEVICE_PHONE, DEVICE_TABLET, MODE_DARK, MODE_LIGHT, MODE_SYSTEM,
+    PRESET_DESKTOP, PRESET_LAPTOP, PRESET_MOBILE, PRESET_TABLET,
 };
 
 /// The size a custom viewport starts at when nothing gives it one.
@@ -21,12 +23,11 @@ pub(crate) const GRID_STEP: f32 = 8.0;
 
 /// Everything the canvas toolbar sets, for every preview alike. One value, so it is kept, restored and stored whole.
 ///
-/// A field at its default leaves the decision to the preview's own [`PreviewEnv`], and where that names nothing, to the application.
+/// A field at its default leaves the decision to the preview's own [`PreviewEnv`], and where that names nothing, to the application: for the mode, to the application's mode for the system's scheme first ([`ModeChoice::System`]).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct CanvasSettings {
-    /// A mode registered with `register_mode`, by id.
-    pub(crate) mode: Option<String>,
+    pub(crate) mode: ModeChoice,
     /// A BCP 47 language tag.
     pub(crate) locale: Option<String>,
     /// Set only by choosing one; otherwise the canvas reads in the direction of its locale.
@@ -71,6 +72,108 @@ impl Background {
             Self::Dark => Some(DARK_BACKGROUND),
         }
     }
+}
+
+/// The mode the canvas is shown in. Stored and carried as one word ([`Self::word`]): `system`, `light`, `dark`, or a mode's id. The words `light` and `dark` are the scheme choices, resolving to the application's light and dark modes, and none of the three names a mode: one registered as `light` or `dark` is reached through the scheme it declares.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub(crate) enum ModeChoice {
+    /// The preview's own mode, else the application's mode for the scheme the workshop is in, following the system as it changes.
+    #[default]
+    System,
+    /// The application's light mode ([`scheme_mode`]).
+    Light,
+    /// The application's dark mode ([`scheme_mode`]).
+    Dark,
+    /// A mode registered with `register_mode`, by id.
+    Named(String),
+}
+
+impl ModeChoice {
+    pub(crate) fn word(&self) -> &str {
+        match self {
+            Self::System => "system",
+            Self::Light => "light",
+            Self::Dark => "dark",
+            Self::Named(id) => id,
+        }
+    }
+
+    /// The choice that shows the mode `id`: the scheme choice where `id` is the application's mode for that scheme, so the menu ticks it and it is kept as it was picked.
+    pub(crate) fn for_mode(id: &str) -> Self {
+        let stands_for = |scheme| scheme_mode(scheme).as_deref() == Some(id);
+        if stands_for(ColorScheme::Light) {
+            Self::Light
+        } else if stands_for(ColorScheme::Dark) {
+            Self::Dark
+        } else {
+            Self::Named(id.to_string())
+        }
+    }
+
+    /// The choice [`Self::word`] wrote; an empty word is no choice made.
+    pub(crate) fn parse(word: &str) -> Self {
+        match word {
+            "" | "system" => Self::System,
+            "light" => Self::Light,
+            "dark" => Self::Dark,
+            id => Self::Named(id.to_string()),
+        }
+    }
+
+    pub(crate) fn label(&self) -> String {
+        match self {
+            Self::System => strings::text(MODE_SYSTEM),
+            Self::Light => strings::text(MODE_LIGHT),
+            Self::Dark => strings::text(MODE_DARK),
+            Self::Named(id) => id.clone(),
+        }
+    }
+
+    /// The mode a canvas is shown in for a preview asking for `asked`, while the workshop is in `scheme`. A scheme the application has no mode for leaves the preview its own, as a setting that names nothing does.
+    pub(crate) fn mode(&self, asked: Option<&str>, scheme: ColorScheme) -> Option<String> {
+        let asked = || asked.map(str::to_string);
+        match self {
+            Self::System => asked().or_else(|| scheme_mode(scheme)),
+            Self::Light => scheme_mode(ColorScheme::Light).or_else(asked),
+            Self::Dark => scheme_mode(ColorScheme::Dark).or_else(asked),
+            Self::Named(id) => Some(id.clone()),
+        }
+    }
+}
+
+impl Serialize for ModeChoice {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.word().serialize(serializer)
+    }
+}
+
+/// `null`, what a workshop that offered no system choice stored for its default, reads as [`ModeChoice::System`].
+impl<'de> Deserialize<'de> for ModeChoice {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let word = Option::<String>::deserialize(deserializer)?;
+        Ok(word.as_deref().map_or(Self::System, Self::parse))
+    }
+}
+
+/// What the Mode setting offers: following the system, the application's light and dark modes where it has them, then each other registered mode by id, leaving out one named with a word [`ModeChoice::parse`] reads as another choice.
+pub(crate) fn mode_choices() -> Vec<ModeChoice> {
+    let light = scheme_mode(ColorScheme::Light);
+    let dark = scheme_mode(ColorScheme::Dark);
+    let mut choices = vec![ModeChoice::System];
+    if light.is_some() {
+        choices.push(ModeChoice::Light);
+    }
+    if dark.is_some() {
+        choices.push(ModeChoice::Dark);
+    }
+    choices.extend(
+        registered_modes()
+            .into_iter()
+            .filter(|id| Some(id) != light.as_ref() && Some(id) != dark.as_ref())
+            .map(|id| ModeChoice::parse(&id))
+            .filter(|choice| matches!(choice, ModeChoice::Named(_))),
+    );
+    choices
 }
 
 /// How big the canvas is.
@@ -239,12 +342,13 @@ impl CanvasSettings {
             .map(|size| if self.rotated { rotate(size) } else { size })
     }
 
-    /// The canvas's environment: these settings over `env`, the preview's own. `framed` is false for a fullscreen preview, which takes no size, device or safe area.
+    /// The canvas's environment: these settings over `env`, the preview's own, while the workshop is in `scheme`. `framed` is false for a fullscreen preview, which takes no size, device or safe area.
     pub(crate) fn resolve(
         &self,
         env: &PreviewEnv,
         framed: bool,
         project: &[ViewportPreset],
+        scheme: ColorScheme,
     ) -> CanvasEnv {
         let locale = self
             .locale
@@ -266,7 +370,7 @@ impl CanvasSettings {
                 }
             });
         CanvasEnv {
-            mode: self.mode.clone().or_else(|| env.mode.map(str::to_string)),
+            mode: self.mode.mode(env.mode, scheme),
             locale,
             direction,
             control_size: self.control_size,

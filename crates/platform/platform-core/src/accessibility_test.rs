@@ -20,6 +20,7 @@ fn node(role: Role, name: &str) -> AccessNode {
         position: None,
         active_descendant: None,
         controls: None,
+        has_popup: None,
     }
 }
 
@@ -74,10 +75,12 @@ fn a_state_is_read_in_the_words_of_its_role() {
         toggled(Role::Tab, "Advanced", false),
         toggled(Role::Disclosure, "Details", false),
         toggled(Role::Slider, "Volume", true),
+        toggled(Role::MenuItemCheckBox, "Word wrap", true),
+        toggled(Role::MenuItemRadio, "Compact", false),
     ];
     assert_eq!(
         transcript(&nodes),
-        "Reduce motion, switch, checked\nBold, button, pressed\nItalic, button, not pressed\nGeneral, tab, selected\nAdvanced, tab\nDetails, button, collapsed\nVolume, slider"
+        "Reduce motion, switch, checked\nBold, button, pressed\nItalic, button, not pressed\nGeneral, tab, selected\nAdvanced, tab\nDetails, button, collapsed\nVolume, slider\nWord wrap, menuitemcheckbox, checked\nCompact, menuitemradio, not checked"
     );
 }
 
@@ -98,6 +101,25 @@ fn a_tree_row_is_read_as_selected_and_open_or_shut() {
     assert_eq!(
         transcript(&nodes),
         "Inputs, treeitem, expanded\nButton, treeitem, selected, collapsed\nPrimary, treeitem"
+    );
+}
+
+/// A control that opens something says what before whether it is open, as a reader warns of a menu before Enter drops it.
+#[test]
+fn a_control_that_opens_something_says_what() {
+    let opening = |role: Role, name: &str, popup: HasPopup, open: bool| {
+        let mut node = node(role, name);
+        node.has_popup = Some(popup);
+        node.expanded = Some(open);
+        node
+    };
+    let nodes = [
+        opening(Role::Button, "File", HasPopup::Menu, false),
+        opening(Role::ComboBox, "Size", HasPopup::ListBox, true),
+    ];
+    assert_eq!(
+        transcript(&nodes),
+        "File, button, has menu, collapsed\nSize, combobox, has listbox, expanded"
     );
 }
 
