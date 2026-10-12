@@ -111,6 +111,11 @@ pub trait AppRuntime: 'static {
         ui_core::set_safe_area_insets(insets);
     }
 
+    /// Reports whether the window being driven is maximized into the store [`window::is_maximized`](crate::window::is_maximized) reads.
+    fn set_surface_maximized(&self, maximized: bool) {
+        ui_core::set_surface_maximized(maximized);
+    }
+
     /// Hands over the history the platform stands on, in the store [`location_history`](crate::location_history) reads and a following navigator adopts.
     fn set_location_history(&self, history: &[platform_core::Location]) {
         platform_core::receive_location_history(history.to_vec());

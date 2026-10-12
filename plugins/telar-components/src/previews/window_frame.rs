@@ -22,21 +22,15 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(window_frame, "Default", |p| {
             let style = SurfaceFrameStyle {
-                radius: telar::use_theme_tokens().radius(),
-                font_size: 13.0,
+                radius: Some(crate::metrics::radius_dialog()),
                 controls: WindowControls {
                     drag: false,
                     minimize: p.arg("minimize", true),
                     maximize: p.arg("maximize", true),
                 },
-                body_inset: p.arg("body_inset", 12.0f32),
+                body_inset: Some(p.arg("body_inset", crate::metrics::gap_lg())),
                 ..SurfaceFrameStyle::default()
             }
-            .background(token(|t| t.surface()))
-            .title_bar(token(|t| t.surface_alt()))
-            .title_text(token(|t| t.ink()))
-            .close(token(|t| t.ink()))
-            .control_hover(token(|t| t.highlight_med()))
             .close_hover(token(|t| t.error()))
             .close_hover_glyph(token(|t| t.on_error()));
             let body = Container::new(

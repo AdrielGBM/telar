@@ -49,8 +49,8 @@ col gap:20
         card gap:8
             text "Chosen: {$chosen} · in use: {scheme_name($scheme)}" font_size:13 color:$theme.ink
             row gap:8
-                button label:"System" ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::System))
-                button label:"Light" ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::Light))
-                button label:"Dark" ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::Dark))
+                button label:"System" variant:ButtonVariant::Ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::System))
+                button label:"Light" variant:ButtonVariant::Ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::Light))
+                button label:"Dark" variant:ButtonVariant::Ghost on_press:(|| telar::set_scheme_preference(telar::SchemePreference::Dark))
             text "A fixed choice holds whatever the system does until it is changed here, and is kept in the target's preference store: a file beside prefs.toml, or localStorage on the web." font_size:12 color:$theme.muted
         code_line code:"set_scheme_preference(SchemePreference::Dark)   ·   $scheme   ·   store_preference(key, value)"

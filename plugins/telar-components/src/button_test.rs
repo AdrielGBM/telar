@@ -13,7 +13,10 @@ use super::*;
 fn a_ghost_label_keeps_the_ink_of_the_region_around_it() {
     crate::test_support::fresh_layout_runtime();
     let btn = button(
-        ButtonProps::props().label("Undo").ghost(true).build(),
+        ButtonProps::props()
+            .label("Undo")
+            .variant(ButtonVariant::Ghost)
+            .build(),
         Children::default(),
     )
     .unwrap();
@@ -53,7 +56,7 @@ fn tap_fires_on_press() {
     let mut btn = button(
         ButtonProps::props()
             .label("OK")
-            .fill(Reactive::of(|| Color::rgba(0.2, 0.4, 0.9, 1.0)))
+            .color(Reactive::of(|| Color::rgba(0.2, 0.4, 0.9, 1.0)))
             .on_press(Rc::new(move || sink.set(true)))
             .build(),
         Children::default(),
@@ -111,7 +114,7 @@ fn switching_theme_re_spaces_the_button() {
     compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
     assert_eq!(
         rect.get().width,
-        2.0 * 8.0 * 1.75,
+        2.0 * 8.0 * 1.5,
         "a button starts at the padding of the theme it was built under"
     );
 
@@ -119,7 +122,7 @@ fn switching_theme_re_spaces_the_button() {
     relayout_if_dirty();
     assert_eq!(
         rect.get().width,
-        2.0 * 24.0 * 1.75,
+        2.0 * 24.0 * 1.5,
         "and follows the theme it is switched to, without being rebuilt"
     );
 }
@@ -239,4 +242,246 @@ fn a_button_under_a_provider_paints_with_that_theme() {
         themed_rect.get().width > plain_rect.get().width,
         "the provider's spacing pads the button it covers"
     );
+}
+
+#[test]
+fn a_ghost_button_is_washed_while_the_pointer_rests_on_it() {
+    use telar::testing::{centre, moved, route};
+
+    crate::test_support::fresh_layout_runtime();
+    let btn = button(
+        ButtonProps::props()
+            .label("Undo")
+            .variant(ButtonVariant::Ghost)
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_row().width(200.0).height(80.0),
+        &[btn.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(80.0),
+    )
+    .unwrap();
+    telar::relayout_if_dirty();
+    let mut tree = ComponentList::new(btn);
+    let filled = |tree: &ComponentList| {
+        tree.commands()
+            .iter()
+            .filter(|c| matches!(c, DrawCommand::Rect { style, .. } if style.fill.is_some()))
+            .count()
+    };
+    assert_eq!(filled(&tree), 0);
+    let (x, y) = centre(crate::test_support::drawn(telar::focus::Role::Button)[0]);
+    route(&mut tree, &moved(x, y));
+    assert_eq!(filled(&tree), 1);
+}
+
+#[derive(Clone)]
+struct Rounded {
+    control: f32,
+    buttons: Option<ButtonTokens>,
+}
+
+impl telar::ThemeTokens for Rounded {
+    fn radius_control(&self) -> f32 {
+        self.control
+    }
+    fn border_width_strong(&self) -> f32 {
+        3.0
+    }
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(buttons) = &self.buttons {
+            extensions.insert(buttons.clone());
+        }
+    }
+}
+
+fn laid_out(props: ButtonProps) -> ComponentList {
+    crate::test_support::fresh_layout_runtime();
+    let btn = button(props, Children::default()).unwrap();
+    compute_layout(
+        btn.layout_node(),
+        AvailableSpace::MaxContent,
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    ComponentList::new(btn)
+}
+
+fn box_style(tree: &ComponentList) -> RectStyle {
+    tree.commands()
+        .iter()
+        .find_map(|c| match c {
+            DrawCommand::Rect { style, .. } => Some(**style),
+            _ => None,
+        })
+        .expect("the button paints its box")
+}
+
+#[test]
+fn the_corner_is_the_theme_s_control_role_until_the_button_tokens_name_one() {
+    telar::set_theme(Rounded {
+        control: 7.0,
+        buttons: None,
+    });
+    let tree = laid_out(ButtonProps::props().label("Save").build());
+    assert_eq!(box_style(&tree).radius, BorderRadius::all(7.0));
+
+    telar::set_theme(Rounded {
+        control: 7.0,
+        buttons: Some(ButtonTokens {
+            radius: Some(2.0),
+            ..ButtonTokens::default()
+        }),
+    });
+    assert_eq!(
+        box_style(&tree).radius,
+        BorderRadius::all(2.0),
+        "the theme's own button radius wins, and the paint follows the switch"
+    );
+
+    telar::set_theme(Rounded {
+        control: 12.0,
+        buttons: Some(ButtonTokens::default()),
+    });
+    assert_eq!(
+        box_style(&tree).radius,
+        BorderRadius::all(12.0),
+        "tokens left unset keep following the role"
+    );
+}
+
+#[test]
+fn an_outline_is_framed_at_the_theme_s_strong_border_width() {
+    telar::set_theme(Rounded {
+        control: 4.0,
+        buttons: None,
+    });
+    let red = Color::rgba(0.8, 0.1, 0.1, 1.0);
+    let tree = laid_out(
+        ButtonProps::props()
+            .label("Cancel")
+            .variant(ButtonVariant::Outline)
+            .color(red)
+            .build(),
+    );
+    let style = box_style(&tree);
+    assert_eq!(style.border, Some(Border::uniform(red, 3.0)));
+    assert_eq!(style.fill, None, "an outline at rest is not filled");
+}
+
+#[test]
+fn a_soft_button_is_a_wash_of_its_colour_at_the_theme_s_strength() {
+    telar::set_theme(Rounded {
+        control: 4.0,
+        buttons: None,
+    });
+    let red = Color::rgba(0.8, 0.1, 0.1, 1.0);
+    let tree = laid_out(
+        ButtonProps::props()
+            .label("Archive")
+            .variant(ButtonVariant::Soft)
+            .color(red)
+            .build(),
+    );
+    let wash = telar::use_theme_tokens().highlight_med();
+    assert_eq!(
+        box_style(&tree).fill.map(|p| p.solid_color()),
+        Some(red.with_alpha(wash.a))
+    );
+}
+
+/// `@class` and the `style` prop amend the finished paint, so they reach the hovered box as well as the resting one.
+#[test]
+fn a_style_amendment_reshapes_every_state() {
+    use telar::testing::{centre, moved, route};
+
+    telar::set_theme(Rounded {
+        control: 9.0,
+        buttons: None,
+    });
+    let square: SurfaceAmendment = Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(0.0)));
+    let mut tree = laid_out(
+        ButtonProps::props()
+            .label("Save")
+            .variant(ButtonVariant::Ghost)
+            .style(square)
+            .build(),
+    );
+    assert_eq!(box_style(&tree).radius, BorderRadius::all(0.0));
+    let (x, y) = centre(crate::test_support::drawn(telar::focus::Role::Button)[0]);
+    route(&mut tree, &moved(x, y));
+    let hovered = box_style(&tree);
+    assert!(hovered.fill.is_some(), "the hover wash is drawn");
+    assert_eq!(
+        hovered.radius,
+        BorderRadius::all(0.0),
+        "on the amended shape"
+    );
+}
+
+fn label_height_in(width: f32) -> f32 {
+    crate::test_support::fresh_layout_runtime();
+    let btn = button(
+        ButtonProps::props().label("Get started now").build(),
+        Children::default(),
+    )
+    .unwrap();
+    compute_layout(
+        btn.layout_node(),
+        AvailableSpace::Definite(width),
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    ComponentList::new(btn)
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            DrawCommand::Text { rect, .. } => Some(rect.height),
+            _ => None,
+        })
+        .expect("the button draws its label")
+}
+
+/// A button names one action, so a narrow space makes it overflow or its neighbours move, never break its label over two lines that the box has no vertical padding to hold.
+#[test]
+fn a_label_wider_than_its_space_stays_on_one_line() {
+    assert_eq!(label_height_in(40.0), label_height_in(400.0));
+}
+
+/// A button sized by its label stands it in the middle of its face: the padding before the first glyph's advance is the padding after the last, to within the half pixel layout rounds its edges to.
+#[test]
+fn a_hugging_button_pads_its_label_evenly_on_both_sides() {
+    crate::test_support::fresh_layout_runtime();
+    let btn = button(
+        ButtonProps::props()
+            .label("Settings")
+            .variant(ButtonVariant::Ghost)
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_row().width(400.0).height(80.0),
+        &[btn.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(80.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(btn);
+    let face = crate::test_support::drawn(telar::focus::Role::Button)[0];
+    let (before, after) = crate::test_support::run_insets(&tree, "Settings", face);
+    let pad = crate::shared::control_pad_x();
+    assert!((before - pad).abs() <= 0.5, "{before} {after}");
+    assert!((after - pad).abs() <= 0.5, "{before} {after}");
 }

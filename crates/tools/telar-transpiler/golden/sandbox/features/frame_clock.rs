@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -65,8 +66,8 @@ pub fn frame_clock(props: FrameClockProps, children: Children) -> Result<Box<dyn
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_0 = {
-                                            let __node_3 = button(ButtonProps::props().label("Start").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(true) })).build(), Children::default())?;
-                                            let __node_4 = button(ButtonProps::props().label("Stop").ghost(true).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(false) })).build(), Children::default())?;
+                                            let __node_3 = button(ButtonProps::props().label("Start").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(true) })).build(), Children::default())?;
+                                            let __node_4 = button(ButtonProps::props().label("Stop").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(false) })).build(), Children::default())?;
                                             let __text_0 = {
                                                 let seconds = seconds.clone();
                                                 Text::declaring(

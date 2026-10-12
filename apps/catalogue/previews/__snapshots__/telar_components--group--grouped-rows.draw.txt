@@ -8,20 +8,20 @@ element group
           element group
             rect 16,16 240x18
             element group
-              matrix 1,0,0,1,26,18
-                text 0,0 22x14.28 "Edit" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+              matrix 1,0,0,1,24,18
+                text 0,0 21.22x14.28 "Edit" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
               end
             end
           end
           element button
             rect 16,34 240x32
             element group
-              matrix 1,0,0,1,26,34
+              matrix 1,0,0,1,24,34
                 text 0,7 36x16.8 "Undo" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
               end
             end
             element group
-              matrix 1,0,0,1,208,34
+              matrix 1,0,0,1,210,34
                 text 0,7 38x15.12 "Ctrl+Z" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
               end
             end
@@ -29,13 +29,13 @@ element group
           element button
             rect 16,66 240x32
             element group
-              matrix 1,0,0,1,26,66
+              matrix 1,0,0,1,24,66
                 text 0,7 34x16.8 "Redo" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
               end
             end
             element group
-              matrix 1,0,0,1,208,66
-                text 0,7 38x15.12 "Ctrl+Y" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+              matrix 1,0,0,1,211,66
+                text 0,7 37.22x15.12 "Ctrl+Y" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
               end
             end
           end
@@ -45,7 +45,7 @@ element group
           element group
             rect 16,103 240x19
             element group
-              matrix 1,0,0,1,26,105
+              matrix 1,0,0,1,24,105
                 text 0,0 28x14.28 "View" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
               end
             end
@@ -53,12 +53,12 @@ element group
           element button
             rect 16,122 240x32
             element group
-              matrix 1,0,0,1,26,122
-                text 0,7 54x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+              matrix 1,0,0,1,24,122
+                text 0,7 53.47x16.8 "Zoom in" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
               end
             end
             element group
-              matrix 1,0,0,1,208,122
+              matrix 1,0,0,1,210,122
                 text 0,7 38x15.12 "Ctrl+=" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
               end
             end
@@ -66,13 +66,13 @@ element group
           element button
             rect 16,154 240x32
             element group
-              matrix 1,0,0,1,26,154
-                text 0,7 64x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+              matrix 1,0,0,1,24,154
+                text 0,7 63.06x16.8 "Zoom out" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
               end
             end
             element group
-              matrix 1,0,0,1,210,154
-                text 0,7 36x15.12 "Ctrl+-" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+              matrix 1,0,0,1,213,154
+                text 0,7 35.45x15.12 "Ctrl+-" size=12.6 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
               end
             end
           end

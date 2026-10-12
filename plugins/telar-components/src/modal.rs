@@ -5,8 +5,8 @@ use std::rc::Rc;
 use telar::Slots;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, JustifyContent,
-    LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
-    StyledContainer, Text, box_item, focus::Role,
+    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, RectStyle, RwSignal,
+    ShapeStyle, StyledContainer, SurfaceAmendment, Text, amend_surface, box_item, focus::Role,
 };
 
 use crate::heading::heading_style;
@@ -14,16 +14,45 @@ use crate::scrim;
 use crate::shared;
 use crate::strings;
 
-/// Muted tone for the Close affordance.
-fn dialog_radius() -> f32 {
-    shared::radius() * 3.0
+/// A modal's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the theme role or measure named beside it, read when the dialog paints and lays out.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ModalTokens {
+    /// Corner radius. `None` is the theme's `radius_dialog`.
+    pub radius: Option<f32>,
+    /// Space between the dialog's edge and its content, and between the dialog and the window's edge, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
+    pub pad: Option<f32>,
+    /// The narrowest the dialog is drawn, at the regular control size, scaled with the control size in force. `None` is 24 ems of the document's text.
+    pub min_width: Option<f32>,
+    /// The widest the dialog is drawn, at the regular control size, scaled with the control size in force. `None` is 32 ems of the document's text.
+    pub max_width: Option<f32>,
 }
-fn dialog_pad() -> f32 {
-    shared::spacing() * 3.0
+
+impl ModalTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_dialog)
+    }
+
+    pub fn pad(&self) -> f32 {
+        self.pad
+            .map_or_else(shared::gap_xl, |pad| pad * telar::control_scale())
+    }
+
+    pub fn min_width(&self) -> f32 {
+        shared::width_or_measure(self.min_width, 24.0)
+    }
+
+    pub fn max_width(&self) -> f32 {
+        shared::width_or_measure(self.max_width, 32.0)
+    }
 }
-fn dialog_gap() -> f32 {
-    shared::spacing() * 1.5
-}
+
 /// The close glyph's share of the text around it.
 const CLOSE_RATIO: f32 = 0.93;
 
@@ -32,16 +61,25 @@ fn header_row() -> LayoutStyle {
         .flex_row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::SPACE_BETWEEN)
-        .gap(dialog_gap())
+        .gap(shared::gap_lg())
 }
-fn card() -> LayoutStyle {
+fn card(room: scrim::Room) -> LayoutStyle {
+    let tokens = ModalTokens::current();
+    let room = room.inside(tokens.pad());
     LayoutStyle::new()
         .flex_column()
-        .gap(dialog_gap())
-        // So the dialog never collapses to its min-content width: the header and body leaves are unmeasured, with 0 intrinsic width, which would shrink the card to a strip.
-        .min_width(320.0)
-        .max_width(440.0)
-        .padding_all(dialog_pad())
+        .gap(shared::gap_lg())
+        // So the dialog never collapses to its min-content width: the header and body leaves are unmeasured, with 0 intrinsic width, which would shrink the card to a strip. Capped by the room, so a narrow window wins over the minimum.
+        .min_width(tokens.min_width().min(room.width))
+        .max_width(tokens.max_width().min(room.width))
+        .max_height(room.height)
+        .padding_all(tokens.pad())
+}
+fn body_column() -> LayoutStyle {
+    LayoutStyle::new().flex_column().gap(shared::gap_lg())
+}
+fn body_scroll() -> LayoutStyle {
+    LayoutStyle::new().flex_shrink(1.0).min_height(0.0)
 }
 fn backdrop() -> LayoutStyle {
     LayoutStyle::new()
@@ -49,7 +87,8 @@ fn backdrop() -> LayoutStyle {
         .flex_grow(1.0)
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
-        .padding_all(dialog_pad())
+        .min_height(0.0)
+        .padding_all(ModalTokens::current().pad())
 }
 
 /// A centred dialog over a dimming scrim. When `open` is true it portals an `Overlay` (a top-layer layer that escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque surface card holding the `title`, the slot children (the dialog body) and a Close affordance; when false it collapses to a 0-size node. Tapping the scrim (or Close) dismisses; tapping the card itself does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
@@ -73,6 +112,9 @@ pub struct ModalProps {
     /// Dialog surface colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `surface`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
+    /// Amends the paint of the dialog's card — its **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`ModalTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// A dialog portaled over the page, dismissed by its scrim, its Close or Escape.
@@ -84,13 +126,15 @@ pub fn modal(props: ModalProps, children: Children) -> Result<Box<dyn LayoutItem
         on_close,
         close_label,
         color,
+        style,
     } = props;
     let open = shared::resolve_open(open, id);
 
     scrim::scrim_overlay(open, on_close, move |dismiss| {
         // Built on the first open rather than here: a body built while the dialog has never opened would register its focus stops with nothing on screen to take them.
         let body = children.build()?.take_default();
-        build_open_modal(title, close_label, body, color, dismiss)
+        let paint = Rc::new(move || amend_surface(card_paint(&color), &style));
+        build_open_modal(title, close_label, body, paint, dismiss)
     })
 }
 
@@ -99,7 +143,7 @@ fn build_open_modal(
     title: Reactive<String>,
     close_label: Option<Reactive<String>>,
     body: Vec<Box<dyn LayoutItem>>,
-    color: Reactive<Color>,
+    paint: Rc<dyn Fn() -> RectStyle>,
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = title.clone();
@@ -127,34 +171,38 @@ fn build_open_modal(
     let header = Container::new(header_row(), vec![box_item(heading), box_item(close)])?
         .styled_by(header_row);
 
-    let mut dialog_children: Vec<Box<dyn LayoutItem>> = vec![box_item(header)];
-    dialog_children.extend(body);
+    let body = LayoutScrollArea::new(
+        body_scroll(),
+        box_item(Container::new(body_column(), body)?),
+    )?;
+    let dialog_children: Vec<Box<dyn LayoutItem>> = vec![box_item(header), box_item(body)];
 
-    let dialog = StyledContainer::new(
-        card(),
-        move |_r| {
-            RectStyle::default()
-                .with_fill(shared::resolve(&color, shared::surface))
-                .with_border(Border::uniform(shared::border(), 1.0))
-                .with_radius(BorderRadius::all(dialog_radius()))
-        },
-        dialog_children,
-    )?
-    .styled_by(card)
-    .role(Role::Dialog)
-    .a11y_label(move || name.get())
-    // Swallow taps on the card so only the scrim (or Close) dismisses.
-    .on_press(|| {});
+    let room = scrim::Room::new();
+    let dialog = StyledContainer::new(card(room), move |_r| paint(), dialog_children)?
+        .styled_by(move || card(room))
+        .role(Role::Dialog)
+        .a11y_label(move || name.get())
+        // Swallow taps on the card so only the scrim (or Close) dismisses.
+        .on_press(|| {});
 
     let scrim = StyledContainer::new(
         backdrop(),
-        |_r| RectStyle::default().with_fill(scrim::SCRIM),
+        |_r| RectStyle::default().with_fill(shared::overlay()),
         vec![box_item(dialog)],
     )?
     .styled_by(backdrop);
+    room.follow(scrim.layout_node());
     let scrim = shared::dismissed_by_press(scrim, move || (*dismiss)());
 
     Ok(box_item(scrim))
+}
+
+/// The card's paint before the caller's amendment.
+fn card_paint(color: &Reactive<Color>) -> RectStyle {
+    RectStyle::default()
+        .with_fill(shared::resolve(color, shared::surface))
+        .with_border(Border::uniform(shared::border(), shared::border_width()))
+        .with_radius(BorderRadius::all(ModalTokens::current().radius()))
 }
 
 #[cfg(test)]

@@ -8,22 +8,53 @@ use std::time::Duration;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, FixedLayer,
     JustifyContent, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, RectStyle,
-    RwSignal, ShapeStyle, StyledContainer, Text, TextWrap, Timer, box_item, detached, focus::Role,
-    on_cleanup, run_after, signal,
+    RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, Timer, amend_surface,
+    box_item, detached, focus::Role, on_cleanup, run_after, signal, style_follows,
 };
 
 use crate::shared;
 use crate::strings;
 
-const DEFAULT_WIDTH: f32 = 360.0;
-const STRIPE_WIDTH: f32 = 3.0;
 const DISMISS_GLYPH: &str = "✕";
 
-fn gap() -> f32 {
-    shared::spacing()
+/// A notice's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the theme role or measure named beside it, read when the notice paints and lays out.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ToastTokens {
+    /// Corner radius of each notice. `None` is the theme's `radius_surface`.
+    pub radius: Option<f32>,
+    /// Space between a notice's edge and what it says, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_lg`](crate::metrics::gap_lg).
+    pub pad: Option<f32>,
+    /// A notice's width when the toaster names none, at the regular control size, scaled with the control size in force. `None` is 26 ems of the document's text.
+    pub width: Option<f32>,
+    /// Width of the stripe in the colour of the notice's kind, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_xs`](crate::metrics::gap_xs).
+    pub stripe_width: Option<f32>,
 }
-fn edge() -> f32 {
-    shared::spacing() * 2.0
+
+impl ToastTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_surface)
+    }
+
+    pub fn pad(&self) -> f32 {
+        self.pad
+            .map_or_else(shared::gap_lg, |pad| pad * telar::control_scale())
+    }
+
+    pub fn width(&self) -> f32 {
+        shared::width_or_measure(self.width, 26.0)
+    }
+
+    pub fn stripe_width(&self) -> f32 {
+        self.stripe_width
+            .map_or_else(shared::gap_xs, |width| width * telar::control_scale())
+    }
 }
 
 /// What a notice is about, which decides the colour of its stripe.
@@ -256,12 +287,15 @@ pub struct ToasterProps {
     /// How many notices show at once. `0` means 3.
     #[props(default)]
     pub max_visible: u32,
-    /// Each notice's width in logical px. `0.0` (the default) means 360.
+    /// Each notice's width in logical px. `0.0` (the default) means "unset" -> [`ToastTokens::width`].
     #[props(default)]
     pub width: f32,
     /// What a reader calls the stack. `None` (the default) uses the localized `telar_components.notifications` message.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
+    /// Amends the paint of each notice's card — its **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`ToastTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// A stack of notices against one edge of the surface, each putting itself away after a while.
@@ -275,6 +309,7 @@ pub fn toaster(
         max_visible,
         width,
         label,
+        style,
     } = props;
     let queue = queue.unwrap_or_else(toasts);
     let max_visible = if max_visible == 0 {
@@ -282,7 +317,7 @@ pub fn toaster(
     } else {
         max_visible as usize
     };
-    let width = if width > 0.0 { width } else { DEFAULT_WIDTH };
+    let width = Width((width > 0.0).then_some(width));
     let held = Rc::new(Hold::default());
 
     let shown = move || {
@@ -294,20 +329,19 @@ pub fn toaster(
         }
         shown
     };
-    let stack = ReactiveList::with_style(
-        LayoutStyle::new().flex_column().gap(gap()),
-        shown,
-        |entry: &Posted| entry.id,
-        {
-            let held = held.clone();
-            move |entry| notice(queue, entry, width, &held)
-        },
-    )?;
+    let stack_box = || LayoutStyle::new().flex_column().gap(shared::gap_md());
+    let stack = ReactiveList::with_style(stack_box(), shown, |entry: &Posted| entry.id, {
+        let held = held.clone();
+        move |entry| notice(queue, entry, width, &style, &held)
+    })?;
+    style_follows(stack.layout_node(), stack_box);
+    let region_box = move || LayoutStyle::new().flex_column().width(width.get());
     let region = StyledContainer::new(
-        LayoutStyle::new().flex_column().width(width),
+        region_box(),
         |_r| RectStyle::default(),
         vec![box_item(stack)],
     )?
+    .styled_by(region_box)
     .on_hover({
         let held = held.clone();
         move |inside| held.pointer(inside)
@@ -318,17 +352,30 @@ pub fn toaster(
         None => strings::text(strings::NOTIFICATIONS),
     });
 
-    let layer_box = LayoutStyle::new()
-        .flex_column()
-        .align_items(placement.across())
-        .justify_content(if placement.is_top() {
-            JustifyContent::START
-        } else {
-            JustifyContent::END
-        })
-        .padding_all(edge());
-    let layer = FixedLayer::new(layer_box, vec![box_item(region)])?;
+    let layer_box = move || {
+        LayoutStyle::new()
+            .flex_column()
+            .align_items(placement.across())
+            .justify_content(if placement.is_top() {
+                JustifyContent::START
+            } else {
+                JustifyContent::END
+            })
+            .padding_all(shared::gap_xl())
+    };
+    let layer = FixedLayer::new(layer_box(), vec![box_item(region)])?;
+    style_follows(layer.layout_node(), layer_box);
     Ok(box_item(layer))
+}
+
+/// The width a toaster was given, else its theme's.
+#[derive(Clone, Copy)]
+struct Width(Option<f32>);
+
+impl Width {
+    fn get(self) -> f32 {
+        self.0.unwrap_or_else(|| ToastTokens::current().width())
+    }
 }
 
 /// What holds the clock of every shown notice, so the one being read or acted on never closes under it: the pointer resting on the stack, or the keyboard on one of its buttons.
@@ -380,7 +427,8 @@ impl Hold {
 fn notice(
     queue: Toasts,
     entry: Posted,
-    width: f32,
+    width: Width,
+    style: &Option<SurfaceAmendment>,
     held: &Rc<Hold>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Posted { id, toast } = entry;
@@ -401,7 +449,7 @@ fn notice(
         words.push(box_item(Text::declaring(
             move || title.to_string(),
             LayoutStyle::new(),
-            |t| shared::control_text(t, 1.0).with_font_weight(600),
+            |t| shared::control_text(t, 1.0).with_font_weight(shared::strong_weight()),
         )?));
     }
     let message = toast.message.clone();
@@ -416,7 +464,7 @@ fn notice(
             .flex_grow(1.0)
             .flex_shrink(1.0)
             .min_width(0.0)
-            .gap(shared::spacing() * 0.25)
+            .gap(shared::gap_xs())
     };
     let text = Container::new(column(), words)?.styled_by(column);
 
@@ -445,37 +493,45 @@ fn notice(
         LayoutStyle::new()
             .flex_row()
             .align_items(AlignItems::START)
-            .width(width)
-            .padding_all(shared::spacing() * 1.25)
-            .gap(shared::spacing())
+            .width(width.get())
+            .padding_all(ToastTokens::current().pad())
+            .gap(shared::gap_md())
     };
+    let style = style.clone();
     let card = StyledContainer::new(
         card_box(),
-        |_r| {
-            RectStyle::default()
-                .with_fill(shared::surface())
-                .with_border(Border::uniform(shared::border(), 1.0))
-                .with_radius(BorderRadius::all(shared::radius_md() * 2.0))
-        },
+        move |_r| amend_surface(card_paint(), &style),
         parts,
     )?
     .styled_by(card_box);
     Ok(box_item(card))
 }
 
+/// A notice's paint before the caller's amendment.
+fn card_paint() -> RectStyle {
+    RectStyle::default()
+        .with_fill(shared::surface())
+        .with_border(Border::uniform(shared::border(), shared::border_width()))
+        .with_radius(BorderRadius::all(ToastTokens::current().radius()))
+}
+
 fn stripe(kind: ToastKind) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let stripe = StyledContainer::new(
+    let stripe_box = || {
         LayoutStyle::new()
-            .width(STRIPE_WIDTH)
+            .width(ToastTokens::current().stripe_width())
             .align_self_stretch()
-            .flex_shrink(0.0),
-        move |_r| {
+            .flex_shrink(0.0)
+    };
+    let stripe = StyledContainer::new(
+        stripe_box(),
+        move |r| {
             RectStyle::default()
                 .with_fill(kind.accent())
-                .with_radius(BorderRadius::all(STRIPE_WIDTH / 2.0))
+                .with_radius(shared::pill(r))
         },
         vec![],
     )?
+    .styled_by(stripe_box)
     .a11y_hidden();
     Ok(box_item(stripe))
 }
@@ -492,7 +548,8 @@ fn text_button(
         if dismisses {
             shared::quiet(t, 1.0)
         } else {
-            t.with_color(shared::accent()).with_font_weight(600)
+            t.with_color(shared::accent())
+                .with_font_weight(shared::strong_weight())
         }
     })?;
     let shell = || {
@@ -500,13 +557,9 @@ fn text_button(
             .flex_row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
-            .padding_horizontal(shared::spacing() * 0.5)
+            .padding_horizontal(shared::gap_sm())
     };
-    let hover_paint = |_r| {
-        RectStyle::default()
-            .with_fill(shared::accent().with_alpha(0.1))
-            .with_radius(BorderRadius::all(shared::radius_sm()))
-    };
+    let shape = || RectStyle::default().with_radius(BorderRadius::all(shared::radius_item()));
     let focused = Rc::new(Cell::new(false));
     {
         let (held, focused) = (held.clone(), focused.clone());
@@ -517,19 +570,16 @@ fn text_button(
         });
     }
     let held = held.clone();
-    let button = StyledContainer::new(
-        shell(),
-        |_r| RectStyle::default().with_radius(BorderRadius::all(shared::radius_sm())),
-        vec![box_item(text)],
-    )?
-    .styled_by(shell)
-    .hover_style(hover_paint)
-    .control(Role::Button)
-    .on_focus(move |now| {
-        focused.set(now);
-        held.keyboard(now);
-    })
-    .on_press(press);
+    let button = StyledContainer::new(shell(), move |_r| shape(), vec![box_item(text)])?
+        .styled_by(shell)
+        .hover_style(move |_r| shape().with_fill(shared::hover_wash()))
+        .active_style(move |_r| shape().with_fill(shared::pressed_wash()))
+        .control(Role::Button)
+        .on_focus(move |now| {
+            focused.set(now);
+            held.keyboard(now);
+        })
+        .on_press(press);
     Ok(box_item(if dismisses {
         button.a11y_label(|| strings::text(strings::DISMISS))
     } else {

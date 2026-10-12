@@ -70,7 +70,7 @@ col gap:20
                 button label:"Overview" on_press:(|| { panes.push(Pane::Overview) })
                 button label:"Pricing" on_press:(|| { panes.push(Pane::Pricing) })
                 button label:"Team" on_press:(|| { panes.push(Pane::Team) })
-                button label:"Back" ghost on_press:(|| { navigate_back(); })
+                button label:"Back" variant:ButtonVariant::Ghost on_press:(|| { navigate_back(); })
             text "{$address} · {$depth} deep" font_size:14 color:$theme.ink
             text "Open it again with --location {$address} on desktop or in a terminal, or reload the page on the web." font_size:13 color:$theme.muted
         code_line code:"let panes = Navigator::new(Pane::Overview).follow_location();"

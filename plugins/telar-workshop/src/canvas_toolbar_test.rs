@@ -115,9 +115,15 @@ impl Workshop {
         }
     }
 
-    fn pick(&mut self, select: &str, row: &str) {
+    fn choose(&mut self, select: &str, row: &str) {
         self.click(Role::ComboBox, select);
         self.click(Role::Option, row);
+    }
+
+    /// Picks `row` from the top bar's preview settings.
+    fn pick(&mut self, row: &str) {
+        self.click(Role::Button, "Settings");
+        self.click(Role::MenuItem, row);
     }
 
     fn rect_of(&self, needle: &str) -> Rect {
@@ -193,8 +199,8 @@ fn mode_locale_and_direction_restyle_the_canvas_and_never_the_chrome() {
         "the canvas starts in the application's theme"
     );
 
-    workshop.pick("Mode", "night");
-    workshop.pick("Locale", "ar");
+    workshop.pick("night");
+    workshop.pick("ar");
 
     assert!(
         workshop.draws("env Rtl ar"),
@@ -239,12 +245,12 @@ fn the_preview_locale_is_the_default_and_a_chosen_direction_wins_over_the_locale
         PreviewEntry::new("fake--probe--english", "probe", "English", environment).locale("en"),
     ]);
     assert!(workshop.draws("env Rtl ar"), "the preview's own locale");
-    workshop.pick("Locale", "en");
+    workshop.pick("en");
     assert!(workshop.draws("env Ltr en"), "the toolbar's, over it");
-    workshop.pick("Direction", "Right to left");
+    workshop.pick("Right to left");
     assert!(workshop.draws("env Rtl en"), "a chosen direction wins");
-    workshop.pick("Direction", "Auto direction");
-    workshop.pick("Locale", "Default locale");
+    workshop.pick("Auto direction");
+    workshop.pick("Default locale");
     assert!(workshop.draws("env Rtl ar"), "and back to the preview's");
 }
 
@@ -252,7 +258,7 @@ fn the_preview_locale_is_the_default_and_a_chosen_direction_wins_over_the_locale
 fn a_device_frame_sets_the_safe_area_and_rotating_turns_it() {
     let mut workshop = Workshop::open(entries(safe_area));
     assert!(workshop.draws("safe 0 0 0 0"));
-    workshop.pick("Viewport", "Phone");
+    workshop.choose("Viewport", "Phone");
     assert!(workshop.draws("safe 47 0 34 0"));
     assert!(workshop.draws("390 × 844"), "{:?}", texts(&workshop.tree));
 
@@ -260,7 +266,7 @@ fn a_device_frame_sets_the_safe_area_and_rotating_turns_it() {
     assert!(workshop.draws("safe 0 34 0 47"));
     assert!(workshop.draws("844 × 390"));
 
-    workshop.pick("Viewport", "Fill");
+    workshop.choose("Viewport", "Fill");
     assert!(
         workshop.draws("safe 0 0 0 0"),
         "only a device keeps a safe area"
@@ -271,7 +277,7 @@ fn a_device_frame_sets_the_safe_area_and_rotating_turns_it() {
 fn a_preview_mounted_in_a_device_frame_is_built_in_its_safe_area() {
     let mut workshop = Workshop::open(entries(safe_area_at_build));
     assert!(workshop.draws("built in 0 0 0 0"));
-    workshop.pick("Viewport", "Phone");
+    workshop.choose("Viewport", "Phone");
     workshop.click(Role::Button, "Remount");
     assert!(
         workshop.draws("built in 47 0 34 0"),
@@ -294,7 +300,7 @@ fn a_viewport_larger_than_the_stage_is_zoomed_to_fit_until_a_zoom_is_chosen() {
     assert!((fitted.width / fitted.height - 4.0 / 3.0).abs() < 0.01);
     assert!(workshop.draws("4000 × 3000"), "at the size it asked for");
 
-    workshop.pick("Zoom", "50%");
+    workshop.choose("Zoom", "50%");
     let halved = workshop.canvas_rect("env");
     assert_eq!((halved.width, halved.height), (2000.0, 1500.0));
     assert!(workshop.draws("4000 × 3000"));
@@ -305,9 +311,16 @@ fn reduced_motion_is_switched_for_the_whole_application() {
     set_reduced_motion_override(None);
     let mut workshop = Workshop::open(entries(environment));
     assert_eq!(reduced_motion_override(), None);
-    workshop.click(Role::Button, "Reduce motion");
+    workshop.pick("Reduce motion");
     assert_eq!(reduced_motion_override(), Some(true));
-    workshop.click(Role::Button, "Reduce motion");
+    workshop.click(Role::Button, "Settings");
+    assert_eq!(
+        workshop.control(Role::MenuItem, "Reduce motion").toggled,
+        Some(true),
+        "the row is announced as on, under the name it had while off"
+    );
+    workshop.click(Role::Button, "Settings");
+    workshop.pick("Reduce motion");
     assert_eq!(reduced_motion_override(), None);
 }
 
@@ -322,7 +335,7 @@ fn high_contrast_is_switched_for_the_canvas_and_never_the_chrome() {
     let mut workshop = Workshop::open(entries(contrast));
     assert!(workshop.draws("contrast None"));
 
-    workshop.click(Role::Button, "High contrast");
+    workshop.pick("High contrast");
     assert!(
         workshop.draws("contrast Some(true)"),
         "the canvas is shown in high contrast: {:?}",
@@ -335,7 +348,7 @@ fn high_contrast_is_switched_for_the_canvas_and_never_the_chrome() {
     );
     assert_eq!(*chrome.borrow(), vec![None], "the chrome never hears of it");
 
-    workshop.click(Role::Button, "High contrast");
+    workshop.pick("High contrast");
     assert!(
         workshop.draws("contrast None"),
         "released, the canvas follows the application again"
@@ -356,7 +369,7 @@ fn a_fullscreen_preview_offers_no_size_zoom_or_rotation() {
             "{name} is offered"
         );
     }
-    assert!(nodes.iter().any(|node| named(node, "Mode")));
+    assert!(nodes.iter().any(|node| named(node, "Settings")));
 }
 
 #[test]
@@ -364,13 +377,13 @@ fn reduced_motion_is_followed_while_the_workshop_shows_docs() {
     set_reduced_motion_override(None);
     telar::hot_restore_json(r#"{"@workshop/view":"\"Docs\""}"#);
     let mut workshop = Workshop::open(entries(environment));
-    workshop.click(Role::Button, "Reduce motion");
+    workshop.pick("Reduce motion");
     assert_eq!(
         reduced_motion_override(),
         Some(true),
         "no canvas is mounted, and motion is still switched"
     );
-    workshop.click(Role::Button, "Reduce motion");
+    workshop.pick("Reduce motion");
     assert_eq!(reduced_motion_override(), None);
 }
 

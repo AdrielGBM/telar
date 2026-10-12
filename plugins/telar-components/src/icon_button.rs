@@ -3,9 +3,9 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, JustifyContent, LayoutError,
-    LayoutItem, LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, Slots, StyledContainer,
-    box_item, focus::Role,
+    Accessible, AlignItems, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, Slots, StyledContainer, SurfaceAmendment,
+    amend_surface, box_item, focus::Role,
 };
 
 use crate::shared;
@@ -36,10 +36,29 @@ pub struct IconButtonProps {
     pub disabled: Reactive<bool>,
     #[props(default = Rc::new(|| {}))]
     pub on_press: Rc<dyn Fn()>,
+    /// Amends the paint of the button's square — its **principal surface** — at rest, hovered, pressed and disabled. See [`telar::SurfaceStyle`] for when a theme token or [`IconButtonTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
-fn pad() -> f32 {
-    shared::spacing() * 0.75
+/// An icon button's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the theme role named beside it, read when the button paints, so a theme that moves the role still moves every icon button it has not given a value of its own.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct IconButtonTokens {
+    /// Corner radius. `None` is the theme's `radius_control`.
+    pub radius: Option<f32>,
+}
+
+impl IconButtonTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_control)
+    }
 }
 
 fn shell() -> LayoutStyle {
@@ -47,24 +66,35 @@ fn shell() -> LayoutStyle {
         .flex_row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
-        .padding_all(pad())
+        .padding_all(shared::icon_pad())
+        .min_width(shared::control_height())
+        .min_height(shared::control_height())
 }
 
-fn paint(pressed: bool, hovered: bool, cursor: bool) -> RectStyle {
-    let wash = match (pressed, hovered) {
-        (true, true) => 0.28,
-        (true, false) => 0.2,
-        (false, true) => 0.1,
-        (false, false) => 0.0,
+/// Which of its paints the square is showing.
+#[derive(Clone, Copy)]
+enum State {
+    Rest,
+    Hovered,
+    Pressed,
+}
+
+/// The square's paint before the caller's amendment: the theme's washes for a pointer resting on it, for a toggle held on and for a press, and the theme's focus ring where a toolbar's cursor stands.
+fn paint(state: State, toggled: bool, cursor: bool) -> RectStyle {
+    let rect =
+        RectStyle::default().with_radius(BorderRadius::all(IconButtonTokens::current().radius()));
+    let wash = match (state, toggled) {
+        (State::Rest, false) => None,
+        (State::Hovered, false) => Some(shared::hover_wash()),
+        (State::Rest, true) => Some(shared::held_wash()),
+        (State::Hovered, true) | (State::Pressed, _) => Some(shared::pressed_wash()),
     };
-    let rect = RectStyle::default().with_radius(BorderRadius::all(shared::radius()));
-    let rect = if wash > 0.0 {
-        rect.with_fill(shared::accent().with_alpha(wash))
-    } else {
-        rect
+    let rect = match wash {
+        Some(wash) => rect.with_fill(wash),
+        None => rect,
     };
     if cursor {
-        rect.with_border(Border::uniform(shared::accent(), 2.0))
+        rect.with_border(shared::focus_ring())
     } else {
         rect
     }
@@ -84,6 +114,7 @@ pub fn icon_button(
         pressed,
         disabled,
         on_press,
+        style,
     } = props;
     let toolbar = telar::use_context::<ToolbarContext>();
 
@@ -109,9 +140,16 @@ pub fn icon_button(
         }
     };
 
-    let picture = picture(icon, disabled.clone())?;
-    let (base_pressed, base_cursor) = (is_pressed.clone(), cursor.clone());
-    let (hover_pressed, hover_cursor) = (is_pressed.clone(), cursor);
+    let picture = picture(icon, ink(disabled.clone()))?;
+    let surface = {
+        let is_pressed = is_pressed.clone();
+        Rc::new(move |state: State, at_cursor: bool| {
+            amend_surface(paint(state, is_pressed(), at_cursor), &style)
+        })
+    };
+    let (rest, hover, pressing, idle) =
+        (surface.clone(), surface.clone(), surface.clone(), surface);
+    let (rest_cursor, hover_cursor, press_cursor) = (cursor.clone(), cursor.clone(), cursor);
     let press = {
         let toolbar = toolbar.clone();
         move || {
@@ -124,13 +162,14 @@ pub fn icon_button(
     let name = label.clone();
     let button = StyledContainer::new(
         shell(),
-        move |_| paint(base_pressed(), false, base_cursor()),
+        move |_| rest(State::Rest, rest_cursor()),
         vec![picture],
     )?
     .styled_by(shell)
-    .hover_style(move |_| paint(hover_pressed(), true, hover_cursor()))
+    .hover_style(move |_| hover(State::Hovered, hover_cursor()))
+    .active_style(move |_| pressing(State::Pressed, press_cursor()))
     .disabled(is_disabled)
-    .disabled_style(|_| RectStyle::default().with_radius(BorderRadius::all(shared::radius())))
+    .disabled_style(move |_| idle(State::Rest, false))
     .on_press(press)
     .a11y_label(move || name.get());
 
@@ -158,17 +197,24 @@ pub fn icon_button(
 fn ink(disabled: Reactive<bool>) -> Reactive<Color> {
     Reactive::of(move || {
         if disabled.get() {
-            shared::muted().with_alpha(0.5)
+            shared::muted()
         } else {
             Color::TRANSPARENT
         }
     })
 }
 
+/// What names an icon: an [`IconName`](telar_icons::IconName) under the `icons` feature, and an id drawn as a Unicode glyph without it.
 #[cfg(feature = "icons")]
-fn picture(
-    icon: telar_icons::IconName,
-    disabled: Reactive<bool>,
+pub(crate) type IconSource = telar_icons::IconName;
+#[cfg(not(feature = "icons"))]
+pub(crate) type IconSource = Reactive<String>;
+
+/// `icon` at the size a control draws one, in `color`, or in the text around it while that is transparent.
+#[cfg(feature = "icons")]
+pub(crate) fn picture(
+    icon: IconSource,
+    color: Reactive<Color>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_icons::{IconProps, icon as draw};
 
@@ -176,20 +222,19 @@ fn picture(
         IconProps::props()
             .name(icon)
             .size(shared::icon_size())
-            .color(ink(disabled))
+            .color(color)
             .build(),
         Children::default(),
     )
 }
 
 #[cfg(not(feature = "icons"))]
-fn picture(
-    icon: Reactive<String>,
-    disabled: Reactive<bool>,
+pub(crate) fn picture(
+    icon: IconSource,
+    color: Reactive<Color>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar::{Text, TextWrap};
 
-    let color = ink(disabled);
     let size = shared::icon_size();
     let glyph = Text::declaring(
         move || glyph_for(&icon.get()).to_string(),

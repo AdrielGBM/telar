@@ -14,7 +14,7 @@ use telar::{
 use telar_components::{ButtonProps, button};
 
 use crate::WorkshopApp;
-use crate::arrangement::{PANES_FROM, SETTINGS_FROM};
+use crate::arrangement::PANES_FROM;
 use crate::settings::CanvasSettings;
 use crate::state::{PANEL_DEFAULT_SIZE, PanelPosition, WorkshopState};
 use crate::test_support::{Shell, control, sample_previews, settle};
@@ -242,18 +242,20 @@ fn within(inner: Rect, outer: Rect) -> bool {
 /// Sprint 4's acceptance for the workshop: the chrome passes the checks it runs on a preview, at every width it arranges itself for and with everything it folds away opened.
 #[test]
 fn the_chrome_passes_its_own_accessibility_checks_in_a_wide_window() {
-    let workshop = Workshop::app(WIDE, PROJECT);
-    assert!(workshop.find(Role::ComboBox, "Mode Default mode").is_some());
+    let mut workshop = Workshop::app(WIDE, PROJECT);
     workshop.assert_passes("the workshop");
+    workshop.click(Role::Button, "Settings");
+    assert!(workshop.find(Role::MenuItem, "Right to left").is_some());
+    workshop.assert_passes("the preview settings menu");
 }
 
 #[test]
 fn the_chrome_passes_its_own_accessibility_checks_in_a_medium_window() {
     let mut workshop = Workshop::app(MEDIUM, PROJECT);
     workshop.assert_passes("the workshop");
-    workshop.click(Role::Button, "Canvas settings");
+    workshop.click(Role::Button, "Settings");
     assert!(workshop.find(Role::MenuItem, "Right to left").is_some());
-    workshop.assert_passes("the canvas settings menu");
+    workshop.assert_passes("the preview settings menu");
 }
 
 #[test]
@@ -269,8 +271,8 @@ fn the_chrome_passes_its_own_accessibility_checks_in_a_narrow_window() {
         workshop.find(Role::Dialog, "Previews").is_none(),
         "Escape takes the keyboard from the search field to the tree, then shuts the drawer"
     );
-    workshop.click(Role::Button, "Canvas settings");
-    workshop.assert_passes("the canvas settings menu");
+    workshop.click(Role::Button, "Settings");
+    workshop.assert_passes("the preview settings menu");
 }
 
 #[test]
@@ -279,28 +281,10 @@ fn a_long_project_name_is_cut_short_rather_than_pushing_the_top_bar_out_of_the_w
     workshop.assert_passes("the workshop");
 }
 
-/// The width the top bar's settings are kept in place from is the width they need: every part of the bar fits there, and one px narrower they are a menu.
 #[test]
-fn the_canvas_settings_stay_in_the_top_bar_down_to_the_width_they_fit() {
-    let mut workshop = Workshop::app(SETTINGS_FROM as u32, PROJECT);
-    assert!(workshop.find(Role::ComboBox, "Mode Default mode").is_some());
-    workshop.assert_passes("the workshop");
-    let docs = workshop.control(Role::Tab, "Docs").rect;
-    let spare = SETTINGS_FROM - (docs.x + docs.width);
-    assert!(
-        spare >= 0.0,
-        "the view switch ends {spare} px inside the bar"
-    );
-
-    workshop.resize(SETTINGS_FROM as u32 - 1);
-    assert!(workshop.find(Role::ComboBox, "Mode Default mode").is_none());
-    assert!(workshop.find(Role::Button, "Canvas settings").is_some());
-}
-
-#[test]
-fn the_canvas_settings_menu_sets_what_the_top_bar_would() {
+fn the_preview_settings_menu_sets_the_environment_of_every_canvas() {
     let mut workshop = Workshop::shell(MEDIUM);
-    workshop.click(Role::Button, "Canvas settings");
+    workshop.click(Role::Button, "Settings");
     workshop.click(Role::MenuItem, "Right to left");
     assert_eq!(workshop.settings().direction, Some(Direction::Rtl));
     assert!(
@@ -308,7 +292,7 @@ fn the_canvas_settings_menu_sets_what_the_top_bar_would() {
         "picking a row shuts the menu"
     );
 
-    workshop.click(Role::Button, "Canvas settings");
+    workshop.click(Role::Button, "Settings");
     workshop.click(Role::MenuItem, "High contrast");
     assert_eq!(workshop.settings().high_contrast, Some(true));
 }
@@ -465,8 +449,6 @@ fn the_window_width_picks_the_arrangement() {
     let arrangement = workshop.state().arrangement();
     assert_eq!(arrangement.get(), Arrangement::Compact);
     workshop.resize(PANES_FROM as u32);
-    assert_eq!(arrangement.get(), Arrangement::Medium);
-    workshop.resize(SETTINGS_FROM as u32);
     assert_eq!(arrangement.get(), Arrangement::Wide);
     telar::set_surface_size(Size::ZERO);
     assert_eq!(

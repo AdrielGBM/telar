@@ -5,19 +5,23 @@ element group
     element group
       element group
         element group
-          rect 30,222 300x196 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
+          rect 30,226 300x188 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
           element group
-            matrix 1,0,0,1,54,246
-              text 0,0 252x38.4 "📱" size=32 family=sans-serif weight=400 color=#262633ff lang=en
+            rect 54,250 32x32
+            element group
+              matrix 1,0,0,1,54,250
+                path M9.33,2.67 L22.67,2.67 C24.14,2.67 25.33,3.86 25.33,5.33 L25.33,26.67 C25.33,28.14 24.14,29.33 22.67,29.33 L9.33,29.33 C7.86,29.33 6.67,28.14 6.67,26.67 L6.67,5.33 C6.67,3.86 7.86,2.67 9.33,2.67 Z stroke=2.67 stroke-color=#bd2461ff cap=round join=round
+                path M16,24 L16.01,24 stroke=2.67 stroke-color=#bd2461ff cap=round join=round
+              end
             end
           end
           element group
-            matrix 1,0,0,1,54,294
+            matrix 1,0,0,1,54,292
               text 0,0 252x21.6 "Cross-platform" size=18 family=sans-serif weight=400 color=#171a2eff lang=en
             end
           end
           element group
-            matrix 1,0,0,1,54,326
+            matrix 1,0,0,1,54,324
               text 0,0 252x67.2 "One codebase targets desktop and Android with native event loops, plus a longer body to test how the card wraps multi-line text." size=14 family=sans-serif weight=400 color=#545973ff lang=en
             end
           end

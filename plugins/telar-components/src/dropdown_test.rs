@@ -5,6 +5,7 @@ use telar::{
 
 use super::*;
 use crate::select::{SelectProps, select};
+use crate::shared::{panel_pad, row_height};
 use crate::test_support::{drawn, fresh_layout_runtime};
 
 const WINDOW_WIDTH: f32 = 400.0;
@@ -73,8 +74,12 @@ fn bottom(rect: Rect) -> f32 {
 fn a_short_list_is_as_tall_as_its_rows() {
     let (_tree, _) = opened(3, 0.0);
     let list = list();
-    assert_eq!(list.height, 3.0 * ROW_HEIGHT);
-    assert_eq!(list.y, TRIGGER_HEIGHT + panel_pad(), "under its trigger");
+    assert_eq!(list.height, 3.0 * row_height());
+    assert_eq!(
+        list.y,
+        crate::shared::control_height() + panel_pad(),
+        "under its trigger"
+    );
 }
 
 /// Forty rows are 1280px; in a 300px window the list used to open at its full height and run off the bottom of the surface.
@@ -86,7 +91,10 @@ fn a_long_list_is_capped_to_the_window_and_scrolls_to_the_cursor() {
         bottom(list) + panel_pad() <= WINDOW_HEIGHT,
         "inside the window: {list:?}"
     );
-    assert!(list.height < 40.0 * ROW_HEIGHT, "cut to the room: {list:?}");
+    assert!(
+        list.height < 40.0 * row_height(),
+        "cut to the room: {list:?}"
+    );
 
     route(&mut tree, &named(NamedKey::End));
     settle(&tree);
@@ -111,7 +119,11 @@ fn a_dropdown_near_the_bottom_opens_above_its_trigger() {
     let top = 220.0;
     let (mut tree, picked) = opened(5, top);
     let list = list();
-    assert_eq!(list.height, 5.0 * ROW_HEIGHT, "whole, since it fits above");
+    assert_eq!(
+        list.height,
+        5.0 * row_height(),
+        "whole, since it fits above"
+    );
     assert!(
         bottom(list) + panel_pad() <= top,
         "above the trigger: {list:?}"
@@ -142,7 +154,7 @@ fn a_dropdown_with_more_room_below_stays_below_however_long_it_is() {
     let (_tree, _) = opened(40, top);
     let list = list();
     assert!(
-        list.y >= top + TRIGGER_HEIGHT,
+        list.y >= top + crate::shared::control_height(),
         "below the trigger: {list:?}"
     );
     assert!(bottom(list) <= WINDOW_HEIGHT, "inside the window: {list:?}");
@@ -253,4 +265,63 @@ fn a_select_s_rows_are_options_that_say_which_one_is_chosen() {
     route(&mut tree, &named(NamedKey::Enter));
     settle(&tree);
     assert_eq!(selection(), [Some(false), Some(true), Some(false)]);
+}
+
+#[test]
+#[cfg(all(feature = "workbench", feature = "overlays"))]
+fn controls_of_every_kind_standing_in_a_row_are_drawn_at_one_height() {
+    use crate::{ButtonProps, IconButtonProps, MenuProps, button, icon_button, menu};
+    use telar::focus::Role;
+
+    fresh_layout_runtime();
+    let items = vec![
+        button(
+            ButtonProps::props().label("Open").build(),
+            Children::default(),
+        )
+        .unwrap(),
+        icon_button(
+            IconButtonProps::props()
+                .icon("lucide:search")
+                .label("Find")
+                .build(),
+            Children::default(),
+        )
+        .unwrap(),
+        menu(
+            MenuProps::props().label("File").fit(true).build(),
+            Children::default(),
+        )
+        .unwrap(),
+        select(SelectProps::props().build(), Children::default()).unwrap(),
+    ];
+    let root = telar::Container::new(
+        telar::LayoutStyle::new()
+            .flex_row()
+            .align_items(telar::AlignItems::CENTER)
+            .width(WINDOW_WIDTH)
+            .height(WINDOW_HEIGHT),
+        items,
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(WINDOW_WIDTH),
+        AvailableSpace::Definite(WINDOW_HEIGHT),
+    )
+    .unwrap();
+    relayout_if_dirty();
+    let _tree = ComponentList::new(telar::box_item(root));
+    let heights: Vec<f32> = [Role::Button, Role::ComboBox]
+        .into_iter()
+        .flat_map(drawn)
+        .map(|rect| rect.height)
+        .collect();
+    assert_eq!(heights.len(), 4, "{heights:?}");
+    assert!(
+        heights
+            .iter()
+            .all(|height| *height == crate::shared::control_height()),
+        "{heights:?}"
+    );
 }

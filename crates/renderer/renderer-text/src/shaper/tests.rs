@@ -974,3 +974,33 @@ fn a_span_underlines_only_its_own_glyphs_in_its_own_colour() {
     );
     assert_eq!(strokes[0].paint, renderer_core::Paint::Solid(accent));
 }
+
+/// A label read `[ Settings   ]` in a button sized by it: the measure rounded the line up to a whole pixel, so the box was up to a pixel wider than the run drawn in it and every bit of that fell after the last glyph.
+#[test]
+fn a_measured_line_is_as_wide_as_the_run_drawn_from_it() {
+    let mut shaper = TextShaper::new();
+    for (text, weight) in [("Settings", 400), ("Preview", 600), ("catalogue", 400)] {
+        let style = TextStyle::new(13.0, Color::BLACK)
+            .with_font_weight(weight)
+            .with_text_wrap(TextWrap::NoWrap);
+        let (measured, _) = shaper.measure_text(text, None, 0.0, &style);
+        let unbounded = Rect::new(0.0, 0.0, 1000.0, 1000.0);
+        let buffer = make_buffer(
+            &mut shaper.font_system,
+            &mut shaper.family_availability,
+            text,
+            None,
+            unbounded,
+            &style,
+        );
+        let drawn = buffer
+            .layout_runs()
+            .filter_map(|run| run.glyphs.last().map(|glyph| glyph.x + glyph.w))
+            .fold(0.0_f32, f32::max);
+        assert!(drawn > 0.0, "{text} draws nothing here");
+        assert!(
+            (measured - drawn).abs() <= LAYOUT_UNIT,
+            "{text} measures {measured} and draws {drawn}"
+        );
+    }
+}

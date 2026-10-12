@@ -6,10 +6,10 @@ element group
       element group
         element group
           element button
-            rect 331,286 139x28 fill=#4261edff radius=10
+            rect 333,286 134x28 fill=#4261edff radius=10
             element group
-              matrix 1,0,0,1,345,292
-                text 0,0 111x16.8 "Open the drawer" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+              matrix 1,0,0,1,345,286
+                text 0,5 110.95x16.8 "Open the drawer" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
               end
             end
           end
@@ -23,15 +23,23 @@ end
 element group
   rect 0,0 800x600 fill=#00000080
   element dialog
-    rect 0,0 280x600 fill=#ffffffff border=1 border-color=#dbdeedff
-    element group
-      matrix 1,0,0,1,20,20
-        text 0,0 240x16.8 "Filters" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
-      end
-    end
-    element group
-      matrix 1,0,0,1,20,49
-        text 0,0 240x16.8 "Tap outside the panel to close it." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+    rect 0,0 280x600 fill=#ffffffff border=1 border-color=#dbdeedff radius=0,16,16,0
+    element scrollarea
+      clip 16,16 248x46
+        matrix 1,0,0,1,16,16
+          element group
+            element group
+              matrix 1,0,0,1,0,0
+                text 0,0 248x16.8 "Filters" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,29
+                text 0,0 248x16.8 "Tap outside the panel to close it." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+        end
       end
     end
   end

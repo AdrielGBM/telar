@@ -463,6 +463,11 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_set_safe_area_insets(top: f32, right: f32, bottom: f32, left: f32) {
                 ::telar::set_safe_area_insets(::telar::Insets::new(top, right, bottom, left));
             }
+            // The dylib's own copy of whether the window is maximized, which a title bar it draws reads.
+            #[unsafe(no_mangle)]
+            pub unsafe extern "Rust" fn _rsx_hot_set_surface_maximized(maximized: bool) {
+                ::telar::set_surface_maximized(maximized);
+            }
             // Drain the dylib's own window-command queue: a title bar's `on_press` pushes into this dylib's thread-local, so the host must drain it across this boundary to apply drag/minimize/maximize/ close — its own copy is empty.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_drain_window_commands()
@@ -511,7 +516,7 @@ pub fn app(input: TokenStream) -> TokenStream {
             pub unsafe extern "Rust" fn _rsx_hot_install_task_waker(waker: ::telar::RedrawWaker) {
                 ::telar::set_task_waker(move || waker.wake());
             }
-            // This dylib's copies of the clipboard, the URI opener and the file dialogs start empty; the host's serve it instead.
+            // This dylib's copies of the clipboard, the URI opener, the file dialogs and the font database start empty; the host's serve it instead.
             #[unsafe(no_mangle)]
             pub unsafe extern "Rust" fn _rsx_hot_install_services(services: ::telar::hot::HostServices) {
                 services.install();

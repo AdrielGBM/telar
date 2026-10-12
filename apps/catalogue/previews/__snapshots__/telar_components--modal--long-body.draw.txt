@@ -1,0 +1,242 @@
+frame 480x360 lang=en
+element group
+  rect 0,0 480x360 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+        end
+      end
+    end
+  end
+end
+element group
+  rect 0,0 480x360 fill=#00000080
+  element dialog
+    rect 65,16 351x328 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
+    element group
+      element group
+        matrix 1,0,0,1,81,32
+          text 0,0 59.39x23.52 "Terms" size=19.6 family=sans-serif weight=600 color=#4261edff lang=en
+        end
+      end
+      element button
+        rect 365,36 35x16 border=2 border-color=#4261edff
+        element group
+          matrix 1,0,0,1,365,36
+            text 0,0 35x15.62 "Close" size=13.02 family=sans-serif weight=400 color=#171a2eff lang=en
+          end
+        end
+      end
+    end
+    element scrollarea
+      clip 81,68 319x260
+        matrix 1,0,0,1,81,68
+          element group
+            element group
+              matrix 1,0,0,1,0,0
+                text 0,1 319x16.8 "Paragraph 0 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,32
+                text 0,1 319x16.8 "Paragraph 1 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,64
+                text 0,1 319x16.8 "Paragraph 2 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,96
+                text 0,1 319x16.8 "Paragraph 3 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,128
+                text 0,1 319x16.8 "Paragraph 4 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,160
+                text 0,1 319x16.8 "Paragraph 5 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,192
+                text 0,1 319x16.8 "Paragraph 6 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,224
+                text 0,1 319x16.8 "Paragraph 7 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,256
+                text 0,1 319x16.8 "Paragraph 8 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,288
+                text 0,1 319x16.8 "Paragraph 9 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,320
+                text 0,1 319x16.8 "Paragraph 10 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,352
+                text 0,1 319x16.8 "Paragraph 11 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,384
+                text 0,1 319x16.8 "Paragraph 12 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,416
+                text 0,1 319x16.8 "Paragraph 13 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,448
+                text 0,1 319x16.8 "Paragraph 14 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,480
+                text 0,1 319x16.8 "Paragraph 15 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,512
+                text 0,1 319x16.8 "Paragraph 16 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,544
+                text 0,1 319x16.8 "Paragraph 17 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,576
+                text 0,1 319x16.8 "Paragraph 18 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,608
+                text 0,1 319x16.8 "Paragraph 19 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,640
+                text 0,1 319x16.8 "Paragraph 20 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,672
+                text 0,1 319x16.8 "Paragraph 21 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,704
+                text 0,1 319x16.8 "Paragraph 22 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,736
+                text 0,1 319x16.8 "Paragraph 23 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,768
+                text 0,1 319x16.8 "Paragraph 24 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,800
+                text 0,1 319x16.8 "Paragraph 25 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,832
+                text 0,1 319x16.8 "Paragraph 26 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,864
+                text 0,1 319x16.8 "Paragraph 27 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,896
+                text 0,1 319x16.8 "Paragraph 28 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,928
+                text 0,1 319x16.8 "Paragraph 29 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,960
+                text 0,1 319x16.8 "Paragraph 30 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,992
+                text 0,1 319x16.8 "Paragraph 31 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,1024
+                text 0,1 319x16.8 "Paragraph 32 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,1056
+                text 0,1 319x16.8 "Paragraph 33 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,1088
+                text 0,1 319x16.8 "Paragraph 34 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,1120
+                text 0,1 319x16.8 "Paragraph 35 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,1152
+                text 0,1 319x16.8 "Paragraph 36 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,1184
+                text 0,1 319x16.8 "Paragraph 37 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,1216
+                text 0,1 319x16.8 "Paragraph 38 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+            element group
+              matrix 1,0,0,1,0,1248
+                text 0,1 319x16.8 "Paragraph 39 of a body longer than the window." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+        end
+      end
+      rect 392,68 6x53.31 fill=#a8adc2ff radius=3
+    end
+  end
+end

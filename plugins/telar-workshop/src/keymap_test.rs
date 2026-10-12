@@ -345,7 +345,7 @@ fn slash_and_mod_k_open_the_palette_without_typing_into_it() {
 #[test]
 fn the_find_trigger_opens_the_palette() {
     let mut workshop = Workshop::open(entries());
-    workshop.click(Role::Button, "Find a preview or command");
+    workshop.click(Role::Button, "Find a preview or command in Workshop");
     assert_eq!(workshop.dialogs(), ["Command palette"]);
 }
 

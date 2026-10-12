@@ -1,6 +1,9 @@
 [telar]
 backend = "auto"
-prelude = ["telar_components"]
+prelude = ["telar_components", "telar_icons"]
+
+[telar.icons]
+iconify = "icons"
 # The crate declares no `mod` statements of its own: `app.rs`, `theme.rs` and `demo_images.rs` are found by
 # walking `src/`, the same way the `.rsx` files beside them are.
 

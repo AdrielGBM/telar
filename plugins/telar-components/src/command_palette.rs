@@ -6,37 +6,71 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Clip, ClippedItem, Color, Container, Declared,
-    JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
+    Accessible, AlignItems, Border, BorderRadius, Children, Clip, ClippedItem, Color, Container,
+    Declared, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
     ModifiersState, NamedKey, Props, Reactive, ReactiveList, RectStyle, RwSignal, ScrollViewport,
-    ShapeStyle, Span, StyledContainer, Text, TextWrap, VirtualList, box_item, effect,
+    ShapeStyle, Span, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap, VirtualList,
+    amend_surface, box_item, effect,
     focus::{FocusId, Role},
     memo, on_cleanup, signal,
 };
 
 use crate::fuzzy::fuzzy_match;
 use crate::kbd::spoken_chord;
+use crate::list::{ListTokens, row_paint, tinted};
 use crate::scrim;
 use crate::shared;
 use crate::strings;
 use crate::text_field::{TextFieldProps, text_field};
 use crate::{KbdProps, kbd};
 
-const DEFAULT_WIDTH: f32 = 560.0;
 /// How many rows show before the list scrolls.
 const VISIBLE_ROWS: usize = 8;
 const OVERSCAN: usize = 4;
 /// What a match against a keyword or the group's name gives up to one against the command's own name.
 const INDIRECT_PENALTY: i32 = 6;
+/// How many ems wide the dialog is when its tokens name no width: room for a long command's name, its group's heading and its shortcut on one line.
+const WIDTH_EMS: f32 = 40.0;
+/// How far down the window the dialog stands when its tokens say nothing, in the theme's widest spacing step: high enough that the list has the room below it to grow into.
+const INSET_IN_GAPS: f32 = 6.0;
 
-fn row_height() -> f32 {
-    crate::dropdown::ROW_HEIGHT
+/// The command palette's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the role named beside it, read when the palette opens. Its rows follow [`ListTokens`].
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct CommandPaletteTokens {
+    /// Width of the dialog at the regular control size, scaled with the control size in force. `None` is 40 ems of the document's text. A palette's own `width` prop wins over it.
+    pub width: Option<f32>,
+    /// Corner of the dialog. `None` is the theme's `radius_dialog`.
+    pub radius: Option<f32>,
+    /// How far below the top of the window the dialog stands, at the regular control size and scaled with the control size in force. `None` is six of [`metrics::gap_xl`](crate::metrics::gap_xl).
+    pub inset_top: Option<f32>,
 }
+
+impl CommandPaletteTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn width(&self) -> f32 {
+        shared::width_or_measure(self.width, WIDTH_EMS)
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_dialog)
+    }
+
+    pub fn inset_top(&self) -> f32 {
+        self.inset_top.map_or_else(
+            || shared::gap_xl() * INSET_IN_GAPS,
+            |inset| inset * telar::control_scale(),
+        )
+    }
+}
+
 fn card_pad() -> f32 {
-    shared::spacing()
-}
-fn top_offset() -> f32 {
-    shared::spacing() * 12.0
+    shared::gap_md()
 }
 
 /// One thing the palette can run: what it is called, the group it is listed under, the other words it answers to and the shortcut that runs it without the palette.
@@ -124,12 +158,15 @@ pub struct CommandPaletteProps {
     /// Runs whenever the palette closes, whether a command ran or not.
     #[props(some, default)]
     pub on_close: Option<Rc<dyn Fn()>>,
-    /// The dialog's width in logical px. `0.0` (the default) means 560.
+    /// The dialog's width in logical px. `0.0` (the default) is [`CommandPaletteTokens::width`].
     #[props(default)]
     pub width: f32,
-    /// Accent for the matched characters and the cursor. `Color::TRANSPARENT` (the default) falls back to the theme accent.
+    /// The colour the matched characters are drawn in and the cursor's wash is tinted with. `Color::TRANSPARENT` (the default) draws the matches in the theme accent and leaves the theme's wash as it is.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
+    /// Amends the paint of the dialog — this component's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`CommandPaletteTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// A dialog that finds a command by typing part of its name, and runs it.
@@ -149,10 +186,10 @@ pub fn command_palette(
         on_close,
         width,
         color,
+        style,
     } = props;
     let open = shared::resolve_open(open, id);
     let query = query.unwrap_or_else(|| signal(String::new()));
-    let width = if width > 0.0 { width } else { DEFAULT_WIDTH };
     let parts = Parts {
         commands,
         query,
@@ -162,6 +199,7 @@ pub fn command_palette(
         on_run,
         width,
         color,
+        style,
     };
     scrim::scrim_overlay(open, on_close, move |dismiss| {
         build_open_palette(parts, open, dismiss)
@@ -175,8 +213,10 @@ struct Parts {
     label: Option<Reactive<String>>,
     empty_label: Option<Reactive<String>>,
     on_run: Option<RunHandler>,
+    /// `0.0` for the tokens' width.
     width: f32,
     color: Reactive<Color>,
+    style: SurfaceStyle,
 }
 
 /// One line of the list: a group's heading, or a command with the ranges of its name the query matched.
@@ -303,6 +343,8 @@ struct Palette {
     built: RwSignal<HashMap<Arc<str>, FocusId>>,
     run: Rc<dyn Fn(&Command)>,
     color: Reactive<Color>,
+    /// Fixed while the palette is open: the list is virtual, and places rows it has not built by it.
+    row_height: f32,
 }
 
 impl Palette {
@@ -365,7 +407,7 @@ impl Palette {
         if height <= 0.0 {
             return;
         }
-        let row = row_height();
+        let row = self.row_height;
         let top = index as f32 * row;
         let bottom = top + row;
         let target = if top < offset {
@@ -431,7 +473,11 @@ fn build_open_palette(
         on_run,
         width,
         color,
+        style,
     } = parts;
+    let tokens = CommandPaletteTokens::current();
+    let width = if width > 0.0 { width } else { tokens.width() };
+    let row_height = ListTokens::current().row_height();
     let results = memo(move || {
         let commands = commands.get();
         let ranked = query.with(|query| rank(&commands, query));
@@ -455,7 +501,7 @@ fn build_open_palette(
     // Short of the room as well as of eight rows: the card shrinks to the window it is in, and this is what gives.
     let scroll = LayoutScrollArea::new_with(
         LayoutStyle::new()
-            .max_height(VISIBLE_ROWS as f32 * row_height())
+            .max_height(VISIBLE_ROWS as f32 * row_height)
             .flex_shrink(1.0)
             .min_height(0.0),
         |viewport| {
@@ -466,6 +512,7 @@ fn build_open_palette(
                 built: signal(HashMap::new()),
                 run,
                 color,
+                row_height,
             });
             made = Some(palette.clone());
             let source = {
@@ -475,7 +522,7 @@ fn build_open_palette(
             let rows = VirtualList::new(
                 LayoutStyle::new().flex_column(),
                 palette.viewport.clone(),
-                row_height(),
+                row_height,
                 OVERSCAN,
                 source,
                 |entry: &Rc<Entry>| (**entry).clone(),
@@ -553,10 +600,11 @@ fn build_open_palette(
         0.0,
     )?;
 
+    let room = scrim::Room::new();
     let card_box = move || {
         LayoutStyle::new()
             .flex_column()
-            .width(width)
+            .width(width.min(room.inside(card_pad()).width))
             .padding_all(card_pad())
             .gap(card_pad())
             .min_height(0.0)
@@ -564,11 +612,12 @@ fn build_open_palette(
     let name = label.clone();
     let card = StyledContainer::new(
         card_box(),
-        |_r| {
-            RectStyle::default()
+        move |_r| {
+            let card = RectStyle::default()
                 .with_fill(shared::surface())
-                .with_border(telar::Border::uniform(shared::border(), 1.0))
-                .with_radius(BorderRadius::all(shared::radius() * 3.0))
+                .with_border(Border::uniform(shared::border(), shared::border_width()))
+                .with_radius(BorderRadius::all(CommandPaletteTokens::current().radius()));
+            amend_surface(card, &style)
         },
         vec![field, box_item(scroll), box_item(empty)],
     )?
@@ -587,16 +636,17 @@ fn build_open_palette(
             .min_height(0.0)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::START)
-            .padding_top(top_offset())
+            .padding_top(CommandPaletteTokens::current().inset_top())
             .padding_bottom(card_pad())
             .padding_horizontal(card_pad())
     };
     let backdrop = StyledContainer::new(
         backdrop_box(),
-        |_r| RectStyle::default().with_fill(scrim::SCRIM),
+        |_r| RectStyle::default().with_fill(shared::overlay()),
         vec![box_item(card)],
     )?
     .styled_by(backdrop_box);
+    room.follow(backdrop.layout_node());
     let backdrop = shared::dismissed_by_press(backdrop, move || dismiss());
     Ok(box_item(backdrop))
 }
@@ -630,12 +680,12 @@ fn empty_state(
 
 fn build_entry(palette: &Rc<Palette>, entry: &Entry) -> Result<Box<dyn LayoutItem>, LayoutError> {
     match entry {
-        Entry::Heading(group) => heading(group.clone()),
+        Entry::Heading(group) => heading(group.clone(), palette.row_height),
         Entry::Item { command, marks } => build_row(palette, command, marks),
     }
 }
 
-fn heading(group: Arc<str>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn heading(group: Arc<str>, row_height: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let heading = crate::list::group(
         crate::list::GroupProps::props()
             .label(Reactive::of(move || group.to_string()))
@@ -645,7 +695,7 @@ fn heading(group: Arc<str>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let slot = Container::new(
         LayoutStyle::new()
             .flex_column()
-            .height(row_height())
+            .height(row_height)
             .flex_shrink(0.0)
             .justify_content(JustifyContent::END),
         vec![heading],
@@ -669,7 +719,9 @@ fn build_row(
                 .map(|mark| {
                     Span::new(
                         mark.start as u32..mark.end as u32,
-                        Declared::default().with_color(accent).with_font_weight(600),
+                        Declared::default()
+                            .with_color(accent)
+                            .with_font_weight(shared::strong_weight()),
                     )
                 })
                 .collect()
@@ -700,14 +752,12 @@ fn build_row(
         None => command.label.to_string(),
     };
     let id = command.id.clone();
+    // The cursor is the option a reader hears as selected, so it wears the selection's wash; the pointer moves the cursor, so a hovered row wears it too.
     let paint = |hovered: bool| {
         let (palette, id) = (palette.clone(), id.clone());
         move |_r| {
-            if hovered || palette.is_cursor(&id) {
-                crate::dropdown::option_row_hover_style(&palette.color)
-            } else {
-                RectStyle::default().with_radius(BorderRadius::all(shared::radius_sm()))
-            }
+            let lit = hovered || palette.is_cursor(&id);
+            row_paint(lit.then(|| tinted(&palette.color, shared::held_wash())))
         }
     };
     let disabled = command.disabled;
@@ -723,15 +773,16 @@ fn build_row(
             }
         }
     };
-    let row_box = || {
+    let row_height = palette.row_height;
+    let row_box = move || {
         LayoutStyle::new()
             .flex_row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::SPACE_BETWEEN)
-            .height(row_height())
+            .height(row_height)
             .flex_shrink(0.0)
-            .padding_horizontal(10.0)
-            .gap(8.0)
+            .padding_horizontal(ListTokens::current().pad_x())
+            .gap(shared::gap_md())
     };
     let selected = {
         let (palette, id) = (palette.clone(), id.clone());
@@ -739,6 +790,7 @@ fn build_row(
     };
     // Selected while the cursor is on it, as the list autocomplete pattern has it: nothing is chosen until it is run, and the cursor is what Enter runs.
     let row = StyledContainer::new(row_box(), paint(false), content)?
+        .styled_by(row_box)
         .hover_style(paint(true))
         .disabled(move || disabled)
         .presented(Role::Option)

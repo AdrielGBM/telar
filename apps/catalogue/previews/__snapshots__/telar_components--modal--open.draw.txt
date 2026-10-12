@@ -6,10 +6,10 @@ element group
       element group
         element group
           element button
-            rect 361,282 79x28 fill=#4261edff radius=10
+            rect 363,282 74x28 fill=#4261edff radius=10
             element group
-              matrix 1,0,0,1,375,288
-                text 0,0 51x16.8 "Reopen" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+              matrix 1,0,0,1,375,282
+                text 0,5 50.38x16.8 "Reopen" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
               end
             end
           end
@@ -23,25 +23,33 @@ end
 element group
   rect 0,0 800x600 fill=#00000080
   element dialog
-    rect 240,248 320x104 fill=#ffffffff border=1 border-color=#dbdeedff radius=30
+    rect 232,256 336x88 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
     element group
       element group
-        matrix 1,0,0,1,264,272
+        matrix 1,0,0,1,248,272
           text 0,0 77x23.52 "Confirm" size=19.6 family=sans-serif weight=600 color=#4261edff lang=en
         end
       end
       element button
-        rect 501,276 35x16 border=2 border-color=#4261edff
+        rect 517,276 35x16 border=2 border-color=#4261edff
         element group
-          matrix 1,0,0,1,501,276
+          matrix 1,0,0,1,517,276
             text 0,0 35x15.62 "Close" size=13.02 family=sans-serif weight=400 color=#171a2eff lang=en
           end
         end
       end
     end
-    element group
-      matrix 1,0,0,1,264,308
-        text 0,1 272x16.8 "This dialog stays inside the canvas." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+    element scrollarea
+      clip 248,308 304x20
+        matrix 1,0,0,1,248,308
+          element group
+            element group
+              matrix 1,0,0,1,0,0
+                text 0,1 304x16.8 "This dialog stays inside the canvas." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              end
+            end
+          end
+        end
       end
     end
   end

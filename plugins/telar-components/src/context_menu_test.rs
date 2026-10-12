@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use telar::testing::{lay_out, moved, named, press, release, route};
-use telar::{ComponentList, LayoutItem};
+use telar::{ComponentList, LayoutItem, ThemeTokens, relayout_if_dirty};
 
 use super::*;
 use crate::test_support::fresh_layout_runtime;
@@ -180,8 +180,8 @@ fn pointing_at_a_submenu_opens_it() {
         drawn_texts(&tree)
     );
 
-    // The fourth entry down, at the metrics the default style lays it out on: two rows and a separator above it, from a panel opened at y=30.
-    route(&mut tree, &moved(60.0, 94.0));
+    let (x, y) = telar::testing::centre(crate::test_support::drawn(Role::MenuItem)[2]);
+    route(&mut tree, &moved(x, y));
     telar::relayout_if_dirty();
     assert!(
         drawn_texts(&tree).iter().any(|text| text == "hondo"),
@@ -299,7 +299,7 @@ fn bottom(rect: Rect) -> f32 {
 fn a_long_menu_is_capped_to_the_window_and_scrolls_to_the_keyboard() {
     let mut tree = opened_at((40.0, 30.0), rows(30));
     let panel = panels()[0];
-    assert_eq!(panel.y, 30.0 + MenuStyle::default().padding, "at the point");
+    assert_eq!(panel.y, 30.0 + crate::shared::panel_pad(), "at the point");
     assert!(
         bottom(panel) <= WINDOW.height,
         "inside the window: {panel:?}"
@@ -459,4 +459,197 @@ fn a_pick_gives_the_keyboard_back_too() {
     settle(&tree);
     assert!(!open.get());
     assert_eq!(focus::current(), Some(button));
+}
+
+/// A theme in one of two schemes, with every colour a context menu could fall back to told apart.
+#[derive(Clone)]
+struct Scheme {
+    dark: bool,
+    menus: Option<ContextMenuTokens>,
+}
+
+impl Scheme {
+    fn pick(&self, light: Color, dark: Color) -> Color {
+        if self.dark { dark } else { light }
+    }
+}
+
+impl telar::ThemeTokens for Scheme {
+    fn surface(&self) -> Color {
+        self.pick(
+            Color::rgba(0.98, 0.98, 0.97, 1.0),
+            Color::rgba(0.11, 0.11, 0.13, 1.0),
+        )
+    }
+    fn border(&self) -> Color {
+        self.pick(
+            Color::rgba(0.85, 0.85, 0.84, 1.0),
+            Color::rgba(0.26, 0.26, 0.3, 1.0),
+        )
+    }
+    fn ink(&self) -> Color {
+        self.pick(
+            Color::rgba(0.1, 0.1, 0.12, 1.0),
+            Color::rgba(0.93, 0.93, 0.95, 1.0),
+        )
+    }
+    fn muted(&self) -> Color {
+        self.pick(
+            Color::rgba(0.45, 0.45, 0.5, 1.0),
+            Color::rgba(0.6, 0.6, 0.66, 1.0),
+        )
+    }
+    fn radius(&self) -> f32 {
+        4.0
+    }
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(menus) = self.menus {
+            extensions.insert(menus);
+        }
+    }
+}
+
+/// The paint of the first panel drawn: the first box with a frame.
+fn panel_paint(tree: &ComponentList) -> RectStyle {
+    tree.commands()
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Rect { style, .. } if style.border.is_some() => Some(**style),
+            _ => None,
+        })
+        .expect("the panel is painted")
+}
+
+/// The colour a string is drawn in.
+fn ink_of(tree: &ComponentList, needle: &str) -> Color {
+    tree.commands()
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Text { text, style, .. } if text.as_ref() == needle => {
+                Some(style.color.solid_color())
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{needle:?} is drawn"))
+}
+
+/// The panel used to be a fixed near-black whatever the application looked like, so a light application opened a dark menu. Every colour now comes from the theme in force, and a switch of scheme while the menu is open repaints it.
+#[test]
+fn the_panel_is_drawn_from_the_theme_in_force_in_light_and_in_dark() {
+    use telar::{BorderRadius, Paint};
+
+    let light = Scheme {
+        dark: false,
+        menus: None,
+    };
+    let dark = Scheme {
+        dark: true,
+        menus: None,
+    };
+    telar::set_theme(light.clone());
+    let (tree, _) = menu();
+    let panel = panel_paint(&tree);
+    assert_eq!(panel.fill, Some(Paint::Solid(light.surface())));
+    assert_eq!(
+        panel.border.map(|border| border.paint),
+        Some(Paint::Solid(light.border()))
+    );
+    assert_eq!(panel.radius, BorderRadius::all(light.radius_surface()));
+    assert_eq!(ink_of(&tree, "copiar"), light.ink());
+    assert_eq!(ink_of(&tree, "ctrl+c"), light.muted());
+    assert_eq!(ink_of(&tree, "pegar"), light.muted(), "disabled");
+
+    telar::set_theme(dark.clone());
+    relayout_if_dirty();
+    let panel = panel_paint(&tree);
+    assert_eq!(panel.fill, Some(Paint::Solid(dark.surface())));
+    assert_eq!(
+        panel.border.map(|border| border.paint),
+        Some(Paint::Solid(dark.border()))
+    );
+    assert_eq!(ink_of(&tree, "copiar"), dark.ink());
+    assert_eq!(ink_of(&tree, "ctrl+c"), dark.muted());
+}
+
+/// The row under the keyboard wears the theme's hover wash in the corner every list's rows share, as the rows of a `menu` do.
+#[test]
+fn the_highlighted_row_wears_the_theme_s_hover_wash() {
+    use telar::{BorderRadius, Paint};
+
+    telar::set_theme(Scheme {
+        dark: false,
+        menus: None,
+    });
+    let (mut tree, _) = menu();
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    relayout_if_dirty();
+    let row = crate::test_support::drawn(Role::MenuItem)[0];
+    let lit = tree
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Rect { rect, style }
+                if rect.width == row.width && rect.height == row.height && style.fill.is_some() =>
+            {
+                Some(**style)
+            }
+            _ => None,
+        })
+        .expect("the highlighted row is painted");
+    assert_eq!(lit.fill, Some(Paint::Solid(crate::shared::hover_wash())));
+    assert_eq!(lit.radius, BorderRadius::all(crate::shared::radius_item()));
+    assert_eq!(row.height, ListTokens::current().row_height());
+}
+
+/// The theme's context menu tokens move every menu; one menu's own `tokens` win over them field by field; `style` amends the panel's paint last.
+#[test]
+fn a_menu_s_tokens_win_over_the_theme_s_and_its_style_amends_the_panel() {
+    use telar::{BorderRadius, Paint};
+
+    let red = Color::rgba(0.9, 0.1, 0.1, 1.0);
+    let blue = Color::rgba(0.1, 0.1, 0.9, 1.0);
+    telar::set_theme(Scheme {
+        dark: false,
+        menus: Some(ContextMenuTokens {
+            background: Some(red),
+            radius: Some(3.0),
+            row_height: Some(36.0),
+            ..ContextMenuTokens::default()
+        }),
+    });
+    fresh_layout_runtime();
+    let menu = context_menu(
+        ContextMenuProps::props()
+            .entries(vec![Entry::row("copiar", "", || {})])
+            .within(WINDOW)
+            .tokens(ContextMenuTokens {
+                background: Some(blue),
+                ..ContextMenuTokens::default()
+            })
+            .style(Rc::new(|style: RectStyle| RectStyle {
+                border: None,
+                ..style
+            }))
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+    let tree = ComponentList::new(menu);
+    let panel = tree
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Rect { style, .. } if style.fill.is_some() => Some(**style),
+            _ => None,
+        })
+        .expect("the panel is painted");
+    assert_eq!(
+        panel.fill,
+        Some(Paint::Solid(blue)),
+        "the menu's own colour"
+    );
+    assert_eq!(panel.radius, BorderRadius::all(3.0), "the theme's radius");
+    assert_eq!(panel.border, None, "and the caller's amendment last");
+    assert_eq!(crate::test_support::drawn(Role::MenuItem)[0].height, 36.0);
 }

@@ -2,8 +2,8 @@
 
 use telar::{
     Border, BorderRadius, Color, ColorScheme, ControlSize, Declared, FontFamily, LayoutError,
-    LayoutItem, LayoutStyle, RectStyle, ScopedTheme, TextStyle, ThemeProvider, ThemeTokens,
-    follow_theme, provide_theme, use_resolved_scheme, use_theme_extension,
+    LayoutItem, LayoutStyle, RectStyle, ScopeProvider, ScopedTheme, TextStyle, ThemeTokens,
+    follow_theme, provide_theme, use_resolved_scheme, use_theme_extension, use_theme_tokens,
 };
 
 pub const WORKBENCH_TEXT_SIZE: f32 = 13.0;
@@ -80,6 +80,7 @@ impl Default for WorkbenchTokens {
 /// The workbench palette as a theme: every shared token the catalogue reads, plus [`WorkbenchTokens`].
 #[derive(Clone, ThemeTokens)]
 #[theme(root = Declared::default().with_font_size(WORKBENCH_TEXT_SIZE).with_color(self.ink))]
+#[theme(radius_surface = 8.0, radius_dialog = 12.0, radius_item = 4.0)]
 pub struct WorkbenchTheme {
     pub primary: Color,
     pub on_primary: Color,
@@ -178,15 +179,18 @@ pub fn workbench_theme() -> ScopedTheme {
 /// Builds `child` under the workbench theme, leaving the application's global theme alone.
 pub fn workbench_scope(
     child: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
-) -> Result<ThemeProvider, LayoutError> {
+) -> Result<ScopeProvider, LayoutError> {
     provide_theme(workbench_theme(), child)
 }
 
 /// The outline every workbench card, field and frame shares: a one-pixel subtle border on the workbench radius. The caller adds the fill, if any.
 pub fn workbench_card() -> RectStyle {
     RectStyle::default()
-        .with_border(Border::uniform(use_workbench_tokens().border_subtle, 1.0))
-        .with_radius(BorderRadius::all(WORKBENCH_RADIUS))
+        .with_border(Border::uniform(
+            use_workbench_tokens().border_subtle,
+            use_theme_tokens().border_width(),
+        ))
+        .with_radius(BorderRadius::all(use_theme_tokens().radius_control()))
 }
 
 /// Text that steps back: hints, empty states and secondary details.

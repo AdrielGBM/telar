@@ -6,12 +6,12 @@ element group
       element group
         element group
           element group
-            rect 261,286 61x28
+            rect 262,286 60x28
             element group
-              rect 261,286 61x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+              rect 262,286 60x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
               element group
-                matrix 1,0,0,1,273,292
-                  text 0,0 37x16.8 "Inbox" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                matrix 1,0,0,1,274,292
+                  text 0,0 36.33x16.8 "Inbox" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                 end
               end
             end
@@ -39,12 +39,12 @@ element group
             end
           end
           element group
-            rect 464,286 75x28
+            rect 464,286 74x28
             element group
-              rect 464,286 75x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+              rect 464,286 74x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
               element group
                 matrix 1,0,0,1,476,292
-                  text 0,0 51x16.8 "Archive" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                  text 0,0 50.13x16.8 "Archive" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                 end
               end
             end

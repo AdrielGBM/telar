@@ -2,20 +2,60 @@
 
 use std::rc::Rc;
 use telar::{
-    Accessible, Border, BorderRadius, Children, Color, LayoutError, LayoutItem, LayoutStyle, Props,
-    Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Transform, box_item, box_transform,
-    focus::Role, signal,
+    Accessible, Border, Children, Color, Insets, LayoutError, LayoutItem, LayoutStyle, Props,
+    Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Transform,
+    amend_surface, box_item, box_transform, focus::Role, signal,
 };
 
 use crate::shared;
 
-/// Track thickness (px) — a slim pill rail with a floating thumb.
-fn track_height() -> f32 {
-    shared::spacing()
+/// A slider's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every length is at the regular control size and scaled with the control size in force, and every field left `None` follows the role named beside it, read when the slider paints.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SliderTokens {
+    /// Length of the track when the caller names no `width`. `None` is 16 ems of the document's text, a progress bar's length.
+    pub width: Option<f32>,
+    /// Thickness of the track. `None` is [`metrics::spacing`](crate::metrics::spacing).
+    pub track: Option<f32>,
+    /// Diameter of the thumb. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
+    pub thumb: Option<f32>,
+    /// Width of the ring that parts the thumb from the fill under it. `None` is the theme's `border_width_strong`.
+    pub ring: Option<f32>,
 }
-/// Thumb diameter (px), bigger than the track so it stays easy to grab; it overhangs the rail on purpose.
+
+const WIDTH_EMS: f32 = 16.0;
+
+impl SliderTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn width(&self) -> f32 {
+        shared::width_or_measure(self.width, WIDTH_EMS)
+    }
+
+    pub fn track(&self) -> f32 {
+        self.track
+            .map_or_else(shared::spacing, |track| track * telar::control_scale())
+    }
+
+    pub fn thumb(&self) -> f32 {
+        self.thumb
+            .map_or_else(shared::icon_size, |thumb| thumb * telar::control_scale())
+    }
+
+    pub fn ring(&self) -> f32 {
+        self.ring.unwrap_or_else(shared::border_width_strong)
+    }
+}
+
+fn track_height() -> f32 {
+    SliderTokens::current().track()
+}
 fn thumb_size() -> f32 {
-    shared::icon_size()
+    SliderTokens::current().thumb()
 }
 
 fn thumb_box() -> LayoutStyle {
@@ -23,6 +63,12 @@ fn thumb_box() -> LayoutStyle {
 }
 fn track_box(width: f32) -> LayoutStyle {
     LayoutStyle::new().width(width).height(track_height())
+}
+
+/// How far the track's grab area reaches past its long sides, so the thin track and the thumb overhanging it are one target at least [`shared::MIN_TARGET`] tall.
+fn grab_outset() -> Insets {
+    let reach = ((shared::MIN_TARGET.max(thumb_size()) - track_height()) / 2.0).max(0.0);
+    Insets::new(reach, 0.0, reach, 0.0)
 }
 
 /// A drag-driven `min..=max` control: a rounded track, an accent fill up to `value`, and a thumb positioned by it. This is the canonical demo of the `on_drag` primitive (see `StyledContainer::on_drag`): the widget just encapsulates the press/move -> value mapping (and the fill/thumb repaint) an app would otherwise wire up by hand. High-level sugar over the primitives; lives in `telar-components`, not the kernel, so an app can drop it. `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal), `Some` is caller-bound.
@@ -37,7 +83,7 @@ pub struct SliderProps {
     /// Track (rail) colour; `Color::TRANSPARENT` (the default) means "unset": fall back to the theme's muted token.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub track_color: Reactive<Color>,
-    /// Track width in px. `0.0` (the default) means "unset" — the slider uses `220.0`.
+    /// Track width in px. `0.0` (the default) means "unset": the [`SliderTokens`] width at the control size in force.
     #[props(default)]
     pub width: f32,
     /// Lower bound of the reported value. Default `0.0`.
@@ -55,6 +101,9 @@ pub struct SliderProps {
     /// Fires with the new `min..=max` value on every drag report (the press and each subsequent move).
     #[props(some, default)]
     pub on_change: Option<Rc<dyn Fn(f32)>>,
+    /// Amends the paint of the track — the slider's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`SliderTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// A track and thumb dragged, or stepped with the arrow keys, over a range.
@@ -69,13 +118,15 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
         step,
         label,
         on_change,
+        style,
     } = props;
-    // Degenerate bounds fall back to 0.0..=1.0 rather than dividing by zero below.
     let (min, max) = if max <= min { (0.0, 1.0) } else { (min, max) };
-    // Uncontrolled: own the value so the slider still works when the caller binds no signal.
     let value = value.unwrap_or_else(|| signal(min));
-    let width = if width > 0.0 { width } else { 220.0 };
-    // Shared across the fill and thumb closures: an `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is. The drag and the arrow keys are two ways into one commit, so the callback has to reach both.
+    let width = if width > 0.0 {
+        width
+    } else {
+        SliderTokens::current().width()
+    };
     let key_on_change = on_change.clone();
     let announced_value = value;
     let commit_value = value;
@@ -85,11 +136,11 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
     let fill_color = color.clone();
     let fill = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
-        move |_r| {
+        move |r| {
             let fill = shared::resolve(&fill_color, shared::accent);
             RectStyle::default()
                 .with_fill(fill)
-                .with_radius(BorderRadius::all(track_height() / 2.0))
+                .with_radius(shared::pill(r))
         },
         vec![],
     )?
@@ -104,12 +155,15 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
     let thumb_color = color.clone();
     let thumb = StyledContainer::new(
         thumb_box(),
-        move |_r| {
+        move |r| {
             let fill = shared::resolve(&thumb_color, shared::accent);
             RectStyle::default()
                 .with_fill(fill)
-                .with_border(Border::uniform(Color::WHITE, 2.0))
-                .with_radius(BorderRadius::all(thumb_size() / 2.0))
+                .with_border(Border::uniform(
+                    shared::thumb_on(fill),
+                    SliderTokens::current().ring(),
+                ))
+                .with_radius(shared::pill(r))
         },
         vec![],
     )?
@@ -123,15 +177,17 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
 
     let track = StyledContainer::new(
         track_box(width),
-        move |_r| {
+        move |r| {
             let fill = shared::resolve(&track_color, shared::muted);
-            RectStyle::default()
+            let rest = RectStyle::default()
                 .with_fill(fill)
-                .with_radius(BorderRadius::all(track_height() / 2.0))
+                .with_radius(shared::pill(r));
+            amend_surface(rest, &style)
         },
         vec![box_item(fill), box_item(thumb)],
     )?
     .styled_by(move || track_box(width))
+    .hit_outset(Reactive::of(grab_outset))
     // A slider you can reach but not move is not operable. One step per press, or a twentieth of the range when the caller named none — the granularity a continuous value has to invent for a keyboard.
     .control(Role::Slider)
     .a11y_label({
@@ -167,7 +223,6 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
         }
     })
     .on_drag(move |px, _py| {
-        // `on_drag` reports widget-local coords, so no rect subtraction is needed.
         let t = (px / width).clamp(0.0, 1.0);
         let mut v = min + t * (max - min);
         if step > 0.0 {

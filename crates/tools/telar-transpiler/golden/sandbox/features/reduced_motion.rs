@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -96,9 +97,9 @@ pub fn reduced_motion(props: ReducedMotionProps, children: Children) -> Result<B
                                         };
                                         __children.push(box_item(__text_2));
                                         let __row_0 = {
-                                            let __node_3 = button(ButtonProps::props().label("Follow the system").ghost(true).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(None))).build(), Children::default())?;
-                                            let __node_4 = button(ButtonProps::props().label("Less motion").ghost(true).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(true)))).build(), Children::default())?;
-                                            let __node_5 = button(ButtonProps::props().label("Full motion").ghost(true).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(false)))).build(), Children::default())?;
+                                            let __node_3 = button(ButtonProps::props().label("Follow the system").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(None))).build(), Children::default())?;
+                                            let __node_4 = button(ButtonProps::props().label("Less motion").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(true)))).build(), Children::default())?;
+                                            let __node_5 = button(ButtonProps::props().label("Full motion").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(false)))).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_3, __node_4, __node_5])?
                                         };
                                         __children.push(box_item(__row_0));
@@ -152,7 +153,7 @@ pub fn reduced_motion(props: ReducedMotionProps, children: Children) -> Result<B
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_1 = {
-                                            let __node_9 = button(ButtonProps::props().label("Slide").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pulse = pulse.clone(); move || pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }) })).build(), Children::default())?;
+                                            let __node_9 = button(ButtonProps::props().label("Slide").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pulse = pulse.clone(); move || pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }) })).build(), Children::default())?;
                                             let __node_10 = spinner(SpinnerProps::props().size(20.0).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_9, __node_10])?
                                         };

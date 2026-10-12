@@ -46,6 +46,42 @@ pub enum Cursor {
     Wait,
 }
 
+/// The edge or corner of a window an interactive resize pulls, for a window drawn without decorations to be resized by handles of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ResizeEdge {
+    North,
+    South,
+    East,
+    West,
+    NorthEast,
+    NorthWest,
+    SouthEast,
+    SouthWest,
+}
+
+impl ResizeEdge {
+    pub const ALL: [Self; 8] = [
+        Self::North,
+        Self::South,
+        Self::East,
+        Self::West,
+        Self::NorthEast,
+        Self::NorthWest,
+        Self::SouthEast,
+        Self::SouthWest,
+    ];
+
+    /// The pointer shape over a handle that pulls this edge.
+    pub fn cursor(self) -> Cursor {
+        match self {
+            Self::North | Self::South => Cursor::NsResize,
+            Self::East | Self::West => Cursor::EwResize,
+            Self::NorthWest | Self::SouthEast => Cursor::NwseResize,
+            Self::NorthEast | Self::SouthWest => Cursor::NeswResize,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 /// Where a window opens: centred on its monitor, or at absolute coordinates.
 pub enum WindowPosition {
@@ -100,6 +136,10 @@ pub trait Window {
     }
     /// Begins an OS-driven interactive move (drag the window by a custom title bar). Must be called while the pointer button that started the drag is still pressed. No-op on backends without a movable top-level window (layer-shell surfaces, headless).
     fn drag_window(&self) {}
+    /// Begins an OS-driven interactive resize pulling `edge`, for a window drawn without decorations to be resized by handles of its own. Must be called while the pointer button that started the drag is still pressed. No-op where unsupported.
+    fn drag_resize_window(&self, _edge: ResizeEdge) {}
+    /// Shows (`true`) or hides (`false`) the title bar and borders the window system draws around the window. No-op where unsupported.
+    fn set_decorations(&self, _decorated: bool) {}
     /// Minimizes (`true`) or restores (`false`) the window. No-op where unsupported.
     fn set_minimized(&self, _minimized: bool) {}
     /// Maximizes (`true`) or restores (`false`) the window. No-op where unsupported.

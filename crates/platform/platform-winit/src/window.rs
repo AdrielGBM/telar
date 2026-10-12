@@ -57,6 +57,25 @@ impl PlatformWindow for WinitWindow {
         let _ = self.0.drag_window();
     }
 
+    fn drag_resize_window(&self, edge: platform_core::ResizeEdge) {
+        use platform_core::ResizeEdge;
+        use winit::window::ResizeDirection;
+        let _ = self.0.drag_resize_window(match edge {
+            ResizeEdge::North => ResizeDirection::North,
+            ResizeEdge::South => ResizeDirection::South,
+            ResizeEdge::East => ResizeDirection::East,
+            ResizeEdge::West => ResizeDirection::West,
+            ResizeEdge::NorthEast => ResizeDirection::NorthEast,
+            ResizeEdge::NorthWest => ResizeDirection::NorthWest,
+            ResizeEdge::SouthEast => ResizeDirection::SouthEast,
+            ResizeEdge::SouthWest => ResizeDirection::SouthWest,
+        });
+    }
+
+    fn set_decorations(&self, decorated: bool) {
+        self.0.set_decorations(decorated);
+    }
+
     fn set_minimized(&self, minimized: bool) {
         self.0.set_minimized(minimized);
     }

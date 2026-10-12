@@ -22,7 +22,7 @@ col gap:20
     example title:"A width that follows state"
         card gap:8
             text "Reflow" font_size:fit($share) font_weight:600 color:$theme.primary
-            button label:"Switch between 90% and 40%" ghost on_press:(|| $narrow.toggle())
+            button label:"Switch between 90% and 40%" variant:ButtonVariant::Ghost on_press:(|| $narrow.toggle())
         code_line code:"let share = memo(move || FitWidth::Containing(…));   text font_size:fit($share)"
     example title:"A length, and the face the app ships"
         card gap:8

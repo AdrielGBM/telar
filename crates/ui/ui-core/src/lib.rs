@@ -95,8 +95,9 @@ pub use context::{
     NodeId, RelayoutHook, absolute_rect, compute_layout, current_direction, live_node_count,
     mark_dirty, new_container, new_leaf, on_relayout, overlay_viewport, relayout_if_dirty,
     remove_node, reset_layout_runtime, set_children, set_direction, set_display, set_min_height,
-    set_overlay_host, set_safe_area_insets, set_surface_size, surface_size, track_layout,
-    use_direction, use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
+    set_overlay_host, set_safe_area_insets, set_surface_maximized, set_surface_size, surface_size,
+    track_layout, use_direction, use_safe_area_insets, use_surface_height, use_surface_maximized,
+    use_surface_size, use_surface_width,
 };
 pub use cursor::requested_cursor;
 pub use dismiss::{
@@ -146,13 +147,15 @@ pub use scroll_timeline::{
 pub use scroll_viewports::{enclosing_scroll_viewport, scroll_viewports_of, use_primary_scroll};
 pub use slots::{Children, SlotRequest, Slots, use_context};
 pub use step::{COARSE_STEP, FINE_STEP, step_factor};
-pub use styled_container::{KeyAnswer, StyledContainer, box_transform, style_follows};
-pub use surface::{DEFAULT_SCRIM, Edge, SurfaceScaffold, SurfaceTransition};
+pub use styled_container::{
+    KeyAnswer, StyledContainer, box_transform, focus_ring_border, style_follows,
+};
+pub use surface::{Edge, Scrim, SurfaceScaffold, SurfaceTransition};
 pub use surface_canvas::{SurfaceCanvas, SurfaceEnv, composite_surface};
 pub use surface_context::{Surface, SurfaceGuard};
 pub use surface_font::{open_surface_font_family, set_font_family, use_font_family};
 pub use surface_frame::SurfaceFrame;
-pub use surface_style::{SurfaceStyle, amend_surface};
+pub use surface_style::{SurfaceAmendment, SurfaceStyle, amend_surface};
 pub use surface_title::{
     TitleParts, compose_title, open_surface_title, set_app_title, set_page_title, set_title_format,
     surface_title, use_surface_title,
@@ -161,7 +164,9 @@ pub use surface_title::{
 pub use svg::Svg;
 pub use text::{Text, TextRun};
 pub use text_area::TextArea;
-pub use theme_provider::{ThemeProvider, follow_theme, provide_theme};
+pub use theme_provider::{
+    ScopeProvider, follow_control_size, follow_theme, provide_control_size, provide_theme,
+};
 pub use transform_origin::{TransformOrigin, box_transform_about};
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};
 pub use virtual_list::{VirtualList, visible_window};

@@ -2349,3 +2349,94 @@ fn the_document_focusing_a_presented_box_does_not_move_focus_to_it() {
     assert_eq!(focus::current(), button.focus_id());
     focus::clear();
 }
+
+#[derive(Clone)]
+struct Ring {
+    width: f32,
+    offset: f32,
+}
+
+const RING: Color = Color::rgba(0.1, 0.8, 0.2, 1.0);
+
+impl ThemeTokens for Ring {
+    fn focus_ring(&self) -> Color {
+        RING
+    }
+    fn focus_ring_width(&self) -> f32 {
+        self.width
+    }
+    fn focus_ring_offset(&self) -> f32 {
+        self.offset
+    }
+    fn radius(&self) -> f32 {
+        10.0
+    }
+}
+
+fn focused_control() -> (StyledContainer, FocusId) {
+    reset_layout_runtime();
+    let frame = Border::uniform(Color::BLACK, 1.0);
+    let control = StyledContainer::new(
+        LayoutStyle::new().width(100.0).height(40.0),
+        move |_r| {
+            RectStyle::default()
+                .with_border(frame)
+                .with_radius(renderer_core::BorderRadius::all(10.0))
+        },
+        vec![],
+    )
+    .unwrap()
+    .control(focus::Role::Button);
+    compute_layout(
+        control.layout_node(),
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(40.0),
+    )
+    .unwrap();
+    let id = control.focus_id().expect("a control is focusable");
+    focus::request(id);
+    (control, id)
+}
+
+#[test]
+fn the_default_ring_is_the_theme_s_colour_and_width_on_the_box_s_edge() {
+    set_theme(Ring {
+        width: 3.0,
+        offset: 0.0,
+    });
+    let (control, id) = focused_control();
+    let painted = rect_style(&control.view()).expect("the box paints a rect");
+    assert_eq!(painted.border, Some(Border::uniform(RING, 3.0)));
+    assert_eq!(focus_ring_border(), Border::uniform(RING, 3.0));
+    focus::release(id);
+}
+
+#[test]
+fn an_offset_ring_keeps_the_box_s_border_and_stands_inside_it() {
+    set_theme(Ring {
+        width: 2.0,
+        offset: 4.0,
+    });
+    let (control, id) = focused_control();
+    let view = control.view();
+    let painted = rect_style(&view).expect("the box paints a rect");
+    assert_eq!(painted.border, Some(Border::uniform(Color::BLACK, 1.0)));
+    let RenderNode::Element { children, .. } = &view else {
+        panic!("a box is an element");
+    };
+    let RenderNode::Group { children, .. } = &children[0] else {
+        panic!("its content is a group");
+    };
+    let Some(RenderNode::Primitive(renderer_core::DrawCommand::Rect { rect, style, .. })) =
+        children.get(1)
+    else {
+        panic!("the ring is a rect of its own");
+    };
+    assert_eq!(
+        (rect.x, rect.y, rect.width, rect.height),
+        (4.0, 4.0, 92.0, 32.0)
+    );
+    assert_eq!(style.border, Some(Border::uniform(RING, 2.0)));
+    assert_eq!(style.radius, renderer_core::BorderRadius::all(6.0));
+    focus::release(id);
+}

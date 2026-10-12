@@ -103,7 +103,7 @@ impl Board {
         let mut found = None;
         telar::for_each_with_matrix(&self.tree.commands(), |command, matrix| {
             if let telar::DrawCommand::Rect { rect, style, .. } = command
-                && rect.width == LINE
+                && rect.width == crate::shared::focus_ring_width()
                 && style.fill.is_some()
             {
                 found = Some((rect.x + matrix[4], rect.y + matrix[5]));
@@ -146,13 +146,16 @@ fn the_insertion_line_marks_the_slot_in_the_container_under_the_pointer() {
     assert_eq!(board.group.target(), Some(Slot::new(1, 2)));
     assert_eq!(
         board.line_at(),
-        Some((2.0 * ITEM - LINE / 2.0, ROW)),
+        Some((2.0 * ITEM - crate::shared::focus_ring_width() / 2.0, ROW)),
         "after the last pill of the second row"
     );
 
     board.event(moved(110.0, 20.0));
     assert_eq!(board.group.target(), Some(Slot::new(0, 1)));
-    assert_eq!(board.line_at(), Some((ITEM - LINE / 2.0, 0.0)));
+    assert_eq!(
+        board.line_at(),
+        Some((ITEM - crate::shared::focus_ring_width() / 2.0, 0.0))
+    );
     board.event(release(110.0, 20.0));
     assert!(
         board.moves.borrow().is_empty(),

@@ -23,7 +23,7 @@ use crate::surface_context::HomeSurface;
 ///
 /// What the subtree reads from its surroundings comes from two places, as it does for a portal in a document:
 /// - what an owner provides — the theme tokens, the locale, a [`provide_context`](reactive_core::provide_context) value — is read from where `new` was called, for the subtree's whole life, wherever it is shown;
-/// - what the layout tree carries — text styles declared on the boxes above it, a theme a [`ThemeProvider`](crate::ThemeProvider) put on one of them, being hidden, disabled, clipped or scrolled — follows the outlet showing it, and is resolved again when it moves.
+/// - what the layout tree carries — text styles declared on the boxes above it, a theme a [`provide_theme`](crate::provide_theme) put on one of them, being hidden, disabled, clipped or scrolled — follows the outlet showing it, and is resolved again when it moves.
 ///
 /// It is shown only on the surface it was built on: an outlet asked for on another one is an error. An outlet must not stand inside the subtree it shows.
 ///

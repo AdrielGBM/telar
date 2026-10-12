@@ -65,7 +65,7 @@ fn region(runtime: &LocalApp<WorkshopApp>, tree: &ComponentList, name: &str) -> 
 fn the_shell_lays_out_every_region() {
     let runtime = LocalApp(WorkshopApp::new(entries()).project_name("bench"));
     let tree = lay_out(&runtime.0);
-    for text in ["bench", "Search previews", "Canvas", "Previews", "Controls"] {
+    for text in ["bench", "Search previews", "Previews", "Controls"] {
         assert!(find_text(&tree, text), "{text} is not drawn");
     }
     assert_eq!(width_of(&tree, "Previews"), SIDEBAR_DEFAULT_WIDTH);

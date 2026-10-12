@@ -14,10 +14,10 @@ col gap:20
     example title:"consumes_keys — a custom control that keeps the arrows, beside plain buttons"
         card gap:12
             row gap:12 wrap align:center
-                button label:"Before" fill:$theme.primary on_press:(|| $pressed += 1)
+                button label:"Before" color:$theme.primary on_press:(|| $pressed += 1)
                 box role:slider fill:$theme.surface_alt stroke:$theme.border radius:8 pad_x:16 pad_y:10 focus_style(stroke:$theme.primary) on_focus:(|now| $focused.set(now)) on_press:(|| ()) consumes_keys:arrows on_key:(|key: &Key| -> bool { if !$focused.get() { return false; } match key { Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => { $level.set(($level.get() + 1).min(10)); true } Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => { $level.set(($level.get() - 1).max(0)); true } _ => false } })
                     text "level {$level} / 10" font_size:13 color:$theme.ink
-                button label:"After" outline:$theme.primary on_press:(|| $pressed += 1)
+                button label:"After" variant:ButtonVariant::Outline color:$theme.primary on_press:(|| $pressed += 1)
             text "Tab moves between all three. With the level focused, the arrows change it and the page does not scroll; on a button, the arrows scroll the page. Buttons pressed · {$pressed}" font_size:12 color:$theme.muted
         code_line code:"box role:slider focus_style(…) consumes_keys:arrows on_key:(|key| …)"
     example title:"Attributes"

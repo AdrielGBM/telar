@@ -11,7 +11,7 @@ use telar::{
     Accessible, AlignItems, Children, Color, LayoutError, LayoutItem, LayoutStyle, Reactive,
     ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, box_item,
 };
-use telar_components::{ButtonProps, Tab, button, tab_list};
+use telar_components::{ButtonProps, ButtonVariant, Tab, button, tab_list};
 use telar_devtools::{
     WORKBENCH_GRID, accessibility_panel, inspection_toggles, inspector_panel, use_workbench_tokens,
     workbench_fill,
@@ -167,7 +167,7 @@ fn reset_all(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> 
             button(
                 ButtonProps::props()
                     .label(Reactive::of(|| strings::text(RESET_ALL)))
-                    .ghost(true)
+                    .variant(ButtonVariant::Ghost)
                     .on_press(on_press)
                     .build(),
                 Children::default(),

@@ -65,8 +65,8 @@ pub use system_preferences::{
     system_locales_from_env,
 };
 pub use window::{
-    Cursor, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, SurfaceId, Window,
-    WindowConfig, WindowPosition, window_waker,
+    Cursor, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, ResizeEdge, SurfaceId,
+    Window, WindowConfig, WindowPosition, window_waker,
 };
 pub use window_command::{
     WindowCommand, WindowCommandContext, WindowCommandGuard, push_window_command,

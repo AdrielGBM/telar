@@ -3,13 +3,12 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 
 #[derive(::telar::Props)]
 pub struct FeatureCardProps {
-    #[props(default)]
-    pub icon: &'static str,
     #[props(default)]
     pub title: &'static str,
     #[props(default)]
@@ -22,28 +21,25 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let __sbox_0 = {
+        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+        __children.extend(children.build_slot(Some("icon"))?);
         let __text_0 = {
-            Text::declaring(
-                move || format!("{}", { props.icon }),
-                LayoutStyle::new(),
-                move |__inherited: TextStyle| __inherited.with_font_size(28.0),
-            )?
-        };
-        let __text_1 = {
             Text::declaring(
                 move || format!("{}", { props.title }),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink) },
             )?
         };
-        let __text_2 = {
+        __children.push(box_item(__text_0));
+        let __text_1 = {
             Text::declaring(
                 move || format!("{}", { props.body }),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
             )?
         };
-        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(20.0).gap(8.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(16.0) } }, children![__text_0, __text_1, __text_2])?
+        __children.push(box_item(__text_1));
+        StyledContainer::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(170.0).padding_all(20.0).gap(8.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(16.0) } }, __children)?
     };
     Ok(Box::new(__sbox_0))
 }
@@ -54,18 +50,36 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
 pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    let __node_0 = feature_card(FeatureCardProps::props().icon(::telar::__preview_arg!(__preview, "icon", "⚡")).title(::telar::__preview_arg!(__preview, "title", "Fast")).body(::telar::__preview_arg!(__preview, "body", "Software and wgpu renderers with dirty-tracking and scroll-blit detection.")).__preview_actions(&__preview.actions()).build(), Children::default())?;
+    let __node_0 = {
+        let __deferred = Children::per_slot(
+            {
+                let theme = theme.clone();
+            move |__request: SlotRequest<'_>| {
+                let theme = theme.clone();
+                let mut __slots = Slots::new();
+                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                if __request.includes(Some("icon")) {
+                    let __node_1 = icon(IconProps::props().name(("lucide:zap", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_4802B2F8), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                    __slots.push(Some("icon"), box_item(__node_1));
+                }
+                __slots.extend_default(__children);
+                Ok(__slots)
+            }
+            }
+        );
+        feature_card(FeatureCardProps::props().title(::telar::__preview_arg!(__preview, "title", "Fast")).body(::telar::__preview_arg!(__preview, "body", "Software and wgpu renderers with dirty-tracking and scroll-blit detection.")).__preview_actions(&__preview.actions()).build(), __deferred)?
+    };
     Ok(Box::new(__node_0))
 }
 
 pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--feature-card"), "feature_card", "Feature card", feature_card_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/feature_card.rsx"), 18)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/feature_card.rsx"), 17)
         .title("Sandbox/Feature card")
         .docs("An icon, title and body on a bordered surface, for the feature grid.")
-        .source("[preview \"Feature card\" matrix:(mode:[modern midnight])]\nfeature_card icon:\"⚡\" title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"", &[::telar::preview::SourceSpan::new(0, 175, 18)])
+        .source("[preview \"Feature card\" matrix:(mode:[modern midnight])]\nfeature_card title:\"Fast\" body:\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"\n    icon name:\"lucide:zap\" size:28 color:$theme.primary slot:\"icon\"", &[::telar::preview::SourceSpan::new(0, 232, 17)])
         .props(<FeatureCardProps as ::telar::preview::HasPropsSchema>::schema)
-        .args(&[::telar::preview::ArgSpec::new("icon").default("\"⚡\""), ::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")])
+        .args(&[::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")])
         .layout(::telar::preview::Layout::Centered)
         .matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Mode(&["modern", "midnight"])])),
 ];

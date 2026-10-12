@@ -188,7 +188,7 @@ pub fn toolbar(
 
     let layout = move || {
         let style = LayoutStyle::new()
-            .gap(shared::spacing() * 0.25)
+            .gap(shared::gap_xs())
             .align_items(AlignItems::CENTER);
         if vertical {
             style.flex_column()

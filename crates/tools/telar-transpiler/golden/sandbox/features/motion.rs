@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -143,7 +144,7 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
                                                 };
                                                 StyledContainer::new(LayoutStyle::new().flex_column().width(100.0).height(100.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__sbox_1])?
                                             };
-                                            let __node_3 = button(ButtonProps::props().label("Bounce").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build(), Children::default())?;
+                                            let __node_3 = button(ButtonProps::props().label("Bounce").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let big = big.clone(); let scale = scale.clone(); move || { big.toggle(); scale.retarget(if big.get() { 1.3 } else { 0.6 }) } })).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__sbox_0, __node_3])?
                                         };
                                         __children.push(box_item(__row_0));
@@ -241,7 +242,7 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            let __node_10 = button(ButtonProps::props().label("Replay").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let progress = progress.clone(); move || { progress.restart() } })).build(), Children::default())?;
+                                            let __node_10 = button(ButtonProps::props().label("Replay").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let progress = progress.clone(); move || { progress.restart() } })).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__canvas_1, __text_0, __node_10])?
                                         };
                                         __children.push(box_item(__row_1));

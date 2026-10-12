@@ -57,7 +57,7 @@ impl WorkshopApp {
         self
     }
 
-    /// The name the top bar shows; it shows none until one is set. `telar::app!` sets the package's own, read as it is compiled.
+    /// The name the command palette's trigger in the top bar shows; until one is set it shows the workshop's own. `telar::app!` sets the package's own, read as it is compiled.
     pub fn project_name(mut self, name: impl Into<String>) -> Self {
         self.project_name = Some(name.into());
         self

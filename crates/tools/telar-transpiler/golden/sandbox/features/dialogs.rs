@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -47,7 +48,7 @@ pub fn dialogs(props: DialogsProps, children: Children) -> Result<Box<dyn Layout
                                             )?
                                         };
                                         __children.push(box_item(__text_0));
-                                        let __node_3 = button(ButtonProps::props().label("Open modal").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("confirm"))).build(), Children::default())?;
+                                        let __node_3 = button(ButtonProps::props().label("Open modal").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("confirm"))).build(), Children::default())?;
                                         __children.push(box_item(__node_3));
                                         let __node_4 = {
                                             let __deferred = Children::per_slot(
@@ -112,7 +113,7 @@ pub fn dialogs(props: DialogsProps, children: Children) -> Result<Box<dyn Layout
                                     let mut __slots = Slots::new();
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
-                                        let __node_8 = button(ButtonProps::props().label("Open drawer").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("nav"))).build(), Children::default())?;
+                                        let __node_8 = button(ButtonProps::props().label("Open drawer").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || open_overlay("nav"))).build(), Children::default())?;
                                         __children.push(box_item(__node_8));
                                         let __node_9 = {
                                             let __deferred = Children::per_slot(

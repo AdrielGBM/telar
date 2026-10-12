@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::time::Duration;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Role, signal};
@@ -68,8 +69,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect(by_role(Role::Toolbar).named("Debug"))?;
             canvas.click(run.clone())?;
             canvas.expect_toggled(run.clone(), true)?;
-            canvas.click(by_role(Role::Button).named("Stop"))?;
-            canvas.expect_toggled(run, false)
+            let stop = by_role(Role::Button).named("Stop");
+            canvas.click(stop.clone())?;
+            canvas.expect_toggled(run, false)?;
+            canvas.hover(stop)?;
+            canvas.advance(Duration::from_secs(1))?;
+            canvas.expect_text("Shift+F5")
         }),
     ]
 }

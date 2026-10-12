@@ -5,10 +5,12 @@ element group
     element group
       element group
         element button
-          rect 16,16 120x32
+          rect 16,16 117x32
           element group
-            matrix 1,0,0,1,26,16
-              text 0,15 14x0 "" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+            element group
+              matrix 1,0,0,1,27,27
+                path M0,5.5 L3.8,9.5 L10,1 stroke=1.5 stroke-color=#00000000
+              end
             end
           end
           element group
@@ -18,7 +20,7 @@ element group
           end
           element group
             matrix 1,0,0,1,110,16
-              text 0,7 16x15.12 "F2" size=12.6 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+              text 0,7 15.13x15.12 "F2" size=12.6 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
             end
           end
         end

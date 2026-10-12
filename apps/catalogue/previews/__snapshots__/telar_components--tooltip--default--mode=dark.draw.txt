@@ -6,12 +6,12 @@ element group
       element group
         element group
           element group
-            rect 354,286 92x28
+            rect 356,286 88x28
             element button
-              rect 354,286 92x28 fill=#7394ffff radius=10
+              rect 356,286 88x28 fill=#7394ffff radius=10
               element group
-                matrix 1,0,0,1,368,292
-                  text 0,0 64x16.8 "Hover me" size=14 family=sans-serif weight=400 color=#0d0f1fff lang=en
+                matrix 1,0,0,1,368,286
+                  text 0,5 64x16.8 "Hover me" size=14 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
                 end
               end
             end

@@ -6,23 +6,23 @@ element group
       element group
         element group
           element button
-            rect 16,16 355x37
+            rect 16,16 354x32 radius=10
             element group
-              matrix 1,0,0,1,30,26
-                text 0,0 106x16.8 "Shipping details" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+              matrix 1,0,0,1,28,16
+                text 0,7 105.41x16.8 "Shipping details" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
               end
             end
             element group
-              matrix 1,0,0,1,349,26
-                text 0,1 8x14.28 "▾" size=11.9 family=sans-serif weight=400 color=#7394ffff lang=en
+              matrix 1,0,0,1,346,29
+                path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#7394ffff
               end
             end
           end
           element group
-            clip 16,53 355x17
+            clip 16,48 354x17
               element group
-                matrix 1,0,0,1,16,53
-                  text 0,0 355x16.8 "Orders leave the warehouse within two working days." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                matrix 1,0,0,1,16,48
+                  text 0,0 354.14x16.8 "Orders leave the warehouse within two working days." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                 end
               end
             end

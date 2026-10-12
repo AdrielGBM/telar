@@ -798,3 +798,77 @@ fn a_splitter_in_a_region_is_grabbed_from_either_edge_right_to_left() {
     }
     telar::set_direction(Direction::Ltr);
 }
+
+#[derive(Clone, Default)]
+struct Plain {
+    splits: Option<SplitPaneTokens>,
+}
+
+impl telar::ThemeTokens for Plain {
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(splits) = &self.splits {
+            extensions.insert(splits.clone());
+        }
+    }
+}
+
+fn bar_paint(style: Option<SurfaceAmendment>) -> (Rect, RectStyle) {
+    let mut props = SplitPaneProps::props().build();
+    props.style = style;
+    let split = Split::build(props);
+    telar::ComponentList::new(split.item)
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Rect { rect, style } if style.fill.is_some() => {
+                Some((*rect, **style))
+            }
+            _ => None,
+        })
+        .expect("the bar paints")
+}
+
+#[test]
+fn the_bar_is_a_pill_a_step_thick_until_the_tokens_say_otherwise() {
+    telar::set_theme(Plain::default());
+    let (bar, style) = bar_paint(None);
+    assert_eq!(bar.width, crate::metrics::gap_sm());
+    assert_eq!(style.radius, BorderRadius::all(bar.width / 2.0));
+
+    telar::set_theme(Plain {
+        splits: Some(SplitPaneTokens {
+            thickness: Some(1.0),
+            radius: Some(0.0),
+        }),
+    });
+    let (bar, style) = bar_paint(None);
+    assert_eq!(bar.width, 1.0);
+    assert_eq!(style.radius, BorderRadius::all(0.0));
+}
+
+#[test]
+fn a_hairline_bar_is_still_a_full_size_target() {
+    telar::set_theme(Plain {
+        splits: Some(SplitPaneTokens {
+            thickness: Some(1.0),
+            radius: None,
+        }),
+    });
+    let size = signal(200.0f32);
+    let mut split = Split::build(props(size));
+    assert_eq!(split.bar, 1.0);
+    split.drag_from(grab_edge(), 30.0);
+    assert_eq!(size.get(), 230.0);
+}
+
+#[test]
+fn a_style_amendment_reshapes_the_bar() {
+    telar::set_theme(Plain::default());
+    let tint: SurfaceAmendment =
+        Rc::new(|s: RectStyle| s.with_fill(telar::Color::rgb(0.9, 0.1, 0.1)));
+    let (_, style) = bar_paint(Some(tint));
+    assert_eq!(
+        style.fill.map(|f| f.solid_color()),
+        Some(telar::Color::rgb(0.9, 0.1, 0.1))
+    );
+}

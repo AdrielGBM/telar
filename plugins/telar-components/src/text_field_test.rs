@@ -71,11 +71,11 @@ fn a_field_takes_the_size_the_region_around_it_declared() {
         .expect("the field drew its value");
     assert_eq!(size, 11.0);
 
-    // The box is sized before the field has a parent to inherit from, so this half arrives by effect. Within a pixel because taffy rounds, and 4px clear of the 39.6 an unfollowed box would have kept.
     let height = track_layout(box_node).unwrap().get().height;
-    assert!(
-        (height - (2.0 * pad_y() + telar::single_line_box(11.0))).abs() < 1.0,
-        "the box closes down to the text instead of keeping the room the theme's size wanted, got {height}"
+    assert_eq!(
+        height,
+        shared::control_height(),
+        "the box stays one control tall whatever size its text is, so it stands level with a button beside it"
     );
 }
 
@@ -107,8 +107,8 @@ fn typing_into_a_focused_field_edits_the_bound_signal() {
     let mut tree = ComponentList::new(field);
     let _ = tree.commands(); // build the initial segments before dispatching events
 
-    let press_x = (rect.x + pad_x() + 2.0) as f64;
-    let press_y = (rect.y + pad_y() + 2.0) as f64;
+    let press_x = (rect.x + TextFieldTokens::current().pad_x() + 2.0) as f64;
+    let press_y = (rect.y + rect.height / 2.0) as f64;
     tree.on_event(&press(press_x, press_y));
     tree.on_event(&Event::KeyPressed {
         key: Key::Char('z'),
@@ -135,8 +135,8 @@ fn enter_fires_on_submit_while_focused() {
     let mut tree = ComponentList::new(field);
     let _ = tree.commands();
 
-    let press_x = (rect.x + pad_x() + 2.0) as f64;
-    let press_y = (rect.y + pad_y() + 2.0) as f64;
+    let press_x = (rect.x + TextFieldTokens::current().pad_x() + 2.0) as f64;
+    let press_y = (rect.y + rect.height / 2.0) as f64;
     tree.on_event(&press(press_x, press_y));
     tree.on_event(&Event::KeyPressed {
         key: Key::Named(NamedKey::Enter),
@@ -187,8 +187,8 @@ fn a_key_hook_hears_keys_first_and_takes_only_the_ones_it_answers() {
     let mut tree = ComponentList::new(field);
     let _ = tree.commands();
     tree.on_event(&press(
-        (rect.x + pad_x() + 2.0) as f64,
-        (rect.y + pad_y() + 2.0) as f64,
+        (rect.x + TextFieldTokens::current().pad_x() + 2.0) as f64,
+        (rect.y + rect.height / 2.0) as f64,
     ));
     for key in [Key::Named(NamedKey::Enter), Key::Char('z')] {
         tree.on_event(&Event::KeyPressed {
@@ -259,8 +259,83 @@ fn the_input_is_as_tall_as_the_box_so_the_whole_field_is_the_target() {
         target.height >= shared::MIN_TARGET,
         "the input is a full-size target: {target:?}"
     );
-    assert!(
-        target.height >= boxed.height - 2.0,
-        "and fills the box but for its border: {target:?} in {boxed:?}"
+    assert_eq!(
+        target.height, boxed.height,
+        "and is the whole height of the box: {target:?} in {boxed:?}"
     );
+}
+
+fn mounted(props: TextFieldProps) -> ComponentList {
+    ComponentList::new(laid_out_field(props).0)
+}
+
+#[test]
+fn the_corner_is_the_theme_s_control_role_until_the_text_field_tokens_name_one() {
+    crate::test_support::assert_corner_follows_the_role_until_the_tokens_name_one(
+        || mounted(TextFieldProps::props().build()),
+        |tree| crate::test_support::first_painted(tree).radius,
+        |_, role| BorderRadius::all(role),
+        |radius| TextFieldTokens {
+            radius: Some(radius),
+            ..TextFieldTokens::default()
+        },
+    );
+}
+
+#[derive(Clone)]
+struct Hairline(f32);
+
+impl telar::ThemeTokens for Hairline {
+    fn border_width(&self) -> f32 {
+        self.0
+    }
+}
+
+#[test]
+fn the_frame_is_the_theme_s_hairline() {
+    telar::set_theme(Hairline(3.0));
+    let tree = mounted(TextFieldProps::props().build());
+    assert_eq!(
+        crate::test_support::first_painted(&tree).border,
+        Some(Border::uniform(telar::use_theme_tokens().border(), 3.0))
+    );
+}
+
+#[test]
+fn a_style_amendment_reshapes_the_box() {
+    let flat: SurfaceAmendment = Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(0.0)));
+    let tree = mounted(TextFieldProps::props().style(flat).build());
+    let painted = crate::test_support::first_painted(&tree);
+    assert_eq!(painted.radius, BorderRadius::all(0.0));
+    assert!(painted.border.is_some(), "the rest of the paint is kept");
+}
+
+/// A field with no width of its own takes the theme's, at the control size in force, and so does the caption column around it.
+#[test]
+fn the_default_width_follows_the_control_size() {
+    crate::test_support::fresh_layout_runtime();
+    let mut built = None;
+    let field = telar::provide_control_size(telar::ControlSize::Large, || {
+        built = Some(TextFieldTokens::current().width());
+        text_field(
+            TextFieldProps::props().label("Name").build(),
+            Children::default(),
+        )
+    })
+    .unwrap();
+    let rect = track_layout(field.layout_node()).unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(800.0).height(200.0),
+        &[field.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(800.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    let width = built.expect("the field was built");
+    assert_eq!(width, (TextFieldTokens::default().width() * 1.25).round());
+    assert_eq!(rect.get().width, width);
 }

@@ -5,6 +5,18 @@ use telar::{ComponentList, DrawCommand, Event, relayout_if_dirty};
 
 use super::*;
 
+fn row_height() -> f32 {
+    TreeViewTokens::current().row_height()
+}
+
+fn pad_x() -> f32 {
+    TreeViewTokens::current().pad_x()
+}
+
+fn caret_width() -> f32 {
+    crate::shared::icon_size()
+}
+
 fn catalogue() -> Vec<TreeNode> {
     vec![
         TreeNode::new("inputs", "Inputs").with_children([
@@ -578,4 +590,18 @@ fn pressing_the_empty_space_below_the_rows_focuses_the_tree() {
     assert_eq!(focus::current(), None);
     tree.click(120.0, 380.0);
     assert!(focus::current().is_some());
+}
+
+/// A tree's rows stand at the height every other list's rows do, rather than at a proportion of their own.
+#[test]
+fn a_tree_s_rows_are_as_tall_as_every_other_list_s() {
+    let tree = Mounted::new(catalogue(), 400.0);
+    let rows = crate::test_support::drawn(Role::TreeItem);
+    assert!(!rows.is_empty());
+    assert!(
+        rows.iter()
+            .all(|row| row.height == crate::list::ListTokens::default().row_height()),
+        "{rows:?}"
+    );
+    drop(tree);
 }

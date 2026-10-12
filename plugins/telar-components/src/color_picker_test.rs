@@ -262,3 +262,80 @@ fn without_alpha_there_is_no_opacity_slider() {
     assert!(mounted.node(Role::Slider, "Opacity").is_none());
     assert!(mounted.node(Role::Slider, "Hue").is_some());
 }
+
+#[derive(Clone, Default)]
+struct Plain {
+    pickers: Option<ColorPickerTokens>,
+}
+
+impl telar::ThemeTokens for Plain {
+    fn radius_control(&self) -> f32 {
+        6.0
+    }
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(pickers) = &self.pickers {
+            extensions.insert(pickers.clone());
+        }
+    }
+}
+
+/// Every box a picker showing `start` paints, in paint order: the area first.
+fn painted(start: Color, style: Option<SurfaceAmendment>) -> Vec<(Rect, RectStyle)> {
+    crate::test_support::fresh_layout_runtime();
+    telar::set_locale("en");
+    let mut props = ColorPickerProps::props().value(signal(start)).build();
+    props.style = style;
+    let picker = color_picker(props, Children::default()).unwrap();
+    telar::testing::lay_out(picker.layout_node(), 400.0, 500.0);
+    ComponentList::new(picker)
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            telar::DrawCommand::Rect { rect, style } => Some((*rect, **style)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_area_is_rounded_like_a_control_and_takes_the_style_amendment() {
+    telar::set_theme(Plain::default());
+    let (area, style) = painted(Color::rgb(0.2, 0.4, 0.8), None)[0];
+    assert_eq!(style.radius, BorderRadius::all(6.0));
+    assert_eq!(area.width, ColorPickerTokens::default().width());
+
+    let square: SurfaceAmendment = Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(0.0)));
+    let (_, style) = painted(Color::rgb(0.2, 0.4, 0.8), Some(square))[0];
+    assert_eq!(style.radius, BorderRadius::all(0.0));
+}
+
+#[test]
+fn the_picker_tokens_set_its_width_and_corner() {
+    telar::set_theme(Plain {
+        pickers: Some(ColorPickerTokens {
+            width: Some(300.0),
+            radius: Some(2.0),
+            ring: None,
+        }),
+    });
+    let (area, style) = painted(Color::rgb(0.2, 0.4, 0.8), None)[0];
+    assert_eq!(area.width, 300.0);
+    assert_eq!(style.radius, BorderRadius::all(2.0));
+}
+
+#[test]
+fn the_area_s_thumb_is_ringed_in_what_reads_on_the_colour_it_shows() {
+    telar::set_theme(Plain::default());
+    for shown in [Color::rgb(1.0, 1.0, 1.0), Color::rgb(0.0, 0.0, 0.0)] {
+        let thumb = painted(shown, None)
+            .into_iter()
+            .find(|(_, style)| style.fill.is_some() && style.border.is_some())
+            .map(|(_, style)| style)
+            .expect("the area's thumb is filled and ringed");
+        let ring = thumb.border.expect("ringed").paint.solid_color();
+        assert!(
+            shown.contrast_ratio(ring) >= 3.0,
+            "a thumb showing {shown:?} is ringed in {ring:?}"
+        );
+    }
+}

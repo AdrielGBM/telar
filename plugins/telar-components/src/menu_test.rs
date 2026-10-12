@@ -51,8 +51,9 @@ fn a_narrow_filled_trigger_still_opens_a_readable_panel() {
     assert!(
         widths
             .iter()
-            .any(|w| *w >= PANEL_WIDTH - panel_pad() * 2.0 - 0.5),
-        "the open panel should be at least {PANEL_WIDTH}px wide, got {widths:?}"
+            .any(|w| *w >= panel_width() - panel_pad() * 2.0 - 0.5),
+        "the open panel should be at least {}px wide, got {widths:?}",
+        panel_width()
     );
 }
 
@@ -73,7 +74,7 @@ fn builds_and_lays_out() {
     )
     .unwrap();
     assert!(
-        root_rect.get().height >= TRIGGER_HEIGHT - 0.5,
+        root_rect.get().height >= crate::shared::control_height() - 0.5,
         "closed menu is at least the trigger tall: {:?}",
         root_rect.get()
     );
@@ -180,14 +181,15 @@ fn selecting_an_item_fires_on_select_and_closes() {
     let mut tree = ComponentList::new(item);
     let _ = tree.commands();
 
-    let tx = (PANEL_WIDTH / 2.0) as f64;
-    let ty = (TRIGGER_HEIGHT / 2.0) as f64;
+    let tx = (panel_width() / 2.0) as f64;
+    let ty = (crate::shared::control_height() / 2.0) as f64;
     route(&mut tree, &press(tx, ty));
     route(&mut tree, &release(tx, ty));
     relayout_if_dirty();
 
-    let ox = (PANEL_WIDTH / 2.0) as f64;
-    let oy = (TRIGGER_HEIGHT + panel_pad() + ROW_HEIGHT + ROW_HEIGHT / 2.0) as f64;
+    let ox = (panel_width() / 2.0) as f64;
+    let oy =
+        (crate::shared::control_height() + panel_pad() + row_height() + row_height() / 2.0) as f64;
     route(&mut tree, &press(ox, oy));
     route(&mut tree, &release(ox, oy));
 
@@ -310,13 +312,14 @@ fn a_disabled_row_does_not_commit_on_a_tap() {
     let mut tree = ComponentList::new(item);
     let _ = tree.commands();
 
-    let tx = (PANEL_WIDTH / 2.0) as f64;
-    let ty = (TRIGGER_HEIGHT / 2.0) as f64;
+    let tx = (panel_width() / 2.0) as f64;
+    let ty = (crate::shared::control_height() / 2.0) as f64;
     route(&mut tree, &press(tx, ty));
     route(&mut tree, &release(tx, ty));
     relayout_if_dirty();
 
-    let oy = (TRIGGER_HEIGHT + panel_pad() + ROW_HEIGHT + ROW_HEIGHT / 2.0) as f64;
+    let oy =
+        (crate::shared::control_height() + panel_pad() + row_height() + row_height() / 2.0) as f64;
     route(&mut tree, &press(tx, oy));
     route(&mut tree, &release(tx, oy));
     assert_eq!(seen.get(), None, "a disabled row commits nothing");
@@ -550,7 +553,10 @@ fn every_way_of_closing_a_menu_gives_the_keyboard_back_to_its_trigger() {
     settle(&tree);
     assert_eq!(telar::focus::current(), Some(trigger), "after a pick");
 
-    let (tx, ty) = ((PANEL_WIDTH / 2.0) as f64, (TRIGGER_HEIGHT / 2.0) as f64);
+    let (tx, ty) = (
+        (panel_width() / 2.0) as f64,
+        (crate::shared::control_height() / 2.0) as f64,
+    );
     route(&mut tree, &press(tx, ty));
     route(&mut tree, &release(tx, ty));
     settle(&tree);
@@ -569,4 +575,364 @@ fn every_way_of_closing_a_menu_gives_the_keyboard_back_to_its_trigger() {
         !telar::focus::is_focus_visible(trigger),
         "and without a ring, as the press that opened it left it"
     );
+}
+
+/// Where a trigger's label is drawn: the clip it is cut by, which is the label's own box.
+fn label_box(tree: &ComponentList) -> telar::Rect {
+    tree.commands()
+        .iter()
+        .find_map(|c| match c {
+            telar::DrawCommand::PushClip { rect, .. } => Some(*rect),
+            _ => None,
+        })
+        .expect("the trigger clips its label")
+}
+
+/// The space a trigger leaves before its label and after it.
+fn insets(tree: &ComponentList) -> (f32, f32) {
+    let trigger = crate::test_support::drawn(telar::focus::Role::Button)[0];
+    let label = label_box(tree);
+    (
+        label.x - trigger.x,
+        (trigger.x + trigger.width) - (label.x + label.width),
+    )
+}
+
+/// The same trigger measured to the glyphs it draws rather than to the box they are set in: the label's box was its line rounded up to a whole pixel, so the trigger sized by it had up to a pixel more after the text than before it.
+#[test]
+fn a_trigger_without_a_caret_pads_its_drawn_label_evenly_on_both_sides() {
+    crate::test_support::fresh_layout_runtime();
+    let item = menu(
+        MenuProps::props()
+            .label("Settings")
+            .caret(false)
+            .fit(true)
+            .build(),
+        rows(&["New"]),
+    )
+    .unwrap();
+    let root = telar::new_container(
+        telar::LayoutStyle::new()
+            .flex_row()
+            .width(400.0)
+            .height(80.0),
+        &[item.layout_node()],
+    )
+    .unwrap();
+    telar::compute_layout(
+        root,
+        telar::AvailableSpace::Definite(400.0),
+        telar::AvailableSpace::Definite(80.0),
+    )
+    .unwrap();
+    telar::relayout_if_dirty();
+    let tree = telar::ComponentList::new(item);
+    let trigger = crate::test_support::drawn(telar::focus::Role::Button)[0];
+    let (before, after) = crate::test_support::run_insets(&tree, "Settings", trigger);
+    let pad = crate::shared::control_pad_x();
+    assert!((before - pad).abs() <= 0.5, "{before} {after}");
+    assert!((after - pad).abs() <= 0.5, "{before} {after}");
+}
+
+/// The workshop's "Settings" trigger read `[ Settings   ]`: with no caret its label was the only child of a `SPACE_BETWEEN` row, which puts a lone child at the start, so every pixel the trigger had beyond its label fell after it. Without a caret the label is the whole face, and stands centred in it as a button's does.
+#[test]
+fn a_trigger_without_a_caret_pads_its_label_evenly_on_both_sides() {
+    let tree = laid_out_menu(true);
+    let (before, after) = insets(&tree);
+    assert_eq!(
+        before,
+        crate::shared::control_pad_x(),
+        "fitted: {before} {after}"
+    );
+    assert_eq!(after, before, "fitted: {before} {after}");
+
+    let tree = laid_out_menu(false);
+    let (before, after) = insets(&tree);
+    assert!(
+        (before - after).abs() < 0.5,
+        "a fixed-width trigger centres it too: {before} {after}"
+    );
+    assert!(before > crate::shared::control_pad_x(), "{before}");
+}
+
+#[derive(Clone)]
+struct Themed {
+    control: f32,
+    menus: Option<MenuTokens>,
+}
+
+impl telar::ThemeTokens for Themed {
+    fn radius_control(&self) -> f32 {
+        self.control
+    }
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(menus) = self.menus {
+            extensions.insert(menus);
+        }
+    }
+}
+
+fn bordered_trigger(tree: &ComponentList) -> telar::RectStyle {
+    tree.commands()
+        .iter()
+        .find_map(|c| match c {
+            telar::DrawCommand::Rect { style, .. } if style.border.is_some() => Some(**style),
+            _ => None,
+        })
+        .expect("a bordered trigger is painted")
+}
+
+#[test]
+fn the_trigger_follows_the_control_role_until_the_menu_tokens_name_their_own() {
+    use telar::{Border, BorderRadius};
+
+    crate::test_support::fresh_layout_runtime();
+    telar::set_theme(Themed {
+        control: 7.0,
+        menus: None,
+    });
+    let item = menu(
+        MenuProps::props().label("File").bordered(true).build(),
+        rows(&["New"]),
+    )
+    .unwrap();
+    let root = telar::new_container(
+        LayoutStyle::new().flex_row().width(400.0).height(80.0),
+        &[item.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(80.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(item);
+    let trigger = bordered_trigger(&tree);
+    assert_eq!(trigger.radius, BorderRadius::all(7.0));
+    assert_eq!(
+        trigger.border.map(|border| border.widths),
+        Some([crate::shared::border_width(); 4])
+    );
+    let width = crate::test_support::drawn(telar::focus::Role::Button)[0].width;
+    assert_eq!(width, crate::dropdown::width(None));
+
+    telar::set_theme(Themed {
+        control: 7.0,
+        menus: Some(MenuTokens {
+            radius: Some(2.0),
+            border_width: Some(3.0),
+            width: Some(150.0),
+            ..MenuTokens::default()
+        }),
+    });
+    relayout_if_dirty();
+    let trigger = bordered_trigger(&tree);
+    assert_eq!(
+        trigger.radius,
+        BorderRadius::all(2.0),
+        "the theme's own menu radius wins"
+    );
+    assert_eq!(
+        trigger.border.map(|border: Border| border.widths),
+        Some([3.0; 4])
+    );
+    let width = crate::test_support::drawn(telar::focus::Role::Button)[0].width;
+    assert_eq!(width, 150.0, "and its width, laid out again on the switch");
+}
+
+/// A plain row per label, which is what the markup `menu … item label:"…"` compiles to. Enough for the tests that care about the trigger and the panel rather than about what a row can be.
+fn rows(labels: &'static [&'static str]) -> Children {
+    Children::new(move || {
+        let mut slots = Slots::new();
+        for label in labels {
+            slots.push(
+                None,
+                crate::list::item(
+                    crate::list::ItemProps::props()
+                        .label(Reactive::of(move || label.to_string()))
+                        .build(),
+                    Children::default(),
+                )?,
+            );
+        }
+        Ok(slots)
+    })
+}
+
+/// The shape of a trigger is the caller's call, not the component's.
+///
+/// The default splits them by what they are — a menu is a button, a select is a field — but a menu dropped into a row of inputs wants to match them, and there has to be a way to say so that is not editing the catalogue. Guards the props rather than the pixels: what matters is that they *reach* the trigger's paint at all.
+#[test]
+fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
+    use telar::DrawCommand;
+    use telar::{ComponentList, LayoutItem};
+
+    let strokes = |bordered: bool, caret: bool| {
+        crate::test_support::fresh_layout_runtime();
+        let item = menu(
+            MenuProps::props()
+                .label("File")
+                .bordered(bordered)
+                .caret(caret)
+                .build(),
+            rows(&["New"]),
+        )
+        .unwrap();
+        // Laid out first: the caret is drawn by a `Canvas`, which has nothing to draw into until it has a rect.
+        let root = telar::new_container(
+            telar::LayoutStyle::new().width(300.0).height(80.0),
+            &[item.layout_node()],
+        )
+        .unwrap();
+        telar::compute_layout(
+            root,
+            telar::AvailableSpace::Definite(300.0),
+            telar::AvailableSpace::Definite(80.0),
+        )
+        .unwrap();
+        let tree = ComponentList::new(item);
+        let cmds = tree.commands().to_vec();
+        let bordered_boxes = cmds
+            .iter()
+            .filter(|c| matches!(c, DrawCommand::Rect { style, .. } if style.border.is_some()))
+            .count();
+        let paths = cmds
+            .iter()
+            .filter(|c| matches!(c, DrawCommand::Path { .. }))
+            .count();
+        (bordered_boxes, paths)
+    };
+
+    let (plain_border, plain_caret) = strokes(false, true);
+    assert_eq!(
+        plain_border, 0,
+        "a menu is a button, so no frame by default"
+    );
+    assert_eq!(plain_caret, 1, "and it says it opens something");
+
+    let (asked_border, _) = strokes(true, true);
+    assert_eq!(asked_border, 1, "a caller that wants the field gets it");
+
+    let (_, no_caret) = strokes(false, false);
+    assert_eq!(no_caret, 0, "and one that wants no caret gets none");
+}
+
+/// A caller can restyle the surface without editing the catalogue.
+///
+/// The pressure this relieves is real: an app wanted its menu trigger squared off, and the only lever the catalogue offered was the theme's radius — which moves every rounded thing in the application. Editing `dropdown.rs` to hold one app's opinion is how a shared component stops being shared.
+///
+/// The amendment must *compose*, not replace: the component still decides that a bordered trigger wears a stroke, and the caller only says what they came to say.
+#[test]
+fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
+    use telar::{BorderRadius, DrawCommand, ShapeStyle};
+    use telar::{ComponentList, LayoutItem};
+
+    crate::test_support::fresh_layout_runtime();
+    let item = menu(
+        MenuProps::props()
+            .label("File")
+            .bordered(true)
+            .style(Rc::new(|s| {
+                s.with_radius(BorderRadius::all(0.0))
+                    .with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0))
+            }))
+            .build(),
+        rows(&["New"]),
+    )
+    .unwrap();
+    let root = telar::new_container(
+        telar::LayoutStyle::new().width(300.0).height(80.0),
+        &[item.layout_node()],
+    )
+    .unwrap();
+    telar::compute_layout(
+        root,
+        telar::AvailableSpace::Definite(300.0),
+        telar::AvailableSpace::Definite(80.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(item);
+    let trigger = tree
+        .commands()
+        .iter()
+        .find_map(|c| match c {
+            DrawCommand::Rect { style, .. } if style.border.is_some() => Some(style.clone()),
+            _ => None,
+        })
+        .expect("a bordered trigger is painted");
+
+    assert_eq!(
+        trigger.radius,
+        BorderRadius::all(0.0),
+        "the caller's radius reaches the paint"
+    );
+    assert_eq!(
+        trigger.fill,
+        Some(telar::Paint::Solid(Color::rgba(1.0, 0.0, 0.0, 1.0))),
+        "and so does their fill"
+    );
+    assert!(
+        trigger.border.is_some(),
+        "while the component keeps the border it decided a field wears"
+    );
+}
+
+fn laid_out_menu(fit: bool) -> telar::ComponentList {
+    crate::test_support::fresh_layout_runtime();
+    let item = menu(
+        MenuProps::props()
+            .label("File")
+            .caret(false)
+            .fit(fit)
+            .build(),
+        rows(&["New"]),
+    )
+    .unwrap();
+    let root = telar::new_container(
+        telar::LayoutStyle::new()
+            .flex_row()
+            .width(400.0)
+            .height(80.0),
+        &[item.layout_node()],
+    )
+    .unwrap();
+    telar::compute_layout(
+        root,
+        telar::AvailableSpace::Definite(400.0),
+        telar::AvailableSpace::Definite(80.0),
+    )
+    .unwrap();
+    telar::relayout_if_dirty();
+    telar::ComponentList::new(item)
+}
+
+#[test]
+fn a_fitted_menu_takes_the_width_of_its_label_rather_than_the_fixed_one() {
+    let width = |fit: bool| {
+        let _tree = laid_out_menu(fit);
+        crate::test_support::drawn(telar::focus::Role::Button)[0].width
+    };
+    assert_eq!(width(false), panel_width());
+    assert!(width(true) < panel_width() / 2.0, "{}", width(true));
+}
+
+#[test]
+fn a_menu_trigger_is_washed_while_the_pointer_rests_on_it() {
+    use telar::DrawCommand;
+    use telar::testing::{centre, moved, route};
+
+    let mut tree = laid_out_menu(true);
+    let filled = |tree: &telar::ComponentList| {
+        tree.commands()
+            .iter()
+            .filter(|c| matches!(c, DrawCommand::Rect { style, .. } if style.fill.is_some()))
+            .count()
+    };
+    assert_eq!(filled(&tree), 0);
+    let (x, y) = centre(crate::test_support::drawn(telar::focus::Role::Button)[0]);
+    route(&mut tree, &moved(x, y));
+    assert_eq!(filled(&tree), 1);
+    route(&mut tree, &moved(390.0, 79.0));
+    assert_eq!(filled(&tree), 0);
 }

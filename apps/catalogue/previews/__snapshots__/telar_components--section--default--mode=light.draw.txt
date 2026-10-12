@@ -7,17 +7,17 @@ element group
         element group
           element group
             matrix 1,0,0,1,16,16
-              text 0,0 340x23.52 "Profile" size=19.6 family=sans-serif weight=600 color=#4261edff lang=en
+              text 0,0 339.47x23.52 "Profile" size=19.6 family=sans-serif weight=600 color=#4261edff lang=en
             end
           end
           element group
             matrix 1,0,0,1,16,48
-              text 0,0 340x16.8 "Your name and photo are shown to other members." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              text 0,0 339.47x16.8 "Your name and photo are shown to other members." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
             end
           end
           element group
             matrix 1,0,0,1,16,72
-              text 0,0 340x16.8 "Only you can see your email address." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              text 0,0 339.47x16.8 "Only you can see your email address." size=14 family=sans-serif weight=400 color=#171a2eff lang=en
             end
           end
         end

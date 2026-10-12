@@ -103,18 +103,30 @@ fn the_shared_token_table_is_exactly_the_trait() {
             _ => None,
         })
         .expect("context.rs declares `ThemeTokens`");
-    let mut declared: Vec<String> = trait_item
+    let mut declared: Vec<(String, String)> = trait_item
         .items
         .iter()
         .filter_map(|item| match item {
             syn::TraitItem::Fn(method) if is_question(&method.sig) => {
-                Some(method.sig.ident.to_string())
+                let syn::ReturnType::Type(_, ty) = &method.sig.output else {
+                    return None;
+                };
+                Some((method.sig.ident.to_string(), quote::quote!(#ty).to_string()))
             }
             _ => None,
         })
         .collect();
-    let mut tabled: Vec<String> = telar_project::theme_tokens::all()
-        .map(str::to_string)
+    let mut tabled: Vec<(String, String)> = telar_project::theme_tokens::all()
+        .map(|token| {
+            let ty = match telar_project::theme_tokens::token_type(token) {
+                Some(TokenType::Color) => "Color",
+                Some(TokenType::Length) => "f32",
+                Some(TokenType::Weight) => "u16",
+                Some(TokenType::Declared) => "Declared",
+                None => "not a token",
+            };
+            (token.to_string(), ty.to_string())
+        })
         .collect();
     declared.sort();
     tabled.sort();
@@ -170,5 +182,26 @@ fn an_unknown_field_option_is_rejected() {
     assert!(
         err.to_string().contains("#[theme(extension)]"),
         "got: {err}"
+    );
+}
+
+#[test]
+fn a_role_field_answers_with_its_own_type() {
+    let out = expand_str(&FULL.replace(
+        "border: Color,",
+        "border: Color, radius_control: f32, font_weight_strong: u16, overlay: Color,",
+    ))
+    .expect("valid");
+    assert!(
+        out.contains("fn radius_control (& self) -> f32"),
+        "got: {out}"
+    );
+    assert!(
+        out.contains("fn font_weight_strong (& self) -> u16"),
+        "got: {out}"
+    );
+    assert!(
+        out.contains("fn overlay (& self) -> :: telar :: Color"),
+        "got: {out}"
     );
 }

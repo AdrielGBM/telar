@@ -26,8 +26,9 @@ pub use context::{
     use_theme_extension, use_theme_tokens,
 };
 pub use density::{
-    ControlSize, ControlSizeContext, ControlSizeGuard, control_scale, current_control_size,
-    set_control_size, set_surface_control_size, use_control_size, use_surface_control_size,
+    ControlSize, ControlSizeContext, ControlSizeGuard, ScopedControlSize, control_scale,
+    current_control_size, nearest_control_size, set_control_size, set_surface_control_size,
+    use_control_size, use_surface_control_size,
 };
 pub use mode::{
     ModeContext, ModeGuard, ResolvedScheme, SchemePreference, active_mode, follow_system, is_dark,

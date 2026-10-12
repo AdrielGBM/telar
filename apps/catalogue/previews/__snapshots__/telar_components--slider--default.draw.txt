@@ -6,20 +6,20 @@ element group
       element group
         element group
           element group
-            matrix 1,0,0,1,290,285
-              text 0,0 220x14.28 "Volume" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
+            matrix 1,0,0,1,288,285
+              text 0,0 224x14.28 "Volume" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
             end
           end
           element slider
-            rect 290,308 220x8 fill=#616680ff radius=4
+            rect 288,308 224x8 fill=#616680ff radius=4
             element group
-              matrix 0.4,0,0,1,174,0
-                rect 290,308 220x8 fill=#4261edff radius=4
+              matrix 0.4,0,0,1,172.8,0
+                rect 288,308 224x8 fill=#4261edff radius=4
               end
             end
             element group
-              matrix 1,0,0,1,81.6,-4
-                rect 290,308 16x16 fill=#4261edff border=2 border-color=#ffffffff radius=8
+              matrix 1,0,0,1,83.2,-4
+                rect 288,308 16x16 fill=#4261edff border=1.5 border-color=#ffffffff radius=8
               end
             end
           end

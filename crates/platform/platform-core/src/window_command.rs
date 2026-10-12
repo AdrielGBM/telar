@@ -5,6 +5,10 @@
 pub enum WindowCommand {
     /// Begin an OS-driven interactive move (drag the window by its title bar). Must originate from a pointer-press handler so the platform can latch onto the in-progress drag.
     Drag,
+    /// Begin an OS-driven interactive resize pulling the given edge, for a window drawn without decorations. Like [`Drag`](Self::Drag), it must originate from a pointer-press handler.
+    DragResize(crate::ResizeEdge),
+    /// Show or hide the title bar and borders the window system draws, for an app that draws its own while it does.
+    SetDecorations(bool),
     /// Minimize the window to the taskbar/dock.
     Minimize,
     /// Toggle between maximized and restored.

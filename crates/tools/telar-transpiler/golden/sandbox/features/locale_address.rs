@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -72,9 +73,9 @@ pub fn locale_address(props: LocaleAddressProps, children: Children) -> Result<B
                                         };
                                         __children.push(box_item(__text_1));
                                         let __row_0 = {
-                                            let __node_3 = button(ButtonProps::props().label("English").ghost(true).on_press(std::rc::Rc::new(move || telar::set_locale("en"))).build(), Children::default())?;
-                                            let __node_4 = button(ButtonProps::props().label("Español").ghost(true).on_press(std::rc::Rc::new(move || telar::set_locale("es"))).build(), Children::default())?;
-                                            let __node_5 = button(ButtonProps::props().label("العربية").ghost(true).on_press(std::rc::Rc::new(move || telar::set_locale("ar"))).build(), Children::default())?;
+                                            let __node_3 = button(ButtonProps::props().label("English").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_locale("en"))).build(), Children::default())?;
+                                            let __node_4 = button(ButtonProps::props().label("Español").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_locale("es"))).build(), Children::default())?;
+                                            let __node_5 = button(ButtonProps::props().label("العربية").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_locale("ar"))).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_3, __node_4, __node_5])?
                                         };
                                         __children.push(box_item(__row_0));

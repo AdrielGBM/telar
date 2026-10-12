@@ -112,3 +112,91 @@ fn uncontrolled_accordion_builds_and_starts_closed() {
         "closed, only the header should contribute height, got {height}"
     );
 }
+
+#[derive(Clone, Default)]
+struct Plain {
+    accordions: Option<AccordionTokens>,
+}
+
+impl telar::ThemeTokens for Plain {
+    fn radius_control(&self) -> f32 {
+        6.0
+    }
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(accordions) = &self.accordions {
+            extensions.insert(accordions.clone());
+        }
+    }
+}
+
+fn header_paint(style: Option<SurfaceAmendment>, hovered: bool) -> (telar::Rect, f32, RectStyle) {
+    use telar::testing::{centre, moved, route};
+
+    crate::test_support::fresh_layout_runtime();
+    let mut props = AccordionProps::props().title("Details").build();
+    props.style = style;
+    let item = accordion(props, Children::from(slot_with_body("Body"))).unwrap();
+    telar::testing::lay_out(item.layout_node(), 400.0, 400.0);
+    let mut tree = telar::ComponentList::new(item);
+    let header = crate::test_support::drawn(Role::Disclosure)[0];
+    if hovered {
+        let (x, y) = centre(header);
+        route(&mut tree, &moved(x, y));
+    }
+    let commands = tree.commands();
+    let style = commands
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Rect { rect, style } if *rect == header => Some(**style),
+            _ => None,
+        })
+        .unwrap_or_default();
+    let mut shift = 0.0;
+    let title = commands
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::PushMatrix { matrix } => {
+                shift = matrix[4];
+                None
+            }
+            telar::DrawCommand::Text { rect, .. } => Some(rect.x + shift),
+            _ => None,
+        })
+        .expect("the title is drawn");
+    (header, title, style)
+}
+
+#[test]
+fn the_header_is_a_row_tall_and_padded_like_a_control() {
+    telar::set_theme(Plain::default());
+    let (header, title, _) = header_paint(None, false);
+    assert!(header.height >= crate::metrics::row_height());
+    assert_eq!(title - header.x, crate::metrics::control_pad_x());
+
+    telar::set_theme(Plain {
+        accordions: Some(AccordionTokens {
+            pad_x: Some(20.0),
+            radius: None,
+        }),
+    });
+    let (header, title, _) = header_paint(None, false);
+    assert_eq!(title - header.x, 20.0);
+}
+
+#[test]
+fn a_hovered_header_takes_the_theme_s_wash_on_the_amended_shape() {
+    telar::set_theme(Plain::default());
+    let (_, _, rest) = header_paint(None, false);
+    assert_eq!(rest.radius, telar::BorderRadius::all(6.0));
+    let (_, _, hovered) = header_paint(None, true);
+    assert_eq!(
+        hovered.fill.map(|f| f.solid_color()),
+        Some(crate::metrics::hover_wash())
+    );
+
+    let square: SurfaceAmendment =
+        std::rc::Rc::new(|s: RectStyle| s.with_radius(telar::BorderRadius::all(0.0)));
+    let (_, _, hovered) = header_paint(Some(square), true);
+    assert!(hovered.fill.is_some());
+    assert_eq!(hovered.radius, telar::BorderRadius::all(0.0));
+}

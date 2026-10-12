@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::feature_card::{feature_card, FeatureCardProps};
@@ -19,12 +20,16 @@ pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn Layo
 
     let __col_0 = {
         let __col_1 = {
-            let __text_0 = {
-                Text::declaring(
-                    || "▲ rsx — native UI for Rust".to_string(),
-                    LayoutStyle::new(),
-                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(34.0).with_color(theme.get().ink) },
-                )?
+            let __row_0 = {
+                let __node_0 = icon(IconProps::props().name(("lucide:triangle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_1FFBD581), true)).size(30.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
+                let __text_0 = {
+                    Text::declaring(
+                        || "rsx — native UI for Rust".to_string(),
+                        LayoutStyle::new(),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(34.0).with_color(theme.get().ink) },
+                    )?
+                };
+                Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_0, __text_0])?
             };
             let __text_1 = {
                 Text::declaring(
@@ -33,23 +38,95 @@ pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn Layo
                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().muted) },
                 )?
             };
-            Container::new(LayoutStyle::new().flex_column().gap(10.0), children![__text_0, __text_1])?
+            Container::new(LayoutStyle::new().flex_column().gap(10.0), children![__row_0, __text_1])?
         };
-        let __node_0 = {
-            let __node_1 = stat(StatProps::props().value("25+").label("modular crates").build(), Children::default())?;
-            let __node_2 = stat(StatProps::props().value("2").label("render backends").build(), Children::default())?;
-            let __node_3 = stat(StatProps::props().value("60 fps").label("software + wgpu").build(), Children::default())?;
-            let __node_4 = stat(StatProps::props().value("0").label("GC pauses").build(), Children::default())?;
-            Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(150.0), TemplateTrack::fr(1.0)))]).gap(16.0), children![__node_1, __node_2, __node_3, __node_4])?
+        let __node_1 = {
+            let __node_2 = stat(StatProps::props().value("25+").label("modular crates").build(), Children::default())?;
+            let __node_3 = stat(StatProps::props().value("2").label("render backends").build(), Children::default())?;
+            let __node_4 = stat(StatProps::props().value("60 fps").label("software + wgpu").build(), Children::default())?;
+            let __node_5 = stat(StatProps::props().value("0").label("GC pauses").build(), Children::default())?;
+            Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(150.0), TemplateTrack::fr(1.0)))]).gap(16.0), children![__node_2, __node_3, __node_4, __node_5])?
         };
-        let __node_5 = {
-            let __node_6 = feature_card(FeatureCardProps::props().icon("🧩").title("Declarative").body("Rows, columns, boxes and text compose by indentation — no builder soup.").build(), Children::default())?;
-            let __node_7 = feature_card(FeatureCardProps::props().icon("🎨").title("Themeable").body("Semantic color tokens resolve reactively. Switch the theme in the sidebar.").build(), Children::default())?;
-            let __node_8 = feature_card(FeatureCardProps::props().icon("⚡").title("Reactive").body("Fine-grained signals update only the widgets that depend on them.").build(), Children::default())?;
-            let __node_9 = feature_card(FeatureCardProps::props().icon("📐").title("Flex + grid").body("A full flexbox and CSS-grid engine with wrapping and responsive tracks.").build(), Children::default())?;
-            Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(200.0), TemplateTrack::fr(1.0)))]).gap(16.0), children![__node_6, __node_7, __node_8, __node_9])?
+        let __node_6 = {
+            let __node_7 = {
+                let __deferred = Children::per_slot(
+                    {
+                        let theme = theme.clone();
+                    move |__request: SlotRequest<'_>| {
+                        let theme = theme.clone();
+                        let mut __slots = Slots::new();
+                        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                        if __request.includes(Some("icon")) {
+                            let __node_8 = icon(IconProps::props().name(("lucide:puzzle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_85A554E9), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                            __slots.push(Some("icon"), box_item(__node_8));
+                        }
+                        __slots.extend_default(__children);
+                        Ok(__slots)
+                    }
+                    }
+                );
+                feature_card(FeatureCardProps::props().title("Declarative").body("Rows, columns, boxes and text compose by indentation — no builder soup.").build(), __deferred)?
+            };
+            let __node_9 = {
+                let __deferred = Children::per_slot(
+                    {
+                        let theme = theme.clone();
+                    move |__request: SlotRequest<'_>| {
+                        let theme = theme.clone();
+                        let mut __slots = Slots::new();
+                        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                        if __request.includes(Some("icon")) {
+                            let __node_10 = icon(IconProps::props().name(("lucide:palette", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_E0D46014), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                            __slots.push(Some("icon"), box_item(__node_10));
+                        }
+                        __slots.extend_default(__children);
+                        Ok(__slots)
+                    }
+                    }
+                );
+                feature_card(FeatureCardProps::props().title("Themeable").body("Semantic color tokens resolve reactively. Switch the theme in the sidebar.").build(), __deferred)?
+            };
+            let __node_11 = {
+                let __deferred = Children::per_slot(
+                    {
+                        let theme = theme.clone();
+                    move |__request: SlotRequest<'_>| {
+                        let theme = theme.clone();
+                        let mut __slots = Slots::new();
+                        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                        if __request.includes(Some("icon")) {
+                            let __node_12 = icon(IconProps::props().name(("lucide:zap", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_4802B2F8), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                            __slots.push(Some("icon"), box_item(__node_12));
+                        }
+                        __slots.extend_default(__children);
+                        Ok(__slots)
+                    }
+                    }
+                );
+                feature_card(FeatureCardProps::props().title("Reactive").body("Fine-grained signals update only the widgets that depend on them.").build(), __deferred)?
+            };
+            let __node_13 = {
+                let __deferred = Children::per_slot(
+                    {
+                        let theme = theme.clone();
+                    move |__request: SlotRequest<'_>| {
+                        let theme = theme.clone();
+                        let mut __slots = Slots::new();
+                        let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                        if __request.includes(Some("icon")) {
+                            let __node_14 = icon(IconProps::props().name(("lucide:layout-grid", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_624744E2), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                            __slots.push(Some("icon"), box_item(__node_14));
+                        }
+                        __slots.extend_default(__children);
+                        Ok(__slots)
+                    }
+                    }
+                );
+                feature_card(FeatureCardProps::props().title("Flex + grid").body("A full flexbox and CSS-grid engine with wrapping and responsive tracks.").build(), __deferred)?
+            };
+            Container::new(LayoutStyle::new().display_grid().grid_template_columns(vec![TemplateTrack::fit(TemplateTrack::minmax(TemplateTrack::px(200.0), TemplateTrack::fr(1.0)))]).gap(16.0), children![__node_7, __node_9, __node_11, __node_13])?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(24.0), children![__col_1, __node_0, __node_5])?
+        Container::new(LayoutStyle::new().flex_column().gap(24.0), children![__col_1, __node_1, __node_6])?
     };
     Ok(Box::new(__col_0))
 }

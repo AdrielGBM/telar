@@ -7,9 +7,9 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use telar::{
-    AlignItems, Children, Color, Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Margin, NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, Text,
-    TextWrap, box_item,
+    Accessible, AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError,
+    LayoutItem, LayoutStyle, Margin, NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
+    StyledContainer, Text, TextWrap, box_item,
     focus::{FocusId, Role},
     use_context,
 };
@@ -20,6 +20,56 @@ use crate::type_ahead::TypeAhead;
 /// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them read as secondary without becoming a second colour a theme has to answer for.
 const HINT_RATIO: f32 = 0.9;
 const HEADING_RATIO: f32 = 0.85;
+
+/// The tokens of the rows a list draws — the items of a menu and a select, the commands of the palette, the rows of a context menu — which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the role named beside it, read when the row is laid out or painted, so every list in an application keeps one row height and one corner unless its theme says otherwise.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ListTokens {
+    /// Height of a row at the regular control size, scaled with the control size in force. `None` is [`metrics::row_height`](crate::metrics::row_height).
+    pub row_height: Option<f32>,
+    /// Corner of the wash behind a row. `None` is the theme's `radius_item`.
+    pub radius: Option<f32>,
+    /// Space between a row's edge and what it says at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    pub pad_x: Option<f32>,
+}
+
+impl ListTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    /// In whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
+    pub fn row_height(&self) -> f32 {
+        self.row_height
+            .map_or_else(shared::row_height, |height| height * telar::control_scale())
+            .round()
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_item)
+    }
+
+    pub fn pad_x(&self) -> f32 {
+        self.pad_x
+            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+    }
+}
+
+/// `wash` as a list drawn in `color` lays it: the theme's own wash while `color` is unset, else `color` at the wash's strength, so a tinted list is as light or as strong as the theme's hover and selection.
+pub(crate) fn tinted(color: &Reactive<Color>, wash: Color) -> Color {
+    shared::resolve(color, || wash).with_alpha(wash.a)
+}
+
+/// A row's paint: `fill` behind it, in the row's corner.
+pub(crate) fn row_paint(fill: Option<Color>) -> RectStyle {
+    let rect = RectStyle::default().with_radius(BorderRadius::all(ListTokens::current().radius()));
+    match fill {
+        Some(fill) => rect.with_fill(fill),
+        None => rect,
+    }
+}
 
 /// What a row needs to know about the list it is in, and what the list needs to learn from its rows.
 ///
@@ -244,18 +294,27 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
     }
 
     let mut content: Vec<Box<dyn LayoutItem>> = Vec::new();
+    let ticked = checked.clone();
     if let Some(checked) = checked {
-        content.push(box_item(Text::declaring(
-            move || {
-                if checked.get() {
-                    "✓".into()
-                } else {
-                    String::new()
-                }
+        let tick = shared::mark(
+            || shared::Mark::Check,
+            move |text| match checked.get() {
+                true => text.color,
+                false => Color::TRANSPARENT.into(),
             },
-            LayoutStyle::new().width(14.0),
-            |t| shared::control_text(t, 1.0),
-        )?));
+        )?;
+        content.push(box_item(
+            Container::new(
+                LayoutStyle::new()
+                    .width(shared::icon_size())
+                    .flex_shrink(0.0)
+                    .flex_row()
+                    .align_items(AlignItems::CENTER)
+                    .justify_content(JustifyContent::CENTER),
+                vec![tick],
+            )?
+            .a11y_hidden(),
+        ));
     }
     // Markup children are the row's content when there are any; `label` is the shorthand for the case that needs nothing else.
     let mut given = children;
@@ -286,9 +345,9 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
     };
     let hover_style = {
         let list = list.clone();
-        move |_r| match &list {
-            Some(ctx) => ctx.hover_style(),
-            None => RectStyle::default(),
+        move |_r| match (&list, index) {
+            (Some(ctx), Some(i)) => ctx.hover_style(i),
+            _ => RectStyle::default(),
         }
     };
     let commit = {
@@ -304,6 +363,7 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
     };
 
     let row = StyledContainer::new(row_layout(), row_style, content)?
+        .styled_by(row_layout)
         .hover_style(hover_style)
         .disabled(move || disabled.get())
         .on_press(commit);
@@ -317,6 +377,11 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
             row
         }
         _ => row,
+    };
+    // The tick is drawn for the eye; a reader hears the state instead, and the row keeps one name whether it is ticked or not.
+    let row = match ticked {
+        Some(ticked) => row.toggled(move || ticked.get()),
+        None => row,
     };
     Ok(box_item(row))
 }
@@ -337,13 +402,17 @@ pub fn separator(
     if let Some(bare) = declared_placeholder(&list) {
         return bare;
     }
-    let rule = StyledContainer::new(
+    let rule_box = || {
         LayoutStyle::new()
-            .height(1.0)
-            .margin(Margin::symmetric(shared::spacing() * 0.25, 0.0)),
+            .height(shared::border_width())
+            .margin(Margin::symmetric(shared::gap_xs(), 0.0))
+    };
+    let rule = StyledContainer::new(
+        rule_box(),
         |_r| RectStyle::default().with_fill(shared::border()),
         vec![],
-    )?;
+    )?
+    .styled_by(rule_box);
     Ok(box_item(rule))
 }
 
@@ -368,14 +437,18 @@ pub fn group(props: GroupProps, _children: Children) -> Result<Box<dyn LayoutIte
         LayoutStyle::new(),
         |t| shared::quiet(t, HEADING_RATIO).with_text_wrap(TextWrap::NoWrap),
     )?;
-    let heading = StyledContainer::new(
+    let heading_box = || {
         LayoutStyle::new()
             .flex_row()
-            .padding_horizontal(10.0)
-            .padding_vertical(shared::spacing() * 0.25),
+            .padding_horizontal(ListTokens::current().pad_x())
+            .padding_vertical(shared::gap_xs())
+    };
+    let heading = StyledContainer::new(
+        heading_box(),
         |_r| RectStyle::default(),
         vec![box_item(text)],
-    )?;
+    )?
+    .styled_by(heading_box);
     Ok(box_item(heading))
 }
 
@@ -389,13 +462,14 @@ fn declared_placeholder(
 }
 
 fn row_layout() -> LayoutStyle {
+    let tokens = ListTokens::current();
     LayoutStyle::new()
         .flex_row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::SPACE_BETWEEN)
-        .height(crate::dropdown::ROW_HEIGHT)
-        .padding_horizontal(10.0)
-        .gap(8.0)
+        .height(tokens.row_height())
+        .padding_horizontal(tokens.pad_x())
+        .gap(shared::gap_md())
 }
 
 impl ListContext {
@@ -408,17 +482,30 @@ impl ListContext {
         }
     }
 
-    fn row_style(&self, index: u32) -> RectStyle {
-        // The keyboard cursor wears the hover paint on purpose: it says the same thing, and a look of its own would have the list report two different places at once.
-        if self.0.highlighted.get() == Some(index) {
-            return self.hover_style();
-        }
-        let is_selected = self.0.selected.as_ref().is_some_and(|s| s.get() == index);
-        crate::dropdown::option_row_style(is_selected, &self.0.color)
+    fn is_selected(&self, index: u32) -> bool {
+        self.0.selected.as_ref().is_some_and(|s| s.get() == index)
     }
 
-    fn hover_style(&self) -> RectStyle {
-        crate::dropdown::option_row_hover_style(&self.0.color)
+    /// The chosen row keeps the selection's wash whatever else is on it, so the cursor or the pointer passing over it never makes it look less chosen than it is.
+    fn row_style(&self, index: u32) -> RectStyle {
+        // The keyboard cursor wears the hover paint on purpose: it says the same thing, and a look of its own would have the list report two different places at once.
+        let wash = if self.is_selected(index) {
+            Some(shared::held_wash())
+        } else if self.0.highlighted.get() == Some(index) {
+            Some(shared::hover_wash())
+        } else {
+            None
+        };
+        row_paint(wash.map(|wash| tinted(&self.0.color, wash)))
+    }
+
+    fn hover_style(&self, index: u32) -> RectStyle {
+        let wash = if self.is_selected(index) {
+            shared::held_wash()
+        } else {
+            shared::hover_wash()
+        };
+        row_paint(Some(tinted(&self.0.color, wash)))
     }
 }
 

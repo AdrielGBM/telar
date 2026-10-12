@@ -6,7 +6,7 @@ use crate::shared::components::example::{example, ExampleProps};
 use crate::shared::components::prop_row::{prop_row, PropRowProps};
 use crate::shared::demo_svgs::make_icon;
 
-let icon = make_icon();
+let demo_icon = make_icon();
 let letters: Vec<String> = "TELAR".chars().map(String::from).collect();
 let mood = signal(String::from("calm"));
 
@@ -22,10 +22,10 @@ col gap:20
     example title:"A picture is decoration until it is named"
         card
             row gap:20 align:center
-                svg src:icon width:40 height:40
-                svg src:icon label:"Telar logo" color:$theme.primary width:40 height:40
+                svg src:demo_icon width:40 height:40
+                svg src:demo_icon label:"Telar logo" color:$theme.primary width:40 height:40
                 text "the first is skipped, the second is read as “Telar logo, image”" font_size:12 color:$theme.muted
-        code_line code:"svg src:icon label:'Telar logo'"
+        code_line code:"svg src:demo_icon label:'Telar logo'"
     example title:"Language of a subtree"
         card
             col gap:6
@@ -37,7 +37,7 @@ col gap:20
         card
             row gap:12 align:center
                 box fill:$theme.surface_alt radius:8 pad:12 label:(format!("Mood: {}", $mood)) on_press:(|| $mood.set(if $mood.get() == "calm" { "busy".into() } else { "calm".into() }))
-                    text "☺" a11y:hidden font_size:20
+                    icon name:"lucide:smile" size:20 color:$theme.ink
                 text "press to change the name a reader hears" font_size:12 color:$theme.muted
         code_line code:"box label:(format!('Mood: {}', $mood))"
     example title:"Attributes"

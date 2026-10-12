@@ -1550,3 +1550,138 @@ fn an_overlay_reads_the_apps_frame_with_what_the_checks_found_and_not_its_own() 
         "and is told what the checks found in the same frame"
     );
 }
+
+thread_local! {
+    static MOVES_ASKED: Cell<u32> = const { Cell::new(0) };
+    static MOVES_ENDED: Cell<u32> = const { Cell::new(0) };
+    static SHOWN_MAXIMIZED: Cell<Option<bool>> = const { Cell::new(None) };
+}
+
+/// A 120x80 window drawing its own title bar: no decorations from the window system, and a 120x20 band along the top that moves the window, counting each move it asks for and each stroke that ends.
+struct TitleBar;
+
+impl App for TitleBar {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        ui_core::reset_layout_runtime();
+        crate::window::set_decorations(false);
+        reactive_core::effect(|| {
+            SHOWN_MAXIMIZED.with(|shown| shown.set(Some(crate::window::is_maximized())))
+        });
+        let band = ui_core::StyledContainer::new(
+            layout_core::LayoutStyle::new().width(120.0).height(20.0),
+            |_| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .expect("a band builds")
+        .on_drag(|_, _| {
+            MOVES_ASKED.with(|asked| asked.set(asked.get() + 1));
+            crate::window::drag();
+        })
+        .on_drag_end(|_, _| MOVES_ENDED.with(|ended| ended.set(ended.get() + 1)));
+        let card = ui_core::StyledContainer::new(
+            layout_core::LayoutStyle::new()
+                .flex_column()
+                .width(120.0)
+                .height(80.0),
+            |_| renderer_core::RectStyle::default(),
+            vec![ui_core::box_item(band)],
+        )
+        .expect("a card builds");
+        Box::new(ui_core::WindowRoot::new(ui_core::box_item(card)))
+    }
+}
+
+fn title_bar_handler() -> AppHandler<HeadlessWindow, ()> {
+    build_app_handler::<HeadlessWindow, ()>(
+        Box::new(LocalApp(TitleBar)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "title-bar-test".to_string(),
+        SurfaceRenderer::builtin(),
+    )
+}
+
+#[test]
+fn a_tree_that_draws_its_own_title_bar_is_never_shown_with_the_systems() {
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = title_bar_handler();
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    assert!(
+        !window.is_decorated(),
+        "the decorations are gone when the resume hands the window back to be shown"
+    );
+}
+
+/// The window system keeps the release of a stroke it took over to move the window, so the runner ends the stroke itself: left running, the next move over the window would ask for another move with no button held.
+#[test]
+fn a_stroke_the_window_system_takes_over_ends_where_it_was_handed_over() {
+    use platform_core::{PointerButton, PointerSource};
+
+    MOVES_ASKED.with(|asked| asked.set(0));
+    MOVES_ENDED.with(|ended| ended.set(0));
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = title_bar_handler();
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    run_a_pass(&mut handler, &window);
+
+    handler.on_event(
+        Event::PointerPressed {
+            x: 60.0,
+            y: 10.0,
+            button: PointerButton::Primary,
+            source: PointerSource::Mouse,
+        },
+        &window,
+    );
+    assert_eq!(MOVES_ASKED.with(Cell::get), 1);
+    assert_eq!(
+        MOVES_ENDED.with(Cell::get),
+        1,
+        "the stroke ended with the handover"
+    );
+    assert!(
+        !ui_core::pointer_buttons().any(),
+        "and nothing is held any more"
+    );
+
+    handler.on_event(
+        Event::PointerMoved {
+            x: 70.0,
+            y: 10.0,
+            source: PointerSource::Mouse,
+        },
+        &window,
+    );
+    assert_eq!(
+        MOVES_ASKED.with(Cell::get),
+        1,
+        "a later move asks for nothing"
+    );
+}
+
+#[test]
+fn the_app_hears_whether_its_window_is_maximized_as_the_window_resizes() {
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = title_bar_handler();
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    handler.about_to_wait();
+    assert_eq!(SHOWN_MAXIMIZED.with(Cell::get), Some(false));
+
+    window.set_maximized(true);
+    window.resize(400, 300);
+    handler.new_events();
+    handler.on_event(
+        Event::WindowResized {
+            width: 400,
+            height: 300,
+        },
+        &window,
+    );
+    handler.about_to_wait();
+    assert_eq!(SHOWN_MAXIMIZED.with(Cell::get), Some(true));
+}

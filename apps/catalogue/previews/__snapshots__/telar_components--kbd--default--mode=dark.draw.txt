@@ -5,29 +5,29 @@ element group
     element group
       element group
         element group
-          rect 356,292 88x16
+          rect 357,291 86x18
           element group
             element group
-              rect 356,292 28x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+              rect 357,291 28x18 fill=#12141cff border=1 border-color=#3d4252ff radius=6
               element group
                 matrix 1,0,0,1,361,293
-                  text 0,0 19x13.44 "Ctrl" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                  text 0,0 20.14x14.28 "Ctrl" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                 end
               end
             end
             element group
-              rect 388,292 33x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+              rect 387,291 33x18 fill=#12141cff border=1 border-color=#3d4252ff radius=6
               element group
-                matrix 1,0,0,1,393,293
-                  text 0,0 24x13.44 "Shift" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                matrix 1,0,0,1,391,293
+                  text 0,0 25.45x14.28 "Shift" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                 end
               end
             end
             element group
-              rect 425,292 20x16 fill=#12141cff border=1 border-color=#3d4252ff radius=6
+              rect 423,291 21x18 fill=#12141cff border=1 border-color=#3d4252ff radius=6
               element group
-                matrix 1,0,0,1,431,293
-                  text 0,0 8x13.44 "P" size=11.2 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                matrix 1,0,0,1,430,293
+                  text 0,0 8x14.28 "P" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                 end
               end
             end

@@ -4,9 +4,9 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Accessible, Border, BorderRadius, Children, Color, Cursor, Key, LayoutError, LayoutItem,
-    LayoutStyle, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    Transaction, box_item, focus::Role, signal, step_factor, use_theme_tokens,
+    Accessible, Border, Children, Color, Cursor, Insets, Key, LayoutError, LayoutItem, LayoutStyle,
+    NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
+    Transaction, amend_surface, box_item, focus::Role, signal, step_factor, use_theme_tokens,
 };
 
 use crate::edit::write_through;
@@ -16,6 +16,41 @@ use crate::shared;
 pub type ToValue = Rc<dyn Fn(f32, f32) -> f32>;
 /// Where on the canvas a value is drawn, as value → `(x, y)`.
 pub type ToPoint = Rc<dyn Fn(f32) -> (f32, f32)>;
+
+/// A handle's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the role named beside it, read when the handle paints.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct HandleTokens {
+    /// Diameter of the dot at the regular control size, scaled with the control size in force. `None` is a slider's thumb less [`metrics::gap_sm`](crate::metrics::gap_sm), since a handle sits over the content it edits.
+    pub size: Option<f32>,
+    /// Width of the ring that parts the dot from what it sits on. `None` is the theme's `border_width_strong`.
+    pub ring: Option<f32>,
+}
+
+impl HandleTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn size(&self) -> f32 {
+        self.size.map_or_else(
+            || crate::slider::SliderTokens::current().thumb() - shared::gap_sm(),
+            |size| size * telar::control_scale(),
+        )
+    }
+
+    pub fn ring(&self) -> f32 {
+        self.ring.unwrap_or_else(shared::border_width_strong)
+    }
+}
+
+/// How far the dot's grab area reaches past its edge, so a small dot is still a target of [`shared::MIN_TARGET`].
+fn grab_outset(size: f32) -> Insets {
+    let reach = ((shared::MIN_TARGET - size) / 2.0).max(0.0);
+    Insets::new(reach, reach, reach, reach)
+}
 
 /// A draggable point bound to a number, placed over its parent in that parent's coordinates; a drag keeps the grab offset so it doesn't jump, clamps to `min..=max`, and every drag or arrow-key step is its own [`Transaction`] (Escape reverts it).
 #[derive(Props)]
@@ -36,8 +71,8 @@ pub struct HandleProps {
     /// One unscaled arrow-key step. Non-positive falls back to `1.0`.
     #[props(default = 1.0)]
     pub step: f32,
-    /// The handle's diameter.
-    #[props(default = 12.0)]
+    /// The handle's diameter in px. `0.0` (the default) means "unset": the [`HandleTokens`] size at the control size in force.
+    #[props(default)]
     pub size: f32,
     #[props(default = Cursor::Grab)]
     pub cursor: Cursor,
@@ -59,6 +94,9 @@ pub struct HandleProps {
     /// Runs once for every drag [`on_start`](Self::on_start) ran for, with whether it was kept: `true` when it was let go, `false` when it was cancelled — Escape, another pointer button, the window losing focus — or the handle went away mid-drag. An undone drag has reverted its transaction by the time this runs; a kept one has written the value it was let go at, and its transaction commits as this returns. A drag that joined a transaction already open elsewhere leaves that decision to whoever opened it, and ends kept whenever its gesture ends.
     #[props(some, default)]
     pub on_end: Option<Rc<dyn Fn(bool)>>,
+    /// Amends the paint of the dot — the handle's **principal surface** — clamped or not. See [`telar::SurfaceStyle`] for when a theme token or [`HandleTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 #[derive(Clone, Copy)]
@@ -106,7 +144,23 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
         label,
         on_start,
         on_end,
+        style,
     } = props;
+    let size = move || {
+        if size > 0.0 {
+            size
+        } else {
+            HandleTokens::current().size()
+        }
+    };
+    let dot_box = move || {
+        LayoutStyle::new()
+            .absolute()
+            .inset_top(0.0)
+            .inset_start(0.0)
+            .width(size())
+            .height(size())
+    };
     let (min, max) = if max < min { (max, min) } else { (min, max) };
     let step = if step > 0.0 { step } else { 1.0 };
     let transaction = transaction.unwrap_or_else(|| {
@@ -124,7 +178,8 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
         let to_point = to_point.clone();
         move |at: f32| {
             let (x, y) = to_point(at);
-            (x - size / 2.0, y - size / 2.0)
+            let half = size() / 2.0;
+            (x - half, y - half)
         }
     };
     let request = move |raw: f32| {
@@ -144,24 +199,25 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
     };
 
     let dot = StyledContainer::new(
-        LayoutStyle::new()
-            .absolute()
-            .inset_top(0.0)
-            .inset_start(0.0)
-            .width(size)
-            .height(size),
-        move |_| {
+        dot_box(),
+        move |r| {
             let fill = match clamped.get() {
                 true => shared::resolve(&clamped_color, || use_theme_tokens().warning()),
                 false => shared::resolve(&color, shared::accent),
             };
-            RectStyle::default()
+            let rest = RectStyle::default()
                 .with_fill(fill)
-                .with_border(Border::uniform(Color::WHITE, 2.0))
-                .with_radius(BorderRadius::all(size / 2.0))
+                .with_border(Border::uniform(
+                    shared::thumb_on(fill),
+                    HandleTokens::current().ring(),
+                ))
+                .with_radius(shared::pill(r));
+            amend_surface(rest, &style)
         },
         vec![],
     )?
+    .styled_by(dot_box)
+    .hit_outset(Reactive::of(move || grab_outset(size())))
     .with_transform({
         let placed = placed.clone();
         move |_| {

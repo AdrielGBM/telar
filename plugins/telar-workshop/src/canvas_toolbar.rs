@@ -1,4 +1,4 @@
-//! The canvas toolbar: the controls that write [`CanvasSettings`]. The environment sits in the top bar, and the size, zoom and rotation beside the canvas they act on, in its header.
+//! The canvas toolbar: the controls that write [`CanvasSettings`]. The environment every preview is shown in is a menu in the top bar, and the size, zoom and rotation sit beside the canvas they act on, in its header.
 
 use std::rc::Rc;
 
@@ -21,12 +21,12 @@ use crate::settings::{
 use crate::state::WorkshopState;
 use crate::strings::{
     self, BACKGROUND, BACKGROUND_DARK, BACKGROUND_LIGHT, BACKGROUND_PREVIEW,
-    BACKGROUND_TRANSPARENT, CANVAS_SETTINGS, CONTROL_SIZE, CONTROL_SIZE_DEFAULT,
-    CONTROL_SIZE_LARGE, CONTROL_SIZE_MINI, CONTROL_SIZE_REGULAR, CONTROL_SIZE_SMALL, DEVICE_FRAMES,
-    DIRECTION, DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL, GRID, HIGH_CONTRAST, LOCALE,
+    BACKGROUND_TRANSPARENT, CONTROL_SIZE, CONTROL_SIZE_DEFAULT, CONTROL_SIZE_LARGE,
+    CONTROL_SIZE_MINI, CONTROL_SIZE_REGULAR, CONTROL_SIZE_SMALL, DEVICE_FRAMES, DIRECTION,
+    DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL, FRAME_SETTINGS, GRID, HIGH_CONTRAST, LOCALE,
     LOCALE_DEFAULT, MODE, MODE_DEFAULT, PROJECT_VIEWPORTS, REDUCED_MOTION, ROTATE, RULERS,
-    VIEWPORT, VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM, ZOOM_FIT,
-    ZOOM_PERCENT,
+    SETTINGS, VIEWPORT, VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM,
+    ZOOM_FIT, ZOOM_PERCENT,
 };
 
 const NARROW: f32 = WORKBENCH_GRID * 11.0;
@@ -35,21 +35,14 @@ const WIDE: f32 = WORKBENCH_GRID * 22.0;
 /// The index a select shows as nothing chosen.
 const NO_ROW: u32 = u32::MAX;
 
-/// The top bar's settings: the mode, locale, direction, control size, background and high contrast every canvas is shown in, and reduced motion.
-pub(crate) fn environment(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let items = environment_settings(state)
-        .iter()
-        .map(|setting| setting.inline())
-        .collect::<Result<Vec<_>, _>>()?;
-    group_of(items)
-}
-
-/// [`environment`] as one menu, for a top bar too narrow to hold it: a heading over each setting's choices with the one in use ticked, then the switches, ticked while on.
+/// The top bar's preview settings as one menu: the mode, locale, direction, control size and background every canvas is shown in, each a heading over its choices with the one in use ticked, then reduced motion and high contrast, ticked while on.
 pub(crate) fn environment_menu(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let settings: Rc<[Box<dyn Setting>]> = environment_settings(state).into();
     menu(
         MenuProps::props()
-            .label(Reactive::of(|| strings::text(CANVAS_SETTINGS)))
+            .label(Reactive::of(|| strings::text(SETTINGS)))
+            .caret(false)
+            .fit(true)
             .build(),
         Children::new(move || {
             let mut slots = Slots::new();
@@ -164,7 +157,7 @@ pub(crate) fn frame_settings(
         )
         .inline()?,
     ];
-    group_of(items)
+    frame_group(items)
 }
 
 /// Turns the canvas a quarter, swapping its width and height; off while it has no fixed size to turn. An item of a `toolbar`, so it is built among its children.
@@ -606,7 +599,7 @@ impl<T: PartialEq> Row<T> {
     }
 }
 
-fn group_of(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn frame_group(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let row = StyledContainer::new(
         LayoutStyle::new()
             .flex_row()
@@ -617,7 +610,7 @@ fn group_of(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, Layo
         items,
     )?
     .role(Role::Group)
-    .a11y_label(|| strings::text(CANVAS_SETTINGS));
+    .a11y_label(|| strings::text(FRAME_SETTINGS));
     Ok(box_item(row))
 }
 

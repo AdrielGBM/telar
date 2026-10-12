@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -90,7 +91,7 @@ pub fn fixed_layer(props: FixedLayerProps, children: Children) -> Result<Box<dyn
                                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                                                 )?
                                                             };
-                                                            let __node_5 = button(ButtonProps::props().label("Tap").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let taps = taps.clone(); move || taps.update(|n| *n += 1) })).build(), Children::default())?;
+                                                            let __node_5 = button(ButtonProps::props().label("Tap").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let taps = taps.clone(); move || taps.update(|n| *n += 1) })).build(), Children::default())?;
                                                             StyledContainer::new(LayoutStyle::new().flex_row().gap(12.0).padding_horizontal(16.0).padding_vertical(10.0).align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(12.0) } }, children![__text_2, __node_5])?
                                                         };
                                                         let __row_0 = __row_0.a11y_label(|| "Fixed bar");

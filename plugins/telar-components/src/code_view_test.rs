@@ -172,7 +172,7 @@ fn only_the_marked_lines_that_exist_are_washed() {
             .color(Color::rgb(1.0, 0.0, 0.0))
             .build(),
     );
-    let wash = Paint::Solid(Color::rgb(1.0, 0.0, 0.0).with_alpha(MARK_ALPHA));
+    let wash = Paint::Solid(Color::rgb(1.0, 0.0, 0.0).with_alpha(crate::shared::held_wash().a));
     let washed = mounted
         .tree
         .commands()
@@ -237,4 +237,73 @@ fn a_tall_block_stops_at_its_max_height() {
     assert!(free.height() > 300.0, "{}", free.height());
     let capped = Mounted::new(CodeViewProps::props().code(tall).max_height(120.0).build());
     assert_eq!(capped.height(), 120.0);
+}
+
+#[test]
+fn the_block_is_rounded_by_the_surface_role_until_the_tokens_name_a_radius() {
+    crate::test_support::assert_panel_corner_follows_its_role(
+        crate::test_support::PanelRole::Surface,
+        || Mounted::new(source_props().copyable(false).build()).tree,
+        |tree| crate::test_support::first_painted(tree).radius,
+        BorderRadius::all,
+        |radius| CodeViewTokens {
+            radius: Some(radius),
+            ..CodeViewTokens::default()
+        },
+    );
+}
+
+#[test]
+fn the_tokens_pad_the_lines_and_the_marks_follow_them() {
+    telar::set_theme(crate::test_support::PanelTheme {
+        role: crate::test_support::PanelRole::Surface,
+        radius: 6.0,
+        tokens: Some(CodeViewTokens {
+            pad: Some(20.0),
+            ..CodeViewTokens::default()
+        }),
+    });
+    let mounted = Mounted::new(
+        source_props()
+            .copyable(false)
+            .line_numbers(false)
+            .highlighted(vec![1])
+            .build(),
+    );
+    let frame = track_layout(mounted.node).unwrap().get();
+    let mut line = None;
+    let mut wash = None;
+    telar::for_each_with_matrix(&mounted.tree.commands(), |command, matrix| match command {
+        DrawCommand::Text { rect, .. } if line.is_none() => {
+            line = Some((rect.x + matrix[4], rect.y + matrix[5]));
+        }
+        DrawCommand::Rect { rect, style, .. }
+            if wash.is_none() && style.border.is_none() && style.fill.is_some() =>
+        {
+            wash = Some(rect.y + matrix[5]);
+        }
+        _ => {}
+    });
+    let (x, y) = line.expect("the code is drawn");
+    assert_eq!(x - frame.x, 20.0, "the lines sit the token's pad in");
+    assert_eq!(y - frame.y, 20.0);
+    assert_eq!(
+        wash,
+        Some(y),
+        "and the marked line's wash sits under its line"
+    );
+}
+
+#[test]
+fn a_style_amendment_restyles_the_frame() {
+    let ink = Color::rgb(0.05, 0.05, 0.1);
+    let mounted = Mounted::new(
+        source_props()
+            .copyable(false)
+            .style(Rc::new(move |paint: RectStyle| paint.with_fill(ink)) as SurfaceAmendment)
+            .build(),
+    );
+    let paint = crate::test_support::first_painted(&mounted.tree);
+    assert_eq!(paint.fill, Some(Paint::Solid(ink)));
+    assert!(paint.border.is_some(), "the block's own frame is kept");
 }

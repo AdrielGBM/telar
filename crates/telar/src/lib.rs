@@ -162,7 +162,7 @@ pub use licenses::install_icon_licenses as __install_icon_licenses;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
     ConsumedKeys, Cursor, Event, FullscreenMode, Key, NamedKey, NumericValue, Orientation,
-    ScrollDelta, WindowCommand, WindowConfig, WindowPosition, push_window_command,
+    ResizeEdge, ScrollDelta, WindowCommand, WindowConfig, WindowPosition, push_window_command,
     take_window_commands,
 };
 // The seam for an application rendering its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on. Two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
@@ -204,7 +204,7 @@ pub use renderer_core::{
     LineJoin, Paint, PathData, PathStyle, PathVerb, Raster, RectStyle, RendererError, Role, Scale,
     Semantics, Shadow, ShapeStyle, Span, Stroke, TextAlign, TextCase, TextDecoration, TextLength,
     TextShadow, TextStyle, TextWrap, fitted_font_size, for_each_with_matrix, hash_draw_commands,
-    measure_text, text_metrics_generation, transform_clip_rect,
+    measure_ink_bounds, measure_text, text_metrics_generation, transform_clip_rect,
 };
 // The drawing half of the backend-author API: a frontend implements `RendererFactory` and installs a `TextMetrics` for whatever "how wide is this string" means on its surface.
 #[cfg(feature = "runtime")]
@@ -300,12 +300,12 @@ pub use surface::{
 pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    ControlSize, ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions,
-    ThemeTokens, active_mode, control_scale, current_control_size, follow_system, is_dark,
-    nearest_theme, register_mode, register_mode_theme, registered_modes, scheme_preference,
-    set_control_size, set_mode, set_mode_scheme, set_scheme_preference, set_theme,
-    use_control_size, use_mode, use_resolved_scheme, use_scheme_preference, use_theme,
-    use_theme_extension, use_theme_tokens,
+    ControlSize, ResolvedScheme, SchemePreference, ScopedControlSize, ScopedTheme, Theme,
+    ThemeExtensions, ThemeTokens, active_mode, control_scale, current_control_size, follow_system,
+    is_dark, nearest_control_size, nearest_theme, register_mode, register_mode_theme,
+    registered_modes, scheme_preference, set_control_size, set_mode, set_mode_scheme,
+    set_scheme_preference, set_theme, use_control_size, use_mode, use_resolved_scheme,
+    use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
@@ -318,8 +318,8 @@ pub use ui_core::{
 };
 #[cfg(feature = "runtime")]
 pub use ui_core::{
-    Breakpoints, breakpoint, set_safe_area_insets, set_surface_size, surface_size,
-    use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
+    Breakpoints, breakpoint, set_safe_area_insets, set_surface_maximized, set_surface_size,
+    surface_size, use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
     use_text_metrics_generation,
 };
 #[cfg(feature = "runtime")]
@@ -329,34 +329,35 @@ pub use ui_core::{
 };
 // The family a surface's text shapes in where nothing above it names one: seeded from `AppConfig::font_family`, changed live with `set_font_family`.
 #[cfg(feature = "runtime")]
-pub use ui_core::{SurfaceCanvas, SurfaceEnv, SurfaceFrame, composite_surface};
+pub use ui_core::{SurfaceAmendment, SurfaceStyle, amend_surface};
 #[cfg(feature = "runtime")]
-pub use ui_core::{SurfaceStyle, amend_surface};
+pub use ui_core::{SurfaceCanvas, SurfaceEnv, SurfaceFrame, composite_surface};
 #[cfg(feature = "runtime")]
 pub use ui_core::{open_surface_font_family, set_font_family, use_font_family};
 // The seam and nothing behind it: `telar-dynamic` carries the decoders and transports that plug in here, and an application's own plug in exactly the same way.
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Accessible, AnchorAlign, Anchoring, Axis, BuildFailure, COARSE_STEP, Canvas, Caret, ChildSlot,
-    Children, Clip, ClipAxis, ClippedItem, Component, ComponentList, Container, DEFAULT_SCRIM,
+    Children, Clip, ClipAxis, ClippedItem, Component, ComponentList, Container,
     DismissRegistration, DragAxis, DragStart, Edge, ErrorBoundary, EventResult, FINE_STEP,
     FixedLayer, Image, Inherited, Input, IntoClip, KeyAnswer, KeyNav, KeyNavMove, LayoutItem,
     LayoutLeaf, LayoutScrollArea, LayoutTransition, Lazy, Mask, NodeId, NodeVec, Overlay, Path,
     Placement, PointerButtons, Presence, ReactiveList, Rectangle, RelayoutHook, RenderNode,
-    ScrollPage, ScrollViewport, ScrollbarStyle, SlotRequest, Slots, StyledContainer,
-    SurfaceScaffold, SurfaceTransition, Text, TextArea, TextRun, ThemeProvider, TransformOrigin,
+    ScopeProvider, Scrim, ScrollPage, ScrollViewport, ScrollbarStyle, SlotRequest, Slots,
+    StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea, TextRun, TransformOrigin,
     Transition, Underline, VirtualList, WindowRoot, absolute_rect, anchor_rect, animate_layout,
     apply_move, box_item, box_transform, box_transform_about, close_overlay, compute_layout,
     confirm_top, current_direction, declare, dismiss_depth, dismiss_top, drag_start, drag_travel,
-    exits_in_flight, focus, follow_theme, fragment, fragment_positional, inherited_text_style,
-    insertion_index, interactive_rects, kept, key_held, key_nav_apply, key_nav_apply_grid,
-    key_pressed, line_box, logical_border_radius, logical_border_widths, mark_dirty, modifiers,
-    new_container, new_leaf, observe_keyboard, observe_pointer, on_relayout, open_overlay,
-    overlay_state, overlay_viewport, pointer_buttons, provide_theme, register_transaction,
-    register_transaction_within, relayout_if_dirty, remove_node, requested_cursor, set_children,
-    set_direction, set_display, set_min_height, set_overlay_host, shortcut_key, single_line_box,
-    step_factor, style_follows, track_layout, transform_pointer, undeclare, use_context,
-    use_direction, use_dismiss_depth, visible_window,
+    exits_in_flight, focus, focus_ring_border, follow_control_size, follow_theme, fragment,
+    fragment_positional, inherited_text_style, insertion_index, interactive_rects, kept, key_held,
+    key_nav_apply, key_nav_apply_grid, key_pressed, line_box, logical_border_radius,
+    logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
+    observe_pointer, on_relayout, open_overlay, overlay_state, overlay_viewport, pointer_buttons,
+    provide_control_size, provide_theme, register_transaction, register_transaction_within,
+    relayout_if_dirty, remove_node, requested_cursor, set_children, set_direction, set_display,
+    set_min_height, set_overlay_host, shortcut_key, single_line_box, step_factor, style_follows,
+    track_layout, transform_pointer, undeclare, use_context, use_direction, use_dismiss_depth,
+    visible_window,
 };
 #[cfg(feature = "async-assets")]
 pub use ui_core::{

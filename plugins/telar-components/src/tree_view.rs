@@ -14,29 +14,53 @@ use telar::{
     memo, on_cleanup, signal,
 };
 
+use crate::list::tinted;
 use crate::shared;
 use crate::type_ahead::TypeAhead;
 
-const CARET_RATIO: f32 = 0.85;
-const CARET_CLOSED: &str = "\u{25B8}";
-const CARET_CLOSED_RTL: &str = "\u{25C2}";
-const CARET_OPEN: &str = "\u{25BE}";
-const SELECTED_ALPHA: f32 = 0.14;
-const HOVER_ALPHA: f32 = 0.08;
-const CURSOR_RING: f32 = 2.0;
 const OVERSCAN: usize = 4;
 
-fn row_height() -> f32 {
-    (shared::spacing() * 3.5).round()
+/// A tree view's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the role named beside it, read when the tree is built or painted, so a tree's rows stand at the height every other list's do.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TreeViewTokens {
+    /// Height of a row at the regular control size, scaled with the control size in force. `None` is [`metrics::row_height`](crate::metrics::row_height).
+    pub row_height: Option<f32>,
+    /// How far each level is set in from the one above it, likewise. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
+    pub indent: Option<f32>,
+    /// Corner of a row's wash and its cursor. `None` is the theme's `radius_item`.
+    pub radius: Option<f32>,
+    /// Space between a row's edges and what it shows, likewise. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    pub pad_x: Option<f32>,
 }
-fn indent() -> f32 {
-    shared::spacing() * 2.0
-}
-fn caret_width() -> f32 {
-    shared::spacing() * 2.0
-}
-fn pad_x() -> f32 {
-    shared::spacing()
+
+impl TreeViewTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    /// In whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
+    pub fn row_height(&self) -> f32 {
+        self.row_height
+            .map_or_else(shared::row_height, |height| height * telar::control_scale())
+            .round()
+    }
+
+    pub fn indent(&self) -> f32 {
+        self.indent
+            .map_or_else(shared::gap_xl, |indent| indent * telar::control_scale())
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_item)
+    }
+
+    pub fn pad_x(&self) -> f32 {
+        self.pad_x
+            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+    }
 }
 
 /// One node of a tree, as data: what it is called, the id the selection and the open branches name it by, and the nodes under it.
@@ -135,7 +159,7 @@ pub fn tree_view(
         let items = items.get();
         expanded.with(|open| Flat::of(&items, open))
     });
-    let row_height = row_height();
+    let row_height = TreeViewTokens::current().row_height();
 
     let mut made: Option<Rc<Tree>> = None;
     let scroll = LayoutScrollArea::new_with(fill(), |viewport| {
@@ -555,10 +579,10 @@ fn build_row(
     Ok(box_item(built))
 }
 
-/// The open-or-shut glyph, or the empty column a leaf keeps so its label lines up with its siblings'. Pressing it toggles the branch without selecting the row, and a reader hears the row's state rather than the glyph.
+/// The open-or-shut chevron, or the empty column a leaf keeps so its label lines up with its siblings'. Pressing it toggles the branch without selecting the row, and a reader hears the row's state rather than the mark.
 fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let column = LayoutStyle::new()
-        .width(caret_width())
+        .width(shared::icon_size())
         .height(tree.row_height)
         .flex_shrink(0.0)
         .flex_row()
@@ -567,18 +591,14 @@ fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError>
     if !row.node.is_branch() {
         return Ok(box_item(Container::new(column, vec![])?));
     }
-    let glyph = {
+    let point = {
         let (tree, id) = (tree.clone(), row.node.id.clone());
-        move || {
-            match (tree.is_open(&id), current_direction()) {
-                (true, _) => CARET_OPEN,
-                (false, Direction::Rtl) => CARET_CLOSED_RTL,
-                (false, _) => CARET_CLOSED,
-            }
-            .to_string()
+        move || match tree.is_open(&id) {
+            true => shared::Mark::ChevronDown,
+            false => shared::Mark::ChevronForward,
         }
     };
-    let text = Text::declaring(glyph, LayoutStyle::new(), |t| shared::quiet(t, CARET_RATIO))?;
+    let mark = shared::mark(point, |text| text.color.faded(shared::QUIET_ALPHA))?;
     let toggle = {
         let (tree, id) = (tree.clone(), row.node.id.clone());
         move || {
@@ -586,7 +606,7 @@ fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError>
             tree.take_focus();
         }
     };
-    let caret = StyledContainer::new(column, |_r| RectStyle::default(), vec![box_item(text)])?
+    let caret = StyledContainer::new(column, |_r| RectStyle::default(), vec![mark])?
         .role(Role::Group)
         .on_press(toggle)
         .a11y_hidden();
@@ -594,27 +614,38 @@ fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError>
 }
 
 fn row_box(level: u32, height: f32) -> LayoutStyle {
+    let tokens = TreeViewTokens::current();
     LayoutStyle::new()
         .flex_row()
         .align_items(AlignItems::CENTER)
         .height(height)
         .flex_shrink(0.0)
-        .padding_start(pad_x() + level.saturating_sub(1) as f32 * indent())
-        .padding_end(pad_x())
-        .gap(shared::spacing() * 0.5)
+        .padding_start(tokens.pad_x() + level.saturating_sub(1) as f32 * tokens.indent())
+        .padding_end(tokens.pad_x())
+        .gap(shared::gap_sm())
 }
 
-/// The selection fills the row; the keyboard cursor rings it while the tree shows focus, so the two read apart when they are on different rows.
+/// The selection and the pointer wash the row, at the theme's strengths and in the tree's colour when it was given one; the keyboard cursor rings it while the tree shows focus, so the two read apart when they are on different rows.
 fn row_paint(tree: &Tree, id: &str, color: &Reactive<Color>, hovered: bool) -> RectStyle {
-    let accent = shared::resolve(color, shared::accent);
-    let mut style = RectStyle::default().with_radius(BorderRadius::all(shared::radius_sm()));
+    let mut style =
+        RectStyle::default().with_radius(BorderRadius::all(TreeViewTokens::current().radius()));
     if tree.is_selected(id) {
-        style = style.with_fill(accent.with_alpha(SELECTED_ALPHA));
+        style = style.with_fill(tinted(color, shared::held_wash()));
     } else if hovered {
-        style = style.with_fill(accent.with_alpha(HOVER_ALPHA));
+        style = style.with_fill(tinted(color, shared::hover_wash()));
     }
     if tree.shows_cursor(id) {
-        style = style.with_border(Border::uniform(accent, CURSOR_RING));
+        let ring = shared::focus_ring();
+        let tone = color.get();
+        let ring = if tone == Color::TRANSPARENT {
+            ring
+        } else {
+            Border {
+                paint: tone.into(),
+                ..ring
+            }
+        };
+        style = style.with_border(ring);
     }
     style
 }

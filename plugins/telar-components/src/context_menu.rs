@@ -8,14 +8,15 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::rc::Rc;
 use telar::{
-    AlignItems, AnchorAlign, Anchoring, Children, Color, Container, JustifyContent, Key,
+    AlignItems, AnchorAlign, Anchoring, Border, Children, Color, Container, JustifyContent, Key,
     LayoutError, LayoutItem, LayoutStyle, NamedKey, NodeId, Overlay, Placement, PointerButton,
-    Props, Rect, RectStyle, RwSignal, ScrollViewport, SizeDimension, StyledContainer, Text,
-    TextStyle, box_item, effect,
+    Props, Rect, RectStyle, RwSignal, ScrollViewport, ShapeStyle, SizeDimension, StyledContainer,
+    SurfaceAmendment, SurfaceStyle, Text, amend_surface, box_item, effect,
     focus::{self, FocusId, Role},
     on_cleanup, signal, track_layout,
 };
 
+use crate::list::ListTokens;
 use crate::popup;
 use crate::shared;
 
@@ -86,42 +87,92 @@ impl Entry {
     }
 }
 
-/// How a menu is painted, and how wide. Every colour is the caller's: this crate has no palette of its own and a context menu is chrome, which is exactly where an application's own look shows.
-#[derive(Clone, Copy)]
-pub struct MenuStyle {
-    pub background: Color,
-    pub border: Color,
-    pub label: Color,
-    /// The shortcut, and a disabled row's label.
-    pub faint: Color,
-    /// Behind the row under the pointer or the keyboard.
-    pub highlight: Color,
-    pub radius: f32,
-    pub font_size: f32,
-    /// The height of a row the component draws itself, which is at least a pointer target tall by default. A `Custom` row is whatever its widget measures.
-    pub row_height: f32,
-    pub padding: f32,
-    /// The mark a row wears to say it opens another panel.
-    ///
-    /// A setting and not a constant, because it is a character: a face without it draws whatever the desktop offers in its place, at a size meant for another grid, and says nothing about having done so.
-    pub submenu: &'static str,
+/// A context menu's own tokens, which an application's theme supplies through a `#[theme(extension)]` field, and one menu through its `tokens` prop.
+///
+/// Every field left `None` follows the theme role named beside it, read when the menu is laid out or painted, so a menu that names none is drawn like the list a `menu` or a `select` opens, in the light theme and the dark alike. A context menu is chrome, which is where an application's own look shows, so every colour is a token as well as every length.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ContextMenuTokens {
+    /// The panel's fill. `None` is the theme's `surface`.
+    pub background: Option<Color>,
+    /// The panel's edge and the rule between groups. `None` is the theme's `border`.
+    pub border: Option<Color>,
+    /// A row's label. `None` is the ink the menu inherits.
+    pub label: Option<Color>,
+    /// The shortcut, and a disabled row's label. `None` is the theme's `muted`.
+    pub faint: Option<Color>,
+    /// Behind the row under the pointer or the keyboard. `None` is the theme's `highlight_low`.
+    pub highlight: Option<Color>,
+    /// Corner of a panel. `None` is the theme's `radius_surface`.
+    pub radius: Option<f32>,
+    /// Height of a row the menu draws itself, at the regular control size and scaled with the control size in force. `None` is [`ListTokens::row_height`]. A `Custom` row is whatever its widget measures.
+    pub row_height: Option<f32>,
+    /// Space between a panel's edge and its rows, at the regular control size and scaled with the control size in force. `None` is [`metrics::panel_pad`](crate::metrics::panel_pad).
+    pub padding: Option<f32>,
+    /// Width of a panel, at the regular control size and scaled with the control size in force. `None` is the width of the list a `menu` opens. A menu's `width` prop wins over it.
+    pub width: Option<f32>,
 }
 
-impl Default for MenuStyle {
-    fn default() -> Self {
+impl ContextMenuTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    /// These tokens, with every field they leave `None` taken from `fallback`.
+    pub fn or(self, fallback: Self) -> Self {
         Self {
-            background: Color::rgba(0.10, 0.10, 0.12, 1.0),
-            border: Color::rgba(0.25, 0.25, 0.28, 1.0),
-            label: Color::rgba(0.90, 0.90, 0.92, 1.0),
-            faint: Color::rgba(0.55, 0.55, 0.58, 1.0),
-            highlight: Color::rgba(0.20, 0.20, 0.24, 1.0),
-            radius: 4.0,
-            font_size: 13.0,
-            row_height: shared::MIN_TARGET,
-            padding: 4.0,
-            submenu: "›",
+            background: self.background.or(fallback.background),
+            border: self.border.or(fallback.border),
+            label: self.label.or(fallback.label),
+            faint: self.faint.or(fallback.faint),
+            highlight: self.highlight.or(fallback.highlight),
+            radius: self.radius.or(fallback.radius),
+            row_height: self.row_height.or(fallback.row_height),
+            padding: self.padding.or(fallback.padding),
+            width: self.width.or(fallback.width),
         }
     }
+
+    pub fn background(&self) -> Color {
+        self.background.unwrap_or_else(shared::surface)
+    }
+
+    pub fn border(&self) -> Color {
+        self.border.unwrap_or_else(shared::border)
+    }
+
+    pub fn faint(&self) -> Color {
+        self.faint.unwrap_or_else(shared::muted)
+    }
+
+    pub fn highlight(&self) -> Color {
+        self.highlight.unwrap_or_else(shared::hover_wash)
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_surface)
+    }
+
+    pub fn row_height(&self) -> f32 {
+        self.row_height.map_or_else(
+            || ListTokens::current().row_height(),
+            |height| (height * telar::control_scale()).round(),
+        )
+    }
+
+    pub fn padding(&self) -> f32 {
+        self.padding
+            .map_or_else(shared::panel_pad, |pad| pad * telar::control_scale())
+    }
+
+    pub fn width(&self) -> f32 {
+        crate::dropdown::width(self.width)
+    }
+}
+
+/// The tokens a menu draws with: its own over the theme's, read where they are used so a theme switched while the menu is open repaints it.
+fn look(own: ContextMenuTokens) -> ContextMenuTokens {
+    own.or(ContextMenuTokens::current())
 }
 
 /// The list a menu's children push themselves into as they build.
@@ -255,13 +306,26 @@ pub struct ContextMenuProps {
     /// Run when the menu is done with: a row was picked, Escape was pressed, or the hand went elsewhere. The caller owns whether the menu exists, so this is how it says the answer is in.
     #[props(default = Rc::new(|| {}))]
     pub on_close: Rc<dyn Fn()>,
-    #[props(default = 180.0)]
+    /// Width of each panel in logical px. `0.0` (the default) is [`ContextMenuTokens::width`].
+    #[props(default)]
     pub width: f32,
     /// The box the panel is kept inside. The window, usually; a pane for a menu that belongs to one.
     #[props(default = Rect::new(0.0, 0.0, f32::MAX, f32::MAX))]
     pub within: Rect,
-    #[props(default = MenuStyle::default())]
-    pub style: MenuStyle,
+    /// This menu's own tokens, over the theme's: each field it names wins, and each it leaves `None` is the theme's.
+    #[props(default)]
+    pub tokens: ContextMenuTokens,
+    /// Amends the paint of every panel — this component's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`ContextMenuTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
+}
+
+/// What every panel of one menu, its submenus' included, is drawn with.
+struct Config {
+    width: f32,
+    within: Rect,
+    tokens: ContextMenuTokens,
+    style: SurfaceStyle,
 }
 
 /// A menu opened at a point: rows, submenus, the keyboard, and every way out.
@@ -277,6 +341,7 @@ pub fn context_menu(
         on_close,
         width,
         within,
+        tokens,
         style,
     } = props;
     let mut entries = entries;
@@ -285,7 +350,17 @@ pub fn context_menu(
     let point = Rect::new(at.0, at.1, 0.0, 0.0);
     let anchoring: Anchored =
         Rc::new(move || Anchoring::new(point, Placement::Below, kept_inside(within)));
-    let menu = Built::panel(entries, anchoring, width, within, style, closing.clone())?;
+    let config = Rc::new(Config {
+        width: if width > 0.0 {
+            width
+        } else {
+            look(tokens).width()
+        },
+        within,
+        tokens,
+        style,
+    });
+    let menu = Built::panel(entries, anchoring, config, closing.clone())?;
     let (keys, list, deepest) = (menu.keys, menu.list, menu.deepest);
     let mut layers = vec![menu.panel];
     layers.extend(menu.layers);
@@ -364,9 +439,7 @@ struct Host {
 /// What every row of one panel shares.
 #[derive(Clone)]
 struct Panel {
-    style: MenuStyle,
-    width: f32,
-    within: Rect,
+    config: Rc<Config>,
     highlighted: RwSignal<Option<usize>>,
     opened: RwSignal<Option<usize>>,
     closing: Rc<Rc<dyn Fn()>>,
@@ -390,9 +463,7 @@ impl Built {
     fn panel(
         entries: Vec<Entry>,
         anchoring: Anchored,
-        width: f32,
-        within: Rect,
-        style: MenuStyle,
+        config: Rc<Config>,
         closing: Rc<Rc<dyn Fn()>>,
     ) -> Result<Self, LayoutError> {
         let stops: Vec<usize> = entries
@@ -401,10 +472,9 @@ impl Built {
             .filter(|(_, entry)| entry.stops())
             .map(|(index, _)| index)
             .collect();
+        let (width, tokens, style) = (config.width, config.tokens, config.style.clone());
         let state = Panel {
-            style,
-            width,
-            within,
+            config,
             highlighted: signal(None),
             opened: signal(None),
             closing,
@@ -440,14 +510,16 @@ impl Built {
             popup::Popup {
                 anchoring,
                 width,
-                padding: style.padding,
+                padding: look(tokens).padding(),
                 cursor,
                 keyboard: popup::Keyboard::Held { pointed },
             },
             box_item(rows),
-            move |_| RectStyle {
-                border: Some(telar::Border::uniform(style.border, 1.0)),
-                ..RectStyle::filled(style.background, style.radius)
+            move |_| {
+                let look = look(tokens);
+                let panel = RectStyle::filled(look.background(), look.radius())
+                    .with_border(Border::uniform(look.border(), shared::border_width()));
+                amend_surface(panel, &style)
             },
         )?;
         let (view, list) = (opened.view, opened.list);
@@ -479,10 +551,11 @@ impl Built {
 
 /// Where a submenu opens: beside the panel its row is in, level with the row, on whichever side has the room.
 fn beside(row: NodeId, panel: &Panel) -> Anchored {
-    let (host, padding, within) = (panel.host.clone(), panel.style.padding, panel.within);
+    let (host, tokens, within) = (panel.host.clone(), panel.config.tokens, panel.config.within);
     let laid = track_layout(row).expect("a row is registered");
     Rc::new(move || {
         laid.get();
+        let padding = look(tokens).padding();
         if let Some(view) = host.view.borrow().as_ref() {
             view.offset().1.get();
         }
@@ -571,26 +644,35 @@ enum Act {
     None,
 }
 
+/// The wash behind the row under the pointer or the keyboard, in a row's corner.
+fn lit(tokens: ContextMenuTokens) -> RectStyle {
+    RectStyle::filled(look(tokens).highlight(), ListTokens::current().radius())
+}
+
 /// One row, whatever kind it is.
 fn row(entry: Entry, index: usize, panel: &Panel) -> Result<Row, LayoutError> {
     let Panel {
-        style,
         highlighted,
         opened,
         ..
     } = *panel;
+    let tokens = panel.config.tokens;
     let closing = panel.closing.clone();
     match entry {
         Entry::Separator => {
-            let rule = StyledContainer::new(
+            let rule_box = || {
                 LayoutStyle::new()
                     .width(SizeDimension::Percent(1.0))
-                    .height(1.0)
-                    .margin_block_start(style.padding * 0.5)
-                    .margin_block_end(style.padding * 0.5),
-                move |_| RectStyle::filled(style.border, 0.0),
+                    .height(shared::border_width())
+                    .margin_block_start(shared::gap_xs())
+                    .margin_block_end(shared::gap_xs())
+            };
+            let rule = StyledContainer::new(
+                rule_box(),
+                move |_| RectStyle::default().with_fill(look(tokens).border()),
                 vec![],
-            )?;
+            )?
+            .styled_by(rule_box);
             Ok(Row {
                 node: rule.layout_node(),
                 widget: box_item(rule),
@@ -600,10 +682,6 @@ fn row(entry: Entry, index: usize, panel: &Panel) -> Result<Row, LayoutError> {
             })
         }
         Entry::Custom { widget, act } => {
-            let lit = move || match highlighted.get() == Some(index) {
-                true => RectStyle::filled(style.highlight, style.radius * 0.5),
-                false => RectStyle::default(),
-            };
             let held = act.clone();
             let stopping = match &act {
                 Some(act) => Act::Pick(Rc::clone(act)),
@@ -613,7 +691,10 @@ fn row(entry: Entry, index: usize, panel: &Panel) -> Result<Row, LayoutError> {
                 LayoutStyle::new()
                     .flex_row()
                     .width(SizeDimension::Percent(1.0)),
-                move |_| lit(),
+                move |_| match highlighted.get() == Some(index) {
+                    true => lit(tokens),
+                    false => RectStyle::default(),
+                },
                 vec![widget()?],
             )?
             .on_hover(move |now| {
@@ -646,10 +727,17 @@ fn row(entry: Entry, index: usize, panel: &Panel) -> Result<Row, LayoutError> {
                 true => Act::Pick(act.clone()),
                 false => Act::None,
             };
-            let line = line(label, hint, index, enabled, false, panel, move || {
-                closing();
-                act();
-            })?;
+            let line = line(
+                label,
+                Trailing::Hint(hint),
+                index,
+                enabled,
+                panel,
+                move || {
+                    closing();
+                    act();
+                },
+            )?;
             Ok(Row {
                 node: line.layout_node(),
                 control: line.focus_id(),
@@ -659,19 +747,12 @@ fn row(entry: Entry, index: usize, panel: &Panel) -> Result<Row, LayoutError> {
             })
         }
         Entry::Sub { label, entries } => {
-            let opening = line(
-                label,
-                style.submenu.to_string(),
-                index,
-                true,
-                true,
-                panel,
-                move || opened.set(Some(index)),
-            )?;
+            let opening = line(label, Trailing::Submenu, index, true, panel, move || {
+                opened.set(Some(index))
+            })?;
             let node = opening.layout_node();
             let anchoring = beside(node, panel);
-            let (width, within, subs, built) =
-                (panel.width, panel.within, panel.subs.clone(), panel.built);
+            let (config, subs, built) = (panel.config.clone(), panel.subs.clone(), panel.built);
             // Built the first time it is opened: a menu with six submenus is six panels nobody asked for, and the row it hangs off has no place on screen until the panel it is in has one.
             let layer = telar::Lazy::new(
                 LayoutStyle::new()
@@ -680,7 +761,7 @@ fn row(entry: Entry, index: usize, panel: &Panel) -> Result<Row, LayoutError> {
                     .inset_start(0.0),
                 move || opened.get() == Some(index),
                 move || {
-                    let sub = Built::panel(entries, anchoring, width, within, style, closing)?;
+                    let sub = Built::panel(entries, anchoring, config, closing)?;
                     subs.borrow_mut().insert(
                         index,
                         Sub {
@@ -705,53 +786,75 @@ fn row(entry: Entry, index: usize, panel: &Panel) -> Result<Row, LayoutError> {
     }
 }
 
-/// A drawn row: its label, its hint, and the highlight behind them.
+/// A row's box: the menu's row height, and the padding every list's rows share.
+fn line_box(tokens: ContextMenuTokens) -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .width(SizeDimension::Percent(1.0))
+        .height(look(tokens).row_height())
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::SPACE_BETWEEN)
+        .padding_horizontal(ListTokens::current().pad_x())
+        .gap(shared::gap_md())
+}
+
+/// What a drawn row shows at its end.
+enum Trailing {
+    /// The shortcut that runs the row without the menu, or nothing.
+    Hint(String),
+    /// The mark of a row that opens a submenu, which opens by being hovered where an ordinary row does nothing until it is pressed.
+    Submenu,
+}
+
+/// A drawn row: its label, what it shows at its end, and the highlight behind them.
 fn line(
     label: String,
-    hint: String,
+    trailing: Trailing,
     index: usize,
     enabled: bool,
-    // A submenu opens by being hovered; an ordinary row does nothing until it is pressed.
-    opens: bool,
     panel: &Panel,
     act: impl Fn() + 'static,
 ) -> Result<StyledContainer, LayoutError> {
     let Panel {
-        style,
         highlighted,
         opened,
         ..
     } = *panel;
-    let ink = match enabled {
-        true => style.label,
-        false => style.faint,
-    };
+    let tokens = panel.config.tokens;
     let name = Text::declaring(
         move || label.clone(),
         LayoutStyle::new(),
-        move |inherited| shared::in_family_of(TextStyle::new(style.font_size, ink), inherited),
-    )?;
-    let key = Text::declaring(
-        move || hint.clone(),
-        LayoutStyle::new(),
         move |inherited| {
-            shared::in_family_of(TextStyle::new(style.font_size, style.faint), inherited)
+            let text = shared::control_text(inherited, 1.0);
+            let look = look(tokens);
+            match (enabled, look.label) {
+                (false, _) => text.with_color(look.faint()),
+                (true, Some(label)) => text.with_color(label),
+                (true, None) => text,
+            }
         },
     )?;
+    let opens = matches!(trailing, Trailing::Submenu);
+    let end = match trailing {
+        Trailing::Hint(hint) => box_item(Text::declaring(
+            move || hint.clone(),
+            LayoutStyle::new(),
+            move |inherited| shared::control_text(inherited, 1.0).with_color(look(tokens).faint()),
+        )?),
+        Trailing::Submenu => shared::mark(
+            || shared::Mark::ChevronForward,
+            move |_| look(tokens).faint().into(),
+        )?,
+    };
     let row = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .width(SizeDimension::Percent(1.0))
-            .height(style.row_height)
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::SPACE_BETWEEN)
-            .padding_horizontal(style.padding * 1.5),
+        line_box(tokens),
         move |_| match highlighted.get() == Some(index) && enabled {
-            true => RectStyle::filled(style.highlight, style.radius * 0.5),
+            true => lit(tokens),
             false => RectStyle::default(),
         },
-        vec![box_item(name), box_item(key)],
+        vec![box_item(name), end],
     )?
+    .styled_by(move || line_box(tokens))
     .on_hover(move |now| {
         if !now || !enabled {
             return;

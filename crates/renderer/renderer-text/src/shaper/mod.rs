@@ -32,6 +32,14 @@ use cache::{GlyphPositions, ShapingCacheKey};
 /// Line height as a multiple of font size, applied uniformly at layout time. Exposed so widgets that vertically place text (e.g. centering a button label) center against the exact box the renderer uses.
 pub const LINE_HEIGHT_FACTOR: f32 = 1.2;
 
+/// The finest step a measured width is given in. A whole pixel left the box up to a pixel wider than the line drawn in it, all of it after the last glyph; this step is exact in an `f32` at any width a window has, so a box padded around the width and a width handed back to the text out of that box come back to it exactly, and a line measured to fit is never broken by float error.
+const LAYOUT_UNIT: f32 = 1.0 / 64.0;
+
+/// `width` rounded up to the next [`LAYOUT_UNIT`].
+pub(crate) fn in_layout_units(width: f32) -> f32 {
+    (width / LAYOUT_UNIT).ceil() * LAYOUT_UNIT
+}
+
 /// The fonts and cache bounds a shaper is built with.
 pub struct TextShaperConfig {
     /// Bounds the composed-string raster cache. Whole [`Policy`] rather than a byte count so an app can also say how long a raster may sit idle and whether one sighting is enough to keep it.

@@ -2,33 +2,51 @@
 
 use telar::{
     AlignItems, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, Text, box_item,
+    LayoutStyle, Props, Reactive, Rect, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
+    Text, amend_surface, box_item,
 };
 
 use crate::shared;
 
-fn pad_x() -> f32 {
-    shared::spacing()
-}
-fn pad_y() -> f32 {
-    shared::spacing() * 0.25
-}
-/// A badge's share of the text around it: a tag reads as an annotation, not as a sentence.
-const TEXT_RATIO: f32 = 0.85;
-fn radius() -> f32 {
-    shared::radius() * 2.5
+/// A badge's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the theme role named beside it, read when the badge paints and lays out, so a theme that moves the role still moves every badge it has not given a value of its own.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BadgeTokens {
+    /// Corner radius. `None` is a pill: fully rounded at whatever height the badge is laid out.
+    pub radius: Option<f32>,
+    /// Space between the edge and the label at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    pub pad_x: Option<f32>,
 }
 
-fn pill() -> LayoutStyle {
+impl BadgeTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    /// The corner for a badge laid out at `rect`.
+    pub fn radius(&self, rect: Rect) -> f32 {
+        self.radius
+            .unwrap_or_else(|| shared::pill_radius(rect.width.min(rect.height)))
+    }
+
+    pub fn pad_x(&self) -> f32 {
+        self.pad_x
+            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+    }
+}
+
+fn pill_box() -> LayoutStyle {
     LayoutStyle::new()
         .flex_row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
-        .padding_horizontal(pad_x())
-        .padding_vertical(pad_y())
+        .padding_horizontal(BadgeTokens::current().pad_x())
+        .padding_vertical(shared::gap_xs())
 }
 
-/// A small solid pill tag: an accent-filled box with a short label in whichever ink reads on that fill. Non-interactive (unlike `button`) — pure presentation sugar over `StyledContainer` + `Text`; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
+/// A small solid pill tag: an accent-filled box with a short label, at a caption's share of the text around it, in whichever ink reads on that fill. Non-interactive (unlike `button`) — pure presentation sugar over `StyledContainer` + `Text`; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
 #[derive(Props)]
 pub struct BadgeProps {
     #[props(into, default)]
@@ -36,38 +54,41 @@ pub struct BadgeProps {
     /// Fill colour. `Color::TRANSPARENT` (the default) means "unset" -> the theme's `primary()`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
+    /// Amends the paint of the pill — the badge's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`BadgeTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// A small status label, filled from a semantic colour.
 pub fn badge(props: BadgeProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let BadgeProps { label, color } = props;
+    let BadgeProps {
+        label,
+        color,
+        style,
+    } = props;
 
     let ink_fill = color.clone();
     let label_widget = Text::declaring(
         move || label.get(),
         LayoutStyle::new(),
         move |inherited| {
-            shared::control_text(inherited, TEXT_RATIO)
-                .with_color(shared::ink_on(shared::resolve(&ink_fill, fill_default)))
+            shared::control_text(inherited, shared::CAPTION_RATIO)
+                .with_color(shared::ink_on(shared::resolve(&ink_fill, shared::accent)))
         },
     )?;
 
     let container = StyledContainer::new(
-        pill(),
-        move |_r| {
-            RectStyle::default()
-                .with_fill(shared::resolve(&color, fill_default))
-                .with_radius(BorderRadius::all(radius()))
+        pill_box(),
+        move |r| {
+            let rect = RectStyle::default()
+                .with_fill(shared::resolve(&color, shared::accent))
+                .with_radius(BorderRadius::all(BadgeTokens::current().radius(r)));
+            amend_surface(rect, &style)
         },
         vec![box_item(label_widget)],
     )?
-    .styled_by(pill);
+    .styled_by(pill_box);
     Ok(box_item(container))
-}
-
-/// The default pill fill when `color` is unset: the theme's primary accent, matching `button`'s own default.
-fn fill_default() -> Color {
-    shared::accent()
 }
 
 #[cfg(test)]

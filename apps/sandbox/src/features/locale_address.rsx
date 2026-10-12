@@ -18,9 +18,9 @@ col gap:20
             text "{t!(\"greeting\", name = \"Ada\")}" font_size:15 color:$theme.ink
             text "locale · {$active}   ·   address · {$address}" font_size:13 color:$theme.primary
             row gap:8
-                button label:"English" ghost on_press:(|| telar::set_locale("en"))
-                button label:"Español" ghost on_press:(|| telar::set_locale("es"))
-                button label:"العربية" ghost on_press:(|| telar::set_locale("ar"))
+                button label:"English" variant:ButtonVariant::Ghost on_press:(|| telar::set_locale("en"))
+                button label:"Español" variant:ButtonVariant::Ghost on_press:(|| telar::set_locale("es"))
+                button label:"العربية" variant:ButtonVariant::Ghost on_press:(|| telar::set_locale("ar"))
             text "set_locale rewrites the entry shown in the new locale: the page and the anchor stay, and no entry is added, so back still leaves the page. The choice is kept for the next run." font_size:12 color:$theme.muted
         code_line code:"follow_location_locale([\"en\", \"es\", \"ar\"], \"en\")   ·   set_locale(\"es\")"
     example title:"A link to this place in another language"

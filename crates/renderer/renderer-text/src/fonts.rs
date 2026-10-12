@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 
 use cosmic_text::{FontSystem, fontdb};
-use renderer_core::{FontAsset, FontConfig, FontSource, FontStyle};
+use renderer_core::{FontAsset, FontConfig, FontSource, FontSources, FontStyle, GenericFamilies};
 
 use crate::measure::ShaperMetrics;
 
@@ -66,6 +66,36 @@ impl Fonts {
     pub fn family_names(&self) -> &[String] {
         self.listed.get_or_init(|| listed_families(&self.db))
     }
+
+    /// What these faces were loaded from and how they resolve each generic family, for [`install_sources`] to load again in another copy of this crate.
+    pub fn sources(&self) -> FontSources {
+        FontSources {
+            system_fonts: self.sources.system_scan,
+            dirs: self.sources.dirs.clone(),
+            faces: self.sources.faces.clone(),
+            sans_serif_family_candidates: self.families.clone(),
+            generic_families: generic_families(&self.db),
+        }
+    }
+}
+
+fn generic_families(db: &fontdb::Database) -> GenericFamilies {
+    let name = |family: fontdb::Family| db.family_name(&family).to_string();
+    GenericFamilies {
+        serif: name(fontdb::Family::Serif),
+        sans_serif: name(fontdb::Family::SansSerif),
+        monospace: name(fontdb::Family::Monospace),
+        cursive: name(fontdb::Family::Cursive),
+        fantasy: name(fontdb::Family::Fantasy),
+    }
+}
+
+fn resolve_generic_families(db: &mut fontdb::Database, families: &GenericFamilies) {
+    db.set_serif_family(families.serif.as_str());
+    db.set_sans_serif_family(families.sans_serif.as_str());
+    db.set_monospace_family(families.monospace.as_str());
+    db.set_cursive_family(families.cursive.as_str());
+    db.set_fantasy_family(families.fantasy.as_str());
 }
 
 fn listed_families(db: &fontdb::Database) -> Vec<String> {
@@ -123,6 +153,66 @@ pub fn add_faces(faces: Vec<FontAsset>) -> Arc<Fonts> {
             ..FaceSources::none()
         },
         None,
+    )
+}
+
+/// What the installed faces were loaded from and how they resolve each generic family, or `None` while nothing has installed any. Asking loads nothing.
+pub fn installed_sources() -> Option<FontSources> {
+    INSTALLED
+        .read()
+        .expect("font database lock")
+        .as_ref()
+        .map(|fonts| fonts.sources())
+}
+
+/// Loads the faces `sources` names and resolves each generic family as they say, so this copy of the crate sets text in exactly the faces the copy that described them does.
+///
+/// A hot-reloaded library links a copy of its own, whose database starts empty. Loading one itself, it lacks the application's faces and resolves the generic families as a bare platform scan does rather than as the host's configuration did, so it lays text out in a face other than the one the host draws it in. Additive like [`install`]: what is already loaded stays.
+pub fn install_sources(sources: FontSources) -> Arc<Fonts> {
+    renderer_core::set_default_text_metrics(ShaperMetrics);
+    install_sources_into(
+        &mut INSTALLED.write().expect("font database lock"),
+        &FACES_GENERATION,
+        sources,
+    )
+}
+
+fn install_sources_into(
+    slot: &mut Option<Arc<Fonts>>,
+    generation: &AtomicU64,
+    sources: FontSources,
+) -> Arc<Fonts> {
+    let FontSources {
+        system_fonts,
+        dirs,
+        faces,
+        sans_serif_family_candidates,
+        generic_families: generic,
+    } = sources;
+    let wanted = FaceSources {
+        system_scan: system_fonts,
+        dirs,
+        faces,
+    };
+    let loaded = add_into(slot, generation, wanted, Some(sans_serif_family_candidates));
+    if generic_families(&loaded.db) == generic {
+        return loaded;
+    }
+    let mut db = loaded.db.clone();
+    resolve_generic_families(&mut db, &generic);
+    // A generic family resolving to another face changes what a shaper already built sets text in, as a face arriving does.
+    let faces = generation.fetch_add(1, Ordering::AcqRel) + 1;
+    renderer_core::invalidate_text_metrics();
+    replace(
+        slot,
+        Fonts {
+            locale: loaded.locale.clone(),
+            db,
+            sources: loaded.sources.clone(),
+            families: loaded.families.clone(),
+            faces,
+            listed: loaded.listed.clone(),
+        },
     )
 }
 

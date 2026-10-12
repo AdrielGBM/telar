@@ -11,6 +11,7 @@ use telar::{
 };
 use telar_components::{
     DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer, split_pane,
+    window_edges,
 };
 use telar_devtools::{use_workbench_tokens, workbench_fill};
 
@@ -20,6 +21,7 @@ use crate::state::{
     ViewMode, WorkshopState,
 };
 use crate::strings::{self, PANELS, PREVIEWS, RESIZE_PANELS, RESIZE_SIDEBAR, WORKSPACE};
+use crate::top_bar::Frame;
 use crate::view_switch::view_key;
 use crate::{canvas, docs, matrix, panels, sidebar, top_bar};
 
@@ -29,6 +31,15 @@ pub(crate) fn shell(
     state: &WorkshopState,
     project_name: Option<String>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    shell_in(state, project_name, Frame::CURRENT)
+}
+
+/// The workshop in a window framed as `frame` says: one the workshop frames itself has its borders to resize it by, over everything else.
+pub(crate) fn shell_in(
+    state: &WorkshopState,
+    project_name: Option<String>,
+    frame: Frame,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let divider = StyledContainer::new(
         LayoutStyle::new().height(DIVIDER).flex_shrink(0.0),
         |_| RectStyle::default().with_fill(use_workbench_tokens().border_subtle),
@@ -36,11 +47,14 @@ pub(crate) fn shell(
     )?;
     let keymap = Keymap::new(state);
     let mut regions = vec![
-        top_bar::top_bar(state, &keymap, project_name)?,
+        top_bar::top_bar(state, &keymap, project_name, frame)?,
         box_item(divider),
         body(state)?,
     ];
     regions.extend(keymap.overlays()?);
+    if frame == Frame::Own {
+        regions.push(window_edges()?);
+    }
     let root = StyledContainer::new(
         LayoutStyle::new()
             .flex_column()

@@ -6,10 +6,10 @@ element group
       element group
         element group
           element spinbutton
-            rect 361,288 78x24 fill=#f5f7fcff radius=10
+            rect 357,286 86x28 fill=#f5f7fcff radius=10
             element group
-              matrix 1,0,0,1,369,292
-                text 0,0 39x16.8 "Width" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+              matrix 1,0,0,1,369,286
+                text 0,5 39x16.8 "Width" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
               end
             end
             element group
@@ -19,9 +19,9 @@ element group
             end
           end
           element group
-            rect 361,288 0x0 radius=10
+            rect 357,286 0x0 radius=10
             element group
-              matrix 1,0,0,1,361,288
+              matrix 1,0,0,1,357,286
                 text 0,0 0x0 "" size=14 family=sans-serif weight=400 color=#171a2eff
               end
             end

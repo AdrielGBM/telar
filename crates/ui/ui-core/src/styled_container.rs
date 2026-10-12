@@ -1111,37 +1111,35 @@ impl Component for StyledContainer {
             .into_iter()
             .flatten()
             .any(focus::is_focus_visible);
-        let painted = match &self.state.focus {
+        let (painted, inset_ring) = match &self.state.focus {
             Some(ring) if shows_focus => {
                 let base = style(r);
                 let ring = ring(r);
                 let band = self.state.default_ring.then(cell_focus_band).flatten();
-                RectStyle {
+                let offset = use_theme_tokens().focus_ring_offset();
+                let inset_ring = ring
+                    .border
+                    .filter(|_| offset > 0.0)
+                    .and_then(|border| inset_focus_ring(r, base.radius, border, offset));
+                let painted = RectStyle {
                     fill: ring.fill.or(base.fill).or(band),
-                    border: ring.border.or(base.border),
+                    border: match inset_ring {
+                        Some(_) => base.border,
+                        None => ring.border.or(base.border),
+                    },
                     shadow: ring.shadow.or(base.shadow),
                     // The ring sits on the box's shape rather than choosing one of its own.
                     radius: base.radius,
-                }
+                };
+                (painted, inset_ring)
             }
-            _ => style(r),
+            _ => (style(r), None),
         };
-        let background = RenderNode::rect(
-            Rect {
-                x: r.x,
-                y: r.y,
-                width: r.width,
-                height: r.height,
-            },
-            painted,
-        );
+        let background = std::iter::once(RenderNode::rect(r, painted)).chain(inset_ring);
         let content = match &self.dyn_host {
-            Some(host) => {
-                RenderNode::group(std::iter::once(background).chain(host.child_boundaries()))
-            }
+            Some(host) => RenderNode::group(background.chain(host.child_boundaries())),
             None => RenderNode::group(
-                std::iter::once(background)
-                    .chain(self.children.iter().map(|c| c.segment.boundary())),
+                background.chain(self.children.iter().map(|c| c.segment.boundary())),
             ),
         };
         let opacity = self.opacity.as_ref().map_or(1.0, |o| o());
@@ -1343,7 +1341,27 @@ impl Drop for StyledContainer {
 ///
 /// A ring and not a fill, because it answers a different question from hover or pressed — *where the keys are going*, not what the box is doing — and has to survive being layered over whichever of those won. Its radius is deliberately absent: the compositing path takes that from the box, since a ring sits on a shape it does not get to reshape.
 pub(crate) fn default_focus_ring() -> RectStyle {
-    RectStyle::default().with_border(Border::uniform(use_theme_tokens().primary(), 2.0))
+    RectStyle::default().with_border(focus_ring_border())
+}
+
+/// The theme's ring as a frame, for a component that draws a keyboard cursor on a box that is not itself focused: the row of a list, the item of a toolbar.
+pub fn focus_ring_border() -> Border {
+    let tokens = use_theme_tokens();
+    Border::uniform(tokens.focus_ring(), tokens.focus_ring_width())
+}
+
+/// The ring drawn `offset` inside the box, on a shape of its own that follows the box's corners. `None` where the box is too small to hold it.
+fn inset_focus_ring(
+    rect: Rect,
+    radius: renderer_core::BorderRadius,
+    border: Border,
+    offset: f32,
+) -> Option<RenderNode> {
+    let (inner, radius) = renderer_core::border_inner_shape(rect, radius, [offset; 4])?;
+    Some(RenderNode::rect(
+        inner,
+        RectStyle::default().with_border(border).with_radius(radius),
+    ))
 }
 
 /// What the theme's ring adds on a surface drawn in whole cells, under a box that has no fill of its own.

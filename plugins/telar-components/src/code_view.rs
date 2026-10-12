@@ -8,8 +8,9 @@ use std::time::Duration;
 use telar::{
     Accessible, Border, BorderRadius, Canvas, Children, Color, Container, Declared, FontFamily,
     FontStyle, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, Rect,
-    RectStyle, RenderNode, ShapeStyle, Span, StyledContainer, Text, TextStyle, TextWrap, Timer,
-    box_item, focus::Role, inherited_text_style, line_box, memo, run_after, signal,
+    RectStyle, RenderNode, ShapeStyle, Span, StyledContainer, SurfaceAmendment, Text, TextStyle,
+    TextWrap, Timer, amend_surface, box_item, focus::Role, inherited_text_style, line_box, memo,
+    run_after, signal,
 };
 
 use crate::line_gutter::LineGutter;
@@ -20,11 +21,37 @@ use crate::{IconButtonProps, icon_button};
 const TAB_WIDTH: usize = 4;
 /// Monospace's share of the text around it: a face whose every glyph is as wide as its widest reads larger than proportional type of the same size.
 const MONO_RATIO: f32 = 0.92;
-const MARK_ALPHA: f32 = 0.14;
 const COPIED_FOR: Duration = Duration::from_millis(1500);
 
+/// A code block's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the theme role named beside it, read when the block paints and lays out.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CodeViewTokens {
+    /// Corner radius. `None` is the theme's `radius_surface`.
+    pub radius: Option<f32>,
+    /// Space between the block's edge and its lines, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    pub pad: Option<f32>,
+}
+
+impl CodeViewTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_surface)
+    }
+
+    pub fn pad(&self) -> f32 {
+        self.pad
+            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+    }
+}
+
 fn pad() -> f32 {
-    shared::spacing()
+    CodeViewTokens::current().pad()
 }
 
 /// What a run of source is, as far as its colour goes. The caller decides which runs are which; nothing here parses a language.
@@ -100,6 +127,9 @@ pub struct CodeViewProps {
     /// The marked lines' wash. `Color::TRANSPARENT` (the default) falls back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
+    /// Amends the paint of the block's frame — its **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`CodeViewTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// The theme's colour for each kind of token, read from the tokens every theme answers.
@@ -109,9 +139,9 @@ fn theme_token_style(kind: TokenKind) -> Declared {
         TokenKind::Plain => Declared::default(),
         TokenKind::Keyword => Declared::default()
             .with_color(tokens.primary())
-            .with_font_weight(600),
+            .with_font_weight(shared::strong_weight()),
         TokenKind::Type => Declared::default().with_color(tokens.info()),
-        TokenKind::Function => Declared::default().with_font_weight(600),
+        TokenKind::Function => Declared::default().with_font_weight(shared::strong_weight()),
         TokenKind::String => Declared::default().with_color(tokens.success()),
         TokenKind::Number => Declared::default().with_color(tokens.warning()),
         TokenKind::Comment => Declared::default()
@@ -201,6 +231,7 @@ pub fn code_view(
         max_height,
         token_style,
         color,
+        style,
     } = props;
     let first_line = first_line.max(1);
     let prepared = {
@@ -232,7 +263,7 @@ pub fn code_view(
         LayoutStyle::new().absolute_fill(),
         move |rect, inherited| {
             let line = line_box(&code_text(inherited));
-            let wash = shared::resolve(&color, shared::accent).with_alpha(MARK_ALPHA);
+            let wash = shared::resolve(&color, shared::accent).with_alpha(shared::held_wash().a);
             let lines = prepared.with(|prepared| prepared.lines) as u32;
             let bands = highlighted
                 .get()
@@ -266,7 +297,7 @@ pub fn code_view(
         LayoutStyle::new()
             .flex_row()
             .padding_all(pad())
-            .gap(pad() * 1.5)
+            .gap(shared::gap_lg())
     };
     let content = Container::new(content_box(), row)?.styled_by(content_box);
     let viewport_box = if max_height > 0.0 {
@@ -282,12 +313,7 @@ pub fn code_view(
     }
     let frame = StyledContainer::new(
         LayoutStyle::new().flex_column(),
-        |_r| {
-            RectStyle::default()
-                .with_fill(shared::surface_alt())
-                .with_border(Border::uniform(shared::border(), 1.0))
-                .with_radius(BorderRadius::all(shared::radius_md()))
-        },
+        move |_r| amend_surface(frame_paint(), &style),
         layers,
     )?
     .role(Role::Group);
@@ -295,6 +321,14 @@ pub fn code_view(
         Some(label) => box_item(frame.a11y_label(move || label.get())),
         None => box_item(frame),
     })
+}
+
+/// The frame's paint before the caller's amendment.
+fn frame_paint() -> RectStyle {
+    RectStyle::default()
+        .with_fill(shared::surface_alt())
+        .with_border(Border::uniform(shared::border(), shared::border_width()))
+        .with_radius(BorderRadius::all(CodeViewTokens::current().radius()))
 }
 
 fn copy_button(
@@ -326,13 +360,13 @@ fn copy_button(
             .build(),
         Children::default(),
     )?;
-    let corner = Container::new(
+    let corner_box = || {
         LayoutStyle::new()
             .absolute()
-            .inset_top(pad() * 0.5)
-            .inset_end(pad() * 0.5),
-        vec![button],
-    )?;
+            .inset_top(shared::gap_sm())
+            .inset_end(shared::gap_sm())
+    };
+    let corner = Container::new(corner_box(), vec![button])?.styled_by(corner_box);
     Ok(box_item(corner))
 }
 

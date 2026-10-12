@@ -5,20 +5,20 @@ element group
     element group
       element group
         element group
-          rect 145,251 511x98 fill=#ffffffff border=1 border-color=#e2e5eeff radius=12
+          rect 145,251 510x98 fill=#ffffffff border=1 border-color=#e2e5eeff radius=12
           element group
             matrix 1,0,0,1,161,267
-              text 0,0 479x19.2 "Header" size=16 family=sans-serif weight=400 color=#14161fff lang=en
+              text 0,0 478.22x19.2 "Header" size=16 family=sans-serif weight=400 color=#14161fff lang=en
             end
           end
           element group
             matrix 1,0,0,1,161,294
-              text 0,0 479x15.6 "A card is the standard surface panel." size=13 family=sans-serif weight=400 color=#686d82ff lang=en
+              text 0,0 478.22x15.6 "A card is the standard surface panel." size=13 family=sans-serif weight=400 color=#686d82ff lang=en
             end
           end
           element group
             matrix 1,0,0,1,161,318
-              text 0,0 479x15.6 "Bare children stack with the gap you pass; slot:\"header\" pins a header on top." size=13 family=sans-serif weight=400 color=#686d82ff lang=en
+              text 0,0 478.22x15.6 "Bare children stack with the gap you pass; slot:\"header\" pins a header on top." size=13 family=sans-serif weight=400 color=#686d82ff lang=en
             end
           end
         end

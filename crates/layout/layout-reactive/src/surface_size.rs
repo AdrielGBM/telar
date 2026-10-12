@@ -10,11 +10,12 @@ struct Sides {
     width: RwSignal<f32>,
     height: RwSignal<f32>,
     safe_area: RwSignal<Insets>,
+    maximized: RwSignal<bool>,
 }
 
 reactive_core::surface_local! {
     /// The active surface's size, in the logical units its layout is written in.
-    slot SIDES: Sides = Sides { width: signal(0.0), height: signal(0.0), safe_area: signal(Insets::default()) };
+    slot SIDES: Sides = Sides { width: signal(0.0), height: signal(0.0), safe_area: signal(Insets::default()), maximized: signal(false) };
     access with_sides, with_sides_ref;
     context SurfaceSizeContext, SurfaceSizeGuard;
 }
@@ -70,6 +71,19 @@ pub fn set_safe_area_insets(insets: Insets) {
 /// Reactive read of how far in from each edge the system keeps the active surface for itself: bars, a notch, rounded corners. Zero where nothing is kept, which is a desktop window, a terminal and a headless surface.
 pub fn use_safe_area_insets() -> Insets {
     sides().safe_area.get()
+}
+
+/// Records whether the window the active surface is drawn in is maximized. The runner calls it as the window is resized.
+pub fn set_surface_maximized(maximized: bool) {
+    let state = sides().maximized;
+    if state.peek() != maximized {
+        state.set(maximized);
+    }
+}
+
+/// Reactive read of whether the window the active surface is drawn in is maximized, for a title bar drawn by the app to offer restoring it. `false` wherever there is no window to maximize.
+pub fn use_surface_maximized() -> bool {
+    sides().maximized.get()
 }
 
 #[cfg(test)]

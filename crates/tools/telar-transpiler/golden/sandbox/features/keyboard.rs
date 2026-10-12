@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -56,7 +57,7 @@ pub fn keyboard(props: KeyboardProps, children: Children) -> Result<Box<dyn Layo
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_0 = {
-                                            let __node_3 = button(ButtonProps::props().label("Before").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pressed = pressed.clone(); move || pressed.update(|__v| *__v += 1) })).build(), Children::default())?;
+                                            let __node_3 = button(ButtonProps::props().label("Before").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pressed = pressed.clone(); move || pressed.update(|__v| *__v += 1) })).build(), Children::default())?;
                                             let __sbox_0 = {
                                                 let __text_0 = {
                                                     let level = level.clone();
@@ -68,7 +69,7 @@ pub fn keyboard(props: KeyboardProps, children: Children) -> Result<Box<dyn Layo
                                                 };
                                                 StyledContainer::new(LayoutStyle::new().flex_column().padding_horizontal(16.0).padding_vertical(10.0).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface_alt)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::all(8.0) } }, children![__text_0])?.focus_style({ let theme = theme.clone(); move |_| RectStyle { fill: None, border: Some(Border { paint: Paint::Solid(theme.get().primary), widths: [1.0; 4] }), shadow: None, radius: BorderRadius::zero() } }).on_press(move || ()).on_key({ let focused = focused.clone(); let level = level.clone(); move |key: &Key| -> bool { if !focused.get() { return false; } match key { Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => { level.set((level.get() + 1).min(10)); true } Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => { level.set((level.get() - 1).max(0)); true } _ => false } } }).on_focus({ let focused = focused.clone(); move |now| focused.set(now) }).consumes_keys(|| ::telar::ConsumedKeys::ARROWS).control(::telar::Role::Slider)
                                             };
-                                            let __node_4 = button(ButtonProps::props().label("After").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pressed = pressed.clone(); move || pressed.update(|__v| *__v += 1) })).build(), Children::default())?;
+                                            let __node_4 = button(ButtonProps::props().label("After").variant(ButtonVariant::Outline).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pressed = pressed.clone(); move || pressed.update(|__v| *__v += 1) })).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __sbox_0, __node_4])?
                                         };
                                         __children.push(box_item(__row_0));

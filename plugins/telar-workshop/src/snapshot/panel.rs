@@ -9,8 +9,8 @@ use telar::{
     use_theme_tokens,
 };
 use telar_components::{
-    BadgeProps, ButtonProps, CodeSpan, CodeViewProps, Tab, TokenKind, badge, button, code_view,
-    tab_list,
+    BadgeProps, ButtonProps, ButtonVariant, CodeSpan, CodeViewProps, Tab, TokenKind, badge, button,
+    code_view, tab_list,
 };
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_mono, workbench_muted};
 
@@ -83,7 +83,7 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
     button(
         ButtonProps::props()
             .label(strings::reactive(SNAPSHOT_RELOAD))
-            .ghost(true)
+            .variant(ButtonVariant::Ghost)
             .on_press(Rc::new(move || review.reload()))
             .build(),
         Children::default(),

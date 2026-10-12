@@ -7,8 +7,9 @@ use std::time::Duration;
 use telar::{
     Accessible, BorderRadius, Children, Clip, ClippedItem, Container, Cursor, Direction, DragAxis,
     Insets, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, NumericValue, Orientation, Props,
-    Reactive, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer, Transaction,
-    box_item, current_direction, drag_start, focus::Role, signal, step_factor, track_layout,
+    Reactive, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer,
+    SurfaceAmendment, Transaction, amend_surface, box_item, current_direction, drag_start,
+    focus::Role, signal, step_factor, track_layout,
 };
 use web_time::Instant;
 
@@ -18,6 +19,38 @@ use crate::strings;
 
 const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 const DRAG_THRESHOLD: f32 = 3.0;
+const DEFAULT_SIZE: f32 = 240.0;
+const DEFAULT_STEP: f32 = 16.0;
+
+/// A split pane's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the role named beside it, read when the splitter paints.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SplitPaneTokens {
+    /// Thickness of the splitter's bar at the regular control size, scaled with the control size in force. Its grab area is never thinner than [`metrics::MIN_TARGET`](crate::metrics::MIN_TARGET) whatever this is. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm).
+    pub thickness: Option<f32>,
+    /// Corner radius of the bar. `None` is a pill.
+    pub radius: Option<f32>,
+}
+
+impl SplitPaneTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn thickness(&self) -> f32 {
+        self.thickness.map_or_else(shared::gap_sm, |thickness| {
+            thickness * telar::control_scale()
+        })
+    }
+
+    /// The bar's corner for a bar laid out at `rect`.
+    pub fn radius(&self, rect: Rect) -> BorderRadius {
+        self.radius
+            .map_or_else(|| shared::pill(rect), BorderRadius::all)
+    }
+}
 
 /// How the two panes sit relative to each other.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, telar::PreviewArg)]
@@ -199,6 +232,9 @@ pub struct SplitPaneProps {
     /// A landmark around the pane that takes the rest and the splitter, for a split whose panes are landmarks: a reader then finds the splitter inside a region rather than between two, collapsed or not. The sized pane stays the caller's to announce. `None` (the default) leaves the splitter between the panes.
     #[props(some, default)]
     pub region: Option<SplitRegion>,
+    /// Amends the paint of the splitter's bar — the split's **principal surface** — at rest and while dragged. See [`telar::SurfaceStyle`] for when a theme token or [`SplitPaneTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 pub fn split_pane(
@@ -219,13 +255,14 @@ pub fn split_pane(
         step,
         label,
         region,
+        style,
     } = props;
     let default_size = if default_size > 0.0 {
         default_size
     } else {
-        240.0
+        DEFAULT_SIZE
     };
-    let step = if step > 0.0 { step } else { 16.0 };
+    let step = if step > 0.0 { step } else { DEFAULT_STEP };
     let size = size.unwrap_or_else(|| signal(default_size));
     let collapsed = collapsed.unwrap_or_else(|| signal(false));
     let transaction = Transaction::new(size);
@@ -302,14 +339,15 @@ pub fn split_pane(
 
     let bar = StyledContainer::new(
         bar_box(direction),
-        move |_| {
+        move |r| {
             let fill = match dragging.get() {
                 true => shared::accent(),
                 false => shared::border(),
             };
-            RectStyle::default()
+            let rest = RectStyle::default()
                 .with_fill(fill)
-                .with_radius(BorderRadius::all(bar_thickness() / 2.0))
+                .with_radius(SplitPaneTokens::current().radius(r));
+            amend_surface(rest, &style)
         },
         vec![],
     )?
@@ -433,7 +471,7 @@ fn landmark(
 }
 
 fn bar_thickness() -> f32 {
-    (shared::spacing() * 0.75).max(4.0)
+    SplitPaneTokens::current().thickness()
 }
 
 /// How far the splitter's grab area reaches past each long side of its bar.

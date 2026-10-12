@@ -193,7 +193,7 @@ fn within<T: Any + 'static>(
     Ok(Slots { items })
 }
 
-/// A child mounted under the owner that provided its context, rather than under the container it is placed in, so it draws and takes events with that context in force, as a [`ThemeProvider`](crate::ThemeProvider) does for its theme. Adds no layout node.
+/// A child mounted under the owner that provided its context, rather than under the container it is placed in, so it draws and takes events with that context in force, as a [`provide_theme`](crate::provide_theme) does for its theme. Adds no layout node.
 struct InContext {
     child: Child,
 }

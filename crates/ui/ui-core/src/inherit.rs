@@ -79,7 +79,7 @@ struct Cascade {
     declared: FxHashMap<NodeId, RwSignal<Declared>>,
     /// Bumped only when nodes start or stop declaring, not on value changes, so a value write reruns only its own readers.
     structure: RwSignal<u64>,
-    /// The nodes a [`ThemeProvider`](crate::ThemeProvider) put a theme of their own on. A walk stops at the nearest one and starts from that theme's root row, so a themed card inside a bar is set the way it would be in a window of its own, rather than in whatever the bar declared for its own text.
+    /// The nodes a [`provide_theme`](crate::provide_theme) put a theme of their own on. A walk stops at the nearest one and starts from that theme's root row, so a themed card inside a bar is set the way it would be in a window of its own, rather than in whatever the bar declared for its own text.
     themed: FxHashMap<NodeId, ThemeBoundary>,
     /// The root rows recently resolved, kept so nodes that resolve to the same value share it rather than each holding a copy. Compared by value because a theme swap and a light/dark flip both change a row, and neither is something the cascade can be told about.
     roots: Vec<Rc<Inherited>>,

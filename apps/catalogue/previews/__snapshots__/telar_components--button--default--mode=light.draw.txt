@@ -5,10 +5,10 @@ element group
     element group
       element group
         element button
-          rect 370,286 61x28 fill=#4261edff radius=10
+          rect 372,286 56x28 fill=#4261edff radius=10
           element group
-            matrix 1,0,0,1,384,292
-              text 0,0 33x16.8 "Save" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+            matrix 1,0,0,1,384,286
+              text 0,5 32.41x16.8 "Save" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
             end
           end
         end

@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -427,7 +428,7 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
                                             Ok(Box::new(__col_13) as Box<dyn LayoutItem>)
                                         })?;
                                         __children.push(box_item(__col_13));
-                                        let __node_17 = button(ButtonProps::props().label("Switch this one").ghost(true).on_press(std::rc::Rc::new({ let night = night.clone(); move || night.toggle() })).build(), Children::default())?;
+                                        let __node_17 = button(ButtonProps::props().label("Switch this one").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let night = night.clone(); move || night.toggle() })).build(), Children::default())?;
                                         __children.push(box_item(__node_17));
                                     }
                                     __slots.extend_default(__children);

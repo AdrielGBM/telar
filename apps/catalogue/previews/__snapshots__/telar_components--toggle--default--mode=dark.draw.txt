@@ -5,18 +5,18 @@ element group
     element group
       element group
         element switch
-          rect 333,289 134x22
+          rect 336,286 128x28
           element group
-            rect 333,289 40x22 fill=#7394ffff radius=11
+            rect 336,290 36x20 fill=#7394ffff radius=10
             element group
-              matrix 1,0,0,1,18,0
-                rect 336,292 16x16 fill=#ffffffff radius=8
+              matrix 1,0,0,1,16,0
+                rect 338,292 16x16 fill=#0d0f1fff radius=8
               end
             end
           end
           element group
-            matrix 1,0,0,1,383,289
-              text 0,2 84x16.8 "Notifications" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+            matrix 1,0,0,1,380,286
+              text 0,5 84x16.8 "Notifications" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
             end
           end
         end

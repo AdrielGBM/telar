@@ -69,7 +69,7 @@ fn on_close_renders_and_fires_on_tap() {
 
     let r = rect.get();
     let (cx, cy) = (
-        (r.x + r.width - pad_x() - 3.0) as f64,
+        (r.x + r.width - ChipTokens::current().pad_x() - 3.0) as f64,
         (r.y + r.height / 2.0) as f64,
     );
     chip.on_event(&Event::PointerPressed {
@@ -104,4 +104,78 @@ fn empty_label_builds_without_panic() {
     .unwrap();
     let tree = ComponentList::new(chip);
     let _ = tree.commands();
+}
+
+fn mounted(props: ChipProps) -> (ComponentList, telar::Rect) {
+    crate::test_support::fresh_layout_runtime();
+    let chip = chip(props, Children::default()).unwrap();
+    let rect = track_layout(chip.layout_node()).unwrap();
+    compute_layout(
+        chip.layout_node(),
+        AvailableSpace::MaxContent,
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    (ComponentList::new(chip), rect.get())
+}
+
+#[test]
+fn a_chip_is_a_pill_until_the_chip_tokens_name_a_radius() {
+    let laid_out = Rc::new(Cell::new(telar::Rect::default()));
+    let at = laid_out.clone();
+    crate::test_support::assert_corner_follows_the_role_until_the_tokens_name_one(
+        move || {
+            let (tree, rect) = mounted(ChipProps::props().label("Draft").build());
+            at.set(rect);
+            tree
+        },
+        |tree| crate::test_support::first_painted(tree).radius,
+        move |_, _| shared::pill(laid_out.get()),
+        |radius| ChipTokens {
+            radius: Some(radius),
+            ..ChipTokens::default()
+        },
+    );
+}
+
+#[test]
+fn a_style_amendment_reshapes_the_pill() {
+    let flat: SurfaceAmendment = Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(0.0)));
+    let (tree, _) = mounted(ChipProps::props().label("Draft").style(flat).build());
+    let painted = crate::test_support::first_painted(&tree);
+    assert_eq!(painted.radius, BorderRadius::all(0.0));
+    assert!(painted.border.is_some(), "the rest of the paint is kept");
+}
+
+/// A chip's padding is a length at the regular size, so a larger control size pads it in proportion.
+#[test]
+fn the_padding_scales_with_the_control_size() {
+    crate::test_support::fresh_layout_runtime();
+    let chip = telar::provide_control_size(telar::ControlSize::Large, || {
+        chip(
+            ChipProps::props().label("Draft").build(),
+            Children::default(),
+        )
+    })
+    .unwrap();
+    let rect = track_layout(chip.layout_node()).unwrap();
+    compute_layout(
+        chip.layout_node(),
+        AvailableSpace::MaxContent,
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    let tree = ComponentList::new(chip);
+    let label = tree
+        .commands()
+        .iter()
+        .find_map(|c| match c {
+            DrawCommand::Text { text, rect, .. } if text.as_ref() == "Draft" => Some(*rect),
+            _ => None,
+        })
+        .expect("the chip draws its label");
+    assert_eq!(
+        rect.get().width - label.width,
+        2.0 * shared::gap_md() * 1.25
+    );
 }

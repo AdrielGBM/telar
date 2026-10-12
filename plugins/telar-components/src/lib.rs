@@ -36,6 +36,8 @@ mod code_view;
 mod color_picker;
 #[cfg(feature = "overlays")]
 mod command_palette;
+#[cfg(test)]
+mod consistency_test;
 #[cfg(feature = "overlays")]
 mod context_menu;
 #[cfg(feature = "overlays")]
@@ -76,6 +78,8 @@ mod split_pane;
 #[cfg(feature = "advanced")]
 mod stepper;
 mod strings;
+#[cfg(test)]
+mod style_scan_test;
 mod swatches;
 mod tabs;
 #[cfg(test)]
@@ -92,74 +96,114 @@ mod tooltip;
 mod tree_view;
 mod type_ahead;
 #[cfg(feature = "chrome")]
+mod window_edges;
+#[cfg(feature = "chrome")]
 mod window_frame;
 
 #[cfg(feature = "advanced")]
-pub use accordion::{AccordionProps, accordion};
-pub use badge::{BadgeProps, badge};
-pub use button::{ButtonProps, button};
-pub use checkbox::{CheckboxProps, checkbox};
-pub use chip::{ChipProps, chip};
+pub use accordion::{AccordionProps, AccordionTokens, accordion};
+pub use badge::{BadgeProps, BadgeTokens, badge};
+pub use button::{ButtonProps, ButtonTokens, ButtonVariant, button};
+pub use checkbox::{CheckboxProps, CheckboxTokens, checkbox};
+pub use chip::{ChipProps, ChipTokens, chip};
 #[cfg(feature = "workbench")]
-pub use code_view::{CodeSpan, CodeViewProps, CopyHandler, TokenKind, TokenStyler, code_view};
+pub use code_view::{
+    CodeSpan, CodeViewProps, CodeViewTokens, CopyHandler, TokenKind, TokenStyler, code_view,
+};
 #[cfg(feature = "workbench")]
-pub use color_picker::{ColorPickerProps, color_picker};
+pub use color_picker::{ColorPickerProps, ColorPickerTokens, color_picker};
 #[cfg(feature = "overlays")]
-pub use command_palette::{Command, CommandPaletteProps, RunHandler, command_palette};
-#[cfg(feature = "overlays")]
-pub use context_menu::{
-    ContextMenuProps, Entry as MenuEntry, MenuCustomProps, MenuRowProps, MenuSeparatorProps,
-    MenuStyle, MenuSubProps, context_menu, menu_custom, menu_row, menu_separator, menu_sub,
+pub use command_palette::{
+    Command, CommandPaletteProps, CommandPaletteTokens, RunHandler, command_palette,
 };
 #[cfg(feature = "overlays")]
-pub use drawer::{DrawerProps, drawer};
+pub use context_menu::{
+    ContextMenuProps, ContextMenuTokens, Entry as MenuEntry, MenuCustomProps, MenuRowProps,
+    MenuSeparatorProps, MenuSubProps, context_menu, menu_custom, menu_row, menu_separator,
+    menu_sub,
+};
+#[cfg(feature = "overlays")]
+pub use drawer::{DrawerProps, DrawerTokens, drawer};
 #[cfg(feature = "overlays")]
 pub use fuzzy::{FuzzyMatch, fuzzy_match};
-pub use handle::{HandleProps, ToPoint, ToValue, handle};
+pub use handle::{HandleProps, HandleTokens, ToPoint, ToValue, handle};
 pub use heading::{HeadingProps, heading};
 #[cfg(feature = "workbench")]
-pub use icon_button::{IconButtonProps, icon_button};
+pub use icon_button::{IconButtonProps, IconButtonTokens, icon_button};
 #[cfg(feature = "overlays")]
-pub use kbd::{KbdProps, kbd};
+pub use kbd::{KbdProps, KbdTokens, kbd};
 pub use line_gutter::LineGutter;
-pub use list::{GroupProps, ItemProps, SeparatorProps, group, item, separator};
+pub use list::{GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator};
 #[cfg(feature = "overlays")]
-pub use menu::{MenuProps, menu};
+pub use menu::{MenuProps, MenuTokens, menu};
 #[cfg(feature = "overlays")]
-pub use modal::{ModalProps, modal};
-pub use progress::{ProgressProps, progress};
-pub use radio::{RadioProps, radio};
+pub use modal::{ModalProps, ModalTokens, modal};
+pub use progress::{ProgressProps, ProgressTokens, progress};
+pub use radio::{RadioProps, RadioTokens, radio};
 #[cfg(feature = "advanced")]
 pub use reorder_zones::{ReorderGroup, ReorderZoneProps, Slot, apply_zone_move};
 #[cfg(feature = "advanced")]
 pub use reorderable::{ItemBuilder, ReorderableProps, reorderable};
-pub use scrub_field::{DOUBLE_CLICK, Format, Parse, ScrubFieldProps, scrub_field};
+pub use scrub_field::{
+    DOUBLE_CLICK, Format, Parse, ScrubFieldProps, ScrubFieldTokens, scrub_field,
+};
 pub use section::{SectionProps, section};
-pub use select::{SelectProps, select};
-pub use slider::{SliderProps, slider};
-pub use spinner::{SpinnerProps, spinner};
+pub use select::{SelectProps, SelectTokens, select};
+pub use slider::{SliderProps, SliderTokens, slider};
+pub use spinner::{SpinnerProps, SpinnerTokens, spinner};
 #[cfg(feature = "workbench")]
-pub use split_pane::{SizedPane, SplitDirection, SplitPaneProps, SplitRegion, split_pane};
+pub use split_pane::{
+    SizedPane, SplitDirection, SplitPaneProps, SplitPaneTokens, SplitRegion, split_pane,
+};
 #[cfg(feature = "advanced")]
-pub use stepper::{StepperProps, stepper};
-pub use swatches::{SwatchesProps, swatches};
-pub use tabs::{Tab, TabsProps, tab_list, tabs};
-pub use text_field::{FieldKeyHandler, TextFieldProps, text_field};
+pub use stepper::{StepperProps, StepperTokens, stepper};
+pub use swatches::{SwatchesProps, SwatchesTokens, swatches};
+pub use tabs::{Tab, TabsProps, TabsTokens, tab_list, tabs};
+pub use text_field::{FieldKeyHandler, TextFieldProps, TextFieldTokens, text_field};
 #[cfg(feature = "overlays")]
 pub use toast::{
-    Toast, ToastAction, ToastId, ToastKind, ToastPlacement, ToasterProps, Toasts, show_toast,
-    toaster, toasts,
+    Toast, ToastAction, ToastId, ToastKind, ToastPlacement, ToastTokens, ToasterProps, Toasts,
+    show_toast, toaster, toasts,
 };
-pub use toggle::{ToggleProps, toggle};
+pub use toggle::{ToggleProps, ToggleTokens, toggle};
 #[cfg(feature = "workbench")]
 pub use toolbar::{ToolbarProps, toolbar};
 #[cfg(feature = "overlays")]
-pub use tooltip::{TooltipProps, tooltip};
+pub use tooltip::{TooltipProps, TooltipTokens, tooltip};
 #[cfg(feature = "workbench")]
-pub use tree_view::{SelectHandler, TrailingBuilder, TreeNode, TreeViewProps, tree_view};
+pub use tree_view::{
+    SelectHandler, TrailingBuilder, TreeNode, TreeViewProps, TreeViewTokens, tree_view,
+};
+#[cfg(feature = "chrome")]
+pub use window_edges::window_edges;
 #[cfg(feature = "chrome")]
 pub use window_frame::{MIN_FRAME_SIZE, SurfaceFrameStyle, WindowControls, window_frame};
 
+/// The geometry, washes, type and marks every catalogue control is drawn from, for an application drawing controls of its own that have to sit beside the catalogue's.
+///
+/// Each one reads the theme in force — a role such as `radius_control` or `highlight_low`, never a literal — and every length is scaled by the control size in force (`set_control_size`, a surface's own, or `provide_control_size` for a subtree), so a control built from these matches the catalogue's at any theme and any density:
+///
+/// ```ignore
+/// use telar_components::metrics;
+///
+/// let shell = LayoutStyle::new()
+///     .min_height(metrics::control_height())
+///     .padding_horizontal(metrics::control_pad_x());
+/// let paint = |_r| RectStyle::default()
+///     .with_border(Border::uniform(border(), metrics::border_width()))
+///     .with_radius(BorderRadius::all(metrics::radius_control()));
+/// ```
+///
+/// Read them inside the closure that builds the style, so a theme switch or a density change re-runs it.
+pub mod metrics {
+    pub use crate::shared::{
+        MIN_TARGET, Mark, border_width, border_width_strong, control_height, control_pad_x,
+        control_text, focus_ring, gap_lg, gap_md, gap_sm, gap_xl, gap_xs, held_wash, hover_wash,
+        hovered_fill, icon_pad, icon_size, ink_on, mark, measure, panel_pad, pill, pill_radius,
+        pressed_fill, pressed_wash, radius_control, radius_dialog, radius_item, radius_surface,
+        row_height, spacing, strong_weight, thumb_on,
+    };
+}
 telar::__previews! {
     mod previews;
 

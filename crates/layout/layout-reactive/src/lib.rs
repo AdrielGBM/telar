@@ -11,8 +11,9 @@ pub use direction::{
     use_direction, use_surface_direction,
 };
 pub use surface_size::{
-    SurfaceSizeContext, SurfaceSizeGuard, set_safe_area_insets, set_surface_size, surface_size,
-    use_safe_area_insets, use_surface_height, use_surface_size, use_surface_width,
+    SurfaceSizeContext, SurfaceSizeGuard, set_safe_area_insets, set_surface_maximized,
+    set_surface_size, surface_size, use_safe_area_insets, use_surface_height,
+    use_surface_maximized, use_surface_size, use_surface_width,
 };
 
 pub use context::{
@@ -24,7 +25,7 @@ pub use context::{
     overlay_viewport, parent, record_nodes, relayout_if_dirty, remeasure_since, remove_node,
     reset_layout_runtime, set_children, set_container_row, set_display, set_layout_style,
     set_leading_margin, set_min_height, set_overlay_host, set_scroll_content, set_sticky_view,
-    track_display_none, track_layout, track_parent,
+    track_display_none, track_layout, track_parent, unrounded_width,
 };
 pub use layout_core::{
     AlignItems, AvailableSpace, Css, Direction, JustifyContent, LayoutError, LayoutStyle,

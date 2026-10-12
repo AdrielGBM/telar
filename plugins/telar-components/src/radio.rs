@@ -3,14 +3,58 @@
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, Border, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, box_item,
-    focus::Role, signal,
+    AlignItems, Border, Children, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
+    Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
+    amend_surface, box_item, focus::Role, signal,
 };
 
 use crate::shared;
 
-/// One radio button in a group: an 18px ring that fills its centre dot (and accents its border) while the bound `selected` signal equals this button's `value`; tapping the row sets `selected` to `value` (and fires `on_select`). A radio *group* is several `radio`s sharing one `selected` signal with different `value`s. High-level sugar over the primitives (`box` + `on_press` + a reactive fill); lives in `telar-components`, not the kernel. `selected` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal, so it never matches — a lone default radio), `Some` is the shared group signal.
+/// A radio button's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the role named beside it, read when the radio paints. The ring and its dot are pills at whatever size they are laid out.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RadioTokens {
+    /// Diameter of the ring at the regular control size, scaled with the control size in force. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
+    pub size: Option<f32>,
+    /// Width of the ring. `None` is the theme's `border_width_strong`.
+    pub border_width: Option<f32>,
+}
+
+impl RadioTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn size(&self) -> f32 {
+        self.size
+            .map_or_else(shared::icon_size, |size| size * telar::control_scale())
+    }
+
+    pub fn border_width(&self) -> f32 {
+        self.border_width
+            .unwrap_or_else(shared::border_width_strong)
+    }
+}
+
+fn ring_style() -> LayoutStyle {
+    let size = RadioTokens::current().size();
+    LayoutStyle::new()
+        .flex_row()
+        .width(size)
+        .height(size)
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::CENTER)
+}
+
+/// The dot stands inside the ring by the step between the parts of one control, as a checkbox's mark does inside its box.
+fn dot_style() -> LayoutStyle {
+    let side = (RadioTokens::current().size() - shared::gap_sm() * 2.0).max(0.0);
+    LayoutStyle::new().width(side).height(side)
+}
+
+/// One radio button in a group: a ring that fills its centre dot (and accents its border) while the bound `selected` signal equals this button's `value`; tapping the row sets `selected` to `value` (and fires `on_select`). A radio *group* is several `radio`s sharing one `selected` signal with different `value`s. High-level sugar over the primitives (`box` + `on_press` + a reactive fill); lives in `telar-components`, not the kernel. `selected` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal, so it never matches — a lone default radio), `Some` is the shared group signal.
 #[derive(Props)]
 pub struct RadioProps {
     /// The group's bound selection. `None` (the default) is uncontrolled — the widget makes its own `signal(0)`.
@@ -27,6 +71,9 @@ pub struct RadioProps {
     /// Fires with this button's `value` when it becomes selected.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(u32)>>,
+    /// Amends the paint of the ring — the radio's **principal surface** — selected and not. See [`telar::SurfaceStyle`] for when a theme token or [`RadioTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// One option of a group, selecting into a shared bound value.
@@ -37,17 +84,15 @@ pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutIte
         label,
         color,
         on_select,
+        style,
     } = props;
-    // Uncontrolled: own the selection so the widget is self-consistent when the caller binds no group signal.
     let selected = selected.unwrap_or_else(|| signal(0u32));
-    // Shared across the dot and ring style closures (a `Rc<dyn Fn>` is not `Clone`, an `Rc` handle is).
 
-    // The dot: an inner circle that paints the accent only while this value is selected, so selecting never reflows.
     let dot_selected = selected;
     let dot_color = color.clone();
     let dot = StyledContainer::new(
-        LayoutStyle::new().width(10.0).height(10.0),
-        move |_r| {
+        dot_style(),
+        move |r| {
             let fill = if dot_selected.get() == value {
                 shared::resolve(&dot_color, shared::accent)
             } else {
@@ -55,33 +100,33 @@ pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutIte
             };
             RectStyle::default()
                 .with_fill(fill)
-                .with_radius(BorderRadius::all(5.0))
+                .with_radius(shared::pill(r))
         },
         vec![],
-    )?;
+    )?
+    .styled_by(dot_style);
 
     let ring_selected = selected;
-    let ring_color = color.clone();
     let ring = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .width(18.0)
-            .height(18.0)
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER),
-        move |_r| {
+        ring_style(),
+        move |r| {
             let stroke = if ring_selected.get() == value {
-                shared::resolve(&ring_color, shared::accent)
+                shared::resolve(&color, shared::accent)
             } else {
                 shared::border()
             };
-            RectStyle::default()
+            let rest = RectStyle::default()
                 .with_fill(shared::surface())
-                .with_border(Border::uniform(stroke, 1.5))
-                .with_radius(BorderRadius::all(9.0))
+                .with_border(Border::uniform(
+                    stroke,
+                    RadioTokens::current().border_width(),
+                ))
+                .with_radius(shared::pill(r));
+            amend_surface(rest, &style)
         },
         vec![box_item(dot)],
-    )?;
+    )?
+    .styled_by(ring_style);
 
     let select = selected;
     let announced = selected;

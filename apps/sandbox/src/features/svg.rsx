@@ -7,7 +7,7 @@ use crate::shared::components::prop_row::{prop_row, PropRowProps};
 use crate::shared::demo_svgs::{make_blurred, make_icon, make_logo};
 
 // Each returns an Arc<SvgData> parsed at runtime (the app depends on telar-dynamic for the parser).
-let icon = make_icon();
+let demo_icon = make_icon();
 let logo = make_logo();
 let blurred = make_blurred();
 
@@ -17,19 +17,19 @@ col gap:20
     example title:"One source, drawn crisp at every size"
         card
             row gap:20 align:end
-                svg src:icon width:20 height:20
-                svg src:icon width:36 height:36
-                svg src:icon width:64 height:64
-                svg src:icon width:96 height:96
-        code_line code:"svg src:icon width:96 height:96"
+                svg src:demo_icon width:20 height:20
+                svg src:demo_icon width:36 height:36
+                svg src:demo_icon width:64 height:64
+                svg src:demo_icon width:96 height:96
+        code_line code:"svg src:demo_icon width:96 height:96"
     example title:"Tint — recolor a monochrome glyph (reads the active theme)"
         card
             row gap:20 align:center
-                svg src:icon color:$theme.primary width:48 height:48
-                svg src:icon color:$theme.success width:48 height:48
-                svg src:icon color:$theme.danger width:48 height:48
-                svg src:icon color:$theme.purple width:48 height:48
-        code_line code:"svg src:icon color:$theme.primary"
+                svg src:demo_icon color:$theme.primary width:48 height:48
+                svg src:demo_icon color:$theme.success width:48 height:48
+                svg src:demo_icon color:$theme.danger width:48 height:48
+                svg src:demo_icon color:$theme.purple width:48 height:48
+        code_line code:"svg src:demo_icon color:$theme.primary"
     example title:"Full-color vectors and a raster fallback for filters"
         card
             row gap:24 align:center
@@ -38,7 +38,10 @@ col gap:20
                     text "gradient + shapes" font_size:12 color:$theme.muted
                 col gap:6 align:center
                     svg src:blurred width:88 height:88
-                    text "feGaussianBlur → raster" font_size:12 color:$theme.muted
+                    row gap:4 align:center
+                        text "feGaussianBlur" font_size:12 color:$theme.muted
+                        icon name:"lucide:arrow-right" size:12 color:$theme.muted
+                        text "raster" font_size:12 color:$theme.muted
         code_line code:"svg src:logo width:88 height:88"
     example title:"A vector baked from disk at build time (no runtime parser)"
         card

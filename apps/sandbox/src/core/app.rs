@@ -4,11 +4,12 @@ use crate::core::theme::theme;
 use telar::{
     AlignItems, App, AvailableSpace, BorderRadius, Children, Color, Component, Container, Event,
     EventResult, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId,
-    NodeVec, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, SizeDimension,
+    NodeVec, Reactive, Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, SizeDimension,
     StyledContainer, Text, TextStyle, compute_layout, hot_signal, mark_dirty, new_container,
     new_leaf, reset_layout_runtime, set_display, set_overlay_host, signal, transform_pointer,
     use_direction, use_dismiss_depth,
 };
+use telar_icons::{IconProps, icon};
 use telar_navigate::{NavPage, NavTransition, Navigator, PagePolicy, TabHost, TabStacks};
 
 /// Width of the navigation rail / drawer, in px. Kept in sync with the `width:` on `sidebar.rsx`'s root.
@@ -228,10 +229,31 @@ fn build_source_link(
     section: usize,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let file = section_def(section).file;
-    let label = Text::new(
-        move || format!("View source \u{2192} {file}"),
-        LayoutStyle::new(),
-        || TextStyle::new(13.0, theme().primary),
+    let label = Container::new(
+        LayoutStyle::new()
+            .flex_row()
+            .align_items(AlignItems::CENTER)
+            .gap(6.0),
+        vec![
+            Box::new(Text::new(
+                || "View source".to_string(),
+                LayoutStyle::new(),
+                || TextStyle::new(13.0, theme().primary),
+            )?),
+            icon(
+                IconProps::props()
+                    .name(telar_icons::icon!("lucide:arrow-right"))
+                    .size(12.0)
+                    .color(Reactive::of(|| theme().primary))
+                    .build(),
+                Children::default(),
+            )?,
+            Box::new(Text::new(
+                move || file.to_string(),
+                LayoutStyle::new(),
+                || TextStyle::new(13.0, theme().primary),
+            )?),
+        ],
     )?;
     let btn = StyledContainer::new(
         LayoutStyle::new()
@@ -375,14 +397,33 @@ fn build_back(stacks: TabStacks<usize, SectionRoute>) -> Result<Box<dyn LayoutIt
     let live =
         move |stacks: &TabStacks<usize, SectionRoute>| use_dismiss_depth() > 0 || stacks.can_pop();
     let on_label = stacks.clone();
+    let on_arrow = stacks.clone();
+    let arrow = icon(
+        IconProps::props()
+            .name(telar_icons::icon!("lucide:arrow-left"))
+            .size(14.0)
+            .color(Reactive::of(move || {
+                let t = theme();
+                if live(&on_arrow) { t.ink } else { t.muted }
+            }))
+            .build(),
+        Children::default(),
+    )?;
     let label = Text::new(
-        || "\u{2190} Back".to_string(),
+        || "Back".to_string(),
         LayoutStyle::new(),
         move || {
             let t = theme();
             let color = if live(&on_label) { t.ink } else { t.muted };
             TextStyle::new(13.0, color)
         },
+    )?;
+    let label = Container::new(
+        LayoutStyle::new()
+            .flex_row()
+            .align_items(AlignItems::CENTER)
+            .gap(6.0),
+        vec![arrow, Box::new(label)],
     )?;
     let on_hover = stacks.clone();
     let on_press = stacks.clone();
@@ -487,10 +528,14 @@ fn build_sidebar(
 /// Mobile top bar: a hamburger button (toggles `menu_open`) next to the wordmark. Shown only below the breakpoint.
 fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let toggle = menu_open;
-    let glyph = Text::new(
-        || "\u{2630}".to_string(),
-        LayoutStyle::new(),
-        || TextStyle::new(20.0, theme().ink),
+    let glyph = icon(
+        IconProps::props()
+            .name(telar_icons::icon!("lucide:menu"))
+            .size(20.0)
+            .color(Reactive::of(|| theme().ink))
+            .label("Menu")
+            .build(),
+        Children::default(),
     )?;
     let burger = StyledContainer::new(
         LayoutStyle::new()
@@ -504,7 +549,7 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
                 .with_fill(theme().surface)
                 .with_radius(BorderRadius::all(8.0))
         },
-        vec![Box::new(glyph)],
+        vec![glyph],
     )?
     .hover_style(|_r| {
         RectStyle::default()
@@ -515,9 +560,21 @@ fn build_topbar(menu_open: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, Layout
         let open = toggle.peek();
         toggle.set(!open);
     });
-    let logo = Text::single_line(
-        || "\u{25b2} rsx".to_string(),
-        || TextStyle::new(18.0, theme().ink),
+    let logo_mark = icon(
+        IconProps::props()
+            .name(telar_icons::icon!("lucide:triangle"))
+            .size(18.0)
+            .color(Reactive::of(|| theme().ink))
+            .build(),
+        Children::default(),
+    )?;
+    let logo_text = Text::single_line(|| "rsx".to_string(), || TextStyle::new(18.0, theme().ink))?;
+    let logo = Container::new(
+        LayoutStyle::new()
+            .flex_row()
+            .align_items(AlignItems::CENTER)
+            .gap(6.0),
+        vec![logo_mark, Box::new(logo_text)],
     )?;
     let bar = StyledContainer::new(
         LayoutStyle::new()

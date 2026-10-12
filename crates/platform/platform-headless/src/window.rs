@@ -1,6 +1,6 @@
 //! A window with no window behind it: a size, a scale factor and nothing to present to.
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use platform_core::{Cursor, Window};
@@ -26,6 +26,8 @@ struct Inner {
     cursor: Mutex<Cursor>,
     title: Mutex<String>,
     titles: Mutex<Option<TitleSink>>,
+    maximized: AtomicBool,
+    decorated: AtomicBool,
 }
 
 impl HeadlessWindow {
@@ -44,6 +46,8 @@ impl HeadlessWindow {
                 cursor: Mutex::new(Cursor::Default),
                 title: Mutex::new(String::new()),
                 titles: Mutex::new(None),
+                maximized: AtomicBool::new(false),
+                decorated: AtomicBool::new(true),
             }),
         }
     }
@@ -62,6 +66,11 @@ impl HeadlessWindow {
     /// Writes every title this window is given into `sink`, oldest first, for a caller that asserts on — or a prerender that reads — what the surface was called.
     pub fn record_titles_into(&self, sink: TitleSink) {
         *lock(&self.inner.titles) = Some(sink);
+    }
+
+    /// Whether the window system would draw its title bar and borders, as [`Window::set_decorations`] last left it.
+    pub fn is_decorated(&self) -> bool {
+        self.inner.decorated.load(Ordering::Relaxed)
     }
 
     /// The pointer shape last requested through [`Window::set_cursor`], so a test can see what a real window would show.
@@ -113,6 +122,15 @@ impl Window for HeadlessWindow {
         if let Some(sink) = lock(&self.inner.titles).as_ref() {
             lock(sink).push(title.to_owned());
         }
+    }
+    fn set_maximized(&self, maximized: bool) {
+        self.inner.maximized.store(maximized, Ordering::Relaxed);
+    }
+    fn is_maximized(&self) -> bool {
+        self.inner.maximized.load(Ordering::Relaxed)
+    }
+    fn set_decorations(&self, decorated: bool) {
+        self.inner.decorated.store(decorated, Ordering::Relaxed);
     }
     fn is_offscreen(&self) -> bool {
         true

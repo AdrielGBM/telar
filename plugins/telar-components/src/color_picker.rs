@@ -3,10 +3,11 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Canvas, Children, Color, Container, Cursor,
-    Gradient, Key, LayoutError, LayoutItem, LayoutStyle, ModifiersState, NamedKey, NumericValue,
-    Paint, Point, Props, Reactive, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle,
-    StyledContainer, box_item, box_transform, effect, focus::Role, signal, step_factor,
+    Accessible, AlignItems, Border, BorderRadius, Canvas, Children, Clip, ClippedItem, Color,
+    Container, Cursor, Gradient, Key, LayoutError, LayoutItem, LayoutStyle, ModifiersState,
+    NamedKey, NumericValue, Paint, Point, Props, Reactive, Rect, RectStyle, RenderNode, RwSignal,
+    ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item, box_transform, effect,
+    focus::Role, signal, step_factor,
 };
 
 use crate::shared;
@@ -14,23 +15,68 @@ use crate::strings;
 use crate::swatches::{SwatchesProps, swatches};
 use crate::text_field::{TextFieldProps, text_field};
 
-const DEFAULT_WIDTH: f32 = 220.0;
+/// A colour picker's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the role named beside it, read when the picker paints.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ColorPickerTokens {
+    /// Width when the caller names none, at the regular control size and scaled with the control size in force. `None` is 16 ems of the document's text, a slider's length.
+    pub width: Option<f32>,
+    /// Corner radius of the saturation and brightness area and of the chip showing the colour. `None` is the theme's `radius_control`.
+    pub radius: Option<f32>,
+    /// Width of the ring round each thumb. `None` is the theme's `border_width_strong`.
+    pub ring: Option<f32>,
+}
+
+const WIDTH_EMS: f32 = 16.0;
+
+impl ColorPickerTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn width(&self) -> f32 {
+        shared::width_or_measure(self.width, WIDTH_EMS)
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_control)
+    }
+
+    pub fn ring(&self) -> f32 {
+        self.ring.unwrap_or_else(shared::border_width_strong)
+    }
+}
+
 const AREA_RATIO: f32 = 0.62;
-const TRACK_HEIGHT: f32 = 12.0;
-const THUMB_RING: f32 = 2.0;
-const CHECKER_CELL: f32 = 4.0;
-const SWATCH_SIZE: f32 = 18.0;
 /// One arrow-key step on any channel, as a share of its range.
 const KEY_STEP: f32 = 0.01;
 
 fn gap() -> f32 {
-    shared::spacing()
-}
-fn chip_size() -> f32 {
-    TRACK_HEIGHT * 2.0 + gap()
+    shared::gap_md()
 }
 fn thumb_size() -> f32 {
-    TRACK_HEIGHT + 4.0
+    shared::icon_size()
+}
+/// A channel's track sits inside its thumb by the smallest step on each side.
+fn track_height() -> f32 {
+    thumb_size() - shared::gap_xs() * 2.0
+}
+/// The chip spans both channel tracks and the gap between them.
+fn chip_size() -> f32 {
+    track_height() * 2.0 + gap()
+}
+fn checker_cell() -> f32 {
+    shared::gap_sm()
+}
+
+fn ring(color: Color) -> Border {
+    Border::uniform(color, ColorPickerTokens::current().ring())
+}
+
+fn rounded() -> BorderRadius {
+    BorderRadius::all(ColorPickerTokens::current().radius())
 }
 
 /// A colour picked on a saturation and brightness area, a hue slider and, unless turned off, an opacity slider; typed as hex; or chosen from a row of swatches.
@@ -48,7 +94,7 @@ pub struct ColorPickerProps {
     /// What each swatch is called, for a reader; one per colour.
     #[props(default)]
     pub swatch_names: Vec<String>,
-    /// Width in logical px. `0.0` (the default) means 220.
+    /// Width in logical px. `0.0` (the default) means "unset" -> [`ColorPickerTokens::width`].
     #[props(default)]
     pub width: f32,
     /// A small caption stacked above the picker; omitted when empty.
@@ -57,6 +103,9 @@ pub struct ColorPickerProps {
     /// Fires with the colour every drag, key, typed hex or swatch picks.
     #[props(some, default)]
     pub on_change: Option<Rc<dyn Fn(Color)>>,
+    /// Amends the paint of the saturation and brightness area — the picker's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`ColorPickerTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// A colour in hue (degrees), saturation and value: the picker's own model, which keeps the hue a grey or a black has no way to say.
@@ -178,9 +227,14 @@ pub fn color_picker(
         width,
         label,
         on_change,
+        style,
     } = props;
     let value = value.unwrap_or_else(|| signal(shared::accent()));
-    let width = if width > 0.0 { width } else { DEFAULT_WIDTH };
+    let width = if width > 0.0 {
+        width
+    } else {
+        ColorPickerTokens::current().width()
+    };
     let start = value.peek();
     let picker = Picker {
         value,
@@ -199,7 +253,7 @@ pub fn color_picker(
         effect(move || picker.follow(value.get()));
     }
 
-    let mut rows: Vec<Box<dyn LayoutItem>> = vec![area(&picker, width)?];
+    let mut rows: Vec<Box<dyn LayoutItem>> = vec![area(&picker, width, style)?];
     let slider_width = width - chip_size() - gap();
     let mut sliders: Vec<Box<dyn LayoutItem>> = vec![hue_slider(&picker, slider_width)?];
     if alpha {
@@ -228,12 +282,12 @@ pub fn color_picker(
     shared::captioned(box_item(picker_box), label, width)
 }
 
-fn ring() -> Border {
-    Border::uniform(Color::WHITE, THUMB_RING)
-}
-
 /// The saturation (across) and brightness (up) of the current hue, dragged or stepped with the arrows.
-fn area(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn area(
+    picker: &Picker,
+    width: f32,
+    style: Option<SurfaceAmendment>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let height = (width * AREA_RATIO).round();
     let hsv = picker.hsv;
     let whiten = StyledContainer::new(
@@ -245,7 +299,7 @@ fn area(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, LayoutError>
                     Point::new(r.x + r.width, r.y),
                     &[(0.0, Color::WHITE), (1.0, Color::WHITE.with_alpha(0.0))],
                 )))
-                .with_radius(BorderRadius::all(shared::radius()))
+                .with_radius(rounded())
         },
         vec![],
     )?;
@@ -258,18 +312,19 @@ fn area(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, LayoutError>
                     Point::new(r.x, r.y + r.height),
                     &[(0.0, Color::BLACK.with_alpha(0.0)), (1.0, Color::BLACK)],
                 )))
-                .with_radius(BorderRadius::all(shared::radius()))
+                .with_radius(rounded())
         },
         vec![],
     )?;
     let size = thumb_size();
     let thumb = StyledContainer::new(
         LayoutStyle::new().absolute().width(size).height(size),
-        move |_r| {
+        move |r| {
+            let shown = from_hsv(hsv.get(), 1.0);
             RectStyle::default()
-                .with_fill(from_hsv(hsv.get(), 1.0))
-                .with_border(ring())
-                .with_radius(BorderRadius::all(size / 2.0))
+                .with_fill(shown)
+                .with_border(ring(shared::thumb_on(shown)))
+                .with_radius(shared::pill(r))
         },
         vec![],
     )?
@@ -291,16 +346,18 @@ fn area(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, LayoutError>
     let area = StyledContainer::new(
         LayoutStyle::new().width(width).height(height),
         move |_r| {
-            RectStyle::default()
-                .with_fill(from_hsv(
-                    Hsv {
-                        h: hsv.get().h,
-                        s: 1.0,
-                        v: 1.0,
-                    },
-                    1.0,
-                ))
-                .with_radius(BorderRadius::all(shared::radius()))
+            let hue = from_hsv(
+                Hsv {
+                    h: hsv.get().h,
+                    s: 1.0,
+                    v: 1.0,
+                },
+                1.0,
+            );
+            amend_surface(
+                RectStyle::default().with_fill(hue).with_radius(rounded()),
+                &style,
+            )
         },
         vec![box_item(whiten), box_item(darken), box_item(thumb)],
     )?
@@ -348,6 +405,8 @@ struct Channel {
     read: Rc<dyn Fn() -> f32>,
     write: Rc<dyn Fn(f32)>,
     paint: Rc<dyn Fn(Rect) -> Paint>,
+    /// The colour the track shows under the thumb, which the thumb's ring has to stand out from.
+    under: Rc<dyn Fn() -> Color>,
     checkered: bool,
     name: &'static str,
     /// The announced range: degrees for the hue, a percentage for the opacity.
@@ -355,7 +414,7 @@ struct Channel {
 }
 
 fn hue_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let (read, write) = (picker.clone(), picker.clone());
+    let (read, write, under) = (picker.clone(), picker.clone(), picker.clone());
     channel(
         Channel {
             read: Rc::new(move || read.hsv.get().h / 360.0),
@@ -384,6 +443,10 @@ fn hue_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, Layout
                     &stops,
                 ))
             }),
+            under: Rc::new(move || {
+                let h = under.hsv.get().h;
+                from_hsv(Hsv { h, s: 1.0, v: 1.0 }, 1.0)
+            }),
             checkered: false,
             name: strings::HUE,
             range: 360.0,
@@ -393,7 +456,12 @@ fn hue_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, Layout
 }
 
 fn alpha_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let (read, write, paint) = (picker.clone(), picker.clone(), picker.clone());
+    let (read, write, paint, under) = (
+        picker.clone(),
+        picker.clone(),
+        picker.clone(),
+        picker.clone(),
+    );
     channel(
         Channel {
             read: Rc::new(move || read.value.get().a),
@@ -406,6 +474,7 @@ fn alpha_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, Layo
                     &[(0.0, opaque.with_alpha(0.0)), (1.0, opaque)],
                 ))
             }),
+            under: Rc::new(move || shared::over(under.value.get(), shared::surface())),
             checkered: true,
             name: strings::OPACITY,
             range: 100.0,
@@ -419,22 +488,24 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
         read,
         write,
         paint,
+        under,
         checkered,
         name,
         range,
     } = channel;
-    let radius = TRACK_HEIGHT / 2.0;
     let mut layers: Vec<Box<dyn LayoutItem>> = Vec::new();
     if checkered {
-        layers.push(checker(LayoutStyle::new().absolute_fill())?);
+        layers.push(checker(|| {
+            BorderRadius::all(shared::pill_radius(track_height()))
+        })?);
     }
     layers.push(box_item(StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         move |r| {
             RectStyle::default()
                 .with_fill(paint(r))
-                .with_border(Border::uniform(shared::border(), 1.0))
-                .with_radius(BorderRadius::all(radius))
+                .with_border(Border::uniform(shared::border(), shared::border_width()))
+                .with_radius(shared::pill(r))
         },
         vec![],
     )?));
@@ -443,10 +514,10 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
     layers.push(box_item(
         StyledContainer::new(
             LayoutStyle::new().absolute().width(size).height(size),
-            move |_r| {
+            move |r| {
                 RectStyle::default()
-                    .with_border(ring())
-                    .with_radius(BorderRadius::all(size / 2.0))
+                    .with_border(ring(shared::thumb_on(under())))
+                    .with_radius(shared::pill(r))
             },
             vec![],
         )?
@@ -458,7 +529,7 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
                 1.0,
                 1.0,
                 t * (width - size),
-                (TRACK_HEIGHT - size) / 2.0,
+                (track_height() - size) / 2.0,
             )
         })
         .a11y_hidden(),
@@ -467,7 +538,7 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
     let (announced, keyed) = (read.clone(), read);
     let drag = write.clone();
     let track = StyledContainer::new(
-        LayoutStyle::new().width(width).height(TRACK_HEIGHT),
+        LayoutStyle::new().width(width).height(track_height()),
         |_r| RectStyle::default(),
         layers,
     )?;
@@ -503,28 +574,26 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
     Ok(box_item(track))
 }
 
-/// The squares a translucent colour is shown over, so how much shows through can be seen.
-fn checker(style: LayoutStyle) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let canvas = Canvas::new(style, |rect| {
-        let light = Color::rgba(1.0, 1.0, 1.0, 1.0);
-        let dark = Color::rgba(0.8, 0.8, 0.82, 1.0);
-        let columns = (rect.width / CHECKER_CELL).ceil() as usize;
-        let rows = (rect.height / CHECKER_CELL).ceil() as usize;
+/// The squares a translucent colour is shown over, so how much shows through can be seen, filling its parent and cut to the `corner` of what is drawn over it.
+fn checker(
+    corner: impl Fn() -> BorderRadius + 'static,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let canvas = Canvas::new(LayoutStyle::new().absolute_fill(), |rect| {
+        let light = shared::surface();
+        let dark = shared::over(shared::border(), light);
+        let cell = checker_cell();
+        let columns = (rect.width / cell).ceil() as usize;
+        let rows = (rect.height / cell).ceil() as usize;
         let mut cells = vec![RenderNode::rect(
             rect,
             RectStyle::default().with_fill(light),
         )];
         for row in 0..rows {
             for column in (row % 2..columns).step_by(2) {
-                let x = column as f32 * CHECKER_CELL;
-                let y = row as f32 * CHECKER_CELL;
+                let x = column as f32 * cell;
+                let y = row as f32 * cell;
                 cells.push(RenderNode::rect(
-                    Rect::new(
-                        x,
-                        y,
-                        CHECKER_CELL.min(rect.width - x),
-                        CHECKER_CELL.min(rect.height - y),
-                    ),
+                    Rect::new(x, y, cell.min(rect.width - x), cell.min(rect.height - y)),
                     RectStyle::default().with_fill(dark),
                 ));
             }
@@ -532,7 +601,10 @@ fn checker(style: LayoutStyle) -> Result<Box<dyn LayoutItem>, LayoutError> {
         RenderNode::group(cells)
     })?
     .a11y_hidden();
-    Ok(box_item(canvas))
+    let cut = ClippedItem::following(box_item(canvas), move || {
+        Clip::both().rounded(corner()).paint_only()
+    });
+    Ok(box_item(cut))
 }
 
 /// The colour as it stands, alpha and all, over the checker.
@@ -543,14 +615,14 @@ fn chip(value: RwSignal<Color>) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move |_r| {
             RectStyle::default()
                 .with_fill(value.get())
-                .with_border(Border::uniform(shared::border(), 1.0))
-                .with_radius(BorderRadius::all(shared::radius_sm()))
+                .with_border(Border::uniform(shared::border(), shared::border_width()))
+                .with_radius(rounded())
         },
         vec![],
     )?;
     let chip = Container::new(
         LayoutStyle::new().width(size).height(size).flex_shrink(0.0),
-        vec![checker(LayoutStyle::new().absolute_fill())?, box_item(face)],
+        vec![checker(rounded)?, box_item(face)],
     )?
     .a11y_hidden();
     Ok(box_item(chip))
@@ -636,7 +708,6 @@ fn swatch_row(
             .colors(palette)
             .names(names)
             .selected(selected)
-            .size(SWATCH_SIZE)
             .on_select(choose)
             .build(),
         Children::default(),

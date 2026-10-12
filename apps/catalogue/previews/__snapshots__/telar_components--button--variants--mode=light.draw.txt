@@ -1,0 +1,44 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element button
+            rect 267,286 57x28 fill=#4261edff radius=10
+            element group
+              matrix 1,0,0,1,279,286
+                text 0,5 33x16.8 "Solid" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+              end
+            end
+          end
+          element button
+            rect 332,286 71x28 border=1.5 border-color=#4261edff radius=10
+            element group
+              matrix 1,0,0,1,344,286
+                text 0,5 47x16.8 "Outline" size=14 family=sans-serif weight=400 color=#4261edff wrap=none lang=en
+              end
+            end
+          end
+          element button
+            rect 411,286 51x28 fill=#4261ed14 radius=10
+            element group
+              matrix 1,0,0,1,423,286
+                text 0,5 27x16.8 "Soft" size=14 family=sans-serif weight=400 color=#4059d8ff wrap=none lang=en
+              end
+            end
+          end
+          element button
+            rect 469,286 63x28 radius=10
+            element group
+              matrix 1,0,0,1,481,286
+                text 0,5 39.09x16.8 "Ghost" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

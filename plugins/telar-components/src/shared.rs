@@ -1,8 +1,11 @@
-//! Internal helpers shared across the widget catalogue: the reactive-colour resolver, the named theme reads every component paints from, and the labelled-control row scaffold. Not part of the public API (`pub(crate)`).
+//! What every catalogue component is drawn from: the theme's roles read for the thing being drawn, scaled by the control size in force, plus the scaffolds several components share.
+//!
+//! **The rule.** A component takes every length, corner, border, wash and weight from a function here (or from its own `XTokens`, which default to one of these), never from a literal or from a primitive token scaled by a factor of its own. Two components that draw the same kind of thing then cannot disagree, and a theme or a control size moves them together. The subset an application needs to draw controls of its own that sit beside the catalogue's is public as [`crate::metrics`].
 
 use telar::{
-    AlignItems, Color, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, RectStyle,
-    StyledContainer, Text, TextStyle, box_item, focus::Role, style_follows, use_theme_tokens,
+    Accessible, AlignItems, Border, BorderRadius, Color, Container, LayoutError, LayoutItem,
+    LayoutStyle, Reactive, Rect, RectStyle, StyledContainer, Text, TextStyle, box_item,
+    focus::Role, style_follows, use_theme_tokens,
 };
 
 /// The ink the document starts in — the root of the cascade, not the text at any particular node.
@@ -14,10 +17,10 @@ fn base_ink() -> Color {
 /// The WCAG AA contrast ratio for body text.
 const BODY_TEXT_CONTRAST: f32 = 4.5;
 
-/// Readable ink for a label sitting on `fill`: whichever of the document's own ink and the theme's `on_primary` has the higher WCAG contrast ratio against it. A mid-tone fill neither of them reads on at [`BODY_TEXT_CONTRAST`] takes black or white instead, whichever reads better.
+/// Readable ink for a label sitting on `fill`: whichever of the document's own ink and the theme's `on_primary` has the higher WCAG contrast ratio against it. A mid-tone fill neither of them reads on at 4.5:1 takes black or white instead, whichever reads better.
 ///
-/// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A neutral palette — the greys a shadcn-style theme builds on, say — makes `primary` a near-white in dark mode, and the label disappeared into its own button. Reading both ends of the theme and picking by contrast ratio keeps a caller free to pass any colour at all — which the `fill:` prop already lets them do.
-pub(crate) fn ink_on(fill: Color) -> Color {
+/// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A neutral palette — the greys a shadcn-style theme builds on, say — makes `primary` a near-white in dark mode, and the label disappeared into its own button. Reading both ends of the theme and picking by contrast ratio keeps a caller free to pass any colour at all.
+pub fn ink_on(fill: Color) -> Color {
     let ink = fill.most_readable(&[use_theme_tokens().on_primary(), base_ink()]);
     if fill.contrast_ratio(ink) >= BODY_TEXT_CONTRAST {
         ink
@@ -26,8 +29,42 @@ pub(crate) fn ink_on(fill: Color) -> Color {
     }
 }
 
+/// `color` taken toward the ink that reads on `background` just far enough to read on it at 4.5:1, so a label keeps its hue where it can: the text of a soft button, a tinted badge.
+pub fn readable_on(color: Color, background: Color) -> Color {
+    let ink = ink_on(background);
+    (0..=READABLE_STEPS)
+        .map(|step| color.mix(ink, step as f32 / READABLE_STEPS as f32))
+        .find(|candidate| background.contrast_ratio(*candidate) >= BODY_TEXT_CONTRAST)
+        .unwrap_or(ink)
+}
+const READABLE_STEPS: u8 = 10;
+
+/// `top` laid over the opaque `bottom`: what a translucent fill looks like on the surface under it, which is what its label has to read against.
+pub(crate) fn over(top: Color, bottom: Color) -> Color {
+    let blend = |t: f32, b: f32| t * top.a + b * (1.0 - top.a);
+    Color {
+        r: blend(top.r, bottom.r),
+        g: blend(top.g, bottom.g),
+        b: blend(top.b, bottom.b),
+        a: bottom.a,
+    }
+}
+
+/// WCAG's non-text contrast: what a part of a control needs against what it sits on to be told apart from it.
+const NON_TEXT_CONTRAST: f32 = 3.0;
+
+/// What a knob, a thumb or the ring round one is drawn in over `fill`: the theme's `thumb` wherever it stands out from `fill`, else the ink that reads on `fill`, so a light primary or a light track never swallows the knob. A toggle's knob, a slider's thumb, a handle and a colour picker's thumbs all take it.
+pub fn thumb_on(fill: Color) -> Color {
+    let thumb = use_theme_tokens().thumb();
+    if fill.contrast_ratio(thumb) >= NON_TEXT_CONTRAST {
+        thumb
+    } else {
+        ink_on(fill)
+    }
+}
+
 /// The smallest a pointer target is made on either side, whatever is drawn inside it.
-pub(crate) const MIN_TARGET: f32 = 24.0;
+pub const MIN_TARGET: f32 = 24.0;
 
 /// The panel surface a floating thing sits on.
 pub(crate) fn surface() -> Color {
@@ -52,24 +89,131 @@ pub(crate) fn on_accent() -> Color {
 pub(crate) fn muted() -> Color {
     use_theme_tokens().muted()
 }
+/// The scrim laid over the page behind a modal, a drawer or the command palette.
+#[cfg(feature = "overlays")]
+pub(crate) fn overlay() -> Color {
+    use_theme_tokens().overlay()
+}
 
-/// Base corner radius from the theme. A component that wants a different shape multiplies this rather than declaring its own constant, so one theme number still moves it.
-pub(crate) fn radius() -> f32 {
-    use_theme_tokens().radius()
+/// Corner of a control a pointer presses or types into: a button, a field, a trigger, a tab, an icon button, a stepper. Not scaled by the control size: a smaller control is smaller, not flatter.
+pub fn radius_control() -> f32 {
+    use_theme_tokens().radius_control()
 }
-/// The steps either side of [`radius`], for the shapes that are not a card: a chip or a row rounds less, a panel or a bubble sits between. Every one of these was a literal in the component that drew it, which meant a theme could move its base radius and watch half the catalogue ignore it.
-pub(crate) fn radius_sm() -> f32 {
-    use_theme_tokens().radius_sm()
+/// Corner of a panel floating over the page: a popup, a menu, a tooltip, a toast, a code block.
+pub fn radius_surface() -> f32 {
+    use_theme_tokens().radius_surface()
 }
-pub(crate) fn radius_md() -> f32 {
-    use_theme_tokens().radius_md()
+/// Corner of a modal, the command palette, a drawer.
+pub fn radius_dialog() -> f32 {
+    use_theme_tokens().radius_dialog()
 }
-/// Base spacing unit from the theme, and what a component derives its own padding from.
-///
-/// Scaled by the ambient [`ControlSize`](telar::ControlSize) — which is the whole of how a control gets smaller here: each component keeps its own proportions and the unit underneath them moves. See `theme-core`'s `density` module for why that is one number rather than a size matrix per component.
-pub(crate) fn spacing() -> f32 {
+/// Corner of a row, option or item inside a surface.
+pub fn radius_item() -> f32 {
+    use_theme_tokens().radius_item()
+}
+/// Fully rounded ends for a box `short_side` across: a chip, a badge, a radio, a toggle's track, a slider's thumb.
+pub fn pill_radius(short_side: f32) -> f32 {
+    short_side / 2.0
+}
+/// [`pill_radius`] for the box a style closure is handed, so the shape follows the box whatever it is laid out at.
+pub fn pill(rect: Rect) -> BorderRadius {
+    BorderRadius::all(pill_radius(rect.width.min(rect.height)))
+}
+
+/// Width of a hairline: a field's frame, a divider, a panel's edge.
+pub fn border_width() -> f32 {
+    use_theme_tokens().border_width()
+}
+/// Width of a frame that is the control's shape rather than a hairline: an outline button, a checkbox's box.
+pub fn border_width_strong() -> f32 {
+    use_theme_tokens().border_width_strong()
+}
+/// The theme's focus ring as a frame, for the cursor a list, a tree or a toolbar draws on the item the arrows reached. A focusable box gets the same ring by itself.
+pub fn focus_ring() -> Border {
+    telar::focus_ring_border()
+}
+/// The focus ring's thickness, for a cursor drawn as a line rather than a frame: where a dragged item will land.
+#[cfg(feature = "advanced")]
+pub(crate) fn focus_ring_width() -> f32 {
+    use_theme_tokens().focus_ring_width()
+}
+
+/// The wash a pointer resting on a control or a row lays over it.
+pub fn hover_wash() -> Color {
+    use_theme_tokens().highlight_low()
+}
+/// The wash of the selected row, or of a control held open.
+pub fn held_wash() -> Color {
+    use_theme_tokens().highlight_med()
+}
+/// The wash of a control while it is pressed.
+pub fn pressed_wash() -> Color {
+    use_theme_tokens().highlight_high()
+}
+/// How much a filled surface darkens while a pointer rests on it, and while it is pressed. A fill cannot take a wash over itself, since a box has one fill, so the step is a darkening shared by every filled control.
+const FILL_HOVER_STEP: f32 = 0.15;
+const FILL_PRESS_STEP: f32 = 0.25;
+/// `fill` as a filled control shows it while a pointer rests on it.
+pub fn hovered_fill(fill: Color) -> Color {
+    fill.darken(FILL_HOVER_STEP)
+}
+/// `fill` as a filled control shows it while it is pressed.
+pub fn pressed_fill(fill: Color) -> Color {
+    fill.darken(FILL_PRESS_STEP)
+}
+
+/// Weight of text that stands out from the body around it: a title, a heading, a matched run.
+pub fn strong_weight() -> u16 {
+    use_theme_tokens().font_weight_strong()
+}
+
+/// Base spacing unit from the theme, scaled by the control size in force — which is the whole of how a control gets smaller: the unit underneath its proportions moves. See `theme-core`'s `density` module for why that is one number rather than a size matrix per component.
+pub fn spacing() -> f32 {
     use_theme_tokens().spacing() * telar::control_scale()
 }
+/// The smallest step: between a glyph and the mark beside it.
+pub fn gap_xs() -> f32 {
+    gap_sm() / 2.0
+}
+/// The theme's spacing steps at the control size in force: `sm` between the parts of one control, `md` between controls, `lg` around a group, `xl` between sections.
+pub fn gap_sm() -> f32 {
+    use_theme_tokens().spacing_sm() * telar::control_scale()
+}
+pub fn gap_md() -> f32 {
+    use_theme_tokens().spacing_md() * telar::control_scale()
+}
+pub fn gap_lg() -> f32 {
+    use_theme_tokens().spacing_lg() * telar::control_scale()
+}
+pub fn gap_xl() -> f32 {
+    use_theme_tokens().spacing_xl() * telar::control_scale()
+}
+
+/// The height every single-line control is drawn at — a button, a field, a select or menu trigger, a tab, a stepper, a scrub field — so any of them stand in one row edge to edge: an icon with its padding, at the control size in force, never below the smallest pointer target, and in whole pixels so every control snaps to the same edge. A control centres its line inside it rather than padding it vertically.
+pub fn control_height() -> f32 {
+    (icon_size() + icon_pad() * 2.0).max(MIN_TARGET).round()
+}
+/// The space between a single-line control's edge and its label or value.
+pub fn control_pad_x() -> f32 {
+    gap_lg()
+}
+/// The padding around an icon that is the whole face of a control, so every such control is the same square.
+pub fn icon_pad() -> f32 {
+    spacing() * 0.75
+}
+/// The theme's standalone icon size at the control size in force.
+pub fn icon_size() -> f32 {
+    use_theme_tokens().icon_size() * telar::control_scale()
+}
+/// The height of a row in a list, a menu or a tree: a control's height and the step that separates one row's wash from the next, in whole pixels like [`control_height`] so every list's rows snap to the same edges.
+pub fn row_height() -> f32 {
+    (control_height() + gap_sm()).round()
+}
+/// The padding between a floating panel's edge and the rows inside it.
+pub fn panel_pad() -> f32 {
+    gap_sm()
+}
+
 /// A caption's share of the text it labels.
 pub(crate) const CAPTION_RATIO: f32 = 0.85;
 /// A title's share of the body text around it.
@@ -77,27 +221,34 @@ pub(crate) const HEADING_RATIO: f32 = 1.4;
 /// What is left of a line's ink once it is only supporting the line above it: the least that still reads at 4.5:1 on the tinted rows and key caps the catalogue paints behind such a line.
 pub(crate) const QUIET_ALPHA: f32 = 0.7;
 
-/// The text a control draws: whatever the tree above it says, at the ambient control density, at this control's own ratio to the body size around it.
+/// The text a control draws: whatever the tree above it says, at the control size in force, at this control's own ratio to the body size around it.
 ///
-/// The ratio is how a component says "a caption" or "a close glyph" — a proportion of the text beside it rather than a number of its own. Taking the inherited style as the starting point is the whole of B9's fix: a field's label and a plain label next to it can no longer be two sizes, because there is one size and each control names its distance from it.
-pub(crate) fn control_text(inherited: TextStyle, ratio: f32) -> TextStyle {
+/// The ratio is how a component says "a caption" or "a close glyph" — a proportion of the text beside it rather than a number of its own, so a field's label and a plain label next to it cannot be two sizes.
+pub fn control_text(inherited: TextStyle, ratio: f32) -> TextStyle {
     let size = inherited.font_size * telar::control_scale() * ratio;
     inherited.with_font_size(size)
 }
 
+/// `ems` of the document's text at the control size in force: the default width of every catalogue box that is not sized by what it holds — a field, a slider, a trigger and its list, a tooltip, a dialog, a notice — so each keeps as many characters to a line whatever size its theme sets the text at. In whole pixels, the edge layout snaps it to.
+pub fn measure(ems: f32) -> f32 {
+    (telar::Inherited::initial().text.font_size * telar::control_scale() * ems).round()
+}
+
+/// A width a component's tokens may name: `token` at the regular control size, scaled with the control size in force and in whole pixels, else [`measure`]`(ems)`.
+pub(crate) fn width_or_measure(token: Option<f32>, ems: f32) -> f32 {
+    token.map_or_else(
+        || measure(ems),
+        |width| (width * telar::control_scale()).round(),
+    )
+}
+
 /// [`control_text`] in a fainter shade of the ink around it: a hint, a group heading, an inactive tab.
 ///
-/// Fades what the tree above declared instead of naming `ink()`, because `ink()` is the very value the cascade seeds itself with — writing it can only repeat the root or overrule a region that said otherwise, and a label reading "quieter than its neighbours" has to know who its neighbours are. Fading also keeps a colour that arrived already soft from being pushed back up to [`QUIET_ALPHA`].
+/// Fades what the tree above declared instead of naming `ink()`, because `ink()` is the very value the cascade seeds itself with — writing it can only repeat the root or overrule a region that said otherwise. Fading also keeps a colour that arrived already soft from being pushed back up to [`QUIET_ALPHA`].
 pub(crate) fn quiet(inherited: TextStyle, ratio: f32) -> TextStyle {
     let text = control_text(inherited, ratio);
     let ink = text.color.faded(QUIET_ALPHA);
     text.with_color(ink)
-}
-
-#[cfg(any(feature = "overlays", feature = "chrome"))]
-/// `style` as a frame or a menu sets it whole, in the family the tree above it shapes in: chrome keeps its own size and ink, and still follows the surface's default family and any family declared over it.
-pub(crate) fn in_family_of(style: TextStyle, inherited: TextStyle) -> TextStyle {
-    style.with_font_family(inherited.font_family)
 }
 
 /// [`control_text`]'s size on its own, for the box a control sizes to hold that text.
@@ -105,11 +256,6 @@ pub(crate) fn in_family_of(style: TextStyle, inherited: TextStyle) -> TextStyle 
 /// Takes the node rather than the style because a box is sized outside the closure that styles its text — and reading the context here is what makes the box follow a declaration the text is already following.
 pub(crate) fn control_text_size(node: telar::NodeId, ratio: f32) -> f32 {
     control_text(telar::inherited_text_style(node), ratio).font_size
-}
-
-/// Default standalone icon size from the theme, scaled by the ambient control size.
-pub(crate) fn icon_size() -> f32 {
-    use_theme_tokens().icon_size() * telar::control_scale()
 }
 
 /// Resolve a reactive colour: `color()` unless it is `Color::TRANSPARENT` (the "unset" sentinel), else `fallback()`. `color()` is evaluated once. Collapses the per-widget accent/track/surface/bubble resolvers into one shape.
@@ -139,7 +285,7 @@ pub(crate) fn resolve_open(
 pub(crate) fn heading_style(inherited: TextStyle) -> TextStyle {
     control_text(inherited, HEADING_RATIO)
         .with_color(accent())
-        .with_font_weight(600)
+        .with_font_weight(strong_weight())
 }
 
 fn caption_box(text_size: f32) -> LayoutStyle {
@@ -157,11 +303,12 @@ fn caption_column(width: f32) -> LayoutStyle {
 pub(crate) fn captioned(
     control: Box<dyn LayoutItem>,
     label: Reactive<String>,
-    width: f32,
+    width: impl Into<Reactive<f32>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     if label.get().is_empty() {
         return Ok(box_item(control));
     }
+    let width = width.into();
     let caption = Text::declaring(
         move || label.get(),
         LayoutStyle::new(),
@@ -170,17 +317,26 @@ pub(crate) fn captioned(
     // The caption is a leaf, so its style is followed from the column that outlives it and owns the effect.
     let caption_node = caption.layout_node();
     let col = Container::new(
-        caption_column(width),
+        caption_column(width.get()),
         vec![box_item(caption), box_item(control)],
     )?
-    .styled_by(move || caption_column(width));
+    .styled_by(move || caption_column(width.get()));
     style_follows(caption_node, move || {
         caption_box(control_text_size(caption_node, CAPTION_RATIO))
     });
     Ok(box_item(col))
 }
 
-/// A control (checkbox box / radio ring / toggle pill) plus an optional label, laid out as one gap-10 row that is itself the tap target: a tap runs `on_press`. Shared by checkbox, radio and toggle.
+/// A control height tall whatever the box drawn in it, so a checkbox stands level with a button or a field beside it and is never a smaller target than one.
+fn labelled_row() -> LayoutStyle {
+    LayoutStyle::new()
+        .flex_row()
+        .gap(gap_md())
+        .min_height(control_height())
+        .align_items(AlignItems::CENTER)
+}
+
+/// A control (checkbox box / radio ring / toggle pill) plus an optional label, laid out as one row that is itself the tap target: a tap runs `on_press`. Shared by checkbox, radio and toggle.
 pub(crate) fn labelled_control(
     control: Box<dyn LayoutItem>,
     label: Reactive<String>,
@@ -198,17 +354,11 @@ pub(crate) fn labelled_control(
         children.push(box_item(text));
     }
     // The whole row is the control, label included: clicking the word beside a checkbox toggles it, and the ring goes round both.
-    let row = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .gap(spacing() * 1.25)
-            .align_items(AlignItems::CENTER),
-        |_r| RectStyle::default(),
-        children,
-    )?
-    .control(role)
-    .toggled(toggled)
-    .on_press(on_press);
+    let row = StyledContainer::new(labelled_row(), |_r| RectStyle::default(), children)?
+        .styled_by(labelled_row)
+        .control(role)
+        .toggled(toggled)
+        .on_press(on_press);
     Ok(box_item(row))
 }
 
@@ -218,4 +368,106 @@ pub(crate) fn dismissed_by_press(
     dismiss: impl Fn() + 'static,
 ) -> StyledContainer {
     backdrop.role(Role::Group).on_press(dismiss)
+}
+
+/// A drawn mark: what a control wears where a text glyph would depend on a face carrying it. `ChevronForward` is toward the end of the line, so it turns round in a right-to-left region.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mark {
+    ChevronDown,
+    ChevronForward,
+    Close,
+    Check,
+    Minimize,
+    Maximize,
+    Ring,
+}
+
+/// A chevron's long side as a share of the icon size: wide enough to read beside a label at the body size, narrow enough not to compete with it.
+const CHEVRON_RATIO: f32 = 0.7;
+
+/// The side of the square the other marks fill, as a share of the icon size: smaller than a chevron's span, since a cross or a box is dense where a chevron is two strokes.
+const SQUARE_RATIO: f32 = 0.6;
+
+/// Where a check's ends and elbow sit in its box, as shares of its width and height.
+/// The distance of a cubic handle from its end, as a share of the radius, that best fits a quarter circle.
+const CIRCLE_HANDLE: f32 = 0.552_284_8;
+
+const CHECK_POINTS: [(f32, f32); 3] = [(0.0, 0.55), (0.38, 0.95), (1.0, 0.1)];
+
+fn mark_box(shape: Mark) -> LayoutStyle {
+    // Whole, even pixels on both sides, so the strokes meet at the same point wherever the box lands on the pixel grid.
+    let whole = |ratio: f32| (icon_size() * ratio / 2.0).round() * 2.0;
+    let (width, height) = match shape {
+        Mark::ChevronDown => (whole(CHEVRON_RATIO), whole(CHEVRON_RATIO) / 2.0),
+        Mark::ChevronForward => (whole(CHEVRON_RATIO) / 2.0, whole(CHEVRON_RATIO)),
+        Mark::Close | Mark::Check | Mark::Minimize | Mark::Maximize | Mark::Ring => {
+            (whole(SQUARE_RATIO), whole(SQUARE_RATIO))
+        }
+    };
+    LayoutStyle::new()
+        .width(width)
+        .height(height)
+        .flex_shrink(0.0)
+}
+
+fn mark_path(shape: Mark, rect: Rect) -> telar::PathData {
+    let (w, h) = (rect.width, rect.height);
+    let at = |(x, y): (f32, f32)| telar::Point::new(x, y);
+    let stroke = |points: &[(f32, f32)]| {
+        let mut path = telar::PathData::new().move_to(at(points[0]));
+        for point in &points[1..] {
+            path = path.line_to(at(*point));
+        }
+        path
+    };
+    match (shape, telar::current_direction()) {
+        (Mark::ChevronDown, _) => stroke(&[(0.0, 0.0), (w / 2.0, h), (w, 0.0)]),
+        (Mark::ChevronForward, telar::Direction::Rtl) => {
+            stroke(&[(w, 0.0), (0.0, h / 2.0), (w, h)])
+        }
+        (Mark::ChevronForward, _) => stroke(&[(0.0, 0.0), (w, h / 2.0), (0.0, h)]),
+        (Mark::Close, _) => stroke(&[(0.0, 0.0), (w, h)])
+            .move_to(at((w, 0.0)))
+            .line_to(at((0.0, h))),
+        (Mark::Check, _) => stroke(&CHECK_POINTS.map(|(x, y)| (x * w, y * h))),
+        (Mark::Minimize, _) => stroke(&[(0.0, h / 2.0), (w, h / 2.0)]),
+        (Mark::Maximize, _) => stroke(&[(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]).close(),
+        (Mark::Ring, _) => ring(rect),
+    }
+}
+
+/// A circle inscribed in `rect`, from four cubic curves.
+fn ring(rect: Rect) -> telar::PathData {
+    let (rx, ry) = (rect.width / 2.0, rect.height / 2.0);
+    let (kx, ky) = (rx * CIRCLE_HANDLE, ry * CIRCLE_HANDLE);
+    let at = |x: f32, y: f32| telar::Point::new(x, y);
+    telar::PathData::new()
+        .move_to(at(rx * 2.0, ry))
+        .cubic_to(
+            at(rx * 2.0, ry + ky),
+            at(rx + kx, ry * 2.0),
+            at(rx, ry * 2.0),
+        )
+        .cubic_to(at(rx - kx, ry * 2.0), at(0.0, ry + ky), at(0.0, ry))
+        .cubic_to(at(0.0, ry - ky), at(rx - kx, 0.0), at(rx, 0.0))
+        .cubic_to(at(rx + kx, 0.0), at(rx * 2.0, ry - ky), at(rx * 2.0, ry))
+        .close()
+}
+
+/// A mark drawn rather than spelled, since a face cannot be relied on to carry a caret, a tick or a cross at the size and weight of the label beside it. Strokes are sized from the icon size in force. `ink` picks its colour from the text the tree above it declared, so it follows a region that declared its own. Hidden from readers: the control it sits in has the name.
+pub fn mark(
+    shape: impl Fn() -> Mark + Clone + 'static,
+    ink: impl Fn(&TextStyle) -> telar::Paint + 'static,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let current = shape.clone();
+    let canvas = telar::Canvas::declaring(mark_box(shape()), move |rect, text| {
+        telar::RenderNode::path(
+            std::sync::Arc::new(mark_path(current(), rect)),
+            telar::PathStyle::default()
+                .with_stroke(telar::Stroke::new(ink(&text), border_width_strong())),
+        )
+    })?
+    .a11y_hidden();
+    style_follows(canvas.layout_node(), move || mark_box(shape()));
+    Ok(box_item(canvas))
 }

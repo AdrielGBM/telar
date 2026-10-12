@@ -6,17 +6,36 @@ use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role, Slots, T
 use crate::button::{ButtonProps, button};
 use crate::modal::{ModalProps, modal};
 
-fn body() -> Children {
-    Children::new(|| {
+fn body_in(height: Option<f32>) -> Children {
+    Children::new(move || {
         let text = Text::declaring(
             || "This dialog stays inside the canvas.".to_string(),
-            LayoutStyle::new().height(20.0),
+            height.map_or_else(LayoutStyle::new, |height| LayoutStyle::new().height(height)),
             |t| t,
         )?;
         let mut slots = Slots::new();
         slots.push(None, box_item(text));
         Ok(slots)
     })
+}
+
+fn long_body() -> Children {
+    Children::new(|| {
+        let mut slots = Slots::new();
+        for line in 0..40 {
+            let text = Text::declaring(
+                move || format!("Paragraph {line} of a body longer than the window."),
+                LayoutStyle::new().height(20.0),
+                |t| t,
+            )?;
+            slots.push(None, box_item(text));
+        }
+        Ok(slots)
+    })
+}
+
+fn body() -> Children {
+    body_in(Some(20.0))
 }
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -57,5 +76,33 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.click(by_role(Role::Button).named("Reopen"))?;
             canvas.expect(by_role(Role::Dialog).named("Confirm"))
         }),
+        preview!(modal: ModalProps, "Long body", |p| {
+            modal(
+                ModalProps::props()
+                    .open(p.signal("open", true))
+                    .title("Terms")
+                    .build(),
+                long_body(),
+            )
+        })
+        .title("Overlays/Modal")
+        .viewport(480.0, 360.0)
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            canvas.expect(by_role(Role::Dialog).named("Terms"))?;
+            canvas.expect(by_role(Role::Button).named("Close"))
+        }),
+        preview!(modal: ModalProps, "Narrow window", |p| {
+            modal(
+                ModalProps::props()
+                    .open(p.signal("open", true))
+                    .title("Confirm")
+                    .build(),
+                body_in(None),
+            )
+        })
+        .title("Overlays/Modal")
+        .viewport(240.0, 320.0)
+        .play(|canvas| canvas.expect(by_role(Role::Dialog).named("Confirm"))),
     ]
 }

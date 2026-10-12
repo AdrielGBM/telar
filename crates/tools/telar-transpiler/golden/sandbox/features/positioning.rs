@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -456,7 +457,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                         };
                                         __children.push(box_item(__sbox_14));
                                         let __row_2 = {
-                                            let __node_24 = button(ButtonProps::props().label("Move the badge").ghost(true).on_press(std::rc::Rc::new({ let corner = corner.clone(); move || corner.set((corner.get() + 1) % 4) })).build(), Children::default())?;
+                                            let __node_24 = button(ButtonProps::props().label("Move the badge").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let corner = corner.clone(); move || corner.set((corner.get() + 1) % 4) })).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_24])?
                                         };
                                         __children.push(box_item(__row_2));
@@ -745,8 +746,8 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                         )?;
                                         __children.push(box_item(__node_38));
                                         let __row_4 = {
-                                            let __node_39 = button(ButtonProps::props().label("Fill").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let slot = slot.clone(); move || slot.set(Slot::Filled(7)) })).build(), Children::default())?;
-                                            let __node_40 = button(ButtonProps::props().label("Clear").ghost(true).on_press(std::rc::Rc::new({ let slot = slot.clone(); move || slot.set(Slot::Empty) })).build(), Children::default())?;
+                                            let __node_39 = button(ButtonProps::props().label("Fill").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let slot = slot.clone(); move || slot.set(Slot::Filled(7)) })).build(), Children::default())?;
+                                            let __node_40 = button(ButtonProps::props().label("Clear").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let slot = slot.clone(); move || slot.set(Slot::Empty) })).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_39, __node_40])?
                                         };
                                         __children.push(box_item(__row_4));

@@ -2,6 +2,7 @@ use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Container, LayoutError, LayoutStyle, Reactive, Role};
 
 use crate::checkbox::{CheckboxProps, checkbox};
+use crate::metrics;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
@@ -37,7 +38,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )?;
             let echo = super::sample::text_of(Reactive::of(move || format!("agree · {}", agree.get())))?;
             Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column().gap(8.0),
+                LayoutStyle::new().flex_column().gap(metrics::gap_md()),
                 vec![check, echo],
             )?)
         })

@@ -245,3 +245,38 @@ fn a_scrub_inside_an_open_transaction_joins_it() {
     popover.revert().unwrap();
     assert_eq!(value.peek(), 2.0);
 }
+
+fn mounted(props: ScrubFieldProps) -> ComponentList {
+    fresh();
+    let widget = scrub_field(props, Children::default()).unwrap();
+    let node = widget.layout_node();
+    let tree = ComponentList::new(widget);
+    lay_out(node, 300.0, 40.0);
+    tree
+}
+
+fn handle(tree: &ComponentList) -> RectStyle {
+    crate::test_support::painted_at(tree, crate::test_support::drawn(Role::SpinButton)[0])
+}
+
+#[test]
+fn the_corner_is_the_theme_s_control_role_until_the_scrub_field_tokens_name_one() {
+    crate::test_support::assert_corner_follows_the_role_until_the_tokens_name_one(
+        || mounted(ScrubFieldProps::props().label("W").build()),
+        |tree| handle(tree).radius,
+        |_, role| BorderRadius::all(role),
+        |radius| ScrubFieldTokens {
+            radius: Some(radius),
+            ..ScrubFieldTokens::default()
+        },
+    );
+}
+
+#[test]
+fn a_style_amendment_reshapes_the_handle() {
+    let flat: SurfaceAmendment = Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(0.0)));
+    let tree = mounted(ScrubFieldProps::props().label("W").style(flat).build());
+    let painted = handle(&tree);
+    assert_eq!(painted.radius, BorderRadius::all(0.0));
+    assert!(painted.fill.is_some(), "the rest of the paint is kept");
+}

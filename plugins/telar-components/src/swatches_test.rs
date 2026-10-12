@@ -42,7 +42,7 @@ fn build(
 
 fn swatch_centre(row: Rect, index: u32) -> (f64, f64) {
     let hit = SIZE.max(shared::MIN_TARGET);
-    let step = hit + (shared::spacing() * 0.5 - (hit - SIZE)).max(0.0);
+    let step = hit + (shared::gap_sm() - (hit - SIZE)).max(0.0);
     (
         (row.x + index as f32 * step + hit / 2.0) as f64,
         (row.y + hit / 2.0) as f64,
@@ -140,7 +140,8 @@ fn the_selected_swatch_draws_a_thicker_border_than_the_others() {
         })
         .collect();
 
-    assert_eq!(borders, vec![1.0, 2.0, 1.0, 1.0]);
+    let (hairline, strong) = (shared::border_width(), shared::border_width_strong());
+    assert_eq!(borders, vec![hairline, strong, hairline, hairline]);
 }
 
 #[test]
@@ -162,4 +163,69 @@ fn a_swatch_smaller_than_a_pointer_target_is_pressed_from_the_margin_around_it()
     );
 
     assert_eq!(selected.peek(), Some(0));
+}
+
+#[derive(Clone, Default)]
+struct Plain {
+    swatches: Option<SwatchesTokens>,
+}
+
+impl telar::ThemeTokens for Plain {
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(swatches) = &self.swatches {
+            extensions.insert(swatches.clone());
+        }
+    }
+}
+
+fn faces(style: Option<telar::SurfaceAmendment>) -> Vec<(Rect, telar::RectStyle)> {
+    crate::test_support::fresh_layout_runtime();
+    let mut props = SwatchesProps::props()
+        .colors(palette())
+        .selected(signal(Some(0u32)))
+        .build();
+    props.style = style;
+    let item = swatches(props, Children::default()).unwrap();
+    telar::testing::lay_out_row(item.layout_node(), 400.0, 100.0);
+    ComponentList::new(item)
+        .commands()
+        .iter()
+        .filter_map(|c| match c {
+            DrawCommand::Rect { rect, style } if style.border.is_some() => Some((*rect, **style)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn an_unsized_swatch_is_an_icon_and_a_step_across_and_follows_the_tokens() {
+    telar::set_theme(Plain::default());
+    let drawn = faces(None);
+    let side = shared::icon_size() + shared::gap_sm();
+    assert_eq!((drawn[0].0.width, drawn[0].0.height), (side, side));
+    assert_eq!(drawn[0].1.radius, telar::BorderRadius::all(side / 2.0));
+
+    telar::set_theme(Plain {
+        swatches: Some(SwatchesTokens {
+            size: Some(28.0),
+            ring: Some(3.0),
+        }),
+    });
+    let drawn = faces(None);
+    assert_eq!(drawn[0].0.width, 28.0);
+    assert_eq!(drawn[0].1.border.map(|b| b.widths[0]), Some(3.0));
+}
+
+#[test]
+fn a_style_amendment_reshapes_every_swatch() {
+    telar::set_theme(Plain::default());
+    let square: telar::SurfaceAmendment =
+        Rc::new(|s: telar::RectStyle| s.with_radius(telar::BorderRadius::all(0.0)));
+    let drawn = faces(Some(square));
+    assert_eq!(drawn.len(), palette().len());
+    assert!(
+        drawn
+            .iter()
+            .all(|(_, style)| style.radius == telar::BorderRadius::all(0.0))
+    );
 }

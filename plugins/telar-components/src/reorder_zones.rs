@@ -12,9 +12,6 @@ use telar::{
 use crate::reorderable::ItemBuilder;
 use crate::shared;
 
-/// Thickness of the insertion line.
-const LINE: f32 = 2.0;
-
 /// An item's place: which container, and where in it. As a drop target, `index` counts slots in that container before the move, the frame [`telar::apply_move`] reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Slot {
@@ -221,32 +218,35 @@ impl ReorderGroup {
 
         let line_held = self.0.held;
         let line_paint_held = self.0.held;
-        let line = StyledContainer::new(
+        let line_box = move || {
+            let at_origin = LayoutStyle::new()
+                .absolute()
+                .inset_top(0.0)
+                .inset_start(0.0);
+            let (across, along) = (
+                SizeDimension::Px(shared::focus_ring_width()),
+                SizeDimension::Percent(1.0),
+            );
             match axis {
-                Axis::Horizontal => LayoutStyle::new()
-                    .absolute()
-                    .inset_top(0.0)
-                    .inset_start(0.0)
-                    .width(LINE)
-                    .height(SizeDimension::Percent(1.0)),
-                Axis::Vertical => LayoutStyle::new()
-                    .absolute()
-                    .inset_top(0.0)
-                    .inset_start(0.0)
-                    .width(SizeDimension::Percent(1.0))
-                    .height(LINE),
-            },
+                Axis::Horizontal => at_origin.width(across).height(along),
+                Axis::Vertical => at_origin.width(along).height(across),
+            }
+        };
+        let line = StyledContainer::new(
+            line_box(),
             move |_| match line_paint_held.get().and_then(|held| held.to) {
                 Some(to) if to.zone == index => RectStyle::default().with_fill(shared::accent()),
                 _ => RectStyle::default(),
             },
             vec![],
         )?
+        .styled_by(line_box)
         .input_transparent()
         .with_transform(move |rect| {
             let held = line_held.get()?;
             let to = held.to.filter(|to| to.zone == index)?;
-            let along = line_position(held.zone(index)?, to.index, gap) - LINE / 2.0;
+            let along =
+                line_position(held.zone(index)?, to.index, gap) - shared::focus_ring_width() / 2.0;
             Some(match axis {
                 Axis::Horizontal => [1.0, 0.0, 0.0, 1.0, along - rect.x, 0.0],
                 Axis::Vertical => [1.0, 0.0, 0.0, 1.0, 0.0, along - rect.y],
@@ -517,7 +517,7 @@ pub struct ReorderZoneProps {
     #[props(default)]
     pub gap: f32,
     /// The smallest the container gets on both axes, so an empty one is still somewhere to drop.
-    #[props(default = 24.0)]
+    #[props(default = shared::MIN_TARGET)]
     pub min_extent: f32,
 }
 

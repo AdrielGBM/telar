@@ -85,7 +85,7 @@ telar::__previews! {
                 button(
                     ButtonProps::props()
                         .label(p.arg("label", "Save"))
-                        .ghost(p.arg("ghost", false))
+                        .variant(p.arg("variant", ButtonVariant::Solid))
                         .build(),
                     Children::default(),
                 )
@@ -361,9 +361,11 @@ includes them: `cargo telar preview -p catalogue`.
 dependency of your package that `cargo telar new` writes. Without it the command falls back to a plain page that
 lists every preview, and says how to add it.
 
-- **Top bar.** The project's name, a search trigger (`/` or Ctrl/Cmd+K), the Canvas, Matrix and Docs views, and the
-  environment every canvas is shown in: mode, locale, direction, control size, background, high contrast, reduced
-  motion. Below 1280 px the canvas settings fold into one menu.
+- **Top bar.** A bold Preview label and the Settings menu, setting the environment every canvas is shown in (mode, locale, direction,
+  control size, background, high contrast, reduced motion); a search field centred on the window, showing the project's
+  name, that opens the command palette (`/` or Ctrl/Cmd+K), which folds into a search button before the views when the window is too narrow for it; and the Canvas, Matrix and Docs views as icon tabs. On the
+  desktop it is the window's title bar: the window opens without the system's decorations, the bar moves it and a
+  double-click maximizes it, minimize, maximize and close sit at its end, and the window's borders resize it.
 - **Sidebar.** Search over the tree of group, component and preview, with a badge on a preview whose snapshot
   failed. Below 900 px it becomes a drawer.
 - **Canvas.** One preview, mounted alone on a surface of its own, with its size, device frame, zoom, rulers, grid,

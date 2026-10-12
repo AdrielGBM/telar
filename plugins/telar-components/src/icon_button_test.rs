@@ -156,3 +156,75 @@ fn an_icon_baked_from_rust_draws_its_artwork() {
         "{commands:?}"
     );
 }
+
+fn mounted(props: IconButtonProps) -> ComponentList {
+    crate::test_support::fresh_layout_runtime();
+    mount(icon_button(props, Children::default()).unwrap())
+}
+
+fn square(tree: &ComponentList) -> RectStyle {
+    crate::test_support::painted_at(tree, crate::test_support::drawn(Role::Button)[0])
+}
+
+#[test]
+fn the_corner_is_the_theme_s_control_role_until_the_icon_button_tokens_name_one() {
+    crate::test_support::assert_corner_follows_the_role_until_the_tokens_name_one(
+        || {
+            mounted(
+                IconButtonProps::props()
+                    .icon("lucide:search")
+                    .label("Search")
+                    .build(),
+            )
+        },
+        |tree| square(tree).radius,
+        |_, role| BorderRadius::all(role),
+        |radius| IconButtonTokens {
+            radius: Some(radius),
+        },
+    );
+}
+
+#[test]
+fn a_toggle_held_on_wears_the_theme_s_held_wash() {
+    let tree = mounted(
+        IconButtonProps::props()
+            .icon("lucide:star")
+            .label("Favourite")
+            .pressed(true)
+            .build(),
+    );
+    assert_eq!(
+        square(&tree).fill.map(|paint| paint.solid_color()),
+        Some(telar::use_theme_tokens().highlight_med())
+    );
+}
+
+/// `@class` and the `style` prop amend the finished paint, so they reach the hovered square as well as the resting one.
+#[test]
+fn a_style_amendment_reshapes_every_state() {
+    use telar::testing::{centre, moved, route};
+
+    let flat: SurfaceAmendment = Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(0.0)));
+    let mut tree = mounted(
+        IconButtonProps::props()
+            .icon("lucide:search")
+            .label("Search")
+            .style(flat)
+            .build(),
+    );
+    assert_eq!(square(&tree).radius, BorderRadius::all(0.0));
+    let (x, y) = centre(crate::test_support::drawn(Role::Button)[0]);
+    route(&mut tree, &moved(x, y));
+    let hovered = square(&tree);
+    assert_eq!(
+        hovered.fill.map(|paint| paint.solid_color()),
+        Some(telar::use_theme_tokens().highlight_low()),
+        "the hover wash is drawn"
+    );
+    assert_eq!(
+        hovered.radius,
+        BorderRadius::all(0.0),
+        "on the amended shape"
+    );
+}

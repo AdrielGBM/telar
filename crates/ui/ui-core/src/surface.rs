@@ -11,14 +11,30 @@ use motion_core::{Animated, Easing, tween};
 use platform_core::{Event, Key, NamedKey, PointerButton};
 use reactive_core::RwSignal;
 use renderer_core::{Color, RectStyle};
+use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::context::{compute_layout, mark_dirty, new_container, track_layout};
 use crate::input_region::{InputHandle, Placement};
 use crate::layout_item::LayoutItem;
 
-/// The default scrim wash: ~35 % black over the content behind a drawer/modal. Rendered as a fill (not an opacity layer) so the panel above it stays fully opaque. Kept as the value a caller reaches for rather than being folded into the scaffold, because [`SurfaceScaffold`] now takes the colour itself.
-pub const DEFAULT_SCRIM: Color = Color::rgba(0.0, 0.0, 0.0, 0.35);
+/// What a [`SurfaceScaffold`] lays over the content behind its panel: a fill rather than an opacity layer, so the panel above it stays fully opaque.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Scrim {
+    /// The theme's `overlay`, read each time the scaffold paints, so a theme or mode switch reaches a surface that is already open.
+    Theme,
+    /// A colour of the caller's own.
+    Color(Color),
+}
+
+impl Scrim {
+    pub fn color(self) -> Color {
+        match self {
+            Self::Theme => use_theme_tokens().overlay(),
+            Self::Color(color) => color,
+        }
+    }
+}
 
 /// Which side of the viewport a [`SurfaceScaffold`] pins its panel to, and the direction it slides in from.
 ///
@@ -119,7 +135,7 @@ pub struct SurfaceScaffold {
     panel_rect: Option<RwSignal<Rect>>,
     root_rect: Option<RwSignal<Rect>>,
     content: Box<dyn LayoutItem>,
-    scrim: Option<Color>,
+    scrim: Option<Scrim>,
     dismiss: Option<Rc<dyn Fn()>>,
     edge: Edge,
     transition: Option<SurfaceTransition>,
@@ -127,12 +143,12 @@ pub struct SurfaceScaffold {
 }
 
 impl SurfaceScaffold {
-    /// `margin` is `(top, right, bottom, left)` and becomes padding on all four sides, so the panel floats off every viewport edge rather than only the one it is pinned to. `scrim` paints behind the panel when set (see [`DEFAULT_SCRIM`]); `dismiss` fires on a press outside it, and `None` means outside presses fall through.
+    /// `margin` is `(top, right, bottom, left)` and becomes padding on all four sides, so the panel floats off every viewport edge rather than only the one it is pinned to. `scrim` paints behind the panel when set (see [`Scrim`]); `dismiss` fires on a press outside it, and `None` means outside presses fall through.
     pub fn new(
         edge: Edge,
         align: AlignItems,
         margin: (i32, i32, i32, i32),
-        scrim: Option<Color>,
+        scrim: Option<Scrim>,
         dismiss: Option<Rc<dyn Fn()>>,
         content: Box<dyn LayoutItem>,
     ) -> Result<Self, LayoutError> {
@@ -227,9 +243,9 @@ impl Component for SurfaceScaffold {
         };
         let panel = apply_enter(content, matrix, opacity);
         match (self.scrim, self.root_rect.as_ref()) {
-            (Some(color), Some(rect)) => {
+            (Some(scrim), Some(rect)) => {
                 let scrim = apply_enter(
-                    RenderNode::rect(rect.get(), RectStyle::filled(color, 0.0)),
+                    RenderNode::rect(rect.get(), RectStyle::filled(scrim.color(), 0.0)),
                     IDENTITY,
                     opacity,
                 );

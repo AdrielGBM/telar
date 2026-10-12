@@ -97,8 +97,9 @@ fn canvas_rect(tree: &ComponentList, needle: &str) -> Rect {
         .unwrap_or_else(|| panic!("{needle} is drawn outside any canvas"))
 }
 
+/// Whether `inner` lies within `outer`, short of the pixel layout may take off a box sized by a line of text when it rounds the box's edges, which the line overhangs.
 fn inside(inner: Rect, outer: Rect) -> bool {
-    const SLACK: f32 = 0.5;
+    const SLACK: f32 = 1.0;
     inner.x >= outer.x - SLACK
         && inner.y >= outer.y - SLACK
         && inner.x + inner.width <= outer.x + outer.width + SLACK

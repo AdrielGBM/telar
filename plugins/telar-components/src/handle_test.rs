@@ -244,3 +244,99 @@ fn an_arrow_key_step_is_not_a_drag() {
     assert_eq!(canvas.value.peek(), 21.0);
     assert!(told.borrow().is_empty());
 }
+
+#[derive(Clone, Default)]
+struct Plain {
+    handles: Option<HandleTokens>,
+}
+
+impl telar::ThemeTokens for Plain {
+    fn border_width_strong(&self) -> f32 {
+        2.5
+    }
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(handles) = &self.handles {
+            extensions.insert(handles.clone());
+        }
+    }
+}
+
+fn dot_paint(canvas: &Canvas) -> (telar::Rect, RectStyle) {
+    canvas
+        .tree
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Rect { rect, style } if style.border.is_some() => {
+                Some((*rect, **style))
+            }
+            _ => None,
+        })
+        .expect("the dot is ringed")
+}
+
+#[test]
+fn the_dot_is_a_ringed_pill_a_step_smaller_than_a_slider_s_thumb() {
+    telar::set_theme(Plain::default());
+    let canvas = canvas(20.0);
+    let (rect, style) = dot_paint(&canvas);
+    let side = crate::metrics::icon_size() - crate::metrics::gap_sm();
+    assert_eq!((rect.width, rect.height), (side, side));
+    assert_eq!(style.radius, telar::BorderRadius::all(side / 2.0));
+    assert_eq!(style.border.map(|b| b.widths[0]), Some(2.5));
+}
+
+#[test]
+fn the_handle_tokens_size_the_dot_and_its_ring() {
+    telar::set_theme(Plain {
+        handles: Some(HandleTokens {
+            size: Some(20.0),
+            ring: Some(1.0),
+        }),
+    });
+    let canvas = canvas(20.0);
+    let (rect, style) = dot_paint(&canvas);
+    assert_eq!((rect.width, rect.height), (20.0, 20.0));
+    let shown = crate::test_support::drawn(telar::focus::Role::Slider)[0];
+    assert_eq!(
+        (shown.x + shown.width / 2.0, shown.y + shown.height / 2.0),
+        (20.0, 50.0),
+        "centred on its point at any size"
+    );
+    assert_eq!(style.border.map(|b| b.widths[0]), Some(1.0));
+}
+
+#[test]
+fn a_press_just_outside_the_small_dot_still_takes_hold_of_it() {
+    telar::set_theme(Plain::default());
+    let mut canvas = canvas(20.0);
+    let reach = crate::metrics::MIN_TARGET / 2.0 - 1.0;
+    canvas.event(press(20.0 + reach, 50.0));
+    canvas.event(moved(60.0 + reach, 50.0));
+    assert_eq!(canvas.value.peek(), 60.0);
+    canvas.event(release(60.0 + reach, 50.0));
+}
+
+#[test]
+fn a_style_amendment_reshapes_the_dot() {
+    fresh_layout_runtime();
+    let square: telar::SurfaceAmendment =
+        Rc::new(|s: RectStyle| s.with_radius(telar::BorderRadius::all(0.0)));
+    let mut props = HandleProps::props()
+        .to_point(Rc::new(|value| (value, 50.0)))
+        .build();
+    props.style = Some(square);
+    let dot = handle(props, Children::default()).unwrap();
+    let node = dot.layout_node();
+    let tree = ComponentList::new(dot);
+    lay_out(node, 200.0, 200.0);
+    let style = tree
+        .commands()
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Rect { style, .. } => Some(**style),
+            _ => None,
+        })
+        .expect("the dot paints");
+    assert_eq!(style.radius, telar::BorderRadius::all(0.0));
+}

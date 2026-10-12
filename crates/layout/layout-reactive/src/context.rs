@@ -424,6 +424,11 @@ pub fn box_model(node: NodeId) -> Option<geometry_core::BoxModel> {
     with_runtime_ref(|rt| rt.engine.box_model(node).ok())
 }
 
+/// The width `node` was laid out at before layout rounded its edges to whole pixels, or `None` for a node this runtime does not own. A plain read, like [`box_model`].
+pub fn unrounded_width(node: NodeId) -> Option<f32> {
+    with_runtime_ref(|rt| rt.engine.unrounded_width(node).ok())
+}
+
 /// The node `node` hangs from, or `None` at a root.
 ///
 /// The **layout-tree** parent, which is not always the visual one: a portalled overlay is recorded against the host it attached to, so anything walking up from inside one arrives where the markup put it rather than where the compositor draws it. That is the link a cascade has to follow — CSS inherits through the document, not through the stacking context — and it is the same one [`is_hidden`] already climbs.

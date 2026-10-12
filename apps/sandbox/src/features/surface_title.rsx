@@ -22,15 +22,15 @@ col gap:20
             text "{$shown}" font_size:15 color:$theme.ink
             row gap:8 wrap
                 button label:"Name this page" on_press:(|| telar::set_page_title(Some("Surface title".to_string())))
-                button label:"No page title" ghost on_press:(|| telar::set_page_title(None))
-                button label:"Rename the app" ghost on_press:(|| telar::window::set_title("Telar sandbox"))
+                button label:"No page title" variant:ButtonVariant::Ghost on_press:(|| telar::set_page_title(None))
+                button label:"Rename the app" variant:ButtonVariant::Ghost on_press:(|| telar::window::set_title("Telar sandbox"))
             text "A navigator that follows the app's address names the page itself, from its current route's title." font_size:12 color:$theme.muted
         code_line code:"impl Route for Page   ·   fn title(&self) -> Option<String>   ·   Some(t!(\"credits.title\"))"
     example title:"A rule of your own"
         card gap:10
             row gap:8 wrap
-                button label:"Page | App" ghost on_press:(|| telar::set_title_format(bar_rule))
-                button label:"Page — App" ghost on_press:(|| telar::set_title_format(telar::compose_title))
+                button label:"Page | App" variant:ButtonVariant::Ghost on_press:(|| telar::set_title_format(bar_rule))
+                button label:"Page — App" variant:ButtonVariant::Ghost on_press:(|| telar::set_title_format(telar::compose_title))
             text "The rule runs inside the effect that derives the title, so one that translates follows the locale too." font_size:12 color:$theme.muted
         code_line code:"set_title_format(bar_rule)   ·   compose_title(parts)   ·   use_surface_title()"
     example title:"Where each target shows it"

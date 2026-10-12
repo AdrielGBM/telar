@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -61,8 +62,8 @@ pub fn indicators(props: IndicatorsProps, children: Children) -> Result<Box<dyn 
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                                 )?
                                             };
-                                            let __node_4 = button(ButtonProps::props().label("Advance").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let p = p.clone(); move || { p.set((p.get() + 0.15).min(1.0)) } })).build(), Children::default())?;
-                                            let __node_5 = button(ButtonProps::props().label("Reset").ghost(true).on_press(std::rc::Rc::new({ let p = p.clone(); move || { p.set(0.0) } })).build(), Children::default())?;
+                                            let __node_4 = button(ButtonProps::props().label("Advance").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let p = p.clone(); move || { p.set((p.get() + 0.15).min(1.0)) } })).build(), Children::default())?;
+                                            let __node_5 = button(ButtonProps::props().label("Reset").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let p = p.clone(); move || { p.set(0.0) } })).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__text_0, __node_4, __node_5])?
                                         };
                                         __children.push(box_item(__row_0));

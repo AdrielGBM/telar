@@ -28,7 +28,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(context_menu: ContextMenuProps, "Open", |p| {
             let open = p.signal("open", true);
-            let width = p.arg("width", 180.0f32);
             let reopen = button(
                 ButtonProps::props()
                     .label("Show the menu")
@@ -47,7 +46,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         ContextMenuProps::props()
                             .at((24.0, 64.0))
                             .entries(entries())
-                            .width(width)
                             .on_close(Rc::new(move || open.set(false)))
                             .build(),
                         Children::default(),

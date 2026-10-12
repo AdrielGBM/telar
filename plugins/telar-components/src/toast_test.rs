@@ -247,3 +247,83 @@ fn show_toast_posts_to_the_one_shared_queue() {
     toasts().dismiss(id);
     assert!(shared.is_empty());
 }
+
+/// A toaster showing one notice, built after the caller installed its theme.
+fn one_notice(props: ToasterProps, queue: Toasts) -> ComponentList {
+    crate::test_support::fresh_layout_runtime();
+    set_surface_size(SURFACE);
+    let mut tree = ComponentList::new(toaster(props, Children::default()).unwrap());
+    queue.push(Toast::new("Saved").until_dismissed());
+    for _ in 0..2 {
+        relayout_if_dirty();
+        let _ = tree.commands();
+    }
+    route(&mut tree, &moved(0.0, 0.0));
+    tree
+}
+
+/// The notice's card: the last box drawn over the whole of the region a reader is told about.
+fn card(tree: &ComponentList) -> (telar::Rect, RectStyle) {
+    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let region = nodes
+        .iter()
+        .find(|node| node.role == Role::Status)
+        .expect("the stack is announced");
+    (
+        region.rect,
+        crate::test_support::painted_at(tree, region.rect),
+    )
+}
+
+#[test]
+fn a_notice_is_rounded_by_the_surface_role_until_the_tokens_name_a_radius() {
+    let queue = Toasts::new();
+    crate::test_support::assert_panel_corner_follows_its_role(
+        crate::test_support::PanelRole::Surface,
+        || one_notice(ToasterProps::props().toasts(queue).build(), queue),
+        |tree| card(tree).1.radius,
+        BorderRadius::all,
+        |radius| ToastTokens {
+            radius: Some(radius),
+            ..ToastTokens::default()
+        },
+    );
+}
+
+#[test]
+fn an_unset_width_is_the_tokens_and_a_named_one_wins() {
+    telar::set_theme(crate::test_support::PanelTheme {
+        role: crate::test_support::PanelRole::Surface,
+        radius: 6.0,
+        tokens: Some(ToastTokens {
+            width: Some(300.0),
+            ..ToastTokens::default()
+        }),
+    });
+    let queue = Toasts::new();
+    let tree = one_notice(ToasterProps::props().toasts(queue).build(), queue);
+    assert_eq!(card(&tree).0.width, 300.0);
+
+    let queue = Toasts::new();
+    let tree = one_notice(
+        ToasterProps::props().toasts(queue).width(240.0).build(),
+        queue,
+    );
+    assert_eq!(card(&tree).0.width, 240.0, "the toaster's own width wins");
+}
+
+#[test]
+fn a_style_amendment_restyles_every_notice() {
+    let ink = Color::rgb(0.2, 0.6, 0.3);
+    let queue = Toasts::new();
+    let tree = one_notice(
+        ToasterProps::props()
+            .toasts(queue)
+            .style(Rc::new(move |paint: RectStyle| paint.with_fill(ink)) as telar::SurfaceAmendment)
+            .build(),
+        queue,
+    );
+    let (_, paint) = card(&tree);
+    assert_eq!(paint.fill, Some(ink.into()));
+    assert!(paint.border.is_some(), "the notice's own frame is kept");
+}

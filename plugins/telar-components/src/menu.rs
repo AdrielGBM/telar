@@ -4,14 +4,68 @@ use std::rc::Rc;
 
 #[cfg(test)]
 use telar::Slots;
-use telar::{Children, Color, LayoutError, LayoutItem, Props, Reactive};
+use telar::{Children, Color, LayoutError, LayoutItem, Props, Reactive, SurfaceAmendment};
 
 use crate::dropdown;
-// Re-exported for the test module below, which reads them via `use super::*` to compute click points.
+use crate::shared;
+// What the test module below reads via `use super::*` to compute click points.
 #[cfg(test)]
-use crate::dropdown::{PANEL_WIDTH, ROW_HEIGHT, TRIGGER_HEIGHT, panel_pad};
+fn panel_width() -> f32 {
+    dropdown::width(None)
+}
+#[cfg(test)]
+use crate::shared::{panel_pad, row_height};
 #[cfg(test)]
 use telar::track_layout;
+
+/// A menu's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the theme role named beside it, read when the trigger is laid out or painted. The rows of the list it opens follow [`ListTokens`](crate::ListTokens).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MenuTokens {
+    /// Corner of the trigger. `None` is the theme's `radius_control`.
+    pub radius: Option<f32>,
+    /// Space between the trigger's edge and its label at the regular control size, scaled with the control size in force. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    pub pad_x: Option<f32>,
+    /// Width of a bordered trigger's frame. `None` is the theme's `border_width`.
+    pub border_width: Option<f32>,
+    /// Width of the trigger, unless it is stretched or fitted, and of the list it opens, at the regular control size and scaled with the control size in force. `None` is 13 ems of the document's text.
+    pub width: Option<f32>,
+}
+
+impl MenuTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_control)
+    }
+
+    pub fn pad_x(&self) -> f32 {
+        self.pad_x
+            .map_or_else(shared::control_pad_x, |pad| pad * telar::control_scale())
+    }
+
+    pub fn border_width(&self) -> f32 {
+        self.border_width.unwrap_or_else(shared::border_width)
+    }
+
+    pub fn width(&self) -> f32 {
+        dropdown::width(self.width)
+    }
+
+    fn geometry() -> dropdown::Geometry {
+        let tokens = Self::current();
+        dropdown::Geometry {
+            radius: tokens.radius(),
+            pad_x: tokens.pad_x(),
+            border_width: tokens.border_width(),
+            width: tokens.width(),
+        }
+    }
+}
 
 /// A click-triggered list of action items: a labelled trigger button that opens an anchored list; picking an item fires `on_select` with its index and closes. Unlike `select`, a menu holds no bound selection state — its items are one-shot actions. High-level sugar built on the overlay anchor + click-through primitives; lives in `telar-components`, not the kernel.
 #[derive(Props)]
@@ -22,7 +76,7 @@ pub struct MenuProps {
     /// Fired with the index of the chosen item when it is picked.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(u32)>>,
-    /// Accent colour (trigger border, hover highlight). `Color::TRANSPARENT` (the default) means "unset" and falls back to the theme accent. A closure so a theme token re-reads on every render.
+    /// The colour a bordered trigger is framed in and the rows' washes are tinted with. `Color::TRANSPARENT` (the default) frames it in the theme accent and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
     /// Take the width the row offers instead of the fixed trigger width — see [`crate::SelectProps::stretch`].
@@ -33,12 +87,15 @@ pub struct MenuProps {
     /// A prop and not a decision settled inside the component, because both readings are legitimate: a menu standing alone in a header wants no frame, and one sitting in a row of fields wants to match them.
     #[props(default)]
     pub bordered: bool,
-    /// Show the caret that says the trigger opens something. On by default.
+    /// Show the caret that says the trigger opens something. On by default. Without it the label stands centred in the trigger, as a button's does.
     #[props(default = true)]
     pub caret: bool,
-    /// Amends the paint of the trigger — this component's **principal surface**, the thing a caller means when they point at a menu. See [`telar::SurfaceStyle`] for why it takes the finished style rather than naming one property, and for when a theme token is the right instrument instead.
+    /// Size the trigger to its label instead of the fixed width a column of fields shares. Off by default; the list it opens keeps its own width.
+    #[props(default)]
+    pub fit: bool,
+    /// Amends the paint of the trigger — this component's **principal surface**, the thing a caller means when they point at a menu — at rest, hovered and held open. See [`telar::SurfaceStyle`] for when a theme token or [`MenuTokens`] is the right instrument instead.
     #[props(some, default)]
-    pub style: Option<Rc<dyn Fn(telar::RectStyle) -> telar::RectStyle>>,
+    pub style: Option<SurfaceAmendment>,
 }
 
 // A menu carries no bound selection, so its rows are one-shot actions: no index is written back and no row is highlighted.
@@ -53,148 +110,10 @@ pub fn menu(props: MenuProps, children: Children) -> Result<Box<dyn LayoutItem>,
         stretch: props.stretch,
         bordered: props.bordered,
         caret: props.caret,
+        fit: props.fit,
+        geometry: MenuTokens::geometry,
         style: props.style,
     })
-}
-
-/// A plain row per label, which is what the markup `menu … item label:"…"` compiles to. Enough for the tests that care about the trigger and the panel rather than about what a row can be.
-#[cfg(test)]
-fn rows(labels: &'static [&'static str]) -> Children {
-    Children::new(move || {
-        let mut slots = Slots::new();
-        for label in labels {
-            slots.push(
-                None,
-                crate::list::item(
-                    crate::list::ItemProps::props()
-                        .label(Reactive::of(move || label.to_string()))
-                        .build(),
-                    Children::default(),
-                )?,
-            );
-        }
-        Ok(slots)
-    })
-}
-
-/// The shape of a trigger is the caller's call, not the component's.
-///
-/// The default splits them by what they are — a menu is a button, a select is a field — but a menu dropped into a row of inputs wants to match them, and there has to be a way to say so that is not editing the catalogue. Guards the props rather than the pixels: what matters is that they *reach* the trigger's paint at all.
-#[cfg(test)]
-#[test]
-fn a_menu_can_be_asked_for_a_field_and_for_no_caret() {
-    use telar::DrawCommand;
-    use telar::{ComponentList, LayoutItem};
-
-    let strokes = |bordered: bool, caret: bool| {
-        crate::test_support::fresh_layout_runtime();
-        let item = menu(
-            MenuProps::props()
-                .label("File")
-                .bordered(bordered)
-                .caret(caret)
-                .build(),
-            rows(&["New"]),
-        )
-        .unwrap();
-        // Laid out first: the caret is drawn by a `Canvas`, which has nothing to draw into until it has a rect.
-        let root = telar::new_container(
-            telar::LayoutStyle::new().width(300.0).height(80.0),
-            &[item.layout_node()],
-        )
-        .unwrap();
-        telar::compute_layout(
-            root,
-            telar::AvailableSpace::Definite(300.0),
-            telar::AvailableSpace::Definite(80.0),
-        )
-        .unwrap();
-        let tree = ComponentList::new(item);
-        let cmds = tree.commands().to_vec();
-        let bordered_boxes = cmds
-            .iter()
-            .filter(|c| matches!(c, DrawCommand::Rect { style, .. } if style.border.is_some()))
-            .count();
-        let paths = cmds
-            .iter()
-            .filter(|c| matches!(c, DrawCommand::Path { .. }))
-            .count();
-        (bordered_boxes, paths)
-    };
-
-    let (plain_border, plain_caret) = strokes(false, true);
-    assert_eq!(
-        plain_border, 0,
-        "a menu is a button, so no frame by default"
-    );
-    assert_eq!(plain_caret, 1, "and it says it opens something");
-
-    let (asked_border, _) = strokes(true, true);
-    assert_eq!(asked_border, 1, "a caller that wants the field gets it");
-
-    let (_, no_caret) = strokes(false, false);
-    assert_eq!(no_caret, 0, "and one that wants no caret gets none");
-}
-
-/// A caller can restyle the surface without editing the catalogue.
-///
-/// The pressure this relieves is real: an app wanted its menu trigger squared off, and the only lever the catalogue offered was the theme's radius — which moves every rounded thing in the application. Editing `dropdown.rs` to hold one app's opinion is how a shared component stops being shared.
-///
-/// The amendment must *compose*, not replace: the component still decides that a bordered trigger wears a stroke, and the caller only says what they came to say.
-#[cfg(test)]
-#[test]
-fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
-    use telar::{BorderRadius, DrawCommand, ShapeStyle};
-    use telar::{ComponentList, LayoutItem};
-
-    crate::test_support::fresh_layout_runtime();
-    let item = menu(
-        MenuProps::props()
-            .label("File")
-            .bordered(true)
-            .style(Rc::new(|s| {
-                s.with_radius(BorderRadius::all(0.0))
-                    .with_fill(Color::rgba(1.0, 0.0, 0.0, 1.0))
-            }))
-            .build(),
-        rows(&["New"]),
-    )
-    .unwrap();
-    let root = telar::new_container(
-        telar::LayoutStyle::new().width(300.0).height(80.0),
-        &[item.layout_node()],
-    )
-    .unwrap();
-    telar::compute_layout(
-        root,
-        telar::AvailableSpace::Definite(300.0),
-        telar::AvailableSpace::Definite(80.0),
-    )
-    .unwrap();
-    let tree = ComponentList::new(item);
-    let trigger = tree
-        .commands()
-        .iter()
-        .find_map(|c| match c {
-            DrawCommand::Rect { style, .. } if style.border.is_some() => Some(style.clone()),
-            _ => None,
-        })
-        .expect("a bordered trigger is painted");
-
-    assert_eq!(
-        trigger.radius,
-        BorderRadius::all(0.0),
-        "the caller's radius reaches the paint"
-    );
-    assert_eq!(
-        trigger.fill,
-        Some(telar::Paint::Solid(Color::rgba(1.0, 0.0, 0.0, 1.0))),
-        "and so does their fill"
-    );
-    assert!(
-        trigger.border.is_some(),
-        "while the component keeps the border it decided a field wears"
-    );
 }
 
 #[cfg(test)]

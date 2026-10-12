@@ -30,15 +30,15 @@ col gap:20
             text "the app's choice · {$chosen}" font_size:15 color:$theme.ink
             text "in effect · {$effective}" font_size:15 color:$theme.primary
             row gap:8 wrap
-                button label:"Follow the system" ghost on_press:(|| telar::set_reduced_motion_override(None))
-                button label:"Less motion" ghost on_press:(|| telar::set_reduced_motion_override(Some(true)))
-                button label:"Full motion" ghost on_press:(|| telar::set_reduced_motion_override(Some(false)))
+                button label:"Follow the system" variant:ButtonVariant::Ghost on_press:(|| telar::set_reduced_motion_override(None))
+                button label:"Less motion" variant:ButtonVariant::Ghost on_press:(|| telar::set_reduced_motion_override(Some(true)))
+                button label:"Full motion" variant:ButtonVariant::Ghost on_press:(|| telar::set_reduced_motion_override(Some(false)))
             text "The choice is kept in the target's preference store: a file in the app's config directory, or localStorage on the web." font_size:12 color:$theme.muted
         code_line code:"set_reduced_motion_override(Some(true))   ·   use_reduced_motion()   ·   use_system_reduced_motion()"
     example title:"Every animation follows the value in effect"
         card gap:12
             row gap:12 align:center
-                button label:"Slide" fill:$theme.primary on_press:(|| $pulse.set(if $pulse.get() < 0.5 { 1.0 } else { 0.0 }))
+                button label:"Slide" color:$theme.primary on_press:(|| $pulse.set(if $pulse.get() < 0.5 { 1.0 } else { 0.0 }))
                 spinner size:20
             box fill:$theme.surface_alt radius:6 height:12 width:260
                 box fill:$theme.primary radius:6 height:12 width:40 translate_x:($pulse * 220.0) transition(translate_x 1200ms ease-in-out)

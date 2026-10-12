@@ -6,26 +6,26 @@ element group
       element group
         element tablist
           element tab
-            rect 265,284 95x32 fill=#7394ffff radius=15
+            rect 277,286 87x28 fill=#7394ffff radius=10
             element group
-              matrix 1,0,0,1,281,292
-                text 0,0 63x16.8 "Overview" size=14 family=sans-serif weight=400 color=#0d0f1fff lang=en
+              matrix 1,0,0,1,289,286
+                text 0,5 63x16.8 "Overview" size=14 family=sans-serif weight=400 color=#0d0f1fff lang=en
               end
             end
           end
           element tab
-            rect 364,284 82x32 radius=15
+            rect 368,286 73x28 radius=10
             element group
-              matrix 1,0,0,1,380,292
-                text 0,0 50x16.8 "Activity" size=14 family=sans-serif weight=400 color=#ebedf5b3 lang=en
+              matrix 1,0,0,1,380,286
+                text 0,5 49.61x16.8 "Activity" size=14 family=sans-serif weight=400 color=#ebedf5b3 lang=en
               end
             end
           end
           element tab
-            rect 450,284 86x32 radius=15
+            rect 445,286 78x28 radius=10
             element group
-              matrix 1,0,0,1,466,292
-                text 0,0 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#ebedf5b3 lang=en
+              matrix 1,0,0,1,457,286
+                text 0,5 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#ebedf5b3 lang=en
               end
             end
           end

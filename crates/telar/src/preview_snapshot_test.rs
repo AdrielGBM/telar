@@ -200,7 +200,7 @@ fn a_padding_change_reads_as_a_line_diff_of_the_draw_text() {
     assert!(
         removed
             .iter()
-            .any(|line| line.ends_with(" rect 16,16 59x33 fill=#2255aaff radius=4"))
+            .any(|line| line.ends_with(" rect 16,16 58x33 fill=#2255aaff radius=4"))
             && removed
                 .iter()
                 .any(|line| line.ends_with("matrix 1,0,0,1,24,24")),
@@ -209,7 +209,7 @@ fn a_padding_change_reads_as_a_line_diff_of_the_draw_text() {
     assert!(
         added
             .iter()
-            .any(|line| line.ends_with(" rect 16,16 67x41 fill=#2255aaff radius=4"))
+            .any(|line| line.ends_with(" rect 16,16 66x41 fill=#2255aaff radius=4"))
             && added
                 .iter()
                 .any(|line| line.ends_with("matrix 1,0,0,1,28,28")),

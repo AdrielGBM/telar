@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 
@@ -19,12 +20,16 @@ pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn Layout
 
     let __col_0 = {
         let __col_1 = {
-            let __text_0 = {
-                Text::declaring(
-                    || "▲ rsx".to_string(),
-                    LayoutStyle::new(),
-                    { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(20.0).with_color(theme.get().ink) },
-                )?
+            let __row_0 = {
+                let __node_0 = icon(IconProps::props().name(("lucide:triangle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_1FFBD581), true)).size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
+                let __text_0 = {
+                    Text::declaring(
+                        || "rsx".to_string(),
+                        LayoutStyle::new(),
+                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(20.0).with_color(theme.get().ink) },
+                    )?
+                };
+                Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_0, __text_0])?
             };
             let __text_1 = {
                 Text::declaring(
@@ -33,7 +38,7 @@ pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn Layout
                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                 )?
             };
-            Container::new(LayoutStyle::new().flex_column().gap(2.0), children![__text_0, __text_1])?.role(::telar::Role::Banner)
+            Container::new(LayoutStyle::new().flex_column().gap(2.0), children![__row_0, __text_1])?.role(::telar::Role::Banner)
         };
         let __col_2 = {
             let __text_2 = {
@@ -44,11 +49,11 @@ pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn Layout
                 )?
             };
             let __col_3 = {
-                let __row_0 = {
-                    let __node_0 = button(ButtonProps::props().label("Modern").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("modern"))).build(), Children::default())?;
-                    let __node_1 = button(ButtonProps::props().label("Pastel").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("pastel"))).build(), Children::default())?;
-                    let __node_2 = button(ButtonProps::props().label("Midnight").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("midnight"))).build(), Children::default())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), children![__node_0, __node_1, __node_2])?
+                let __row_1 = {
+                    let __node_1 = button(ButtonProps::props().label("Modern").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("modern"))).build(), Children::default())?;
+                    let __node_2 = button(ButtonProps::props().label("Pastel").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("pastel"))).build(), Children::default())?;
+                    let __node_3 = button(ButtonProps::props().label("Midnight").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new(move || set_mode("midnight"))).build(), Children::default())?;
+                    Container::new(LayoutStyle::new().flex_row().gap(6.0).flex_wrap(), children![__node_1, __node_2, __node_3])?
                 };
                 let __text_3 = {
                     let theme_name = theme_name.clone();
@@ -58,7 +63,7 @@ pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn Layout
                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                     )?
                 };
-                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__row_0, __text_3])?
+                Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__row_1, __text_3])?
             };
             Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_2, __col_3])?
         };

@@ -5,7 +5,7 @@ use quote::quote;
 use std::collections::HashMap;
 use syn::spanned::Spanned;
 use syn::{Data, DeriveInput, Expr, Fields, Ident, Token, punctuated::Punctuated};
-use telar_project::theme_tokens::{DERIVED, OPTIONAL, REQUIRED, is_token};
+use telar_project::theme_tokens::{DERIVED, OPTIONAL, REQUIRED, TokenType, is_token, token_type};
 
 #[derive(Default)]
 struct Options {
@@ -111,12 +111,11 @@ fn parse_fields(input: &DeriveInput) -> syn::Result<FieldMap> {
 }
 
 fn return_type(token: &str) -> TokenStream2 {
-    match token {
-        "root" => quote!(::telar::Declared),
-        t if t.starts_with("radius") || t.starts_with("spacing") || t == "icon_size" => {
-            quote!(f32)
-        }
-        _ => quote!(::telar::Color),
+    match token_type(token) {
+        Some(TokenType::Declared) => quote!(::telar::Declared),
+        Some(TokenType::Length) => quote!(f32),
+        Some(TokenType::Weight) => quote!(u16),
+        Some(TokenType::Color) | None => quote!(::telar::Color),
     }
 }
 

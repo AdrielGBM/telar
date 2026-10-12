@@ -73,32 +73,27 @@ fn real_feature_cards_do_not_overflow_row() {
     telar::reset_layout_runtime();
     let bodies = [
         (
-            "⚡",
             "Fast",
             "Software and wgpu renderers with dirty-tracking and scroll-blit detection.",
         ),
         (
-            "🧩",
             "Composable",
             "Signals, memos and reusable .rsx components compose right inside the markup.",
         ),
         (
-            "🎨",
             "Themeable",
             "Semantic color tokens resolve reactively, so dark mode is a single swap.",
         ),
         (
-            "📱",
             "Cross-platform",
             "One codebase targets desktop and Android with native event loops.",
         ),
     ];
     let cards: Vec<Box<dyn LayoutItem>> = bodies
         .iter()
-        .map(|(icon, title, body)| {
+        .map(|(title, body)| {
             crate::feature_card::feature_card(
                 crate::feature_card::FeatureCardProps::props()
-                    .icon(icon)
                     .title(title)
                     .body(body)
                     .build(),

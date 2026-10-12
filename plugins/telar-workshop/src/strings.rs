@@ -17,10 +17,10 @@ pub(crate) const BACKGROUND_LIGHT: &str = "background_light";
 pub(crate) const BACKGROUND_PREVIEW: &str = "background_preview";
 pub(crate) const BACKGROUND_TRANSPARENT: &str = "background_transparent";
 pub(crate) const BUILD_FAILED: &str = "build_failed";
-pub(crate) const CANVAS_SETTINGS: &str = "canvas_settings";
 pub(crate) const CANVAS_TOOLS: &str = "canvas_tools";
 pub(crate) const CLEAR_ACTIONS: &str = "clear_actions";
 pub(crate) const CLEAR_SEARCH: &str = "clear_search";
+pub(crate) const CLOSE: &str = "close";
 pub(crate) const COLUMN_DEFAULT: &str = "column_default";
 pub(crate) const COLUMN_DESCRIPTION: &str = "column_description";
 pub(crate) const COLUMN_NAME: &str = "column_name";
@@ -47,7 +47,9 @@ pub(crate) const DIRECTION_LTR: &str = "direction_ltr";
 pub(crate) const DIRECTION_RTL: &str = "direction_rtl";
 pub(crate) const FILTER_ACTIONS: &str = "filter_actions";
 pub(crate) const FIND: &str = "find";
+pub(crate) const FIND_IN: &str = "find_in";
 pub(crate) const FOCUS_CELL: &str = "focus_cell";
+pub(crate) const FRAME_SETTINGS: &str = "frame_settings";
 pub(crate) const FULLSCREEN: &str = "fullscreen";
 pub(crate) const GRID: &str = "grid";
 pub(crate) const GROUP_CANVAS: &str = "group_canvas";
@@ -71,6 +73,8 @@ pub(crate) const MATRIX_NONE: &str = "matrix_none";
 pub(crate) const MATRIX_OWN: &str = "matrix_own";
 pub(crate) const MATRIX_PICK: &str = "matrix_pick";
 pub(crate) const MATRIX_SOURCE: &str = "matrix_source";
+pub(crate) const MAXIMIZE: &str = "maximize";
+pub(crate) const MINIMIZE: &str = "minimize";
 pub(crate) const MODE: &str = "mode";
 pub(crate) const MODE_DEFAULT: &str = "mode_default";
 pub(crate) const MOVE_PANELS: &str = "move_panels";
@@ -100,6 +104,7 @@ pub(crate) const PRESET_DESKTOP: &str = "preset_desktop";
 pub(crate) const PRESET_LAPTOP: &str = "preset_laptop";
 pub(crate) const PRESET_MOBILE: &str = "preset_mobile";
 pub(crate) const PRESET_TABLET: &str = "preset_tablet";
+pub(crate) const PREVIEW: &str = "preview";
 pub(crate) const PREVIEWS: &str = "previews";
 pub(crate) const PREVIOUS_COMPONENT: &str = "previous_component";
 pub(crate) const PREVIOUS_PREVIEW: &str = "previous_preview";
@@ -114,10 +119,12 @@ pub(crate) const RESET_ALL: &str = "reset_all";
 pub(crate) const RESET_ARG: &str = "reset_arg";
 pub(crate) const RESIZE_PANELS: &str = "resize_panels";
 pub(crate) const RESIZE_SIDEBAR: &str = "resize_sidebar";
+pub(crate) const RESTORE: &str = "restore";
 pub(crate) const ROTATE: &str = "rotate";
 pub(crate) const RULERS: &str = "rulers";
 pub(crate) const RUN_ON_MOUNT: &str = "run_on_mount";
 pub(crate) const SEARCH: &str = "search";
+pub(crate) const SETTINGS: &str = "settings";
 pub(crate) const SHOW_CANVAS: &str = "show_canvas";
 pub(crate) const SHOW_DOCS: &str = "show_docs";
 pub(crate) const SHOW_MATRIX: &str = "show_matrix";
@@ -175,6 +182,7 @@ pub(crate) const VIEWPORT_PRESETS: &str = "viewport_presets";
 pub(crate) const VIEWPORT_PREVIEW: &str = "viewport_preview";
 pub(crate) const VIEWPORT_RESET: &str = "viewport_reset";
 pub(crate) const VIEWPORT_WIDTH: &str = "viewport_width";
+pub(crate) const WINDOW: &str = "window";
 pub(crate) const WORKSHOP: &str = "workshop";
 pub(crate) const WORKSPACE: &str = "workspace";
 pub(crate) const ZOOM: &str = "zoom";
@@ -201,10 +209,10 @@ static CATALOG: Catalog = Catalog {
         english!(BACKGROUND_PREVIEW, "Preview background"),
         english!(BACKGROUND_TRANSPARENT, "Transparent"),
         english!(BUILD_FAILED, "This preview failed to build"),
-        english!(CANVAS_SETTINGS, "Canvas settings"),
         english!(CANVAS_TOOLS, "Canvas tools"),
         english!(CLEAR_ACTIONS, "Clear"),
         english!(CLEAR_SEARCH, "Clear search"),
+        english!(CLOSE, "Close"),
         english!(COLUMN_DEFAULT, "Default"),
         english!(COLUMN_DESCRIPTION, "Description"),
         english!(COLUMN_NAME, "Name"),
@@ -231,7 +239,9 @@ static CATALOG: Catalog = Catalog {
         english!(DIRECTION_RTL, "Right to left"),
         english!(FILTER_ACTIONS, "Filter actions"),
         english!(FIND, "Find a preview or command"),
+        english!(FIND_IN, "Find a preview or command in ", { arg }),
         english!(FOCUS_CELL, "Focus ", { arg }),
+        english!(FRAME_SETTINGS, "Viewport and zoom"),
         english!(FULLSCREEN, "Fullscreen canvas"),
         english!(GRID, "Grid"),
         english!(GROUP_CANVAS, "Canvas"),
@@ -265,6 +275,8 @@ static CATALOG: Catalog = Catalog {
         english!(MATRIX_OWN, "The preview's matrix"),
         english!(MATRIX_PICK, "Pick axes to build a matrix."),
         english!(MATRIX_SOURCE, "Matrix shown"),
+        english!(MAXIMIZE, "Maximize"),
+        english!(MINIMIZE, "Minimize"),
         english!(MODE, "Mode"),
         english!(MODE_DEFAULT, "Default mode"),
         english!(MOVE_PANELS, "Move the panels"),
@@ -302,6 +314,7 @@ static CATALOG: Catalog = Catalog {
         english!(PRESET_LAPTOP, "Laptop"),
         english!(PRESET_MOBILE, "Mobile"),
         english!(PRESET_TABLET, "Tablet"),
+        english!(PREVIEW, "Preview"),
         english!(PREVIEWS, "Previews"),
         english!(PREVIOUS_COMPONENT, "Previous component"),
         english!(PREVIOUS_PREVIEW, "Previous preview"),
@@ -316,10 +329,12 @@ static CATALOG: Catalog = Catalog {
         english!(RESET_ARG, "Reset ", { arg }),
         english!(RESIZE_PANELS, "Resize the panels"),
         english!(RESIZE_SIDEBAR, "Resize the sidebar"),
+        english!(RESTORE, "Restore"),
         english!(ROTATE, "Rotate"),
         english!(RULERS, "Rulers"),
         english!(RUN_ON_MOUNT, "Run on mount"),
         english!(SEARCH, "Search previews"),
+        english!(SETTINGS, "Settings"),
         english!(SHOW_CANVAS, "Show the canvas"),
         english!(SHOW_DOCS, "Show the docs"),
         english!(SHOW_MATRIX, "Show the matrix"),
@@ -411,6 +426,7 @@ static CATALOG: Catalog = Catalog {
         english!(VIEWPORT_PREVIEW, "Preview size"),
         english!(VIEWPORT_RESET, "Reset the viewport"),
         english!(VIEWPORT_WIDTH, "Viewport width"),
+        english!(WINDOW, "Window"),
         english!(WORKSHOP, "Workshop"),
         english!(WORKSPACE, "Workspace"),
         english!(ZOOM, "Zoom"),

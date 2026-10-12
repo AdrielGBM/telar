@@ -1,16 +1,10 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Color, Key, NamedKey, Reactive, Role};
+use telar::{Children, Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Reactive, Role};
 
-use crate::button::{ButtonProps, button};
-
-#[derive(Clone, Copy, telar::PreviewArg)]
-enum Emphasis {
-    Filled,
-    Outline,
-    Ghost,
-}
+use crate::button::{ButtonProps, ButtonVariant, button};
+use crate::metrics;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
@@ -18,8 +12,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             button(
                 ButtonProps::props()
                     .label(p.arg("label", "Save"))
-                    .fill(p.arg("fill", Color::TRANSPARENT))
-                    .ghost(p.arg("ghost", false))
+                    .variant(p.arg("variant", ButtonVariant::Solid))
+                    .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
                 Children::default(),
             )
@@ -31,18 +25,33 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.click(by_role(Role::Button).named("Save"))?;
             canvas.expect_action("on_press", 1)
         }),
-        preview!(button: ButtonProps, "Emphasis", |p| {
-            let accent = p.arg("accent", Color::TRANSPARENT);
-            let props = ButtonProps::props().label(p.arg("label", "Save"));
-            let props = match p.arg("emphasis", Emphasis::Filled) {
-                Emphasis::Filled => props.fill(accent),
-                Emphasis::Outline => props.outline(accent),
-                Emphasis::Ghost => props.ghost(true),
-            };
-            button(props.build(), Children::default())
+        preview!(button: ButtonProps, "Variants", |p| {
+            let color = p.arg("color", Color::TRANSPARENT);
+            let buttons = [
+                ("Solid", ButtonVariant::Solid),
+                ("Outline", ButtonVariant::Outline),
+                ("Soft", ButtonVariant::Soft),
+                ("Ghost", ButtonVariant::Ghost),
+            ]
+            .into_iter()
+            .map(|(label, variant)| {
+                button(
+                    ButtonProps::props()
+                        .label(label)
+                        .variant(variant)
+                        .color(color)
+                        .build(),
+                    Children::default(),
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+            let row = Container::new(LayoutStyle::new().flex_row().gap(metrics::gap_md()), buttons)?
+                .styled_by(|| LayoutStyle::new().flex_row().gap(metrics::gap_md()));
+            Ok::<_, LayoutError>(row)
         })
         .title("Inputs/Button")
-        .layout(Layout::Centered),
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes")),
         preview!(button: ButtonProps, "Counting presses", |p| {
             let presses = p.signal("presses", 0u32);
             button(

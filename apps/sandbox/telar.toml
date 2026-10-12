@@ -1,8 +1,11 @@
 [telar]
 backend = "auto"
-prelude = ["telar_components", "telar_navigate"]
+prelude = ["telar_components", "telar_icons", "telar_navigate"]
 # Root for baked `src:"..."` assets, relative to the package. Defaults to "assets"; e.g. "src/shared/assets".
 # assets = "assets"
+
+[telar.icons]
+iconify = "icons"
 
 [telar.dev]
 devtools = true

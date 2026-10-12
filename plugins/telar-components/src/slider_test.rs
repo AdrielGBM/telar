@@ -165,3 +165,114 @@ fn only_the_focused_slider_answers_the_arrows() {
     assert!((volume.peek() - 0.6).abs() < 1e-4, "{}", volume.peek());
     assert_eq!(brightness.peek(), 0.5, "the unfocused slider stayed put");
 }
+
+#[derive(Clone, Default)]
+struct Plain {
+    sliders: Option<SliderTokens>,
+}
+
+impl telar::ThemeTokens for Plain {
+    fn border_width_strong(&self) -> f32 {
+        2.5
+    }
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(sliders) = &self.sliders {
+            extensions.insert(sliders.clone());
+        }
+    }
+}
+
+/// The track and the thumb a laid-out slider paints.
+fn track_and_thumb(item: Box<dyn LayoutItem>) -> ((Rect, RectStyle), (Rect, RectStyle)) {
+    telar::testing::lay_out(item.layout_node(), 400.0, 100.0);
+    let painted: Vec<(Rect, RectStyle)> = telar::ComponentList::new(item)
+        .commands()
+        .iter()
+        .filter_map(|command| match command {
+            telar::DrawCommand::Rect { rect, style } => Some((*rect, **style)),
+            _ => None,
+        })
+        .collect();
+    let thumb = *painted
+        .iter()
+        .find(|(_, style)| style.border.is_some())
+        .expect("the thumb is ringed");
+    (painted[0], thumb)
+}
+
+fn plain_slider(style: Option<telar::SurfaceAmendment>) -> Box<dyn LayoutItem> {
+    let mut props = SliderProps::props().value(signal(0.5f32)).build();
+    props.style = style;
+    slider(props, Children::default()).unwrap()
+}
+
+#[test]
+fn the_track_and_thumb_follow_the_roles_until_the_slider_tokens_name_their_own() {
+    crate::test_support::fresh_layout_runtime();
+    telar::set_theme(Plain::default());
+    let ((track, track_style), (thumb, thumb_style)) = track_and_thumb(plain_slider(None));
+    assert_eq!(track.height, crate::metrics::spacing());
+    assert_eq!(
+        track_style.radius,
+        telar::BorderRadius::all(track.height / 2.0)
+    );
+    assert_eq!(thumb.width, crate::metrics::icon_size());
+    assert_eq!(thumb_style.border.map(|b| b.widths[0]), Some(2.5));
+
+    telar::set_theme(Plain {
+        sliders: Some(SliderTokens {
+            width: Some(300.0),
+            track: Some(4.0),
+            thumb: Some(20.0),
+            ring: Some(1.0),
+        }),
+    });
+    let ((track, _), (thumb, thumb_style)) = track_and_thumb(plain_slider(None));
+    assert_eq!((track.width, track.height), (300.0, 4.0));
+    assert_eq!(thumb.width, 20.0);
+    assert_eq!(thumb_style.border.map(|b| b.widths[0]), Some(1.0));
+}
+
+#[test]
+fn the_slider_scales_with_the_control_size_in_force() {
+    crate::test_support::fresh_layout_runtime();
+    let ((regular, _), (regular_thumb, _)) = track_and_thumb(plain_slider(None));
+    crate::test_support::fresh_layout_runtime();
+    let large =
+        telar::provide_control_size(telar::ControlSize::Large, || Ok(plain_slider(None))).unwrap();
+    let ((large, _), (large_thumb, _)) = track_and_thumb(Box::new(large));
+    let scale = telar::ControlSize::Large.scale();
+    assert_eq!(
+        (large.width, large.height, large_thumb.width),
+        (
+            regular.width * scale,
+            regular.height * scale,
+            regular_thumb.width * scale
+        )
+    );
+}
+
+#[test]
+fn a_style_amendment_reshapes_the_track() {
+    crate::test_support::fresh_layout_runtime();
+    let square: telar::SurfaceAmendment =
+        Rc::new(|s: RectStyle| s.with_radius(telar::BorderRadius::all(0.0)));
+    let ((_, track), (_, thumb)) = track_and_thumb(plain_slider(Some(square)));
+    assert_eq!(track.radius, telar::BorderRadius::all(0.0));
+    assert_ne!(thumb.radius, telar::BorderRadius::all(0.0));
+}
+
+#[test]
+fn a_press_beside_the_thin_track_still_takes_hold_of_it() {
+    crate::test_support::fresh_layout_runtime();
+    let value = signal(0.0f32);
+    let mut widget = slider(
+        SliderProps::props().value(value).width(200.0).build(),
+        Children::default(),
+    )
+    .unwrap();
+    let rect = lay_out(widget.layout_node());
+    let above = rect.y - (crate::metrics::MIN_TARGET - rect.height) / 2.0 + 1.0;
+    widget.on_event(&press((rect.x + 100.0) as f64, above as f64));
+    assert!((value.get() - 0.5).abs() < 1e-4, "got {}", value.get());
+}

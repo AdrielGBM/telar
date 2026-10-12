@@ -10,7 +10,9 @@ use telar::{
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NamedKey, Reactive, ReactiveList,
     RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item, use_theme_tokens,
 };
-use telar_components::{BadgeProps, ButtonProps, ToggleProps, badge, button, toggle};
+use telar_components::{
+    BadgeProps, ButtonProps, ButtonVariant, ToggleProps, badge, button, metrics, toggle,
+};
 use telar_devtools::{
     WORKBENCH_GRID, WORKBENCH_RADIUS, use_workbench_tokens, workbench_fill, workbench_mono,
     workbench_muted,
@@ -97,7 +99,7 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
             button(
                 ButtonProps::props()
                     .label(Reactive::of(|| strings::text(BACK_TO_LIVE)))
-                    .ghost(true)
+                    .variant(ButtonVariant::Ghost)
                     .on_press(Rc::new(move || interactions.back_to_live()))
                     .build(),
                 Children::default(),
@@ -449,14 +451,19 @@ fn head(index: usize, step: &Step) -> Result<StyledContainer, LayoutError> {
         LayoutStyle::new().width(NUMBER_WIDTH).flex_shrink(0.0),
         |text| workbench_muted(workbench_mono(text)),
     )?;
+    let shape = mark_of(&step.status);
     let status = step.status.clone();
-    let mark = Text::declaring(
-        move || String::from(mark_of(&status)),
-        LayoutStyle::new().width(MARK_WIDTH).flex_shrink(0.0),
-        {
-            let status = step.status.clone();
-            move |text| text.with_color(status_color(&status))
-        },
+    let mark = StyledContainer::new(
+        LayoutStyle::new()
+            .width(MARK_WIDTH)
+            .flex_shrink(0.0)
+            .flex_row()
+            .align_items(AlignItems::CENTER),
+        |_| RectStyle::default(),
+        vec![metrics::mark(
+            move || shape,
+            move |_| status_color(&status).into(),
+        )?],
     )?;
     let action = step.action.clone();
     let action = Text::declaring(
@@ -478,11 +485,11 @@ fn head(index: usize, step: &Step) -> Result<StyledContainer, LayoutError> {
     Ok(head)
 }
 
-fn mark_of(status: &StepStatus) -> &'static str {
+fn mark_of(status: &StepStatus) -> metrics::Mark {
     match status {
-        StepStatus::Pending => "○",
-        StepStatus::Passed => "✓",
-        StepStatus::Failed(_) => "✕",
+        StepStatus::Pending => metrics::Mark::Ring,
+        StepStatus::Passed => metrics::Mark::Check,
+        StepStatus::Failed(_) => metrics::Mark::Close,
     }
 }
 

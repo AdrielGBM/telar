@@ -23,7 +23,7 @@ col gap:20
                 layer justify:end align:center pad:24
                     row gap:12 pad_x:16 pad_y:10 radius:12 fill:$theme.surface stroke:$theme.border align:center label:"Fixed bar"
                         text "Fixed over the surface" font_size:13 color:$theme.ink
-                        button label:"Tap" fill:$theme.primary on_press:(|| $taps.update(|n| *n += 1))
+                        button label:"Tap" color:$theme.primary on_press:(|| $taps.update(|n| *n += 1))
         code_line code:"layer justify:end align:center pad:24  >  row …     (laid out against the whole surface)"
     example title:"use_primary_scroll() — the page's scroll, read from outside its content"
         card gap:12

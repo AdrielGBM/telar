@@ -6,6 +6,7 @@ use telar::{
 };
 
 use super::*;
+use crate::shared::row_height;
 
 fn catalogue() -> Vec<Command> {
     vec![
@@ -109,6 +110,10 @@ impl Mounted {
     }
 
     fn in_window(commands: Vec<Command>, height: f32) -> Self {
+        Self::in_size(commands, 800.0, height)
+    }
+
+    fn in_size(commands: Vec<Command>, width: f32, height: f32) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::set_locale("en");
         ui_core::reset_keyboard();
@@ -130,13 +135,13 @@ impl Mounted {
         )
         .unwrap();
         let root = new_container(
-            LayoutStyle::new().flex_column().width(800.0).height(height),
+            LayoutStyle::new().flex_column().width(width).height(height),
             &[palette.layout_node()],
         )
         .unwrap();
         compute_layout(
             root,
-            AvailableSpace::Definite(800.0),
+            AvailableSpace::Definite(width),
             AvailableSpace::Definite(height),
         )
         .unwrap();
@@ -521,4 +526,116 @@ fn the_results_are_a_named_list_box_whose_cursor_row_is_selected() {
         selected(&mounted),
         [mounted.pointed().expect("a cursor row")]
     );
+}
+
+#[derive(Clone)]
+struct Themed {
+    palettes: Option<CommandPaletteTokens>,
+}
+
+impl telar::ThemeTokens for Themed {
+    fn radius(&self) -> f32 {
+        4.0
+    }
+    fn register_extensions(&self, extensions: &mut telar::ThemeExtensions) {
+        if let Some(palettes) = self.palettes {
+            extensions.insert(palettes);
+        }
+    }
+}
+
+/// An open palette's dialog, as it is drawn and as it is painted.
+fn dialog(style: Option<telar::SurfaceAmendment>) -> (telar::Rect, RectStyle) {
+    crate::test_support::fresh_layout_runtime();
+    let open = signal(false);
+    let props = CommandPaletteProps::props()
+        .open(open)
+        .commands(catalogue());
+    let props = match style {
+        Some(style) => props.style(style),
+        None => props,
+    };
+    let palette = command_palette(props.build(), Children::default()).unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(800.0).height(600.0),
+        &[palette.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(800.0),
+        AvailableSpace::Definite(600.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(palette);
+    let _ = tree.commands();
+    open.set(true);
+    relayout_if_dirty();
+    let _ = tree.commands();
+    relayout_if_dirty();
+    let rect = ui_core::accessibility::snapshot(&tree.commands())
+        .into_iter()
+        .find(|node| node.role == Role::Dialog)
+        .expect("the dialog is drawn")
+        .rect;
+    let style = tree
+        .commands()
+        .iter()
+        .find_map(|c| match c {
+            telar::DrawCommand::Rect { rect: at, style } if *at == rect => Some(**style),
+            _ => None,
+        })
+        .expect("the dialog is painted");
+    (rect, style)
+}
+
+#[test]
+fn the_dialog_takes_the_dialog_corner_until_the_palette_tokens_name_their_own() {
+    use telar::{BorderRadius, Paint, ThemeTokens};
+
+    telar::set_theme(Themed { palettes: None });
+    let (rect, style) = dialog(None);
+    assert_eq!(
+        style.radius,
+        BorderRadius::all(Themed { palettes: None }.radius_dialog())
+    );
+    assert_eq!(rect.width, CommandPaletteTokens::default().width());
+
+    telar::set_theme(Themed {
+        palettes: Some(CommandPaletteTokens {
+            radius: Some(5.0),
+            width: Some(300.0),
+            ..CommandPaletteTokens::default()
+        }),
+    });
+    let green = Color::rgba(0.1, 0.6, 0.2, 1.0);
+    let (rect, style) = dialog(Some(Rc::new(move |style: RectStyle| {
+        style.with_fill(green)
+    })));
+    assert_eq!(style.radius, BorderRadius::all(5.0));
+    assert_eq!(rect.width, 300.0);
+    assert_eq!(
+        style.fill,
+        Some(Paint::Solid(green)),
+        "the caller's amendment comes last"
+    );
+}
+
+#[test]
+fn in_a_narrow_window_the_dialog_stays_inside_it() {
+    for width in [200.0, 320.0, 480.0] {
+        let mut mounted = Mounted::in_size(numbered(40), width, 600.0);
+        mounted.open.set(true);
+        mounted.settle();
+        let card = mounted.rect_of(Role::Dialog, None);
+        assert!(
+            card.x >= 0.0 && card.x + card.width <= width,
+            "inside {width}: {card:?}"
+        );
+        let field = mounted.rect_of(Role::TextInput, None);
+        assert!(
+            field.x >= card.x && field.x + field.width <= card.x + card.width + 0.5,
+            "the field stays in the dialog at {width}: {field:?} in {card:?}"
+        );
+    }
 }

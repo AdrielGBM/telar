@@ -55,21 +55,20 @@ here than for a Rust crate: a library ships the code `.rsx` transpiled to, and t
 
 A component is a props struct and a function. The struct derives `Props`, which gives it a builder
 (`ButtonProps::props().label("Save").build()`), and the function takes it and the nested children and returns a
-layout item. This is [`badge`](../plugins/telar-components/src/badge.rs), nearly in full:
+layout item. This is a pill tag in the shape of [`badge`](../plugins/telar-components/src/badge.rs), fully rounded at whatever size it is laid out:
 
 ```rust
 use telar::{
-    BorderRadius, Children, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle,
-    StyledContainer, SurfaceStyle, Text, amend_surface, box_item, use_theme_tokens,
+    BorderRadius, Children, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle,
+    StyledContainer, SurfaceAmendment, SurfaceStyle, Text, amend_surface, box_item, use_theme_tokens,
 };
-use std::rc::Rc;
 
 #[derive(Props)]
 pub struct PillProps {
     #[props(into, default)]
     pub label: Reactive<String>,
     #[props(some, default)]
-    pub style: Option<Rc<dyn Fn(RectStyle) -> RectStyle>>,
+    pub style: Option<SurfaceAmendment>,
 }
 
 pub fn pill(props: PillProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -79,11 +78,13 @@ pub fn pill(props: PillProps, _children: Children) -> Result<Box<dyn LayoutItem>
         inherited.with_color(use_theme_tokens().on_primary())
     })?;
     let container = StyledContainer::new(
-        LayoutStyle::new().flex_row(),
-        move |_rect| {
+        LayoutStyle::new()
+            .flex_row()
+            .padding_horizontal(use_theme_tokens().spacing()),
+        move |rect| {
             let base = RectStyle::default()
                 .with_fill(use_theme_tokens().primary())
-                .with_radius(BorderRadius::all(use_theme_tokens().radius()));
+                .with_radius(BorderRadius::all(rect.width.min(rect.height) / 2.0));
             amend_surface(base, &surface)
         },
         vec![box_item(label)],
@@ -115,7 +116,8 @@ point at it: a button's box, a menu's trigger, a tooltip's bubble. The transpile
 class names (`fill`, `stroke`, `stroke_width`, `radius`) into a closure over the style the component worked out
 and passes it as the `style` prop. A component accepts it by
 
-1. declaring a `style` prop of type `Option<Rc<dyn Fn(RectStyle) -> RectStyle>>`, the expansion of `SurfaceStyle`, and
+1. declaring a `style` prop of type `Option<SurfaceAmendment>` with `#[props(some, default)]` (spelled with the
+   `Option`, not as `SurfaceStyle`, so the setter takes the amendment `@class` hands it), and
 2. running its finished style for that surface through `amend_surface(style, &surface)` on every state, hover and
    press included.
 

@@ -2915,6 +2915,7 @@ dependencies = [
  "telar",
  "telar-components",
  "telar-devtools",
+ "telar-icons",
  "tracing-subscriber",
 ]
 
@@ -5167,6 +5168,7 @@ dependencies = [
  "telar-components",
  "telar-devtools",
  "telar-dynamic",
+ "telar-icons",
  "telar-navigate",
  "telar-platform-core",
  "telar-platform-headless",
@@ -6391,6 +6393,7 @@ dependencies = [
  "telar-project",
  "telar-theme-core",
  "tiny-skia 0.12.0",
+ "web-time",
 ]
 
 [[package]]

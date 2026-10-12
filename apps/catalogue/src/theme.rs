@@ -2,6 +2,7 @@ use telar::{Color, ColorScheme, ThemeTokens, register_mode_theme, set_mode_schem
 
 /// The application's design tokens. Every component reads these, so a restyle happens here and nowhere else.
 #[derive(Clone, ThemeTokens)]
+#[theme(radius_surface = 12.0, radius_dialog = 16.0, radius_item = 6.0)]
 pub struct AppTheme {
     pub primary: Color,
     pub on_primary: Color,

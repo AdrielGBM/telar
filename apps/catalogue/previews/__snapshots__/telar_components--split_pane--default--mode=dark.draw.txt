@@ -14,13 +14,13 @@ element group
           end
         end
         element separator
-          rect 240,0 6x600 fill=#3d4252ff radius=3
+          rect 240,0 4x600 fill=#3d4252ff radius=2
         end
         element group
-          clip 246,0 554x600
+          clip 244,0 556x600
             element group
-              matrix 1,0,0,1,246,0
-                text 0,0 554x16.8 "Editor" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+              matrix 1,0,0,1,244,0
+                text 0,0 556x16.8 "Editor" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
               end
             end
           end

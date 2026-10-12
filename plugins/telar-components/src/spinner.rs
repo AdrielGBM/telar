@@ -2,14 +2,36 @@
 
 use std::time::Duration;
 use telar::{
-    AlignItems, Border, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, box_item, box_transform,
+    AlignItems, Border, Children, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
+    Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface,
+    box_item, box_transform,
     motion::{Easing, Keyframes, Repeat},
 };
 
 use crate::shared;
 
-/// Track stroke thickness and orbiting head diameter, as fractions of `size`.
+/// A spinner's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the role named beside it, read when the spinner paints.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SpinnerTokens {
+    /// Diameter of the ring when the caller names no `size`, at the regular control size and scaled with the control size in force. `None` is [`metrics::control_height`](crate::metrics::control_height), so a spinner stands level in a row of controls.
+    pub size: Option<f32>,
+}
+
+impl SpinnerTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn size(&self) -> f32 {
+        self.size
+            .map_or_else(shared::control_height, |size| size * telar::control_scale())
+    }
+}
+
+/// Track stroke thickness and orbiting head diameter, as fractions of the ring's diameter, so a spinner a caller sizes keeps its proportions.
 const TRACK_STROKE_FRACTION: f32 = 0.12;
 const HEAD_FRACTION: f32 = 0.22;
 /// One full rotation's duration — fast enough to read as "busy", slow enough not to strobe.
@@ -21,9 +43,12 @@ pub struct SpinnerProps {
     /// Head (orbiting dot) accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
-    /// Ring diameter in px. `0.0` (the default) means "unset" — the spinner uses `24.0`.
+    /// Ring diameter in px. `0.0` (the default) means "unset": the [`SpinnerTokens`] size at the control size in force.
     #[props(default)]
     pub size: f32,
+    /// Amends the paint of the ring — the spinner's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`SpinnerTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// An indeterminate ring, for work with no bound value to show.
@@ -31,28 +56,37 @@ pub fn spinner(
     props: SpinnerProps,
     _children: Children,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let SpinnerProps { color, size } = props;
-    let size = if size > 0.0 { size } else { 24.0 };
-    let head_size = size * HEAD_FRACTION;
+    let SpinnerProps { color, size, style } = props;
+    let size = move || {
+        if size > 0.0 {
+            size
+        } else {
+            SpinnerTokens::current().size()
+        }
+    };
+    let head_box = move || {
+        let head = size() * HEAD_FRACTION;
+        LayoutStyle::new().width(head).height(head)
+    };
+    let ring_box = move || LayoutStyle::new().width(size()).height(size());
 
-    // `box_transform` turns each frame's angle into a rotation pivoted on the rotor's centre, which lands on the ring's centre since the rotor exactly overlays it.
     let angle = Keyframes::<f32>::new(0.0)
         .then(360.0, ROTATION, Easing::Linear)
         .start(Repeat::Loop);
 
-    // Needed by this one style closure, so it moves in directly; `Rc` re-erasure is only for shared props.
     let head = StyledContainer::new(
-        LayoutStyle::new().width(head_size).height(head_size),
-        move |_r| {
+        head_box(),
+        move |r| {
             let fill = shared::resolve(&color, shared::accent);
             RectStyle::default()
                 .with_fill(fill)
-                .with_radius(BorderRadius::all(head_size / 2.0))
+                .with_radius(shared::pill(r))
         },
         vec![],
-    )?;
+    )?
+    .styled_by(head_box);
 
-    // The rotor overlays the track and centres the head against its top edge, so rotating it carries the head around the circle.
+    // The rotor overlays the track and centres the head against its top edge, so rotating it on its own centre carries the head around the circle.
     let rotor = StyledContainer::new(
         LayoutStyle::new()
             .absolute_fill()
@@ -65,17 +99,19 @@ pub fn spinner(
     .with_transform(move |r| box_transform(r, angle.get(), 1.0, 1.0, 0.0, 0.0));
 
     let track = StyledContainer::new(
-        LayoutStyle::new().width(size).height(size),
-        move |_r| {
-            RectStyle::default()
+        ring_box(),
+        move |r| {
+            let rest = RectStyle::default()
                 .with_border(Border::uniform(
                     shared::muted(),
-                    size * TRACK_STROKE_FRACTION,
+                    r.width.min(r.height) * TRACK_STROKE_FRACTION,
                 ))
-                .with_radius(BorderRadius::all(size / 2.0))
+                .with_radius(shared::pill(r));
+            amend_surface(rest, &style)
         },
         vec![box_item(rotor)],
-    )?;
+    )?
+    .styled_by(ring_box);
 
     Ok(box_item(track))
 }

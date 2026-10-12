@@ -7,17 +7,17 @@ element group
         element group
           element group
             matrix 1,0,0,1,16,16
-              text 0,0 462x14.4 "FOUNDATIONS" size=12 family=sans-serif weight=400 color=#3b5bdbff lang=en
+              text 0,0 461.34x14.4 "FOUNDATIONS" size=12 family=sans-serif weight=400 color=#3b5bdbff lang=en
             end
           end
           element group
             matrix 1,0,0,1,16,36
-              text 0,0 462x31.2 "Layout" size=26 family=sans-serif weight=400 color=#14161fff lang=en
+              text 0,0 461.34x31.2 "Layout" size=26 family=sans-serif weight=400 color=#14161fff lang=en
             end
           end
           element group
             matrix 1,0,0,1,16,74
-              text 0,0 462x16.8 "Flexbox rows and columns with gaps, padding, alignment and growth." size=14 family=sans-serif weight=400 color=#686d82ff lang=en
+              text 0,0 461.34x16.8 "Flexbox rows and columns with gaps, padding, alignment and growth." size=14 family=sans-serif weight=400 color=#686d82ff lang=en
             end
           end
         end

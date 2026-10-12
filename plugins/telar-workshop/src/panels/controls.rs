@@ -9,7 +9,7 @@ use telar::{
     LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer, Text,
     box_item,
 };
-use telar_components::{ButtonProps, button};
+use telar_components::{ButtonProps, ButtonVariant, button};
 use telar_devtools::{
     WORKBENCH_GRID, use_workbench_tokens, workbench_fill, workbench_mono, workbench_muted,
 };
@@ -216,7 +216,7 @@ fn reset_button(binding: &Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let button = button(
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(RESET)))
-            .ghost(true)
+            .variant(ButtonVariant::Ghost)
             .on_press(on_press)
             .build(),
         Children::default(),

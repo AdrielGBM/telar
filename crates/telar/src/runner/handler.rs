@@ -1,6 +1,6 @@
 //! The frame loop: one surface's [`EventHandler`](platform_core::EventHandler), from resume to teardown.
 
-use platform_core::{Event, EventHandler, SystemPreferences, Window, WindowCommand};
+use platform_core::{Event, EventHandler, PointerButton, SystemPreferences, Window, WindowCommand};
 use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
 use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
@@ -13,8 +13,6 @@ use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
 
 use super::COMMAND_BUF_POOL_CAP;
-#[cfg(feature = "shaper")]
-use super::font_config::{SystemFonts, build_font_config};
 use super::frame_thread::FrameMsg;
 use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, SurfaceRenderer};
 use super::state::{AppEnv, FramePacer, WindowTitle};
@@ -194,18 +192,60 @@ struct FramePass {
     generation: u64,
 }
 
+/// What draining the window-command queue did.
+#[derive(Default)]
+struct AppliedCommands {
+    any: bool,
+    /// A move or a resize handed the pointer stroke under way to the window system.
+    took_stroke: bool,
+}
+
+/// The release the stroke `event` belongs to will now never deliver, as if the pointer had let go where it stood.
+fn release_of_taken_stroke(event: &Event) -> Option<Event> {
+    let (x, y, source) = match event {
+        Event::PointerPressed { x, y, source, .. } | Event::PointerMoved { x, y, source } => {
+            (*x, *y, source.clone())
+        }
+        _ => return None,
+    };
+    let held = ui_core::pointer_buttons();
+    let button = if held.primary {
+        PointerButton::Primary
+    } else if held.secondary {
+        PointerButton::Secondary
+    } else if held.auxiliary {
+        PointerButton::Auxiliary
+    } else {
+        return None;
+    };
+    Some(Event::PointerReleased {
+        x,
+        y,
+        button,
+        source,
+    })
+}
+
 impl<W, D> AppHandler<W, D>
 where
     W: Window + Clone + 'static,
     D: DevOverlay,
 {
-    /// Drains and applies the window-management commands a handler enqueued — from a title-bar control during event dispatch, or from `on_frame` (e.g. raising this window on a routed handoff). Returns whether any applied. Routed through the App bridge so the dylib-backed `HotApp` drains the dylib's own queue.
-    fn apply_window_commands(&mut self, window: &W) -> bool {
-        let mut applied = false;
+    /// Drains and applies the window-management commands a handler enqueued — from a title-bar control during event dispatch, or from `on_frame` (e.g. raising this window on a routed handoff). Routed through the App bridge so the dylib-backed `HotApp` drains the dylib's own queue.
+    fn apply_window_commands(&mut self, window: &W) -> AppliedCommands {
+        let mut applied = AppliedCommands::default();
         for cmd in self.app.drain_window_commands() {
-            applied = true;
+            applied.any = true;
             match cmd {
-                WindowCommand::Drag => window.drag_window(),
+                WindowCommand::Drag => {
+                    window.drag_window();
+                    applied.took_stroke = true;
+                }
+                WindowCommand::DragResize(edge) => {
+                    window.drag_resize_window(edge);
+                    applied.took_stroke = true;
+                }
+                WindowCommand::SetDecorations(decorated) => window.set_decorations(decorated),
                 WindowCommand::Minimize => window.set_minimized(true),
                 WindowCommand::ToggleMaximize => window.set_maximized(!window.is_maximized()),
                 WindowCommand::SetMaximized(v) => window.set_maximized(v),
@@ -228,6 +268,26 @@ where
             }
         }
         applied
+    }
+
+    /// Hands `event` to the app's overlays, and to its tree where no overlay took it.
+    fn dispatch_to_app(&mut self, event: &Event) -> EventResult {
+        // A hot-reloaded app dylib links its own reactive-core copy, which the host's batch cannot reach; a handler's signal write would flush immediately and re-run a segment's effect while its widget is still borrowed for `on_event`, silently dropping that segment's subscriptions.
+        self.app.begin_event_batch();
+        // Overlays paint on top, so positioned events must reach them first; registry is consulted via the bridge before tree dispatch.
+        let handled = if self.app.dispatch_overlays(event) {
+            if let (Event::PointerMoved { .. }, Some(tree)) = (event, self.tree.as_mut()) {
+                tree.on_covered_event(event);
+            }
+            EventResult::Handled
+        } else {
+            self.tree
+                .as_mut()
+                .map(|tree| tree.on_event(event))
+                .unwrap_or(EventResult::Ignored)
+        };
+        self.app.end_event_batch();
+        handled
     }
 
     /// Gives the app's runtime the history this surface's platform stands on, before a tree is built from it. A surface with no address of its own leaves the app's alone.
@@ -317,6 +377,7 @@ where
         // A new tree starts at its 0×0 defaults and a kept one at the size it was last shown at; both learn the real size from this event, as they would from a resize.
         let (width, height) = self.logical_size(window);
         self.report_surface_size(width, height);
+        self.app.set_surface_maximized(window.is_maximized());
         let resize = Event::WindowResized { width, height };
         if let Some(ref mut tree) = self.tree {
             tree.on_event(&resize);
@@ -855,8 +916,7 @@ where
         // Before the tree measures a word of text. Building a renderer loads them too — which is what makes measure and draw agree — but a hardware renderer builds on its own thread, so the first layout would be sized in the platform's fonts. A renderer that does not shape glyphs skips the scan, keeping its own measurer.
         #[cfg(feature = "shaper")]
         if self.renderer_host.shapes_text() {
-            let system_fonts = SystemFonts::from_provider(self.env.paths.as_ref());
-            renderer_text::fonts::install(build_font_config(self.fonts.clone(), &system_fonts));
+            super::font_config::install_window_fonts(&self.fonts, self.env.paths.as_ref());
         }
         // Offscreen windows have no surface for a windowed renderer to create, so they rasterize into a CPU pixmap regardless of the configured backend and need no GPU adapter.
         let renderer_ok = if window.is_offscreen() {
@@ -896,6 +956,8 @@ where
             self.relay_hot_reload();
             self.mount_tree(window);
         }
+        // Before the platform first shows the window, so a tree that asked for no decorations is never seen with them.
+        self.apply_window_commands(window);
         self.pacer.presentation_owed = true;
 
         let w = window.clone();
@@ -935,7 +997,10 @@ where
         }
         match &event {
             Event::ScaleFactorChanged { scale_factor } => self.scale_factor = *scale_factor as f32,
-            Event::WindowResized { width, height } => self.report_surface_size(*width, *height),
+            Event::WindowResized { width, height } => {
+                self.report_surface_size(*width, *height);
+                self.app.set_surface_maximized(window.is_maximized());
+            }
             Event::SafeAreaChanged { insets } => {
                 self.app.set_safe_area_insets(*insets);
                 window.request_redraw();
@@ -988,24 +1053,17 @@ where
         if overlay.consumed {
             return;
         }
-        // A hot-reloaded app dylib links its own reactive-core copy, which the host's batch cannot reach; a handler's signal write would flush immediately and re-run a segment's effect while its widget is still borrowed for `on_event`, silently dropping that segment's subscriptions.
-        self.app.begin_event_batch();
-        // Overlays paint on top, so positioned events must reach them first; registry is consulted via the bridge before tree dispatch.
-        let handled = if self.app.dispatch_overlays(&event) {
-            if let (Event::PointerMoved { .. }, Some(tree)) = (&event, self.tree.as_mut()) {
-                tree.on_covered_event(&event);
-            }
-            EventResult::Handled
-        } else {
-            self.tree
-                .as_mut()
-                .map(|tree| tree.on_event(&event))
-                .unwrap_or(EventResult::Ignored)
-        };
-        self.app.end_event_batch();
+        let handled = self.dispatch_to_app(&event);
         // Drag must run inside the pointer-press dispatch it originated from, so this sits right after the walk.
-        let window_command_applied = self.apply_window_commands(window);
-        if handled == EventResult::Handled || window_command_applied {
+        let applied = self.apply_window_commands(window);
+        // The window system now owns the stroke and keeps its release, which would leave the gesture that handed it over running into the next time the pointer moves.
+        if applied.took_stroke
+            && let Some(release) = release_of_taken_stroke(&event)
+        {
+            ui_core::observe_pointer(&release);
+            self.dispatch_to_app(&release);
+        }
+        if handled == EventResult::Handled || applied.any {
             // Immediately, so `on_redraw` in the same cycle finds the tree dirty rather than deferring a cycle.
             end_batch();
             begin_batch();

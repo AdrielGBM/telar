@@ -5,7 +5,7 @@ element group
     element group
       element group
         element group
-          rect 379,291 42x18 fill=#7394ffff radius=25
+          rect 379,291 42x18 fill=#7394ffff radius=9
           element group
             matrix 1,0,0,1,387,293
               text 0,0 26x14.28 "New" size=11.9 family=sans-serif weight=400 color=#0d0f1fff lang=en

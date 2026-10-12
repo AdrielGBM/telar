@@ -5,10 +5,10 @@ element group
     element group
       element group
         element group
-          rect 290,296 220x8 fill=#616680ff radius=4
+          rect 288,296 224x8 fill=#616680ff radius=4
           element group
-            matrix 0.6,0,0,1,116,0
-              rect 290,296 220x8 fill=#4261edff radius=4
+            matrix 0.6,0,0,1,115.2,0
+              rect 288,296 224x8 fill=#4261edff radius=4
             end
           end
         end

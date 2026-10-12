@@ -13,7 +13,9 @@ use telar::{
     LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, Role, RwSignal, ShapeStyle,
     StyledContainer, Text, batch, box_item, effect, signal, use_theme_tokens,
 };
-use telar_components::{ButtonProps, CheckboxProps, Tab, button, checkbox, tab_list};
+use telar_components::{
+    ButtonProps, ButtonVariant, CheckboxProps, Tab, button, checkbox, tab_list,
+};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
 
 pub(crate) use plan::{CustomAxis, MatrixSource};
@@ -219,7 +221,7 @@ fn open_in_canvas(
             button(
                 ButtonProps::props()
                     .label(strings::reactive(OPEN_IN_CANVAS))
-                    .ghost(true)
+                    .variant(ButtonVariant::Ghost)
                     .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
                     .build(),
                 Children::default(),

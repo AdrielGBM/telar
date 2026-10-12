@@ -266,3 +266,68 @@ fn a_followed_theme_switches_with_what_it_reads() {
     assert_eq!(seen.borrow().first(), Some(&RED));
     assert_eq!(seen.borrow().last(), Some(&BLUE));
 }
+
+/// A box as wide as the control size in force makes it.
+fn sized() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let style = || {
+        LayoutStyle::new()
+            .width(80.0 * theme_core::control_scale())
+            .height(10.0)
+    };
+    let item =
+        crate::styled_container::StyledContainer::new(style(), |_r| RectStyle::default(), vec![])?
+            .styled_by(style);
+    Ok(Box::new(item))
+}
+
+#[test]
+fn a_provided_control_size_sizes_its_subtree_and_not_its_siblings() {
+    use theme_core::{ControlSize, set_control_size};
+
+    reset_layout_runtime();
+    set_control_size(ControlSize::Regular);
+    let dense = reactive_core::signal(false);
+    let form_size = follow_control_size(move || match dense.get() {
+        true => ControlSize::Small,
+        false => ControlSize::Large,
+    });
+    let form = provide_control_size(form_size, sized).unwrap();
+    let form_rect = crate::context::track_layout(form.layout_node()).unwrap();
+    let toolbar = sized().unwrap();
+    let toolbar_rect = crate::context::track_layout(toolbar.layout_node()).unwrap();
+    let mini = provide_control_size(ControlSize::Mini, sized).unwrap();
+    let mini_rect = crate::context::track_layout(mini.layout_node()).unwrap();
+    let row = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![Box::new(form), toolbar, Box::new(mini)],
+    )
+    .unwrap();
+    compute_layout(
+        row.layout_node(),
+        AvailableSpace::MaxContent,
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    assert_eq!(form_rect.get().width, 100.0);
+    assert_eq!(toolbar_rect.get().width, 80.0);
+    assert_eq!(mini_rect.get().width, 60.0);
+
+    dense.set(true);
+    crate::context::relayout_if_dirty();
+    assert_eq!(
+        form_rect.get().width,
+        70.0,
+        "switching the scope re-spaces its subtree"
+    );
+    assert_eq!(toolbar_rect.get().width, 80.0, "and nothing outside it");
+
+    set_control_size(ControlSize::Large);
+    crate::context::relayout_if_dirty();
+    assert_eq!(
+        toolbar_rect.get().width,
+        100.0,
+        "the thread's size still reaches the rest"
+    );
+    assert_eq!(form_rect.get().width, 70.0, "but not a scoped subtree");
+    set_control_size(ControlSize::Regular);
+}

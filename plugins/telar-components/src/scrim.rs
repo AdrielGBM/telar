@@ -4,15 +4,43 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use telar::{
-    Color, Component, Container, DismissRegistration, Effect, Event, EventResult, LayoutError,
-    LayoutItem, LayoutStyle, NodeId, Overlay, ReactiveList, RenderNode, RwSignal, box_item, effect,
+    Component, Container, DismissRegistration, Effect, Event, EventResult, LayoutError, LayoutItem,
+    LayoutStyle, NodeId, Overlay, ReactiveList, Rect, RenderNode, RwSignal, Size, box_item, effect,
+    signal,
 };
-
-/// Scrim tone: a translucent black wash over the page. Kept as a *fill* on an opaque-subtree dialog (never an `opacity` layer over the whole overlay) so the dialog itself stays fully opaque — layering the scrim's alpha over the dialog would bleed the page through it.
-pub(crate) const SCRIM: Color = Color::rgba(0.0, 0.0, 0.0, 0.5);
 
 /// The dismiss handler the helper hands to each widget's scrim (and, for `modal`, its Close): shared so both affordances run the same "set `open = false`, then `on_close`" without rebuilding it per tap target.
 pub(crate) type DismissFn = Rc<dyn Fn()>;
+
+/// How much of the window a dialog's card may take, read from the backdrop the card stands on so it follows the window as it is resized and is right from the first layout of the backdrop, however the dialog came to be built.
+#[derive(Clone, Copy)]
+pub(crate) struct Room(RwSignal<Option<RwSignal<Rect>>>);
+
+impl Room {
+    pub(crate) fn new() -> Self {
+        Self(signal(None))
+    }
+
+    pub(crate) fn follow(self, backdrop: NodeId) {
+        self.0.set(telar::track_layout(backdrop));
+    }
+
+    /// What is left of the backdrop after `inset` on each side, subscribing the caller to it; unbounded until the backdrop has been laid out.
+    pub(crate) fn inside(self, inset: f32) -> Size {
+        let laid_out = self
+            .0
+            .get()
+            .map(|rect| rect.get())
+            .filter(|rect| rect.width > 0.0 && rect.height > 0.0);
+        match laid_out {
+            Some(rect) => Size::new(
+                (rect.width - inset * 2.0).max(0.0),
+                (rect.height - inset * 2.0).max(0.0),
+            ),
+            None => Size::new(f32::MAX, f32::MAX),
+        }
+    }
+}
 
 /// Carries the overlay subtree's effects alongside it, so the dismiss-stack registration and the focus handover live exactly as long as the overlay is mounted and are released with it.
 struct Dismissible {

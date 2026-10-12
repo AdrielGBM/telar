@@ -9,6 +9,7 @@ use crate::app_runtime::AppRuntime;
 use crate::config;
 use crate::prefs::UserPrefs;
 
+use super::font_config::FontSetup;
 use super::handler::build_app_handler;
 
 /// Runs the dev host: a window whose application comes from a dylib and is swapped on each rebuild, with `D` drawn over it.
@@ -43,6 +44,18 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     #[cfg(feature = "clipboard")]
     platform_desktop::DesktopClipboard::install();
     platform_desktop::DesktopUriOpener::install();
+    let paths: Arc<dyn services_core::AppPathsProvider> = Arc::new(DesktopPathsProvider);
+    let crate::app_config::AppConfig {
+        mut window,
+        fonts: faces,
+        font_family,
+    } = config;
+    let fonts = FontSetup {
+        faces,
+        family: font_family,
+    };
+    #[cfg(feature = "shaper")]
+    super::font_config::install_window_fonts(&fonts, paths.as_ref());
     let initial_app = match crate::hot::load_hot_app(std::path::Path::new(lib_path)) {
         Ok(app) => app,
         Err(e) => {
@@ -51,7 +64,6 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         }
     };
     let hot_rx = crate::hot::listen_hot_reload(port);
-    let paths: Arc<dyn services_core::AppPathsProvider> = Arc::new(DesktopPathsProvider);
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     let platform = match WinitPlatform::try_new() {
@@ -61,11 +73,6 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
             std::process::exit(1);
         }
     };
-    let crate::app_config::AppConfig {
-        mut window,
-        fonts: faces,
-        font_family,
-    } = config;
     #[cfg(feature = "hot-reload")]
     super::dev_window::apply_dev_window_overrides(&mut window);
     if let Some(custom) = initial_app.window_config() {
@@ -75,10 +82,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     let mut handler = build_app_handler::<WinitWindow, D>(
         Box::new(initial_app),
         paths,
-        crate::runner::font_config::FontSetup {
-            faces,
-            family: font_family,
-        },
+        fonts,
         backend,
         prefs,
         app_name.to_owned(),

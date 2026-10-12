@@ -253,6 +253,14 @@ impl crate::app_runtime::AppRuntime for HotApp {
         }
     }
 
+    fn set_surface_maximized(&self, maximized: bool) {
+        if let Some(set) =
+            self.symbol::<unsafe extern "Rust" fn(bool)>(b"_rsx_hot_set_surface_maximized\0")
+        {
+            unsafe { set(maximized) }
+        }
+    }
+
     fn set_location_history(&self, history: &[platform_core::Location]) {
         if let Some(set) = self.symbol::<unsafe extern "Rust" fn(&[platform_core::Location])>(
             b"_rsx_hot_set_location_history\0",
@@ -351,30 +359,40 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
     Ok(HotApp { inner, _lib: lib })
 }
 
-/// The platform services the host installed, handed to each library it loads: the library's copies of their stores start empty, so without them a reloaded app copies to no clipboard, opens no link and shows no file dialog.
+/// The platform services the host installed, handed to each library it loads: the library's copies of their stores start empty, so without them a reloaded app copies to no clipboard, opens no link, shows no file dialog and lays its text out in faces other than the ones the host draws it in.
 ///
-/// The host's backends serve both sides, so a selection the clipboard owns outlives every library swapped in under it.
+/// The host's backends serve both sides, so a selection the clipboard owns outlives every library swapped in under it. The fonts are handed over as what they were loaded from, since a font database is not something two copies of the shaper can share.
 #[cfg(feature = "dev")]
 #[doc(hidden)]
 pub struct HostServices {
     clipboard: Option<std::sync::Arc<dyn services_core::Clipboard>>,
     uri_opener: Option<std::sync::Arc<dyn services_core::UriOpener>>,
     file_dialogs: Option<std::sync::Arc<dyn services_core::FileDialogs>>,
+    fonts: Option<renderer_core::FontSources>,
 }
 
 #[cfg(feature = "dev")]
 impl HostServices {
     /// What this side has installed.
     pub fn installed() -> Self {
+        #[cfg(feature = "shaper")]
+        let fonts = renderer_text::fonts::installed_sources();
+        #[cfg(not(feature = "shaper"))]
+        let fonts = None;
         Self {
             clipboard: services_core::clipboard(),
             uri_opener: services_core::uri_opener(),
             file_dialogs: services_core::file_dialogs(),
+            fonts,
         }
     }
 
     /// Installs each service on this side, as the host had it.
     pub fn install(self) {
+        #[cfg(feature = "shaper")]
+        if let Some(fonts) = self.fonts {
+            renderer_text::fonts::install_sources(fonts);
+        }
         if let Some(clipboard) = self.clipboard {
             services_core::set_clipboard(clipboard);
         }

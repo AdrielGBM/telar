@@ -8,7 +8,9 @@ use telar::{
     LayoutScrollArea, LayoutStyle, Memo, Reactive, ReactiveList, RectStyle, Role, StyledContainer,
     Text, box_item, memo,
 };
-use telar_components::{BadgeProps, ButtonProps, TextFieldProps, badge, button, text_field};
+use telar_components::{
+    BadgeProps, ButtonProps, ButtonVariant, TextFieldProps, badge, button, text_field,
+};
 use telar_devtools::{
     WORKBENCH_GRID, use_workbench_tokens, workbench_fill, workbench_mono, workbench_muted,
 };
@@ -86,7 +88,7 @@ pub(super) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
     let clear = button(
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(CLEAR_ACTIONS)))
-            .ghost(true)
+            .variant(ButtonVariant::Ghost)
             .on_press(Rc::new(move || log.clear()))
             .build(),
         Children::default(),

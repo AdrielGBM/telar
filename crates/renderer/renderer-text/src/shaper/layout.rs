@@ -3,8 +3,8 @@
 use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
 use super::{
-    effective_line_height, from_cosmic_color, glyph_index_at, make_buffer, make_cased_buffer,
-    physical_glyph, resolve_coverage, shape_buffer,
+    effective_line_height, from_cosmic_color, glyph_index_at, in_layout_units, make_buffer,
+    make_cased_buffer, physical_glyph, resolve_coverage, shape_buffer,
 };
 use cosmic_text::{CacheKey, SwashContent, Wrap};
 use geometry_core::{Color, Rect};
@@ -338,8 +338,7 @@ impl TextShaper {
             width = width.max(run.line_w);
         }
 
-        // Rounded up, so sub-pixel rounding never re-wraps the last glyph.
-        let result = (width.ceil(), height);
+        let result = (in_layout_units(width), height);
         if spans.is_none() {
             self.measure_cache.insert(cache_key, result);
         }
@@ -411,7 +410,7 @@ impl TextShaper {
             .layout_runs()
             .map(|run| run.line_w)
             .fold(0.0_f32, f32::max);
-        self.measure_text(text, spans, widest.ceil(), style)
+        self.measure_text(text, spans, in_layout_units(widest), style)
     }
 
     /// The text's ink bounding box measured from the top of a `[0, max_width] × [0, ∞]` layout rect, at scale 1.0: `(ink_top, ink_height)`. Unlike [`measure_text`](Self::measure_text) (which returns the full line-box height) this is the actual drawn glyph extent, so a caller can *optically* center text — the font's line box reserves ascent room for accents/descenders that short runs like "72%" leave empty, which makes line-box-centered text sit visibly high next to an icon. Empty text or a run with no inked glyphs returns `(0.0, 0.0)`.

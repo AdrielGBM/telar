@@ -1,10 +1,20 @@
 //! Window-management calls for UI code. A custom title bar's buttons call these directly — including from `.rsx` `on_press` handlers (`on_press(|| telar::window::close())`). Each enqueues a [`platform_core::WindowCommand`] that the runner applies to the OS window right after the current event is dispatched. On backends without a movable top-level window (layer-shell, headless) they are inert no-ops.
 
-use platform_core::{WindowCommand, push_window_command};
+use platform_core::{ResizeEdge, WindowCommand, push_window_command};
 
 /// Begin an OS-driven interactive move. Call from a title-bar **pointer-press** handler so the platform can latch onto the drag while the button is held.
 pub fn drag() {
     push_window_command(WindowCommand::Drag);
+}
+
+/// Begin an OS-driven interactive resize pulling `edge`, for a window opened without decorations to be resized by handles of its own. Call from a pointer-press handler, as [`drag`].
+pub fn drag_resize(edge: ResizeEdge) {
+    push_window_command(WindowCommand::DragResize(edge));
+}
+
+/// Show or hide the title bar and borders the window system draws, for an app that draws its own title bar while it does.
+pub fn set_decorations(decorated: bool) {
+    push_window_command(WindowCommand::SetDecorations(decorated));
 }
 
 /// Minimize the window to the taskbar/dock.
@@ -20,6 +30,11 @@ pub fn toggle_maximize() {
 /// Explicitly set the maximized state.
 pub fn set_maximized(maximized: bool) {
     push_window_command(WindowCommand::SetMaximized(maximized));
+}
+
+/// Reactive read of whether the window is maximized, for a custom title bar to offer maximizing or restoring it. `false` where there is no window to maximize.
+pub fn is_maximized() -> bool {
+    ui_core::use_surface_maximized()
 }
 
 /// Close the window (and, for a single-window app, exit the app).

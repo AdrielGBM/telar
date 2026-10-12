@@ -1,6 +1,7 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role};
 
+use crate::metrics;
 use crate::radio::{RadioProps, radio};
 
 const SIZES: [&str; 3] = ["Small", "Medium", "Large"];
@@ -25,7 +26,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column().gap(8.0),
+                LayoutStyle::new().flex_column().gap(metrics::gap_xs()),
                 options,
             )?)
         })

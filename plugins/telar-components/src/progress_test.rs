@@ -64,3 +64,75 @@ fn a_derived_reading_can_drive_the_bar() {
     used.set(1.0);
     assert_eq!(fraction.get(), 0.25, "and keeps following its sources");
 }
+
+fn bar(props: ProgressProps) -> telar::ComponentList {
+    crate::test_support::fresh_layout_runtime();
+    let widget = progress(props, Children::default()).unwrap();
+    lay_out(widget.layout_node());
+    telar::ComponentList::new(widget)
+}
+
+#[test]
+fn the_bar_is_a_pill_until_the_tokens_name_a_radius() {
+    telar::set_theme(crate::test_support::TokensTheme::<ProgressTokens> {
+        role: 7.0,
+        tokens: None,
+    });
+    let tree = bar(ProgressProps::props().width(120.0).height(10.0).build());
+    assert_eq!(
+        crate::test_support::first_painted(&tree).radius,
+        BorderRadius::all(5.0),
+        "fully rounded at whatever thickness it is laid out"
+    );
+
+    telar::set_theme(crate::test_support::TokensTheme {
+        role: 7.0,
+        tokens: Some(ProgressTokens {
+            radius: Some(2.0),
+            ..ProgressTokens::default()
+        }),
+    });
+    assert_eq!(
+        crate::test_support::first_painted(&tree).radius,
+        BorderRadius::all(2.0)
+    );
+}
+
+#[test]
+fn an_unset_size_is_the_tokens_and_a_named_one_wins() {
+    telar::set_theme(crate::test_support::TokensTheme {
+        role: 7.0,
+        tokens: Some(ProgressTokens {
+            width: Some(150.0),
+            height: Some(6.0),
+            ..ProgressTokens::default()
+        }),
+    });
+    let track = |tree: &telar::ComponentList| {
+        tree.commands()
+            .iter()
+            .find_map(|command| match command {
+                telar::DrawCommand::Rect { rect, .. } => Some((rect.width, rect.height)),
+                _ => None,
+            })
+            .expect("the track is drawn")
+    };
+    assert_eq!(track(&bar(ProgressProps::props().build())), (150.0, 6.0));
+    assert_eq!(
+        track(&bar(ProgressProps::props().width(90.0).height(4.0).build())),
+        (90.0, 4.0),
+        "the bar's own size wins"
+    );
+}
+
+#[test]
+fn a_style_amendment_restyles_the_track() {
+    let ink = Color::rgb(0.3, 0.3, 0.9);
+    let tree = bar(ProgressProps::props()
+        .style(std::rc::Rc::new(move |paint: RectStyle| paint.with_fill(ink)) as SurfaceAmendment)
+        .build());
+    assert_eq!(
+        crate::test_support::first_painted(&tree).fill,
+        Some(ink.into())
+    );
+}

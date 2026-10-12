@@ -15,7 +15,7 @@ fn panel() -> Box<dyn LayoutItem> {
 
 /// The grip's whole job is arithmetic, and every part of it is invisible until it is wrong.
 ///
-/// `on_drag` reports a position *local to the grip*, so a grip that forgot to add its own origin back would resize the window to about 14×14 the moment it was touched. And the grab offset — the distance from the pointer to the corner when the drag began — is what stops the corner teleporting to the cursor on the first event: press the middle of the grip and the window must not change size at all.
+/// `on_drag` reports a position *local to the grip*, so a grip that forgot to add its own origin back would resize the window to about the size of the grip the moment it was touched. And the grab offset — the distance from the pointer to the corner when the drag began — is what stops the corner teleporting to the cursor on the first event: press the middle of the grip and the window must not change size at all.
 #[test]
 fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
     use std::cell::RefCell;
@@ -23,20 +23,7 @@ fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
 
     let asked: Rc<RefCell<Vec<(f32, f32)>>> = Rc::new(RefCell::new(Vec::new()));
     let sink = asked.clone();
-    let style = SurfaceFrameStyle {
-        background: Color::TRANSPARENT.into(),
-        title_bar: Color::TRANSPARENT.into(),
-        title_text: Color::TRANSPARENT.into(),
-        close: Color::TRANSPARENT.into(),
-        radius: 0.0,
-        font_size: 12.0,
-        controls: WindowControls::default(),
-        body_inset: 12.0,
-        control_hover: Color::TRANSPARENT.into(),
-        close_hover: Color::TRANSPARENT.into(),
-        control_hover_glyph: None,
-        close_hover_glyph: None,
-    };
+    let style = SurfaceFrameStyle::default();
     let mut frame = window_frame(
         "Settings",
         None,
@@ -53,13 +40,14 @@ fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
     )
     .unwrap();
 
+    let (side, inset) = (crate::shared::icon_size(), crate::shared::gap_sm());
     let grip = Rect {
-        x: 400.0 - 4.0 - GRIP_SIZE,
-        y: 300.0 - 4.0 - GRIP_SIZE,
-        width: GRIP_SIZE,
-        height: GRIP_SIZE,
+        x: 400.0 - inset - side,
+        y: 300.0 - inset - side,
+        width: side,
+        height: side,
     };
-    let (start_x, start_y) = (grip.x + GRIP_SIZE / 2.0, grip.y + GRIP_SIZE / 2.0);
+    let (start_x, start_y) = (grip.x + side / 2.0, grip.y + side / 2.0);
     frame.on_event(&press(start_x as f64, start_y as f64));
     frame.on_event(&Event::PointerMoved {
         x: (start_x + 60.0) as f64,
@@ -88,20 +76,7 @@ fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
     crate::test_support::fresh_layout_runtime();
 
     const SURFACE: (f32, f32) = (920.0, 680.0);
-    let style = SurfaceFrameStyle {
-        background: Color::TRANSPARENT.into(),
-        title_bar: Color::TRANSPARENT.into(),
-        title_text: Color::TRANSPARENT.into(),
-        close: Color::TRANSPARENT.into(),
-        radius: 0.0,
-        font_size: 12.0,
-        controls: WindowControls::default(),
-        body_inset: 12.0,
-        control_hover: Color::TRANSPARENT.into(),
-        close_hover: Color::TRANSPARENT.into(),
-        control_hover_glyph: None,
-        close_hover_glyph: None,
-    };
+    let style = SurfaceFrameStyle::default();
     let hungry = box_item(
         StyledContainer::new(
             LayoutStyle::new().width(600.0).height(SURFACE.1),
@@ -130,10 +105,8 @@ fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
     .unwrap();
 
     // A grip laid out past the bottom edge receives nothing, so nothing resizes.
-    let (x, y) = (
-        SURFACE.0 - 4.0 - GRIP_SIZE / 2.0,
-        SURFACE.1 - 4.0 - GRIP_SIZE / 2.0,
-    );
+    let reach = crate::shared::gap_sm() + crate::shared::icon_size() / 2.0;
+    let (x, y) = (SURFACE.0 - reach, SURFACE.1 - reach);
     frame.on_event(&press(x as f64, y as f64));
     frame.on_event(&Event::PointerMoved {
         x: (x + 40.0) as f64,
@@ -157,20 +130,7 @@ fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
 #[test]
 fn a_frame_without_a_resize_callback_draws_no_grip() {
     crate::test_support::fresh_layout_runtime();
-    let style = SurfaceFrameStyle {
-        background: Color::TRANSPARENT.into(),
-        title_bar: Color::TRANSPARENT.into(),
-        title_text: Color::TRANSPARENT.into(),
-        close: Color::TRANSPARENT.into(),
-        radius: 0.0,
-        font_size: 12.0,
-        controls: WindowControls::default(),
-        body_inset: 12.0,
-        control_hover: Color::TRANSPARENT.into(),
-        close_hover: Color::TRANSPARENT.into(),
-        control_hover_glyph: None,
-        close_hover_glyph: None,
-    };
+    let style = SurfaceFrameStyle::default();
     // A grip a backend cannot act on must be absent rather than present and inert.
     assert!(
         window_frame("Clock", None, style, Rc::new(|| {}), panel(), None).is_ok(),
@@ -212,7 +172,7 @@ fn a_leading_item_and_a_zero_inset_reshape_the_frame_without_replacing_it() {
             .as_ref()
             .and_then(|item| telar::track_layout(item.layout_node()));
         let style = SurfaceFrameStyle {
-            body_inset: inset,
+            body_inset: Some(inset),
             ..SurfaceFrameStyle::default()
         };
         let frame = window_frame("Files", leading, style, Rc::new(|| {}), body, None).unwrap();
@@ -313,37 +273,35 @@ fn a_frame_restyles_on_a_mode_switch_without_being_rebuilt() {
     assert!(!after.contains(&light.into()));
 }
 
-fn glyph_color(tree: &telar::ComponentList, glyph: &str) -> telar::Paint {
+fn mark_color(tree: &telar::ComponentList) -> telar::Paint {
     tree.commands()
         .iter()
         .find_map(|command| match command {
-            telar::DrawCommand::Text { text, style, .. } if text.as_ref() == glyph => {
-                Some(style.color)
-            }
+            telar::DrawCommand::Path { style, .. } => style.stroke.as_ref().map(|s| s.paint),
             _ => None,
         })
-        .expect("the glyph is drawn")
+        .expect("the mark is drawn")
 }
 
 use telar::testing::centre;
 
-fn glyph_centre(tree: &telar::ComponentList, glyph: &str) -> (f64, f64) {
+fn mark_centre(tree: &telar::ComponentList) -> (f64, f64) {
     let commands = tree.commands();
     let at = commands
         .iter()
-        .position(|command| matches!(command, telar::DrawCommand::Text { text, .. } if text.as_ref() == glyph))
-        .expect("the glyph is drawn");
-    let (telar::DrawCommand::Text { rect, .. }, telar::DrawCommand::PushMatrix { matrix }) =
+        .position(|command| matches!(command, telar::DrawCommand::Path { .. }))
+        .expect("the mark is drawn");
+    let (telar::DrawCommand::Path { data, .. }, telar::DrawCommand::PushMatrix { matrix }) =
         (&commands[at], &commands[at - 1])
     else {
-        panic!("the glyph is not drawn under its own translation");
+        panic!("the mark is not drawn under its own translation");
     };
-    let (x, y) = centre(*rect);
+    let (x, y) = centre(data.bounds().expect("the mark has extent"));
     (x + matrix[4] as f64, y + matrix[5] as f64)
 }
 
 #[test]
-fn the_close_glyph_swaps_to_its_hover_colour_while_the_pointer_is_over_it() {
+fn the_close_mark_swaps_to_its_hover_colour_while_the_pointer_is_over_it() {
     use telar::testing::{moved, route};
 
     crate::test_support::fresh_layout_runtime();
@@ -362,13 +320,57 @@ fn the_close_glyph_swaps_to_its_hover_colour_while_the_pointer_is_over_it() {
     .unwrap();
     telar::relayout_if_dirty();
     let mut tree = telar::ComponentList::new(frame);
-    let glyph = "\u{2715}";
-    assert_eq!(glyph_color(&tree, glyph), resting.into());
+    assert_eq!(mark_color(&tree), resting.into());
 
-    let (x, y) = glyph_centre(&tree, glyph);
+    let (x, y) = mark_centre(&tree);
     route(&mut tree, &moved(x, y));
-    assert_eq!(glyph_color(&tree, glyph), hovered.into());
+    assert_eq!(mark_color(&tree), hovered.into());
 
     route(&mut tree, &moved(0.0, 190.0));
-    assert_eq!(glyph_color(&tree, glyph), resting.into());
+    assert_eq!(mark_color(&tree), resting.into());
+}
+
+fn laid_out_frame(style: SurfaceFrameStyle) -> telar::ComponentList {
+    crate::test_support::fresh_layout_runtime();
+    let frame = window_frame("Files", None, style, Rc::new(|| {}), panel(), None).unwrap();
+    compute_layout(
+        frame.layout_node(),
+        AvailableSpace::Definite(300.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+    telar::relayout_if_dirty();
+    telar::ComponentList::new(frame)
+}
+
+/// A frame that names no colours is drawn in the theme's own: a card in `surface`, a strip in `surface_alt`, square, so a backend gets chrome that matches the catalogue without restating the theme.
+#[test]
+fn an_unstyled_frame_paints_from_the_theme_roles() {
+    let theme = PaperTheme {
+        primary: Color::rgba(0.2, 0.3, 0.9, 1.0),
+        surface: Color::rgba(0.95, 0.94, 0.9, 1.0),
+    };
+    telar::set_theme(theme.clone());
+    let tree = laid_out_frame(SurfaceFrameStyle::default());
+    let card = crate::test_support::first_painted(&tree);
+    assert_eq!(card.fill, Some(theme.surface.into()));
+    assert_eq!(
+        card.radius,
+        telar::BorderRadius::all(0.0),
+        "square unless asked"
+    );
+    assert!(fills(&tree.commands()).contains(&telar::ThemeTokens::surface_alt(&theme).into()));
+}
+
+#[test]
+fn a_named_radius_and_a_card_amendment_reshape_the_card() {
+    let ink = Color::rgba(0.1, 0.1, 0.1, 0.8);
+    let style = SurfaceFrameStyle {
+        radius: Some(9.0),
+        ..SurfaceFrameStyle::default()
+    }
+    .card(Rc::new(move |paint: RectStyle| paint.with_fill(ink)));
+    let card = crate::test_support::first_painted(&laid_out_frame(style));
+    assert_eq!(card.fill, Some(ink.into()));
+    assert_eq!(card.radius, telar::BorderRadius::all(9.0));
 }

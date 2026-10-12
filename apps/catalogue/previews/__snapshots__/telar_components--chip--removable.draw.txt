@@ -5,21 +5,21 @@ element group
     element group
       element group
         element group
-          rect 363,288 74x24 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=30
+          rect 367,291 66x18 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=9
           element group
             element group
-              rect 373,297 6x6 fill=#2eb073ff radius=3
+              rect 375,296 8x8 fill=#2eb073ff radius=4
             end
             element group
-              matrix 1,0,0,1,385,292
-                text 0,0 28x15.62 "Rust" size=13.02 family=sans-serif weight=400 color=#171a2eff lang=en
+              matrix 1,0,0,1,387,293
+                text 0,0 24.88x14.28 "Rust" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
               end
             end
             element button
-              rect 419,293 8x14
+              rect 416,295 10x10
               element group
-                matrix 1,0,0,1,419,293
-                  text 0,0 8x14.28 "×" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
+                matrix 1,0,0,1,416,295
+                  path M0,0 L10,10 M10,0 L0,10 stroke=1.5 stroke-color=#171a2eff
                 end
               end
             end

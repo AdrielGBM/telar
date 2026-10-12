@@ -61,7 +61,7 @@ col gap:20
             text "Optical size 14 against 32" font_size:18 color:$theme.ink font_family:"Telar Test, sans_serif" font_variation:(opsz 14)
             text "Optical size 32" font_size:18 color:$theme.ink font_family:"Telar Test, sans_serif" font_variation:(opsz 32)
             text "0123456789 with tabular figures" font_size:16 color:$theme.ink font_features:(tnum)
-            button label:"Move the axis" ghost on_press:(|| $heavy.toggle())
+            button label:"Move the axis" variant:ButtonVariant::Ghost on_press:(|| $heavy.toggle())
             text "A document sets every axis and feature. The GPU shaper places wght anywhere along its range and applies features; other axes are a document's alone for now." font_size:12 color:$theme.muted
         code_line code:"text font_variation:(wght $w, opsz 32) transition(font_variation 400ms)   ·   font_features:(tnum, liga 0)"
     example title:"Line clamp & ellipsis"
@@ -88,7 +88,7 @@ col gap:20
     example title:"t! — a catalogue lookup is Rust, so it goes where any value goes"
         card gap:10
             row gap:12 align:center
-                button label:t!("nav.overview") ghost
+                button label:t!("nav.overview") variant:ButtonVariant::Ghost
                 text "{t!(\"greeting\", name = \"Ada\")}" font_size:13 color:$theme.muted
             text "The macro validates the key against locales/ at compile time and re-reads the locale, so a language switch re-renders both." font_size:12 color:$theme.muted
         code_line code:"button label:t!('nav.overview')   ·   text '{t!(\'greeting\', name = n)}'"

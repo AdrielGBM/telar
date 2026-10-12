@@ -10,8 +10,11 @@ use renderer_core::RectStyle;
 ///
 /// This is the per-instance half of styling. The other two halves already exist and are not this: **theme tokens** for what a whole application should agree on (how round anything is), and **props** for what changes the shape rather than the paint (whether a menu wears a field's border). Reaching for this to say something every menu should say is how a design system comes apart one call site at a time.
 ///
-/// A component crate accepts `@class` the way the catalogue does by taking this type for its surface prop and running its resolved style through [`amend_surface`].
-pub type SurfaceStyle = Option<Rc<dyn Fn(RectStyle) -> RectStyle>>;
+/// A component crate accepts `@class` the way the catalogue does: a prop `#[props(some, default)] pub style: Option<SurfaceAmendment>` (spelled with the `Option` so the setter takes the amendment itself, which is what `@class` hands it), and its finished style for that surface run through [`amend_surface`] in every state, after its own paint.
+pub type SurfaceStyle = Option<SurfaceAmendment>;
+
+/// One amendment: what a `style` prop holds when the caller gave one. See [`SurfaceStyle`].
+pub type SurfaceAmendment = Rc<dyn Fn(RectStyle) -> RectStyle>;
 
 /// Applies a caller's amendment, if there is one.
 pub fn amend_surface(style: RectStyle, over: &SurfaceStyle) -> RectStyle {

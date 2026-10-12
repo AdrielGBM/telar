@@ -24,9 +24,9 @@ type Measured = (
     Option<(renderer_core::FontFit, geometry_core::Size)>,
 );
 
-/// The run the glyph band is measured from: a capital, an x-height letter and a descender, which between them span the extent a Latin face actually draws in. Any string of the same style is then centred by the same amount, which is what puts a row of labels on one baseline.
-const REFERENCE: &str = "Hxg";
-/// Room the reference cannot fill: it is three characters, and cosmic-text overflows on an unbounded one.
+/// The run the glyph band is measured from: a capital, an ascender, an x-height letter and a descender, which between them span the extent a Latin face actually draws in. Any string of the same style is then centred by the same amount, which is what puts a row of labels on one baseline. The ascender is there because in most faces it stands above the capitals, and a band stopping at the capitals centred every lowercase label a pixel high.
+const REFERENCE: &str = "Hlxg";
+/// Room the reference cannot fill: it is four characters, and cosmic-text overflows on an unbounded one.
 const REFERENCE_WIDTH: f32 = 1_000.0;
 
 /// The measured text leaf, optically centred in the box its parent gave it.
@@ -356,6 +356,19 @@ impl Text {
 }
 
 impl Text {
+    /// The leaf's box, as wide as layout made it before rounding its edges to whole pixels wherever that took some off: a line measured to fit is drawn unbroken, overhanging the rounded box by less than a pixel.
+    fn set_in(&self) -> Rect {
+        let r = self.leaf.rect.get();
+        if r.width <= 0.0 {
+            return r;
+        }
+        let unrounded = layout_reactive::unrounded_width(self.leaf.node).unwrap_or(r.width);
+        Rect {
+            width: r.width.max(unrounded),
+            ..r
+        }
+    }
+
     /// Where the text sits inside a box `r`, as `(top, height)`: optically centred, see the comments inside.
     fn placed(&self, r: Rect, text: &str, style: &TextStyle) -> (f32, f32) {
         // A text leaf stretches to fill its parent's cross axis, and the font's line box reserves ascent room a run never uses, so line-box-centred text sits visibly high next to an icon. The band is measured from a fixed reference run, which makes the offset a property of the font at this size and shared by every label in the style — centring each string on its own ink moved it by whether it held a descender.
@@ -396,7 +409,7 @@ impl Text {
         if spans.iter().all(|span| span.link.is_none()) {
             return None;
         }
-        let r = self.leaf.rect.get();
+        let r = self.set_in();
         if !r.contains(x, y) {
             return None;
         }
@@ -486,7 +499,7 @@ impl Drop for Text {
 
 impl Component for Text {
     fn view(&self) -> RenderNode {
-        let r = self.leaf.rect.get();
+        let r = self.set_in();
         let text: Arc<str> = {
             let new_str = (self.content)();
             let mut cache = self.cached_content.borrow_mut();

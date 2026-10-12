@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -244,9 +245,9 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                         };
                                         __children.push(box_item(__text_7));
                                         let __row_0 = {
-                                            let __node_9 = button(ButtonProps::props().label("System").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::System))).build(), Children::default())?;
-                                            let __node_10 = button(ButtonProps::props().label("Light").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Light))).build(), Children::default())?;
-                                            let __node_11 = button(ButtonProps::props().label("Dark").ghost(true).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Dark))).build(), Children::default())?;
+                                            let __node_9 = button(ButtonProps::props().label("System").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::System))).build(), Children::default())?;
+                                            let __node_10 = button(ButtonProps::props().label("Light").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Light))).build(), Children::default())?;
+                                            let __node_11 = button(ButtonProps::props().label("Dark").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Dark))).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_9, __node_10, __node_11])?
                                         };
                                         __children.push(box_item(__row_0));

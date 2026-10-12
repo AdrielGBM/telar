@@ -8,7 +8,7 @@ element group
           element radio
             rect 340,288 24x24
             element group
-              rect 340,288 20x20 fill=#4261edff border=2 border-color=#171a2eff radius=10
+              rect 340,288 20x20 fill=#4261edff border=1.5 border-color=#171a2eff radius=10
             end
           end
           element radio

@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::feature_card::{feature_card, FeatureCardProps};
 #[allow(unused_imports)] use crate::demo_images::{make_checker, make_gradient, make_radial_alpha};
@@ -98,14 +99,18 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
     let __col_0 = {
         let __sbox_0 = {
             let __row_0 = {
-                let __text_0 = {
-                    Text::declaring(
-                        || "▲ rsx".to_string(),
-                        LayoutStyle::new(),
-                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(20.0).with_color(theme.get().dark) },
-                    )?
-                };
                 let __row_1 = {
+                    let __node_0 = icon(IconProps::props().name(("lucide:triangle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_1FFBD581), true)).size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().dark })).build(), Children::default())?;
+                    let __text_0 = {
+                        Text::declaring(
+                            || "rsx".to_string(),
+                            LayoutStyle::new(),
+                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(20.0).with_color(theme.get().dark) },
+                        )?
+                    };
+                    Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_0, __text_0])?
+                };
+                let __row_2 = {
                     let __text_1 = {
                         Text::declaring(
                             || "Features".to_string(),
@@ -127,16 +132,16 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                         )?
                     };
-                    let __node_0 = button(ButtonProps::props().label("Get started").fill(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER), children![__text_1, __text_2, __text_3, __node_0])?
+                    let __node_1 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                    Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER).flex_wrap(), children![__text_1, __text_2, __text_3, __node_1])?
                 };
-                Container::new(style_navwrap(), children![__text_0, __row_1])?
+                Container::new(style_navwrap().flex_wrap().gap(12.0), children![__row_1, __row_2])?
             };
             StyledContainer::new(style_navband(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__row_0])?
         };
         let __sbox_1 = {
             let __col_1 = {
-                let __row_2 = {
+                let __row_3 = {
                     let __col_2 = {
                         let __text_4 = {
                             Text::declaring(
@@ -152,10 +157,10 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().muted) },
                             )?
                         };
-                        let __row_3 = {
-                            let __node_1 = button(ButtonProps::props().label("Get started").fill(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
-                            let __node_2 = button(ButtonProps::props().label("Read the docs").outline(PRIMARY).build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap(), children![__node_1, __node_2])?
+                        let __row_4 = {
+                            let __node_2 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                            let __node_3 = button(ButtonProps::props().label("Read the docs").variant(ButtonVariant::Outline).color(PRIMARY).build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap(), children![__node_2, __node_3])?
                         };
                         let __text_6 = {
                             let spots_left = spots_left.clone();
@@ -165,7 +170,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().accent) },
                             )?
                         };
-                        Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(320.0).gap(20.0), children![__text_4, __text_5, __row_3, __text_6])?
+                        Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(320.0).gap(20.0), children![__text_4, __text_5, __row_4, __text_6])?
                     };
                     let __col_3 = {
                         let __img_0 = {
@@ -182,7 +187,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(48.0).flex_wrap().align_items(AlignItems::CENTER), children![__col_2, __col_3])?
                 };
-                Container::new(style_wrap(), children![__row_2])?
+                Container::new(style_wrap(), children![__row_3])?
             };
             StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_1])?
         };
@@ -195,7 +200,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                     )?
                 };
-                let __row_4 = {
+                let __row_5 = {
                     let __sbox_3 = {
                         let __text_8 = {
                             Text::declaring(
@@ -266,7 +271,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap(), children![__sbox_3, __sbox_4, __sbox_5, __sbox_6])?
                 };
-                Container::new(style_wrap().gap(24.0), children![__text_7, __row_4])?
+                Container::new(style_wrap().gap(24.0), children![__text_7, __row_5])?
             };
             StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__col_4])?
         };
@@ -289,14 +294,86 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     };
                     Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_16, __text_17])?
                 };
-                let __row_5 = {
-                    let __node_3 = feature_card(FeatureCardProps::props().icon("⚡").title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), Children::default())?;
-                    let __node_4 = feature_card(FeatureCardProps::props().icon("🧩").title("Composable").body("Signals, memos and reusable .rsx components compose right inside the markup.").build(), Children::default())?;
-                    let __node_5 = feature_card(FeatureCardProps::props().icon("🎨").title("Themeable").body("Semantic color tokens resolve reactively, so dark mode is a single swap.").build(), Children::default())?;
-                    let __node_6 = feature_card(FeatureCardProps::props().icon("📱").title("Cross-platform").body("One codebase targets desktop and Android with native event loops.").build(), Children::default())?;
-                    Container::new(LayoutStyle::new().flex_row().gap(24.0).flex_wrap(), children![__node_3, __node_4, __node_5, __node_6])?
+                let __row_6 = {
+                    let __node_4 = {
+                        let __deferred = Children::per_slot(
+                            {
+                                let theme = theme.clone();
+                            move |__request: SlotRequest<'_>| {
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                if __request.includes(Some("icon")) {
+                                    let __node_5 = icon(IconProps::props().name(("lucide:zap", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_4802B2F8), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                                    __slots.push(Some("icon"), box_item(__node_5));
+                                }
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        feature_card(FeatureCardProps::props().title("Fast").body("Software and wgpu renderers with dirty-tracking and scroll-blit detection.").build(), __deferred)?
+                    };
+                    let __node_6 = {
+                        let __deferred = Children::per_slot(
+                            {
+                                let theme = theme.clone();
+                            move |__request: SlotRequest<'_>| {
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                if __request.includes(Some("icon")) {
+                                    let __node_7 = icon(IconProps::props().name(("lucide:puzzle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_85A554E9), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                                    __slots.push(Some("icon"), box_item(__node_7));
+                                }
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        feature_card(FeatureCardProps::props().title("Composable").body("Signals, memos and reusable .rsx components compose right inside the markup.").build(), __deferred)?
+                    };
+                    let __node_8 = {
+                        let __deferred = Children::per_slot(
+                            {
+                                let theme = theme.clone();
+                            move |__request: SlotRequest<'_>| {
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                if __request.includes(Some("icon")) {
+                                    let __node_9 = icon(IconProps::props().name(("lucide:palette", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_E0D46014), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                                    __slots.push(Some("icon"), box_item(__node_9));
+                                }
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        feature_card(FeatureCardProps::props().title("Themeable").body("Semantic color tokens resolve reactively, so dark mode is a single swap.").build(), __deferred)?
+                    };
+                    let __node_10 = {
+                        let __deferred = Children::per_slot(
+                            {
+                                let theme = theme.clone();
+                            move |__request: SlotRequest<'_>| {
+                                let theme = theme.clone();
+                                let mut __slots = Slots::new();
+                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                if __request.includes(Some("icon")) {
+                                    let __node_11 = icon(IconProps::props().name(("lucide:smartphone", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_15E9407E), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                                    __slots.push(Some("icon"), box_item(__node_11));
+                                }
+                                __slots.extend_default(__children);
+                                Ok(__slots)
+                            }
+                            }
+                        );
+                        feature_card(FeatureCardProps::props().title("Cross-platform").body("One codebase targets desktop and Android with native event loops.").build(), __deferred)?
+                    };
+                    Container::new(LayoutStyle::new().flex_row().gap(24.0).flex_wrap(), children![__node_4, __node_6, __node_8, __node_10])?
                 };
-                Container::new(style_wrap().gap(28.0), children![__col_6, __row_5])?
+                Container::new(style_wrap().gap(28.0), children![__col_6, __row_6])?
             };
             StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_5])?
         };
@@ -319,7 +396,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     };
                     Container::new(LayoutStyle::new().flex_column().gap(8.0), children![__text_18, __text_19])?
                 };
-                let __row_6 = {
+                let __row_7 = {
                     let __col_9 = {
                         let __img_1 = {
                             let __src = gradient_img.clone();
@@ -382,13 +459,13 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(20.0).flex_wrap(), children![__col_9, __col_10, __col_11])?
                 };
-                Container::new(style_wrap().gap(28.0), children![__col_8, __row_6])?
+                Container::new(style_wrap().gap(28.0), children![__col_8, __row_7])?
             };
             StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::zero()) }, children![__col_7])?
         };
         let __sbox_9 = {
             let __col_12 = {
-                let __row_7 = {
+                let __row_8 = {
                     let __col_13 = {
                         let __img_4 = {
                             let __src = checker_img.clone();
@@ -417,18 +494,22 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().muted) },
                             )?
                         };
-                        let __text_25 = {
-                            Text::declaring(
-                                || "→ signal, memo, effect".to_string(),
-                                LayoutStyle::new(),
-                                move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(PRIMARY),
-                            )?
+                        let __row_9 = {
+                            let __node_12 = icon(IconProps::props().name(("lucide:arrow-right", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_6866DA5D), true)).size(16.0).color(PRIMARY).build(), Children::default())?;
+                            let __text_25 = {
+                                Text::declaring(
+                                    || "signal, memo, effect".to_string(),
+                                    LayoutStyle::new(),
+                                    move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(PRIMARY),
+                                )?
+                            };
+                            Container::new(LayoutStyle::new().flex_row().gap(6.0).align_items(AlignItems::CENTER), children![__node_12, __text_25])?
                         };
-                        Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(300.0).gap(14.0), children![__text_23, __text_24, __text_25])?
+                        Container::new(LayoutStyle::new().flex_column().flex_grow(1.0).min_width(300.0).gap(14.0), children![__text_23, __text_24, __row_9])?
                     };
                     Container::new(LayoutStyle::new().flex_row().gap(48.0).flex_wrap().align_items(AlignItems::CENTER), children![__col_13, __col_14])?
                 };
-                Container::new(style_wrap(), children![__row_7])?
+                Container::new(style_wrap(), children![__row_8])?
             };
             StyledContainer::new(style_band(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface).with_radius(BorderRadius::zero()) }, children![__col_12])?
         };
@@ -449,8 +530,8 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().on_primary) },
                     )?
                 };
-                let __row_8 = {
-                    let __node_7 = button(ButtonProps::props().label("Reserve a seat").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
+                let __row_10 = {
+                    let __node_13 = button(ButtonProps::props().label("Reserve a seat").color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build(), Children::default())?;
                     let __text_28 = {
                         let signups = signups.clone();
                         Text::declaring(
@@ -459,21 +540,25 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().on_primary) },
                         )?
                     };
-                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER).flex_wrap(), children![__node_7, __text_28])?
+                    Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER).flex_wrap(), children![__node_13, __text_28])?
                 };
-                Container::new(style_wrap().align_items(AlignItems::CENTER).gap(16.0), children![__text_26, __text_27, __row_8])?
+                Container::new(style_wrap().align_items(AlignItems::CENTER).gap(16.0), children![__text_26, __text_27, __row_10])?
             };
             StyledContainer::new(style_band(), move |_| RectStyle::default().with_fill(PRIMARY).with_radius(BorderRadius::zero()), children![__col_15])?
         };
         let __sbox_11 = {
-            let __row_9 = {
+            let __row_11 = {
                 let __col_16 = {
-                    let __text_29 = {
-                        Text::declaring(
-                            || "▲ rsx".to_string(),
-                            LayoutStyle::new(),
-                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().on_primary) },
-                        )?
+                    let __row_12 = {
+                        let __node_14 = icon(IconProps::props().name(("lucide:triangle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_1FFBD581), true)).size(18.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().on_primary })).build(), Children::default())?;
+                        let __text_29 = {
+                            Text::declaring(
+                                || "rsx".to_string(),
+                                LayoutStyle::new(),
+                                { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().on_primary) },
+                            )?
+                        };
+                        Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_14, __text_29])?
                     };
                     let __text_30 = {
                         Text::declaring(
@@ -482,7 +567,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().on_dark) },
                         )?
                     };
-                    Container::new(LayoutStyle::new().flex_column().gap(8.0).flex_grow(1.0).min_width(200.0), children![__text_29, __text_30])?
+                    Container::new(LayoutStyle::new().flex_column().gap(8.0).flex_grow(1.0).min_width(200.0), children![__row_12, __text_30])?
                 };
                 let __col_17 = {
                     let __text_31 = {
@@ -534,7 +619,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                 };
                 Container::new(style_footwrap(), children![__col_16, __col_17, __col_18])?
             };
-            StyledContainer::new(style_footband(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().dark).with_radius(BorderRadius::zero()) }, children![__row_9])?
+            StyledContainer::new(style_footband(), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().dark).with_radius(BorderRadius::zero()) }, children![__row_11])?
         };
         Container::new(style_page(), children![__sbox_0, __sbox_1, __sbox_2, __sbox_7, __sbox_8, __sbox_9, __sbox_10, __sbox_11])?
     };
@@ -553,10 +638,10 @@ pub fn home_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
 
 pub const HOME_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--home--landing-full-page"), "home", "Landing — full page", home_preview_0)
-        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/home.rsx"), 152)
+        .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/home.rsx"), 162)
         .title("Landing/Home")
         .docs("The whole landing page, from the hero down to the footer.")
-        .source("[preview \"Landing — full page\" matrix:(viewport:[390x844 1280x800])]\nhome", &[::telar::preview::SourceSpan::new(0, 75, 152)])
+        .source("[preview \"Landing — full page\" matrix:(viewport:[390x844 1280x800])]\nhome", &[::telar::preview::SourceSpan::new(0, 75, 162)])
         .props(<HomeProps as ::telar::preview::HasPropsSchema>::schema)
         .layout(::telar::preview::Layout::Fullscreen)
         .matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Viewport(&["390x844", "1280x800"])])),

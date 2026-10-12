@@ -237,3 +237,109 @@ fn a_reactive_label_follows_what_it_reads() {
     lay_out(node);
     assert!(telar::testing::find_text(&tree, "Lienzo"));
 }
+
+#[cfg(feature = "workbench")]
+#[test]
+fn an_icon_tab_is_the_same_square_as_an_icon_button() {
+    crate::test_support::fresh_layout_runtime();
+    let tab_list = tab_list(
+        signal(0u32),
+        vec![Tab::new(0u32, "One").icon(telar_icons::icon!("lucide:square"))],
+        Color::TRANSPARENT.into(),
+        None,
+    )
+    .unwrap();
+    let button = crate::icon_button(
+        crate::IconButtonProps::props()
+            .icon(telar_icons::icon!("lucide:square"))
+            .label("Two")
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    let root = telar::Container::new(
+        LayoutStyle::new().flex_row().width(400.0).height(100.0),
+        vec![tab_list, button],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let _tree = ComponentList::new(telar::box_item(root));
+    let tab = crate::test_support::drawn(Role::Tab)[0];
+    let pressed = crate::test_support::drawn(Role::Button)[0];
+    assert_eq!((tab.width, tab.height), (pressed.width, pressed.height));
+}
+
+fn mounted(props: TabsProps) -> ComponentList {
+    crate::test_support::fresh_layout_runtime();
+    let item = tabs(props, Children::default()).unwrap();
+    lay_out(item.layout_node());
+    ComponentList::new(item)
+}
+
+fn tab_at(tree: &ComponentList, index: usize) -> RectStyle {
+    crate::test_support::painted_at(tree, crate::test_support::drawn(Role::Tab)[index])
+}
+
+#[test]
+fn the_corner_is_the_theme_s_control_role_until_the_tabs_tokens_name_one() {
+    crate::test_support::assert_corner_follows_the_role_until_the_tokens_name_one(
+        || mounted(TabsProps::props().items(vec!["One", "Two"]).build()),
+        |tree| tab_at(tree, 0).radius,
+        |_, role| BorderRadius::all(role),
+        |radius| TabsTokens {
+            radius: Some(radius),
+            ..TabsTokens::default()
+        },
+    );
+}
+
+/// `@class` and the `style` prop amend the finished paint of every tab, so they reach the selected tab, the others, and a tab under the pointer.
+#[test]
+fn a_style_amendment_reshapes_every_tab_in_every_state() {
+    use telar::testing::{centre, moved};
+
+    let flat: SurfaceAmendment = Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(0.0)));
+    let mut tree = mounted(
+        TabsProps::props()
+            .items(vec!["One", "Two"])
+            .style(flat)
+            .build(),
+    );
+    let selected = tab_at(&tree, 0);
+    assert!(selected.fill.is_some(), "the selected tab is filled");
+    assert_eq!(selected.radius, BorderRadius::all(0.0));
+    assert_eq!(tab_at(&tree, 1).radius, BorderRadius::all(0.0));
+    let (x, y) = centre(crate::test_support::drawn(Role::Tab)[1]);
+    route(&mut tree, &moved(x, y));
+    let hovered = tab_at(&tree, 1);
+    assert_eq!(
+        hovered.fill.map(|paint| paint.solid_color()),
+        Some(telar::use_theme_tokens().highlight_low()),
+        "the hover wash is drawn"
+    );
+    assert_eq!(
+        hovered.radius,
+        BorderRadius::all(0.0),
+        "on the amended shape"
+    );
+}
+
+#[test]
+fn the_padding_tokens_scale_with_the_control_size() {
+    crate::test_support::fresh_layout_runtime();
+    let tokens = TabsTokens {
+        pad_x: Some(10.0),
+        ..TabsTokens::default()
+    };
+    let mut padded = 0.0;
+    let _ = telar::provide_control_size(telar::ControlSize::Large, || {
+        padded = tokens.pad_x();
+        telar::Container::new(LayoutStyle::new(), vec![]).map(box_item)
+    });
+    assert_eq!(padded, 12.5);
+}

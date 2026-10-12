@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -31,7 +32,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
     let keys = signal(0i32);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Buttons").desc("button is a component (from the components feature, not a base tag): it takes a label, a variant, and an on_press closure. The variant is the color token you pass to fill or outline; ghost is a bare flag.").build(), Children::default())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Buttons").desc("button is a component (from the components feature, not a base tag): it takes a label, a variant, a color and an on_press closure. The variant says how the color is carried (Solid, Outline, Soft or Ghost); the color defaults to the theme's primary.").build(), Children::default())?;
         let __node_1 = {
             let __deferred = Children::per_slot(
                 {
@@ -51,12 +52,13 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_0 = {
-                                            let __node_3 = button(ButtonProps::props().label("Filled").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
-                                            let __node_4 = button(ButtonProps::props().label("Outline").outline(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
-                                            let __node_5 = button(ButtonProps::props().label("Ghost").ghost(true).build(), Children::default())?;
-                                            let __node_6 = button(ButtonProps::props().label("Danger").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).build(), Children::default())?;
-                                            let __node_7 = button(ButtonProps::props().label("Success").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
-                                            Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __node_4, __node_5, __node_6, __node_7])?
+                                            let __node_3 = button(ButtonProps::props().label("Solid").build(), Children::default())?;
+                                            let __node_4 = button(ButtonProps::props().label("Outline").variant(ButtonVariant::Outline).build(), Children::default())?;
+                                            let __node_5 = button(ButtonProps::props().label("Soft").variant(ButtonVariant::Soft).build(), Children::default())?;
+                                            let __node_6 = button(ButtonProps::props().label("Ghost").variant(ButtonVariant::Ghost).build(), Children::default())?;
+                                            let __node_7 = button(ButtonProps::props().label("Danger").color(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).build(), Children::default())?;
+                                            let __node_8 = button(ButtonProps::props().label("Success").color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __node_4, __node_5, __node_6, __node_7, __node_8])?
                                         };
                                         __children.push(box_item(__row_0));
                                     }
@@ -68,8 +70,8 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                             card(CardProps::props().build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
-                        let __node_8 = code_line(CodeLineProps::props().code("button label:'Filled' fill:$theme.primary   ·   outline:$theme.primary   ·   ghost").build(), Children::default())?;
-                        __children.push(box_item(__node_8));
+                        let __node_9 = code_line(CodeLineProps::props().code("button label:'Save' variant:ButtonVariant::Outline color:$theme.danger").build(), Children::default())?;
+                        __children.push(box_item(__node_9));
                     }
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -78,7 +80,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
             );
             example(ExampleProps::props().title("Variants").build(), __deferred)?
         };
-        let __node_9 = {
+        let __node_10 = {
             let __deferred = Children::per_slot(
                 {
                     let clicks = clicks.clone();
@@ -89,7 +91,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
-                        let __node_10 = {
+                        let __node_11 = {
                             let __deferred = Children::per_slot(
                                 {
                                     let clicks = clicks.clone();
@@ -110,10 +112,10 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                         };
                                         __children.push(box_item(__text_0));
                                         let __row_1 = {
-                                            let __node_11 = button(ButtonProps::props().label("+1").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build(), Children::default())?;
-                                            let __node_12 = button(ButtonProps::props().label("+10").fill(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build(), Children::default())?;
-                                            let __node_13 = button(ButtonProps::props().label("Reset").ghost(true).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build(), Children::default())?;
-                                            Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_11, __node_12, __node_13])?
+                                            let __node_12 = button(ButtonProps::props().label("+1").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build(), Children::default())?;
+                                            let __node_13 = button(ButtonProps::props().label("+10").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build(), Children::default())?;
+                                            let __node_14 = button(ButtonProps::props().label("Reset").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build(), Children::default())?;
+                                            Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_12, __node_13, __node_14])?
                                         };
                                         __children.push(box_item(__row_1));
                                     }
@@ -124,9 +126,9 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                             );
                             card(CardProps::props().gap(12.0).build(), __deferred)?
                         };
-                        __children.push(box_item(__node_10));
-                        let __node_14 = code_line(CodeLineProps::props().code("button label:'+1' fill:$theme.primary on_press:|| $clicks += 1      ($x += n desugars to .update)").build(), Children::default())?;
-                        __children.push(box_item(__node_14));
+                        __children.push(box_item(__node_11));
+                        let __node_15 = code_line(CodeLineProps::props().code("button label:'+1' on_press:|| $clicks += 1      ($x += n desugars to .update)").build(), Children::default())?;
+                        __children.push(box_item(__node_15));
                     }
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -135,7 +137,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
             );
             example(ExampleProps::props().title("on_press — every click runs a closure that mutates a signal").build(), __deferred)?
         };
-        let __node_15 = {
+        let __node_16 = {
             let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
@@ -146,7 +148,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
-                        let __node_16 = {
+                        let __node_17 = {
                             let __deferred = Children::per_slot(
                                 {
                                     let theme = theme.clone();
@@ -185,9 +187,9 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                             );
                             card(CardProps::props().gap(10.0).build(), __deferred)?
                         };
-                        __children.push(box_item(__node_16));
-                        let __node_17 = code_line(CodeLineProps::props().code("box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)").build(), Children::default())?;
                         __children.push(box_item(__node_17));
+                        let __node_18 = code_line(CodeLineProps::props().code("box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)").build(), Children::default())?;
+                        __children.push(box_item(__node_18));
                     }
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -196,7 +198,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
             );
             example(ExampleProps::props().title("A whole box is clickable — on_press works on any container, not just buttons").build(), __deferred)?
         };
-        let __node_18 = {
+        let __node_19 = {
             let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
@@ -205,7 +207,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
-                        let __node_19 = {
+                        let __node_20 = {
                             let __deferred = Children::per_slot(
                                 {
                                     let theme = theme.clone();
@@ -254,9 +256,9 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                             );
                             card(CardProps::props().gap(10.0).build(), __deferred)?
                         };
-                        __children.push(box_item(__node_19));
-                        let __node_20 = code_line(CodeLineProps::props().code("box fill:$theme.surface_alt hover_style(fill:$theme.primary)      (swap style while hovered)").build(), Children::default())?;
                         __children.push(box_item(__node_20));
+                        let __node_21 = code_line(CodeLineProps::props().code("box fill:$theme.surface_alt hover_style(fill:$theme.primary)      (swap style while hovered)").build(), Children::default())?;
+                        __children.push(box_item(__node_21));
                     }
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -265,7 +267,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
             );
             example(ExampleProps::props().title("hover — a container restyles while the pointer is over it (mouse only)").build(), __deferred)?
         };
-        let __node_21 = {
+        let __node_22 = {
             let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
@@ -278,7 +280,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
-                        let __node_22 = {
+                        let __node_23 = {
                             let __deferred = Children::per_slot(
                                 {
                                     let theme = theme.clone();
@@ -331,9 +333,9 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                             );
                             card(CardProps::props().gap(10.0).build(), __deferred)?
                         };
-                        __children.push(box_item(__node_22));
-                        let __node_23 = code_line(CodeLineProps::props().code("box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)").build(), Children::default())?;
                         __children.push(box_item(__node_23));
+                        let __node_24 = code_line(CodeLineProps::props().code("box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)").build(), Children::default())?;
+                        __children.push(box_item(__node_24));
                     }
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -342,7 +344,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
             );
             example(ExampleProps::props().title("Event callbacks — on_hover (a bool) and on_key (global shortcut)").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_9, __node_15, __node_18, __node_21])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_10, __node_16, __node_19, __node_22])?
     };
     Ok(Box::new(__col_0))
 }

@@ -13,6 +13,27 @@ pub struct FontConfig {
     pub sans_serif_family_candidates: Vec<String>,
 }
 
+/// What a shaper's font database was loaded from and the family each generic name resolves to in it, as plain data: what a second copy of the shaper, the one a hot-reloaded library links, loads to set text in the very faces the first draws in.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FontSources {
+    /// Whether the platform's own font directories were scanned.
+    pub system_fonts: bool,
+    pub dirs: Vec<PathBuf>,
+    pub faces: Vec<FontAsset>,
+    pub sans_serif_family_candidates: Vec<String>,
+    pub generic_families: GenericFamilies,
+}
+
+/// The family each generic name resolves to. Two databases loaded from the same faces can disagree on it, depending on what read the platform's font configuration and in which order.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GenericFamilies {
+    pub serif: String,
+    pub sans_serif: String,
+    pub monospace: String,
+    pub cursive: String,
+    pub fantasy: String,
+}
+
 /// A face an application ships: where its bytes come from, and what it answers to.
 ///
 /// The same concept on every target. A glyph shaper loads the bytes, a document hands them to the browser as an `@font-face`, and a terminal ignores the whole thing because a cell has no typeface to choose.

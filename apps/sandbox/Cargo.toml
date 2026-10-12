@@ -31,6 +31,7 @@ telar-navigate = { workspace = true }
 
 serde = { workspace = true }
 telar-devtools = { workspace = true, optional = true }
+telar-icons.workspace = true
 
 # Only `main.rs` initialises a subscriber, and there is no `main.rs` on wasm — left unconditional, this pulled a terminal log formatter, `ansi` included, into every page build.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

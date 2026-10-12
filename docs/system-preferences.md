@@ -107,7 +107,7 @@ In `.rsx`, a control that offers the choice calls it from a handler:
 
 ```rsx
 button label:"Less motion" on_press:(|| telar::set_reduced_motion_override(Some(true)))
-button label:"Follow the system" ghost on_press:(|| telar::set_reduced_motion_override(None))
+button label:"Follow the system" variant:ButtonVariant::Ghost on_press:(|| telar::set_reduced_motion_override(None))
 ```
 
 The override is meant for that: a choice the person makes in the app. An application that merely prefers its own

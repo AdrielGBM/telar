@@ -26,7 +26,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                             .to_vec(),
                     )
                     .selected(p.signal("selected", Some(0u32)))
-                    .size(p.arg("size", 20.0f32))
+                    .size(p.arg("size", 0.0f32))
                     .build(),
                 Children::default(),
             )

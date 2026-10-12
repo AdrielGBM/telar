@@ -6,17 +6,17 @@ element group
       element group
         element group
           element button
-            rect 310,282 180x36 radius=8
+            rect 309,286 182x28 radius=10
             element group
-              clip 322,-1000000 24x2000000
-                matrix 1,0,0,1,322,282
-                  text 0,9 24x16.8 "File" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+              clip 321,-1000000 23x2000000
+                matrix 1,0,0,1,321,286
+                  text 0,5 23.22x16.8 "File" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                 end
               end
             end
             element group
               matrix 1,0,0,1,467,297
-                path M0,0.25 L5.5,5.75 L11,0.25 stroke=1.4 stroke-color=#ebedf599
+                path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#ebedf5b3
               end
             end
           end

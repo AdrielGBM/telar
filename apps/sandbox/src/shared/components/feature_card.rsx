@@ -1,14 +1,13 @@
 [logic]
 #[derive(Default)]
 pub struct Props {
-    pub icon: &'static str,
     pub title: &'static str,
     pub body: &'static str,
 }
 
 [view]
 box fill:$theme.surface stroke:$theme.border radius:16 grow:1 min_width:170 pad:20 gap:8
-    text "{props.icon}" font_size:28
+    children name:"icon"
     text "{props.title}" font_size:16 color:$theme.ink
     text "{props.body}" font_size:13 color:$theme.muted
 
@@ -16,4 +15,5 @@ box fill:$theme.surface stroke:$theme.border radius:16 grow:1 min_width:170 pad:
 An icon, title and body on a bordered surface, for the feature grid.
 
 [preview "Feature card" matrix:(mode:[modern midnight])]
-feature_card icon:"⚡" title:"Fast" body:"Software and wgpu renderers with dirty-tracking and scroll-blit detection."
+feature_card title:"Fast" body:"Software and wgpu renderers with dirty-tracking and scroll-blit detection."
+    icon name:"lucide:zap" size:28 color:$theme.primary slot:"icon"

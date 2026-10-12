@@ -12,7 +12,7 @@ use telar::{
     Accessible, AlignItems, Children, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea,
     LayoutStyle, Reactive, ReactiveList, RectStyle, Role, StyledContainer, Text, box_item,
 };
-use telar_components::{ButtonProps, CodeViewProps, button, code_view};
+use telar_components::{ButtonProps, ButtonVariant, CodeViewProps, button, code_view};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
 use telar_project::protocol::title_path;
 
@@ -189,7 +189,7 @@ fn preview(state: &WorkshopState, entry: PreviewEntry) -> Result<Box<dyn LayoutI
     let open = button(
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(OPEN_IN_CANVAS)))
-            .ghost(true)
+            .variant(ButtonVariant::Ghost)
             .on_press(Rc::new(move || {
                 opening.select(entry.id);
                 opening.view().set(ViewMode::Canvas);

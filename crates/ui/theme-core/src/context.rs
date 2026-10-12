@@ -13,7 +13,7 @@ use renderer_core::Declared;
 ///
 /// **Every method carries a default**, which makes `impl ThemeTokens for MyTheme {}` valid and each token an independent opt-in: a theme answers the questions it cares about and lets the catalogue keep its own answer for the rest. This trait is deliberately not where a theme's vocabulary lives — that belongs to the theme's own type, reachable in full through [`use_theme`]. What is here is only the subset a component written without knowledge of that type has to be able to ask for.
 ///
-/// The metric tokens are *bases*, not a size scale: a component derives its own proportions from one rather than asking for a named role, because naming the roles would decide for every application which roles may exist. One number scales the thing; the component keeps its own ratios.
+/// The metric tokens come in two layers. The *primitives* (`radius` and its `radius_sm/md/lg` steps, `spacing` and its steps) are the numbers a theme moves to restyle everything. The *roles* (`radius_control`, `radius_surface`, `radius_dialog`, `radius_item`, `border_width`, the focus ring, …) say what a shape is for, and each defaults to a primitive or a convention, so a theme that names none of them still moves them through the base. A component reads the role for the thing it draws and never scales a primitive by a factor of its own, so two components drawing the same kind of thing cannot disagree.
 ///
 /// Nothing here answers what size the text is, and that is the point. Text size inherits, so it is not a question a component asks a theme — it is one it asks the region it is standing in. A theme that wants to move it declares it once, at [`root`](Self::root).
 pub trait ThemeTokens: 'static {
@@ -52,6 +52,45 @@ pub trait ThemeTokens: 'static {
     }
     fn radius_lg(&self) -> f32 {
         self.radius()
+    }
+    /// Corner of a control a pointer presses or types into: a button, a field, a select or menu trigger, a tab, an icon button, a stepper.
+    fn radius_control(&self) -> f32 {
+        self.radius()
+    }
+    /// Corner of a panel floating over the page: a popup or menu list, a tooltip, a toast, a context menu, a code block.
+    fn radius_surface(&self) -> f32 {
+        self.radius() * 1.5
+    }
+    /// Corner of a container that takes the screen's attention: a modal, the command palette, a drawer.
+    fn radius_dialog(&self) -> f32 {
+        self.radius() * 3.0
+    }
+    /// Corner of a row, option or item inside a surface, smaller than the surface's own so it nests inside it.
+    fn radius_item(&self) -> f32 {
+        self.radius_sm()
+    }
+    /// Width of a hairline: a field's frame, a divider, a panel's edge.
+    fn border_width(&self) -> f32 {
+        1.0
+    }
+    /// Width of a frame that has to read as the control's shape rather than as a hairline: an outline button, a checkbox's box.
+    fn border_width_strong(&self) -> f32 {
+        1.5
+    }
+    /// Colour of the ring a control wears while the keyboard is on it, and of the cursor a list or a toolbar draws on the item the arrows reached.
+    fn focus_ring(&self) -> Color {
+        self.primary()
+    }
+    fn focus_ring_width(&self) -> f32 {
+        2.0
+    }
+    /// How far inside the box's edge the ring stands. `0` draws it on the edge in place of the box's own border; more keeps that border and leaves a gap between it and the ring. Inward because a ring outside the box would be cut by every scroll area and covered by every neighbour.
+    fn focus_ring_offset(&self) -> f32 {
+        0.0
+    }
+    /// Weight of text that has to stand out from the body around it: a title, a toast's heading, a matched run.
+    fn font_weight_strong(&self) -> u16 {
+        600
     }
     /// Base gap between adjacent things in px, and the unit a component derives its own padding from.
     fn spacing(&self) -> f32 {
@@ -151,7 +190,7 @@ pub trait ThemeTokens: 'static {
         Color::rgba(0.4, 0.6, 0.8, 1.0)
     }
 
-    /// Three progressively stronger highlight/elevation tints for hover, selection, and pressed states. Defaults to faint neutral washes a theme can override with palette-specific tones.
+    /// Three progressively stronger washes laid over whatever is under them: `highlight_low` while a pointer rests on a control or a row, `highlight_med` on the selected or held-open one, `highlight_high` while it is pressed. Every catalogue component takes its washes from here, so a theme decides once how an interaction looks.
     fn highlight_low(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.55, 0.06)
     }
@@ -160,6 +199,27 @@ pub trait ThemeTokens: 'static {
     }
     fn highlight_high(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.55, 0.20)
+    }
+
+    /// A surface that stands out against [`surface`](Self::surface) the opposite way, for a transient label laid over anything: a tooltip's bubble.
+    fn inverse_surface(&self) -> Color {
+        self.ink()
+    }
+    /// Readable ink on [`inverse_surface`](Self::inverse_surface).
+    fn inverse_ink(&self) -> Color {
+        self.surface()
+    }
+    /// The scrim laid over the page behind a modal or a drawer.
+    fn overlay(&self) -> Color {
+        Color::rgba(0.0, 0.0, 0.0, 0.5)
+    }
+    /// The knob a toggle or a slider drags: the light end of the palette in either mode, so it reads on [`primary`](Self::primary) and on the [`highlight_high`](Self::highlight_high) track beside it.
+    fn thumb(&self) -> Color {
+        if crate::mode::is_dark() {
+            self.ink()
+        } else {
+            self.surface()
+        }
     }
 
     /// Not a token: where a theme hands over the values of tokens a plugin declares for itself, each keyed by its type and read back with [`use_theme_extension`]. The derive fills it from the fields marked `#[theme(extension)]`; a theme that inserts nothing leaves every plugin on its own defaults.

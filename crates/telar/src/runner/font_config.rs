@@ -27,6 +27,15 @@ impl SystemFonts {
     }
 }
 
+/// Loads the faces a window's surface is configured with into the shaper, which every text the window lays out is then measured in.
+#[cfg(feature = "shaper")]
+pub(super) fn install_window_fonts(fonts: &FontSetup, paths: &dyn AppPathsProvider) {
+    renderer_text::fonts::install(build_font_config(
+        fonts.clone(),
+        &SystemFonts::from_provider(paths),
+    ));
+}
+
 /// Loads the application's faces into the shaper and installs the shaper's measurer, for a process that lays text out without ever building a renderer.
 ///
 /// No paths provider, as in [`prerender_page`](super::prerender_page): a measurement-only run has no platform to ask where the system fonts are.

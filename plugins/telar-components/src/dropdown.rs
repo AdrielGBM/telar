@@ -1,10 +1,10 @@
-//! Shared dropdown scaffold (constants, style fns, trigger + overlay/backdrop/anchoring) behind `menu` and `select`.
+//! Shared dropdown scaffold (geometry, style fns, trigger + overlay/backdrop/anchoring) behind `menu` and `select`.
 
 use std::rc::Rc;
 use telar::{
     AlignItems, Anchoring, Border, BorderRadius, Children, Clip, ClippedItem, Color, ConsumedKeys,
-    Container, DismissRegistration, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Overlay,
-    Placement, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, Stroke,
+    Container, DismissRegistration, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle,
+    NamedKey, Overlay, Placement, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle,
     StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface, box_item, effect,
     focus::{self, FocusId, Role},
     signal, track_layout,
@@ -13,12 +13,21 @@ use telar::{
 use crate::popup;
 use crate::shared;
 
-/// The trigger's fixed size and the dropdown panel's geometry. Kept as constants (not content-sized) so the panel lines up under the trigger and so the widgets' hit geometry is deterministic (their tests compute click points from these).
-pub(crate) const PANEL_WIDTH: f32 = 180.0;
-pub(crate) const TRIGGER_HEIGHT: f32 = 36.0;
-pub(crate) const ROW_HEIGHT: f32 = 32.0;
-pub(crate) fn panel_pad() -> f32 {
-    shared::spacing() * 0.5
+/// How many ems wide a trigger and the panel it opens are when their tokens name no width: room for a two-word label beside the caret, and a width the panel lines up under.
+const WIDTH_EMS: f32 = 13.0;
+
+/// The width a trigger and its panel take: what the tokens of the component they belong to name, else [`WIDTH_EMS`].
+pub(crate) fn width(token: Option<f32>) -> f32 {
+    shared::width_or_measure(token, WIDTH_EMS)
+}
+
+/// What a trigger and the panel it opens are drawn at, resolved from the tokens of the component they belong to: a `menu`'s or a `select`'s.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Geometry {
+    pub radius: f32,
+    pub pad_x: f32,
+    pub border_width: f32,
+    pub width: f32,
 }
 
 /// What the trigger says, which is the one place a `menu` and a `select` genuinely differ. A menu commits actions, so its trigger is a name the caller fixes; a select holds a choice, so its trigger *is* that choice — and has to say it before the panel has ever been opened.
@@ -34,7 +43,7 @@ pub(crate) enum TriggerLabel {
 ///
 /// `trigger_label` is a closure so `select` can track its bound signal reactively while `menu` supplies a static label. `selected` drives the bound-selection behaviour: `Some` writes the picked index back and highlights the selected row; `None` (menu) skips both, leaving one-shot actions.
 ///
-/// `stretch` gives the trigger the width its row offers instead of the fixed [`PANEL_WIDTH`], and the panel then opens at whatever width the trigger was laid out to. That is what a form row wants — a control 180px wide beside fields that span the row reads as a mistake — and it is the caller's choice because a dropdown standing on its own has no row to take a width from.
+/// `stretch` gives the trigger the width its row offers instead of the fixed [`Geometry::width`], and the panel then opens at whatever width the trigger was laid out to. That is what a form row wants — a control of fixed width beside fields that span the row reads as a mistake — and it is the caller's choice because a dropdown standing on its own has no row to take a width from.
 ///
 /// Everything the scaffold is told, as one value. It outgrew what a positional argument list can be read at a call site — and the two shape flags are the *caller's* to make rather than the component's.
 pub(crate) struct Dropdown {
@@ -47,7 +56,10 @@ pub(crate) struct Dropdown {
     pub stretch: bool,
     pub bordered: bool,
     pub caret: bool,
-    pub style: Option<Rc<dyn Fn(RectStyle) -> RectStyle>>,
+    pub fit: bool,
+    /// Read wherever the trigger or the panel is laid out or painted, so a theme or a control size that changes moves them.
+    pub geometry: fn() -> Geometry,
+    pub style: SurfaceStyle,
 }
 
 pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -60,9 +72,10 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         stretch,
         bordered,
         caret: with_caret,
+        fit,
+        geometry,
         style: surface,
     } = props;
-    let surface: SurfaceStyle = surface;
     let open = signal(false);
     let dismiss_open = open;
     // Not the same as what is selected: a bound `select` opens with its value under the cursor, and moving off it must not commit anything.
@@ -107,11 +120,20 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     )?;
     // Free to shrink and clipped, so a label longer than the trigger is cut at its edge rather than widening the control or running under the caret.
     let label_text = ClippedItem::new(box_item(label_text), Clip::x());
-    let trigger_style = {
+    let paint = {
         let color = color.clone();
-        let surface = surface.clone();
-        move |_r: Rect| amend_surface(trigger_rect_style(&color, bordered), &surface)
+        Rc::new(move |hovered: bool| {
+            let face = Face {
+                bordered,
+                open: open.get(),
+                hovered,
+            };
+            amend_surface(trigger_rect_style(&color, face, geometry()), &surface)
+        })
     };
+    let (rest, hover) = (paint.clone(), paint);
+    let trigger_style = move |_r: Rect| rest(false);
+    let hover_style = move |_r: Rect| hover(true);
     // Key events are broadcast, so without this a bare Enter would open every dropdown on the page.
     let trigger_focused = signal(false);
     let toggle: Rc<dyn Fn()> = Rc::new(move || {
@@ -122,23 +144,13 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         }
         open.set(opening);
     });
-    let trigger_box = LayoutStyle::new()
-        .flex_row()
-        .align_items(AlignItems::CENTER)
-        .height(TRIGGER_HEIGHT)
-        .padding_horizontal(12.0)
-        .gap(6.0)
-        .justify_content(telar::JustifyContent::SPACE_BETWEEN);
-    // A stretched trigger is as wide as the root column by cross-axis stretch. Growing it would grow it along that column's main axis, which is its height.
-    let trigger_box = if stretch {
-        trigger_box
-    } else {
-        trigger_box.width(PANEL_WIDTH)
-    };
-    // `SPACE_BETWEEN` rather than a growing spacer: a spacer takes the free space before the label has claimed its own, and `File` came out wrapped to two letters a line.
+    let trigger_box = move || trigger_layout(geometry(), with_caret, stretch || fit);
     let mut trigger_children: Vec<Box<dyn LayoutItem>> = vec![box_item(label_text)];
     if with_caret {
-        trigger_children.push(caret()?);
+        trigger_children.push(shared::mark(
+            || shared::Mark::ChevronDown,
+            |text| text.color.faded(shared::QUIET_ALPHA),
+        )?);
     }
     // One handler on the trigger, which lives for the widget's whole life. The panel is rebuilt on every open and would lose a handler hung on it.
     let on_key = {
@@ -202,7 +214,9 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             true
         }
     };
-    let trigger = StyledContainer::new(trigger_box, trigger_style, trigger_children)?
+    let trigger = StyledContainer::new(trigger_box(), trigger_style, trigger_children)?
+        .styled_by(trigger_box)
+        .hover_style(hover_style)
         .on_press({
             let toggle = toggle.clone();
             move || toggle()
@@ -255,12 +269,13 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             list.begin();
             let row_items = rows.build_with(list.clone())?.take_default();
             // A filled trigger widens the panel to match, since a narrower list would read as a different control — but only ever widens it: taking the trigger's width outright turned a compact `File` button into a 40px sheet with one character per line.
+            let width = geometry().width;
             let width = if stretch {
                 telar::anchor_rect(trigger_node, &trigger_rect)
                     .width
-                    .max(PANEL_WIDTH)
+                    .max(width)
             } else {
-                PANEL_WIDTH
+                width
             };
             let row_column = Container::new(LayoutStyle::new().flex_column(), row_items)?;
             let anchoring = Rc::new(move || {
@@ -287,7 +302,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             let placed = popup::Popup {
                 anchoring,
                 width,
-                padding: panel_pad(),
+                padding: shared::panel_pad(),
                 cursor,
                 keyboard,
             };
@@ -354,69 +369,59 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     Ok(box_item(root))
 }
 
-/// A select is a form control and wears a border; a **menu** is a button that happens to open a list, so it wears none. A bordered menu trigger reads as a field with the caret in it — or, sitting alone in a header, as a button stuck in its focused state. `bordered` is there for the caller who wants the other reading.
-fn trigger_rect_style(color: &Reactive<Color>, bordered: bool) -> RectStyle {
-    let radius = BorderRadius::all(shared::radius_md());
-    if !bordered {
-        return RectStyle::default().with_radius(radius);
+/// The trigger's box: as tall as every control, padded by its tokens, and as wide as they say unless the root column decides its width.
+///
+/// A stretched or fitted trigger is as wide as the root column by cross-axis stretch, which a fitted root takes from the label. Growing it would grow it along that column's main axis, which is its height.
+///
+/// With a caret, `SPACE_BETWEEN` rather than a growing spacer: a spacer takes the free space before the label has claimed its own, and `File` came out wrapped to two letters a line. Without one the label is the whole face and stands centred, as a button's does: alone in a `SPACE_BETWEEN` row it sat at the start, and every pixel the trigger had beyond it showed as a gap after the label and none before.
+fn trigger_layout(geometry: Geometry, with_caret: bool, sized_by_root: bool) -> LayoutStyle {
+    let justify = if with_caret {
+        JustifyContent::SPACE_BETWEEN
+    } else {
+        JustifyContent::CENTER
+    };
+    let row = LayoutStyle::new()
+        .flex_row()
+        .align_items(AlignItems::CENTER)
+        .justify_content(justify)
+        .min_height(shared::control_height())
+        .padding_horizontal(geometry.pad_x)
+        .gap(shared::gap_sm());
+    if sized_by_root {
+        row
+    } else {
+        row.width(geometry.width)
     }
-    let accent = shared::resolve(color, shared::accent);
-    RectStyle::default()
-        .with_fill(shared::surface())
-        .with_border(Border::uniform(accent, 1.0))
-        .with_radius(radius)
 }
 
-/// The caret every trigger carries, drawn rather than spelled: a glyph would depend on the face having it and on it being the size the label is. Two strokes, 11px across: wide enough to read beside a label at the body size, narrow enough not to compete with it.
-///
-/// Drawn, it still takes the label's ink at reduced strength — being artwork rather than text is not a reason to stop following the region the trigger sits in.
-fn caret() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    const W: f32 = 11.0;
-    const H: f32 = 5.5;
-    let canvas = telar::Canvas::declaring(
-        LayoutStyle::new().width(W).height(H).flex_shrink(0.0),
-        |rect, text| {
-            let top = (rect.height - H) / 2.0;
-            let data = std::sync::Arc::new(
-                telar::PathData::new()
-                    .move_to(telar::Point::new(0.0, top))
-                    .line_to(telar::Point::new(W / 2.0, top + H))
-                    .line_to(telar::Point::new(W, top)),
-            );
-            telar::RenderNode::path(
-                data,
-                telar::PathStyle::default().with_stroke(Stroke::new(text.color.faded(0.6), 1.4)),
-            )
-        },
-    )?;
-    Ok(box_item(canvas))
+/// What the trigger's face is showing.
+#[derive(Clone, Copy)]
+struct Face {
+    bordered: bool,
+    open: bool,
+    hovered: bool,
+}
+
+/// A select is a form control and wears a border; a **menu** is a button that happens to open a list, so it wears none. A bordered menu trigger reads as a field with the caret in it — or, sitting alone in a header, as a button stuck in its focused state. `bordered` is there for the caller who wants the other reading.
+fn trigger_rect_style(color: &Reactive<Color>, face: Face, geometry: Geometry) -> RectStyle {
+    let rect = RectStyle::default().with_radius(BorderRadius::all(geometry.radius));
+    if !face.bordered {
+        return match (face.open, face.hovered) {
+            (true, _) => rect.with_fill(shared::held_wash()),
+            (false, true) => rect.with_fill(shared::hover_wash()),
+            (false, false) => rect,
+        };
+    }
+    let accent = shared::resolve(color, shared::accent);
+    rect.with_fill(shared::surface())
+        .with_border(Border::uniform(accent, geometry.border_width))
 }
 
 fn panel_rect_style() -> RectStyle {
     RectStyle::default()
         .with_fill(shared::surface())
-        .with_border(Border::uniform(shared::border(), 1.0))
-        .with_radius(BorderRadius::all(shared::radius()))
-}
-
-// A menu row (`selected: None`) yields the plain radius-only style; a select row highlights the bound choice with a faint accent fill.
-pub(crate) fn option_row_style(is_selected: bool, color: &Reactive<Color>) -> RectStyle {
-    let radius = BorderRadius::all(shared::radius_sm());
-    if is_selected {
-        let accent = shared::resolve(color, shared::accent);
-        RectStyle::default()
-            .with_fill(accent.with_alpha(0.14))
-            .with_radius(radius)
-    } else {
-        RectStyle::default().with_radius(radius)
-    }
-}
-
-pub(crate) fn option_row_hover_style(color: &Reactive<Color>) -> RectStyle {
-    let accent = shared::resolve(color, shared::accent);
-    RectStyle::default()
-        .with_fill(accent.with_alpha(0.10))
-        .with_radius(BorderRadius::all(4.0))
+        .with_border(Border::uniform(shared::border(), shared::border_width()))
+        .with_radius(BorderRadius::all(shared::radius_surface()))
 }
 
 #[cfg(test)]

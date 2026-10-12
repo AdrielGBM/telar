@@ -6,15 +6,15 @@ element group
       element group
         element group
           element group
-            matrix 1,0,0,1,250,269
-              text 0,1 300x14.28 "Name" size=11.9 family=sans-serif weight=400 color=#99a1b8ff lang=en
+            matrix 1,0,0,1,250,275
+              text 0,0 300x14.28 "Name" size=11.9 family=sans-serif weight=400 color=#99a1b8ff lang=en
             end
           end
           element group
-            rect 250,292 300x39 fill=#12141cff border=1 border-color=#3d4252ff radius=20
+            rect 250,298 300x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
             element group
-              matrix 1,0,0,1,262,292
-                text 0,10 276x19 "Type here" size=14 family=sans-serif weight=400 color=#ebedf5b3
+              matrix 1,0,0,1,262,298
+                text 0,4 276x20 "Type here" size=14 family=sans-serif weight=400 color=#ebedf5b3
               end
             end
           end

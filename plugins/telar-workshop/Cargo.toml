@@ -26,7 +26,7 @@ include = [
 
 [dependencies]
 telar = { workspace = true, features = ["previews"] }
-telar-components = { workspace = true, features = ["workbench", "overlays"] }
+telar-components = { workspace = true, features = ["workbench", "overlays", "chrome"] }
 telar-devtools.workspace = true
 telar-navigate.workspace = true
 theme-core.workspace = true
@@ -35,6 +35,7 @@ telar-icons.workspace = true
 serde_json.workspace = true
 tiny-skia.workspace = true
 telar-project.workspace = true
+web-time.workspace = true
 
 [dev-dependencies]
 telar = { workspace = true, features = ["headless", "dev", "testing"] }

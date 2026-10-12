@@ -15,7 +15,9 @@ use telar::{
     Accessible, AlignItems, Children, LayoutError, LayoutItem, LayoutStyle, Reactive, ReactiveList,
     RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer, Text, box_item, on_cleanup,
 };
-use telar_components::{ButtonProps, IconButtonProps, ToolbarProps, button, icon_button, toolbar};
+use telar_components::{
+    ButtonProps, ButtonVariant, IconButtonProps, ToolbarProps, button, icon_button, toolbar,
+};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_fill};
 use telar_icons::icon;
 
@@ -195,7 +197,7 @@ fn remount_button(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutEr
     button(
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(REMOUNT)))
-            .ghost(true)
+            .variant(ButtonVariant::Ghost)
             .on_press(Rc::new(move || state.remount()))
             .build(),
         Children::default(),

@@ -191,3 +191,54 @@ fn only_the_faces_given_are_loaded_and_the_default_face_is_routed_to_the_first()
         Some(ExclusiveFontsError::NoFaces)
     );
 }
+
+/// The face `family` resolves to in `fonts`, by the name it was published under.
+fn resolved_face(fonts: &Fonts, family: fontdb::Family) -> Option<String> {
+    let system = fonts.font_system();
+    let db = system.db();
+    let id = db.query(&fontdb::Query {
+        families: &[family],
+        ..fontdb::Query::default()
+    })?;
+    db.face(id).map(|face| face.post_script_name.clone())
+}
+
+/// A hot-reloaded library's copy of this crate starts with an empty database and, left alone, scans the platform for one routed the way a bare scan routes it, while its host loaded the application's faces with the platform's own routing: the guest laid labels out in one face and the host drew them in another.
+#[test]
+fn a_second_copy_given_the_sources_resolves_every_family_as_the_first_does() {
+    let declared = vec![FontAsset::embedded(TEST_FACE).named("App Face")];
+    let mut host = None;
+    let host_generation = AtomicU64::new(0);
+    let host_fonts = add_into(
+        &mut host,
+        &host_generation,
+        FaceSources::of(None, declared),
+        Some(Vec::new()),
+    );
+    let mut guest = None;
+    let guest_generation = AtomicU64::new(0);
+    add_into(&mut guest, &guest_generation, FaceSources::platform(), None);
+
+    let guest_fonts = install_sources_into(&mut guest, &guest_generation, host_fonts.sources());
+
+    assert_eq!(guest_fonts.sources(), host_fonts.sources());
+    for family in [
+        fontdb::Family::SansSerif,
+        fontdb::Family::Serif,
+        fontdb::Family::Monospace,
+    ] {
+        assert_eq!(
+            resolved_face(&guest_fonts, family),
+            resolved_face(&host_fonts, family),
+            "{family:?} must resolve to the face the host draws it in"
+        );
+    }
+    assert!(guest_fonts.family_names().contains(&"App Face".to_string()));
+    assert!(
+        Arc::ptr_eq(
+            &guest_fonts,
+            &install_sources_into(&mut guest, &guest_generation, host_fonts.sources())
+        ),
+        "the same sources again load nothing and replace nothing"
+    );
+}

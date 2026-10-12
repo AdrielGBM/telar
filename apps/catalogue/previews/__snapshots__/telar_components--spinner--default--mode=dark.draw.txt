@@ -5,12 +5,12 @@ element group
     element group
       element group
         element group
-          rect 388,288 24x24 border=2.88 border-color=#99a1b8ff radius=12
+          rect 386,286 28x28 border=3.36 border-color=#99a1b8ff radius=14
           element group
             matrix 1,0,0,1,0,0
-              rect 388,288 24x24
+              rect 386,286 28x28
               element group
-                rect 397,288 6x5 fill=#7394ffff radius=2.64
+                rect 397,286 6x6 fill=#7394ffff radius=3
               end
             end
           end

@@ -42,7 +42,9 @@ pub use element::{
     Role, Semantics, ToggleKind,
 };
 pub use error::RendererError;
-pub use font_config::{FontAsset, FontAxis, FontConfig, FontSource, FontWeight};
+pub use font_config::{
+    FontAsset, FontAxis, FontConfig, FontSource, FontSources, FontWeight, GenericFamilies,
+};
 pub use geometry_core::{BorderRadius, Color, Insets};
 pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};
 pub use image::{ExternalTexture, ImageData, Linked, premultiply_rgba};

@@ -35,7 +35,7 @@ The preview it opens on is the one a link or `<ID>` names, else the one it showe
 
 ## The canvas toolbar
 
-The top bar sets the environment every canvas is shown in: its mode, from the modes the application registers, its locale, writing direction, control size, background and high contrast, which reaches the canvases and leaves the workshop around them as it is. It also switches reduced motion, which is one switch for the whole application. The canvas header sets the canvas's size: the preview's own, the whole stage, a preset, one of the package's `[telar.previews.viewports]`, a device frame with its safe area, or a custom size from the resize handles. It also rotates the canvas and zooms it. A canvas larger than the stage is zoomed to fit unless a zoom is chosen.
+The top bar's **Settings** menu sets the environment every canvas is shown in: its mode, from the modes the application registers, its locale, writing direction, control size, background and high contrast, which reaches the canvases and leaves the workshop around them as it is. It also switches reduced motion, which is one switch for the whole application. The canvas header sets the canvas's size: the preview's own, the whole stage, a preset, one of the package's `[telar.previews.viewports]`, a device frame with its safe area, or a custom size from the resize handles. It also rotates the canvas and zooms it. A canvas larger than the stage is zoomed to fit unless a zoom is chosen.
 
 A setting the toolbar leaves unset takes what the preview's own environment asks for. A locale also sets the canvas's writing direction, unless a direction is chosen. Only the canvas changes: the workshop's chrome keeps its theme, its locale and its direction.
 

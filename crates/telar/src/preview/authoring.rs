@@ -29,7 +29,7 @@ impl<T: LayoutItem + 'static> IntoPreviewRoot for Result<T, LayoutError> {
 ///             button(
 ///                 ButtonProps::props()
 ///                     .label(p.arg("label", "Save"))
-///                     .ghost(p.arg("ghost", false))
+///                     .variant(p.arg("variant", ButtonVariant::Solid))
 ///                     .build(),
 ///                 Children::default(),
 ///             )

@@ -38,7 +38,7 @@ fn dismiss_fires_on_outside_press_only() {
         Edge::Top,
         AlignItems::CENTER,
         (20, 20, 20, 20),
-        Some(DEFAULT_SCRIM),
+        Some(Scrim::Theme),
         Some(Rc::new(move || f.set(f.get() + 1))),
         panel(),
     )
@@ -64,7 +64,7 @@ fn escape_dismisses_only_what_the_panel_left_alone() {
         Edge::Top,
         AlignItems::CENTER,
         (20, 20, 20, 20),
-        Some(DEFAULT_SCRIM),
+        Some(Scrim::Theme),
         Some(Rc::new(move || f.set(f.get() + 1))),
         panel(),
     )
@@ -100,7 +100,7 @@ fn escape_dismisses_only_what_the_panel_left_alone() {
         Edge::Top,
         AlignItems::CENTER,
         (20, 20, 20, 20),
-        Some(DEFAULT_SCRIM),
+        Some(Scrim::Theme),
         Some(Rc::new(move || u.set(u.get() + 1))),
         box_item(field),
     )
@@ -127,7 +127,7 @@ fn cross_axis_margin_insets_the_panel_from_the_side_edges() {
         Edge::Top,
         AlignItems::START,
         (30, 10, 10, 10),
-        Some(DEFAULT_SCRIM),
+        Some(Scrim::Theme),
         Some(Rc::new(move || f.set(f.get() + 1))),
         panel(),
     )
@@ -162,7 +162,7 @@ fn no_dismiss_when_not_configured() {
         Edge::Top,
         AlignItems::CENTER,
         (0, 0, 0, 0),
-        Some(DEFAULT_SCRIM),
+        Some(Scrim::Theme),
         None,
         panel(),
     )
@@ -207,5 +207,34 @@ fn enter_transform_slide_offsets_from_edge_then_settles() {
     assert_eq!(
         enter_transform(EnterMotion::Slide(Edge::Right), 0.0).0[4],
         SLIDE_DISTANCE
+    );
+}
+
+/// The scaffold reads its scrim when it paints, so a surface left open across a theme or mode switch darkens the page the way the new theme says.
+#[test]
+fn the_theme_scrim_is_the_overlay_of_the_theme_in_force() {
+    use theme_core::ThemeTokens;
+
+    #[derive(Clone)]
+    struct Dim;
+    impl ThemeTokens for Dim {
+        fn overlay(&self) -> Color {
+            Color::rgba(0.1, 0.2, 0.3, 0.4)
+        }
+    }
+    #[derive(Clone)]
+    struct Plain;
+    impl ThemeTokens for Plain {}
+
+    theme_core::set_theme(Dim);
+    assert_eq!(Scrim::Theme.color(), Dim.overlay());
+    theme_core::set_theme(Plain);
+    assert_eq!(Scrim::Theme.color(), Plain.overlay());
+
+    let own = Color::rgba(1.0, 0.0, 0.0, 0.5);
+    assert_eq!(
+        Scrim::Color(own).color(),
+        own,
+        "a caller's own colour is kept"
     );
 }

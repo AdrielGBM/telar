@@ -6,35 +6,66 @@ use crate::shared;
 use telar::{
     Accessible, Border, BorderRadius, Children, Color, Input, Key, LayoutError, LayoutItem,
     LayoutStyle, ModifiersState, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    box_item, focus::FocusId, signal, style_follows,
+    SurfaceAmendment, amend_surface, box_item, focus::FocusId, signal, style_follows,
 };
 
-fn box_radius() -> f32 {
-    shared::radius() * 2.0
-}
-fn pad_x() -> f32 {
-    shared::spacing() * 1.5
-}
-fn pad_y() -> f32 {
-    shared::spacing() * 1.25
-}
-const DEFAULT_WIDTH: f32 = 300.0;
+/// A field's width in ems when neither its call nor the theme names one: room for a sentence-long value.
+const WIDTH_EMS: f32 = 21.5;
 
-/// The input takes the box's vertical padding as its own height, so the press and the audit see the whole field rather than the bare line inside it.
-fn line_box(text_size: f32) -> LayoutStyle {
-    let padded = telar::single_line_box(text_size) + pad_y() * 2.0;
-    LayoutStyle::new().height(padded.max(shared::MIN_TARGET))
+/// A text field's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
+///
+/// Every field left `None` follows the theme role named beside it, read when the field paints and lays out, so a theme that moves the role still moves every field it has not given a value of its own.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TextFieldTokens {
+    /// Corner radius. `None` is the theme's `radius_control`.
+    pub radius: Option<f32>,
+    /// Space between the frame and the text at the regular control size, scaled with the control size in force. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    pub pad_x: Option<f32>,
+    /// Width of the frame. `None` is the theme's `border_width`.
+    pub border_width: Option<f32>,
+    /// Width of a field whose call names none, at the regular control size, scaled with the control size in force. `None` is 21.5 ems of the document's text.
+    pub width: Option<f32>,
+}
+
+impl TextFieldTokens {
+    /// The tokens of the theme in force, subscribing the caller to it.
+    pub fn current() -> Self {
+        telar::use_theme_extension::<Self>()
+    }
+
+    pub fn radius(&self) -> f32 {
+        self.radius.unwrap_or_else(shared::radius_control)
+    }
+
+    pub fn pad_x(&self) -> f32 {
+        self.pad_x
+            .map_or_else(shared::control_pad_x, |pad| pad * telar::control_scale())
+    }
+
+    pub fn border_width(&self) -> f32 {
+        self.border_width.unwrap_or_else(shared::border_width)
+    }
+
+    pub fn width(&self) -> f32 {
+        shared::width_or_measure(self.width, WIDTH_EMS)
+    }
+}
+
+/// The input is the whole height of the field, so the press and the audit see the whole field rather than the bare line inside it, and the line is centred in it.
+fn line_box() -> LayoutStyle {
+    LayoutStyle::new().height(shared::control_height())
 }
 fn field_box(width: f32) -> LayoutStyle {
     LayoutStyle::new()
         .flex_column()
         .width(width)
-        .padding_horizontal(pad_x())
+        .max_width(telar::SizeDimension::Percent(1.0))
+        .padding_horizontal(TextFieldTokens::current().pad_x())
         // The border below is unconditional, and on a surface that draws one in whole cells it needs a cell to draw in — without it a field whose padding quantised away had its frame and its own text on the same row.
         .bordered()
 }
 
-/// A labelled, bordered text input: the `Input` primitive (kernel, unstyled) wrapped in a padded/rounded box (see the raw `box fill:surface_alt stroke:border radius:8 pad_x:12 pad_y:10 > input` pattern in `apps/sandbox/src/features/reactivity.rsx`), with an optional caption label stacked above it. High-level sugar; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
+/// A labelled, bordered text input: the `Input` primitive (kernel, unstyled) in a framed box one control tall, with an optional caption stacked above it, outside the box. High-level sugar; lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
 #[derive(Props)]
 pub struct TextFieldProps {
     /// `None` (the default) makes the field uncontrolled: it owns an internal `signal(String::new())`. `Some` binds it to a caller-owned signal (a controlled field), like `button`'s reactive props.
@@ -46,7 +77,7 @@ pub struct TextFieldProps {
     /// A small caption stacked above the box; omitted entirely (no extra row) when empty.
     #[props(into, default)]
     pub label: Reactive<String>,
-    /// Box width in logical px. `0.0` (the default) means "unset" and resolves to `DEFAULT_WIDTH`.
+    /// Box width in logical px. `0.0` (the default) means "unset" and resolves to [`TextFieldTokens::width`].
     #[props(default)]
     pub width: f32,
     /// The entered text's colour. `Color::TRANSPARENT` (the default) means "unset", and leaves the field in whatever the region around it is written in. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live, like `button`'s `fill`/`outline`.
@@ -64,6 +95,9 @@ pub struct TextFieldProps {
     /// The list of suggestions such a field opens, so a reader is told where they are and the row [`active_descendant`](Self::active_descendant) names is looked for in it. `None` (the default) names none.
     #[props(some, default)]
     pub controls: Option<Rc<dyn Fn() -> Option<FocusId>>>,
+    /// Amends the paint of the framed box — the field's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`TextFieldTokens`] is the right instrument instead.
+    #[props(some, default)]
+    pub style: Option<SurfaceAmendment>,
 }
 
 /// What [`TextFieldProps::on_key`] is called with: the key and the modifiers held with it.
@@ -84,9 +118,16 @@ pub fn text_field(
         on_key,
         active_descendant,
         controls,
+        style,
     } = props;
     let value = value.unwrap_or_else(|| signal(String::new()));
-    let width = if width > 0.0 { width } else { DEFAULT_WIDTH };
+    let width = move || {
+        if width > 0.0 {
+            width
+        } else {
+            TextFieldTokens::current().width()
+        }
+    };
 
     // Always a live `Input` with a muted placeholder, so the field is typable from a cold start: a swapped-in placeholder `Text` takes no focus, leaving an empty field impossible to click into.
     let mut input = Input::declaring(value, LayoutStyle::new(), move |t| {
@@ -122,22 +163,24 @@ pub fn text_field(
     let field = box_item(input);
 
     let box_ = StyledContainer::new(
-        field_box(width),
-        |_r| {
-            RectStyle::default()
-                .with_fill(shared::surface_alt())
-                .with_border(Border::uniform(shared::border(), 1.0))
-                .with_radius(BorderRadius::all(box_radius()))
-        },
+        field_box(width()),
+        move |_r| amend_surface(frame(), &style),
         vec![box_item(field)],
     )?
     .frames_focus_of(line_focus)
-    .styled_by(move || field_box(width));
-    style_follows(line_node, move || {
-        line_box(shared::control_text_size(line_node, 1.0))
-    });
+    .styled_by(move || field_box(width()));
+    style_follows(line_node, line_box);
 
-    shared::captioned(box_item(box_), label, width)
+    shared::captioned(box_item(box_), label, Reactive::of(width))
+}
+
+/// The box's paint before the caller's amendment.
+fn frame() -> RectStyle {
+    let tokens = TextFieldTokens::current();
+    RectStyle::default()
+        .with_fill(shared::surface_alt())
+        .with_border(Border::uniform(shared::border(), tokens.border_width()))
+        .with_radius(BorderRadius::all(tokens.radius()))
 }
 
 #[cfg(test)]

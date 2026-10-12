@@ -5,64 +5,64 @@ element group
     element group
       element group
         element group
-          rect 228,179 344x242 fill=#1c1f29ff radius=10
+          rect 228,178 344x244 fill=#1c1f29ff radius=16
           element group
-            rect 228,179 344x40 fill=#12141cff
+            rect 228,178 344x40 fill=#12141cff
             element group
-              rect 240,191 51x16
+              rect 240,190 54x16
               element group
-                matrix 1,0,0,1,240,191
-                  text 0,0 51x15.6 "Settings" size=13 family=sans-serif weight=400 color=#ebedf5ff
+                matrix 1,0,0,1,240,190
+                  text 0,0 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                 end
               end
             end
             element group
-              rect 485,187 75x24
+              rect 482,186 78x24
               element button
-                rect 485,187 25x24
+                rect 482,186 26x24
                 element group
-                  matrix 1,0,0,1,493,191
-                    text 0,0 9x15.6 "–" size=13 family=sans-serif weight=400 color=#ebedf5ff
+                  matrix 1,0,0,1,490,193
+                    path M0,5 L10,5 stroke=1.5 stroke-color=#ebedf5ff
                   end
                 end
               end
               element button
-                rect 510,187 25x24
+                rect 508,186 26x24
                 element group
-                  matrix 1,0,0,1,518,191
-                    text 0,0 9x15.6 "□" size=13 family=sans-serif weight=400 color=#ebedf5ff
+                  matrix 1,0,0,1,516,193
+                    path M0,0 L10,0 L10,10 L0,10 Z stroke=1.5 stroke-color=#ebedf5ff
                   end
                 end
               end
               element button
-                rect 535,187 25x24
+                rect 534,186 26x24
                 element group
-                  matrix 1,0,0,1,543,191
-                    text 0,0 9x15.6 "✕" size=13 family=sans-serif weight=400 color=#ebedf5ff
+                  matrix 1,0,0,1,542,193
+                    path M0,0 L10,10 M10,0 L0,10 stroke=1.5 stroke-color=#ebedf5ff
                   end
                 end
               end
             end
           end
           element group
-            rect 228,219 344x184
+            rect 228,218 344x184
             element group
               element group
-                matrix 1,0,0,1,240,231
+                matrix 1,0,0,1,240,230
                   text 0,0 320x16.8 "Telar can draw its own window chrome." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                 end
               end
               element group
-                matrix 1,0,0,1,240,256
+                matrix 1,0,0,1,240,255
                   text 0,0 320x16.8 "Drag the corner grip to resize." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                 end
               end
             end
           end
           element group
-            rect 228,403 344x18
+            rect 228,402 344x20
             element group
-              rect 554,403 14x14 fill=#ebedf5ff radius=2
+              rect 552,402 16x16 fill=#99a1b8ff radius=6
             end
           end
         end

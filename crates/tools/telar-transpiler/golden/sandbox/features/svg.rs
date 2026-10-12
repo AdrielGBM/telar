@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -22,7 +23,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
 
     // Each returns an Arc<SvgData> parsed at runtime (the app depends on telar-dynamic for the parser).
-    let icon = make_icon();
+    let demo_icon = make_icon();
     let logo = make_logo();
     let blurred = make_blurred();
 
@@ -31,24 +32,24 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
         let __node_1 = {
             let __deferred = Children::per_slot(
                 {
-                    let icon = icon.clone();
+                    let demo_icon = demo_icon.clone();
                 move |__request: SlotRequest<'_>| {
-                    let icon = icon.clone();
+                    let demo_icon = demo_icon.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
                         let __node_2 = {
                             let __deferred = Children::per_slot(
                                 {
-                                    let icon = icon.clone();
+                                    let demo_icon = demo_icon.clone();
                                 move |__request: SlotRequest<'_>| {
-                                    let icon = icon.clone();
+                                    let demo_icon = demo_icon.clone();
                                     let mut __slots = Slots::new();
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_0 = {
                                             let __svg_0 = {
-                                                let __src = icon.clone();
+                                                let __src = demo_icon.clone();
                                                 Svg::new(
                                                     LayoutStyle::new().width(20.0).height(20.0),
                                                     move || __src.clone(),
@@ -57,7 +58,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                                 )?
                                             };
                                             let __svg_1 = {
-                                                let __src = icon.clone();
+                                                let __src = demo_icon.clone();
                                                 Svg::new(
                                                     LayoutStyle::new().width(36.0).height(36.0),
                                                     move || __src.clone(),
@@ -66,7 +67,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                                 )?
                                             };
                                             let __svg_2 = {
-                                                let __src = icon.clone();
+                                                let __src = demo_icon.clone();
                                                 Svg::new(
                                                     LayoutStyle::new().width(64.0).height(64.0),
                                                     move || __src.clone(),
@@ -75,7 +76,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                                 )?
                                             };
                                             let __svg_3 = {
-                                                let __src = icon.clone();
+                                                let __src = demo_icon.clone();
                                                 Svg::new(
                                                     LayoutStyle::new().width(96.0).height(96.0),
                                                     move || __src.clone(),
@@ -95,7 +96,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                             card(CardProps::props().build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
-                        let __node_3 = code_line(CodeLineProps::props().code("svg src:icon width:96 height:96").build(), Children::default())?;
+                        let __node_3 = code_line(CodeLineProps::props().code("svg src:demo_icon width:96 height:96").build(), Children::default())?;
                         __children.push(box_item(__node_3));
                     }
                     __slots.extend_default(__children);
@@ -109,10 +110,10 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
             let __deferred = Children::per_slot(
                 {
                     let theme = theme.clone();
-                    let icon = icon.clone();
+                    let demo_icon = demo_icon.clone();
                 move |__request: SlotRequest<'_>| {
                     let theme = theme.clone();
-                    let icon = icon.clone();
+                    let demo_icon = demo_icon.clone();
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
@@ -120,16 +121,16 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                             let __deferred = Children::per_slot(
                                 {
                                     let theme = theme.clone();
-                                    let icon = icon.clone();
+                                    let demo_icon = demo_icon.clone();
                                 move |__request: SlotRequest<'_>| {
                                     let theme = theme.clone();
-                                    let icon = icon.clone();
+                                    let demo_icon = demo_icon.clone();
                                     let mut __slots = Slots::new();
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_1 = {
                                             let __svg_4 = {
-                                                let __src = icon.clone();
+                                                let __src = demo_icon.clone();
                                                 Svg::new(
                                                     LayoutStyle::new().width(48.0).height(48.0),
                                                     move || __src.clone(),
@@ -138,7 +139,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                                 )?
                                             };
                                             let __svg_5 = {
-                                                let __src = icon.clone();
+                                                let __src = demo_icon.clone();
                                                 Svg::new(
                                                     LayoutStyle::new().width(48.0).height(48.0),
                                                     move || __src.clone(),
@@ -147,7 +148,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                                 )?
                                             };
                                             let __svg_6 = {
-                                                let __src = icon.clone();
+                                                let __src = demo_icon.clone();
                                                 Svg::new(
                                                     LayoutStyle::new().width(48.0).height(48.0),
                                                     move || __src.clone(),
@@ -156,7 +157,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                                 )?
                                             };
                                             let __svg_7 = {
-                                                let __src = icon.clone();
+                                                let __src = demo_icon.clone();
                                                 Svg::new(
                                                     LayoutStyle::new().width(48.0).height(48.0),
                                                     move || __src.clone(),
@@ -176,7 +177,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                             card(CardProps::props().build(), __deferred)?
                         };
                         __children.push(box_item(__node_5));
-                        let __node_6 = code_line(CodeLineProps::props().code("svg src:icon color:$theme.primary").build(), Children::default())?;
+                        let __node_6 = code_line(CodeLineProps::props().code("svg src:demo_icon color:$theme.primary").build(), Children::default())?;
                         __children.push(box_item(__node_6));
                     }
                     __slots.extend_default(__children);
@@ -242,14 +243,25 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                                         move || ObjectFit::Contain,
                                                     )?
                                                 };
-                                                let __text_1 = {
-                                                    Text::declaring(
-                                                        || "feGaussianBlur → raster".to_string(),
-                                                        LayoutStyle::new(),
-                                                        { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
-                                                    )?
+                                                let __row_3 = {
+                                                    let __text_1 = {
+                                                        Text::declaring(
+                                                            || "feGaussianBlur".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                        )?
+                                                    };
+                                                    let __node_9 = icon(IconProps::props().name(("lucide:arrow-right", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_6866DA5D), true)).size(12.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().muted })).build(), Children::default())?;
+                                                    let __text_2 = {
+                                                        Text::declaring(
+                                                            || "raster".to_string(),
+                                                            LayoutStyle::new(),
+                                                            { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
+                                                        )?
+                                                    };
+                                                    Container::new(LayoutStyle::new().flex_row().gap(4.0).align_items(AlignItems::CENTER), children![__text_1, __node_9, __text_2])?
                                                 };
-                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__svg_9, __text_1])?
+                                                Container::new(LayoutStyle::new().flex_column().gap(6.0).align_items(AlignItems::CENTER), children![__svg_9, __row_3])?
                                             };
                                             Container::new(LayoutStyle::new().flex_row().gap(24.0).align_items(AlignItems::CENTER), children![__col_1, __col_2])?
                                         };
@@ -263,8 +275,8 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                             card(CardProps::props().build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
-                        let __node_9 = code_line(CodeLineProps::props().code("svg src:logo width:88 height:88").build(), Children::default())?;
-                        __children.push(box_item(__node_9));
+                        let __node_10 = code_line(CodeLineProps::props().code("svg src:logo width:88 height:88").build(), Children::default())?;
+                        __children.push(box_item(__node_10));
                     }
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -273,19 +285,19 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
             );
             example(ExampleProps::props().title("Full-color vectors and a raster fallback for filters").build(), __deferred)?
         };
-        let __node_10 = {
+        let __node_11 = {
             let __deferred = Children::per_slot(
                 move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
-                        let __node_11 = {
+                        let __node_12 = {
                             let __deferred = Children::per_slot(
                                 move |__request: SlotRequest<'_>| {
                                     let mut __slots = Slots::new();
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
-                                        let __row_3 = {
+                                        let __row_4 = {
                                             let __svg_10 = {
                                                 Svg::new(
                                                     LayoutStyle::new().width(40.0).height(40.0),
@@ -312,7 +324,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                             };
                                             Container::new(LayoutStyle::new().flex_row().gap(20.0).align_items(AlignItems::CENTER), children![__svg_10, __svg_11, __svg_12])?
                                         };
-                                        __children.push(box_item(__row_3));
+                                        __children.push(box_item(__row_4));
                                     }
                                     __slots.extend_default(__children);
                                     Ok(__slots)
@@ -320,9 +332,9 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                             );
                             card(CardProps::props().build(), __deferred)?
                         };
-                        __children.push(box_item(__node_11));
-                        let __node_12 = code_line(CodeLineProps::props().code("svg src:'assets/badge.svg' width:72 height:72").build(), Children::default())?;
                         __children.push(box_item(__node_12));
+                        let __node_13 = code_line(CodeLineProps::props().code("svg src:'assets/badge.svg' width:72 height:72").build(), Children::default())?;
+                        __children.push(box_item(__node_13));
                     }
                     __slots.extend_default(__children);
                     Ok(__slots)
@@ -330,17 +342,17 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
             );
             example(ExampleProps::props().title("A vector baked from disk at build time (no runtime parser)").build(), __deferred)?
         };
-        let __node_13 = {
+        let __node_14 = {
             let __deferred = Children::per_slot(
                 move |__request: SlotRequest<'_>| {
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
                         let __col_3 = {
-                            let __node_14 = prop_row(PropRowProps::props().name("src").values("Arc<SvgData> · 'path'").about("Runtime vector, or a baked file path.").build(), Children::default())?;
-                            let __node_15 = prop_row(PropRowProps::props().name("color").values("Color expr").about("Recolor a glyph, e.g. $theme.primary.").build(), Children::default())?;
-                            let __node_16 = prop_row(PropRowProps::props().name("fit").values("contain · cover · fill").about("Aspect handling in the box.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
+                            let __node_15 = prop_row(PropRowProps::props().name("src").values("Arc<SvgData> · 'path'").about("Runtime vector, or a baked file path.").build(), Children::default())?;
+                            let __node_16 = prop_row(PropRowProps::props().name("color").values("Color expr").about("Recolor a glyph, e.g. $theme.primary.").build(), Children::default())?;
+                            let __node_17 = prop_row(PropRowProps::props().name("fit").values("contain · cover · fill").about("Aspect handling in the box.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_15, __node_16, __node_17])?
                         };
                         __children.push(box_item(__col_3));
                     }
@@ -350,7 +362,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
             );
             example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_13])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_11, __node_14])?
     };
     Ok(Box::new(__col_0))
 }

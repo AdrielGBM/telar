@@ -328,10 +328,10 @@ fn a_squeezed_row_never_narrows_a_label_below_its_longest_word() {
     .unwrap();
     for (label, text) in labels.iter().zip(&texts) {
         let (word, _) = crate::text_metrics::measure_text(label, None, f32::MAX, &style());
-        let laid_out = track_layout(text.layout_node()).unwrap().get().width;
+        let set_in = text.set_in().width;
         assert!(
-            laid_out >= word,
-            "{label:?} needs {word}px unbroken and was squeezed to {laid_out}px"
+            set_in >= word,
+            "{label:?} needs {word}px unbroken and is set in {set_in}px"
         );
     }
 }
@@ -601,4 +601,70 @@ fn spans_scanned_from_an_inheriting_paragraph_follow_both() {
         width() < two,
         "the paragraph around the spans shrinks with what it inherits"
     );
+}
+
+/// A project's name in the workshop's find field sat a pixel high beside the field's icon: the band text is centred by reached the capitals but not the ascenders, which in most faces stand above them, so a lowercase run was centred on a band lower than its own ink. Cut by a clip, as the field cuts it, the text is laid out as any other.
+#[test]
+fn clipped_lowercase_text_is_centred_in_a_control_by_its_ink() {
+    const CONTROL: f32 = 28.0;
+    const NAME: &str = "catalogue";
+    renderer_text::fonts::installed();
+    for family in [
+        renderer_core::FontFamily::SansSerif,
+        renderer_core::FontFamily::Named("Telar Centred".into()),
+    ] {
+        if family != renderer_core::FontFamily::SansSerif {
+            renderer_text::fonts::add_faces(vec![
+                renderer_core::FontAsset::embedded(include_bytes!(
+                    "../../../renderer/renderer-text/test-fonts/TelarTest.ttf"
+                ))
+                .named("Telar Centred"),
+            ]);
+        }
+        reset_layout_runtime();
+        let style = move || {
+            TextStyle::new(13.0, Color::BLACK)
+                .with_font_family(family.clone())
+                .with_text_wrap(renderer_core::TextWrap::NoWrap)
+        };
+        let text = Text::new(
+            || NAME.to_string(),
+            LayoutStyle::new().min_width(0.0),
+            style.clone(),
+        )
+        .unwrap();
+        let clipped = crate::ClippedItem::new(Box::new(text), crate::Clip::x());
+        let row = new_container(
+            LayoutStyle::new()
+                .flex_row()
+                .align_items(layout_core::AlignItems::CENTER)
+                .height(CONTROL),
+            &[clipped.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            row,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(CONTROL),
+        )
+        .unwrap();
+        let tree = crate::ComponentList::new(clipped);
+        let mut line_top = None;
+        renderer_core::for_each_with_matrix(&tree.commands(), |command, matrix| {
+            if let renderer_core::DrawCommand::Text { text, rect, .. } = command
+                && text.as_ref() == NAME
+            {
+                line_top = Some(matrix[5] + rect.y);
+            }
+        });
+        let line_top = line_top.expect("the name is drawn");
+        let (ink_top, ink_height) =
+            crate::text_metrics::measure_ink_bounds(NAME, f32::MAX, &style());
+        let centre = line_top + ink_top + ink_height / 2.0;
+        assert!(
+            (centre - CONTROL / 2.0).abs() <= 0.5,
+            "{:?}: the ink is centred at {centre} in a {CONTROL}px control",
+            style().font_family
+        );
+    }
 }

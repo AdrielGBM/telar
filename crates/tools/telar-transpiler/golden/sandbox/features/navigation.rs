@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -284,7 +285,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
                                             let __node_14 = button(ButtonProps::props().label("Overview").on_press(std::rc::Rc::new(move || { panes.push(Pane::Overview) })).build(), Children::default())?;
                                             let __node_15 = button(ButtonProps::props().label("Pricing").on_press(std::rc::Rc::new(move || { panes.push(Pane::Pricing) })).build(), Children::default())?;
                                             let __node_16 = button(ButtonProps::props().label("Team").on_press(std::rc::Rc::new(move || { panes.push(Pane::Team) })).build(), Children::default())?;
-                                            let __node_17 = button(ButtonProps::props().label("Back").ghost(true).on_press(std::rc::Rc::new(move || { navigate_back(); })).build(), Children::default())?;
+                                            let __node_17 = button(ButtonProps::props().label("Back").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || { navigate_back(); })).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_14, __node_15, __node_16, __node_17])?
                                         };
                                         __children.push(box_item(__row_0));

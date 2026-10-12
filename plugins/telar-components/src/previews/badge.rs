@@ -2,6 +2,7 @@ use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 use telar::{Children, Color, Container, LayoutError, LayoutStyle, Reactive};
 
 use crate::badge::{BadgeProps, badge};
+use crate::metrics;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
@@ -32,10 +33,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-            Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_row().gap(8.0),
-                badges,
-            )?)
+            let row = || LayoutStyle::new().flex_row().gap(metrics::gap_md());
+            Ok::<_, LayoutError>(Container::new(row(), badges)?.styled_by(row))
         })
         .title("Display/Badge")
         .layout(Layout::Centered),

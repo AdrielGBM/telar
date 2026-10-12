@@ -3,6 +3,7 @@
 #![allow(noop_method_call)]
 #[allow(unused_imports)] use telar::*;
 #[allow(unused_imports)] use telar_components::*;
+#[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
 #[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
@@ -64,8 +65,8 @@ pub fn surface_title(props: SurfaceTitleProps, children: Children) -> Result<Box
                                         __children.push(box_item(__text_0));
                                         let __row_0 = {
                                             let __node_3 = button(ButtonProps::props().label("Name this page").on_press(std::rc::Rc::new(move || telar::set_page_title(Some("Surface title".to_string())))).build(), Children::default())?;
-                                            let __node_4 = button(ButtonProps::props().label("No page title").ghost(true).on_press(std::rc::Rc::new(move || telar::set_page_title(None))).build(), Children::default())?;
-                                            let __node_5 = button(ButtonProps::props().label("Rename the app").ghost(true).on_press(std::rc::Rc::new(move || telar::window::set_title("Telar sandbox"))).build(), Children::default())?;
+                                            let __node_4 = button(ButtonProps::props().label("No page title").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_page_title(None))).build(), Children::default())?;
+                                            let __node_5 = button(ButtonProps::props().label("Rename the app").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::window::set_title("Telar sandbox"))).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_3, __node_4, __node_5])?
                                         };
                                         __children.push(box_item(__row_0));
@@ -115,8 +116,8 @@ pub fn surface_title(props: SurfaceTitleProps, children: Children) -> Result<Box
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_1 = {
-                                            let __node_9 = button(ButtonProps::props().label("Page | App").ghost(true).on_press(std::rc::Rc::new(move || telar::set_title_format(bar_rule))).build(), Children::default())?;
-                                            let __node_10 = button(ButtonProps::props().label("Page — App").ghost(true).on_press(std::rc::Rc::new(move || telar::set_title_format(telar::compose_title))).build(), Children::default())?;
+                                            let __node_9 = button(ButtonProps::props().label("Page | App").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_title_format(bar_rule))).build(), Children::default())?;
+                                            let __node_10 = button(ButtonProps::props().label("Page — App").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_title_format(telar::compose_title))).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_9, __node_10])?
                                         };
                                         __children.push(box_item(__row_1));
