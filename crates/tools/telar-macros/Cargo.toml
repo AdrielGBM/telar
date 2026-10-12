@@ -17,9 +17,6 @@ proc-macro = true
 ## The `cargo telar dev` build shape: signal declarations become keyed bindings the dev host restores across a dylib swap, and the runner exports the symbols it swaps through. A feature and not an environment variable because cargo hashes features into the units that enable them, and does not track what a proc macro reads from its environment.
 hot-reload = []
 
-## Turned on by `telar/previews`: the runner `app!` generates answers the preview tools, and its hot factory builds the preview host instead of the application. The transpiled `.rsx` does not depend on it.
-preview = []
-
 [dependencies]
 telar-project = { workspace = true }
 

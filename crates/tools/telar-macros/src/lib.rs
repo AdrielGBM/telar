@@ -216,20 +216,16 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     // Decided at macro expansion time by the features cargo-telar names on the build, which cargo tracks — unlike the environment variables these were, which it does not — and by whether the package is a library compiled for another one.
     let is_hot_reload = flavour.is_hot();
-    let is_preview = runs_previews();
 
     let preview_table = previews_table(&preview_const_idents);
-    let app_previews = match is_preview {
-        true => app_previews_fn(&previews_include),
-        false => quote! {},
-    };
+    let app_previews = app_previews_fn(&previews_include);
     let shell = preview_shell(tooling_crate(telar_project::WORKSHOP_PACKAGE).as_ref());
 
     // The env-var dispatch lives in `telar::dev_entry` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
     //
     // Absent from a build that carries no previews, and that is the whole of what keeps the dev loop out of a shipped application: `dev_entry` reads four environment variables on every start and can be told to run the preview harness and exit, so a release binary that still called it answered `TELAR_TEST=1` from anyone who set it.
-    let dev_entry_call = match is_preview {
-        true => quote! {
+    let dev_entry_call = quote! {
+        ::telar::__previews! {
             if ::telar::dev_entry(
                 __telar_app_previews,
                 ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
@@ -238,8 +234,7 @@ pub fn app(input: TokenStream) -> TokenStream {
             ) {
                 return;
             }
-        },
-        false => quote! {},
+        }
     };
     let devtools = tooling_crate(telar_project::DEVTOOLS_PACKAGE);
     let run_app = with_overlay(devtools.as_ref(), |overlay| {
@@ -299,12 +294,11 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     // Only under `telar/hot-reload`, so dlopen can find the factory.
     let hot_export = if is_hot_reload {
-        let body: TokenStream2 = if is_preview {
-            quote! {
+        let body = quote! {
+            ::telar::__previews! {
                 return ::std::boxed::Box::new((#shell)(__telar_app_previews()));
             }
-        } else {
-            quote! {
+            ::telar::__without_previews! {
                 return ::std::boxed::Box::new(#app_expr);
             }
         };
@@ -595,11 +589,6 @@ fn with_overlay(
 /// It was an environment variable, and cargo does not track a proc macro's env reads — so the flavour needed something cargo *does* track to move the fingerprint by, and that was `--cfg=telar_hot_reload` pushed into `RUSTFLAGS`. Rustflags are hashed into every unit in the graph, so alternating `cargo telar check` and `cargo telar dev` recompiled all four hundred dependencies each way to change which directory this function names. A feature is tracked too, and reaches only the crates that enable it.
 fn build_flavour() -> telar_project::BuildFlavour {
     telar_project::BuildFlavour::new(cfg!(feature = "hot-reload"))
-}
-
-/// Whether the application runner answers the preview tools: `telar/previews` is on, which turns on the feature read here. Not part of the flavour, because the transpiled Rust is the same either way — its previews sit behind `::telar::__previews!` — and only the runner `app!` generates differs.
-fn runs_previews() -> bool {
-    cfg!(feature = "preview")
 }
 
 /// The `telar` version every artifact this macro wires must have been written against: its own.
@@ -1237,9 +1226,11 @@ fn library_previews_test(fonts: TokenStream2) -> TokenStream2 {
 /// The list an application shows: its own `telar_all_previews()`, then each `[telar.previews] include` crate's, in order. A crate that defines none fails to compile on its own name.
 fn app_previews_fn(includes: &[Ident]) -> TokenStream2 {
     quote! {
-        #[doc(hidden)]
-        fn __telar_app_previews() -> ::std::vec::Vec<::telar::preview::PreviewEntry> {
-            [telar_all_previews() #(, ::#includes::telar_all_previews())*].concat()
+        ::telar::__previews! {
+            #[doc(hidden)]
+            fn __telar_app_previews() -> ::std::vec::Vec<::telar::preview::PreviewEntry> {
+                [telar_all_previews() #(, ::#includes::telar_all_previews())*].concat()
+            }
         }
     }
 }

@@ -91,6 +91,23 @@ macro_rules! __previews {
     ($($item:tt)*) => {};
 }
 
+/// The other side of `__previews!`: keeps what a build without previews does in place of what a build with them does.
+#[cfg(feature = "previews")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __without_previews {
+    ($($item:tt)*) => {};
+}
+
+#[cfg(not(feature = "previews"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __without_previews {
+    ($($item:tt)*) => {
+        $($item)*
+    };
+}
+
 #[cfg(test)]
 #[path = "previews_gate_test.rs"]
 mod previews_gate_tests;

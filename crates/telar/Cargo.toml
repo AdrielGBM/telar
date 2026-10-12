@@ -307,7 +307,6 @@ previews = [
     "testing",
     "dep:telar-project",
     "dep:serde_json",
-    "telar-macros/preview",
 ]
 
 ## The preview host that shows those blocks: in a window, or, in a `wasm32` build, on the page it mounts on, which it then does in place of starting the app. Injected by `cargo telar preview`, `--target web` included.

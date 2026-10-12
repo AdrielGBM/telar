@@ -40,3 +40,16 @@ mod without_previews {
         assert_eq!(super::also_gated(), "absent");
     }
 }
+
+crate::__without_previews! {
+    #[cfg_attr(not(feature = "previews"), allow(dead_code))]
+    fn only_without() -> &'static str {
+        "without"
+    }
+}
+
+#[cfg(not(feature = "previews"))]
+#[test]
+fn the_inverse_gate_keeps_its_items_without_previews() {
+    assert_eq!(only_without(), "without");
+}
