@@ -138,6 +138,7 @@ pub fn install_only(
     renderer_core::set_default_text_metrics(ShaperMetrics);
     install_only_into(
         &mut INSTALLED.write().expect("font database lock"),
+        &FACES_GENERATION,
         faces,
         families,
     )
@@ -145,6 +146,7 @@ pub fn install_only(
 
 fn install_only_into(
     slot: &mut Option<Arc<Fonts>>,
+    generation: &AtomicU64,
     faces: Vec<FontAsset>,
     families: Vec<String>,
 ) -> Result<Arc<Fonts>, ExclusiveFontsError> {
@@ -162,6 +164,7 @@ fn install_only_into(
     }
     let fonts = add_into(
         slot,
+        generation,
         wanted,
         (!families.is_empty()).then(|| families.clone()),
     );
@@ -174,7 +177,12 @@ fn install_only_into(
         .find_map(|face| face.families.first())
         .map(|(name, _)| name.clone())
         .ok_or(ExclusiveFontsError::NoFaces)?;
-    Ok(add_into(slot, FaceSources::none(), Some(vec![first])))
+    Ok(add_into(
+        slot,
+        generation,
+        FaceSources::none(),
+        Some(vec![first]),
+    ))
 }
 
 /// Why [`install_only`] could not make the faces it was given the only ones.
@@ -202,6 +210,7 @@ impl std::error::Error for ExclusiveFontsError {}
 fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
     add_into(
         &mut INSTALLED.write().expect("font database lock"),
+        &FACES_GENERATION,
         wanted,
         families,
     )
@@ -209,6 +218,7 @@ fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
 
 fn add_into(
     slot: &mut Option<Arc<Fonts>>,
+    generation: &AtomicU64,
     wanted: FaceSources,
     families: Option<Vec<String>>,
 ) -> Arc<Fonts> {
@@ -221,7 +231,7 @@ fn add_into(
                 db,
                 sources: wanted,
                 families: families.unwrap_or_default(),
-                faces: faces_generation(),
+                faces: generation.load(Ordering::Acquire),
                 listed: OnceLock::new(),
             },
         );
@@ -248,7 +258,7 @@ fn add_into(
     missing.load_into(&mut db);
     let mut sources = loaded.sources.clone();
     sources.absorb(missing);
-    let faces = FACES_GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
+    let faces = generation.fetch_add(1, Ordering::AcqRel) + 1;
     // Text measured before this may have been measured in a fallback for a family that has a face now.
     renderer_core::invalidate_text_metrics();
     replace(

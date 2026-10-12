@@ -156,7 +156,8 @@ fn only_the_faces_given_are_loaded_and_the_default_face_is_routed_to_the_first()
         ]
     };
     let mut slot = None;
-    let fonts = install_only_into(&mut slot, declared(), Vec::new()).unwrap();
+    let generation = AtomicU64::new(0);
+    let fonts = install_only_into(&mut slot, &generation, declared(), Vec::new()).unwrap();
     assert_eq!(
         fonts.family_names(),
         ["Snapshot Face".to_string()],
@@ -166,13 +167,14 @@ fn only_the_faces_given_are_loaded_and_the_default_face_is_routed_to_the_first()
     assert!(
         Arc::ptr_eq(
             &fonts,
-            &install_only_into(&mut slot, declared(), Vec::new()).unwrap()
+            &install_only_into(&mut slot, &generation, declared(), Vec::new()).unwrap()
         ),
         "the same faces again load nothing and replace nothing"
     );
 
     add_into(
         &mut slot,
+        &generation,
         FaceSources {
             faces: vec![FontAsset::file("/nonexistent/other.ttf")],
             ..FaceSources::none()
@@ -180,12 +182,12 @@ fn only_the_faces_given_are_loaded_and_the_default_face_is_routed_to_the_first()
         None,
     );
     assert_eq!(
-        install_only_into(&mut slot, declared(), Vec::new()).err(),
+        install_only_into(&mut slot, &generation, declared(), Vec::new()).err(),
         Some(ExclusiveFontsError::OtherFacesLoaded),
         "a face loaded beyond the declared ones cannot be taken back"
     );
     assert_eq!(
-        install_only_into(&mut None, Vec::new(), Vec::new()).err(),
+        install_only_into(&mut None, &generation, Vec::new(), Vec::new()).err(),
         Some(ExclusiveFontsError::NoFaces)
     );
 }
