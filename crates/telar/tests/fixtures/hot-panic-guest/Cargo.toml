@@ -1,0 +1,15 @@
+[package]
+name = "hot-panic-guest"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# `shaper` because the host test binary has it, and `HostServices` crosses the boundary with a field only `shaper` builds carry: a guest without it is refused as a layout mismatch.
+telar = { path = "../../..", default-features = false, features = ["dev", "shaper"] }
+
+# Its own workspace root, so it is never a member of the repository's: the `hot_panic` test builds it on demand.
+[workspace]

@@ -79,6 +79,11 @@ pub trait DevOverlay: Default + 'static {
         let _ = error;
     }
 
+    /// Sets (or clears with `None`) the report of a panic that stopped the app, which then runs nothing until a rebuild loads. An overlay with no way of its own to say so shows it as it shows a failed build.
+    fn set_app_panic(&mut self, panic: Option<String>) {
+        self.set_build_error(panic);
+    }
+
     /// Names the backend that is now drawing, so the overlay can say which one `ctrl+shift+b` just switched to.
     fn set_renderer_info(&mut self, info: &str) {
         let _ = info;

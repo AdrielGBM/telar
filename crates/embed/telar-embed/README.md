@@ -14,7 +14,7 @@ telar-embed = "0.2.2"
 telar-embed = { version = "0.2.2", features = ["host"] }
 ```
 
-The guest implements `EmbeddedApp` and calls `embed!` to export the shims; the host calls `load_embedded` and drives what it returns. The host must call `LoadedEmbed::on_frame` every frame for guest timers to fire and wake the event loop.
+The guest implements `EmbeddedApp` and calls `embed!` to export the shims; the host calls `load_embedded` and drives what it returns. The host must call `LoadedEmbed::on_frame` every frame for guest timers to fire and wake the event loop. Each `load_embedded` opens a private copy of the library, so a rebuilt library at the same path never shares statics with one still mapped, and a guest built with other features than its host is refused instead of misread. A panic inside a guest never unwinds into the host: `LoadedEmbed::panic` reports what it said and where, and nothing more of that guest runs.
 
 Keep it on the same version as `telar` — the same lockstep `telar` and `telar-macros` already have, and for the same reason.
 

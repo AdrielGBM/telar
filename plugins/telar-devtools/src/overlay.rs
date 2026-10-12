@@ -35,6 +35,7 @@ pub(crate) struct Model {
     pub reading: RwSignal<Reading>,
     pub renderer: RwSignal<Option<String>>,
     pub build_error: RwSignal<Option<String>>,
+    pub app_panic: RwSignal<Option<String>>,
     pub panel_open: RwSignal<bool>,
     pub inspector_open: RwSignal<bool>,
     pub drawer_tab: RwSignal<DrawerTab>,
@@ -48,6 +49,7 @@ impl Model {
             reading: signal(Reading::default()),
             renderer: signal(None),
             build_error: signal(None),
+            app_panic: signal(None),
             panel_open: signal(false),
             inspector_open: signal(false),
             drawer_tab: signal(DrawerTab::default()),
@@ -110,6 +112,11 @@ impl Overlay {
     pub fn set_build_error(&self, error: Option<String>) {
         let _entered = self.canvas.enter();
         self.model.build_error.set_if_changed(error);
+    }
+
+    pub fn set_app_panic(&self, panic: Option<String>) {
+        let _entered = self.canvas.enter();
+        self.model.app_panic.set_if_changed(panic);
     }
 
     /// Reads what the runner reported of the app this frame, which only reaches the widgets where it differs from the last.

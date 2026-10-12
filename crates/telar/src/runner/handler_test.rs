@@ -1685,3 +1685,205 @@ fn the_app_hears_whether_its_window_is_maximized_as_the_window_resizes() {
     handler.about_to_wait();
     assert_eq!(SHOWN_MAXIMIZED.with(Cell::get), Some(true));
 }
+
+#[cfg(feature = "dev")]
+thread_local! {
+    static PRESSES_HEARD: Cell<u32> = const { Cell::new(0) };
+}
+
+/// A tree whose press handler panics, as one that writes a signal its own effect still borrows does.
+#[cfg(feature = "dev")]
+struct BorrowsTwice;
+
+#[cfg(feature = "dev")]
+impl ui_tree::Component for BorrowsTwice {
+    fn view(&self) -> ui_tree::RenderNode {
+        ui_tree::RenderNode::group([])
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        if matches!(event, Event::PointerPressed { .. }) {
+            PRESSES_HEARD.with(|heard| heard.set(heard.get() + 1));
+            panic!("RUNTIME is already borrowed");
+        }
+        EventResult::Ignored
+    }
+}
+
+#[cfg(feature = "dev")]
+struct Panicking;
+
+#[cfg(feature = "dev")]
+impl App for Panicking {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        Box::new(BorrowsTwice)
+    }
+}
+
+/// A tree that hears presses and does nothing else with them.
+#[cfg(feature = "dev")]
+struct Counting;
+
+#[cfg(feature = "dev")]
+impl ui_tree::Component for Counting {
+    fn view(&self) -> ui_tree::RenderNode {
+        ui_tree::RenderNode::group([])
+    }
+
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        if matches!(event, Event::PointerPressed { .. }) {
+            PRESSES_HEARD.with(|heard| heard.set(heard.get() + 1));
+        }
+        EventResult::Ignored
+    }
+}
+
+#[cfg(feature = "dev")]
+struct Fixed;
+
+#[cfg(feature = "dev")]
+impl App for Fixed {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        Box::new(Counting)
+    }
+}
+
+#[cfg(feature = "dev")]
+fn create_panicking() -> crate::hot::GuestResult<Box<dyn App>> {
+    crate::hot::guest::create_app(|| Box::new(Panicking))
+}
+
+#[cfg(feature = "dev")]
+fn create_fixed() -> crate::hot::GuestResult<Box<dyn App>> {
+    crate::hot::guest::create_app(|| Box::new(Fixed))
+}
+
+#[cfg(feature = "dev")]
+fn create_nothing() -> crate::hot::GuestResult<Box<dyn App>> {
+    crate::hot::guest::create_app(|| panic!("the app's setup could not find its assets"))
+}
+
+/// A build served by this process's own exports, through the same table, the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries.
+#[cfg(feature = "dev")]
+fn hot_build(create: crate::hot::CreateApp) -> Box<dyn AppRuntime> {
+    fn keep_services(_: crate::hot::HostServices) -> crate::hot::GuestResult<()> {
+        Ok(())
+    }
+    let exports = crate::hot::GuestExports {
+        install_services: keep_services,
+        ..crate::hot::GuestExports::in_process()
+    };
+    Box::new(crate::hot::HotApp::start(exports, create, None))
+}
+
+/// What the overlay was told about builds and panics.
+#[cfg(feature = "dev")]
+#[derive(Default)]
+struct Reporting {
+    build_error: Option<String>,
+    app_panic: Option<String>,
+}
+
+#[cfg(feature = "dev")]
+impl DevOverlay for Reporting {
+    fn on_frame<'a>(
+        &mut self,
+        base: &'a [renderer_core::DrawCommand],
+        _window_w: f32,
+        _window_h: f32,
+        _tree_dirty: bool,
+    ) -> std::borrow::Cow<'a, [renderer_core::DrawCommand]> {
+        std::borrow::Cow::Borrowed(base)
+    }
+
+    fn set_build_error(&mut self, error: Option<String>) {
+        self.build_error = error;
+    }
+
+    fn set_app_panic(&mut self, panic: Option<String>) {
+        self.app_panic = panic;
+    }
+}
+
+/// A panic in the app's event handler used to unwind out of the dylib into the host, whose copy of std can only abort on it: the window closed and the session with it. Now the window stays, says what panicked and where, runs nothing more of that build, and the next build takes over.
+#[cfg(feature = "dev")]
+#[test]
+fn a_panic_in_the_app_is_shown_and_the_next_build_takes_over() {
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = overlaid::<Reporting>(hot_build(create_panicking));
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    handler.about_to_wait();
+    assert_eq!(
+        handler.dev.app_panic, None,
+        "precondition: a build that runs"
+    );
+
+    handler.new_events();
+    handler.on_event(press_at(10.0, 10.0), &window);
+    assert_eq!(PRESSES_HEARD.with(Cell::get), 1);
+    handler.about_to_wait();
+    let report = handler
+        .dev
+        .app_panic
+        .clone()
+        .expect("the overlay is told the app panicked");
+    assert!(report.contains("RUNTIME is already borrowed"), "{report}");
+    assert!(
+        report.contains(&format!("panicked at {}:", file!())),
+        "the report says where: {report}"
+    );
+    assert!(handler.tree.is_none(), "the tree that panicked is let go");
+
+    handler.new_events();
+    handler.on_event(press_at(10.0, 10.0), &window);
+    handler.on_redraw(&window);
+    handler.about_to_wait();
+    assert_eq!(
+        PRESSES_HEARD.with(Cell::get),
+        1,
+        "nothing more of the build that panicked runs"
+    );
+
+    handler.dev.build_error = Some("error: expected `;`".to_owned());
+    handler.new_events();
+    handler.take_build(hot_build(create_fixed), &window);
+    handler.about_to_wait();
+    assert_eq!(handler.dev.app_panic, None, "a build that loads clears it");
+    assert_eq!(handler.dev.build_error, None);
+    handler.new_events();
+    handler.on_event(press_at(10.0, 10.0), &window);
+    assert_eq!(
+        PRESSES_HEARD.with(Cell::get),
+        2,
+        "the new build hears the press"
+    );
+}
+
+/// A build whose setup panics leaves no app to run, but the window it would have drawn in is the one the next build draws in.
+#[cfg(feature = "dev")]
+#[test]
+fn a_build_that_panics_as_it_starts_keeps_the_window_for_the_next() {
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = overlaid::<Reporting>(hot_build(create_nothing));
+    assert!(handler.app.window_config().is_none());
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    handler.on_redraw(&window);
+    handler.about_to_wait();
+    let report = handler
+        .dev
+        .app_panic
+        .clone()
+        .expect("the overlay is told the app panicked");
+    assert!(
+        report.contains("the app's setup could not find its assets"),
+        "{report}"
+    );
+
+    handler.new_events();
+    handler.take_build(hot_build(create_fixed), &window);
+    handler.about_to_wait();
+    assert_eq!(handler.dev.app_panic, None);
+    assert!(handler.tree.is_some(), "the next build mounts its tree");
+}

@@ -43,6 +43,11 @@ name = "headless_spawn_task"
 path = "src/headless_spawn_task_test.rs"
 
 [[test]]
+name = "hot_panic"
+path = "src/hot_panic_test.rs"
+required-features = ["dev"]
+
+[[test]]
 name = "installed_renderer"
 path = "src/installed_renderer_test.rs"
 

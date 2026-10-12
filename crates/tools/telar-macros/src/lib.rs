@@ -292,8 +292,8 @@ pub fn app(input: TokenStream) -> TokenStream {
         }
     };
 
-    // Only under `telar/hot-reload`, so dlopen can find the factory.
-    let hot_export = if is_hot_reload {
+    // Only under `telar/hot-reload`, so dlopen can find the factory and the exports the host drives the app through. Each one catches a panic in the dylib and hands it back, since one unwinding into the host's copy of std aborts the process.
+    let hot_exports = if is_hot_reload {
         let body = quote! {
             ::telar::__previews! {
                 return ::std::boxed::Box::new((#shell)(__telar_app_previews()));
@@ -304,223 +304,14 @@ pub fn app(input: TokenStream) -> TokenStream {
         };
         quote! {
             #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_create_app() -> ::std::boxed::Box<dyn ::telar::App> {
-                #setup
-                #body
+            pub unsafe extern "Rust" fn _rsx_hot_create_app()
+            -> ::telar::hot::GuestResult<::std::boxed::Box<dyn ::telar::App>> {
+                ::telar::hot::guest::create_app(|| -> ::std::boxed::Box<dyn ::telar::App> {
+                    #setup
+                    #body
+                })
             }
-        }
-    } else {
-        quote! {}
-    };
-
-    // Cleanup function exported for hot reload: called before dlclose to clean up TLS in the dylib.
-    let hot_cleanup = if is_hot_reload {
-        quote! {
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_cleanup() {
-                // Drop in-flight animations alongside the signals they target so none outlive this dylib's reset runtime.
-                ::telar::motion::reset();
-                // Drop pending task and timer callbacks too: they are code compiled into this dylib, so running — or even dropping — one after dlclose would jump into unmapped memory.
-                ::telar::reset_tasks();
-                ::telar::reset_timers();
-                ::telar::reset_runtime();
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    // State-preservation symbols: the host snapshots the outgoing dylib's hot signals and restores them into the incoming one (see telar::hot_state).
-    let hot_state_symbols = if is_hot_reload {
-        quote! {
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_snapshot() -> ::std::string::String {
-                ::telar::hot_snapshot_json()
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_restore(blob: &str) {
-                ::telar::hot_restore_json(blob);
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    // The dylib mounts and owns the segment tree, so its view effects are created in the same reactive runtime as the signals they read. Mounting on the host's side leaves every subscription unestablished, which is what the force-tick workaround exists to paper over.
-    let hot_tree_symbols = if is_hot_reload {
-        quote! {
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_tree_mount(
-                app: &dyn ::telar::App,
-            ) -> *mut ::telar::HotTree {
-                ::telar::HotTree::mount(app)
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_tree_release(tree: *mut ::telar::HotTree) {
-                unsafe { ::telar::HotTree::release(tree) }
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_tree_on_event(
-                tree: *mut ::telar::HotTree,
-                event: &::telar::Event,
-            ) -> bool {
-                unsafe { ::telar::HotTree::on_event(tree, event) }
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_tree_on_covered_event(
-                tree: *mut ::telar::HotTree,
-                event: &::telar::Event,
-            ) {
-                unsafe { ::telar::HotTree::on_covered_event(tree, event) }
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_tree_end_frame(tree: *mut ::telar::HotTree) {
-                unsafe { ::telar::HotTree::end_frame(tree) }
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_tree_paint(
-                tree: *mut ::telar::HotTree,
-            ) -> ::std::vec::Vec<::telar::DrawCommand> {
-                unsafe { ::telar::HotTree::paint(tree) }
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_tree_dirty(tree: *mut ::telar::HotTree) -> bool {
-                unsafe { ::telar::HotTree::is_dirty(tree) }
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_tree_generation(
-                tree: *mut ::telar::HotTree,
-            ) -> u64 {
-                unsafe { ::telar::HotTree::generation(tree) }
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_tree_walk(
-                tree: *mut ::telar::HotTree,
-            ) -> ::std::vec::Vec<::telar::SegmentNodeInfo> {
-                unsafe { ::telar::HotTree::walk(tree) }
-            }
-            // What a reader is told and what the checks find are read from the dylib's registries, which the host's copies of them never see.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_access_snapshot(
-                commands: &[::telar::DrawCommand],
-                background: ::std::option::Option<::telar::Color>,
-            ) -> ::telar::AccessAudit {
-                ::telar::inspect::audit(commands, background)
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    // Motion-tick symbols: host and dylib link separate copies of motion-core, each with its own registry; the `Animated` values live in the dylib's, so the host must call across this boundary instead of ticking its own (empty) copy.
-    let hot_motion_symbols = if is_hot_reload {
-        quote! {
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_motion_tick(now: ::std::time::Instant) {
-                ::telar::motion::tick(now);
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_motion_active() -> bool {
-                ::telar::motion::has_active()
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_motion_continuous() -> bool {
-                ::telar::motion::has_continuous()
-            }
-            // Host and dylib link separate reactive-core copies, so the host must open and close the batch on the app's own runtime across this boundary — otherwise a handler's write flushes mid-dispatch and a segment loses its subscriptions while its widget is borrowed.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_begin_batch() {
-                ::telar::begin_batch();
-            }
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_end_batch() {
-                ::telar::end_batch();
-            }
-            // Relayout the dylib's own layout runtime: the layout tree (taffy nodes) lives in the dylib's thread-local runtime, so the host must drive relayout across this boundary for a reactive list change to be laid out — its own copy is empty.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_relayout() {
-                ::telar::relayout_if_dirty();
-            }
-            // Consult the dylib's own overlay registry: `overlay` widgets register in this dylib's thread-local, so the host must route pointer events to overlays (modal priority / background blocking) across this boundary — its own copy is empty.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_dispatch_overlays(event: &::telar::Event) -> bool {
-                ::telar::dispatch_overlays(event)
-            }
-            // The dylib's own copy of the preference store, which its views, its theme's `follow_system` and its motion engine read.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_set_system_preferences(
-                preferences: &::telar::SystemPreferences,
-            ) {
-                ::telar::set_system_preferences(preferences.clone());
-            }
-            // The dylib's own copy of the surface's size, which its layout resolves surface fractions against and its views read.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_set_surface_size(width: f32, height: f32) {
-                ::telar::set_surface_size(::telar::Size::new(width, height));
-            }
-            // The dylib's own copy of the safe area, which its views read.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_set_safe_area_insets(top: f32, right: f32, bottom: f32, left: f32) {
-                ::telar::set_safe_area_insets(::telar::Insets::new(top, right, bottom, left));
-            }
-            // The dylib's own copy of whether the window is maximized, which a title bar it draws reads.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_set_surface_maximized(maximized: bool) {
-                ::telar::set_surface_maximized(maximized);
-            }
-            // Drain the dylib's own window-command queue: a title bar's `on_press` pushes into this dylib's thread-local, so the host must drain it across this boundary to apply drag/minimize/maximize/ close — its own copy is empty.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_drain_window_commands()
-            -> ::std::vec::Vec<::telar::WindowCommand> {
-                ::telar::take_window_commands()
-            }
-            // The dylib's own copy of the app's history, which its navigator follows.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_set_location_history(
-                history: &[::telar::Location],
-            ) {
-                ::telar::receive_location_history(history.to_vec());
-            }
-            // The dylib's own copy of the surface's title, which its navigator and its views write.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_open_title(app: &str, showing: &str) {
-                ::telar::open_surface_title(app, showing);
-            }
-            // The dylib's own copy of the surface's default family, which its text cascade starts from.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_open_font_family(family: ::std::option::Option<&str>) {
-                ::telar::open_surface_font_family(family.map(::telar::FontFamily::from));
-            }
-            // Back closes the dylib's dialogs and steps the dylib's history, neither of which the host can reach.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_navigate_back() -> bool {
-                ::telar::navigate_back()
-            }
-            // Run the completions of tasks spawned inside this dylib.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_drain_tasks() {
-                ::telar::drain_tasks();
-            }
-            // Run the timers scheduled inside this dylib.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_fire_timers() {
-                ::telar::fire_timers();
-            }
-            // How long until this dylib's earliest timer comes due.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_until_next_timer() -> ::std::option::Option<::std::time::Duration> {
-                ::telar::until_next_timer()
-            }
-            // Give this dylib's reactive-core copy the loop wake.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_install_task_waker(waker: ::telar::RedrawWaker) {
-                ::telar::set_task_waker(move || waker.wake());
-            }
-            // This dylib's copies of the clipboard, the URI opener, the file dialogs and the font database start empty; the host's serve it instead.
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_install_services(services: ::telar::hot::HostServices) {
-                services.install();
-            }
+            ::telar::__hot_guest_api!(::telar::__hot_guest_exports);
         }
     } else {
         quote! {}
@@ -552,11 +343,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         #app_previews
         #desktop_run
         #android_run
-        #hot_export
-        #hot_cleanup
-        #hot_state_symbols
-        #hot_tree_symbols
-        #hot_motion_symbols
+        #hot_exports
     }
     .into()
 }

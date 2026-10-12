@@ -434,10 +434,8 @@ where
             }
             crate::hot::HotEvent::Reload(new_path) => match crate::hot::load_hot_app(&new_path) {
                 Ok(new_app) => {
-                    self.swap_app(Box::new(new_app), window);
-                    self.dev.set_build_error(None);
+                    self.take_build(Box::new(new_app), window);
                     tracing::info!("hot reloaded: {}", new_path.display());
-                    window.request_redraw();
                     true
                 }
                 Err(e) => {
@@ -446,6 +444,19 @@ where
                 }
             },
         }
+    }
+
+    /// Runs a build that loaded in place of the one before it, and takes back what the overlay said about the builds and the panics before it. A panic the new build hits while it starts is still to be shown.
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
+    fn take_build(&mut self, app: Box<dyn AppRuntime>, window: &W) {
+        self.swap_app(app, window);
+        self.dev.set_build_error(None);
+        self.dev.set_app_panic(None);
+        window.request_redraw();
     }
 
     /// Replaces the running app with a freshly loaded runtime, hands it what the outgoing one knew and mounts its tree.
@@ -468,6 +479,21 @@ where
             self.app.hot_restore(&blob);
         }
         self.mount_tree(window);
+    }
+
+    /// Shows a panic the app's runtime stopped at its boundary the way the dev overlay shows a failed build, and owes the frame that draws it.
+    ///
+    /// The tree goes with it: it can no longer be asked for anything, and the next one this surface draws has to start past every generation the old one handed out.
+    fn show_app_panic(&mut self) {
+        let Some(report) = self.app.take_panic() else {
+            return;
+        };
+        let _surface = self.enter_surface();
+        self.tree = None;
+        self.generation.restart();
+        self.dev.set_app_panic(Some(report));
+        self.pacer.presentation_owed = true;
+        self.pacer.frame_owed = true;
     }
 
     /// Hands the app's runtime the loop wake, so a task finishing in it, or a timer it schedules, runs a frame. Every runtime swapped in needs it again: a reloaded dylib's reactive-core copy starts with an empty waker slot of its own.
@@ -1135,6 +1161,7 @@ where
     }
 
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
+        self.show_app_panic();
         end_batch();
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
         // Against `last_tick`, the clock `on_redraw` gates on: reporting a deadline the pass would decline wakes the loop early and it spins re-asking.

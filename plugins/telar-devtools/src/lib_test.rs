@@ -156,6 +156,30 @@ fn the_banner_shows_the_build_error_until_a_build_lands() {
     assert!(!shows(&mut dev, "Build failed"), "a landed build clears it");
 }
 
+/// A build that panicked is not one that keeps running, so it is not said the way a failed build is; and a build that fails after it is said as well, since the panic still stands.
+#[test]
+fn the_banner_says_the_app_panicked_and_where_until_a_build_lands() {
+    let mut dev = devtools();
+    dev.set_app_panic(Some(
+        "panicked at src/counter.rs:14:9:\nRUNTIME is already borrowed".to_owned(),
+    ));
+    assert!(shows(&mut dev, "App panicked"));
+    assert!(shows(&mut dev, "src/counter.rs:14:9"), "where it panicked");
+    assert!(
+        shows(&mut dev, "RUNTIME is already borrowed"),
+        "what it said"
+    );
+    assert!(!shows(&mut dev, "Build failed"));
+
+    dev.set_build_error(Some(ERROR.to_owned()));
+    assert!(shows(&mut dev, "App panicked"));
+    assert!(shows(&mut dev, "Build failed"));
+
+    dev.set_build_error(None);
+    dev.set_app_panic(None);
+    assert!(!shows(&mut dev, "App panicked"), "a landed build clears it");
+}
+
 #[test]
 fn the_inspector_lists_the_mounted_components_nested() {
     let mut dev = devtools();

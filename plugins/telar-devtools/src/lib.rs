@@ -155,6 +155,12 @@ impl DevOverlay for DevTools {
         }
     }
 
+    fn set_app_panic(&mut self, panic: Option<String>) {
+        if let Some(overlay) = self.overlay() {
+            overlay.set_app_panic(panic);
+        }
+    }
+
     fn set_renderer_info(&mut self, info: &str) {
         if let Some(overlay) = self.overlay() {
             overlay.set_renderer(info);

@@ -28,6 +28,8 @@ use ui_core::{EventResult, NodeId, SurfaceCanvas, composite_surface};
 use ui_tree::{Component, RenderNode};
 
 use platform_core::AppCtx;
+use platform_core::guest::{BoundaryLayout, guest_call};
+pub use platform_core::guest::{GuestPanic, GuestResult};
 
 /// Owned draw-command list returned across the FFI boundary (the guest's flattened frame). Self-contained: baked geometry, `Arc`-shared styles/data — the host can render it directly (same-toolchain ABI, as with hot-reload's `Vec<WindowCommand>`).
 pub type DrawList = Vec<DrawCommand>;
@@ -277,18 +279,20 @@ impl EmbedInstance {
     }
 }
 
-// The `embed!` macro exports one thin `#[no_mangle]` wrapper per method, each forwarding to one of these. `#[doc(hidden)]`: public only because the expansion lands in the guest crate.
+// The `embed!` macro exports one table whose entries forward to these, each running its body under `guest_call` so a panic in the guest is handed back instead of unwinding into the host's copy of std, which can only abort on it. `#[doc(hidden)]`: public only because the expansion lands in the guest crate.
 
 /// Build a guest instance and leak it to a raw pointer the host owns (freed via [`__embed_destroy`]).
 #[doc(hidden)]
-pub fn __embed_create(embedded: Box<dyn EmbeddedApp>) -> *mut EmbedInstance {
-    Box::into_raw(Box::new(EmbedInstance::new(embedded)))
+pub fn __embed_create(
+    make: impl FnOnce() -> Box<dyn EmbeddedApp>,
+) -> GuestResult<*mut EmbedInstance> {
+    guest_call(|| Box::into_raw(Box::new(EmbedInstance::new(make()))))
 }
 
 /// # Safety `inst` must be a pointer returned by [`__embed_create`] and not yet destroyed.
 #[doc(hidden)]
-pub unsafe fn __embed_destroy(inst: *mut EmbedInstance) {
-    drop(unsafe { Box::from_raw(inst) });
+pub unsafe fn __embed_destroy(inst: *mut EmbedInstance) -> GuestResult<()> {
+    guest_call(|| drop(unsafe { Box::from_raw(inst) }))
 }
 
 macro_rules! embed_shim {
@@ -296,10 +300,12 @@ macro_rules! embed_shim {
         $(#[$m])*
         #[doc(hidden)]
         /// # Safety `inst` must be a live pointer from [`__embed_create`].
-        pub unsafe fn $vis_fn(inst: *mut EmbedInstance $(, $arg: $ty)*) $(-> $ret)? {
-            unsafe { (*inst).$method($($arg),*) }
+        pub unsafe fn $vis_fn(inst: *mut EmbedInstance $(, $arg: $ty)*) -> GuestResult<embed_shim!(@ret $($ret)?)> {
+            guest_call(|| unsafe { (*inst).$method($($arg),*) })
         }
     };
+    (@ret) => { () };
+    (@ret $ret:ty) => { $ret };
 }
 
 embed_shim!(__embed_relayout(width: f32, height: f32) => relayout);
@@ -324,43 +330,61 @@ embed_shim!(__embed_id() -> String => id);
 // `on_frame` takes `&mut AppCtx`, whose lifetime the shim macro cannot spell.
 /// # Safety `inst` must be a live pointer from [`__embed_create`].
 #[doc(hidden)]
-pub unsafe fn __embed_on_frame(inst: *mut EmbedInstance, ctx: &mut AppCtx) {
-    unsafe { (*inst).on_frame(ctx) }
+pub unsafe fn __embed_on_frame(inst: *mut EmbedInstance, ctx: &mut AppCtx) -> GuestResult<()> {
+    guest_call(|| unsafe { (*inst).on_frame(ctx) })
 }
 
-/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers.
-pub const TELAR_EMBED_ABI: u32 = 6;
+/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers. 7 is for every entry handing back a [`GuestResult`] instead of unwinding. 8 is for the table carrying the layout fingerprint.
+pub const TELAR_EMBED_ABI: u32 = 8;
+
+/// The fingerprint of the layout of what crosses by value, which a guest reports in its table beside the version: a host and a guest built with different features or dependencies disagree about the shape of an event or a draw command without the table having changed at all.
+pub const EMBED_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
+    EmbedVTable,
+    AppCtx<'static>,
+    Color,
+    DrawCommand,
+    Event,
+    GuestPanic,
+    SystemPreferences,
+    WindowCommand,
+    Duration,
+    Instant;
+);
 
 /// Everything the host calls on a guest, as one exported symbol.
 ///
 /// `#[repr(C)]` is what makes the version check sound rather than cosmetic: `abi` is guaranteed to sit at offset 0, so the host can read it out of a guest built against a different (possibly shorter) table before it reads anything else.
 ///
-/// The signatures use the `extern "Rust"` ABI over Rust types, so a guest must be built with the same toolchain as its host — a first-party guest model, exactly as hot reload requires.
+/// The signatures use the `extern "Rust"` ABI over Rust types, so a guest must be built with the same toolchain as its host — a first-party guest model, exactly as hot reload requires. Every entry catches a panic in the guest and returns it as the `Err` of a [`GuestResult`].
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct EmbedVTable {
     pub abi: u32,
-    pub create: unsafe extern "Rust" fn(&[String]) -> *mut EmbedInstance,
-    pub destroy: unsafe extern "Rust" fn(*mut EmbedInstance),
-    pub relayout: unsafe extern "Rust" fn(*mut EmbedInstance, f32, f32),
-    pub relayout_dirty: unsafe extern "Rust" fn(*mut EmbedInstance),
-    pub paint: unsafe extern "Rust" fn(*mut EmbedInstance) -> DrawList,
-    pub generation: unsafe extern "Rust" fn(*mut EmbedInstance) -> u64,
-    pub on_event: unsafe extern "Rust" fn(*mut EmbedInstance, &Event) -> bool,
-    pub dispatch_overlays: unsafe extern "Rust" fn(*mut EmbedInstance, &Event) -> bool,
-    pub end_frame: unsafe extern "Rust" fn(*mut EmbedInstance),
-    pub motion_tick: unsafe extern "Rust" fn(*mut EmbedInstance, Instant),
-    pub motion_active: unsafe extern "Rust" fn(*mut EmbedInstance) -> bool,
-    pub until_next_timer: unsafe extern "Rust" fn(*mut EmbedInstance) -> Option<Duration>,
-    pub next_timer_due: unsafe extern "Rust" fn(*mut EmbedInstance) -> Option<Instant>,
-    pub drain_window_commands: unsafe extern "Rust" fn(*mut EmbedInstance) -> WindowCommands,
-    pub set_system_preferences: unsafe extern "Rust" fn(*mut EmbedInstance, &SystemPreferences),
-    pub activate: unsafe extern "Rust" fn(*mut EmbedInstance),
-    pub clear_color: unsafe extern "Rust" fn(*mut EmbedInstance) -> Option<Color>,
-    pub title: unsafe extern "Rust" fn(*mut EmbedInstance) -> String,
-    pub icon: unsafe extern "Rust" fn(*mut EmbedInstance) -> Option<Vec<u8>>,
-    pub id: unsafe extern "Rust" fn(*mut EmbedInstance) -> String,
-    pub on_frame: unsafe extern "Rust" fn(*mut EmbedInstance, &mut AppCtx),
+    pub layout: u64,
+    pub create: unsafe extern "Rust" fn(&[String]) -> GuestResult<*mut EmbedInstance>,
+    pub destroy: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<()>,
+    pub relayout: unsafe extern "Rust" fn(*mut EmbedInstance, f32, f32) -> GuestResult<()>,
+    pub relayout_dirty: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<()>,
+    pub paint: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<DrawList>,
+    pub generation: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<u64>,
+    pub on_event: unsafe extern "Rust" fn(*mut EmbedInstance, &Event) -> GuestResult<bool>,
+    pub dispatch_overlays: unsafe extern "Rust" fn(*mut EmbedInstance, &Event) -> GuestResult<bool>,
+    pub end_frame: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<()>,
+    pub motion_tick: unsafe extern "Rust" fn(*mut EmbedInstance, Instant) -> GuestResult<()>,
+    pub motion_active: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<bool>,
+    pub until_next_timer:
+        unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<Option<Duration>>,
+    pub next_timer_due: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<Option<Instant>>,
+    pub drain_window_commands:
+        unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<WindowCommands>,
+    pub set_system_preferences:
+        unsafe extern "Rust" fn(*mut EmbedInstance, &SystemPreferences) -> GuestResult<()>,
+    pub activate: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<()>,
+    pub clear_color: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<Option<Color>>,
+    pub title: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<String>,
+    pub icon: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<Option<Vec<u8>>>,
+    pub id: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<String>,
+    pub on_frame: unsafe extern "Rust" fn(*mut EmbedInstance, &mut AppCtx) -> GuestResult<()>,
 }
 
 /// Exports a guest cdylib's one FFI symbol, the `_rsx_embed_vtable`. `$factory` is any `Fn(&[String]) -> Box<dyn EmbeddedApp>` — invoked once per instance with the launch args.
@@ -379,11 +403,12 @@ macro_rules! embed {
         pub static _rsx_embed_vtable: $crate::EmbedVTable = {
             unsafe extern "Rust" fn create(
                 args: &[::std::string::String],
-            ) -> *mut $crate::EmbedInstance {
-                $crate::__embed_create(($factory)(args))
+            ) -> $crate::GuestResult<*mut $crate::EmbedInstance> {
+                $crate::__embed_create(|| ($factory)(args))
             }
             $crate::EmbedVTable {
                 abi: $crate::TELAR_EMBED_ABI,
+                layout: $crate::EMBED_LAYOUT.0,
                 create,
                 destroy: $crate::__embed_destroy,
                 relayout: $crate::__embed_relayout,
@@ -416,44 +441,35 @@ pub use host::{LoadedEmbed, load_embedded};
 #[cfg(feature = "host")]
 mod host {
     use super::*;
+    use platform_core::guest::{Guest, LayoutMismatch};
     use std::path::Path;
 
     /// A loaded guest the host drives. Holds the live instance (dylib-allocated) and the `Library` that must outlive it. `!Send`/`!Sync`: the instance is a foreign reactive runtime, driven only on the UI thread.
+    ///
+    /// Every call goes through its [`Guest`], so once the guest has panicked none reaches it again: [`panic`](Self::panic) says what happened and where, and every method answers as an empty guest would — nothing painted, no event taken, no timer waiting. The host shows the report in the guest's place.
     pub struct LoadedEmbed {
         inst: *mut EmbedInstance,
         vtable: EmbedVTable,
+        guest: Guest,
         timer_mirror: TimerMirror,
-        // Declared last so it drops last: the instance is destroyed before the library unmaps.
-        _lib: libloading::Library,
+        // Declared last so it drops last: the instance is destroyed before the library unmaps. `None` for a table that is this process's own.
+        _lib: Option<libloading::Library>,
     }
 
     /// Load a guest cdylib and create one instance from it (calling its vtable's `create` with `args`).
     ///
-    /// The library is kept mapped for the guest's lifetime — the instance holds live pointers into the dylib's code and data.
+    /// Each load opens a private copy of the library, so a rebuilt library at the same path never shares statics with one still mapped, a guest that panicked among them. The library is kept mapped for the guest's lifetime — the instance holds live pointers into the dylib's code and data. A panic while the guest is built comes back as the error, a [`GuestPanic`] the caller can downcast to.
     pub fn load_embedded(
         path: &Path,
         args: &[String],
     ) -> Result<LoadedEmbed, Box<dyn std::error::Error>> {
-        let lib = platform_core::guest::open(path)?;
+        let lib = platform_core::guest::open_unique(path)?;
 
         let symbol: libloading::Symbol<*const EmbedVTable> =
             unsafe { lib.get(b"_rsx_embed_vtable\0")? };
         let vtable = unsafe { read_vtable(*symbol) }
             .map_err(|mismatch| format!("{mismatch} — rebuild {}", path.display()))?;
-
-        let inst = unsafe { (vtable.create)(args) };
-        if inst.is_null() {
-            return Err("guest create returned null".into());
-        }
-        let guest = LoadedEmbed {
-            inst,
-            vtable,
-            timer_mirror: TimerMirror::default(),
-            _lib: lib,
-        };
-        // A guest starts with a store of its own that knows nothing, and a host only forwards changes; without this one opened mid-session would draw light on a dark desktop until the user next changed a setting.
-        guest.set_system_preferences(&preferences_core::system_preferences());
-        Ok(guest)
+        Ok(LoadedEmbed::start(vtable, args, Some(lib))?)
     }
 
     /// Copies a guest's table out after checking it was built against this one.
@@ -464,90 +480,159 @@ mod host {
         // A guest built against a shorter table has fewer bytes than `EmbedVTable`, so copying the whole struct before the check would read past its end. `#[repr(C)]` puts `abi` at offset 0 for every version.
         let abi = unsafe { *ptr.cast::<u32>() };
         if abi != TELAR_EMBED_ABI {
-            return Err(AbiMismatch { guest: abi });
+            return Err(AbiMismatch::Version { guest: abi });
         }
-        Ok(unsafe { *ptr })
+        let vtable = unsafe { *ptr };
+        EMBED_LAYOUT
+            .accept(BoundaryLayout(vtable.layout))
+            .map_err(AbiMismatch::Layout)?;
+        Ok(vtable)
     }
 
-    /// A guest built against another version of [`EmbedVTable`].
+    /// A guest that cannot be driven by this host: built against another version of [`EmbedVTable`], or laid out differently from it.
     #[derive(Debug, PartialEq, Eq)]
-    pub(crate) struct AbiMismatch {
-        pub(crate) guest: u32,
+    pub(crate) enum AbiMismatch {
+        Version { guest: u32 },
+        Layout(LayoutMismatch),
     }
 
     impl std::fmt::Display for AbiMismatch {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(
-                f,
-                "guest built for ABI {}, host is ABI {TELAR_EMBED_ABI}",
-                self.guest
-            )
+            match self {
+                Self::Version { guest } => {
+                    write!(
+                        f,
+                        "guest built for ABI {guest}, host is ABI {TELAR_EMBED_ABI}"
+                    )
+                }
+                Self::Layout(mismatch) => mismatch.fmt(f),
+            }
         }
     }
 
     impl LoadedEmbed {
+        /// Creates one instance through `vtable` and seeds it with the host's system preferences.
+        pub(crate) fn start(
+            vtable: EmbedVTable,
+            args: &[String],
+            lib: Option<libloading::Library>,
+        ) -> Result<Self, GuestPanic> {
+            let inst = unsafe { (vtable.create)(args) }?;
+            let embed = Self {
+                inst,
+                vtable,
+                guest: Guest::default(),
+                timer_mirror: TimerMirror::default(),
+                _lib: lib,
+            };
+            // A guest starts with a store of its own that knows nothing, and a host only forwards changes; without this one opened mid-session would draw light on a dark desktop until the user next changed a setting.
+            embed.set_system_preferences(&preferences_core::system_preferences());
+            match embed.guest.panic().cloned() {
+                Some(panic) => Err(panic),
+                None => Ok(embed),
+            }
+        }
+
+        /// The panic that stopped this guest, if one has: what it said and where. Nothing of the guest runs after it.
+        pub fn panic(&self) -> Option<&GuestPanic> {
+            self.guest.panic()
+        }
+
         pub fn relayout(&self, width: f32, height: f32) {
-            unsafe { (self.vtable.relayout)(self.inst, width, height) }
+            self.guest
+                .call(|| unsafe { (self.vtable.relayout)(self.inst, width, height) });
         }
         pub fn relayout_dirty(&self) {
-            unsafe { (self.vtable.relayout_dirty)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.relayout_dirty)(self.inst) });
         }
         pub fn paint(&self) -> DrawList {
-            unsafe { (self.vtable.paint)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.paint)(self.inst) })
+                .unwrap_or_default()
         }
         pub fn generation(&self) -> u64 {
-            unsafe { (self.vtable.generation)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.generation)(self.inst) })
+                .unwrap_or_default()
         }
         pub fn on_event(&self, event: &Event) -> bool {
-            unsafe { (self.vtable.on_event)(self.inst, event) }
+            self.guest
+                .call(|| unsafe { (self.vtable.on_event)(self.inst, event) })
+                .unwrap_or(false)
         }
         pub fn dispatch_overlays(&self, event: &Event) -> bool {
-            unsafe { (self.vtable.dispatch_overlays)(self.inst, event) }
+            self.guest
+                .call(|| unsafe { (self.vtable.dispatch_overlays)(self.inst, event) })
+                .unwrap_or(false)
         }
         /// Call once per frame the host drove this guest through, after its events. Closes the guest's one-frame keyboard state, which `key_pressed` inside it answers from.
         pub fn end_frame(&self) {
-            unsafe { (self.vtable.end_frame)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.end_frame)(self.inst) });
         }
         pub fn motion_tick(&self, now: Instant) {
-            unsafe { (self.vtable.motion_tick)(self.inst, now) }
+            self.guest
+                .call(|| unsafe { (self.vtable.motion_tick)(self.inst, now) });
         }
         pub fn motion_active(&self) -> bool {
-            unsafe { (self.vtable.motion_active)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.motion_active)(self.inst) })
+                .unwrap_or(false)
         }
         pub fn drain_window_commands(&self) -> WindowCommands {
-            unsafe { (self.vtable.drain_window_commands)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.drain_window_commands)(self.inst) })
+                .unwrap_or_default()
         }
         /// Hands the guest a new snapshot of the user's system preferences. [`load_embedded`] seeds it with the host's own; call this from the host's `on_system_preferences` so the guest follows later changes.
         pub fn set_system_preferences(&self, preferences: &SystemPreferences) {
-            unsafe { (self.vtable.set_system_preferences)(self.inst, preferences) }
+            self.guest
+                .call(|| unsafe { (self.vtable.set_system_preferences)(self.inst, preferences) });
         }
         pub fn activate(&self) {
-            unsafe { (self.vtable.activate)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.activate)(self.inst) });
         }
         pub fn clear_color(&self) -> Option<Color> {
-            unsafe { (self.vtable.clear_color)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.clear_color)(self.inst) })
+                .flatten()
         }
         pub fn title(&self) -> String {
-            unsafe { (self.vtable.title)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.title)(self.inst) })
+                .unwrap_or_default()
         }
         pub fn icon(&self) -> Option<Vec<u8>> {
-            unsafe { (self.vtable.icon)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.icon)(self.inst) })
+                .flatten()
         }
         pub fn id(&self) -> String {
-            unsafe { (self.vtable.id)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.id)(self.inst) })
+                .unwrap_or_default()
         }
         /// Call once per frame. Runs the guest's due timers, its finished tasks and its own hook, then keeps the host's loop waking for the guest's next timer.
         pub fn on_frame(&self, ctx: &mut AppCtx) {
-            unsafe { (self.vtable.on_frame)(self.inst, ctx) }
+            platform_core::guest::with_guest_ctx(ctx, |guest_ctx| {
+                self.guest
+                    .call(|| unsafe { (self.vtable.on_frame)(self.inst, guest_ctx) })
+            });
             self.timer_mirror
                 .follow(self.next_timer_due(), self.until_next_timer());
         }
         /// How long until the guest's earliest timer comes due; `None` when none is waiting. [`on_frame`](Self::on_frame) already keeps the host's loop waking for it.
         pub fn until_next_timer(&self) -> Option<Duration> {
-            unsafe { (self.vtable.until_next_timer)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.until_next_timer)(self.inst) })
+                .flatten()
         }
         fn next_timer_due(&self) -> Option<Instant> {
-            unsafe { (self.vtable.next_timer_due)(self.inst) }
+            self.guest
+                .call(|| unsafe { (self.vtable.next_timer_due)(self.inst) })
+                .flatten()
         }
     }
 
@@ -571,9 +656,13 @@ mod host {
     }
 
     impl Drop for LoadedEmbed {
+        // Runs dylib code touching its thread-locals, so it must happen before `_lib` unmaps. A guest that panicked keeps its instance: destroying it would run that guest's code again.
         fn drop(&mut self) {
-            // Runs dylib code touching its thread-locals, so it must happen before `_lib` unmaps.
-            unsafe { (self.vtable.destroy)(self.inst) }
+            if self.guest.has_panicked() {
+                return;
+            }
+            self.guest
+                .call(|| unsafe { (self.vtable.destroy)(self.inst) });
         }
     }
 }

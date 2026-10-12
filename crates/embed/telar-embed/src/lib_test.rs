@@ -54,22 +54,25 @@ crate::embed!(|_args: &[String]| -> Box<dyn EmbeddedApp> { Box::new(Stub::new())
 #[test]
 fn the_export_macro_builds_a_vtable_at_the_current_abi() {
     assert_eq!(_rsx_embed_vtable.abi, TELAR_EMBED_ABI);
-    let inst = unsafe { (_rsx_embed_vtable.create)(&[]) };
-    assert!(!inst.is_null(), "the exported vtable built an instance");
-    assert_eq!(unsafe { (_rsx_embed_vtable.id)(inst) }, "stub");
+    let inst =
+        unsafe { (_rsx_embed_vtable.create)(&[]) }.expect("the exported vtable built an instance");
+    assert_eq!(
+        unsafe { (_rsx_embed_vtable.id)(inst) },
+        Ok("stub".to_owned())
+    );
     let dark = SystemPreferences {
         color_scheme: Some(platform_core::ColorScheme::Dark),
         reduced_motion: Some(true),
         ..SystemPreferences::default()
     };
-    unsafe { (_rsx_embed_vtable.set_system_preferences)(inst, &dark) };
+    unsafe { (_rsx_embed_vtable.set_system_preferences)(inst, &dark) }.expect("no panic");
     assert_eq!(
         preferences_core::system_preferences(),
         dark,
         "the whole snapshot crosses, not only the scheme"
     );
     preferences_core::set_system_preferences(SystemPreferences::default());
-    unsafe { (_rsx_embed_vtable.destroy)(inst) };
+    unsafe { (_rsx_embed_vtable.destroy)(inst) }.expect("no panic");
 }
 
 // These deliberately never observe on the caller's behalf, so they fail the moment either observe call leaves `EmbedInstance::on_event`.
@@ -191,7 +194,7 @@ static ABI_ONE: AbiOneTable = AbiOneTable { abi: 1, _create: 0 };
 fn a_guest_built_for_abi_one_is_refused_before_its_table_is_read() {
     let refused = unsafe { crate::host::read_vtable((&raw const ABI_ONE).cast::<EmbedVTable>()) };
     let mismatch = refused.err().expect("an ABI 1 table must not load");
-    assert_eq!(mismatch.guest, 1);
+    assert_eq!(mismatch, crate::host::AbiMismatch::Version { guest: 1 });
     assert_eq!(
         mismatch.to_string(),
         format!("guest built for ABI 1, host is ABI {TELAR_EMBED_ABI}")
@@ -384,4 +387,249 @@ fn the_host_follows_a_guest_deadline_without_arming_it_again() {
         None,
         "nothing left to wake for"
     );
+}
+
+thread_local! {
+    static PRESSES_HEARD: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    static APPS_DROPPED: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// A guest whose press handler panics, as one that writes a signal its own effect still borrows does, and which counts the presses it hears and the times it is dropped.
+struct BorrowsTwice {
+    stub: Stub,
+    panics: bool,
+}
+
+impl BorrowsTwice {
+    fn new(panics: bool) -> Self {
+        Self {
+            stub: Stub::new(),
+            panics,
+        }
+    }
+}
+
+impl Drop for BorrowsTwice {
+    fn drop(&mut self) {
+        APPS_DROPPED.with(|dropped| dropped.set(dropped.get() + 1));
+    }
+}
+
+impl EmbeddedApp for BorrowsTwice {
+    fn build(&mut self) {
+        self.stub.build();
+    }
+    fn layout_root(&self) -> NodeId {
+        self.stub.layout_root()
+    }
+    fn view(&self) -> RenderNode {
+        self.stub.view()
+    }
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        if matches!(event, Event::PointerPressed { .. }) {
+            PRESSES_HEARD.with(|heard| heard.set(heard.get() + 1));
+            if self.panics {
+                panic!("RUNTIME is already borrowed");
+            }
+        }
+        EventResult::Ignored
+    }
+    fn title(&self) -> String {
+        "borrows twice".into()
+    }
+    fn id(&self) -> String {
+        "borrows-twice".into()
+    }
+}
+
+fn press() -> Event {
+    Event::PointerPressed {
+        x: 10.0,
+        y: 10.0,
+        button: platform_core::PointerButton::Primary,
+        source: platform_core::PointerSource::Mouse,
+    }
+}
+
+/// What a panic in the guest's handler hands back instead of unwinding into the host's copy of std, which can only abort on it.
+#[test]
+fn a_panic_in_a_guest_export_comes_back_as_its_report() {
+    let inst = __embed_create(|| Box::new(BorrowsTwice::new(true))).expect("the guest builds");
+    let panic = unsafe { __embed_on_event(inst, &press()) }.expect_err("the panic is caught");
+    assert_eq!(panic.message, "RUNTIME is already borrowed");
+    let location = panic.location.as_deref().expect("the hook saw where");
+    assert!(location.starts_with(&format!("{}:", file!())), "{location}");
+}
+
+#[test]
+fn a_guest_whose_build_panics_hands_back_no_instance() {
+    let panic = __embed_create(|| panic!("the guest could not find its assets"))
+        .expect_err("the panic is caught");
+    assert_eq!(panic.message, "the guest could not find its assets");
+}
+
+#[cfg(feature = "host")]
+unsafe fn create_panicking(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
+    __embed_create(|| Box::new(BorrowsTwice::new(true)))
+}
+
+#[cfg(feature = "host")]
+unsafe fn create_fixed(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
+    __embed_create(|| Box::new(BorrowsTwice::new(false)))
+}
+
+#[cfg(feature = "host")]
+unsafe fn create_nothing(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
+    __embed_create(|| panic!("the guest could not find its assets"))
+}
+
+/// A guest served by this process's own table, through the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries.
+#[cfg(feature = "host")]
+fn embedded(
+    create: unsafe fn(&[String]) -> GuestResult<*mut EmbedInstance>,
+) -> Result<LoadedEmbed, GuestPanic> {
+    LoadedEmbed::start(
+        EmbedVTable {
+            create,
+            .._rsx_embed_vtable
+        },
+        &[],
+        None,
+    )
+}
+
+/// A panic in an embedded guest's handler used to unwind into the host and abort it. Now the host is told what panicked and where, nothing more of that guest runs, and a fresh one takes its place.
+#[cfg(feature = "host")]
+#[test]
+fn a_guest_that_panics_is_reported_and_never_called_again() {
+    PRESSES_HEARD.with(|heard| heard.set(0));
+    APPS_DROPPED.with(|dropped| dropped.set(0));
+    let broken = embedded(create_panicking).expect("the guest loads");
+    broken.relayout(40.0, 20.0);
+    assert_eq!(broken.panic(), None, "precondition: a guest that runs");
+    assert!(
+        !broken.paint().is_empty(),
+        "precondition: a guest that paints"
+    );
+
+    assert!(!broken.on_event(&press()));
+    assert_eq!(PRESSES_HEARD.with(std::cell::Cell::get), 1);
+    let panic = broken.panic().expect("the host is told the guest panicked");
+    assert_eq!(panic.message, "RUNTIME is already borrowed");
+    assert!(
+        panic
+            .location
+            .as_deref()
+            .is_some_and(|location| location.starts_with(file!())),
+        "the report says where: {panic}"
+    );
+
+    assert!(!broken.on_event(&press()));
+    assert!(!broken.dispatch_overlays(&press()));
+    assert!(
+        broken.paint().is_empty(),
+        "a guest that panicked draws nothing"
+    );
+    assert_eq!(broken.title(), "");
+    run_embedded_frame(&broken);
+    assert_eq!(
+        PRESSES_HEARD.with(std::cell::Cell::get),
+        1,
+        "nothing more of the guest that panicked runs"
+    );
+    drop(broken);
+    assert_eq!(
+        APPS_DROPPED.with(std::cell::Cell::get),
+        0,
+        "its instance is kept rather than destroyed by code that already panicked"
+    );
+
+    let fresh = embedded(create_fixed).expect("a fresh guest loads");
+    fresh.on_event(&press());
+    assert_eq!(
+        PRESSES_HEARD.with(std::cell::Cell::get),
+        2,
+        "the fresh guest hears the press"
+    );
+    assert_eq!(fresh.panic(), None);
+    drop(fresh);
+    assert_eq!(
+        APPS_DROPPED.with(std::cell::Cell::get),
+        1,
+        "and is destroyed as usual"
+    );
+}
+
+#[cfg(feature = "host")]
+#[test]
+fn a_guest_whose_build_panics_is_refused_with_the_report() {
+    let panic = embedded(create_nothing)
+        .err()
+        .expect("a guest that cannot build does not load");
+    assert_eq!(panic.message, "the guest could not find its assets");
+}
+
+#[cfg(feature = "host")]
+fn run_embedded_frame(embed: &LoadedEmbed) {
+    let waker = platform_core::RedrawWaker::new(|| panic!("the host's loop is gone"));
+    let mut redraw_requested = false;
+    let mut ctx = AppCtx::new(&mut redraw_requested, Some(&waker), None, None);
+    embed.on_frame(&mut ctx);
+}
+
+/// A guest that wakes the host's loop every frame.
+#[cfg(feature = "host")]
+struct WakesTheHost(Stub);
+
+#[cfg(feature = "host")]
+impl EmbeddedApp for WakesTheHost {
+    fn build(&mut self) {
+        self.0.build();
+    }
+    fn layout_root(&self) -> NodeId {
+        self.0.layout_root()
+    }
+    fn view(&self) -> RenderNode {
+        self.0.view()
+    }
+    fn on_event(&mut self, event: &Event) -> EventResult {
+        self.0.on_event(event)
+    }
+    fn on_frame(&mut self, ctx: &mut AppCtx) {
+        if let Some(waker) = ctx.redraw_waker() {
+            waker.wake();
+        }
+    }
+    fn title(&self) -> String {
+        "wakes".into()
+    }
+    fn id(&self) -> String {
+        "wakes".into()
+    }
+}
+
+#[cfg(feature = "host")]
+unsafe fn create_waking(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
+    __embed_create(|| Box::new(WakesTheHost(Stub::new())))
+}
+
+/// The waker the guest is handed is host code; a panic in it stays on the host's side instead of unwinding through the guest.
+#[cfg(feature = "host")]
+#[test]
+fn a_panic_in_the_host_waker_does_not_reach_the_guest() {
+    let embed = embedded(create_waking).expect("the guest loads");
+    run_embedded_frame(&embed);
+    assert_eq!(embed.panic(), None, "the guest kept running");
+}
+
+#[cfg(feature = "host")]
+#[test]
+fn a_guest_laid_out_differently_is_refused_with_what_to_do() {
+    let mut table = _rsx_embed_vtable;
+    table.layout ^= 1;
+    let refused = unsafe { crate::host::read_vtable(&raw const table) };
+    let mismatch = refused.err().expect("another layout must not load");
+    let message = mismatch.to_string();
+    assert!(message.contains("restart the session"), "{message}");
+    assert!(message.contains("matching features"), "{message}");
 }

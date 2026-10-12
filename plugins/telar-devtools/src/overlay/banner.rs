@@ -1,17 +1,46 @@
-//! The build-error banner: shown over the app while the last rebuild failed, with the compiler's report in a code view.
+//! The banner over the app while it is not running what was last saved: a rebuild that failed, with the compiler's report, or a build that panicked, with what it said and where.
 
 use telar::{
     Accessible, AlignItems, Border, Children, Container, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, Role, ShapeStyle, StyledContainer, Text, box_item, memo, use_theme_tokens,
+    Reactive, Role, RwSignal, ShapeStyle, StyledContainer, Text, box_item, memo, use_theme_tokens,
 };
 use telar_components::{CodeSpan, CodeViewProps, TokenKind, code_view};
 
 use super::{Model, mounted_while};
-use crate::strings::{self, BUILD_ERROR, BUILD_FAILED, BUILD_FAILED_HINT};
+use crate::strings::{
+    self, APP_PANIC, APP_PANICKED, APP_PANICKED_HINT, BUILD_ERROR, BUILD_FAILED, BUILD_FAILED_HINT,
+};
 use crate::workbench::{WORKBENCH_GRID, use_workbench_tokens, workbench_card, workbench_muted};
 
 const REPORT_MAX_HEIGHT: f32 = 280.0;
 const LOCATION_ARROW: &str = "--> ";
+
+/// One report the banner can carry, and the words that say which kind it is.
+#[derive(Clone, Copy)]
+struct Report {
+    text: RwSignal<Option<String>>,
+    title: &'static str,
+    hint: &'static str,
+    label: &'static str,
+}
+
+/// The panic first: while there is one, nothing of the app is running at all.
+fn reports(model: Model) -> [Report; 2] {
+    [
+        Report {
+            text: model.app_panic,
+            title: APP_PANICKED,
+            hint: APP_PANICKED_HINT,
+            label: APP_PANIC,
+        },
+        Report {
+            text: model.build_error,
+            title: BUILD_FAILED,
+            hint: BUILD_FAILED_HINT,
+            label: BUILD_ERROR,
+        },
+    ]
+}
 
 /// Across the top of the app while the inspector is closed; with it open the banner lives in the room the drawer leaves ([`beside_drawer`]), so neither covers the other.
 pub(super) fn banner(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -22,7 +51,7 @@ pub(super) fn banner(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .inset_start(WORKBENCH_GRID)
             .inset_end(WORKBENCH_GRID),
         move || failed(model) && !model.inspector_open.get(),
-        move || report(model),
+        move || cards(model),
     )
 }
 
@@ -31,17 +60,34 @@ pub(super) fn beside_drawer(model: Model) -> Result<Box<dyn LayoutItem>, LayoutE
     mounted_while(
         LayoutStyle::new(),
         move || failed(model),
-        move || report(model),
+        move || cards(model),
     )
 }
 
 fn failed(model: Model) -> bool {
-    model.build_error.with(Option::is_some)
+    reports(model)
+        .iter()
+        .any(|report| report.text.with(Option::is_some))
 }
 
-fn report(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn cards(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let cards = reports(model)
+        .into_iter()
+        .map(|kind| {
+            mounted_while(
+                LayoutStyle::new(),
+                move || kind.text.with(Option::is_some),
+                move || card(kind),
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let column = Container::new(LayoutStyle::new().flex_column().gap(WORKBENCH_GRID), cards)?;
+    Ok(box_item(column))
+}
+
+fn card(kind: Report) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let title = Text::declaring(
-        || strings::text(BUILD_FAILED),
+        move || strings::text(kind.title),
         LayoutStyle::new(),
         |text| {
             text.with_font_weight(600)
@@ -49,7 +95,7 @@ fn report(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         },
     )?;
     let hint = Text::declaring(
-        || strings::text(BUILD_FAILED_HINT),
+        move || strings::text(kind.hint),
         LayoutStyle::new(),
         workbench_muted,
     )?;
@@ -60,7 +106,7 @@ fn report(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .gap(WORKBENCH_GRID),
         vec![box_item(title), box_item(hint)],
     )?;
-    let code = move || model.build_error.get().unwrap_or_default();
+    let code = move || kind.text.get().unwrap_or_default();
     let marked = memo(move || diagnostics(&code()));
     let report = code_view(
         CodeViewProps::props()
@@ -68,7 +114,7 @@ fn report(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .spans(Reactive::of(move || marked.get().0))
             .highlighted(Reactive::of(move || marked.get().1))
             .max_height(REPORT_MAX_HEIGHT)
-            .label(Reactive::of(|| strings::text(BUILD_ERROR)))
+            .label(Reactive::of(move || strings::text(kind.label)))
             .build(),
         Children::default(),
     )?;
@@ -86,7 +132,7 @@ fn report(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?
     .input_opaque()
     .role(Role::Status)
-    .a11y_label(|| strings::text(BUILD_FAILED));
+    .a11y_label(move || strings::text(kind.title));
     Ok(box_item(banner))
 }
 

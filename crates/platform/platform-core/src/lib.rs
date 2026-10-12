@@ -14,7 +14,6 @@ pub mod dom_code;
 pub mod error;
 pub mod event;
 pub mod event_sink;
-#[cfg(feature = "dylib")]
 pub mod guest;
 pub mod history;
 pub mod key_pairing;
