@@ -22,7 +22,7 @@ element group
 end
 element group
   rect 0,0 800x600
-  element button
+  element menu
     rect 24,64 180x109 fill=#1a1a1fff border=1 border-color=#404047ff radius=4
     element menuitem
       rect 28,68 172x24

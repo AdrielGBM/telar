@@ -86,6 +86,8 @@ pub enum Role {
     Tab,
     /// The panel a [`Tab`](Self::Tab) picks.
     TabPanel,
+    /// The panel [`MenuItem`](Self::MenuItem)s are chosen from: a context menu, the list a dropdown opens.
+    Menu,
     /// A row of a menu or a bound list.
     MenuItem,
     /// A continuous value dragged along a track.
@@ -197,6 +199,7 @@ impl Role {
             Self::TabList => "tablist",
             Self::Tab => "tab",
             Self::TabPanel => "tabpanel",
+            Self::Menu => "menu",
             Self::MenuItem => "menuitem",
             Self::Slider => "slider",
             Self::SpinButton => "spinbutton",
@@ -262,6 +265,7 @@ impl Role {
             "tablist" => Self::TabList,
             "tab" => Self::Tab,
             "tabpanel" => Self::TabPanel,
+            "menu" => Self::Menu,
             "menuitem" => Self::MenuItem,
             "slider" => Self::Slider,
             "spinbutton" | "stepper" => Self::SpinButton,

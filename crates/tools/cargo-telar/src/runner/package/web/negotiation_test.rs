@@ -31,6 +31,7 @@ fn pages() -> SitePages {
         locales: vec!["es".to_string(), "en".to_string()],
         base_locale: Some("es".to_string()),
         not_found: true,
+        ..SitePages::default()
     }
 }
 

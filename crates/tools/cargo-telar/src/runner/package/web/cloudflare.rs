@@ -104,10 +104,24 @@ fn headers<'a>(
         ));
     }
     if pages.locales.is_empty() {
+        for dir in &pages.page_dirs {
+            let dir = site.path_of(&PageLocation {
+                segments: vec![dir.clone()],
+                locale: None,
+            });
+            rules.push((format!("{dir}*"), vec![("Cache-Control", REVALIDATE)]));
+        }
+        let in_page_dir = |page: &PageLocation| {
+            page.segments.len() > 1
+                && page
+                    .segments
+                    .first()
+                    .is_some_and(|first| pages.page_dirs.contains(first))
+        };
         for page in pages
             .pages
             .iter()
-            .filter(|page| **page != PageLocation::root())
+            .filter(|page| **page != PageLocation::root() && !in_page_dir(page))
         {
             rules.push((site.path_of(page), vec![("Cache-Control", REVALIDATE)]));
         }

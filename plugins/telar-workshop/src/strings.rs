@@ -174,9 +174,9 @@ pub(crate) const VIEWPORT_HEIGHT: &str = "viewport_height";
 pub(crate) const VIEWPORT_PRESETS: &str = "viewport_presets";
 pub(crate) const VIEWPORT_PREVIEW: &str = "viewport_preview";
 pub(crate) const VIEWPORT_RESET: &str = "viewport_reset";
-pub(crate) const VIEWPORT_SIZE: &str = "viewport_size";
 pub(crate) const VIEWPORT_WIDTH: &str = "viewport_width";
 pub(crate) const WORKSHOP: &str = "workshop";
+pub(crate) const WORKSPACE: &str = "workspace";
 pub(crate) const ZOOM: &str = "zoom";
 pub(crate) const ZOOM_FIT: &str = "zoom_fit";
 pub(crate) const ZOOM_IN: &str = "zoom_in";
@@ -410,9 +410,9 @@ static CATALOG: Catalog = Catalog {
         english!(VIEWPORT_PRESETS, "Viewports"),
         english!(VIEWPORT_PREVIEW, "Preview size"),
         english!(VIEWPORT_RESET, "Reset the viewport"),
-        english!(VIEWPORT_SIZE, "Viewport size"),
         english!(VIEWPORT_WIDTH, "Viewport width"),
         english!(WORKSHOP, "Workshop"),
+        english!(WORKSPACE, "Workspace"),
         english!(ZOOM, "Zoom"),
         english!(ZOOM_FIT, "Fit"),
         english!(ZOOM_IN, "Zoom in"),

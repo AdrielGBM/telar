@@ -138,7 +138,7 @@ pub use select::{SelectProps, select};
 pub use slider::{SliderProps, slider};
 pub use spinner::{SpinnerProps, spinner};
 #[cfg(feature = "workbench")]
-pub use split_pane::{SizedPane, SplitDirection, SplitPaneProps, split_pane};
+pub use split_pane::{SizedPane, SplitDirection, SplitPaneProps, SplitRegion, split_pane};
 #[cfg(feature = "advanced")]
 pub use stepper::{StepperProps, stepper};
 pub use swatches::{SwatchesProps, swatches};

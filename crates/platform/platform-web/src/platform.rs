@@ -20,7 +20,7 @@ const FRAME_INTERVAL: Duration = Duration::from_nanos(1_000_000_000 / 60);
 thread_local! {
     static QUEUE: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
     static APP: RefCell<Option<App>> = const { RefCell::new(None) };
-    static FRAME: RefCell<Frame> = const { RefCell::new(Frame { scheduled: false, callback: None, timeout: None, wake: None }) };
+    static FRAME: RefCell<Frame> = const { RefCell::new(Frame { scheduled: false, callback: None, timeout: None, wake: None, host: None, idle: false }) };
     // The pointer that went down and where, until it travels far enough to be a drag or comes back up.
     static PRESSED: std::cell::Cell<Option<(i32, f32, f32)>> = const { std::cell::Cell::new(None) };
     // The safe area last reported, so a resize that leaves it where it was reports nothing.
@@ -35,7 +35,29 @@ struct Frame {
     /// The browser timeout standing in for a wait longer than a frame, until it fires or a turn supersedes it.
     timeout: Option<i32>,
     wake: Option<Closure<dyn FnMut()>>,
+    /// The element [`IDLE_ATTRIBUTE`] is written on.
+    host: Option<web_sys::HtmlElement>,
+    /// Whether the host carries [`IDLE_ATTRIBUTE`] now, so a turn that leaves it as it was writes nothing.
+    idle: bool,
 }
+
+impl Frame {
+    fn show_idle(&mut self, idle: bool) {
+        if self.idle == idle {
+            return;
+        }
+        self.idle = idle;
+        if let Some(host) = &self.host {
+            let _ = match idle {
+                true => host.set_attribute(IDLE_ATTRIBUTE, ""),
+                false => host.remove_attribute(IDLE_ATTRIBUTE),
+            };
+        }
+    }
+}
+
+/// On the host while the loop has no frame coming: nothing queued, nothing animating, nothing due sooner than a frame from now. Absent until the app's first frame is drawn, so a page reads it as "the app has drawn what it has to draw", which is what a harness waits for before it inspects the document.
+pub const IDLE_ATTRIBUTE: &str = "data-telar-idle";
 
 struct App {
     handler: Box<dyn EventHandler<WebWindow>>,
@@ -76,6 +98,7 @@ pub fn request_frame() {
             .is_ok()
         {
             frame.scheduled = true;
+            frame.show_idle(false);
         }
     });
 }
@@ -185,7 +208,7 @@ impl Platform for WebPlatform {
         // The other half: a document backend creates elements that notice things the platform cannot, and this is the way in for what they notice.
         platform_core::set_event_sink(std::sync::Arc::new(|event| push([event])));
 
-        install_frame_callback();
+        install_frame_callback(&host);
 
         handler.new_events();
         // The listeners report only changes, and a page opened by someone already in dark mode has no change to report.
@@ -508,7 +531,7 @@ fn kept_by_target(event: &web_sys::KeyboardEvent) -> platform_core::ConsumedKeys
         .unwrap_or_default()
 }
 
-fn install_frame_callback() {
+fn install_frame_callback(host: &web_sys::HtmlElement) {
     let callback = Closure::<dyn FnMut()>::new(move || {
         FRAME.with(|frame| frame.borrow_mut().scheduled = false);
         turn();
@@ -521,6 +544,7 @@ fn install_frame_callback() {
         let mut frame = frame.borrow_mut();
         frame.callback = Some(callback);
         frame.wake = Some(wake);
+        frame.host = Some(host.clone());
     });
 }
 
@@ -603,6 +627,11 @@ fn turn() {
     if let Some(wait) = next_turn {
         request_turn_after(wait);
     }
+    FRAME.with(|frame| {
+        let mut frame = frame.borrow_mut();
+        let idle = !frame.scheduled;
+        frame.show_idle(idle);
+    });
 }
 
 /// Whether the keyboard is already somewhere in the app.

@@ -13,6 +13,11 @@ Space, the arrows and the paging keys whenever the surface has focus. On a docum
 box declares (`data-telar-keys`) are prevented, so the browser's Tab walk and keyboard scrolling keep working.
 A Tab left to the browser is not delivered as a key. See [docs/keyboard.md](https://github.com/AdrielGBM/telar/blob/main/docs/keyboard.md).
 
+The host carries `data-telar-idle` (`IDLE_ATTRIBUTE`) while the loop has no frame coming: nothing queued,
+nothing animating, nothing due sooner than a frame from now. It is absent until the first frame is drawn, so a
+browser test waits for it before it inspects the page. See
+[docs/previews.md](https://github.com/AdrielGBM/telar/blob/main/docs/previews.md#auditing-the-exported-workshop).
+
 **Applications depend on the [`telar`](https://crates.io/crates/telar) facade, not on this crate.** Telar
 is split into small crates so a build carries only the target and the capabilities it named, and every one
 of them has to be published for the facade to be. The facade re-exports what an application needs behind

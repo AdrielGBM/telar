@@ -82,13 +82,13 @@ pub(crate) fn signature(runs: &[Run]) -> String {
     out
 }
 
-/// Replaces `node`'s children with `runs`, the text of `box_id`.
+/// Replaces `node`'s children with `runs`, the text of box `owner`.
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn write(
     document: &web_sys::Document,
     node: &web_sys::Element,
     runs: &[Run],
-    box_id: u64,
+    owner: crate::box_key::BoxKey,
 ) {
     node.set_text_content(None);
     for run in runs {
@@ -110,7 +110,7 @@ pub(crate) fn write(
                     if link.external {
                         let _ = element.set_attribute("rel", "noopener");
                     }
-                    let _ = element.set_attribute(RUN_BOX_ATTRIBUTE, &box_id.to_string());
+                    let _ = element.set_attribute(RUN_BOX_ATTRIBUTE, &owner.to_string());
                     let _ = element.set_attribute(RUN_ATTRIBUTE, &link.run.to_string());
                 }
                 element.set_text_content(Some(&run.text));

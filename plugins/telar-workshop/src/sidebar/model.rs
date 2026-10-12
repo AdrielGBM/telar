@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use telar::preview::PreviewEntry;
 use telar_components::{TreeNode, fuzzy_match};
+use telar_project::protocol::title_path;
 
 /// The tree of `entries` whose title, name or tags match `query`, grouped by title path, with `badge` naming what a preview's row carries. An empty query keeps every preview.
 pub(super) fn tree(
@@ -62,12 +63,7 @@ fn matches(query: &str, entry: &PreviewEntry) -> bool {
 }
 
 fn segments(entry: &PreviewEntry) -> Vec<&'static str> {
-    let path: Vec<_> = entry
-        .title
-        .split('/')
-        .map(str::trim)
-        .filter(|segment| !segment.is_empty())
-        .collect();
+    let path: Vec<_> = title_path(entry.title).collect();
     if path.is_empty() {
         vec![entry.component]
     } else {

@@ -142,6 +142,7 @@ fn role_of(role: Role) -> AkRole {
         Role::Tab => AkRole::Tab,
         Role::TabList => AkRole::TabList,
         Role::TabPanel => AkRole::TabPanel,
+        Role::Menu => AkRole::Menu,
         Role::MenuItem => AkRole::MenuItem,
         Role::Slider => AkRole::Slider,
         Role::SpinButton => AkRole::SpinButton,

@@ -9,7 +9,7 @@ use telar::{
     Accessible, Border, BorderRadius, Canvas, Children, Color, Container, Declared, FontFamily,
     FontStyle, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, Rect,
     RectStyle, RenderNode, ShapeStyle, Span, StyledContainer, Text, TextStyle, TextWrap, Timer,
-    box_item, focus::Role, inherited_text_style, line_box, memo, run_after, signal, track_layout,
+    box_item, focus::Role, inherited_text_style, line_box, memo, run_after, signal,
 };
 
 use crate::line_gutter::LineGutter;
@@ -269,20 +269,14 @@ pub fn code_view(
             .gap(pad() * 1.5)
     };
     let content = Container::new(content_box(), row)?.styled_by(content_box);
-    let content_rect = track_layout(content.layout_node()).expect("content node is registered");
-    let scroll = LayoutScrollArea::new(LayoutStyle::new().flex_grow(1.0), box_item(content))?;
-    let viewport_box = move || {
-        let height = content_rect.get().height;
-        let height = if max_height > 0.0 {
-            height.min(max_height)
-        } else {
-            height
-        };
-        LayoutStyle::new().flex_column().height(height)
+    let viewport_box = if max_height > 0.0 {
+        LayoutStyle::new().max_height(max_height)
+    } else {
+        LayoutStyle::new()
     };
-    let viewport = Container::new(viewport_box(), vec![box_item(scroll)])?.styled_by(viewport_box);
+    let scroll = LayoutScrollArea::new(viewport_box, box_item(content))?;
 
-    let mut layers: Vec<Box<dyn LayoutItem>> = vec![box_item(viewport)];
+    let mut layers: Vec<Box<dyn LayoutItem>> = vec![box_item(scroll)];
     if copyable {
         layers.push(copy_button(code, on_copy)?);
     }

@@ -293,6 +293,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
             let panel =
                 StyledContainer::new(sheet(), |_r| panel_rect_style(), vec![box_item(scroll)])?
                     .styled_by(sheet)
+                    .role(Role::Menu)
                     // Swallow clicks on the panel's own padding, so they do not dismiss via the backdrop.
                     .on_press(|| {});
             // A transparent full-viewport backdrop inside a blocking overlay: stops hover and clicks bleeding through to the page behind, and dismisses when a click lands outside the panel.
@@ -304,8 +305,8 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
                 LayoutStyle::new().flex_column().flex_grow(1.0),
                 |_r| RectStyle::default(),
                 vec![box_item(panel)],
-            )?
-            .on_press(close);
+            )?;
+            let backdrop = shared::dismissed_by_press(backdrop, close);
             let overlay = Overlay::new(LayoutStyle::new().flex_column(), vec![box_item(backdrop)])?
                 .owned_by(trigger_node);
             Ok(box_item(overlay))

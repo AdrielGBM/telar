@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use telar_project::protocol::{
     BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR,
-    workshop_channel_file,
 };
 use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE};
 
@@ -126,7 +125,7 @@ fn is_asset_extension(ext: &str) -> bool {
 }
 
 /// Everything an edit that should rebuild can come from.
-struct WatchSet {
+pub(crate) struct WatchSet {
     /// Watched recursively: each member's `src/`, asset root and catalog directory.
     dirs: Vec<PathBuf>,
     /// Every `telar.toml` a member's settings are read from, present or not. A `prelude` or `theme` changes the Rust every `.rsx` becomes, so an edit there is a source edit.
@@ -135,7 +134,7 @@ struct WatchSet {
 
 impl WatchSet {
     /// Canonical, because an event names the path the platform resolved — macOS reports `/private/var/…` for a watch on `/var/…` — and a set spelled any other way would match nothing.
-    fn collect(workspace_root: &Path) -> Self {
+    pub(crate) fn collect(workspace_root: &Path) -> Self {
         let canonical = |path: PathBuf| path.canonicalize().unwrap_or(path);
         Self {
             dirs: collect_watch_dirs(workspace_root)
@@ -155,7 +154,7 @@ impl WatchSet {
     /// Whether the event should trigger a rebuild. Assets need no special handling any more: the macro emits an `include_bytes!` per baked asset, so cargo sees the edit as a real dependency, and the bake before each rebuild refreshes the artifact it reads.
     ///
     /// A manifest's directory is watched only for the manifest, so anything else changing beside it — a `Cargo.lock` cargo rewrote, an editor's swap file — is not an edit to the project.
-    fn wants(&self, event: &notify::Event) -> bool {
+    pub(crate) fn wants(&self, event: &notify::Event) -> bool {
         if !matches!(
             event.kind,
             EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
@@ -173,7 +172,7 @@ impl WatchSet {
     }
 
     /// The directories to hand the watcher, each with how deep to watch it. A manifest is watched through its directory rather than as a file, because an editor that saves by writing a new file and renaming it over the old one would end a watch on the file itself; and not at all when a recursive watch already covers it.
-    fn watches(&self) -> Vec<(PathBuf, RecursiveMode)> {
+    pub(crate) fn watches(&self) -> Vec<(PathBuf, RecursiveMode)> {
         let mut parents: Vec<PathBuf> = self
             .manifests
             .iter()
@@ -197,7 +196,7 @@ impl WatchSet {
 
 /// The `telar.toml` of every member and of the workspace root — the files [`telar_project::TelarManifest::files`] reads for any member — whether or not each exists yet, so creating one is noticed too.
 fn collect_watch_manifests(workspace_root: &Path) -> Vec<PathBuf> {
-    let mut manifests: Vec<PathBuf> = super::bake::member_dirs(workspace_root)
+    let mut manifests: Vec<PathBuf> = telar_project::workspace_member_dirs(workspace_root)
         .into_iter()
         .chain(std::iter::once(workspace_root.to_path_buf()))
         .map(|dir| dir.join(telar_project::MANIFEST_FILENAME))
@@ -209,7 +208,7 @@ fn collect_watch_manifests(workspace_root: &Path) -> Vec<PathBuf> {
 
 // Every directory an edit can come from: each member's `src/`, the asset root, and the catalog directory. The last two sit outside `src/` by default, so watching only `src/` meant editing an asset or a translation raised no event at all — not one that was handled badly, one that never arrived.
 fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = super::bake::member_dirs(workspace_root)
+    let mut dirs: Vec<PathBuf> = telar_project::workspace_member_dirs(workspace_root)
         .into_iter()
         .flat_map(|member| {
             [
@@ -282,24 +281,35 @@ impl HotChannel {
 
     /// Answers whether the line reached the app.
     fn send(&mut self, message: &str) -> bool {
-        use std::io::Write;
-        // The app's connection sits in the accept backlog until the first send; a reconnect replaces the previous stream.
-        while let Ok((stream, _)) = self.listener.accept() {
-            self.stream = Some(stream);
+        self.accept_waiting();
+        if self.stream.is_none() {
+            eprintln!("[cargo-telar] App not connected to the hot reload channel.");
+            return false;
         }
-        match &mut self.stream {
-            Some(stream) => match writeln!(stream, "{message}") {
-                Ok(()) => true,
-                Err(e) => {
-                    eprintln!("[cargo-telar] Failed to write to hot reload channel: {e}");
-                    self.stream = None;
-                    false
-                }
-            },
-            None => {
-                eprintln!("[cargo-telar] App not connected to the hot reload channel.");
+        self.deliver(message)
+    }
+
+    /// [`Self::send`] for a line that waits for the app: not having connected yet is not worth saying.
+    fn deliver(&mut self, message: &str) -> bool {
+        use std::io::Write;
+        self.accept_waiting();
+        let Some(stream) = &mut self.stream else {
+            return false;
+        };
+        match writeln!(stream, "{message}") {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("[cargo-telar] Failed to write to hot reload channel: {e}");
+                self.stream = None;
                 false
             }
+        }
+    }
+
+    // The app's connection sits in the accept backlog until the first send; a reconnect replaces the previous stream.
+    fn accept_waiting(&mut self) {
+        while let Ok((stream, _)) = self.listener.accept() {
+            self.stream = Some(stream);
         }
     }
 }
@@ -358,6 +368,7 @@ fn watch_and_hot_reload(
     let debounce = Duration::from_millis(200);
     let mut last_event = Instant::now();
     let mut pending_rebuild = false;
+    let mut waiting = None;
 
     loop {
         match child.try_wait() {
@@ -372,7 +383,10 @@ fn watch_and_hot_reload(
         }
 
         if let Some(workshop) = &workshop {
-            workshop.poll(|line| channel.send(line));
+            waiting = workshop.take(waiting);
+            if waiting.as_deref().is_some_and(|line| channel.deliver(line)) {
+                waiting = None;
+            }
         }
 
         while let Ok(Ok(event)) = rx.try_recv() {
@@ -518,6 +532,14 @@ impl HotMode {
             HotMode::Preview => &["telar/preview", "telar/dev", "telar/hot-reload"],
         }
     }
+
+    /// What a browser build of the loop adds to the page's frontend: [`Self::features`] short of `telar/dev`, the dylib host, which a page cannot load and has no use for, since a rebuild reloads the whole page.
+    fn web_features(&self) -> &'static [&'static str] {
+        match self {
+            HotMode::Dev => &[],
+            HotMode::Preview => &["telar/preview"],
+        }
+    }
 }
 
 /// The package's own feature for the devtools overlay, qualified so it reaches the package from a workspace root too. `None` when the session turned the overlay off, or when the package declares no `telar-devtools` to turn on, which is said with the command that adds it.
@@ -550,12 +572,29 @@ fn with_tooling<'a>(features: &[&'a str], tooling: &[&'a str]) -> Vec<&'a str> {
     features.iter().chain(tooling).copied().collect()
 }
 
+/// `args` with what a browser build of `mode` turns on: [`HotMode::web_features`] and, for a preview, the package's workshop. Not its devtools: a page draws no overlay, and the workshop brings the panels it reuses itself.
+pub(crate) fn with_web_features(mode: &HotMode, mut args: Vec<String>) -> Vec<String> {
+    warn_if_tooling_unlocked(&args, mode.web_features());
+    let workshop = workshop_feature(mode, &resolve_package(&args));
+    for feature in mode
+        .web_features()
+        .iter()
+        .copied()
+        .chain(workshop.as_deref())
+    {
+        inject_feature(&mut args, feature);
+    }
+    args
+}
+
 pub(crate) struct HotLoopOpts {
     pub(crate) args: Vec<String>,
     /// What the app binary itself is started with, after cargo's own arguments.
     pub(crate) app_args: Vec<String>,
     pub(crate) config: TelarSection,
     pub(crate) no_hot_reload: bool,
+    /// The channel the session's workshop takes requests on, opened before anything was built. Handed requests on once the workshop runs under hot reload, and closed in a session that does not.
+    pub(crate) workshop: Option<WorkshopChannel>,
 }
 
 /// `cargo run`'s arguments with `app_args` handed on to the binary.
@@ -576,6 +615,7 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         app_args,
         config,
         no_hot_reload,
+        workshop,
     } = opts;
 
     let (android, rest) = split_android_flag(args);
@@ -688,12 +728,6 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
 
         if bin_path.exists() && lib_path.exists() {
             let lib_build_args = make_lib_build_args(&rest, &hot_features);
-            let workshop = is_preview
-                .then(|| {
-                    WorkshopChannel::open(workshop_channel_file(&workspace_root, &package_name))
-                })
-                .flatten();
-
             watch_and_hot_reload(
                 lib_build_args,
                 HotLaunch {
@@ -709,6 +743,8 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         }
     }
 
+    // An app restarted on every change has no channel to hand a request on, so a later invocation is left to open a workshop of its own.
+    drop(workshop);
     watch_and_run(
         with_app_args(cargo_args, &app_args),
         launch_envs,

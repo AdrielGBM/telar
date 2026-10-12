@@ -120,8 +120,8 @@ fn build_open_drawer(
             .justify_content(justify),
         |_r| RectStyle::default().with_fill(scrim::SCRIM),
         vec![box_item(panel)],
-    )?
-    .on_press(move || (*dismiss)());
+    )?;
+    let scrim = shared::dismissed_by_press(scrim, move || (*dismiss)());
 
     Ok(box_item(scrim))
 }

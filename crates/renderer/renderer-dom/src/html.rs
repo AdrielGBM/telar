@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use renderer_core::{Color, DrawCommand, ImageData, TextStyle};
 
+use crate::box_key::BoxKey;
 use crate::document::{
     self, ARRIVAL_ID, AUDIT_ATTRIBUTE, BoxNode, Content, DOCUMENT_SCROLL_OVERRIDES, HOST_ATTRIBUTE,
     ID_ATTRIBUTE, Node, PaintNode, RESET, RESET_ID, Surface,
@@ -120,8 +121,8 @@ impl Surface for PageAtRest {
 
 fn write_box(out: &mut String, node: &BoxNode) {
     let _ = write!(out, "<{}", node.tag);
-    attribute(out, ID_ATTRIBUTE, &node.id.to_string());
-    for (name, value) in node.described.attributes(node.id) {
+    attribute(out, ID_ATTRIBUTE, &node.key.to_string());
+    for (name, value) in node.described.attributes(node.key) {
         if let Some(value) = value {
             attribute(out, name, &value);
         }
@@ -145,16 +146,19 @@ fn write_box(out: &mut String, node: &BoxNode) {
         return;
     }
     match &node.content {
-        Content::Children { boxes, pieces } => {
-            for child in boxes {
-                write_box(out, child);
+        Content::Children { children, pieces } => {
+            for child in children {
+                match child {
+                    Node::Box(child) => write_box(out, child),
+                    Node::Paint(paint) => write_paint(out, paint, None, true),
+                }
             }
             for piece in pieces {
-                write_paint(out, piece, Some(node.id), true);
+                write_paint(out, piece, Some(node.key), true);
             }
         }
         Content::Text { text, runs } => match runs {
-            Some(runs) => write_runs(out, runs, node.id),
+            Some(runs) => write_runs(out, runs, node.key),
             None => text_into(out, text),
         },
         Content::Drawing(markup) => out.push_str(markup),
@@ -163,7 +167,7 @@ fn write_box(out: &mut String, node: &BoxNode) {
 }
 
 /// Paint that is not a box. Inside a box it is out of the accessibility tree, where a role with a content model would count it as a child; at the host's own level it is a panel the boxes stand on.
-fn write_paint(out: &mut String, node: &PaintNode, owner: Option<u64>, presentation: bool) {
+fn write_paint(out: &mut String, node: &PaintNode, owner: Option<BoxKey>, presentation: bool) {
     out.push_str("<div");
     if presentation {
         attribute(out, "role", "presentation");
@@ -179,7 +183,7 @@ fn write_paint(out: &mut String, node: &PaintNode, owner: Option<u64>, presentat
     out.push_str("</div>");
 }
 
-fn write_runs(out: &mut String, runs: &[Run], owner: u64) {
+fn write_runs(out: &mut String, runs: &[Run], owner: BoxKey) {
     for run in runs {
         match (&run.link, run.css.is_empty()) {
             (None, true) => text_into(out, &run.text),

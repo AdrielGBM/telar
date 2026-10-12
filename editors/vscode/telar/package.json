@@ -52,8 +52,23 @@
         "command": "telar.openWorkshop",
         "title": "Open workshop",
         "category": "Telar"
+      },
+      {
+        "command": "telar.showInPanel",
+        "title": "Show preview at cursor in panel",
+        "category": "Telar",
+        "icon": "$(open-preview)"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "telar.showInPanel",
+          "when": "resourceExtname == .rsx",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "RSX",
       "properties": {
@@ -65,7 +80,7 @@
         "telar.workshop.followCursor": {
           "type": "boolean",
           "default": false,
-          "description": "Move the running workshop to each [preview] the cursor enters in a .rsx file. Never starts a workshop: run \"Telar: Open workshop\" or a preview's \"Open in workshop\" lens for that."
+          "description": "Move the running workshop window to each [preview] the cursor enters in a .rsx file. Never starts a workshop: run \"Telar: Open workshop\" or a preview's \"Open in workshop\" lens for that. The preview panel follows the cursor whenever it is open."
         }
       }
     },

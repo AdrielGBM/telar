@@ -14,6 +14,7 @@ use telar::{
 };
 use telar_components::{ButtonProps, CodeViewProps, button, code_view};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
+use telar_project::protocol::title_path;
 
 use crate::panels::arg_table;
 use crate::state::{ViewMode, WorkshopState};
@@ -101,11 +102,13 @@ fn page(state: &WorkshopState, title: &'static str) -> Result<Box<dyn LayoutItem
 
 /// The component's name over the group path it is listed under.
 fn heading(title: &'static str) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
-    let (group, name) = title.rsplit_once('/').unwrap_or(("", title));
+    let mut path: Vec<&str> = title_path(title).collect();
+    let name = path.pop().unwrap_or(title);
+    let group = path.join(" / ");
     let mut items = Vec::new();
     if !group.is_empty() {
         items.push(box_item(Text::declaring(
-            move || group.replace('/', " / "),
+            move || group.clone(),
             LayoutStyle::new(),
             workbench_muted,
         )?));

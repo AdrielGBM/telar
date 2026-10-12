@@ -41,5 +41,6 @@ fn each_line_of_the_channel_is_the_event_its_prefix_names() {
             "/preview/demo--card--a?args=label:%22Hi%22".to_string()
         ))
     );
+    assert_eq!(hot_event("focus"), Some(HotEvent::Focus));
     assert_eq!(hot_event("/target/debug/libapp.so"), None);
 }

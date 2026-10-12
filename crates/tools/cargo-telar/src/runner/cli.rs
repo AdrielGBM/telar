@@ -140,7 +140,7 @@ pub(crate) struct FmtArgs {
     pub(crate) paths: Vec<std::path::PathBuf>,
 }
 
-#[derive(clap::Args)]
+#[derive(clap::Args, Clone)]
 pub(crate) struct CommonArgs {
     /// Package to use
     #[arg(short = 'p', long)]
@@ -173,6 +173,9 @@ pub(crate) struct HotArgs {
     /// Disable hot reload, restart process on changes instead
     #[arg(long)]
     pub(crate) no_hot_reload: bool,
+    /// The port a page served for development listens on (`--target web`); without it, 8080 or, when that is taken, a free one
+    #[arg(long, value_name = "PORT")]
+    pub(crate) port: Option<u16>,
 }
 
 #[derive(clap::Args)]
@@ -200,6 +203,12 @@ pub(crate) struct PreviewArgs {
     /// Render every preview to a PNG in this directory and exit, with no window
     #[arg(long, value_name = "DIR", conflicts_with = "list")]
     pub(crate) png: Option<std::path::PathBuf>,
+    /// Export the workshop as a static site into this directory, with a page at the address of every preview, matrix and docs page (`--target web`)
+    #[arg(long, value_name = "DIR", conflicts_with_all = ["list", "png", "preview", "component", "no_hot_reload"])]
+    pub(crate) build: Option<std::path::PathBuf>,
+    /// The path the exported site is served under, in place of `[telar.web] base`
+    #[arg(long, value_name = "PATH", requires = "build")]
+    pub(crate) base: Option<String>,
 }
 
 /// `cargo check` cannot do this job: a `.rsx` compiles to a generated file under `.telar/build/`, so every error past the parse stage names a file the author never wrote. The per-line source map beside each generated file is what puts them back, and nothing outside the VS Code extension read it before this.

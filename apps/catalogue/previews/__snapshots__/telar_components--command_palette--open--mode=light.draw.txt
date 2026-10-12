@@ -20,7 +20,7 @@ element group
     end
   end
 end
-element button
+element group
   rect 0,0 800x600 fill=#00000080
   element dialog
     rect 120,96 560x328 fill=#ffffffff border=1 border-color=#dbdeedff radius=30
@@ -40,7 +40,7 @@ element button
             element group
               element group
                 element group
-                  rect 0,14 544x18
+                  rect 0,14 544x19
                   element group
                     matrix 1,0,0,1,10,16
                       text 0,0 20x14.28 "File" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
@@ -161,7 +161,7 @@ element button
               end
               element group
                 element group
-                  rect 0,174 544x18
+                  rect 0,174 544x19
                   element group
                     matrix 1,0,0,1,10,176
                       text 0,0 28x14.28 "View" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en

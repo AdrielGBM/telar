@@ -151,8 +151,8 @@ fn build_open_modal(
         |_r| RectStyle::default().with_fill(scrim::SCRIM),
         vec![box_item(dialog)],
     )?
-    .styled_by(backdrop)
-    .on_press(move || (*dismiss)());
+    .styled_by(backdrop);
+    let scrim = shared::dismissed_by_press(scrim, move || (*dismiss)());
 
     Ok(box_item(scrim))
 }

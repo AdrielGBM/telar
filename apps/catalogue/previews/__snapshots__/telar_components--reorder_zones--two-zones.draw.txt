@@ -5,7 +5,7 @@ element group
     element group
       element group
         element group
-          element group
+          element list
             rect 324,249 72x102
             element group
               element listitem
@@ -35,7 +35,7 @@ element group
               rect 324,249 72x2
             end
           end
-          element group
+          element list
             rect 420,249 57x102
             element group
               element listitem

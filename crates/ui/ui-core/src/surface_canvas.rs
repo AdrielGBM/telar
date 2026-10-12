@@ -349,7 +349,7 @@ impl SurfaceCanvas {
         ])
     }
 
-    /// Hands this surface a box event a surface reported for a box nested in it ([`Event::InSurface`]): its own, in its own world, or one for a surface nested deeper, through its tree to the frame that draws that one. Anything else is ignored.
+    /// Hands this surface a box event a surface reported for a box nested in it, or a screen reader's action on one of its controls ([`Event::InSurface`]): its own, in its own world, or one for a surface nested deeper, through its overlays and its tree, as the window routes it, to the frame that draws that one. Anything else is ignored.
     pub fn dispatch_in_surface(&self, event: &Event) -> EventResult {
         let Event::InSurface {
             surface,
@@ -359,7 +359,7 @@ impl SurfaceCanvas {
             return EventResult::Ignored;
         };
         if *surface != self.surface.handle().0 {
-            return self.dispatch_tree(event);
+            return self.dispatch_own(event);
         }
         let _entered = self.enter();
         let followed = match &**inner {
@@ -370,6 +370,12 @@ impl SurfaceCanvas {
                 let held = crate::focus::current().is_some();
                 crate::focus::clear();
                 held
+            }
+            Event::AccessAction { id, activate } => {
+                crate::accessibility::perform_action(*id, *activate, |event| {
+                    self.dispatch_own(event);
+                });
+                true
             }
             other => return self.tree.dispatch(other),
         };

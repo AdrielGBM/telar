@@ -114,3 +114,11 @@ path = "src/current_test.rs"
 [[test]]
 name = "arrival_margin"
 path = "src/arrival_margin_test.rs"
+
+[[test]]
+name = "surface"
+path = "src/surface_test.rs"
+
+[[test]]
+name = "frame_tab"
+path = "src/frame_tab_test.rs"

@@ -211,3 +211,11 @@ pub(crate) fn labelled_control(
     .on_press(on_press);
     Ok(box_item(row))
 }
+
+/// Makes `backdrop` close what it holds when it is pressed, around it rather than on it. That press is the pointer's way out, as Escape is the keyboard's, so the backdrop stays a box: a box that answers a press is otherwise a button, and a button wrapped around the dialog or the menu it holds is one a reader is offered and cannot make sense of.
+pub(crate) fn dismissed_by_press(
+    backdrop: StyledContainer,
+    dismiss: impl Fn() + 'static,
+) -> StyledContainer {
+    backdrop.role(Role::Group).on_press(dismiss)
+}

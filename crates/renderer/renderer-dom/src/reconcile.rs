@@ -1,6 +1,6 @@
 //! Bringing the live document in line with the one a frame describes.
 //!
-//! What the document should be is worked out in `document.rs`, the same way a prerendered page is; this half only knows how to get there from what the last frame left. The reconcile is keyed by [`ElementId`](renderer_core::ElementId), which is the layout node the widget was built with: it lives as long as the widget, so a box that only moved is *moved*, and only a box that is genuinely new is created. Nothing here diffs strings against the DOM — the last style written is kept beside the node, because reading a property back out of the browser is the expensive direction.
+//! What the document should be is worked out in `document.rs`, the same way a prerendered page is; this half only knows how to get there from what the last frame left. The reconcile is keyed by [`ElementId`](renderer_core::ElementId), which is the layout node the widget was built with, beside the surface that numbered it: it lives as long as the widget, so a box that only moved is *moved*, and only a box that is genuinely new is created. Nothing here diffs strings against the DOM — the last style written is kept beside the node, because reading a property back out of the browser is the expensive direction.
 //!
 //! The one exception is the first frame on a host that was served a prerendered page: there the elements already exist, and are taken over rather than built (`adopt.rs`), which means reading each one once.
 
@@ -13,6 +13,7 @@ use rustc_hash::FxHashMap;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 
+use crate::box_key::BoxKey;
 use crate::document::{
     self, AUDIT_ATTRIBUTE, BoxNode, Content, Described, HOST_ATTRIBUTE, ID_ATTRIBUTE, Node,
     PaintNode, RESET, RESET_ID, Surface,
@@ -64,6 +65,8 @@ struct Live {
     drawn: String,
     /// The paint this box carries that is not a box, as the children standing in for it.
     pieces: Vec<Piece>,
+    /// The paint a nested surface drawn in this box carries at its own level, as the children standing in for it among the surface's roots.
+    paint: Vec<Piece>,
     /// What was last said about what this box *is*, so an unchanged frame writes no attributes.
     described: Described,
     /// What was last written to a picture's `<img>`.
@@ -114,20 +117,20 @@ impl Piece {
         }
     }
 
-    /// Brings the piece's content in line with `text`, or with `runs` when it has spans, as the text of box `box_id`.
+    /// Brings the piece's content in line with `text`, or with `runs` when it has spans, as the text of box `owner`.
     fn show(
         &mut self,
         document: &web_sys::Document,
         text: &str,
         runs: Option<&[crate::runs::Run]>,
-        box_id: u64,
+        owner: BoxKey,
     ) {
         let written = runs.map(crate::runs::signature);
         let wanted = written.as_deref().unwrap_or(text);
         if std::mem::take(&mut self.adopted) {
-            morph_text(document, &self.node, text, runs, box_id);
+            morph_text(document, &self.node, text, runs, owner);
         } else if self.text != wanted {
-            write_text(document, &self.node, text, runs, box_id);
+            write_text(document, &self.node, text, runs, owner);
         }
         if self.text != wanted {
             self.text = wanted.to_string();
@@ -139,9 +142,9 @@ impl Piece {
 pub struct Reconciler {
     document: web_sys::Document,
     host: web_sys::HtmlElement,
-    live: FxHashMap<u64, Live>,
-    /// Ids seen this frame, so what is missing can be removed at the end.
-    seen: Vec<u64>,
+    live: FxHashMap<BoxKey, Live>,
+    /// Boxes seen this frame, so what is missing can be removed at the end.
+    seen: Vec<BoxKey>,
     /// Whether each box also carries the rect layout computed for it, for a test that compares the two.
     audit: bool,
     /// The surface background last written to the host, so an unchanged frame writes nothing.
@@ -300,11 +303,8 @@ impl Reconciler {
         if !self.host.contains(Some(active.as_ref())) {
             return;
         }
-        if let Some(box_id) = active
-            .get_attribute(FOCUS_BOX_ATTRIBUTE)
-            .and_then(|id| id.parse::<u64>().ok())
-        {
-            platform_core::post_event(platform_core::Event::BoxFocused { box_id });
+        if let Some(key) = focus_box_of(&active) {
+            post_focused(key);
         }
     }
 
@@ -347,21 +347,38 @@ impl Reconciler {
             };
             self.root_paint.push(piece);
         }
-        let piece = &mut self.root_paint[index];
-        if piece.style != paint.style {
-            let _ = piece.node.set_attribute("style", &paint.style);
-            piece.style = paint.style.clone();
+        Some(show_paint(
+            &self.document,
+            &mut self.root_paint[index],
+            paint,
+        ))
+    }
+
+    /// The element standing for the `index`th piece of paint a nested surface drawn in box `owner` carries at its own level, reused from the frame before when there was one. Taken over from the served box first, whose unnamed children stand for this paint before they stand for the box's own pieces.
+    fn paint_in(
+        &mut self,
+        owner: BoxKey,
+        index: usize,
+        paint: &PaintNode,
+    ) -> Option<web_sys::Element> {
+        let live = self.live.get_mut(&owner)?;
+        if index == live.paint.len() {
+            let piece = match live.served_pieces.pop_front() {
+                Some(node) => Piece::adopted(node),
+                None => Piece::created(self.document.create_element("div").ok()?),
+            };
+            crate::adopt::patch_attribute(&piece.node, "role", Some("presentation"));
+            live.paint.push(piece);
         }
-        piece.show(&self.document, &paint.text, None, 0);
-        Some(piece.node.clone())
+        Some(show_paint(&self.document, &mut live.paint[index], paint))
     }
 
     /// Brings one box's element, and everything inside it, in line with `node`. `parent` is where the box belongs, which a served element has to be in already to be taken over.
     fn apply(&mut self, node: &BoxNode, parent: &web_sys::Node) -> web_sys::Element {
-        let element = self.element_for(node.id, node.tag, node.scrolls, parent);
+        let element = self.element_for(node.key, node.tag, node.scrolls, parent);
         self.describe(&element, node);
         if let Some((picture, width)) = &node.picture
-            && let Some(live) = self.live.get_mut(&node.id)
+            && let Some(live) = self.live.get_mut(&node.key)
         {
             crate::picture::show(&element, picture, *width, &mut live.shown);
         }
@@ -372,21 +389,36 @@ impl Reconciler {
         let audit = node
             .audit
             .map(|rect| format!("{} {} {} {}", rect.x, rect.y, rect.width, rect.height));
-        if audit.is_some() || self.live.get(&node.id).is_some_and(|live| live.adopted) {
+        if audit.is_some() || self.live.get(&node.key).is_some_and(|live| live.adopted) {
             crate::adopt::patch_attribute(&element, AUDIT_ATTRIBUTE, audit.as_deref());
         }
-        self.seen.push(node.id);
+        self.seen.push(node.key);
 
         let own: web_sys::Node = element.clone().into();
-        if let Content::Children { boxes, .. } = &node.content {
-            for (index, child) in boxes.iter().enumerate() {
-                let child = self.apply(child, &own);
-                place(&own, index as u32, &child);
+        let mut placed = 0u32;
+        if let Content::Children { children, .. } = &node.content {
+            let mut painted = 0usize;
+            for child in children {
+                let child = match child {
+                    Node::Box(child) => Some(self.apply(child, &own)),
+                    Node::Paint(paint) => self
+                        .paint_in(node.key, painted, paint)
+                        .inspect(|_| painted += 1),
+                };
+                if let Some(child) = child {
+                    place(&own, placed, &child);
+                    placed += 1;
+                }
+            }
+            if let Some(live) = self.live.get_mut(&node.key) {
+                for extra in live.paint.drain(painted.min(live.paint.len())..) {
+                    extra.node.remove();
+                }
             }
         }
 
         let document = self.document.clone();
-        let Some(live) = self.live.get_mut(&node.id) else {
+        let Some(live) = self.live.get_mut(&node.key) else {
             return element;
         };
         let adopted = std::mem::take(&mut live.adopted);
@@ -406,6 +438,7 @@ impl Reconciler {
                     live.drawn = markup.clone();
                     live.text.clear();
                     live.pieces.clear();
+                    live.paint.clear();
                 }
             }
             Content::Text { text, runs } => {
@@ -414,22 +447,23 @@ impl Reconciler {
                     .map(crate::runs::signature)
                     .unwrap_or_else(|| text.clone());
                 if adopted {
-                    morph_text(&document, &live.node, text, runs.as_deref(), node.id);
+                    morph_text(&document, &live.node, text, runs.as_deref(), node.key);
                 } else if live.text != wanted {
-                    write_text(&document, &live.node, text, runs.as_deref(), node.id);
+                    write_text(&document, &live.node, text, runs.as_deref(), node.key);
                 }
                 if live.text != wanted {
                     live.text = wanted;
                     live.pieces.clear();
+                    live.paint.clear();
                 }
             }
-            Content::Children { boxes, pieces } => {
+            Content::Children { pieces, .. } => {
                 live.text.clear();
                 fill_pieces(
                     &document,
                     live,
-                    node.id,
-                    boxes.len() as u32,
+                    node.key,
+                    placed,
                     pieces,
                     self.served.as_mut(),
                 );
@@ -519,15 +553,15 @@ impl Reconciler {
                 _ => self.focus_target = element.clone().dyn_into::<web_sys::HtmlElement>().ok(),
             }
         }
-        let Some(live) = self.live.get_mut(&node.id) else {
+        let Some(live) = self.live.get_mut(&node.key) else {
             return;
         };
         if live.adopted {
-            for (name, value) in node.described.attributes(node.id) {
+            for (name, value) in node.described.attributes(node.key) {
                 crate::adopt::patch_attribute(element, name, value.as_deref());
             }
         } else if live.described != node.described {
-            for (name, value) in node.described.attributes(node.id) {
+            for (name, value) in node.described.attributes(node.key) {
                 set_or_clear(element, name, value.as_deref());
             }
         } else {
@@ -536,15 +570,15 @@ impl Reconciler {
         live.described = node.described.clone();
     }
 
-    /// The element for `id`: on the first frame the served one, while it still fits under `parent`; otherwise created if this is the first frame that mentions it — or recreated if what it means changed, since a role is a tag and a tag cannot be edited.
+    /// The element for `key`: on the first frame the served one, while it still fits under `parent`; otherwise created if this is the first frame that mentions it — or recreated if what it means changed, since a role is a tag and a tag cannot be edited.
     fn element_for(
         &mut self,
-        id: u64,
+        key: BoxKey,
         tag: &'static str,
         scrolls: bool,
         parent: &web_sys::Node,
     ) -> web_sys::Element {
-        if let Some(live) = self.live.get(&id)
+        if let Some(live) = self.live.get(&key)
             && live.tag == tag
         {
             return live.node.clone();
@@ -552,21 +586,21 @@ impl Reconciler {
         let claimed = self
             .served
             .as_mut()
-            .and_then(|served| served.claim(id, tag, parent));
+            .and_then(|served| served.claim(key, tag, parent));
         let adopted = claimed.is_some();
-        let Some(node) = claimed.or_else(|| create(&self.document, tag, id)) else {
+        let Some(node) = claimed.or_else(|| create(&self.document, tag, key)) else {
             // Only reachable if the document refuses a tag this crate chose, which would be a bug here rather than something an application can act on.
             tracing::error!("could not create a <{tag}>");
             return self.host.clone().into();
         };
-        if let Some(previous) = self.live.remove(&id) {
+        if let Some(previous) = self.live.remove(&key) {
             previous.node.remove();
         }
         // A box that scrolls itself has to say where it ended up, or hit-testing and every anchored overlay keep reading an offset that stopped being true the moment the compositor moved it.
-        let scrolls = scrolls.then(|| watch_scroll(&node, id)).flatten();
+        let scrolls = scrolls.then(|| watch_scroll(&node, key)).flatten();
         // A reader may have scrolled the served box before the app ran, and the app has to start from where they left it.
         if adopted && scrolls.is_some() && (node.scroll_left() != 0 || node.scroll_top() != 0) {
-            report_scroll(&node, id);
+            report_scroll(&node, key);
         }
         let (style, served_pieces) = match adopted {
             true => (
@@ -576,7 +610,7 @@ impl Reconciler {
             false => Default::default(),
         };
         self.live.insert(
-            id,
+            key,
             Live {
                 node: node.clone(),
                 tag,
@@ -584,6 +618,7 @@ impl Reconciler {
                 text: String::new(),
                 drawn: String::new(),
                 pieces: Vec::new(),
+                paint: Vec::new(),
                 described: Described::default(),
                 shown: None,
                 _scrolls: scrolls,
@@ -599,15 +634,29 @@ impl Reconciler {
         if self.live.len() == self.seen.len() {
             return;
         }
-        let seen: rustc_hash::FxHashSet<u64> = self.seen.iter().copied().collect();
-        self.live.retain(|id, live| {
-            if seen.contains(id) {
+        let seen: rustc_hash::FxHashSet<BoxKey> = self.seen.iter().copied().collect();
+        self.live.retain(|key, live| {
+            if seen.contains(key) {
                 return true;
             }
             live.node.remove();
             false
         });
     }
+}
+
+/// Brings the element standing for a surface's own paint in line with `paint`, and hands it back to be placed.
+fn show_paint(
+    document: &web_sys::Document,
+    piece: &mut Piece,
+    paint: &PaintNode,
+) -> web_sys::Element {
+    if piece.style != paint.style {
+        let _ = piece.node.set_attribute("style", &paint.style);
+        piece.style = paint.style.clone();
+    }
+    piece.show(document, &paint.text, None, BoxKey::default());
+    piece.node.clone()
 }
 
 /// Puts `node` at `index` among `parent`'s children, moving it only when it is not there already.
@@ -622,13 +671,17 @@ fn place(parent: &web_sys::Node, index: u32, node: &web_sys::Element) {
     let _ = parent.insert_before(node.as_ref(), current.as_ref());
 }
 
-fn create(document: &web_sys::Document, tag: &'static str, id: u64) -> Option<web_sys::Element> {
+fn create(
+    document: &web_sys::Document,
+    tag: &'static str,
+    key: BoxKey,
+) -> Option<web_sys::Element> {
     // An `svg` made as an HTML element is an unknown tag that renders nothing: what makes it a drawing is the namespace, not the name.
     let element = match tag {
         "svg" => document.create_element_ns(Some(SVG_NS), tag).ok()?,
         _ => document.create_element(tag).ok()?,
     };
-    let _ = element.set_attribute(ID_ATTRIBUTE, &id.to_string());
+    let _ = element.set_attribute(ID_ATTRIBUTE, &key.to_string());
     // Written here rather than by `describe`, which writes nothing for a box that says nothing: an `<img>` with no `alt` at all is one a reader announces by its address.
     if tag == "img" {
         let _ = element.set_attribute("alt", "");
@@ -642,7 +695,7 @@ fn create(document: &web_sys::Document, tag: &'static str, id: u64) -> Option<we
 fn fill_pieces(
     document: &web_sys::Document,
     live: &mut Live,
-    box_id: u64,
+    owner: BoxKey,
     after: u32,
     pieces: &[PaintNode],
     served: Option<&mut crate::adopt::Served>,
@@ -674,7 +727,7 @@ fn fill_pieces(
             let _ = piece.node.set_attribute("style", &painted.style);
             piece.style = painted.style.clone();
         }
-        piece.show(document, &painted.text, painted.runs.as_deref(), box_id);
+        piece.show(document, &painted.text, painted.runs.as_deref(), owner);
     }
     while live.pieces.len() > pieces.len() {
         if let Some(extra) = live.pieces.pop() {
@@ -693,10 +746,10 @@ fn write_text(
     node: &web_sys::Element,
     text: &str,
     runs: Option<&[crate::runs::Run]>,
-    box_id: u64,
+    owner: BoxKey,
 ) {
     match runs {
-        Some(runs) => crate::runs::write(document, node, runs, box_id),
+        Some(runs) => crate::runs::write(document, node, runs, owner),
         None => node.set_text_content(Some(text)),
     }
 }
@@ -707,13 +760,13 @@ fn morph_text(
     node: &web_sys::Element,
     text: &str,
     runs: Option<&[crate::runs::Run]>,
-    box_id: u64,
+    owner: BoxKey,
 ) {
     let Ok(wanted) = document.create_element("div") else {
-        write_text(document, node, text, runs, box_id);
+        write_text(document, node, text, runs, owner);
         return;
     };
-    write_text(document, &wanted, text, runs, box_id);
+    write_text(document, &wanted, text, runs, owner);
     crate::adopt::morph_children(node.as_ref(), wanted.as_ref());
 }
 
@@ -765,10 +818,13 @@ fn settle_scroll(node: &web_sys::Element, scroll_to: Option<(f32, f32)>) {
     }
 }
 
-fn watch_scroll(node: &web_sys::Element, id: u64) -> Option<Closure<dyn FnMut(web_sys::Event)>> {
+fn watch_scroll(
+    node: &web_sys::Element,
+    key: BoxKey,
+) -> Option<Closure<dyn FnMut(web_sys::Event)>> {
     let target = node.clone();
     let closure = Closure::<dyn FnMut(web_sys::Event)>::new(move |_: web_sys::Event| {
-        report_scroll(&target, id);
+        report_scroll(&target, key);
     });
     // Passive: this only reports, and saying so lets the browser scroll without waiting to hear whether the listener wanted to prevent it — which is the whole reason a compositor scroll stays smooth.
     let options = web_sys::AddEventListenerOptions::new();
@@ -782,12 +838,21 @@ fn watch_scroll(node: &web_sys::Element, id: u64) -> Option<Closure<dyn FnMut(we
     Some(closure)
 }
 
-fn report_scroll(node: &web_sys::Element, id: u64) {
-    platform_core::post_event(platform_core::Event::BoxScrolled {
-        box_id: id,
+fn report_scroll(node: &web_sys::Element, key: BoxKey) {
+    platform_core::post_event(key.event(platform_core::Event::BoxScrolled {
+        box_id: key.id,
         x: node.scroll_left() as f32,
         y: node.scroll_top() as f32,
-    });
+    }));
+}
+
+/// The box a focusable element stands for, as its focus attribute names it.
+pub(crate) fn focus_box_of(element: &web_sys::Element) -> Option<BoxKey> {
+    BoxKey::parse(&element.get_attribute(FOCUS_BOX_ATTRIBUTE)?)
+}
+
+fn post_focused(key: BoxKey) {
+    platform_core::post_event(key.event(platform_core::Event::BoxFocused { box_id: key.id }));
 }
 
 /// Reports where the document moves focus on its own — its own Tab order — so the app's focus follows it.
@@ -804,11 +869,8 @@ fn follow_focus(host: &web_sys::HtmlElement) -> Option<FocusFollower> {
         else {
             return;
         };
-        match element
-            .get_attribute(FOCUS_BOX_ATTRIBUTE)
-            .and_then(|id| id.parse::<u64>().ok())
-        {
-            Some(box_id) => platform_core::post_event(platform_core::Event::BoxFocused { box_id }),
+        match focus_box_of(&element) {
+            Some(key) => post_focused(key),
             None if !parks_telars_focus(&element, &own_host) => {
                 platform_core::post_event(platform_core::Event::FocusLeftBoxes)
             }

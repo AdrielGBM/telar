@@ -12,7 +12,6 @@ use std::path::{Path, PathBuf};
 use telar_project::BuildFlavour;
 use telar_transpiler::PackageOptions;
 
-use super::bake::member_dirs;
 use super::config::find_package_dir;
 
 /// Transpiles every workspace member's `.rsx`, in both build flavours, and says whether every one of them transpiled.
@@ -27,7 +26,7 @@ pub(crate) fn transpile_workspace() -> bool {
     let producer = format!("cargo-telar {}", env!("CARGO_PKG_VERSION"));
 
     // Collected before judging, so a failing member does not stop the ones after it from being transpiled and reported.
-    member_dirs(&workspace_root)
+    telar_project::workspace_member_dirs(&workspace_root)
         .iter()
         .map(|member| transpile_member(member, &producer, &telar_version))
         .collect::<Vec<bool>>()

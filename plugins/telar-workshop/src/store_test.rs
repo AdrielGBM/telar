@@ -1,3 +1,5 @@
+use telar::FileStore;
+
 use super::*;
 
 fn scratch(name: &str) -> PathBuf {
@@ -20,12 +22,12 @@ fn the_state_lives_under_the_workspace_s_telar_directory() {
 #[test]
 fn only_the_workshop_s_own_keys_outlive_the_run() {
     let file = state_file(&scratch("keys"));
-    let store = WorkshopStore::open(&file);
+    let store = WorkshopStore::keeping(FileStore::open(&file));
     store.set(keys::SIDEBAR_WIDTH, Some("300.0"));
     store.set("telar.scheme", Some("dark"));
     assert_eq!(store.get("telar.scheme").as_deref(), Some("dark"));
 
-    let next_run = WorkshopStore::open(&file);
+    let next_run = WorkshopStore::keeping(FileStore::open(&file));
     assert_eq!(next_run.get(keys::SIDEBAR_WIDTH).as_deref(), Some("300.0"));
     assert_eq!(
         next_run.get("telar.scheme"),

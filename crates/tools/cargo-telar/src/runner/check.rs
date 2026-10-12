@@ -95,7 +95,7 @@ impl diagnostics::Report {
     fn add_all_semantic(&mut self) {
         let dir = super::config::find_package_dir(&[]);
         let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
-        for member in super::bake::member_dirs(&root) {
+        for member in telar_project::workspace_member_dirs(&root) {
             let keys = catalog_keys(&member);
             let catalog =
                 (!keys.is_empty()).then_some(telar_diagnostics::CatalogView { keys: &keys });
@@ -121,7 +121,7 @@ impl diagnostics::Report {
     fn add_all_prelude_problems(&mut self) {
         let dir = super::config::find_package_dir(&[]);
         let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
-        for member in super::bake::member_dirs(&root) {
+        for member in telar_project::workspace_member_dirs(&root) {
             if telar_project::find_rsx_files(&member.join("src")).is_empty() {
                 continue;
             }
@@ -135,7 +135,7 @@ impl diagnostics::Report {
     fn add_all_previews_include_problems(&mut self) {
         let dir = super::config::find_package_dir(&[]);
         let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
-        for member in super::bake::member_dirs(&root) {
+        for member in telar_project::workspace_member_dirs(&root) {
             if let Ok(problems) = telar_project::previews_include_problems(&member) {
                 self.add_previews_include_problems(&problems);
             }

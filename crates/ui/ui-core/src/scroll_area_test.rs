@@ -12,9 +12,9 @@ use crate::context::{compute_layout, new_container, track_layout};
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 
-// A `scroll` element has no other owner to compute its content, so laying out the node must lay out the detached subtree through its effect.
+// Laying out the scroll area lays out its content in the same pass, though the content is placed as a root of its own.
 #[test]
-fn scroll_area_lays_out_its_detached_content() {
+fn scroll_area_lays_out_its_content() {
     reset_layout_runtime();
     let content = Canvas::new(LayoutStyle::new().width(400.0).height(1000.0), |_| {
         RenderNode::Empty
@@ -40,9 +40,9 @@ fn scroll_area_lays_out_its_detached_content() {
     );
 }
 
-/// Torn down the way a container retires a child: its owner first, then its node. The content is laid out apart from the viewport, so nothing in the layout tree carries it along; left behind, the next relayout walks it into rect signals its owner already freed.
+/// Torn down the way a container retires a child: its owner first, then its node. Left behind, the content would be walked by the next relayout into rect signals its owner already freed.
 #[test]
-fn freeing_the_viewport_frees_the_content_laid_out_apart_from_it() {
+fn freeing_the_viewport_frees_its_content() {
     reset_layout_runtime();
     let baseline = crate::context::live_node_count();
     let scope = reactive_core::owner_scope();

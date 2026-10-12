@@ -1,11 +1,11 @@
-//! The scroll viewport: offsets, scrollbars, the fling, and the content laid out as its own root.
+//! The scroll viewport: offsets, scrollbars, the fling, and the content placed in a space of its own.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use geometry_core::{Insets, LayoutGrid, Rect};
-use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
-use platform_core::{Event, Key, ModifiersState, NamedKey, ScrollDelta};
+use layout_core::{LayoutError, LayoutStyle, NodeId};
+use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton, ScrollDelta};
 use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::use_theme_tokens;
@@ -686,7 +686,7 @@ impl Component for ScrollArea {
     }
 }
 
-/// A handle to the enclosing scroll area's live viewport, handed to the content builder by [`LayoutScrollArea::new_with`]. Because a scroll area lays its content out as its OWN layout root, every descendant's tracked rect is already in the same content-local space the scroll offset indexes into — so `visible` is a plain rect overlap, no scroll-transform math.
+/// A handle to the enclosing scroll area's live viewport, handed to the content builder by [`LayoutScrollArea::new_with`]. Because a scroll area places its content as a root of its own, every descendant's tracked rect is already in the same content-local space the scroll offset indexes into — so `visible` is a plain rect overlap, no scroll-transform math.
 #[derive(Clone)]
 pub struct ScrollViewport {
     area: NodeId,
@@ -861,10 +861,8 @@ pub struct LayoutScrollArea {
     leaf: LayoutLeaf,
     home: HomeSurface,
     core: ScrollCore,
-    // Needed because the content is laid out as a root of its own, not a normal layout child.
+    // Needed because the content is placed as a root of its own, with no parent link to the viewport.
     _input: InputHandle,
-    // The content is not a taffy child of the viewport leaf, so nothing else would lay it out; this re-lays the detached subtree whenever the viewport is resized.
-    _layout_effect: Effect,
     // Keeps the offset inside the range the content and viewport currently allow.
     _clamp_effect: Effect,
     // Tells the content's sticky boxes what part of it the viewport shows, so a scroll moves them without a relayout.
@@ -874,7 +872,19 @@ pub struct LayoutScrollArea {
     follows_arrival: bool,
     // `None` once primary: the page scroll is the window's, scrolled with nothing focused rather than by a stop of its own.
     focus: Option<FocusId>,
+    host: Option<Host>,
 }
+
+/// What a scroll area that is a control of its own keeps: see [`LayoutScrollArea::control`].
+struct Host {
+    role: focus::Role,
+    ring: Option<Box<dyn Fn(Rect) -> RectStyle>>,
+    keys: Option<KeyRule>,
+    _focus_effect: Option<Effect>,
+}
+
+/// What a control scroll area does with a key pressed while it holds focus: whether it took it.
+type KeyRule = Box<dyn Fn(&Key) -> bool>;
 
 /// What a scroll's arrival margin is declared as.
 type ArrivalRule = Rc<dyn Fn() -> Insets>;
@@ -942,24 +952,13 @@ impl LayoutScrollArea {
             build(handed.clone())?
         };
         let content_node = content.layout_node();
-        layout_reactive::free_with(content_node, leaf.node);
+        layout_reactive::set_scroll_content(leaf.node, content_node)?;
         let content_rect_signal =
             track_layout(content_node).expect("content node not registered in ctx");
         handed.content.set(Some(content_rect_signal.read_only()));
         crate::scroll_viewports::register(content_node, handed);
 
-        // The viewport rect is set by the surrounding layout and this effect fires during that flush, after the runtime borrow is released, so computing here is re-entrancy safe.
         let viewport = leaf.rect;
-        let layout_effect = effect(move || {
-            let vp = viewport.get();
-            if vp.width > 0.0 {
-                let _ = crate::context::compute_layout(
-                    content_node,
-                    AvailableSpace::Definite(vp.width),
-                    AvailableSpace::MaxContent,
-                );
-            }
-        });
 
         // Both things deciding where the end is move underneath the offset: the content's height and the viewport's. Clamped from an effect because neither is an input event — left to the next wheel tick, the transform pushes the content out of the clip and the viewport shows nothing until it is touched.
         let clamp_effect = {
@@ -1025,14 +1024,75 @@ impl LayoutScrollArea {
                 commanded,
             ),
             _input: input,
-            _layout_effect: layout_effect,
             _clamp_effect: clamp_effect,
             _sticky_effect: sticky_effect,
             arrival,
             declared_arrival: signal(None),
             follows_arrival: false,
             focus: Some(focus),
+            host: None,
         })
+    }
+
+    /// Makes this scroll area the control `role` itself: the box that holds focus, carries the role and scrolls are one, so a reader and the keyboard meet a single element where a control wrapped around a scroll area gave them two.
+    ///
+    /// For the composite widget whose items are reached by a cursor while focus stays on the widget (a tree, a listbox): its rows are no Tab stops, so a scroller that merely contained them could not be focused, and a document's checker rightly refuses a region that scrolls out of the keyboard's reach. It is a stop whether or not its content overflows, keeps the keys [`on_focused_key`](Self::on_focused_key) takes, and scrolls with the rest. Call it first: the other methods of the control act on what it declares.
+    pub fn control(mut self, role: focus::Role) -> Self {
+        if let Some(id) = self.focus {
+            focus::host_scroller(id, role);
+            self.host = Some(Host {
+                role,
+                ring: None,
+                keys: None,
+                _focus_effect: None,
+            });
+        }
+        self
+    }
+
+    /// The focus id this control holds focus by; `None` unless it is a [`control`](Self::control).
+    pub fn focus_id(&self) -> Option<FocusId> {
+        self.host.as_ref().and(self.focus)
+    }
+
+    /// The ring this control draws, in place of the theme's, while the keyboard is what reached it. See [`StyledContainer::focus_style`](crate::StyledContainer::focus_style).
+    pub fn focus_style(mut self, ring: impl Fn(Rect) -> RectStyle + 'static) -> Self {
+        if let Some(host) = &mut self.host {
+            host.ring = Some(Box::new(ring));
+        }
+        self
+    }
+
+    /// Fire `f(&key)` for keys pressed while this control holds focus; a key it answers `true` for does not also scroll. See [`StyledContainer::on_focused_key`](crate::StyledContainer::on_focused_key).
+    pub fn on_focused_key(mut self, keys: impl Fn(&Key) -> bool + 'static) -> Self {
+        if let Some(host) = &mut self.host {
+            host.keys = Some(Box::new(keys));
+        }
+        self
+    }
+
+    /// Fire `f(true)`/`f(false)` when this control gains/loses keyboard focus. See [`StyledContainer::on_focus`](crate::StyledContainer::on_focus).
+    pub fn on_focus(mut self, f: impl Fn(bool) + 'static) -> Self {
+        let (Some(host), Some(id)) = (&mut self.host, self.focus) else {
+            return self;
+        };
+        let last = Rc::new(std::cell::Cell::new(focus::is_focused(id)));
+        host._focus_effect = Some(effect(move || {
+            let now = focus::is_focused(id);
+            if now != last.get() {
+                last.set(now);
+                f(now);
+            }
+        }));
+        self
+    }
+
+    /// Declares which control inside this one the cursor rests on while focus stays here. See [`StyledContainer::active_descendant`](crate::StyledContainer::active_descendant).
+    pub fn active_descendant(self, read: impl Fn() -> Option<FocusId> + 'static) -> Self {
+        if let (Some(_), Some(id)) = (&self.host, self.focus) {
+            focus::set_active_descendant(id, read);
+        }
+        self
     }
 
     pub fn clamp_scroll(&mut self) {
@@ -1107,6 +1167,7 @@ impl LayoutScrollArea {
         Some((to_x.clamp(0.0, max_x), to_y.clamp(0.0, max_y)))
     }
 
+    #[cfg(test)]
     pub(crate) fn content_node(&self) -> NodeId {
         self.core.content.borrow().layout_node()
     }
@@ -1118,20 +1179,34 @@ impl Component for LayoutScrollArea {
     fn view(&self) -> RenderNode {
         // Its own box rather than `LayoutLeaf::at_layout_position`: the content is placed by the scroll offset, not by the leaf's placement, so the two must not both apply.
         let content = self.core.view(self.leaf.rect.get());
-        let element =
-            crate::element::for_target(self.leaf.node, renderer_core::Role::ScrollArea, || {
-                crate::element::with_semantics_scrolled(
-                    self.leaf.node,
-                    renderer_core::Semantics::of(renderer_core::Role::ScrollArea),
-                    self.core.take_command(),
-                    self.core.primary,
-                    self.arrival.get(),
-                )
-            });
+        let role = self
+            .host
+            .as_ref()
+            .map_or(renderer_core::Role::ScrollArea, |host| host.role);
+        let element = crate::element::for_target(self.leaf.node, role, || {
+            let mut semantics = renderer_core::Semantics::of(role);
+            if let (Some(_), Some(id)) = (&self.host, self.focus) {
+                focus::describe(id, &mut semantics, None);
+            }
+            crate::element::with_semantics_scrolled(
+                self.leaf.node,
+                semantics,
+                self.core.take_command(),
+                self.core.primary,
+                self.arrival.get(),
+            )
+        });
+        let rect = self.leaf.rect.get();
         let ring = self
             .focus
             .filter(|id| focus::is_focus_visible(*id))
-            .map(|_| RenderNode::rect(self.leaf.rect.get(), default_focus_ring()));
+            .map(|_| {
+                let style = match self.host.as_ref().and_then(|host| host.ring.as_ref()) {
+                    Some(ring) => ring(rect),
+                    None => default_focus_ring(),
+                };
+                RenderNode::rect(rect, style)
+            });
         RenderNode::element(element, std::iter::once(content).chain(ring))
     }
 
@@ -1145,12 +1220,33 @@ impl Component for LayoutScrollArea {
         }
         if let Event::KeyPressed { key, modifiers, .. } = event
             && self.focus.is_some_and(focus::is_key_target)
-            && let Some((x, y)) = self.keyed_offset(key, *modifiers)
         {
-            self.core.command(x, y);
-            return EventResult::Handled;
+            if let Some(keys) = self.host.as_ref().and_then(|host| host.keys.as_ref())
+                && !focus::text_entry_takes_key(key, *modifiers)
+                && crate::input_region::receives_input(self.leaf.node)
+                && keys(key)
+            {
+                return EventResult::Handled;
+            }
+            if let Some((x, y)) = self.keyed_offset(key, *modifiers) {
+                self.core.command(x, y);
+                return EventResult::Handled;
+            }
         }
-        self.core.on_event(event, self.leaf.rect.get())
+        let result = self.core.on_event(event, self.leaf.rect.get());
+        if let Event::PointerPressed {
+            x,
+            y,
+            button: PointerButton::Primary,
+            ..
+        } = event
+            && result != EventResult::Handled
+            && let Some(id) = self.focus_id()
+            && self.leaf.rect.get().contains(*x as f32, *y as f32)
+        {
+            focus::request_from_pointer(id);
+        }
+        result
     }
 
     fn debug_name(&self) -> &'static str {
@@ -1160,6 +1256,7 @@ impl Component for LayoutScrollArea {
 
 impl Drop for LayoutScrollArea {
     fn drop(&mut self) {
+        self.host.take();
         if let Some(id) = self.focus
             && let Some(_home) = self.home.enter()
         {
@@ -1196,3 +1293,11 @@ mod surface_scroll_tests;
 #[cfg(test)]
 #[path = "scroll_area_sticky_test.rs"]
 mod sticky_tests;
+
+#[cfg(test)]
+#[path = "scroll_area_intrinsic_test.rs"]
+mod intrinsic_tests;
+
+#[cfg(test)]
+#[path = "scroll_area_control_test.rs"]
+mod control_tests;

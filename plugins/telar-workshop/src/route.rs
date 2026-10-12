@@ -1,6 +1,12 @@
-//! [`WorkshopRoute`]: where the workshop is, as an address carries it — `/preview/<id>`, `/matrix/<id>` or `/docs/<title>` — and what a copied link adds to that: the args edited on the preview and the canvas toolbar's settings, `?args=…&globals=…`, and `?chrome=0` for the canvas alone.
+//! [`WorkshopRoute`]: where the workshop is, as an address carries it — `/preview/<id>`, `/matrix/<id>` or `/docs/<title>` — with what is set on it there, so reloading the address, or opening a copy of it, comes back to the same place.
 //!
-//! The args travel as `name:value;…`, each value in [`ArgValue`]'s text form, and the settings as `key:value;…` words, settings at their defaults and args at theirs adding nothing. A route carries them only while a link that arrived is being opened: once they are set the workshop stands on its page alone, so the address it reports as it moves never holds an edited arg.
+//! - `?args=name:value;…`: the selected preview's args that differ from their defaults, each value in [`ArgValue`]'s text form.
+//! - `?axes=mode;dir;arg.size;…`: on a matrix page, the axes picked for a matrix the view builds itself, present, even empty, whenever the view shows one rather than the preview's own.
+//! - `?cell=<axis>=<value>--…`: on a matrix page, the focused cell, by its id past the preview's.
+//! - `?globals=key:value;…`: the canvas toolbar's settings, at their defaults adding nothing, which only a copied link carries: they are kept between runs where the workshop keeps its state, and the address the workshop reports as it moves leaves them out.
+//! - `?chrome=0`: the canvas alone.
+//!
+//! What an address leaves out is left as it is when the workshop opens it, so a bare `/preview/<id>` moves to a preview without undoing what was set on it.
 
 use std::sync::Arc;
 
@@ -8,13 +14,17 @@ use telar::preview::{
     ArgValue, control_size_word, direction_word, parse_control_size, parse_direction, parse_size,
 };
 use telar::{Location, Route};
+use telar_project::protocol::title_path;
 
+use crate::matrix::CustomAxis;
 use crate::settings::{Background, CanvasSettings, CanvasSize, Zoom};
 
 const PREVIEW: &str = "preview";
 const MATRIX: &str = "matrix";
 const DOCS: &str = "docs";
 const ARGS: &str = "args";
+const AXES: &str = "axes";
+const CELL: &str = "cell";
 const GLOBALS: &str = "globals";
 const CHROME: &str = "chrome";
 
@@ -25,57 +35,63 @@ pub(crate) enum Page {
     Preview(Arc<str>),
     /// A preview's matrix, by the preview's id.
     Matrix(Arc<str>),
-    /// A component's docs, by the title its previews are listed under.
+    /// A component's docs, by the title its previews are listed under, in its canonical form.
     Docs(Arc<str>),
 }
 
-/// What a link sets as it arrives.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct Link {
-    /// The args that differ from their defaults, by name.
-    pub(crate) args: Vec<(String, ArgValue)>,
-    /// The canvas toolbar's settings, whole. `None` leaves them as they are.
-    pub(crate) settings: Option<CanvasSettings>,
-}
-
-/// Where the workshop is: a page, whether its chrome shows, and what a link that arrived there still has to set.
+/// Where the workshop is: a page, whether its chrome shows, and what is set on it there.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct WorkshopRoute {
     pub(crate) page: Page,
     pub(crate) chrome: bool,
-    pub(crate) link: Option<Link>,
+    /// The selected preview's args that differ from their defaults, by name.
+    pub(crate) args: Vec<(String, ArgValue)>,
+    /// The axes of the matrix the Matrix view builds, while it shows one rather than the preview's own. Only a matrix page has any.
+    pub(crate) axes: Option<Vec<CustomAxis>>,
+    /// The focused matrix cell, by its whole id. Only a matrix page has one.
+    pub(crate) cell: Option<String>,
+    /// The canvas toolbar's settings, whole. Only a copied link carries them.
+    pub(crate) settings: Option<CanvasSettings>,
 }
 
 impl WorkshopRoute {
+    /// `page`, with nothing set on it.
     pub(crate) fn new(page: Page, chrome: bool) -> Self {
         Self {
             page,
             chrome,
-            link: None,
+            args: Vec::new(),
+            axes: None,
+            cell: None,
+            settings: None,
         }
     }
 }
 
 impl Route for WorkshopRoute {
     fn to_location(&self) -> Location {
-        let location = match &self.page {
+        let mut location = match &self.page {
             Page::Preview(id) => Location::from_segments([PREVIEW, id.as_ref()]),
             Page::Matrix(id) => Location::from_segments([MATRIX, id.as_ref()]),
-            Page::Docs(title) => Location::from_segments(
-                std::iter::once(DOCS).chain(title.split('/').map(str::trim)),
-            ),
+            Page::Docs(title) => {
+                Location::from_segments(std::iter::once(DOCS).chain(title_path(title)))
+            }
         };
-        let mut location = match self.chrome {
-            true => location,
-            false => location.with_param(CHROME, "0"),
-        };
-        let Some(link) = &self.link else {
-            return location;
-        };
-        if !link.args.is_empty() {
-            location = location.with_param(ARGS, args_text(&link.args));
+        if !self.chrome {
+            location = location.with_param(CHROME, "0");
         }
-        if let Some(settings) = link
+        if !self.args.is_empty() {
+            location = location.with_param(ARGS, args_text(&self.args));
+        }
+        if let Page::Matrix(id) = &self.page {
+            if let Some(axes) = &self.axes {
+                location = location.with_param(AXES, axes_text(axes));
+            }
+            if let Some(cell) = self.cell.as_deref().and_then(|cell| cell_past(id, cell)) {
+                location = location.with_param(CELL, cell);
+            }
+        }
+        if let Some(settings) = self
             .settings
             .as_ref()
             .filter(|settings| **settings != CanvasSettings::default())
@@ -94,18 +110,65 @@ impl Route for WorkshopRoute {
             }
             _ => return None,
         };
-        let args = location.param(ARGS).map(parse_args);
-        let settings = location.param(GLOBALS).map(parse_settings);
-        let link = (args.is_some() || settings.is_some()).then(|| Link {
-            args: args.unwrap_or_default(),
-            settings,
-        });
+        let (axes, cell) = match &page {
+            Page::Matrix(id) => (
+                location.param(AXES).map(parse_axes),
+                location
+                    .param(CELL)
+                    .filter(|cell| !cell.is_empty())
+                    .map(|cell| format!("{id}--{cell}")),
+            ),
+            Page::Preview(_) | Page::Docs(_) => (None, None),
+        };
         Some(Self {
-            page,
             chrome: location.param(CHROME) != Some("0"),
-            link,
+            args: location.param(ARGS).map(parse_args).unwrap_or_default(),
+            axes,
+            cell,
+            settings: location.param(GLOBALS).map(parse_settings),
+            page,
         })
     }
+}
+
+/// What of the cell id `cell` follows the preview `id`'s, or `None` for a cell of another preview.
+pub(crate) fn cell_past<'a>(id: &str, cell: &'a str) -> Option<&'a str> {
+    cell.strip_prefix(id)?
+        .strip_prefix("--")
+        .filter(|rest| !rest.is_empty())
+}
+
+/// `axes` as an address carries them: one word each, joined by `;`, an arg as `arg.<name>`.
+pub(crate) fn axes_text(axes: &[CustomAxis]) -> String {
+    axes.iter()
+        .map(|axis| match axis {
+            CustomAxis::Mode => "mode".to_string(),
+            CustomAxis::Locale => "locale".to_string(),
+            CustomAxis::Direction => "dir".to_string(),
+            CustomAxis::ControlSize => "control_size".to_string(),
+            CustomAxis::Viewport => "viewport".to_string(),
+            CustomAxis::Arg(name) => format!("arg.{name}"),
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
+/// The axes [`axes_text`] wrote. A word this workshop does not know is passed over.
+pub(crate) fn parse_axes(text: &str) -> Vec<CustomAxis> {
+    text.split(';')
+        .map(str::trim)
+        .filter_map(|word| match word {
+            "mode" => Some(CustomAxis::Mode),
+            "locale" => Some(CustomAxis::Locale),
+            "dir" => Some(CustomAxis::Direction),
+            "control_size" => Some(CustomAxis::ControlSize),
+            "viewport" => Some(CustomAxis::Viewport),
+            _ => word
+                .strip_prefix("arg.")
+                .filter(|name| !name.is_empty())
+                .map(|name| CustomAxis::Arg(name.to_string())),
+        })
+        .collect()
 }
 
 /// `args` as a link carries them: `name:value`, each value in its text form, joined by `;`.

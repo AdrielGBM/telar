@@ -367,6 +367,10 @@ where
                 self.open_link(&reference, window);
                 false
             }
+            crate::hot::HotEvent::Focus => {
+                window.focus_window();
+                false
+            }
             crate::hot::HotEvent::Reload(new_path) => match crate::hot::load_hot_app(&new_path) {
                 Ok(new_app) => {
                     self.swap_app(Box::new(new_app), window);
@@ -833,18 +837,16 @@ where
 
     fn on_accessibility_action(&mut self, id: u64, activate: bool) {
         let _surface = self.enter_surface();
-        ui_core::focus::request(id);
-        // Activation goes out as the key a focused control already answers, rather than a third path into the same commit, so a reader pressing a button travels the route that has tests.
-        if activate {
-            let enter = platform_core::Event::KeyPressed {
-                key: platform_core::Key::Named(platform_core::NamedKey::Enter),
-                modifiers: platform_core::ModifiersState::default(),
-                unmodified: None,
-            };
-            if let Some(tree) = &mut self.tree {
-                tree.on_event(&enter);
+        let (app, tree) = (&self.app, &mut self.tree);
+        ui_core::accessibility::perform_action(id, activate, |event| {
+            app.begin_event_batch();
+            if !app.dispatch_overlays(event)
+                && let Some(tree) = tree
+            {
+                tree.on_event(event);
             }
-        }
+            app.end_event_batch();
+        });
     }
 
     /// Starts a renderer and presents the tree: the one a previous [`on_suspend`](EventHandler::on_suspend) kept, or one built from the app on the first resume. Either way the renderer has retained nothing, so the first frame is drawn whole.

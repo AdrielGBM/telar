@@ -208,6 +208,13 @@ pub enum Event {
         surface: u64,
         event: Box<Event>,
     },
+    /// A screen reader asked to move to a control, or to activate it, as [`EventHandler::on_accessibility_action`](crate::EventHandler::on_accessibility_action) does: `id` is the control's id in the surface the event reaches.
+    ///
+    /// A reader names a control of a nested surface by the id the window's snapshot gave it, which says which surface it is in; the request travels there inside [`InSurface`](Self::InSurface), as this, with the id that surface knows it by.
+    AccessAction {
+        id: u64,
+        activate: bool,
+    },
     /// The part of the surface the system keeps for itself changed: status and navigation bars, a notch, rounded corners, a browser's own chrome over a page drawn to its edges. Logical units, measured in from each edge. Sent before the first frame where the platform knows, and again whenever it moves.
     SafeAreaChanged {
         insets: geometry_core::Insets,

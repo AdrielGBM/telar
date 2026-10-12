@@ -12,7 +12,7 @@ The extension talks to `telar-analyzer`, a language server that embeds rust-anal
 - **Rename and find references** — component tags and signals, across the workspace
 - **Formatting** — whole document or selection
 - **Inlay hints, code lenses, code actions, document links and folding ranges**
-- **Previews** — `▶ Open in workshop` above each `[preview]` moves the package's running workshop to it, or starts one on it; `▶ Run play` above each `[play]` runs it in a terminal in the package; the workshop can follow the cursor from preview to preview; completion and hover for header options, `args(…)` and the matrices `telar.toml` names
+- **Previews** — `▶ Open in workshop` above each `[preview]` moves the running workshop that lists it to it, or starts one on it; `▶ Show in panel` shows it beside the editor, live; `▶ Run play` above each `[play]` runs it in a terminal in the package; the panel, and optionally the workshop window, follow the cursor from preview to preview; completion and hover for header options, `args(…)` and the matrices `telar.toml` names
 - **Semantic highlighting** and color swatches for theme values
 - **Workspace symbols** — components and `@classes` across the project
 
@@ -32,8 +32,13 @@ A Rust toolchain on `PATH`. The server discovers the sysroot through `rustc` and
 | Command                                     | Description                                                                      |
 | ------------------------------------------- | -------------------------------------------------------------------------------- |
 | `Telar: Show preview at cursor in workshop` | Moves the running workshop to the `[preview]` at the cursor, or starts one on it |
-| `Telar: Open workshop`                      | Starts the workshop of the active file's package                                 |
+| `Telar: Open workshop`                      | Brings forward the workshop that lists the active file's previews, or starts it  |
+| `Telar: Show preview at cursor in panel`    | Opens the preview panel beside the editor on the `[preview]` at the cursor       |
 | `Telar: Show server log`                    | Opens the language server's output channel                                       |
+
+## Preview panel
+
+The panel shows the canvas of the `[preview]` at the cursor, without the workshop around it, and follows the cursor from preview to preview while it is open. It is the workshop's page, served by `cargo telar preview --target web` for the application that lists the preview — the package itself, or for a library, an application naming it under `[telar.previews] include` — and it reloads with every rebuild. The panel uses the server already running, or starts one in a terminal; the first build for the browser takes a while.
 
 ## How the server is found
 

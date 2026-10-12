@@ -6,144 +6,141 @@ element group
       element group
         element group
           element tree
-            rect 270,140 260x320
-            element scrollarea
-              clip 270,140 260x320
-                matrix 1,0,0,1,270,140
-                  element group
-                    element treeitem
-                      rect 0,0 260x28 radius=6
+            clip 270,140 260x320
+              matrix 1,0,0,1,270,140
+                element group
+                  element treeitem
+                    rect 0,0 260x28 radius=6
+                    element group
+                      rect 8,0 16x28
                       element group
-                        rect 8,0 16x28
-                        element group
-                          matrix 1,0,0,1,12,0
-                            text 0,6 8x14.28 "▾" size=11.9 family=sans-serif weight=400 color=#171a2eb3 lang=en
-                          end
-                        end
-                      end
-                      element group
-                        clip 28,0 224x28
-                          matrix 1,0,0,1,28,0
-                            text 0,5 224x16.8 "src" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                          end
+                        matrix 1,0,0,1,12,0
+                          text 0,6 8x14.28 "▾" size=11.9 family=sans-serif weight=400 color=#171a2eb3 lang=en
                         end
                       end
                     end
-                    element treeitem
-                      rect 0,28 260x28 radius=6
-                      element group
-                      end
-                      element group
-                        clip 44,28 208x28
-                          matrix 1,0,0,1,44,28
-                            text 0,5 208x16.8 "main.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                          end
+                    element group
+                      clip 28,0 224x28
+                        matrix 1,0,0,1,28,0
+                          text 0,5 224x16.8 "src" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                         end
                       end
                     end
-                    element treeitem
-                      rect 0,56 260x28 fill=#4261ed24 radius=6
-                      element group
-                      end
-                      element group
-                        clip 44,56 193x28
-                          matrix 1,0,0,1,44,56
-                            text 0,5 193x16.8 "lib.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                          end
-                        end
-                      end
-                      element group
-                        matrix 1,0,0,1,241,56
-                          text 0,6 11x14.28 "M" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                  end
+                  element treeitem
+                    rect 0,28 260x28 radius=6
+                    element group
+                    end
+                    element group
+                      clip 44,28 208x28
+                        matrix 1,0,0,1,44,28
+                          text 0,5 208x16.8 "main.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                         end
                       end
                     end
-                    element treeitem
-                      rect 0,84 260x28 radius=6
-                      element group
-                        rect 24,84 16x28
-                        element group
-                          matrix 1,0,0,1,28,84
-                            text 0,6 8x14.28 "▾" size=11.9 family=sans-serif weight=400 color=#171a2eb3 lang=en
-                          end
-                        end
-                      end
-                      element group
-                        clip 44,84 208x28
-                          matrix 1,0,0,1,44,84
-                            text 0,5 208x16.8 "ui" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                          end
+                  end
+                  element treeitem
+                    rect 0,56 260x28 fill=#4261ed24 radius=6
+                    element group
+                    end
+                    element group
+                      clip 44,56 193x28
+                        matrix 1,0,0,1,44,56
+                          text 0,5 193x16.8 "lib.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                         end
                       end
                     end
-                    element treeitem
-                      rect 0,112 260x28 radius=6
-                      element group
+                    element group
+                      matrix 1,0,0,1,241,56
+                        text 0,6 11x14.28 "M" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                       end
+                    end
+                  end
+                  element treeitem
+                    rect 0,84 260x28 radius=6
+                    element group
+                      rect 24,84 16x28
                       element group
-                        clip 60,112 192x28
-                          matrix 1,0,0,1,60,112
-                            text 0,5 192x16.8 "button.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                          end
+                        matrix 1,0,0,1,28,84
+                          text 0,6 8x14.28 "▾" size=11.9 family=sans-serif weight=400 color=#171a2eb3 lang=en
                         end
                       end
                     end
-                    element treeitem
-                      rect 0,140 260x28 radius=6
-                      element group
-                      end
-                      element group
-                        clip 60,140 179x28
-                          matrix 1,0,0,1,60,140
-                            text 0,5 179x16.8 "theme.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                          end
-                        end
-                      end
-                      element group
-                        matrix 1,0,0,1,243,140
-                          text 0,6 9x14.28 "A" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                    element group
+                      clip 44,84 208x28
+                        matrix 1,0,0,1,44,84
+                          text 0,5 208x16.8 "ui" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                         end
                       end
                     end
-                    element treeitem
-                      rect 0,168 260x28 radius=6
-                      element group
-                        rect 8,168 16x28
-                        element group
-                          matrix 1,0,0,1,12,168
-                            text 0,6 8x14.28 "▸" size=11.9 family=sans-serif weight=400 color=#171a2eb3 lang=en
-                          end
-                        end
-                      end
-                      element group
-                        clip 28,168 224x28
-                          matrix 1,0,0,1,28,168
-                            text 0,5 224x16.8 "tests" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                          end
+                  end
+                  element treeitem
+                    rect 0,112 260x28 radius=6
+                    element group
+                    end
+                    element group
+                      clip 60,112 192x28
+                        matrix 1,0,0,1,60,112
+                          text 0,5 192x16.8 "button.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                         end
                       end
                     end
-                    element treeitem
-                      rect 0,196 260x28 radius=6
-                      element group
-                      end
-                      element group
-                        clip 28,196 224x28
-                          matrix 1,0,0,1,28,196
-                            text 0,5 224x16.8 "Cargo.toml" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                          end
+                  end
+                  element treeitem
+                    rect 0,140 260x28 radius=6
+                    element group
+                    end
+                    element group
+                      clip 60,140 179x28
+                        matrix 1,0,0,1,60,140
+                          text 0,5 179x16.8 "theme.rs" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                         end
                       end
                     end
-                    element treeitem
-                      rect 0,224 260x28 radius=6
-                      element group
+                    element group
+                      matrix 1,0,0,1,243,140
+                        text 0,6 9x14.28 "A" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                       end
+                    end
+                  end
+                  element treeitem
+                    rect 0,168 260x28 radius=6
+                    element group
+                      rect 8,168 16x28
                       element group
-                        clip 28,224 224x28
-                          matrix 1,0,0,1,28,224
-                            text 0,5 224x16.8 "README.md" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                          end
+                        matrix 1,0,0,1,12,168
+                          text 0,6 8x14.28 "▸" size=11.9 family=sans-serif weight=400 color=#171a2eb3 lang=en
+                        end
+                      end
+                    end
+                    element group
+                      clip 28,168 224x28
+                        matrix 1,0,0,1,28,168
+                          text 0,5 224x16.8 "tests" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
+                      end
+                    end
+                  end
+                  element treeitem
+                    rect 0,196 260x28 radius=6
+                    element group
+                    end
+                    element group
+                      clip 28,196 224x28
+                        matrix 1,0,0,1,28,196
+                          text 0,5 224x16.8 "Cargo.toml" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                        end
+                      end
+                    end
+                  end
+                  element treeitem
+                    rect 0,224 260x28 radius=6
+                    element group
+                    end
+                    element group
+                      clip 28,224 224x28
+                        matrix 1,0,0,1,28,224
+                          text 0,5 224x16.8 "README.md" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                         end
                       end
                     end

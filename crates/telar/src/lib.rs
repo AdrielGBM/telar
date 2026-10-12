@@ -231,6 +231,8 @@ pub fn install_default_text_metrics() {
     renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
 }
 
+#[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
+pub use platform_web::{PageHidden, WebStorage};
 /// What the CPU renderer's caches are holding, and a way to make them let go. Exposed so an app can answer "is the memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
 #[cfg(feature = "software")]
 pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer_caches};

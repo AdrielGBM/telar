@@ -10,6 +10,7 @@
 // The document half of the crate is absent off wasm, so what it would have called is unreachable there.
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
+mod box_key;
 mod document;
 mod html;
 mod paint;

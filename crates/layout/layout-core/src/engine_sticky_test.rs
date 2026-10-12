@@ -63,7 +63,8 @@ fn rects_in_view(page: &Page, view: Rect) -> (FxHashMap<NodeId, Rect>, Vec<Stick
             rects.insert(node, rect);
             true
         })
-        .unwrap();
+        .unwrap()
+        .anchors;
     (rects, anchors)
 }
 

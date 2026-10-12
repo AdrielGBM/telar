@@ -24,14 +24,10 @@ const AXE: &str = include_str!(env!(
     "TELAR_AXE_CORE names axe-core's script; the repository's dev shell sets it, so run inside `nix develop`"
 ));
 
-/// What the audit runs: the rules a WCAG 2.2 AA review checks, and the best practices beside them.
+/// What the audit runs: the rules a WCAG 2.2 AA review checks, and the best practices beside them, shared with the audit of the exported workshop (`cargo-telar/src/workshop_audit_test.rs`).
 ///
 /// `region` asks that a whole page sit inside landmarks, and the fixture is one fragment of a page rather than a page.
-const OPTIONS: &str = r#"{
-    "runOnly": { "type": "tag", "values": ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"] },
-    "rules": { "region": { "enabled": false } },
-    "resultTypes": ["violations"]
-}"#;
+const OPTIONS: &str = include_str!("../../../crates/renderer/renderer-dom/axe.json");
 
 const WIDTH: f32 = 640.0;
 const HEIGHT: f32 = 900.0;

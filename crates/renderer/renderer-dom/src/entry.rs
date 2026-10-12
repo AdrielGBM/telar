@@ -77,13 +77,13 @@ impl TextEntry {
             ("rows", Some("1")),
             // Deliberately not `aria-hidden`: this is where the keyboard actually is, and a focused element a reader has been told to ignore is worse than an unnamed one. It takes the name of whichever field it stands for in `park`.
             ("tabindex", Some("-1")),
-            // Named from the moment it exists, not only once a field has claimed it. The element is in the document for the whole life of the app and holds no field for most of it, and a control with no name is one an audit reports whenever it happens to look — which on a page nobody has typed into yet is always.
             ("aria-label", Some(FALLBACK)),
             (CONSUMED_KEYS_ATTRIBUTE, None),
         ];
         for (name, value) in attributes {
             crate::adopt::patch_attribute(&node, name, value);
         }
+        stand_by(&node, true);
         if created {
             host.append_child(node.as_ref()).ok()?;
         }
@@ -153,6 +153,7 @@ impl TextEntry {
         }
         *self.field.borrow_mut() = element;
         self.active = true;
+        stand_by(&self.node, false);
         if take_focus && !self.holds_focus() {
             let _ = self.node.focus();
         }
@@ -173,6 +174,7 @@ impl TextEntry {
             let _ = self.node.set_attribute("aria-label", FALLBACK);
             self.named = Some(FALLBACK.to_string());
         }
+        stand_by(&self.node, true);
     }
 
     /// Puts the entry back where the reconcile expects it, after a frame that swept the host of anything past the boxes it placed. It is a child of the host and not of the page so that the coordinates it is parked at are the ones every other box uses.
@@ -189,11 +191,22 @@ impl TextEntry {
     }
 
     fn holds_focus(&self) -> bool {
-        self.node
-            .owner_document()
-            .and_then(|document| document.active_element())
-            .is_some_and(|active| active.is_same_node(Some(self.node.as_ref())))
+        is_focused(&self.node)
     }
+}
+
+/// Takes the entry out of the document while it stands for no field, and puts it back for one. Standing for none it is neither a control a reader should find nor content the page's landmarks hold. Never while it holds focus, which hiding it would take away.
+fn stand_by(node: &web_sys::HtmlElement, idle: bool) {
+    if idle && is_focused(node) {
+        return;
+    }
+    crate::adopt::patch_attribute(node, "hidden", idle.then_some(""));
+}
+
+fn is_focused(node: &web_sys::HtmlElement) -> bool {
+    node.owner_document()
+        .and_then(|document| document.active_element())
+        .is_some_and(|active| active.is_same_node(Some(node.as_ref())))
 }
 
 fn listen(

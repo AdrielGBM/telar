@@ -1244,7 +1244,7 @@ fn app_previews_fn(includes: &[Ident]) -> TokenStream2 {
     }
 }
 
-/// The constructor of the app `cargo telar preview` shows the previews in: the workshop's while the package's feature for it is on, and the fallback page otherwise.
+/// The constructor of the app `cargo telar preview` shows the previews in: the workshop's while the package's feature for it is on, named after the package as it is compiled, so a browser, with no environment to read the name from, shows it too; and the fallback page otherwise.
 fn preview_shell(workshop: Option<&Ident>) -> TokenStream2 {
     let fallback = quote! { ::telar::preview::host::PreviewApp::new };
     let Some(krate) = workshop else {
@@ -1253,7 +1253,7 @@ fn preview_shell(workshop: Option<&Ident>) -> TokenStream2 {
     let feature = telar_project::WORKSHOP_PACKAGE;
     quote! {{
         #[cfg(feature = #feature)]
-        let shell = ::#krate::WorkshopApp::new;
+        let shell = |entries| ::#krate::WorkshopApp::new(entries).project_name(::core::env!("CARGO_PKG_NAME"));
         #[cfg(not(feature = #feature))]
         let shell = #fallback;
         shell

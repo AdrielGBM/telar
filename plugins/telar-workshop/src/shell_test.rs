@@ -2,12 +2,14 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use telar::focus;
+use telar::inspect::FrameAccess;
 use telar::inspect::a11y::Severity;
 use telar::preview::{PreviewCtx, PreviewEntry, by_role};
 use telar::testing::{centre, key_with, mount, named, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Children, ComponentList, Event, Key, LayoutError, LayoutItem,
-    LocalApp, ModifiersState, NamedKey, Reactive, Rect, Role, Size, reset_layout_runtime, signal,
+    AccessNode, App, AppRuntime, Children, ComponentList, DrawCommand, Event, Key, LayoutError,
+    LayoutItem, LocalApp, ModifiersState, NamedKey, NodeId, Reactive, Rect, Role, Size,
+    reset_layout_runtime, signal,
 };
 use telar_components::{ButtonProps, button};
 
@@ -95,6 +97,59 @@ impl<A: App> Workshop<A> {
             .find(|node| node.role == role && node.name == name)
     }
 
+    /// Every landmark drawn, in document order, each as the path of landmarks down to it.
+    fn landmarks(&self) -> Vec<String> {
+        let mut found = Vec::new();
+        self.walk_elements(|role, name, around| {
+            if role.is_region() {
+                let mut path = around.to_vec();
+                path.push(landmark_name(role, name));
+                found.push(path.join(" > "));
+            }
+            false
+        });
+        found
+    }
+
+    /// The landmarks the box of `role` announced as `name` sits in, outermost first.
+    fn landmarks_around(&self, role: Role, name: &str) -> Vec<String> {
+        let mut found = None;
+        self.walk_elements(|drawn, named, around| {
+            let hit = drawn == role && named == Some(name);
+            if hit {
+                found = Some(around.to_vec());
+            }
+            hit
+        });
+        found.unwrap_or_else(|| panic!("no {role:?} is drawn as {name}"))
+    }
+
+    /// Calls `visit` with each box drawn, its name and the landmarks around it, until it answers `true`.
+    fn walk_elements(&self, mut visit: impl FnMut(Role, Option<&str>, &[String]) -> bool) {
+        let commands = self.tree.commands();
+        let reading = FrameAccess::read(&commands).reading;
+        let mut open: Vec<Option<String>> = Vec::new();
+        for command in commands.iter() {
+            match command {
+                DrawCommand::PushElement { element } => {
+                    let role = element.semantics.role;
+                    let name = reading
+                        .get(NodeId::from(element.id.0))
+                        .and_then(|box_reading| box_reading.name.as_deref());
+                    let around: Vec<String> = open.iter().flatten().cloned().collect();
+                    if visit(role, name, &around) {
+                        return;
+                    }
+                    open.push(role.is_region().then(|| landmark_name(role, name)));
+                }
+                DrawCommand::PopElement => {
+                    open.pop();
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn region(&self, role: Role, name: &str) -> Rect {
         self.find(role, name)
             .unwrap_or_else(|| panic!("no {role:?} is announced as {name}"))
@@ -166,6 +221,13 @@ impl<A: App> Workshop<A> {
             self.width,
             problems.join("\n")
         );
+    }
+}
+
+fn landmark_name(role: Role, name: Option<&str>) -> String {
+    match name {
+        Some(name) => format!("{} {name}", role.as_str()),
+        None => role.as_str().to_string(),
     }
 }
 
@@ -251,6 +313,65 @@ fn the_canvas_settings_menu_sets_what_the_top_bar_would() {
     assert_eq!(workshop.settings().high_contrast, Some(true));
 }
 
+const WORKSPACE: &str = "main Workspace";
+
+/// What axe's `region` rule asks of the page: the canvas and the panels are regions of the workspace, the one main landmark, and both splitters lie inside it rather than between landmarks.
+#[test]
+fn the_workspace_is_the_main_landmark_and_holds_both_splitters() {
+    let workshop = Workshop::shell(WIDE);
+    assert_eq!(
+        workshop.landmarks(),
+        [
+            "banner",
+            "navigation Previews",
+            WORKSPACE,
+            "main Workspace > section Canvas",
+            "main Workspace > section Panels",
+        ]
+    );
+    for splitter in ["Resize the sidebar", "Resize the panels"] {
+        assert_eq!(
+            workshop.landmarks_around(Role::Splitter, splitter),
+            [WORKSPACE],
+            "{splitter}"
+        );
+    }
+}
+
+#[test]
+fn the_sidebar_splitter_stays_in_the_workspace_while_the_sidebar_is_folded() {
+    let workshop = Workshop::shell(WIDE);
+    workshop.state().sidebar_collapsed().set(true);
+    workshop.state().panel_position().set(PanelPosition::Right);
+    settle(&workshop.tree);
+    assert!(workshop.find(Role::Navigation, "Previews").is_none());
+    for splitter in ["Resize the sidebar", "Resize the panels"] {
+        assert_eq!(
+            workshop.landmarks_around(Role::Splitter, splitter),
+            [WORKSPACE],
+            "{splitter}"
+        );
+    }
+}
+
+#[test]
+fn a_narrow_window_keeps_the_workspace_the_main_landmark() {
+    let workshop = Workshop::shell(NARROW);
+    assert_eq!(
+        workshop.landmarks(),
+        [
+            "banner",
+            WORKSPACE,
+            "main Workspace > section Canvas",
+            "main Workspace > section Panels",
+        ]
+    );
+    assert_eq!(
+        workshop.landmarks_around(Role::Splitter, "Resize the panels"),
+        [WORKSPACE]
+    );
+}
+
 #[test]
 fn a_narrow_window_shows_the_sidebar_in_a_drawer_that_a_pick_shuts() {
     let mut workshop = Workshop::shell(NARROW);
@@ -261,7 +382,7 @@ fn a_narrow_window_shows_the_sidebar_in_a_drawer_that_a_pick_shuts() {
             .is_none()
     );
     assert_eq!(
-        workshop.region(Role::Main, "Canvas").width,
+        workshop.region(Role::Section, "Canvas").width,
         NARROW as f32,
         "the canvas takes the window's width"
     );
@@ -310,13 +431,13 @@ fn a_narrow_window_puts_the_panels_below_the_canvas_wherever_they_were_put() {
     let mut workshop = Workshop::shell(MEDIUM);
     workshop.state().panel_position().set(PanelPosition::Right);
     settle(&workshop.tree);
-    let canvas = workshop.region(Role::Main, "Canvas");
-    let panels = workshop.region(Role::Complementary, "Panels");
+    let canvas = workshop.region(Role::Section, "Canvas");
+    let panels = workshop.region(Role::Section, "Panels");
     assert!(panels.x >= canvas.x + canvas.width, "beside the canvas");
 
     workshop.resize(NARROW);
-    let canvas = workshop.region(Role::Main, "Canvas");
-    let panels = workshop.region(Role::Complementary, "Panels");
+    let canvas = workshop.region(Role::Section, "Canvas");
+    let panels = workshop.region(Role::Section, "Panels");
     assert!(panels.y >= canvas.y + canvas.height, "below the canvas");
     assert_eq!(panels.width, NARROW as f32);
     assert_eq!(panels.height, PANEL_DEFAULT_SIZE);
@@ -334,7 +455,7 @@ fn the_panels_splitter_moves_with_the_arrow_keys_in_a_narrow_window() {
     workshop.send(named(NamedKey::ArrowUp));
     let grown = workshop.state().panel_size().get();
     assert!(grown > PANEL_DEFAULT_SIZE, "{grown}");
-    assert_eq!(workshop.region(Role::Complementary, "Panels").height, grown);
+    assert_eq!(workshop.region(Role::Section, "Panels").height, grown);
 }
 
 #[test]
@@ -421,8 +542,8 @@ fn rearranging_the_workshop_moves_the_canvas_instead_of_mounting_it_again() {
         workshop.draws("Pressed 1"),
         "the preview is the one the play pressed, not a fresh one"
     );
-    let canvas = workshop.region(Role::Main, "Canvas");
-    let panels = workshop.region(Role::Complementary, "Panels");
+    let canvas = workshop.region(Role::Section, "Canvas");
+    let panels = workshop.region(Role::Section, "Panels");
     assert!(
         panels.x >= canvas.x + canvas.width,
         "the panels moved beside the canvas"

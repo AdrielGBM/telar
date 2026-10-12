@@ -34,6 +34,8 @@ pub struct Element {
     ///
     /// Not part of [`Semantics`], which is what the box *means* and is compared and hashed as such. This is a fact about one frame, like [`rect`](Self::rect) beside it, and it is `None` on almost every one: only the frame in which the widget asks carries it.
     pub scroll_to: Option<(f32, f32)>,
+    /// Whether this box scrolls its own content, whatever else its role says it is: a scroll area is one by role, and a control that scrolls, such as a tree whose rows overflow it, says so here instead of wrapping a scroll area in a box of its own. A document gives such a box an overflow, so the element a reader focuses is the one that scrolls.
+    pub scrolls: bool,
     /// Whether this box is the surface's primary scroll: the one scroll that stands for the whole page. A backend with a scroll of its own for the page maps this box onto it; every other backend treats it as any other box that scrolls.
     pub primary_scroll: bool,
     /// How far short of each edge of its view a box that scrolls stops what it brings into view, because something is drawn over that strip: a bar fixed over the page. A document says it as the scroller's `scroll-padding`, so the browser's own scrolling into view (a fragment, focus, paging with the keyboard) stops there too; a target that scrolls by drawing has already applied it to every reveal.
@@ -68,6 +70,7 @@ impl Element {
     ) -> Self {
         Self {
             id,
+            scrolls: semantics.role == Role::ScrollArea,
             semantics,
             layout: layout.into(),
             rect,
@@ -100,6 +103,12 @@ impl Element {
     /// Says how far short of its view's edges this box's scroll stops what it brings into view. See [`Element::arrival_margin`].
     pub fn arriving_within(mut self, margin: Insets) -> Self {
         self.arrival_margin = margin;
+        self
+    }
+
+    /// Says the box scrolls its own content, whatever its role. See [`Element::scrolls`].
+    pub fn scrolling(mut self) -> Self {
+        self.scrolls = true;
         self
     }
 

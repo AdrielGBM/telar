@@ -310,7 +310,7 @@ previews = [
     "telar-macros/preview",
 ]
 
-## The preview host that renders those blocks in a window. Injected by `cargo telar preview`.
+## The preview host that shows those blocks: in a window, or, in a `wasm32` build, on the page it mounts on, which it then does in place of starting the app. Injected by `cargo telar preview`, `--target web` included.
 preview = ["previews", "desktop-bare"]
 
 ## Rendering them to PNG with no window, which is `cargo telar preview --png <dir>`.

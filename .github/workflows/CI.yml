@@ -294,6 +294,41 @@ jobs:
           path: target/telar-snapshots/
           if-no-files-found: ignore
 
+  # The catalogue's workshop exported as the static site `cargo telar preview --build` writes, kept as an artifact, and audited in Chrome with axe-core: the canvas of every preview and matrix page, and the workshop's own chrome on one. See `crates/tools/cargo-telar/src/workshop_audit_test.rs`.
+  workshop-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      # Pinned to the `wasm-bindgen` crate's own version, as in `parity-web-dom`: the export runs it on the module it builds.
+      - name: Install wasm-bindgen-cli
+        run: |
+          curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz \
+            | tar -xz --strip-components=1 -C ~/.cargo/bin
+      # The same axe-core release the flake's devShell pins; the audit reads it when it runs.
+      - name: Fetch axe-core
+        run: |
+          mkdir -p "$RUNNER_TEMP/axe-core"
+          curl -fsSL https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz \
+            | tar -xz --strip-components=1 -C "$RUNNER_TEMP/axe-core" package/axe.min.js
+          echo "TELAR_AXE_CORE=$RUNNER_TEMP/axe-core/axe.min.js" >> "$GITHUB_ENV"
+      - run: cargo run -q -p cargo-telar -- transpile
+      - run: cargo run -q -p cargo-telar -- preview -p catalogue --build target/catalogue-site --target web
+      - uses: actions/upload-artifact@v7
+        with:
+          name: catalogue-site
+          path: target/catalogue-site/
+      - name: Audit every preview page
+        # Chrome and its driver are already on the runner; `CHROMEWEBDRIVER` is where the image puts the latter.
+        run: |
+          export CHROMEDRIVER="$CHROMEWEBDRIVER/chromedriver"
+          cargo test -p cargo-telar --test workshop_audit -- --ignored --nocapture
+        env:
+          TELAR_WORKSHOP_SITE: target/catalogue-site
+
   # Exercises `cargo telar build` per host OS: the raw binary everywhere plus each platform's native installer formats.
   package:
     strategy:

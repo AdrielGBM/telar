@@ -173,7 +173,8 @@ fn the_dylib_is_built_with_the_binarys_features() {
 #[test]
 fn every_feature_the_loop_injects_is_one_a_project_can_lock() {
     for mode in [HotMode::Dev, HotMode::Preview] {
-        for feature in mode.features().iter().chain(mode.hot_features()) {
+        let injected = mode.features().iter().chain(mode.hot_features());
+        for feature in injected.chain(mode.web_features()) {
             assert!(
                 crate::runner::config::TOOLING_FEATURES.contains(feature),
                 "`{feature}` is injected but missing from TOOLING_FEATURES"
@@ -250,6 +251,26 @@ fn workshop_for(mode: HotMode, package: &str) -> Option<String> {
 fn the_workshop_is_turned_on_only_by_a_preview_of_a_package_that_declares_it() {
     assert_eq!(workshop_for(HotMode::Dev, "sandbox"), None);
     assert_eq!(workshop_for(HotMode::Preview, "telar-components"), None);
+}
+
+/// A page loads no dylib, so `telar/dev` would only fail to build for wasm; and it draws no overlay, so the devtools would be dead weight.
+#[test]
+fn a_web_preview_builds_the_preview_host_and_the_workshop_alone() {
+    let args = with_web_features(
+        &HotMode::Preview,
+        ["-p", "catalogue"].map(str::to_string).to_vec(),
+    );
+    assert_eq!(
+        args,
+        [
+            "-p",
+            "catalogue",
+            "--features",
+            "telar/preview,catalogue/telar-workshop"
+        ]
+    );
+    let dev = ["-p", "catalogue"].map(str::to_string).to_vec();
+    assert_eq!(with_web_features(&HotMode::Dev, dev.clone()), dev);
 }
 
 #[test]

@@ -12,11 +12,12 @@ use telar::preview::host::{Args, PreviewRequest};
 use telar::preview::{ActionLog, ArgValue, PreviewEntry};
 use telar::{Memo, OwnerId, Route, RwSignal, batch, hot_signal, owner_scope, signal, with_owner};
 use telar_devtools::Inspection;
+use telar_project::protocol::{canonical_title, title_path};
 
 use crate::arrangement::Arrangement;
 use crate::interactions::Interactions;
 use crate::matrix::{CustomAxis, MatrixSource};
-use crate::route::{Link, Page, WorkshopRoute};
+use crate::route::{Page, WorkshopRoute, cell_past};
 use crate::settings::CanvasSettings;
 use crate::sidebar::{group_ids, listed};
 use crate::snapshot::SnapshotReview;
@@ -347,20 +348,35 @@ impl WorkshopState {
         self.matrix_focus
     }
 
-    /// Where the workshop is, as its address carries it, subscribing the caller to the selection, the view and the chrome. `None` only when there are no previews.
+    /// Where the workshop is, as its address carries it: the page with the selected preview's edited args and, on the Matrix view, the axes of a matrix it builds and the focused cell. Subscribes the caller to all of it. `None` only when there are no previews.
     pub(crate) fn route(&self) -> Option<WorkshopRoute> {
         let entry = self.selected()?;
-        Some(route_of(&entry, self.view.get(), self.chrome.get()))
+        let view = self.view.get();
+        let mut route = route_of(&entry, view, self.chrome.get());
+        route.args = edited_args(&self.args(&entry));
+        if view == ViewMode::Matrix {
+            route.axes = match self.matrix_source.get().shown_for(&entry) {
+                MatrixSource::Custom => Some(self.matrix_axes.get()),
+                MatrixSource::Preview => None,
+            };
+            route.cell = self
+                .matrix_focus
+                .get()
+                .filter(|cell| cell_past(entry.id, cell).is_some());
+        }
+        Some(route)
     }
 
-    /// [`Self::route`] without subscribing.
+    /// The page the workshop is on, and whether its chrome shows, without subscribing: where its address starts from, before [`Self::route`] adds what is set there.
     pub(crate) fn current_route(&self) -> Option<WorkshopRoute> {
         let id = self.selection.peek()?;
         let entry = self.entries.iter().find(|entry| *entry.id == *id)?;
         Some(route_of(entry, self.view.peek(), self.chrome.peek()))
     }
 
-    /// Goes where `route` points, and sets what its link carries: the canvas toolbar's settings, and the args of the preview it lands on, every other arg back at its default. An id or a title no preview has leaves the selection as it was; an arg the preview no longer has, or a value it no longer takes, is left at its default.
+    /// Goes where `route` points and sets what it carries: the args of the preview it lands on, every other arg back at its default, the Matrix view's axes and focused cell, and the canvas toolbar's settings. What it leaves out is left as it is, as is what already matches it, so opening the address the workshop reports changes nothing.
+    ///
+    /// An id or a title no preview has leaves the selection as it was, and sets nothing on a preview; an arg the preview no longer has, or a value it no longer takes, is left at its default.
     pub(crate) fn open(&self, route: &WorkshopRoute) {
         batch(|| {
             let (view, listed) = match &route.page {
@@ -372,30 +388,45 @@ impl WorkshopState {
                 self.view.set_if_changed(view);
             }
             self.chrome.set_if_changed(route.chrome);
-            let Some(Link { args, settings }) = &route.link else {
+            if let Some(settings) = &route.settings {
+                self.canvas_settings.set_if_changed(settings.clone());
+            }
+            let Some(entry) = listed.then(|| self.current_entry()).flatten() else {
                 return;
             };
-            if let Some(settings) = settings {
-                self.canvas_settings.set(settings.clone());
+            if !route.args.is_empty() {
+                self.set_args(&entry, &route.args);
             }
-            if let Some(entry) = listed.then(|| self.current_entry()).flatten() {
-                let held = self.args(&entry);
-                held.reset();
-                for (name, value) in args {
-                    let _ = held.set(name, value.clone());
+            if let Some(axes) = &route.axes {
+                self.matrix_axes.set_if_changed(axes.clone());
+                if entry.matrix.is_some() {
+                    self.matrix_source.set_if_changed(MatrixSource::Custom);
                 }
+            }
+            if let Some(cell) = &route.cell {
+                self.matrix_focus.set_if_changed(Some(cell.clone()));
             }
         });
     }
 
-    /// A link to where the workshop is now that also carries the selected preview's edited args and the canvas toolbar's settings: what "Copy link" puts on the clipboard, which `cargo telar preview <link>` opens again.
+    /// Sets `entry`'s args to `args` and every other one to its default, unless they already are.
+    fn set_args(&self, entry: &PreviewEntry, args: &[(String, ArgValue)]) {
+        let held = self.args(entry);
+        let mut wanted = args.to_vec();
+        wanted.sort_by(|(a, _), (b, _)| a.cmp(b));
+        if edited_args(&held) == wanted {
+            return;
+        }
+        held.reset();
+        for (name, value) in args {
+            let _ = held.set(name, value.clone());
+        }
+    }
+
+    /// A link to where the workshop is now that also carries the canvas toolbar's settings: what "Copy link" puts on the clipboard, which `cargo telar preview <link>` opens again.
     pub(crate) fn link(&self) -> Option<String> {
-        let mut route = self.current_route()?;
-        let entry = self.current_entry()?;
-        route.link = Some(Link {
-            args: edited_args(&self.args(&entry)),
-            settings: Some(self.canvas_settings.peek()),
-        });
+        let mut route = self.route()?;
+        route.settings = Some(self.canvas_settings.peek());
         Some(telar::location_format().format(&route.to_location()))
     }
 
@@ -413,13 +444,14 @@ impl WorkshopState {
 
     /// Selects the first preview listed under `title`, unless the selected one already is.
     fn select_title(&self, title: &str) -> bool {
+        let listed_under = |entry_title: &str| title_path(entry_title).eq(title_path(title));
         if self
             .current_entry()
-            .is_some_and(|entry| entry.title == title)
+            .is_some_and(|entry| listed_under(entry.title))
         {
             return true;
         }
-        let first = self.entries.iter().find(|entry| entry.title == title);
+        let first = self.entries.iter().find(|entry| listed_under(entry.title));
         first.is_some_and(|entry| self.select(entry.id))
     }
 
@@ -467,7 +499,7 @@ fn route_of(entry: &PreviewEntry, view: ViewMode, chrome: bool) -> WorkshopRoute
     let page = match view {
         ViewMode::Canvas => Page::Preview(entry.id.into()),
         ViewMode::Matrix => Page::Matrix(entry.id.into()),
-        ViewMode::Docs => Page::Docs(entry.title.into()),
+        ViewMode::Docs => Page::Docs(canonical_title(entry.title).into()),
     };
     WorkshopRoute::new(page, chrome)
 }

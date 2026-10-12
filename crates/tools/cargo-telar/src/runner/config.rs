@@ -31,8 +31,6 @@ impl From<BackendArg> for RendererBackend {
 
 #[derive(Deserialize, Default)]
 pub(crate) struct CargoWorkspace {
-    #[serde(default)]
-    pub(crate) members: Vec<String>,
     pub(crate) package: Option<CargoWorkspacePackage>,
 }
 // `[workspace.package]` — the values a member inherits with `field.workspace = true`.
@@ -115,43 +113,12 @@ pub(crate) struct AndroidMetadata {
     pub(crate) package: Option<String>,
 }
 
-// A `*` in any segment, not just a trailing one: a workspace nesting its members two levels deep expanded to nothing, leaving every crate under it unwatched and unfindable by name.
-pub(crate) fn expand_member(workspace_root: &Path, pattern: &str) -> Vec<PathBuf> {
-    let mut paths = vec![workspace_root.to_path_buf()];
-    for segment in pattern.split('/') {
-        paths = if segment == "*" {
-            paths
-                .iter()
-                .filter_map(|path| std::fs::read_dir(path).ok())
-                .flatten()
-                .filter_map(|entry| entry.ok())
-                .map(|entry| entry.path())
-                .filter(|path| path.is_dir())
-                .collect()
-        } else {
-            paths.into_iter().map(|path| path.join(segment)).collect()
-        };
-    }
-    paths
-}
-
 fn find_package_dir_in_workspace(workspace_root: &Path, package_name: &str) -> Option<PathBuf> {
-    let workspace_manifest = std::fs::read_to_string(workspace_root.join("Cargo.toml")).ok()?;
-    let manifest: CargoManifest = toml::from_str(&workspace_manifest).ok()?;
-    let members = manifest.workspace?.members;
-
-    for member_glob in members {
-        for member_path in expand_member(workspace_root, &member_glob) {
-            let cargo_toml = member_path.join("Cargo.toml");
-            if let Ok(content) = std::fs::read_to_string(&cargo_toml)
-                && let Ok(m) = toml::from_str::<CargoManifest>(&content)
-                && m.package.map(|p| p.name == package_name).unwrap_or(false)
-            {
-                return Some(member_path);
-            }
-        }
-    }
-    None
+    telar_project::workspace_member_dirs(workspace_root)
+        .into_iter()
+        .find(|member| {
+            read_package_manifest_in(member).is_some_and(|package| package.name == package_name)
+        })
 }
 
 pub(crate) fn find_package_dir(args: &[String]) -> PathBuf {
@@ -410,7 +377,7 @@ pub(crate) fn unlocked_tooling_note(
 pub(crate) fn warn_if_tooling_unlocked(args: &[String], injected: &[&str]) {
     let dir = find_package_dir(args);
     let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
-    let declared: Vec<_> = super::bake::member_dirs(&root)
+    let declared: Vec<_> = telar_project::workspace_member_dirs(&root)
         .iter()
         .filter_map(|member| read_manifest_in(member))
         .map(|manifest| manifest.features)
@@ -632,7 +599,7 @@ pub(crate) fn moved_features_hint_for(dir: &Path) -> Option<String> {
 pub(crate) fn warn_if_features_moved(args: &[String]) {
     let dir = find_package_dir(args);
     let root = telar_project::find_workspace_root(&dir).unwrap_or(dir);
-    for member in super::bake::member_dirs(&root) {
+    for member in telar_project::workspace_member_dirs(&root) {
         if let Some(hint) = moved_features_hint_for(&member) {
             eprintln!("[cargo-telar] warning: {hint}");
         }

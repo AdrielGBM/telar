@@ -73,6 +73,7 @@ pub(crate) fn with_semantics_scrolled(
 ) -> Arc<Element> {
     Arc::new(
         element_of(node, semantics)
+            .scrolling()
             .asking_to_scroll(scroll_to)
             .as_primary_scroll(primary)
             .arriving_within(arrival_margin),

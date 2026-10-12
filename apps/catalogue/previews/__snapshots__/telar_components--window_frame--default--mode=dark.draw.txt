@@ -5,9 +5,9 @@ element group
     element group
       element group
         element group
-          rect 228,181 344x238 fill=#1c1f29ff radius=10
+          rect 228,179 344x242 fill=#1c1f29ff radius=10
           element group
-            rect 228,181 344x36 fill=#12141cff
+            rect 228,179 344x40 fill=#12141cff
             element group
               rect 240,191 51x16
               element group
@@ -17,9 +17,9 @@ element group
               end
             end
             element group
-              rect 485,189 75x20
+              rect 485,187 75x24
               element button
-                rect 485,189 25x20
+                rect 485,187 25x24
                 element group
                   matrix 1,0,0,1,493,191
                     text 0,0 9x15.6 "–" size=13 family=sans-serif weight=400 color=#ebedf5ff
@@ -27,7 +27,7 @@ element group
                 end
               end
               element button
-                rect 510,189 25x20
+                rect 510,187 25x24
                 element group
                   matrix 1,0,0,1,518,191
                     text 0,0 9x15.6 "□" size=13 family=sans-serif weight=400 color=#ebedf5ff
@@ -35,7 +35,7 @@ element group
                 end
               end
               element button
-                rect 535,189 25x20
+                rect 535,187 25x24
                 element group
                   matrix 1,0,0,1,543,191
                     text 0,0 9x15.6 "✕" size=13 family=sans-serif weight=400 color=#ebedf5ff
@@ -45,24 +45,24 @@ element group
             end
           end
           element group
-            rect 228,217 344x184
+            rect 228,219 344x184
             element group
               element group
-                matrix 1,0,0,1,240,229
+                matrix 1,0,0,1,240,231
                   text 0,0 320x16.8 "Telar can draw its own window chrome." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                 end
               end
               element group
-                matrix 1,0,0,1,240,254
+                matrix 1,0,0,1,240,256
                   text 0,0 320x16.8 "Drag the corner grip to resize." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                 end
               end
             end
           end
           element group
-            rect 228,401 344x18
+            rect 228,403 344x18
             element group
-              rect 554,401 14x14 fill=#ebedf5ff radius=2
+              rect 554,403 14x14 fill=#ebedf5ff radius=2
             end
           end
         end

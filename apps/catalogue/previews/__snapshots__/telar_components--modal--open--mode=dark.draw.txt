@@ -20,7 +20,7 @@ element group
     end
   end
 end
-element button
+element group
   rect 0,0 800x600 fill=#00000080
   element dialog
     rect 240,248 320x104 fill=#1c1f29ff border=1 border-color=#3d4252ff radius=30

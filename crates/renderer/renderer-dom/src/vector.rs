@@ -10,6 +10,7 @@ use renderer_core::{
     PathStyle, PathVerb, Raster, RectStyle, Stroke, TextStyle,
 };
 
+use crate::box_key::BoxKey;
 use crate::paint::{color, round};
 
 /// A group open in the markup.
@@ -36,11 +37,11 @@ pub struct Drawing {
     boxes: Vec<Rect>,
     next_def: u32,
     /// Namespaces this element's definition ids, since every drawing in the page shares one id space.
-    prefix: u64,
+    prefix: BoxKey,
 }
 
 impl Drawing {
-    pub fn new(prefix: u64) -> Self {
+    pub fn new(prefix: impl Into<BoxKey>) -> Self {
         Self {
             defs: String::new(),
             body: String::new(),
@@ -48,12 +49,12 @@ impl Drawing {
             pending_mask: None,
             boxes: vec![Rect::new(0.0, 0.0, 0.0, 0.0)],
             next_def: 0,
-            prefix,
+            prefix: prefix.into(),
         }
     }
 
     /// A drawing of the box layout put at `frame`, whose boxes inside it are placed relative to it: see [`open_box`](Self::open_box).
-    pub fn at(prefix: u64, frame: Rect) -> Self {
+    pub fn at(prefix: impl Into<BoxKey>, frame: Rect) -> Self {
         Self {
             boxes: vec![frame],
             ..Self::new(prefix)

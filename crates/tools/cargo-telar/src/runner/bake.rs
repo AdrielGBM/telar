@@ -1,10 +1,8 @@
 //! `cargo telar bake` and the single point that runs it before every subcommand that goes on to compile.
 //!
-//! Only the workspace half lives here — which directories are members, and which `telar` the project resolves. Baking one package is `telar-baker`'s, because `telar-analyzer` bakes too and neither binary can depend on the other.
+//! Only the workspace half lives here — which members to bake, in what order, and which `telar` the project resolves. Baking one package is `telar-baker`'s, because `telar-analyzer` bakes too and neither binary can depend on the other.
 
-use std::path::{Path, PathBuf};
-
-use super::config::{CargoManifest, expand_member, find_package_dir};
+use super::config::find_package_dir;
 
 /// Bakes every workspace member's `.rsx` asset references and translation catalogs, answering whether every member baked without an error.
 ///
@@ -28,7 +26,7 @@ pub(crate) fn bake_workspace() -> bool {
     let graph = metadata
         .as_ref()
         .map(telar_baker::DependencyGraph::from_metadata);
-    let members = member_dirs(&workspace_root);
+    let members = telar_project::workspace_member_dirs(&workspace_root);
     let members = match &graph {
         Some(graph) => graph.bake_order(members),
         None => members,
@@ -72,35 +70,3 @@ pub(crate) fn bake_workspace() -> bool {
     }
     clean
 }
-
-pub(super) fn member_dirs(workspace_root: &Path) -> Vec<PathBuf> {
-    let manifest = std::fs::read_to_string(workspace_root.join("Cargo.toml"))
-        .ok()
-        .and_then(|content| toml::from_str::<CargoManifest>(&content).ok());
-
-    let mut dirs = Vec::new();
-    let mut has_workspace = false;
-    if let Some(manifest) = manifest {
-        if manifest.package.is_some() {
-            dirs.push(workspace_root.to_path_buf());
-        }
-        if let Some(workspace) = manifest.workspace {
-            has_workspace = true;
-            for pattern in &workspace.members {
-                dirs.extend(
-                    expand_member(workspace_root, pattern)
-                        .into_iter()
-                        .filter(|member| member.join("Cargo.toml").is_file()),
-                );
-            }
-        }
-    }
-    if !has_workspace && dirs.is_empty() {
-        dirs.push(workspace_root.to_path_buf());
-    }
-    dirs
-}
-
-#[cfg(test)]
-#[path = "bake_test.rs"]
-mod tests;

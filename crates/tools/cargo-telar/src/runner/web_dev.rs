@@ -1,7 +1,7 @@
-//! `cargo telar dev --target web`: build, serve, rebuild on change, and tell the page to reload.
+//! `cargo telar dev --target web` and `cargo telar preview --target web`: build, serve, rebuild on change, and tell the page to reload.
 
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
@@ -10,8 +10,9 @@ use std::time::Duration;
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
 use super::cli::WebRenderer;
-use super::config::{TelarSection, find_package_dir};
+use super::config::{TelarSection, find_package_dir, resolve_package};
 use super::package::{build_web_bundle, compressible, media_type};
+use super::watch::WatchSet;
 
 /// How long to let a burst of file events settle before rebuilding. An editor writing a file produces several, and a save that touches a whole directory produces one per file.
 const SETTLE: Duration = Duration::from_millis(150);
@@ -19,30 +20,66 @@ const SETTLE: Duration = Duration::from_millis(150);
 /// Bumped by every successful rebuild. The page polls it and reloads when it moves, which is the whole live-reload protocol: no websocket, no client library, and nothing to go stale.
 static BUILD: AtomicU64 = AtomicU64::new(1);
 
+/// Where a page served for development listens unless asked to listen elsewhere. A page reloaded by hand, a bookmark and a second terminal all name the same address as long as it is free.
+pub(crate) const DEFAULT_PORT: u16 = 8080;
+
+/// Listens on `requested`, failing when it is taken. Without one, on `preferred` when free and otherwise on a port the system picks, so a port held by something else costs a different address rather than the session.
+fn bind_dev_listener(requested: Option<u16>, preferred: u16) -> std::io::Result<TcpListener> {
+    match requested {
+        Some(port) => TcpListener::bind((Ipv4Addr::LOCALHOST, port)),
+        None => TcpListener::bind((Ipv4Addr::LOCALHOST, preferred))
+            .or_else(|_| TcpListener::bind((Ipv4Addr::LOCALHOST, 0))),
+    }
+}
+
+/// `requested` is the port the user asked for, which the session fails on when it is taken. `opening` is the location the session was asked to show, which it prints the address of beside the site's own. `server_file` is where it names the site's address, for the editor and a later `cargo telar preview` to find: `starting` from the moment it listens, the address once the first build is done.
 pub(crate) fn run_web_dev(
     cargo_args: Vec<String>,
     config: TelarSection,
-    port: u16,
+    requested: Option<u16>,
     renderer: Option<WebRenderer>,
+    opening: Option<&str>,
+    server_file: Option<&Path>,
 ) -> ! {
+    let listener = match bind_dev_listener(requested, DEFAULT_PORT) {
+        Ok(listener) => listener,
+        Err(e) => {
+            let port = requested.unwrap_or(DEFAULT_PORT);
+            eprintln!("[cargo-telar] could not listen on port {port}: {e}");
+            std::process::exit(1);
+        }
+    };
+    let port = listener.local_addr().map_or(0, |at| at.port());
+    if requested.is_none() && port != DEFAULT_PORT {
+        eprintln!("[cargo-telar] Port {DEFAULT_PORT} is taken; serving on port {port} instead.");
+    }
+    if let Some(file) = server_file {
+        super::workshop_channel::announce_starting(file);
+    }
+
     let dist = match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer, false) {
         Ok(dist) => dist,
         Err(e) => {
             eprintln!("[cargo-telar] {e}");
+            if let Some(file) = server_file {
+                super::workshop_channel::retire_server(file);
+            }
             std::process::exit(1);
         }
     };
     inject_reload_poll(&dist);
 
-    let listener = match TcpListener::bind(("127.0.0.1", port)) {
-        Ok(listener) => listener,
-        Err(e) => {
-            eprintln!("[cargo-telar] could not listen on port {port}: {e}");
-            std::process::exit(1);
-        }
-    };
     let base = config.web.base_path();
     eprintln!("[cargo-telar] Serving http://localhost:{port}{base}");
+    if let Some(file) = server_file {
+        super::workshop_channel::announce_server(file, &format!("http://localhost:{port}{base}"));
+    }
+    if let Some(location) = opening {
+        eprintln!(
+            "[cargo-telar] Open http://localhost:{port}{}",
+            address_under(&base, location)
+        );
+    }
 
     let serve_from = dist.clone();
     std::thread::spawn(move || {
@@ -73,34 +110,26 @@ fn watch_and_rebuild(
             }
         }
     };
-    let _ = watcher.watch(Path::new("src"), RecursiveMode::Recursive);
-    let _ = watcher.watch(Path::new("crates"), RecursiveMode::Recursive);
-    let _ = watcher.watch(Path::new("apps"), RecursiveMode::Recursive);
-    let package_root = find_package_dir(&cargo_args);
-    // The template's directory rather than the file: an editor that saves by replacing the file would end a watch on the file itself.
-    if let Some(template_dir) = config.web.template_path(&package_root).0.parent() {
-        let _ = watcher.watch(template_dir, RecursiveMode::NonRecursive);
+    let watched = PageWatch::collect(&cargo_args, &config);
+    for (dir, mode) in watched.watches() {
+        let _ = watcher.watch(&dir, mode);
     }
-    let _ = watcher.watch(
-        &config.web.public_dir(&package_root).0,
-        RecursiveMode::Recursive,
-    );
 
     loop {
         let Ok(event) = rx.recv() else {
             std::thread::sleep(Duration::from_secs(1));
             continue;
         };
-        if !matches!(
-            event.as_ref().map(|e| &e.kind),
-            Ok(EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_))
-        ) {
+        if !event.as_ref().is_ok_and(|event| watched.wants(event)) {
             continue;
         }
         // Drain the rest of the burst rather than rebuilding once per file.
         while rx.recv_timeout(SETTLE).is_ok() {}
 
         eprintln!("[cargo-telar] Rebuilding...");
+        // As in the desktop loop: without it an edited asset compiles against the artifact baked at startup, which fails its hash check.
+        super::bake::bake_workspace();
+        super::transpile::transpile_workspace();
         match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer, false) {
             Ok(_) => {
                 inject_reload_poll(dist);
@@ -109,6 +138,64 @@ fn watch_and_rebuild(
             }
             Err(e) => eprintln!("[cargo-telar] {e}"),
         }
+    }
+}
+
+/// Everything an edit that should rebuild the page can come from: what the desktop loop watches — every member's sources, assets and catalogs, and every `telar.toml` — and the page's own template and public files.
+struct PageWatch {
+    members: WatchSet,
+    template: PathBuf,
+    public: PathBuf,
+}
+
+impl PageWatch {
+    fn collect(cargo_args: &[String], config: &TelarSection) -> Self {
+        let package_root = find_package_dir(cargo_args);
+        Self::new(
+            WatchSet::collect(&resolve_package(cargo_args).workspace_root),
+            &config.web.template_path(&package_root).0,
+            &config.web.public_dir(&package_root).0,
+        )
+    }
+
+    /// Canonical for the reason [`WatchSet::collect`] gives, through the template's directory, since the template may not exist yet.
+    fn new(members: WatchSet, template: &Path, public: &Path) -> Self {
+        let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let template = match (template.parent(), template.file_name()) {
+            (Some(dir), Some(name)) => canonical(dir).join(name),
+            _ => template.to_path_buf(),
+        };
+        Self {
+            members,
+            template,
+            public: canonical(public),
+        }
+    }
+
+    /// The template through its directory, because an editor that saves by replacing the file would end a watch on the file itself.
+    fn watches(&self) -> Vec<(PathBuf, RecursiveMode)> {
+        let mut watches = self.members.watches();
+        if let Some(dir) = self.template.parent().filter(|dir| dir.is_dir()) {
+            watches.push((dir.to_path_buf(), RecursiveMode::NonRecursive));
+        }
+        if self.public.is_dir() {
+            watches.push((self.public.clone(), RecursiveMode::Recursive));
+        }
+        watches
+    }
+
+    /// Any edit to the template or a public file counts, whatever its kind of file: the page serves them as they are.
+    fn wants(&self, event: &notify::Event) -> bool {
+        if self.members.wants(event) {
+            return true;
+        }
+        matches!(
+            event.kind,
+            EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+        ) && event
+            .paths
+            .iter()
+            .any(|path| *path == self.template || path.starts_with(&self.public))
     }
 }
 
@@ -141,6 +228,15 @@ const RELOAD_SCRIPT: &str = r#"    <script id="telar-dev-reload">
           await new Promise((r) => setTimeout(r, 700));
         }
       })();
+      // The editor's preview panel frames the page and moves it from preview to preview by message, as a link would, rather than reloading it.
+      addEventListener('message', (event) => {
+        const goto = event.source === parent && parent !== window && event.data && event.data.telarGoto;
+        if (typeof goto !== 'string') return;
+        const to = new URL(goto, location.href);
+        if (to.origin !== location.origin || to.href === location.href) return;
+        history.pushState(null, '', to);
+        dispatchEvent(new PopStateEvent('popstate', { state: null }));
+      });
     </script>
 "#;
 
@@ -194,11 +290,13 @@ fn serve(mut stream: TcpStream, root: &Path, base: &str) {
         );
         return;
     }
-    let Some((mut file, path, len)) = resolve(root, base, target).and_then(|path| {
-        let file = std::fs::File::open(&path).ok()?;
-        let len = file.metadata().ok()?.len();
-        Some((file, path, len))
-    }) else {
+    let Some((mut file, path, len)) = served_path(root, base, target, headers.accepts_html)
+        .and_then(|path| {
+            let file = std::fs::File::open(&path).ok()?;
+            let len = file.metadata().ok()?.len();
+            Some((file, path, len))
+        })
+    else {
         respond(&mut stream, "404 Not Found", &[], b"", false);
         return;
     };
@@ -285,6 +383,8 @@ fn gzip(body: &[u8]) -> Vec<u8> {
 #[derive(Debug, Default, PartialEq, Eq)]
 struct RequestHeaders {
     accepts_gzip: bool,
+    /// Whether the browser asked for a page, as it does navigating to an address or reloading one.
+    accepts_html: bool,
     range: Option<String>,
 }
 
@@ -302,6 +402,8 @@ fn read_headers(reader: &mut impl BufRead) -> RequestHeaders {
             let name = name.trim();
             if name.eq_ignore_ascii_case("accept-encoding") {
                 headers.accepts_gzip = value.to_ascii_lowercase().contains("gzip");
+            } else if name.eq_ignore_ascii_case("accept") {
+                headers.accepts_html = value.to_ascii_lowercase().contains("text/html");
             } else if name.eq_ignore_ascii_case("range") {
                 headers.range = Some(value.trim().to_string());
             }
@@ -391,6 +493,24 @@ fn resolve(root: &Path, base: &str, target: &str) -> Option<PathBuf> {
         return Some(file.join("index.html"));
     }
     Some(file)
+}
+
+/// The file to answer `target` with: the one [`resolve`] names, or the site's page for a page asked for under `base` that no file is. The app's addresses are paths of its own, so reloading one, or following a link to one, has to load the app that reads it.
+fn served_path(root: &Path, base: &str, target: &str, page_asked: bool) -> Option<PathBuf> {
+    let path = resolve(root, base, target)?;
+    match page_asked && !path.is_file() {
+        true => Some(root.join("index.html")),
+        false => Some(path),
+    }
+}
+
+/// `location`, an app location written from the root, as the address of the site served under `base`.
+pub(crate) fn address_under(base: &str, location: &str) -> String {
+    format!(
+        "{}/{}",
+        base.trim_end_matches('/'),
+        location.trim_start_matches('/')
+    )
 }
 
 /// `%XX` escapes decoded to the bytes they stand for, or `None` when an escape is malformed or the result is not UTF-8.

@@ -17,7 +17,10 @@ pub(crate) use appimage::build_appimage;
 pub(crate) use deb::build_deb;
 pub(crate) use dmg::build_dmg;
 pub(crate) use nsis::build_nsis;
-pub(crate) use web::{WASM_TARGET, build_web, build_web_bundle, compressible, media_type};
+pub(crate) use web::{
+    SitePlan, WASM_TARGET, WebBuild, build_web, build_web_bundle, build_web_site, check_site_dir,
+    compressible, media_type,
+};
 
 pub(crate) fn package_lib_path(
     workspace_root: &Path,

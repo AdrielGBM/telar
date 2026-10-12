@@ -1,21 +1,53 @@
-//! What names a `[preview]` outside the editor: its id, the package that builds it, and where that package's running workshop listens. The code lenses hand it to the extension's commands, and `telar/previewAt` answers it for the preview at the cursor.
+//! What names a `[preview]` outside the editor: its id, the package that builds it, and the workshops that list it. The code lenses hand it to the extension's commands, `telar/previewAt` answers it for the preview at the cursor, and `telar/workshops` answers where a file's previews are shown.
 
 use std::path::{Path, PathBuf};
 
-use serde::Serialize;
+use lsp_types::TextDocumentIdentifier;
+use serde::{Deserialize, Serialize};
 use telar_parser::{Preview, RsxDocument, Section, is_preview_header, section_opened_by};
 use telar_project::naming::{preview_id_suffix, preview_slug};
-use telar_project::protocol::{package_workshop_channel_file, preview_location};
+use telar_project::preview_hosts;
+use telar_project::protocol::{package_workshop_files, preview_location};
 
 /// The request answering [`preview_at`] for a text document position, `null` outside a preview.
 pub const PREVIEW_AT: &str = "telar/previewAt";
 
-/// What a file's preview ids are made of and where their commands run: `<crate>--<component>--<slug(name)>`, in the package that builds them.
+/// The request answering the [`Workshop`]s that list a text document's previews.
+pub const WORKSHOPS: &str = "telar/workshops";
+
+/// What [`WORKSHOPS`] is asked about.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkshopsParams {
+    pub text_document: TextDocumentIdentifier,
+}
+
+/// What a file's preview ids are made of and where they are shown: `<crate>--<component>--<slug(name)>`, in the package that builds them.
 pub struct PreviewHost {
     pub package_root: PathBuf,
     pub crate_name: String,
     pub component: String,
-    pub workshop_channel: Option<PathBuf>,
+    pub workshops: Vec<Workshop>,
+}
+
+/// A package whose workshop lists a preview, and the files its running workshops are reached through: the window's channel, and the page's server, which names its address.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Workshop {
+    pub package_dir: String,
+    pub channel: String,
+    pub server: String,
+}
+
+impl Workshop {
+    fn of(package_dir: &Path) -> Option<Self> {
+        let files = package_workshop_files(package_dir)?;
+        Some(Self {
+            package_dir: package_dir.to_string_lossy().into_owned(),
+            channel: files.channel.to_string_lossy().into_owned(),
+            server: files.server.to_string_lossy().into_owned(),
+        })
+    }
 }
 
 impl PreviewHost {
@@ -23,8 +55,12 @@ impl PreviewHost {
     pub fn discover(rsx_path: &Path) -> Option<Self> {
         let package_root = telar_project::find_package_root(rsx_path)?;
         let crate_name = crate::project::crate_name(&package_root)?;
+        let workshops = preview_hosts(&package_root, &crate_name)
+            .iter()
+            .filter_map(|dir| Workshop::of(dir))
+            .collect();
         Some(Self {
-            workshop_channel: package_workshop_channel_file(&package_root),
+            workshops,
             package_root,
             crate_name,
             component: telar_project::component_name(rsx_path),
@@ -49,22 +85,19 @@ impl PreviewHost {
             location: preview_location(&id),
             id,
             package_dir: self.package_root.to_string_lossy().into_owned(),
-            channel: self
-                .workshop_channel
-                .as_ref()
-                .map(|file| file.to_string_lossy().into_owned()),
+            workshops: self.workshops.clone(),
         })
     }
 }
 
-/// A preview as the editor's commands receive it: what `cargo telar preview` and `cargo telar test --preview` take, where to run them, and the `goto:` location to send a workshop already running on `channel`.
+/// A preview as the editor's commands receive it: its id, which `cargo telar preview` and `cargo telar test --preview` take; the package that builds it, where its tests run; the `goto:` location that shows it; and the workshops that list it, the one to start first.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreviewTarget {
     pub id: String,
     pub package_dir: String,
     pub location: String,
-    pub channel: Option<String>,
+    pub workshops: Vec<Workshop>,
 }
 
 /// The target of the preview whose zone — its header, its body and its `[play]` — holds 0-based `line` of `source`, which `doc` must be the parse of.

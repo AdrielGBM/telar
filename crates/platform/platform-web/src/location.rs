@@ -14,6 +14,9 @@ use crate::platform::{Listener, listen};
 
 const STATE_KEY: &str = "telar";
 
+/// The least time between two `replaceState` calls. A browser refuses or delays a page calling it faster — Safari throws past a hundred calls in ten seconds — and an app's address can change on every frame, as it does while a slider is dragged.
+const REPLACE_INTERVAL_MS: f64 = 200.0;
+
 /// The browser's session history, as the app's address.
 ///
 /// Every entry carries the app's whole history in its `history.state`, so a reload or a traversal restores the stack the entry was made from rather than a single page, and the page's scroll position (the surface's primary scroll), so back and forward return to where the reader was. The browser's own scroll restoration is turned off, since it would restore before the app has drawn the page it belongs to.
@@ -21,6 +24,7 @@ const STATE_KEY: &str = "telar";
 /// `?telar-*` page settings are kept out of the locations the app sees and written back onto every address it pushes, so a setting made by a link survives navigating.
 pub struct WebLocation {
     shared: Rc<Shared>,
+    write_waiting: Closure<dyn FnMut()>,
     _listeners: Vec<Listener>,
 }
 
@@ -28,6 +32,14 @@ struct Shared {
     format: LocationFormat,
     page_settings: Vec<(String, String)>,
     history: RefCell<Vec<Location>>,
+    replaced: RefCell<Replaced>,
+}
+
+/// When the browser's entry was last replaced, and the timer of the replace waiting to follow, if one is.
+#[derive(Default)]
+struct Replaced {
+    at: f64,
+    waiting: Option<i32>,
 }
 
 impl WebLocation {
@@ -42,6 +54,7 @@ impl WebLocation {
             format,
             page_settings: page_settings(),
             history: RefCell::new(Vec::new()),
+            replaced: RefCell::default(),
         });
         let viewport: web_sys::EventTarget = dom::window().into();
         let listeners = vec![
@@ -66,14 +79,28 @@ impl WebLocation {
                 listen(&viewport, "pagehide", true, move |_| shared.stamp_current())
             },
         ];
+        let write_waiting = {
+            let shared = shared.clone();
+            Closure::new(move || shared.write_replace())
+        };
         Self {
             shared,
+            write_waiting,
             _listeners: listeners,
         }
     }
 
     pub fn format(&self) -> &LocationFormat {
         &self.shared.format
+    }
+}
+
+impl Drop for WebLocation {
+    // The waiting replace would call a closure dropped with this, so it is made now instead.
+    fn drop(&mut self) {
+        if self.shared.replaced.borrow().waiting.is_some() {
+            self.shared.write_replace();
+        }
     }
 }
 
@@ -113,13 +140,11 @@ impl LocationSource for WebLocation {
     }
 
     fn replace(&mut self, history: &[Location]) {
-        let shared = &self.shared;
-        let Some(top) = history.last() else {
+        if history.is_empty() {
             return;
-        };
-        let state = write_state(history, scroll_position(), &shared.format);
-        let _ = browser_history().replace_state_with_url(&state, "", Some(&shared.href(top)));
-        *shared.history.borrow_mut() = history.to_vec();
+        }
+        *self.shared.history.borrow_mut() = history.to_vec();
+        self.shared.replace_soon(&self.write_waiting);
     }
 
     // The entries the app stepped back over are kept, so the browser's forward button can return to them.
@@ -153,14 +178,62 @@ impl Shared {
         self.format.format(&with_settings)
     }
 
-    /// Writes the app's history and the current scroll position into the entry the browser is showing, so leaving it — by a push, a traversal or a reload — can come back to both.
+    /// Writes the app's history and the current scroll position into the entry the browser is showing, so leaving it — by a push, a traversal or a reload — can come back to both. A replace still waiting is written now, address and all.
     fn stamp_current(&self) {
+        if self.replaced.borrow().waiting.is_some() {
+            self.write_replace();
+            return;
+        }
         let state = write_state(&self.history.borrow(), scroll_position(), &self.format);
         let _ = browser_history().replace_state(&state, "");
     }
 
+    /// Replaces the entry the browser is showing with the history now, or, when it was replaced less than [`REPLACE_INTERVAL_MS`] ago, once that much has passed: with the history as it is by then, so the last of a burst is the one that lands.
+    fn replace_soon(&self, write: &Closure<dyn FnMut()>) {
+        let wait = {
+            let replaced = self.replaced.borrow();
+            if replaced.waiting.is_some() {
+                return;
+            }
+            replaced.at + REPLACE_INTERVAL_MS - js_sys::Date::now()
+        };
+        if wait <= 0.0 {
+            self.write_replace();
+            return;
+        }
+        let timer = dom::window()
+            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                write.as_ref().unchecked_ref(),
+                wait.ceil() as i32,
+            )
+            .ok();
+        match timer {
+            Some(timer) => self.replaced.borrow_mut().waiting = Some(timer),
+            None => self.write_replace(),
+        }
+    }
+
+    fn write_replace(&self) {
+        self.cancel_waiting_replace();
+        self.replaced.borrow_mut().at = js_sys::Date::now();
+        let history = self.history.borrow();
+        let Some(top) = history.last() else {
+            return;
+        };
+        let state = write_state(&history, scroll_position(), &self.format);
+        let _ = browser_history().replace_state_with_url(&state, "", Some(&self.href(top)));
+    }
+
+    fn cancel_waiting_replace(&self) {
+        if let Some(timer) = self.replaced.borrow_mut().waiting.take() {
+            dom::window().clear_timeout_with_handle(timer);
+        }
+    }
+
     /// The browser moved to another entry by itself. An entry this app stamped says which history it belongs to; any other is a new one the browser opened on top — a same-page link, an address edited by hand — and is stamped now.
     fn traversed(&self, state: JsValue) {
+        // A replace still waiting was for the entry the browser has just left.
+        self.cancel_waiting_replace();
         let Some(current) = self.current() else {
             return;
         };

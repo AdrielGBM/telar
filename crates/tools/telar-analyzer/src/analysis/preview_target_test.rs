@@ -1,12 +1,20 @@
 use super::*;
 use telar_parser::parse;
 
+fn gallery() -> Workshop {
+    Workshop {
+        package_dir: "/work/app".to_string(),
+        channel: "/work/.telar/workshop/my-app.channel".to_string(),
+        server: "/work/.telar/workshop/my-app.server".to_string(),
+    }
+}
+
 fn host(component: &str) -> PreviewHost {
     PreviewHost {
         package_root: PathBuf::from("/work/app"),
         crate_name: "my_app".to_string(),
         component: component.to_string(),
-        workshop_channel: Some(PathBuf::from("/work/.telar/workshop/my-app.channel")),
+        workshops: vec![gallery()],
     }
 }
 
@@ -91,30 +99,49 @@ fn the_target_carries_where_to_run_and_what_to_send() {
             id: "my_app--card--wide-rtl".to_string(),
             package_dir: "/work/app".to_string(),
             location: "/preview/my_app--card--wide-rtl".to_string(),
-            channel: Some("/work/.telar/workshop/my-app.channel".to_string()),
+            workshops: vec![gallery()],
         })
     );
 }
 
+fn scratch(name: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!(
+        "telar-preview-target-{name}-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    root
+}
+
 #[test]
 fn a_previews_file_previews_the_component_it_is_named_after() {
-    let root = std::env::temp_dir().join(format!("telar-preview-target-{}", std::process::id()));
-    let src_dir = root.join("src");
-    std::fs::create_dir_all(&src_dir).unwrap();
+    let root = scratch("app");
     std::fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"rsx-fixture\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    let file = src_dir.join("tally.previews.rsx");
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    let file = root.join("src/tally.previews.rsx");
 
     let host = PreviewHost::discover(&file).unwrap();
     assert_eq!(host.crate_name, "rsx_fixture");
     assert_eq!(host.component, "tally");
     assert_eq!(
-        host.workshop_channel,
-        Some(root.join(".telar/workshop/rsx-fixture.channel")),
-        "named by the package, as `cargo telar preview` names it"
+        host.workshops,
+        vec![Workshop {
+            package_dir: root.to_string_lossy().into_owned(),
+            channel: root
+                .join(".telar/workshop/rsx-fixture.channel")
+                .to_string_lossy()
+                .into_owned(),
+            server: root
+                .join(".telar/workshop/rsx-fixture.server")
+                .to_string_lossy()
+                .into_owned(),
+        }],
+        "an application shows its own, named by the package as `cargo telar preview` names it"
     );
 
     std::fs::write(
@@ -126,6 +153,51 @@ fn a_previews_file_previews_the_component_it_is_named_after() {
         PreviewHost::discover(&file).unwrap().crate_name,
         "fixture_lib",
         "`CARGO_CRATE_NAME` is the library's name"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_librarys_previews_are_shown_by_the_application_that_includes_it() {
+    let root = scratch("library");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"kit\", \"gallery\"]\n",
+    )
+    .unwrap();
+    let kit = root.join("kit");
+    std::fs::create_dir_all(kit.join("src")).unwrap();
+    std::fs::write(kit.join("Cargo.toml"), "[package]\nname = \"kit\"\n").unwrap();
+    std::fs::write(kit.join("telar.toml"), "[telar]\nlibrary = true\n").unwrap();
+    let gallery = root.join("gallery");
+    std::fs::create_dir_all(gallery.join("src")).unwrap();
+    std::fs::write(
+        gallery.join("Cargo.toml"),
+        "[package]\nname = \"gallery\"\n",
+    )
+    .unwrap();
+    std::fs::write(gallery.join("src/main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(
+        gallery.join("telar.toml"),
+        "[telar.previews]\ninclude = [\"kit\"]\n",
+    )
+    .unwrap();
+
+    let host = PreviewHost::discover(&kit.join("src/button.rsx")).unwrap();
+    assert_eq!(host.package_root, kit, "its tests still run in the library");
+    let shown_by: Vec<_> = host
+        .workshops
+        .iter()
+        .map(|workshop| (workshop.package_dir.clone(), workshop.channel.clone()))
+        .collect();
+    assert_eq!(
+        shown_by,
+        vec![(
+            gallery.to_string_lossy().into_owned(),
+            root.join(".telar/workshop/gallery.channel")
+                .to_string_lossy()
+                .into_owned(),
+        )]
     );
     let _ = std::fs::remove_dir_all(&root);
 }

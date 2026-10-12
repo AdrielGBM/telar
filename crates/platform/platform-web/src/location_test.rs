@@ -109,3 +109,50 @@ async fn a_fragment_the_browser_opens_by_itself_is_a_new_entry_on_top() {
         "reported once, though both popstate and hashchange fire"
     );
 }
+
+async fn wait(ms: i32) {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        let _ = window().set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms);
+    });
+    let _ = JsFuture::from(promise).await;
+}
+
+/// A slider dragged across an arg the address carries replaces it on every frame, and a browser refuses a page that calls `replaceState` that often.
+#[wasm_bindgen_test]
+async fn a_burst_of_replaces_writes_the_first_at_once_and_the_last_once_it_rests() {
+    let mut source = WebLocation::new(Some(LocationFormat::new("/telar-test")));
+    source.initial();
+    for n in 0..50 {
+        source.replace(&[at(&format!("/drag/{n}"))]);
+    }
+    assert_eq!(path_now(), "/telar-test/drag/0");
+    wait(400).await;
+    assert_eq!(path_now(), "/telar-test/drag/49");
+}
+
+#[wasm_bindgen_test]
+async fn a_replace_still_waiting_lands_on_its_entry_before_a_push() {
+    record_moves();
+    let mut source = WebLocation::new(Some(LocationFormat::new("/telar-test")));
+    source.initial();
+    source.replace(&[at("/a")]);
+    source.replace(&[at("/b")]);
+    source.push(&[at("/b"), at("/c")]);
+    assert_eq!(path_now(), "/telar-test/c");
+    window().history().unwrap().back().unwrap();
+    settle().await;
+    assert_eq!(path_now(), "/telar-test/b");
+    assert_eq!(MOVES.with(|moves| moves.take()), [vec![at("/b")]]);
+}
+
+#[wasm_bindgen_test]
+async fn a_replace_still_waiting_is_written_when_the_source_goes() {
+    let mut source = WebLocation::new(Some(LocationFormat::new("/telar-test")));
+    source.initial();
+    source.replace(&[at("/first")]);
+    source.replace(&[at("/last")]);
+    drop(source);
+    assert_eq!(path_now(), "/telar-test/last");
+    wait(400).await;
+    assert_eq!(path_now(), "/telar-test/last");
+}

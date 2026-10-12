@@ -767,7 +767,7 @@ fn the_preview_shell_is_the_workshop_only_under_its_feature() {
     let krate = proc_macro2::Ident::new("telar_workshop", proc_macro2::Span::call_site());
     let shell = spaced(super::preview_shell(Some(&krate)));
     assert!(
-        shell.contains("# [cfg (feature = \"telar-workshop\")] let shell = :: telar_workshop :: WorkshopApp :: new ;"),
+        shell.contains("# [cfg (feature = \"telar-workshop\")] let shell = | entries | :: telar_workshop :: WorkshopApp :: new (entries) . project_name (:: core :: env ! (\"CARGO_PKG_NAME\")) ;"),
         "{shell}"
     );
     assert!(

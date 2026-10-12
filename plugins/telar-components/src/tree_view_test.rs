@@ -558,3 +558,24 @@ fn a_tree_that_selects_only_leaves_opens_a_branch_it_is_asked_to_choose() {
     assert_eq!(tree.selected().as_deref(), Some("checkbox"));
     assert_eq!(*tree.picked.borrow(), ["checkbox"]);
 }
+
+#[test]
+fn the_tree_is_a_tab_stop_and_its_rows_are_not() {
+    let _tree = Mounted::new(catalogue(), 400.0);
+    focus::clear();
+    focus::focus_next();
+    let held = focus::current().expect("tab reaches the tree");
+    let exposed = focus::exposed();
+    assert!(exposed.iter().any(|e| e.id == held && e.role == Role::Tree));
+    focus::focus_next();
+    assert_eq!(focus::current(), Some(held), "and nothing else is a stop");
+}
+
+#[test]
+fn pressing_the_empty_space_below_the_rows_focuses_the_tree() {
+    let mut tree = Mounted::new(catalogue(), 400.0);
+    focus::clear();
+    assert_eq!(focus::current(), None);
+    tree.click(120.0, 380.0);
+    assert!(focus::current().is_some());
+}

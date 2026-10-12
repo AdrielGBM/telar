@@ -19,7 +19,7 @@ use super::guides;
 use crate::interactions;
 use crate::settings::{CanvasSettings, CanvasSize, fit_scale};
 use crate::state::WorkshopState;
-use crate::strings::{self, VIEWPORT_HEIGHT, VIEWPORT_RESET, VIEWPORT_SIZE, VIEWPORT_WIDTH};
+use crate::strings::{self, VIEWPORT_HEIGHT, VIEWPORT_RESET, VIEWPORT_WIDTH};
 
 pub(super) const STAGE_MARGIN: f32 = WORKBENCH_GRID * 2.0;
 pub(super) const HANDLE: f32 = WORKBENCH_GRID;
@@ -319,11 +319,12 @@ impl Edge {
         self != Self::Right
     }
 
-    fn label(self) -> &'static str {
+    /// The axis a reader hears the handle move along, and the name it hears. `None` for the corner: a separator moves along one axis and no role a reader knows moves along two, so the corner is a pointer's shortcut to the sizes the other two handles reach from the keyboard.
+    fn axis(self) -> Option<(Orientation, &'static str)> {
         match self {
-            Self::Right => VIEWPORT_WIDTH,
-            Self::Bottom => VIEWPORT_HEIGHT,
-            Self::Corner => VIEWPORT_SIZE,
+            Self::Right => Some((Orientation::Vertical, VIEWPORT_WIDTH)),
+            Self::Bottom => Some((Orientation::Horizontal, VIEWPORT_HEIGHT)),
+            Self::Corner => None,
         }
     }
 
@@ -421,16 +422,8 @@ fn handle(
     .styled_by(style);
     let own = track_layout(handle.layout_node()).expect("the handle is registered");
     let grab: Rc<Cell<Option<Grab>>> = Rc::default();
-    let (dragged, ended, cancelled, stepped, ranged) = (
-        resize.clone(),
-        Rc::clone(&grab),
-        Rc::clone(&grab),
-        resize.clone(),
-        resize,
-    );
+    let (dragged, ended, cancelled) = (resize.clone(), Rc::clone(&grab), Rc::clone(&grab));
     let handle = handle
-        .control(Role::Splitter)
-        .a11y_label(move || strings::text(edge.label()))
         .cursor(edge.cursor())
         .on_hover(move |hovered| active.set(hovered))
         .on_drag(move |x, y| {
@@ -453,7 +446,16 @@ fn handle(
             ));
         })
         .on_drag_end(move |_, _| ended.set(None))
-        .on_drag_cancel(move || cancelled.set(None))
+        .on_drag_cancel(move || cancelled.set(None));
+    let Some((orientation, label)) = edge.axis() else {
+        return Ok(box_item(handle));
+    };
+    let stepped = resize.clone();
+    let handle = handle
+        .control(Role::Splitter)
+        .a11y_label(move || strings::text(label))
+        .oriented(orientation)
+        .valued(move || resize.range(edge))
         .on_focused_key(move |key: &Key| -> bool {
             let Some((dx, dy)) = key_step(edge, key) else {
                 return false;
@@ -462,15 +464,6 @@ fn handle(
             stepped.set(Size::new(from.width + dx, from.height + dy));
             true
         });
-    let handle = match edge {
-        Edge::Right => handle
-            .oriented(Orientation::Vertical)
-            .valued(move || ranged.range(edge)),
-        Edge::Bottom => handle
-            .oriented(Orientation::Horizontal)
-            .valued(move || ranged.range(edge)),
-        Edge::Corner => handle,
-    };
     Ok(box_item(handle))
 }
 

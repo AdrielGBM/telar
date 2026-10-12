@@ -70,7 +70,8 @@ pub use manifest::{
 };
 pub use paths::{
     cargo_metadata, find_ancestor_dir, find_package_root, find_target_dir, find_telar_root,
-    find_workspace_root, resolve_telar_version, telar_version_in, write_if_changed_atomic,
+    find_workspace_root, resolve_telar_version, telar_version_in, workspace_member_dirs,
+    write_if_changed_atomic,
 };
 pub use prelude::{
     PreludeDeclaration, PreludeEntry, PreludeProblem, prelude_declarations, prelude_problems,
@@ -83,7 +84,7 @@ pub use prerender::{
 pub use previews::{
     MATRIX_GLOBAL_AXES, MatrixAxes, MatrixAxis, MatrixControlSize, MatrixDirection, MatrixValue,
     PreviewsInclude, PreviewsIncludeDeclaration, PreviewsIncludeProblem, PreviewsSection,
-    SnapshotSettings, Viewport, is_preview_name, previews_include_declarations,
+    SnapshotSettings, Viewport, is_preview_name, preview_hosts, previews_include_declarations,
     previews_include_problems,
 };
 pub use theme::{normalize_theme_path, theme_type_in_config};

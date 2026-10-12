@@ -85,10 +85,10 @@ fn two_runs_of_text_are_pieces_placed_inside_their_box() {
         false,
     );
     let node = only_box(&frame);
-    let Content::Children { boxes, pieces } = &node.content else {
+    let Content::Children { children, pieces } = &node.content else {
         panic!("the box holds pieces");
     };
-    assert!(boxes.is_empty());
+    assert!(children.is_empty());
     assert_eq!(pieces.len(), 2);
     assert!(pieces[0].style.starts_with("position:absolute;"));
     assert!(
@@ -114,10 +114,10 @@ fn boxes_keep_the_order_they_were_drawn_in() {
         &mut Fixed,
         false,
     );
-    let Content::Children { boxes, .. } = &only_box(&frame).content else {
-        panic!("the box holds boxes");
-    };
-    let ids: Vec<u64> = boxes.iter().map(|node| node.id).collect();
+    let ids: Vec<u64> = children(only_box(&frame))
+        .iter()
+        .map(|node| node.key.id)
+        .collect();
     assert_eq!(ids, [2, 3]);
 }
 
@@ -148,7 +148,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
         ..Described::default()
     };
     let names: Vec<&str> = described
-        .attributes(5)
+        .attributes(BoxKey::from(5))
         .into_iter()
         .map(|(name, _)| name)
         .collect();
@@ -190,7 +190,7 @@ fn a_picture_is_named_by_its_alt_even_when_nobody_named_it() {
         picture: true,
         ..Described::default()
     };
-    let attributes = described.attributes(5);
+    let attributes = described.attributes(BoxKey::from(5));
     assert!(attributes.contains(&("alt", Some(String::new()))));
     assert!(!attributes.iter().any(|(name, _)| *name == "aria-label"));
 }
@@ -209,7 +209,7 @@ fn state_attributes(role: Role, on: bool) -> (&'static str, Vec<(&'static str, S
     let node = only_box(&frame);
     let states = node
         .described
-        .attributes(node.id)
+        .attributes(node.key)
         .into_iter()
         .filter(|(name, _)| {
             matches!(
@@ -261,7 +261,7 @@ fn a_tree_row_writes_its_selection_its_openness_and_its_place() {
         );
         let node = only_box(&frame);
         node.described
-            .attributes(node.id)
+            .attributes(node.key)
             .into_iter()
             .filter(|(name, _)| name.starts_with("aria-") || *name == "role")
             .filter_map(|(name, value)| Some((name, value?)))
@@ -307,7 +307,7 @@ fn current_attribute(semantics: Semantics) -> Option<String> {
     );
     let node = only_box(&frame);
     node.described
-        .attributes(node.id)
+        .attributes(node.key)
         .into_iter()
         .find(|(name, _)| *name == "aria-current")
         .and_then(|(_, value)| value)
@@ -377,10 +377,7 @@ fn page_with_layer() -> Vec<DrawCommand> {
 fn a_layer_takes_the_place_it_was_declared_in() {
     let frame = describe_frame(&page_with_layer(), None, &mut Fixed, false);
     let page = only_box(&frame);
-    let Content::Children { boxes, .. } = &page.content else {
-        panic!("the page holds boxes");
-    };
-    let ids: Vec<u64> = boxes.iter().map(|node| node.id).collect();
+    let ids: Vec<u64> = children(page).iter().map(|node| node.key.id).collect();
     assert_eq!(ids, [10, 3], "the layer stands in for its place");
 }
 
@@ -388,10 +385,7 @@ fn a_layer_takes_the_place_it_was_declared_in() {
 fn a_layer_is_fixed_over_the_page_and_takes_the_pointer_only_over_its_boxes() {
     let frame = describe_frame(&page_with_layer(), None, &mut Fixed, false);
     let page = only_box(&frame);
-    let Content::Children { boxes, .. } = &page.content else {
-        panic!("the page holds boxes");
-    };
-    let layer = &boxes[0];
+    let layer = children(page)[0];
     for declaration in [
         "position:fixed;",
         "left:0px;",
@@ -407,9 +401,7 @@ fn a_layer_is_fixed_over_the_page_and_takes_the_pointer_only_over_its_boxes() {
             layer.style
         );
     }
-    let Content::Children { boxes: bar, .. } = &layer.content else {
-        panic!("the layer holds its bar");
-    };
+    let bar = children(layer);
     assert!(
         bar[0].style.contains("pointer-events:auto;"),
         "{}",
@@ -439,7 +431,7 @@ fn a_layer_whose_place_is_missing_still_stands_over_the_surface() {
         .children
         .iter()
         .map(|node| match node {
-            Node::Box(node) => node.id,
+            Node::Box(node) => node.key.id,
             Node::Paint(_) => 0,
         })
         .collect();
@@ -596,7 +588,7 @@ fn a_splitter_writes_its_value_and_its_orientation() {
     let node = only_box(&frame);
     let written: Vec<_> = node
         .described
-        .attributes(node.id)
+        .attributes(node.key)
         .into_iter()
         .filter(|(name, _)| name.starts_with("aria-value") || *name == "aria-orientation")
         .filter_map(|(name, value)| Some((name, value?)))
@@ -614,15 +606,15 @@ fn a_splitter_writes_its_value_and_its_orientation() {
 
 fn attribute(node: &BoxNode, name: &str) -> Option<String> {
     node.described
-        .attributes(node.id)
+        .attributes(node.key)
         .into_iter()
         .find(|(written, _)| *written == name)
         .and_then(|(_, value)| value)
 }
 
-fn children(node: &BoxNode) -> &[BoxNode] {
+fn children(node: &BoxNode) -> Vec<&BoxNode> {
     match &node.content {
-        Content::Children { boxes, .. } => boxes,
+        Content::Children { children, .. } => children.iter().filter_map(Node::as_box).collect(),
         _ => panic!("a box with boxes inside"),
     }
 }
@@ -658,8 +650,8 @@ fn a_container_points_at_the_row_its_cursor_rests_on() {
 
     let frame = tree(4, None);
     let root = only_box(&frame);
-    let first = &children(root)[0];
-    let nested = &children(&children(root)[1])[0];
+    let first = children(root)[0];
+    let nested = children(children(root)[1])[0];
     assert_eq!(
         attribute(root, "aria-activedescendant").as_deref(),
         Some("telar-box-4")
@@ -709,10 +701,58 @@ fn a_named_wrapper_names_the_one_control_it_wraps() {
         false,
     );
     let wrapper = only_box(&frame);
-    let control = &children(wrapper)[0];
+    let control = children(wrapper)[0];
     assert_eq!(attribute(wrapper, "aria-label"), None);
     assert_eq!(attribute(wrapper, "role"), None);
     assert_eq!(attribute(control, "aria-label").as_deref(), Some("Speed"));
+}
+
+/// A combobox, a spin button or a slider nothing named is named by the text drawn inside it, as every other target names it, where a browser would take that text for its value and leave the control nameless. A button is named by its content by the browser itself, and a wrapper's name still reaches the control it wraps.
+#[test]
+fn a_control_a_browser_would_not_name_by_its_content_is_named_by_what_it_draws() {
+    let frame = describe_frame(
+        &[
+            open(1, Semantics::group()),
+            open(2, Semantics::of(Role::ComboBox)),
+            open(3, Semantics::group()),
+            text("Small"),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            open(4, Semantics::of(Role::SpinButton)),
+            open(5, Semantics::group()),
+            text("Width"),
+            DrawCommand::PopElement,
+            open(6, Semantics::group()),
+            text(" 13 "),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            open(7, Semantics::of(Role::Button)),
+            text("Save"),
+            DrawCommand::PopElement,
+            open(8, named(Semantics::group(), "Speed")),
+            open(9, Semantics::of(Role::Slider)),
+            text("40"),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let [combobox, spin_button, button, wrapper] = children(only_box(&frame))[..] else {
+        panic!("four boxes inside the root");
+    };
+    assert_eq!(attribute(combobox, "aria-label").as_deref(), Some("Small"));
+    assert_eq!(
+        attribute(spin_button, "aria-label").as_deref(),
+        Some("Width 13")
+    );
+    assert_eq!(attribute(button, "aria-label"), None);
+    assert_eq!(
+        attribute(children(wrapper)[0], "aria-label").as_deref(),
+        Some("Speed 40")
+    );
 }
 
 /// A control hidden with `display:none` is still an element, and it is not one a reader would be sent to: only the visible control is counted and named.
@@ -742,10 +782,10 @@ fn a_hidden_control_does_not_stop_a_wrapper_naming_the_visible_one() {
     let wrapper = only_box(&frame);
     assert_eq!(attribute(wrapper, "aria-label"), None);
     assert_eq!(
-        attribute(&children(wrapper)[0], "aria-label").as_deref(),
+        attribute(children(wrapper)[0], "aria-label").as_deref(),
         Some("Speed")
     );
-    assert_eq!(attribute(&children(wrapper)[1], "aria-label"), None);
+    assert_eq!(attribute(children(wrapper)[1], "aria-label"), None);
 }
 
 /// A tab list has a role of its own, and a box with a caption beside its button has words of its own: each names itself, and its control keeps its own name.
@@ -764,7 +804,7 @@ fn a_named_box_with_a_role_or_content_of_its_own_names_itself() {
     );
     let list = only_box(&list);
     assert_eq!(attribute(list, "aria-label").as_deref(), Some("Sections"));
-    assert_eq!(attribute(&children(list)[0], "aria-label"), None);
+    assert_eq!(attribute(children(list)[0], "aria-label"), None);
 
     let bar = describe_frame(
         &[
@@ -781,7 +821,7 @@ fn a_named_box_with_a_role_or_content_of_its_own_names_itself() {
     let bar = only_box(&bar);
     assert_eq!(attribute(bar, "aria-label").as_deref(), Some("Fixed bar"));
     assert_eq!(attribute(bar, "role").as_deref(), Some("group"));
-    assert_eq!(attribute(&children(bar)[0], "aria-label"), None);
+    assert_eq!(attribute(children(bar)[0], "aria-label"), None);
 }
 
 /// A bound that is not a number is no bound: `-inf` is not a value `aria-valuemin` can take, and a field with no limit has none to state.
@@ -805,4 +845,337 @@ fn an_unbounded_value_writes_no_bounds() {
     assert_eq!(attribute(node, "aria-valuenow").as_deref(), Some("3"));
     assert_eq!(attribute(node, "aria-valuemin"), None);
     assert_eq!(attribute(node, "aria-valuemax"), None);
+}
+
+/// A host away from the viewport's corner, so a box placed against the viewport and one placed inside a box are told apart.
+struct Offset;
+
+impl Surface for Offset {
+    fn hold_document_scroll(&mut self, _id: u64) {}
+
+    fn fixed_origin(&mut self) -> Option<(f32, f32)> {
+        None
+    }
+
+    fn host_origin(&mut self) -> (f32, f32) {
+        (100.0, 200.0)
+    }
+
+    fn image_href(&mut self, _data: &ImageData) -> Option<Rc<str>> {
+        None
+    }
+
+    fn baseline(&mut self, style: &TextStyle) -> f32 {
+        style.font_size
+    }
+}
+
+const NESTED: u64 = 7;
+
+/// `content`, the frame of surface [`NESTED`], drawn in the window's box 1.
+fn framed(content: Vec<DrawCommand>) -> Vec<DrawCommand> {
+    let mut commands = vec![
+        open_at(1, Semantics::group(), Rect::new(30.0, 40.0, 200.0, 100.0)),
+        DrawCommand::PushSurface { surface: NESTED },
+    ];
+    commands.extend(content);
+    commands.extend([DrawCommand::PopSurface, DrawCommand::PopElement]);
+    commands
+}
+
+fn in_nested(id: u64) -> BoxKey {
+    BoxKey::new(Some(NESTED), id)
+}
+
+/// Each surface numbers its boxes from its own counter, so the window's box and a box of the surface drawn in it can share an id and still be two elements.
+#[test]
+fn a_nested_surfaces_boxes_are_named_by_the_surface_that_numbered_them() {
+    let focusable = Semantics::of(Role::Button).focusable(renderer_core::Focusable {
+        tab_stop: true,
+        consumes: Role::Button.consumed_keys(),
+    });
+    let frame = describe_frame(
+        &framed(vec![
+            open_at(1, Semantics::group(), Rect::new(0.0, 0.0, 200.0, 100.0)),
+            open_at(2, focusable, Rect::new(10.0, 10.0, 50.0, 20.0)),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ]),
+        None,
+        &mut Fixed,
+        false,
+    );
+    let window_box = only_box(&frame);
+    assert_eq!(window_box.key, BoxKey::from(1));
+    let root = children(window_box)[0];
+    assert_eq!(root.key, in_nested(1));
+    let button = children(root)[0];
+    assert_eq!(button.key, in_nested(2));
+    assert_eq!(
+        attribute(button, platform_core::consumed_keys::FOCUS_BOX_ATTRIBUTE).as_deref(),
+        Some("7-2"),
+        "a focus the document moves onto it names the surface too"
+    );
+}
+
+/// The surface computed and placed its own roots, as the window did its own: nothing in the box it is drawn in says where they go, so each is placed at its rect inside that box, which contains them.
+#[test]
+fn a_nested_surfaces_layout_roots_are_placed_in_the_box_it_is_drawn_in() {
+    let frame = describe_frame(
+        &framed(vec![
+            open_at(1, Semantics::group(), Rect::new(0.0, 0.0, 200.0, 100.0)),
+            DrawCommand::PopElement,
+            open_at(2, Semantics::group(), Rect::new(20.0, 30.0, 60.0, 40.0)),
+            DrawCommand::PopElement,
+        ]),
+        None,
+        &mut Offset,
+        false,
+    );
+    let window_box = only_box(&frame);
+    assert!(
+        window_box.style.contains("contain:layout;"),
+        "{}",
+        window_box.style
+    );
+    let roots = children(window_box);
+    let keys: Vec<BoxKey> = roots.iter().map(|root| root.key).collect();
+    assert_eq!(keys, [in_nested(1), in_nested(2)]);
+    for declaration in [
+        "position:absolute;",
+        "left:20px;",
+        "top:30px;",
+        "width:60px;",
+        "height:40px;",
+    ] {
+        assert!(
+            roots[1].style.contains(declaration),
+            "{declaration} in {}",
+            roots[1].style
+        );
+    }
+}
+
+#[test]
+fn a_nested_surfaces_layer_is_fixed_over_that_surface_and_lifted_inside_its_root() {
+    let frame = describe_frame(&framed(page_with_layer()), None, &mut Offset, false);
+    let window_box = only_box(&frame);
+    let page = children(window_box)[0];
+    assert_eq!(page.key, in_nested(1));
+    let layer = children(page)[0];
+    assert_eq!(
+        layer.key,
+        in_nested(10),
+        "the layer stands in for its place"
+    );
+    for declaration in ["position:fixed;", "left:0px;", "top:0px;", "z-index:1;"] {
+        assert!(
+            layer.style.contains(declaration),
+            "{declaration} in {}",
+            layer.style
+        );
+    }
+    assert!(
+        page.style.contains("isolation:isolate;"),
+        "the lift stays inside the surface's own root: {}",
+        page.style
+    );
+    assert!(
+        !window_box.style.contains("isolation:"),
+        "and not the window's: {}",
+        window_box.style
+    );
+}
+
+#[test]
+fn a_layer_of_the_window_takes_no_place_a_nested_surface_numbered() {
+    let mut commands = framed(vec![
+        open_at(2, Semantics::group(), Rect::new(0.0, 0.0, 200.0, 100.0)),
+        DrawCommand::PopElement,
+    ]);
+    commands.extend([layer(10, 2), DrawCommand::PopElement]);
+    let frame = describe_frame(&commands, None, &mut Fixed, false);
+    let keys: Vec<BoxKey> = frame
+        .children
+        .iter()
+        .filter_map(|node| match node {
+            Node::Box(node) => Some(node.key),
+            Node::Paint(_) => None,
+        })
+        .collect();
+    assert_eq!(keys, [BoxKey::from(1), BoxKey::from(10)]);
+    assert_eq!(children(only_box_of(&frame, 1))[0].key, in_nested(2));
+}
+
+fn only_box_of(frame: &Frame, id: u64) -> &BoxNode {
+    frame
+        .children
+        .iter()
+        .find_map(|node| match node {
+            Node::Box(node) if node.key == BoxKey::from(id) => Some(&**node),
+            _ => None,
+        })
+        .expect("the box is a root")
+}
+
+#[test]
+fn a_cursor_points_only_at_a_row_of_its_own_surface() {
+    let tree = Semantics {
+        active_descendant: Some(2),
+        ..Semantics::of(Role::Tree)
+    };
+    let frame = describe_frame(
+        &[
+            open(1, tree),
+            DrawCommand::PushSurface { surface: NESTED },
+            open(2, Semantics::of(Role::TreeItem)),
+            DrawCommand::PopElement,
+            DrawCommand::PopSurface,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let root = only_box(&frame);
+    assert_eq!(attribute(root, "aria-activedescendant"), None);
+    assert_eq!(attribute(children(root)[0], "id"), None);
+}
+
+#[test]
+fn a_nested_surface_never_takes_the_document_scroll() {
+    let frame = describe_frame(
+        &[
+            DrawCommand::PushSurface { surface: NESTED },
+            DrawCommand::PushElement {
+                element: Arc::new(
+                    Element::new(
+                        ElementId(1),
+                        Semantics::of(Role::ScrollArea),
+                        "",
+                        Rect::new(0.0, 0.0, 200.0, 100.0),
+                    )
+                    .as_primary_scroll(true),
+                ),
+            },
+            DrawCommand::PopElement,
+            DrawCommand::PopSurface,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    assert_eq!(frame.primary, None);
+    let root = only_box(&frame);
+    assert_eq!(root.key, in_nested(1));
+    assert!(root.scrolls, "it scrolls as a box of its own");
+}
+
+#[test]
+fn a_drawing_in_a_nested_surface_names_its_definitions_apart_from_the_windows() {
+    let drawing = |surface: Option<u64>| {
+        let gradient = renderer_core::ShapeStyle::with_fill(
+            renderer_core::RectStyle::default(),
+            renderer_core::Paint::Gradient(renderer_core::Gradient::linear(
+                geometry_core::Point::new(0.0, 0.0),
+                geometry_core::Point::new(20.0, 0.0),
+                &[(0.0, Color::BLACK), (1.0, Color::WHITE)],
+            )),
+        );
+        let mut commands = vec![
+            open_at(
+                4,
+                Semantics::of(Role::Drawing),
+                Rect::new(0.0, 0.0, 20.0, 20.0),
+            ),
+            DrawCommand::Rect {
+                rect: Rect::new(0.0, 0.0, 20.0, 20.0),
+                style: Arc::new(gradient),
+            },
+            DrawCommand::PopElement,
+        ];
+        if let Some(surface) = surface {
+            commands.insert(0, DrawCommand::PushSurface { surface });
+            commands.push(DrawCommand::PopSurface);
+        }
+        match &only_box(&describe_frame(&commands, None, &mut Fixed, false)).content {
+            Content::Drawing(markup) => markup.clone(),
+            _ => panic!("a drawing"),
+        }
+    };
+    assert!(drawing(None).contains("id=\"t4-1\""), "{}", drawing(None));
+    assert!(
+        drawing(Some(NESTED)).contains("id=\"t7-4-1\""),
+        "{}",
+        drawing(Some(NESTED))
+    );
+}
+
+/// A modal inside a frame dims the page under it and not itself: the scrim the surface paints at its own level, between its page and its dialog, stays between them.
+fn framed_page_scrim_dialog() -> Vec<DrawCommand> {
+    framed(vec![
+        open_at(1, Semantics::group(), Rect::new(0.0, 0.0, 200.0, 100.0)),
+        DrawCommand::PopElement,
+        filled(Rect::new(0.0, 0.0, 200.0, 100.0)),
+        open_at(2, Semantics::group(), Rect::new(50.0, 20.0, 100.0, 60.0)),
+        DrawCommand::PopElement,
+    ])
+}
+
+#[test]
+fn paint_a_nested_surface_carries_at_its_own_level_keeps_its_place_among_its_roots() {
+    let frame = describe_frame(&framed_page_scrim_dialog(), None, &mut Offset, false);
+    let window_box = only_box(&frame);
+    let Content::Children { children, pieces } = &window_box.content else {
+        panic!("the box the surface is drawn in holds its top level");
+    };
+    assert!(pieces.is_empty(), "the scrim is no piece after the roots");
+    let order: Vec<Option<BoxKey>> = children
+        .iter()
+        .map(|child| child.as_box().map(|node| node.key))
+        .collect();
+    assert_eq!(order, [Some(in_nested(1)), None, Some(in_nested(2))]);
+    let Node::Paint(scrim) = &children[1] else {
+        panic!("the scrim is paint");
+    };
+    for declaration in [
+        "position:absolute;",
+        "left:0px;",
+        "top:0px;",
+        "width:200px;",
+        "height:100px;",
+        "pointer-events:none;",
+    ] {
+        assert!(
+            scrim.style.contains(declaration),
+            "{declaration} in {}",
+            scrim.style
+        );
+    }
+    assert!(
+        !window_box.style.contains("background"),
+        "a surface's own paint the size of the box is not the box's background: {}",
+        window_box.style
+    );
+}
+
+#[test]
+fn what_the_box_paints_before_the_surface_is_still_its_own() {
+    let commands = [
+        open_at(1, Semantics::group(), Rect::new(30.0, 40.0, 200.0, 100.0)),
+        filled(Rect::new(30.0, 40.0, 200.0, 100.0)),
+        DrawCommand::PushSurface { surface: NESTED },
+        open_at(1, Semantics::group(), Rect::new(0.0, 0.0, 200.0, 100.0)),
+        DrawCommand::PopElement,
+        DrawCommand::PopSurface,
+        DrawCommand::PopElement,
+    ];
+    let frame = describe_frame(&commands, None, &mut Fixed, false);
+    let window_box = only_box(&frame);
+    assert!(
+        window_box.style.contains("background"),
+        "{}",
+        window_box.style
+    );
+    assert_eq!(children(window_box)[0].key, in_nested(1));
 }

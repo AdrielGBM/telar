@@ -330,9 +330,19 @@ pub fn lay_out_against_surface(root: NodeId) {
 
 /// Frees `root`, a layout root of its own, whenever [`remove_node`] frees `holder`.
 ///
-/// For a subtree laid out apart from the node that shows it, as a scroll's content is apart from its viewport: nothing in the layout tree links the two, so freeing the viewport alone would leave the content behind, still laid out by every [`relayout_if_dirty`] after whoever built it has gone.
+/// For a subtree laid out apart from the node that shows it, as a fixed layer's content is apart from the place it was declared: nothing in the layout tree links the two, so freeing the place alone would leave the content behind, still laid out by every [`relayout_if_dirty`] after whoever built it has gone.
 pub fn free_with(root: NodeId, holder: NodeId) {
     with_runtime(|rt| rt.held_roots.entry(holder).or_default().push(root));
+}
+
+/// Makes `host` a scroll container showing `content`, as an `overflow: auto` box shows its children in CSS.
+///
+/// The content is laid out inside the host in the same pass, so the host is sized by it wherever it is sized by its content — a shrink-to-fit parent, an auto height, a `max_height` it is clamped to — and is freed with it. It is still placed apart: its rects are published in a space of its own with its top-left at the origin, the space the scroll offset indexes into, and no parent link joins it to the host, so a climb from inside it ends at the content.
+pub fn set_scroll_content(host: NodeId, content: NodeId) -> Result<(), LayoutError> {
+    with_runtime(|rt| {
+        rt.engine.set_scroll_content(host, content)?;
+        rt.engine.mark_dirty(host)
+    })
 }
 
 /// How many layout passes the active surface has run: computes that found something dirty and laid it out, not the calls that found everything clean.
@@ -920,27 +930,39 @@ impl LayoutRuntime {
         }
         self.engine.compute_layout(root, width, height)?;
         self.passes += 1;
-        let view = match self.sticky_views.get(&root) {
-            Some(view) => Ok(*view),
-            None => self.engine.layout(root),
-        };
-        let mut placed = Placed::new(&self.registry, root);
-        let walked = view.and_then(|view| {
-            self.engine
-                .walk_in_view(root, view, &mut |node, rect| placed.visit(node, rect))
-        });
-        let placed = placed.finish();
+        let placed = self.place(root);
         #[cfg(debug_assertions)]
         {
             self.is_computing = false;
         }
-        let anchors = walked?;
-        if anchors.is_empty() {
-            self.sticky_anchors.remove(&root);
-        } else {
-            self.sticky_anchors.insert(root, anchors);
+        placed
+    }
+
+    /// The rect writes for where the last pass put `root`'s nodes, and the nodes of every scroll content it shows, each content walked as a root of its own.
+    fn place(&mut self, root: NodeId) -> Result<Vec<Update>, LayoutError> {
+        let mut updates = Vec::new();
+        let mut roots = vec![root];
+        while let Some(at) = roots.pop() {
+            let view = match self.sticky_views.get(&at) {
+                Some(view) => Ok(*view),
+                None => self.engine.root_rect(at),
+            };
+            let mut placed = Placed::new(&self.registry, at);
+            let walked = view.and_then(|view| {
+                self.engine
+                    .walk_in_view(at, view, &mut |node, rect| placed.visit(node, rect))
+            });
+            let placed = placed.finish();
+            let walked = walked?;
+            if walked.anchors.is_empty() {
+                self.sticky_anchors.remove(&at);
+            } else {
+                self.sticky_anchors.insert(at, walked.anchors);
+            }
+            updates.extend(self.settle(placed));
+            roots.extend(walked.scroll_contents);
         }
-        Ok(self.settle(placed))
+        Ok(updates)
     }
 
     fn attach_to_host(&mut self, host: NodeId, content: NodeId) -> bool {

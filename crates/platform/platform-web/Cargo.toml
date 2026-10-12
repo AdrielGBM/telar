@@ -84,3 +84,11 @@ path = "src/safe_area_test.rs"
 [[test]]
 name = "title"
 path = "src/title_test.rs"
+
+[[test]]
+name = "page_hidden"
+path = "src/page_hidden_test.rs"
+
+[[test]]
+name = "idle"
+path = "src/idle_test.rs"

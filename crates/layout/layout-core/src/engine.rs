@@ -46,6 +46,8 @@ pub struct LayoutEngine {
     live: FxHashSet<NodeId>,
     /// The insets of every sticky node as last resolved, which taffy never sees.
     sticky: FxHashMap<NodeId, StickyInsets>,
+    /// The content of every scroll container: laid out inside its container, so the container is sized by it as CSS sizes an overflow box, yet walked as a root of its own, so its rects stay in the space the scroll offset indexes into.
+    scroll_contents: FxHashSet<NodeId>,
 }
 
 impl LayoutEngine {
@@ -57,6 +59,7 @@ impl LayoutEngine {
             styles: FxHashMap::default(),
             live: FxHashSet::default(),
             sticky: FxHashMap::default(),
+            scroll_contents: FxHashSet::default(),
         }
     }
 
@@ -165,6 +168,7 @@ impl LayoutEngine {
         self.live.remove(&node);
         self.styles.remove(&node);
         self.sticky.remove(&node);
+        self.scroll_contents.remove(&node);
     }
 
     fn note_sticky(&mut self, node: NodeId, style: &LayoutStyle) {
@@ -219,6 +223,7 @@ impl LayoutEngine {
                 .display_override
                 .or(previous.logical.display_override);
             style.logical.row_forced |= previous.logical.row_forced;
+            style.logical.scrolls |= previous.logical.scrolls;
             style.logical.min_height_override = style
                 .logical
                 .min_height_override
@@ -261,6 +266,25 @@ impl LayoutEngine {
             .remove_child(parent, child)
             .map(|_| ())
             .map_err(LayoutError::from)
+    }
+
+    /// Makes `host` a scroll container holding `content` as its only child.
+    ///
+    /// The host becomes a block box whose overflow scrolls on both axes, as an `overflow: auto` element is in CSS: its content is laid out at the host's width and its own height, the host contributes the content's size wherever it is measured for its intrinsic size, and as a flex or grid item it may still shrink below that size. A walk stops at the content and reports it instead, since it is placed in a space of its own (see [`walk_in_view`](Self::walk_in_view)).
+    pub fn set_scroll_content(&mut self, host: NodeId, content: NodeId) -> Result<(), LayoutError> {
+        self.alive(host)?;
+        self.alive(content)?;
+        self.tree
+            .set_children(host, &[content])
+            .map_err(LayoutError::from)?;
+        self.scroll_contents.insert(content);
+        self.mutate_style(host, |style| style.logical.scrolls = true);
+        Ok(())
+    }
+
+    /// Whether `node` is the content of a scroll container, laid out inside it but walked as a root of its own.
+    pub fn is_scroll_content(&self, node: NodeId) -> bool {
+        self.scroll_contents.contains(&node)
     }
 
     /// The node's style, or `None` once it has been freed — the read-side twin of [`alive`](Self::alive).
@@ -512,31 +536,52 @@ impl LayoutEngine {
         })
     }
 
-    /// Every node under `root`, top-down, at the root-relative rect layout gave it; `f` returns whether to descend. Sticky nodes are left where layout put them — see [`walk_in_view`](Self::walk_in_view).
+    /// Every node under `root`, top-down, at the root-relative rect layout gave it; `f` returns whether to descend. Sticky nodes are left where layout put them — see [`walk_in_view`](Self::walk_in_view). A scroll container's content is not walked: it is a root of its own.
     pub fn walk<F>(&self, root: NodeId, f: &mut F) -> Result<(), LayoutError>
     where
         F: FnMut(NodeId, geometry_core::Rect) -> bool,
     {
         self.alive(root)?;
-        self.visit(Visit::root(root), None, f, &mut Vec::new())
+        self.visit(self.root_visit(root)?, None, f, &mut Walked::default())
     }
 
     /// [`walk`](Self::walk), with every sticky node displaced for `view` — the root-relative rect the tree is seen through, such as a scroll viewport's visible window over its content — and its subtree displaced with it.
     ///
     /// Returns the outermost sticky nodes it met, so that when only the view moves [`walk_anchor`](Self::walk_anchor) can place their subtrees again without walking the rest of the tree, which does not move. A layout root is never sticky itself: it has no containing block to stick within.
+    ///
+    /// Also returns the content of every shown scroll container it passed, for the caller to walk as a root of its own: that content is placed in the space its scroll offset indexes into, with its own top-left at the origin, rather than where the container sits.
     pub fn walk_in_view<F>(
         &self,
         root: NodeId,
         view: geometry_core::Rect,
         f: &mut F,
-    ) -> Result<Vec<StickyAnchor>, LayoutError>
+    ) -> Result<Walked, LayoutError>
     where
         F: FnMut(NodeId, geometry_core::Rect) -> bool,
     {
         self.alive(root)?;
-        let mut anchors = Vec::new();
-        self.visit(Visit::root(root), Some(view), f, &mut anchors)?;
-        Ok(anchors)
+        let mut walked = Walked::default();
+        self.visit(self.root_visit(root)?, Some(view), f, &mut walked)?;
+        Ok(walked)
+    }
+
+    /// The rect `root` is at when walked as a root: where layout put it, or, for a scroll container's content, its own box at the origin.
+    pub fn root_rect(&self, root: NodeId) -> Result<geometry_core::Rect, LayoutError> {
+        let rect = self.layout(root)?;
+        Ok(if self.is_scroll_content(root) {
+            geometry_core::Rect::new(0.0, 0.0, rect.width, rect.height)
+        } else {
+            rect
+        })
+    }
+
+    fn root_visit(&self, root: NodeId) -> Result<Visit, LayoutError> {
+        let mut visit = Visit::root(root);
+        if self.is_scroll_content(root) {
+            let location = self.tree.layout(root).map_err(LayoutError::from)?.location;
+            visit.origin = (-location.x, -location.y);
+        }
+        Ok(visit)
     }
 
     /// Places the subtree `anchor` names for a new `view`, as [`walk_in_view`](Self::walk_in_view) would have. Only valid while the layout it came from is: a relayout can move what stands above the anchor.
@@ -557,7 +602,7 @@ impl LayoutEngine {
             hidden: false,
             inside_sticky: false,
         };
-        self.visit(first, Some(view), f, &mut Vec::new())
+        self.visit(first, Some(view), f, &mut Walked::default())
     }
 
     fn visit<F>(
@@ -565,7 +610,7 @@ impl LayoutEngine {
         first: Visit,
         view: Option<geometry_core::Rect>,
         f: &mut F,
-        anchors: &mut Vec<StickyAnchor>,
+        walked: &mut Walked,
     ) -> Result<(), LayoutError>
     where
         F: FnMut(NodeId, geometry_core::Rect) -> bool,
@@ -597,7 +642,7 @@ impl LayoutEngine {
             };
             if let Some((view, container, insets)) = sticky {
                 if !visit.inside_sticky {
-                    anchors.push(StickyAnchor {
+                    walked.anchors.push(StickyAnchor {
                         node: visit.node,
                         origin: visit.origin,
                         container,
@@ -625,6 +670,12 @@ impl LayoutEngine {
                 );
                 let base = stack.len();
                 for child in self.tree.child_ids(visit.node) {
+                    if self.scroll_contents.contains(&child) {
+                        if !hidden {
+                            walked.scroll_contents.push(child);
+                        }
+                        continue;
+                    }
                     stack.push(Visit {
                         node: child,
                         origin: (x, y),
@@ -665,6 +716,15 @@ impl Visit {
     }
 }
 
+/// What [`LayoutEngine::walk_in_view`] met that its caller has more to do with.
+#[derive(Debug, Default)]
+pub struct Walked {
+    /// The outermost sticky nodes, to place again when only the view moves.
+    pub anchors: Vec<StickyAnchor>,
+    /// The content of every shown scroll container, each to be walked as a root of its own.
+    pub scroll_contents: Vec<NodeId>,
+}
+
 /// A sticky node no other sticky node contains, with what a walk had worked out above it: enough to place its subtree again for another view.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StickyAnchor {
@@ -697,3 +757,7 @@ mod sticky_tests;
 #[cfg(test)]
 #[path = "engine_direction_test.rs"]
 mod direction_tests;
+
+#[cfg(test)]
+#[path = "engine_scroll_test.rs"]
+mod scroll_tests;

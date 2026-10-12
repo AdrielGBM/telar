@@ -30,7 +30,7 @@ fn each_page_has_an_address_of_its_own() {
 fn the_canvas_alone_is_asked_for_with_chrome_0() {
     let route = WorkshopRoute::from_location(&at("/preview/demo--card--a?chrome=0")).unwrap();
     assert!(!route.chrome);
-    assert_eq!(route.link, None);
+    assert_eq!(route, WorkshopRoute::new(route.page.clone(), false));
     assert_eq!(
         written(&route.to_location()),
         "/preview/demo--card--a?chrome=0"
@@ -57,7 +57,7 @@ fn an_address_the_workshop_has_no_page_for_is_none() {
 }
 
 #[test]
-fn a_copied_link_carries_args_and_settings_until_they_are_set() {
+fn a_copied_link_carries_args_and_settings() {
     let settings = CanvasSettings {
         mode: Some("dark".into()),
         locale: Some("ar".into()),
@@ -76,16 +76,13 @@ fn a_copied_link_carries_args_and_settings_until_they_are_set() {
         rulers: true,
     };
     let route = WorkshopRoute {
-        page: Page::Preview("demo--button--primary".into()),
-        chrome: true,
-        link: Some(Link {
-            args: vec![
-                ("label".into(), ArgValue::Text("Save; \"all\": now".into())),
-                ("disabled".into(), ArgValue::Bool(true)),
-                ("size".into(), ArgValue::Choice("Large".into())),
-            ],
-            settings: Some(settings),
-        }),
+        args: vec![
+            ("label".into(), ArgValue::Text("Save; \"all\": now".into())),
+            ("disabled".into(), ArgValue::Bool(true)),
+            ("size".into(), ArgValue::Choice("Large".into())),
+        ],
+        settings: Some(settings),
+        ..WorkshopRoute::new(Page::Preview("demo--button--primary".into()), true)
     };
     let link = written(&route.to_location());
     assert!(
@@ -94,24 +91,90 @@ fn a_copied_link_carries_args_and_settings_until_they_are_set() {
     );
     let back = WorkshopRoute::from_location(&at(&link)).unwrap();
     assert_eq!(back, route);
-    let opened = WorkshopRoute { link: None, ..back };
-    assert_eq!(
-        written(&opened.to_location()),
-        "/preview/demo--button--primary"
+    let reported = WorkshopRoute {
+        settings: None,
+        ..back
+    };
+    let address = written(&reported.to_location());
+    assert!(
+        address.starts_with("/preview/demo--button--primary?args=") && !address.contains("globals"),
+        "the address the workshop reports keeps the args alone: {address}"
     );
 }
 
 #[test]
-fn a_link_with_nothing_edited_is_its_page_alone() {
+fn a_page_with_nothing_set_is_its_page_alone() {
     let route = WorkshopRoute {
-        page: Page::Preview("demo--card--a".into()),
-        chrome: true,
-        link: Some(Link {
-            args: Vec::new(),
-            settings: Some(CanvasSettings::default()),
-        }),
+        settings: Some(CanvasSettings::default()),
+        ..WorkshopRoute::new(Page::Preview("demo--card--a".into()), true)
     };
     assert_eq!(written(&route.to_location()), "/preview/demo--card--a");
+}
+
+#[test]
+fn a_matrix_page_carries_its_axes_and_its_focused_cell() {
+    let route = WorkshopRoute {
+        axes: Some(vec![
+            CustomAxis::Mode,
+            CustomAxis::Direction,
+            CustomAxis::Arg("size".into()),
+        ]),
+        cell: Some("demo--card--a--mode=dark--dir=rtl--size=Large".into()),
+        ..WorkshopRoute::new(Page::Matrix("demo--card--a".into()), true)
+    };
+    let address = written(&route.to_location());
+    assert_eq!(
+        address,
+        "/matrix/demo--card--a?axes=mode;dir;arg.size&cell=mode%3Ddark--dir%3Drtl--size%3DLarge"
+    );
+    assert_eq!(WorkshopRoute::from_location(&at(&address)), Some(route));
+}
+
+#[test]
+fn a_matrix_built_from_no_axes_is_told_from_the_preview_s_own() {
+    let built = WorkshopRoute {
+        axes: Some(Vec::new()),
+        ..WorkshopRoute::new(Page::Matrix("demo--card--a".into()), true)
+    };
+    let address = written(&built.to_location());
+    assert_eq!(address, "/matrix/demo--card--a?axes=");
+    assert_eq!(WorkshopRoute::from_location(&at(&address)), Some(built));
+    let own = WorkshopRoute::from_location(&at("/matrix/demo--card--a")).unwrap();
+    assert_eq!(own.axes, None);
+}
+
+#[test]
+fn only_a_matrix_page_reads_axes_and_a_cell_and_a_cell_of_another_preview_is_left_out() {
+    let preview =
+        WorkshopRoute::from_location(&at("/preview/demo--card--a?axes=mode&cell=mode%3Ddark"))
+            .unwrap();
+    assert_eq!((preview.axes, preview.cell), (None, None));
+    let elsewhere = WorkshopRoute {
+        cell: Some("demo--card--b--mode=dark".into()),
+        ..WorkshopRoute::new(Page::Matrix("demo--card--a".into()), true)
+    };
+    assert_eq!(written(&elsewhere.to_location()), "/matrix/demo--card--a");
+}
+
+#[test]
+fn axes_this_workshop_cannot_build_are_passed_over() {
+    assert_eq!(
+        parse_axes("mode; teleport ;arg.;arg.flag;viewport"),
+        [
+            CustomAxis::Mode,
+            CustomAxis::Arg("flag".into()),
+            CustomAxis::Viewport
+        ]
+    );
+    let every = [
+        CustomAxis::Mode,
+        CustomAxis::Locale,
+        CustomAxis::Direction,
+        CustomAxis::ControlSize,
+        CustomAxis::Viewport,
+        CustomAxis::Arg("tone".into()),
+    ];
+    assert_eq!(parse_axes(&axes_text(&every)), every);
 }
 
 #[test]
@@ -151,4 +214,74 @@ fn words_a_link_cannot_mean_are_passed_over() {
             ("flag".to_string(), ArgValue::Bool(true))
         ]
     );
+}
+
+#[test]
+fn every_page_an_export_writes_opens_its_own_route_at_the_directory_a_static_host_serves() {
+    use telar_project::protocol::{ListedPreview, workshop_pages};
+    let listed = |id: &str, title: &str| ListedPreview {
+        id: id.to_string(),
+        title: title.to_string(),
+    };
+    let pages = workshop_pages(&[
+        listed("demo--card--a", "Inputs/Card"),
+        listed("demo--text field--ñ", "Text field"),
+    ]);
+    let expected = [
+        Page::Preview("demo--card--a".into()),
+        Page::Matrix("demo--card--a".into()),
+        Page::Docs("Inputs/Card".into()),
+        Page::Preview("demo--text field--ñ".into()),
+        Page::Matrix("demo--text field--ñ".into()),
+        Page::Docs("Text field".into()),
+    ];
+    assert_eq!(pages.len(), expected.len());
+    for (page, expected) in pages.iter().zip(expected) {
+        let route = WorkshopRoute::new(expected, true);
+        assert_eq!(route.to_location().segments(), page.segments.as_slice());
+        let directory = format!("{}/", written(&route.to_location()));
+        assert_eq!(WorkshopRoute::from_location(&at(&directory)), Some(route));
+    }
+}
+
+const AWKWARD_TITLES: [&str; 7] = [
+    "Forms / Button",
+    "Forms/Button",
+    " Forms  /  Text field ",
+    "Formulários / Botão ñ",
+    "100% / a?b#c",
+    "Tom & Jerry / a+b",
+    "Single title",
+];
+
+#[test]
+fn a_docs_title_reaches_its_route_as_its_canonical_form_and_back() {
+    use telar_project::protocol::canonical_title;
+    for title in AWKWARD_TITLES {
+        let route = WorkshopRoute::new(Page::Docs(canonical_title(title).into()), true);
+        let written = written(&route.to_location());
+        assert_eq!(
+            WorkshopRoute::from_location(&at(&written)),
+            Some(route),
+            "{title}"
+        );
+    }
+}
+
+#[test]
+fn every_awkward_title_an_export_writes_opens_its_own_route() {
+    use telar_project::protocol::{ListedPreview, canonical_title, workshop_pages};
+    let previews: Vec<_> = AWKWARD_TITLES
+        .iter()
+        .enumerate()
+        .map(|(at, title)| ListedPreview {
+            id: format!("p{at}"),
+            title: title.to_string(),
+        })
+        .collect();
+    for (at, title) in AWKWARD_TITLES.iter().enumerate() {
+        let route = WorkshopRoute::new(Page::Docs(canonical_title(title).into()), true);
+        let page = workshop_pages(&previews[at..=at]).pop().unwrap();
+        assert_eq!(route.to_location().segments(), page.segments.as_slice());
+    }
 }

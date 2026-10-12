@@ -314,3 +314,74 @@ fn the_reset_is_the_stylesheet_the_running_app_would_install() {
     assert!(sheet.starts_with("<style id=\"telar-reset\">[data-telar]{"));
     assert!(sheet.ends_with("</style>"));
 }
+
+/// The page as written ahead of time keeps a nested surface's own paint where the surface drew it among its roots, as the running app does.
+#[test]
+fn a_nested_surfaces_own_paint_is_written_among_its_roots_in_draw_order() {
+    let commands = [
+        open(1, Semantics::group(), "", Rect::new(0.0, 0.0, 200.0, 100.0)),
+        DrawCommand::PushSurface { surface: 7 },
+        open(1, Semantics::group(), "", Rect::new(0.0, 0.0, 200.0, 100.0)),
+        DrawCommand::PopElement,
+        DrawCommand::Rect {
+            rect: Rect::new(0.0, 0.0, 200.0, 100.0),
+            style: Arc::new(RectStyle::filled(Color::BLACK, 0.0)),
+        },
+        open(
+            2,
+            Semantics::group(),
+            "",
+            Rect::new(50.0, 20.0, 100.0, 60.0),
+        ),
+        DrawCommand::PopElement,
+        DrawCommand::PopSurface,
+        DrawCommand::PopElement,
+    ];
+    let markup = prerender(&commands, None).markup;
+    let at = |needle: &str| {
+        markup
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle} in {markup}"))
+    };
+    let (page, scrim, dialog) = (
+        at("data-telar-id=\"7-1\""),
+        at("role=\"presentation\""),
+        at("data-telar-id=\"7-2\""),
+    );
+    assert!(page < scrim && scrim < dialog, "{markup}");
+}
+
+#[test]
+fn a_control_that_scrolls_is_one_element_that_scrolls_and_takes_the_tab_stop() {
+    let tree = Element::new(
+        ElementId(8),
+        Semantics::of(Role::Tree).focusable(renderer_core::Focusable {
+            tab_stop: true,
+            consumes: Role::Tree.consumed_keys(),
+        }),
+        "height:100px;",
+        Rect::new(0.0, 0.0, 200.0, 100.0),
+    )
+    .scrolling();
+    let commands = [
+        DrawCommand::PushElement {
+            element: Arc::new(tree),
+        },
+        DrawCommand::PushClip {
+            rect: Rect::new(0.0, 0.0, 200.0, 100.0),
+            radius: renderer_core::BorderRadius::default(),
+        },
+        DrawCommand::PopClip,
+        DrawCommand::PopElement,
+    ];
+    let written = prerender(&commands, None);
+    let tag = written
+        .markup
+        .split('>')
+        .next()
+        .expect("an opening tag")
+        .to_string();
+    assert!(tag.contains("role=\"tree\""), "{tag}");
+    assert!(tag.contains("tabindex=\"0\""), "{tag}");
+    assert!(tag.contains("overflow:auto"), "{tag}");
+}

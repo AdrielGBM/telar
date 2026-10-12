@@ -3,7 +3,7 @@
 //! `include` is read by `telar::app!`, which lists each crate's `telar_all_previews()` after the package's own. A crate it names has to be one the package depends on, which [`previews_include_problems`] checks against `Cargo.toml` so the error lands on the key rather than on the generated call.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -494,6 +494,42 @@ pub fn previews_include_problems(
             })
         })
         .collect())
+}
+
+/// The packages whose workshop lists the previews of `crate_name`, the crate built at `package_dir`, in the order to look for one: the package itself when it is an application, then each member of its workspace whose `[telar.previews] include` names the crate. A library has no workshop of its own, so its previews are only reached through an application that includes it.
+pub fn preview_hosts(package_dir: &Path, crate_name: &str) -> Vec<PathBuf> {
+    let own = hosts_a_workshop(package_dir).then(|| package_dir.to_path_buf());
+    let workspace_root =
+        crate::find_workspace_root(package_dir).unwrap_or_else(|| package_dir.to_path_buf());
+    let includers = crate::workspace_member_dirs(&workspace_root)
+        .into_iter()
+        .filter(|member| member != package_dir && hosts_a_workshop(member))
+        .filter(|member| {
+            crate::TelarManifest::load_or_default(member)
+                .telar
+                .previews
+                .include()
+                .iter()
+                .any(|entry| entry.crate_name() == crate_name)
+        });
+    own.into_iter().chain(includers).collect()
+}
+
+/// Whether `cargo telar preview` can run a workshop for the package: an application, with a binary to run, rather than a `[telar] library`.
+fn hosts_a_workshop(package_dir: &Path) -> bool {
+    let Some(manifest) = crate::cargo_manifest::read_manifest(package_dir) else {
+        return false;
+    };
+    let has_binary = package_dir.join("src/main.rs").is_file()
+        || package_dir.join("src/bin").is_dir()
+        || manifest
+            .get("bin")
+            .and_then(toml::Value::as_array)
+            .is_some_and(|bins| !bins.is_empty());
+    has_binary
+        && !crate::TelarManifest::load_or_default(package_dir)
+            .telar
+            .library
 }
 
 #[cfg(test)]

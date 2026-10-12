@@ -119,3 +119,56 @@ fn the_telar_version_is_the_resolved_package_named_telar() {
         None
     );
 }
+
+fn members_scratch(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("telar_members_{name}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+#[test]
+fn member_dirs_expand_globs_and_keep_only_real_crates() {
+    let root = members_scratch("globs");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"crates/*\"]\n",
+    )
+    .unwrap();
+    for member in ["crates/a", "crates/b"] {
+        std::fs::create_dir_all(root.join(member)).unwrap();
+        std::fs::write(
+            root.join(member).join("Cargo.toml"),
+            "[package]\nname = \"x\"\n",
+        )
+        .unwrap();
+    }
+    std::fs::create_dir_all(root.join("crates/not_a_crate")).unwrap();
+
+    let mut dirs = workspace_member_dirs(&root);
+    dirs.sort();
+    assert_eq!(dirs, vec![root.join("crates/a"), root.join("crates/b")]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_workspace_manifest_that_is_also_a_package_is_a_member_too() {
+    let root = members_scratch("root_pkg");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"root\"\n\n[workspace]\nmembers = []\n",
+    )
+    .unwrap();
+
+    assert_eq!(workspace_member_dirs(&root), vec![root.clone()]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_lone_package_with_no_workspace_table_is_its_own_member() {
+    let root = members_scratch("lone_pkg");
+    std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"solo\"\n").unwrap();
+
+    assert_eq!(workspace_member_dirs(&root), vec![root.clone()]);
+    let _ = std::fs::remove_dir_all(&root);
+}

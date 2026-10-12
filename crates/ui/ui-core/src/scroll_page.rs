@@ -23,7 +23,6 @@ use crate::scroll_area::{LayoutScrollArea, ScrollViewport};
 /// While it is alive a platform can read and move it through [`platform_core::primary_scroll_offset`] and [`platform_core::scroll_primary_to`], which is how a location adapter keeps a scroll position per history entry, and the tree reads it reactively from anywhere through [`use_primary_scroll`](crate::use_primary_scroll).
 pub struct ScrollPage {
     root: NodeId,
-    content_node: NodeId,
     scroll_area: LayoutScrollArea,
     viewport: ScrollViewport,
     _primary: PrimaryScrollClaim,
@@ -51,7 +50,6 @@ impl ScrollPage {
         )?
         .into_primary();
         let viewport = viewport.expect("the scroll area hands its viewport to the builder");
-        let content_node = scroll_area.content_node();
         // Percent sizing, so a `compute_layout` against `Definite(w, h)` gives the leaf a full-window viewport.
         let root = new_container(
             LayoutStyle::new()
@@ -72,7 +70,6 @@ impl ScrollPage {
         });
         Ok(Self {
             root,
-            content_node,
             scroll_area,
             viewport,
             _primary: primary,
@@ -112,19 +109,13 @@ impl ScrollPage {
         self.viewport.clone()
     }
 
-    /// Lays the page out against a window of `width`×`height`, then the content against that width at its own natural height — which is what gives the scroll area something taller than itself to scroll.
+    /// Lays the page out against a window of `width`×`height`; the content is laid out in the same pass, at that width and its own natural height, which is what gives the scroll area something taller than itself to scroll.
     pub fn relayout(&mut self, width: f32, height: f32) {
         mark_dirty(self.root).ok();
         compute_layout(
             self.root,
             AvailableSpace::Definite(width),
             AvailableSpace::Definite(height),
-        )
-        .ok();
-        compute_layout(
-            self.content_node,
-            AvailableSpace::Definite(width),
-            AvailableSpace::MaxContent,
         )
         .ok();
         self.scroll_area.clamp_scroll();

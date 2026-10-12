@@ -40,7 +40,7 @@ fn assemble_demo(
         renderer,
         locale,
         site: &site,
-        reserved: &reserved_paths(false, web.host()),
+        reserved: &reserved_paths(&SitePlan::Root, web.host()),
     };
     assemble(out, package, web, fonts, &shell)
 }
@@ -222,6 +222,27 @@ fn publishing_replaces_the_previous_output_whole() {
     assert!(!staging.exists());
     assert!(!out.join("app-000000000000.js").exists());
     assert!(out.join("app.js").is_file());
+    cleanup(&package);
+}
+
+#[test]
+fn a_named_output_is_assembled_beside_it_and_replaces_only_a_web_build() {
+    let (package, _) = project("named_out");
+    let root = package.parent().unwrap();
+    let fresh = root.join("site");
+    assert_eq!(staging_beside(&fresh).unwrap(), root.join("site.staging"));
+
+    std::fs::create_dir_all(&fresh).unwrap();
+    assert!(check_site_dir(&fresh).is_ok(), "an empty directory");
+    std::fs::write(fresh.join(MANIFEST_FILE), "{}").unwrap();
+    std::fs::write(fresh.join("index.html"), "old").unwrap();
+    assert!(check_site_dir(&fresh).is_ok(), "an earlier web build");
+
+    let error = check_site_dir(root).unwrap_err();
+    assert!(error.contains("would delete them"), "{error}");
+    std::fs::write(root.join("file"), "").unwrap();
+    assert!(check_site_dir(&root.join("file")).is_err(), "a file");
+    assert!(check_site_dir(Path::new("/")).is_err(), "no directory name");
     cleanup(&package);
 }
 

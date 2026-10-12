@@ -2,8 +2,17 @@ import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
 import * as vscode from "vscode";
-import * as net from "net";
 import { exec } from "child_process";
+
+import { PreviewPanel } from "./previewPanel";
+import {
+  Launches,
+  PreviewTarget,
+  WindowWorkshops,
+  Workshop,
+  isPreviewTarget,
+  isWorkshopList,
+} from "./workshop";
 
 const PATCHED_VERSION_KEY = "telar.patchedServerVersion";
 
@@ -51,8 +60,11 @@ export async function activate(
     }),
   );
 
-  const follower = new CursorFollower();
+  const launches = new Launches();
+  const windows = new WindowWorkshops(launches);
+  const follower = new CursorFollower(windows);
   context.subscriptions.push(
+    launches,
     follower,
     vscode.window.onDidChangeTextEditorSelection((e) =>
       follower.schedule(e.textEditor),
@@ -75,21 +87,32 @@ export async function activate(
             : undefined;
         if (target) {
           follower.shown(target.id);
-          await showInWorkshop(target);
+          await windows.show(target);
         } else {
-          openWorkshop(file);
+          await openWorkshop(windows, file);
         }
       },
     ),
     vscode.commands.registerCommand("telar.openWorkshop", () =>
-      openWorkshop(vscode.window.activeTextEditor?.document.uri),
+      openWorkshop(windows, vscode.window.activeTextEditor?.document.uri),
     ),
     vscode.commands.registerCommand(
       "telar.openInWorkshop",
       async (target?: unknown) => {
         if (!isPreviewTarget(target)) return;
         follower.shown(target.id);
-        await showInWorkshop(target);
+        await windows.show(target);
+      },
+    ),
+    vscode.commands.registerCommand(
+      "telar.showInPanel",
+      async (target?: unknown) => {
+        if (isPreviewTarget(target)) return PreviewPanel.show(launches, target);
+        const editor = vscode.window.activeTextEditor;
+        const atCursor = editor
+          ? await previewAt(editor.document, editor.selection.active)
+          : undefined;
+        await PreviewPanel.show(launches, atCursor);
       },
     ),
     vscode.commands.registerCommand("telar.runPlay", (target?: unknown) => {
@@ -103,28 +126,6 @@ export async function activate(
   );
 }
 
-interface PreviewTarget {
-  id: string;
-  packageDir: string;
-  location: string;
-  channel: string | null;
-}
-
-// A preview id is built from a crate name and slugs alone, so anything else is refused rather than handed to a shell.
-const PREVIEW_ID = /^[\p{L}\p{N}_-]+$/u;
-
-function isPreviewTarget(value: unknown): value is PreviewTarget {
-  if (typeof value !== "object" || value === null) return false;
-  const target = value as Record<string, unknown>;
-  return (
-    typeof target.id === "string" &&
-    PREVIEW_ID.test(target.id) &&
-    typeof target.packageDir === "string" &&
-    typeof target.location === "string" &&
-    (target.channel === null || typeof target.channel === "string")
-  );
-}
-
 interface LanguageClient {
   sendRequest<R>(method: string, params: unknown): Promise<R>;
   code2ProtocolConverter: {
@@ -134,14 +135,17 @@ interface LanguageClient {
 }
 
 // Asked through rust-analyzer's client: telar-analyzer runs as its server, so this extension has no client of its own.
+function analyzerClient(): LanguageClient | undefined {
+  return vscode.extensions.getExtension("rust-lang.rust-analyzer")?.exports
+    ?.client;
+}
+
 async function previewAt(
   document: vscode.TextDocument,
   position: vscode.Position,
 ): Promise<PreviewTarget | undefined> {
   if (!isRsx(document)) return undefined;
-  const client: LanguageClient | undefined = vscode.extensions.getExtension(
-    "rust-lang.rust-analyzer",
-  )?.exports?.client;
+  const client = analyzerClient();
   if (!client) return undefined;
   try {
     const target = await client.sendRequest<unknown>("telar/previewAt", {
@@ -155,58 +159,36 @@ async function previewAt(
   }
 }
 
-// `cargo telar preview <ID>` would reach a running workshop too, but only after opening a terminal and resolving the package.
-async function showInWorkshop(target: PreviewTarget): Promise<void> {
-  if (await sendGoto(target)) return;
-  runInTerminal(
-    "Telar workshop",
-    target.packageDir,
-    `cargo telar preview ${target.id}`,
-  );
-}
-
-function openWorkshop(file: vscode.Uri | undefined): void {
-  const cwd =
-    (file?.scheme === "file" ? findCrateDir(file.fsPath) : undefined) ??
-    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!cwd) return;
-  runInTerminal("Telar workshop", cwd, "cargo telar preview");
-}
-
-// The wire format of cargo-telar's `runner/workshop_channel.rs`: one `goto:<location>` line, answered `ok` once the workshop has it.
-const GOTO_PREFIX = "goto:";
-const ACCEPTED = "ok";
-const ANSWER_TIMEOUT_MS = 2000;
-
-async function sendGoto(target: PreviewTarget): Promise<boolean> {
-  if (!target.channel) return false;
-  let port: number;
+async function workshopsOf(
+  document: vscode.TextDocument,
+): Promise<Workshop[] | undefined> {
+  const client = analyzerClient();
+  if (!client) return undefined;
   try {
-    port = Number((await fs.promises.readFile(target.channel, "utf8")).trim());
-  } catch {
-    return false;
-  }
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) return false;
-  return new Promise((resolve) => {
-    const socket = net.createConnection({ host: "127.0.0.1", port });
-    let answer = "";
-    const settle = (accepted: boolean) => {
-      socket.destroy();
-      resolve(accepted);
-    };
-    socket.setEncoding("utf8");
-    socket.setTimeout(ANSWER_TIMEOUT_MS, () => settle(false));
-    socket.on("connect", () =>
-      socket.write(`${GOTO_PREFIX}${target.location}\n`),
-    );
-    socket.on("data", (chunk: string) => {
-      answer += chunk;
-      const end = answer.indexOf("\n");
-      if (end >= 0) settle(answer.slice(0, end).trim() === ACCEPTED);
+    const workshops = await client.sendRequest<unknown>("telar/workshops", {
+      textDocument:
+        client.code2ProtocolConverter.asTextDocumentIdentifier(document),
     });
-    socket.on("end", () => settle(answer.trim() === ACCEPTED));
-    socket.on("error", () => settle(false));
-  });
+    return isWorkshopList(workshops) ? workshops : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function openWorkshop(
+  windows: WindowWorkshops,
+  file: vscode.Uri | undefined,
+): Promise<void> {
+  const document = vscode.workspace.textDocuments.find(
+    (open) => open.uri.toString() === file?.toString(),
+  );
+  const crateDir =
+    file?.scheme === "file" ? findCrateDir(file.fsPath) : undefined;
+  const workshops = document ? await workshopsOf(document) : undefined;
+  if (workshops && crateDir) return windows.open(workshops, crateDir);
+  // Without the analyzer's answer the package is guessed from the file, and `cargo telar preview` itself brings a running workshop forward.
+  const cwd = crateDir ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (cwd) runInTerminal("Telar workshop", cwd, "cargo telar preview");
 }
 
 const FOLLOW_DELAY_MS = 300;
@@ -215,14 +197,11 @@ class CursorFollower implements vscode.Disposable {
   private timer: NodeJS.Timeout | undefined;
   private shownId: string | undefined;
 
+  constructor(private readonly windows: WindowWorkshops) {}
+
   schedule(editor: vscode.TextEditor): void {
     if (!isRsx(editor.document)) return;
-    if (
-      !vscode.workspace
-        .getConfiguration("telar")
-        .get<boolean>("workshop.followCursor")
-    )
-      return;
+    if (!followsInWindow() && !PreviewPanel.isOpen()) return;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.follow(editor), FOLLOW_DELAY_MS);
   }
@@ -238,13 +217,22 @@ class CursorFollower implements vscode.Disposable {
       this.shownId = undefined;
       return;
     }
-    if (target.id === this.shownId) return;
-    if (await sendGoto(target)) this.shownId = target.id;
+    await PreviewPanel.follow(target);
+    if (!followsInWindow() || target.id === this.shownId) return;
+    if (await this.windows.follow(target)) this.shownId = target.id;
   }
 
   dispose(): void {
     clearTimeout(this.timer);
   }
+}
+
+function followsInWindow(): boolean {
+  return (
+    vscode.workspace
+      .getConfiguration("telar")
+      .get<boolean>("workshop.followCursor") ?? false
+  );
 }
 
 function isRsx(document: vscode.TextDocument): boolean {

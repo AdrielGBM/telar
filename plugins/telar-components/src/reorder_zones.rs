@@ -260,7 +260,8 @@ impl ReorderGroup {
                 .min_height(min_extent),
             |_| RectStyle::default(),
             vec![box_item(list), box_item(line)],
-        )?;
+        )?
+        .role(Role::List);
         let rect = track_layout(container.layout_node()).ok_or_else(|| {
             LayoutError::Engine("reorder zone: its layout node is not in the live tree".into())
         })?;

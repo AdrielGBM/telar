@@ -23,9 +23,9 @@ use crate::{address, canvas, store};
 
 /// The component workshop: a sidebar listing `entries`, a canvas rendering the selected one, and panels to edit its args.
 ///
-/// It opens where the location it was started at points (`--location`, a link the workshop copied), else on the preview [`requested_preview`] names by id, else where it was when it last closed, else on the first preview; the component the request names narrows the sidebar. After a hot reload it stays where it was. A `goto:` line on the hot-reload channel moves it while it runs.
+/// It opens where the location it was started at points (`--location`, a link the workshop copied, a page's address), else on the preview [`requested_preview`] names by id, else where it was when it last closed, else on the first preview; the component the request names narrows the sidebar. After a hot reload it stays where it was. A `goto:` line on the hot-reload channel moves it while it runs.
 ///
-/// Under `cargo telar preview` it keeps the selection, the view, the pane sizes and the canvas toolbar's settings between runs in `<workspace>/.telar/workshop/state`; edited args last the run, or travel in a copied link. Its Snapshot panel reviews the `report.json` the workspace's last `cargo telar test` wrote.
+/// Under `cargo telar preview` it keeps the selection, the view, the pane sizes and the canvas toolbar's settings between runs in `<workspace>/.telar/workshop/state`, or in the page's `localStorage` in a browser. Edited args last the run and travel in its address, which also carries the Matrix view's axes and focused cell, so a page reloaded comes back where it was. Its Snapshot panel reviews the `report.json` the workspace's last `cargo telar test` wrote.
 pub struct WorkshopApp {
     entries: Rc<[PreviewEntry]>,
     requested: PreviewRequest,
@@ -45,9 +45,7 @@ impl WorkshopApp {
         Self {
             entries: entries.into(),
             requested: requested_preview(),
-            project_name: std::env::var("CARGO_PKG_NAME")
-                .ok()
-                .filter(|name| !name.is_empty()),
+            project_name: None,
             report: test_report_path(),
             keeper: RefCell::new(Keeper::none()),
         }
@@ -59,7 +57,7 @@ impl WorkshopApp {
         self
     }
 
-    /// The name the top bar shows. Defaults to the package `cargo` runs.
+    /// The name the top bar shows; it shows none until one is set. `telar::app!` sets the package's own, read as it is compiled.
     pub fn project_name(mut self, name: impl Into<String>) -> Self {
         self.project_name = Some(name.into());
         self

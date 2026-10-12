@@ -932,3 +932,41 @@ fn text_clipped_to_nothing_is_not_announced() {
     let names: Vec<&str> = nodes.iter().map(|node| node.name.as_str()).collect();
     assert_eq!(names, ["Shown", "Unclipped"]);
 }
+
+#[test]
+fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
+    let node = AccessNode {
+        id: Some(3),
+        role: Role::Button,
+        name: "Inside".to_string(),
+        rect: rect(0.0, 0.0, 10.0, 10.0),
+        focused: false,
+        enabled: true,
+        toggled: None,
+        value: None,
+        orientation: None,
+        expanded: None,
+        position: None,
+        lang: None,
+        url: None,
+        current: None,
+        active_descendant: None,
+    };
+    let nested = |surface| NestedSurface {
+        surface,
+        commands: 0..0,
+        placement: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+    };
+    let placed = nested(7).place(node.clone()).id.expect("an id");
+    assert_eq!(
+        AccessTarget::of(placed),
+        AccessTarget::Nested { surface: 7, id: 3 }
+    );
+    let deeper = nested(2).place(nested(7).place(node)).id.expect("an id");
+    assert_eq!(
+        AccessTarget::of(deeper),
+        AccessTarget::Nested { surface: 7, id: 3 },
+        "a surface nested deeper keeps its own handle in the id"
+    );
+    assert_eq!(AccessTarget::of(3), AccessTarget::Own(3));
+}

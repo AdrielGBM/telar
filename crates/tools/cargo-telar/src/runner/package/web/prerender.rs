@@ -215,6 +215,7 @@ fn site_pages(root: &PrerenderedPage) -> SitePages {
         locales: root.locales.clone(),
         base_locale,
         not_found: true,
+        page_dirs: Vec::new(),
     }
 }
 
@@ -297,7 +298,12 @@ fn page_for(
     filled
 }
 
-fn write_page(path: &Path, page: &Page, template: &str, replace: bool) -> Result<(), String> {
+pub(super) fn write_page(
+    path: &Path,
+    page: &Page,
+    template: &str,
+    replace: bool,
+) -> Result<(), String> {
     let html = page
         .render(template)
         .map_err(|e| format!("the page template: {e}"))?;

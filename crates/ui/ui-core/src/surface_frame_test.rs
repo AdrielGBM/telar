@@ -1391,6 +1391,106 @@ fn a_box_event_for_a_box_in_a_frame_reaches_it_in_the_frames_world() {
 }
 
 #[test]
+fn a_box_event_reaches_a_frame_inside_an_overlay_of_a_frame() {
+    reset_layout_runtime();
+    focus::clear();
+    let inner_focused = signal(false);
+    let inner_node = Rc::new(Cell::new(None));
+    let built = Rc::clone(&inner_node);
+    let inner = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+            let target = swatch(Color::BLACK, LayoutStyle::new().width(20.0).height(20.0))?
+                .on_focus(move |now| inner_focused.set(now));
+            built.set(Some(target.layout_node()));
+            Ok(boxed(Container::new(fill(), vec![boxed(target)])?))
+        })
+        .unwrap(),
+    );
+    let held = Rc::clone(&inner);
+    let outer = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+            let frame = SurfaceFrame::filling(held, LayoutStyle::new().width(80.0).height(40.0))?;
+            let overlay = Overlay::new(LayoutStyle::new(), vec![boxed(frame)])?;
+            Ok(boxed(Container::new(
+                fill(),
+                vec![boxed(swatch(Color::WHITE, fill())?), boxed(overlay)],
+            )?))
+        })
+        .unwrap(),
+    );
+    let window = framed_window(&outer, no_focusable());
+    let box_id = u64::from(inner_node.get().expect("the target was built"));
+
+    window.send(Event::InSurface {
+        surface: handle_of(&inner),
+        event: Box::new(Event::BoxFocused { box_id }),
+    });
+    window.frame();
+    assert!(
+        inner_focused.get(),
+        "the box takes focus in the frame the overlay holds"
+    );
+    let outer_focus = {
+        let _inside = outer.enter();
+        focus::current()
+    };
+    assert!(
+        outer_focus.is_some(),
+        "and the overlay's frame holds the outer canvas's focus"
+    );
+}
+
+#[test]
+fn a_readers_action_on_a_control_in_a_frame_reaches_it_in_the_frames_world() {
+    reset_layout_runtime();
+    focus::clear();
+    let presses = Rc::new(Cell::new(0));
+    let pressed = Rc::clone(&presses);
+    let canvas = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+            let button = StyledContainer::new(
+                LayoutStyle::new().width(60.0).height(24.0),
+                |_| RectStyle::default(),
+                vec![boxed(word(
+                    "Inside",
+                    LayoutStyle::new().width(40.0).height(16.0),
+                ))],
+            )?
+            .control(focus::Role::Button)
+            .on_press(move || pressed.set(pressed.get() + 1));
+            Ok(boxed(Container::new(fill(), vec![boxed(button)])?))
+        })
+        .unwrap(),
+    );
+    let window = framed_window(&canvas, no_focusable());
+    let button = crate::accessibility::snapshot(&window.frame())
+        .into_iter()
+        .find(|node| node.role == focus::Role::Button)
+        .and_then(|node| node.id)
+        .expect("the frame's button is announced");
+    let inner_focus = || {
+        let _inside = canvas.enter();
+        focus::current()
+    };
+
+    crate::accessibility::perform_action(button, false, |event| window.send(event.clone()));
+    window.frame();
+    assert!(
+        inner_focus().is_some(),
+        "the button takes focus inside the frame"
+    );
+    assert!(
+        focus::current().is_some(),
+        "and the frame holds the window's focus, so the keys that follow reach it"
+    );
+    assert_eq!(presses.get(), 0, "moving to a control does not press it");
+
+    crate::accessibility::perform_action(button, true, |event| window.send(event.clone()));
+    window.frame();
+    assert_eq!(presses.get(), 1, "activating it presses it once");
+}
+
+#[test]
 fn the_windows_walk_lists_a_frames_components_where_the_frame_shows_them() {
     reset_layout_runtime();
     let canvas = Rc::new(

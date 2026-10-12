@@ -388,16 +388,18 @@ impl HostServices {
 }
 
 #[cfg(feature = "dev")]
-use telar_project::protocol::{BUILD_ERROR_PREFIX, GOTO_PREFIX, HOT_RELOAD_PREFIX};
+use telar_project::protocol::{BUILD_ERROR_PREFIX, FOCUS_LINE, GOTO_PREFIX, HOT_RELOAD_PREFIX};
 
 #[cfg(feature = "dev")]
-/// What `cargo telar dev` sends the running app: a rebuild landed, a build failed, or a location to open.
+/// What `cargo telar dev` sends the running app: a rebuild landed, a build failed, a location to open, or a request to come forward.
 #[derive(Debug, PartialEq)]
 pub enum HotEvent {
     Reload(std::path::PathBuf),
     BuildError(String),
     /// A location reference, as `LocationFormat::parse` reads one, to open as a link into the running app would: `cargo telar preview <ID>` moving the workshop already open.
     Goto(String),
+    /// `cargo telar preview` finding the workshop already open: its window comes forward, showing what it was.
+    Focus,
 }
 
 /// The event one line of the channel carries, or `None` for a line with a prefix this host does not know.
@@ -407,6 +409,8 @@ fn hot_event(line: &str) -> Option<HotEvent> {
         Some(HotEvent::Reload(std::path::PathBuf::from(path)))
     } else if let Some(message) = line.strip_prefix(BUILD_ERROR_PREFIX) {
         Some(HotEvent::BuildError(unescape_lines(message)))
+    } else if line == FOCUS_LINE {
+        Some(HotEvent::Focus)
     } else {
         line.strip_prefix(GOTO_PREFIX)
             .map(|reference| HotEvent::Goto(reference.to_string()))

@@ -7,10 +7,11 @@ use std::collections::VecDeque;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::JsCast;
 
+use crate::box_key::BoxKey;
 use crate::document::ID_ATTRIBUTE;
 
 pub(crate) struct Served {
-    boxes: FxHashMap<u64, web_sys::Element>,
+    boxes: FxHashMap<BoxKey, web_sys::Element>,
     root_paint: VecDeque<web_sys::Element>,
     /// Each element the frame filled, with how many children it placed: whatever is past them was served and not claimed.
     sweeps: Vec<(web_sys::Node, u32)>,
@@ -20,8 +21,8 @@ impl Served {
     pub(crate) fn index(host: &web_sys::HtmlElement) -> Self {
         let mut boxes = FxHashMap::default();
         for element in elements(host.query_selector_all(&format!("[{ID_ATTRIBUTE}]")).ok()) {
-            if let Some(id) = id_of(&element) {
-                boxes.entry(id).or_insert(element);
+            if let Some(key) = key_of(&element) {
+                boxes.entry(key).or_insert(element);
             }
         }
         Self {
@@ -31,16 +32,16 @@ impl Served {
         }
     }
 
-    /// The served element for box `id`, when it is the element the frame would put under `parent` with `tag`.
+    /// The served element for box `key`, when it is the element the frame would put under `parent` with `tag`.
     ///
     /// One whose tag or parent differs is no longer that box: everything under it is forgotten as well, so the subtree is rebuilt from the frame as a whole and the stale one is swept with its parent's leftovers.
     pub(crate) fn claim(
         &mut self,
-        id: u64,
+        key: BoxKey,
         tag: &str,
         parent: &web_sys::Node,
     ) -> Option<web_sys::Element> {
-        let element = self.boxes.remove(&id)?;
+        let element = self.boxes.remove(&key)?;
         let found = element.local_name();
         let same_parent = element
             .parent_node()
@@ -53,8 +54,8 @@ impl Served {
                 .query_selector_all(&format!("[{ID_ATTRIBUTE}]"))
                 .ok(),
         ) {
-            if let Some(id) = id_of(&inside) {
-                self.boxes.remove(&id);
+            if let Some(inside) = key_of(&inside) {
+                self.boxes.remove(&inside);
             }
         }
         let reason = if found == tag {
@@ -64,10 +65,10 @@ impl Served {
         };
         if cfg!(debug_assertions) {
             tracing::warn!(
-                "rebuilding the served box {id} as <{tag}>, because {reason}: the page was prerendered from inputs the client does not share"
+                "rebuilding the served box {key} as <{tag}>, because {reason}: the page was prerendered from inputs the client does not share"
             );
         } else {
-            tracing::debug!("rebuilding the served box {id} as <{tag}>, because {reason}");
+            tracing::debug!("rebuilding the served box {key} as <{tag}>, because {reason}");
         }
         None
     }
@@ -110,8 +111,8 @@ fn elements(list: Option<web_sys::NodeList>) -> impl Iterator<Item = web_sys::El
     })
 }
 
-fn id_of(element: &web_sys::Element) -> Option<u64> {
-    element.get_attribute(ID_ATTRIBUTE)?.parse().ok()
+fn key_of(element: &web_sys::Element) -> Option<BoxKey> {
+    BoxKey::parse(&element.get_attribute(ID_ATTRIBUTE)?)
 }
 
 pub(crate) fn patch_attribute(node: &web_sys::Element, name: &str, value: Option<&str>) {

@@ -16,7 +16,7 @@ use crate::analysis::completions::{
 };
 use crate::analysis::definition::goto_definition;
 use crate::analysis::hover::hover_info;
-use crate::analysis::preview_target::{PreviewHost, PreviewTarget};
+use crate::analysis::preview_target::{PreviewHost, PreviewTarget, Workshop, WorkshopsParams};
 use crate::index::WorkspaceIndex;
 use crate::position::{Section, find_section_at};
 use crate::project::ProjectInfo;
@@ -823,6 +823,12 @@ impl Backend {
             params.position.line,
             &host,
         )
+    }
+
+    /// `telar/workshops`: the workshops that list the previews of the document's package, the one to start first; `null` outside a package.
+    pub async fn workshops(&self, params: WorkshopsParams) -> Option<Vec<Workshop>> {
+        let path = crate::uri::to_path(&params.text_document.uri)?;
+        Some(PreviewHost::discover(&path)?.workshops)
     }
 
     /// `textDocument/documentLink`: clickable links for `img src:"…"` asset paths that exist on disk.

@@ -6,7 +6,7 @@
 //!
 //! A box is a box, but not everything a box paints is one. Three things arrive inside an element: its own background, which is CSS; child boxes, which the browser lays out; and paint that is neither — a caret, a selection band, a scrollbar. The last of those become positioned children, in the order they were drawn, so what covered what on a canvas covers the same thing here.
 //!
-//! And a frame paints at its own level too, outside every element: an application's shell fills the panel its rail stands on, and dims the page behind a drawer. That becomes a box inside the host, placed as it is drawn — see [`Walk::paint_at_root`].
+//! And a frame paints at its own level too, outside every element: an application's shell fills the panel its rail stands on, and dims the page behind a drawer. That becomes a box inside the host, placed as it is drawn — see [`Walk::paint_at_surface_level`]. So does a surface nested in the frame, inside the box it is drawn in.
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -19,6 +19,7 @@ use renderer_core::{
     TextStyle, ToggleKind,
 };
 
+use crate::box_key::BoxKey;
 use crate::paint;
 use crate::runs::Run;
 use crate::vector::Drawing;
@@ -102,15 +103,31 @@ pub(crate) struct Frame {
     pub children: Vec<Node>,
 }
 
-/// A child of the host.
+/// A child of the host, or of a box a nested surface is drawn in: a layout root of the surface, or paint the surface carries at its own level.
 pub(crate) enum Node {
     Box(Box<BoxNode>),
     Paint(PaintNode),
 }
 
+impl Node {
+    pub(crate) fn as_box(&self) -> Option<&BoxNode> {
+        match self {
+            Node::Box(node) => Some(node),
+            Node::Paint(_) => None,
+        }
+    }
+
+    fn as_box_mut(&mut self) -> Option<&mut BoxNode> {
+        match self {
+            Node::Box(node) => Some(node),
+            Node::Paint(_) => None,
+        }
+    }
+}
+
 /// One box, as the element it becomes.
 pub(crate) struct BoxNode {
-    pub id: u64,
+    pub key: BoxKey,
     /// The element a role *is*; a box whose role changes needs a different element, not a new attribute.
     pub tag: &'static str,
     pub role: Role,
@@ -132,8 +149,10 @@ pub(crate) struct BoxNode {
 /// What an element holds.
 pub(crate) enum Content {
     /// Child boxes, then the paint inside the box that is not a box, in the order it was drawn: a scroll area's bars are drawn over the content they scroll.
+    ///
+    /// The children are boxes, except in a box a nested surface is drawn in: there they are that surface's top level, its layout roots and the paint it carries at its own level, in the order it drew them, as the host's are the window's.
     Children {
-        boxes: Vec<BoxNode>,
+        children: Vec<Node>,
         pieces: Vec<PaintNode>,
     },
     /// A single run of text, which is the element's own text rather than something inside it — what lets it be selected, found and read as part of the document.
@@ -191,7 +210,7 @@ pub(crate) struct Described {
 
 impl Described {
     /// Every attribute this speaks for, in the order an element is given them, with `None` for one the element has to be without. Removing matters as much as setting: a box that stops being a link keeps sending the reader somewhere until the `href` goes.
-    pub(crate) fn attributes(&self, id: u64) -> Vec<(&'static str, Option<String>)> {
+    pub(crate) fn attributes(&self, key: BoxKey) -> Vec<(&'static str, Option<String>)> {
         // An `<img>` is named by its `alt`, and an empty one is how it says it is decoration.
         let (alt, label) = match self.picture {
             true => (Some(self.label.clone().unwrap_or_default()), None),
@@ -219,7 +238,7 @@ impl Described {
             ("target", self.opens_beside.then(|| "_blank".to_string())),
             ("rel", self.external.then(|| "noopener".to_string())),
             ("lang", self.lang.clone()),
-            ("id", self.element_id(id)),
+            ("id", self.element_id(key)),
             ("aria-hidden", flag(self.hidden)),
             ("aria-checked", self.state_of(ToggleKind::Checked)),
             ("aria-pressed", self.state_of(ToggleKind::Pressed)),
@@ -261,16 +280,16 @@ impl Described {
             ("aria-disabled", flag(self.disabled)),
             ("tabindex", tabindex.map(str::to_string)),
             (CONSUMED_KEYS_ATTRIBUTE, keys),
-            (FOCUS_BOX_ATTRIBUTE, self.focusable.map(|_| id.to_string())),
+            (FOCUS_BOX_ATTRIBUTE, self.focusable.map(|_| key.to_string())),
         ]);
         attributes
     }
 
     /// The element's `id`: the anchor that reaches it, or, for a box a cursor rests on, one named after the box so it stays the same for as long as the box lives.
-    fn element_id(&self, id: u64) -> Option<String> {
+    fn element_id(&self, key: BoxKey) -> Option<String> {
         self.anchor.clone().or_else(|| {
             self.is_active_descendant
-                .then(|| format!("{DESCENDANT_ID_PREFIX}{id}"))
+                .then(|| format!("{DESCENDANT_ID_PREFIX}{key}"))
         })
     }
 
@@ -357,8 +376,8 @@ pub(crate) fn describe_frame(
         primary: None,
         arrival_margin: Insets::default(),
         isolate_host: false,
-        roots: Vec::new(),
         layers: Vec::new(),
+        surfaces: Vec::new(),
     };
     // Boxes inside a drawing are part of its picture, not elements of the page: it places them itself.
     let mut boxes_in_drawing = 0usize;
@@ -376,16 +395,19 @@ pub(crate) fn describe_frame(
             }
             DrawCommand::PushElement { element } => walk.push(element),
             DrawCommand::PopElement => walk.pop(),
+            DrawCommand::PushSurface { surface } if !in_drawing => walk.enter_surface(*surface),
+            DrawCommand::PopSurface if !in_drawing => walk.leave_surface(),
             other => walk.paint(other, rest),
         }
     }
-    let mut roots = walk.roots;
+    let mut roots = std::mem::take(&mut walk.open[0].children);
     // The outermost layer closed last, and a layer declared inside it can only find its place once that one is in the tree.
     for (place, layer) in walk.layers.into_iter().rev() {
         if let Err(layer) = put_in_place(&mut roots, place, layer) {
             roots.push(Node::Box(layer));
         }
     }
+    name_by_drawn_text(&mut roots);
     Frame {
         background: clear.filter(|color| color.a > 0.0),
         isolate_host: walk.isolate_host,
@@ -399,41 +421,56 @@ pub(crate) fn describe_frame(
 ///
 /// Lifted there over every box of the page, sticky ones included, which are positioned too and come later in the document; and the layout root it sits in becomes a stacking context of its own, so the lift stays inside it and an overlay placed after that root still covers the layer.
 fn put_in_place(
-    roots: &mut [Node],
-    place: u64,
+    nodes: &mut [Node],
+    place: BoxKey,
     mut layer: Box<BoxNode>,
 ) -> Result<(), Box<BoxNode>> {
-    for root in roots.iter_mut() {
-        let Node::Box(root) = root else {
-            continue;
-        };
-        if root.id == place {
-            *root = layer;
-            return Ok(());
+    for node in nodes.iter_mut().filter_map(Node::as_box_mut) {
+        match lift_into(node, place, layer) {
+            Ok(()) => return Ok(()),
+            Err(back) => layer = back,
         }
-        let Some(holder) = box_within(root, place) else {
-            continue;
-        };
-        paint::declare(&mut layer.style, "z-index", "1");
-        *holder = *layer;
-        if !root.style.contains("isolation:") {
-            paint::declare(&mut root.style, "isolation", "isolate");
-        }
-        return Ok(());
     }
     Err(layer)
 }
 
-/// The box `id` somewhere beneath `node`.
-fn box_within(node: &mut BoxNode, id: u64) -> Option<&mut BoxNode> {
-    let Content::Children { boxes, .. } = &mut node.content else {
+/// [`put_in_place`] at or beneath `node`. The layout root the layer sits in is the outermost box of its own surface on the way down: the host's child for the window, and for a surface nested in a frame the box of it the frame holds.
+fn lift_into(
+    node: &mut BoxNode,
+    place: BoxKey,
+    mut layer: Box<BoxNode>,
+) -> Result<(), Box<BoxNode>> {
+    if node.key == place {
+        *node = *layer;
+        return Ok(());
+    }
+    if node.key.surface != place.surface {
+        return match &mut node.content {
+            Content::Children { children, .. } => put_in_place(children, place, layer),
+            _ => Err(layer),
+        };
+    }
+    let Some(holder) = box_within(node, place) else {
+        return Err(layer);
+    };
+    paint::declare(&mut layer.style, "z-index", "1");
+    *holder = *layer;
+    if !node.style.contains("isolation:") {
+        paint::declare(&mut node.style, "isolation", "isolate");
+    }
+    Ok(())
+}
+
+/// The box `key` somewhere beneath `node`.
+fn box_within(node: &mut BoxNode, key: BoxKey) -> Option<&mut BoxNode> {
+    let Content::Children { children, .. } = &mut node.content else {
         return None;
     };
-    for child in boxes.iter_mut() {
-        if child.id == id {
+    for child in children.iter_mut().filter_map(Node::as_box_mut) {
+        if child.key == key {
             return Some(child);
         }
-        if let Some(found) = box_within(child, id) {
+        if let Some(found) = box_within(child, key) {
             return Some(found);
         }
     }
@@ -467,7 +504,7 @@ struct Open {
     style: String,
     /// Whether the element's own background has been taken, so a box painted twice keeps the first.
     painted: bool,
-    boxes: Vec<BoxNode>,
+    children: Vec<Node>,
     pieces: Vec<Painted>,
     /// A transform whose subject is not yet known: the box itself if its own paint turns up inside, and the boxes it wraps otherwise.
     moved: Option<[f32; 6]>,
@@ -478,7 +515,9 @@ struct Open {
     /// Whether the box is an `<img>`, whose picture the browser draws: what the widget painted for every other target is not wanted here.
     picture: bool,
     /// Set on a layer fixed over the surface: the box holding its place where it was declared, which the element takes once the frame is walked.
-    fixed_in_place_of: Option<u64>,
+    fixed_in_place_of: Option<BoxKey>,
+    /// Whether a surface nested in the frame is drawn in this box, which is then what that surface's boxes are placed against.
+    holds_surface: bool,
 }
 
 impl Open {
@@ -490,18 +529,15 @@ impl Open {
             style: String::new(),
             // The host takes no paint of its own: the page chose that element's size and the application named its background in `clear_color`, which the host carries. What the frame draws at this level becomes a box inside it instead.
             painted: true,
-            boxes: Vec::new(),
+            children: Vec::new(),
             pieces: Vec::new(),
             moved: None,
             scrolls: false,
             primary: false,
             picture: false,
             fixed_in_place_of: None,
+            holds_surface: false,
         }
-    }
-
-    fn is_root(&self) -> bool {
-        self.node.is_none()
     }
 }
 
@@ -512,17 +548,71 @@ struct Walk<'a> {
     primary: Option<u64>,
     arrival_margin: Insets,
     isolate_host: bool,
-    roots: Vec<Node>,
     /// The layers fixed over the surface, closed and waiting for the boxes that hold their places, in the order they closed.
-    layers: Vec<(u64, Box<BoxNode>)>,
+    layers: Vec<(BoxKey, Box<BoxNode>)>,
+    /// The surfaces nested in the frame that the walk is inside, innermost last.
+    surfaces: Vec<Entered>,
+}
+
+/// A surface nested in the frame, as the walk entered it.
+struct Entered {
+    handle: u64,
+    /// How many elements were open where it began, the host included: a box opened with as many open is one of its layout roots.
+    base: usize,
 }
 
 impl Walk<'_> {
+    fn enter_surface(&mut self, handle: u64) {
+        if let Some(open) = self.open.last_mut() {
+            open.holds_surface = true;
+        }
+        self.surfaces.push(Entered {
+            handle,
+            base: self.open.len(),
+        });
+    }
+
+    fn leave_surface(&mut self) {
+        self.surfaces.pop();
+    }
+
+    /// The box `id` of the surface the walk is in.
+    fn key(&self, id: u64) -> BoxKey {
+        BoxKey::new(self.surfaces.last().map(|entered| entered.handle), id)
+    }
+
+    /// Whether a box opened now is a layout root of the surface the walk is in: one its surface computed and placed itself, with no parent there expressing where it goes.
+    fn opens_layout_root(&self) -> bool {
+        self.open.len() == self.surface_base()
+    }
+
+    /// Whether the walk is at the top level of the surface it is in, outside every box of it and every drawing: where what it paints is paint the surface carries at its own level.
+    fn at_surface_level(&self) -> bool {
+        self.open.len() == self.surface_base()
+            && self.open.last().is_some_and(|open| open.drawing.is_none())
+    }
+
+    /// How many elements are open at the top level of the surface the walk is in, the host included.
+    fn surface_base(&self) -> usize {
+        self.surfaces.last().map_or(1, |entered| entered.base)
+    }
+
+    /// Whether the surface the walk is in is drawn inside a box, which is what it is placed against, rather than at the host's own level as the window is.
+    fn in_frame_box(&self) -> bool {
+        self.surfaces.last().is_some_and(|entered| entered.base > 1)
+    }
+
     /// Fixes a layer against the viewport, over the whole surface, wherever its element ends up. The layer spans the surface but takes no pointer of its own: its boxes take it back, and everywhere else a press reaches the page under it.
+    ///
+    /// A surface drawn in a box has that box for its viewport: the box contains its layout, which makes it what a fixed element inside it is placed against.
     fn fix_against_viewport(&mut self, style: &mut String, rect: Rect) {
-        let (x, y) = match self.surface.fixed_origin() {
-            Some(origin) => origin,
-            None => self.surface.host_origin(),
+        let (x, y) = if self.in_frame_box() {
+            (0.0, 0.0)
+        } else {
+            match self.surface.fixed_origin() {
+                Some(origin) => origin,
+                None => self.surface.host_origin(),
+            }
         };
         paint::declare(style, "position", "fixed");
         paint::declare(style, "left", &paint::px(rect.x + x));
@@ -532,9 +622,13 @@ impl Walk<'_> {
         paint::declare(style, "pointer-events", "none");
     }
 
-    /// Places a box against the surface: inside the host, or against the viewport while the document scrolls the page, so what stands over the page stays put as it scrolls.
+    /// Places a box against the surface: inside the host, or against the viewport while the document scrolls the page, so what stands over the page stays put as it scrolls. A surface drawn in a box is placed inside that box, which no document scroll moves it against.
     fn place_on_surface(&mut self, style: &mut String, rect: Rect) {
-        let (position, x, y) = match self.surface.fixed_origin() {
+        let fixed_origin = match self.in_frame_box() {
+            true => None,
+            false => self.surface.fixed_origin(),
+        };
+        let (position, x, y) = match fixed_origin {
             Some((x, y)) => ("fixed", rect.x + x, rect.y + y),
             None => ("absolute", rect.x, rect.y),
         };
@@ -543,12 +637,12 @@ impl Walk<'_> {
         paint::declare(style, "top", &paint::px(y));
     }
 
-    /// A box for paint the frame carries at its own top level.
+    /// A box for paint a surface carries at its own top level: the window's, in the host, and a nested surface's, in the box it is drawn in.
     ///
     /// A widget may draw where there is no element for it to be the background of: an application's shell paints the panel its rail stands on before it draws the rail, and dims the page behind a drawer. The host cannot take it — the page chose that element's size and the application named its background in `clear_color` — so it becomes a box of its own inside it. Dropped, as it was, the rail stood on the page's own colour and every pill in it that had been invisible against its panel was suddenly a shape.
     ///
     /// Put in place as it is drawn, and not collected the way paint *inside* an element is. There the pieces go after the boxes because that is what they are — a scroll area's bar is drawn over the content it scrolls. Here the order is the frame's own: a panel drawn before the rail belongs under it, and holding it back would have laid it over the thing it stands behind.
-    fn paint_at_root(&mut self, rect: Rect, painted: &str, text: &str) {
+    fn paint_at_surface_level(&mut self, rect: Rect, painted: &str, text: &str) {
         let mut style = String::new();
         self.place_on_surface(&mut style, rect);
         paint::declare(&mut style, "width", &paint::px(rect.width.max(0.0)));
@@ -565,7 +659,10 @@ impl Walk<'_> {
             );
         }
         style.push_str(painted);
-        self.roots.push(Node::Paint(PaintNode {
+        let Some(level) = self.open.last_mut() else {
+            return;
+        };
+        level.children.push(Node::Paint(PaintNode {
             style,
             text: text.to_string(),
             runs: None,
@@ -589,16 +686,12 @@ impl Walk<'_> {
 
     /// Everything that is not an element boundary: what the open box paints.
     fn paint(&mut self, command: &DrawCommand, rest: &[DrawCommand]) {
-        if self
-            .open
-            .last()
-            .is_some_and(|open| open.is_root() && open.drawing.is_none())
-        {
+        if self.at_surface_level() {
             match command {
                 DrawCommand::Rect { rect, style } => {
                     let mut css = String::new();
                     paint::rect_style(style, *rect, &mut css);
-                    self.paint_at_root(*rect, &css, "");
+                    self.paint_at_surface_level(*rect, &css, "");
                     return;
                 }
                 DrawCommand::Text {
@@ -606,7 +699,7 @@ impl Walk<'_> {
                 } => {
                     let mut css = String::new();
                     paint::text_style(style, &mut css);
-                    self.paint_at_root(*rect, &css, text);
+                    self.paint_at_surface_level(*rect, &css, text);
                     return;
                 }
                 _ => {}
@@ -725,14 +818,18 @@ impl Walk<'_> {
             Some(_) => "img",
             None => tag_of(&element.semantics.role),
         };
-        let fixed_in_place_of = element.fixed_in_place_of.map(|place| place.0);
-        let primary = element.primary_scroll && self.open.len() == 1 && self.primary.is_none();
+        let key = self.key(element.id.0);
+        let fixed_in_place_of = element.fixed_in_place_of.map(|place| self.key(place.0));
+        let primary = element.primary_scroll
+            && self.surfaces.is_empty()
+            && self.open.len() == 1
+            && self.primary.is_none();
         if primary {
             self.primary = Some(element.id.0);
             self.arrival_margin = element.arrival_margin;
             self.surface.hold_document_scroll(element.id.0);
         }
-        let scrolls = element.semantics.role == Role::ScrollArea && !primary;
+        let scrolls = element.scrolls && !primary;
         let drawing = matches!(element.semantics.role, Role::Drawing) && element.picture.is_none();
         let mut style = String::new();
         if let Some(picture) = &element.picture {
@@ -747,13 +844,13 @@ impl Walk<'_> {
             style.push_str(UNSELECTABLE);
         }
         style.push_str(&element.layout);
-        // A box whose parent is the host is a layout root: the application computed and placed it itself, so there is no parent expressing where it goes and the declarations alone would stack them. One of the two places the computed rect is used instead of what the box asked for; a layer fixed over the surface, placed against the viewport wherever its element ends up, is the other.
+        // A box whose parent is the host, or the box a nested surface is drawn in, is a layout root: the application computed and placed it itself, so there is no parent expressing where it goes and the declarations alone would stack them. One of the two places the computed rect is used instead of what the box asked for; a layer fixed over the surface, placed against the viewport wherever its element ends up, is the other.
         // The primary scroll is the exception: it stays in the flow and grows with its content, which is what makes the document tall enough to scroll, and it is at least the surface's height so a short page still fills it.
         if fixed_in_place_of.is_some() {
             self.fix_against_viewport(&mut style, element.rect);
         } else if primary {
             paint::declare(&mut style, "min-height", &paint::px(element.rect.height));
-        } else if self.open.len() == 1 {
+        } else if self.opens_layout_root() {
             let rect = element.rect;
             self.place_on_surface(&mut style, rect);
             paint::declare(&mut style, "width", &paint::px(rect.width));
@@ -789,7 +886,7 @@ impl Walk<'_> {
             paint::declare(&mut style, "transform", &paint::matrix(matrix, at.x, at.y));
         }
         let mut node = BoxNode {
-            id: element.id.0,
+            key,
             tag,
             role: element.semantics.role,
             scrolls,
@@ -803,7 +900,7 @@ impl Walk<'_> {
             scroll_to: element.scroll_to,
             audit: self.audit.then_some(element.rect),
             content: Content::Children {
-                boxes: Vec::new(),
+                children: Vec::new(),
                 pieces: Vec::new(),
             },
         };
@@ -811,16 +908,17 @@ impl Walk<'_> {
         self.open.push(Open {
             node: Some(node),
             box_rect: element.rect,
-            drawing: drawing.then(|| Drawing::at(element.id.0, element.rect)),
+            drawing: drawing.then(|| Drawing::at(key, element.rect)),
             style,
             painted: false,
-            boxes: Vec::new(),
+            children: Vec::new(),
             pieces: Vec::new(),
             moved: None,
             scrolls,
             primary,
             picture: element.picture.is_some(),
             fixed_in_place_of,
+            holds_surface: false,
         });
     }
 
@@ -831,12 +929,15 @@ impl Walk<'_> {
             .iter_mut()
             .rev()
             .filter_map(|open| open.node.as_mut())
-            .find(|owner| owner.described.descendant_box == Some(node.id))
+            .find(|owner| {
+                owner.key.surface == node.key.surface
+                    && owner.described.descendant_box == Some(node.key.id)
+            })
         else {
             return;
         };
         node.described.is_active_descendant = true;
-        owner.described.active_descendant = node.described.element_id(node.id);
+        owner.described.active_descendant = node.described.element_id(node.key);
     }
 
     fn pop(&mut self) {
@@ -850,7 +951,7 @@ impl Walk<'_> {
             return;
         };
         // A single run of text is the box's own label, not something inside it, so it becomes the element's text and style — which is what lets it be selected, found and read as part of the document. Unless the text needs the background to itself: glyphs filled with a gradient are a background clipped to their shape.
-        let inline_text = open.boxes.is_empty()
+        let inline_text = open.children.is_empty()
             && open.pieces.len() == 1
             && matches!(
                 open.pieces[0],
@@ -865,6 +966,10 @@ impl Walk<'_> {
             // Paint placed inside a box is placed against that box. Without this it is placed against whatever the nearest positioned ancestor happens to be, and a field's own text went to the corner of the page.
             paint::declare(&mut open.style, "position", "relative");
         }
+        // A nested surface's layout roots are placed, and its layers fixed, against the box it is drawn in, as the window's are against the host and the viewport: containing the box's layout makes it the block both are placed in.
+        if open.holds_surface {
+            paint::declare(&mut open.style, "contain", "layout");
+        }
         let fixed_in_place_of = open.fixed_in_place_of;
         node.style = open.style;
         node.content = if let Some(drawing) = open.drawing {
@@ -876,7 +981,7 @@ impl Walk<'_> {
             Content::Text { text, runs }
         } else {
             Content::Children {
-                boxes: open.boxes,
+                children: open.children,
                 pieces: open.pieces.into_iter().map(piece).collect(),
             }
         };
@@ -887,7 +992,7 @@ impl Walk<'_> {
         }
     }
 
-    /// Puts a closed box where the frame says it belongs: after the boxes already placed in the element being assembled, or the host's next child.
+    /// Puts a closed box where the frame says it belongs: after what is already placed in the element being assembled, the host included.
     fn place(&mut self, node: BoxNode) {
         let Some(parent) = self.open.last_mut() else {
             return;
@@ -896,11 +1001,7 @@ impl Walk<'_> {
         if parent.drawing.is_some() {
             return;
         }
-        if parent.is_root() {
-            self.roots.push(Node::Box(Box::new(node)));
-        } else {
-            parent.boxes.push(node);
-        }
+        parent.children.push(Node::Box(Box::new(node)));
     }
 }
 
@@ -928,14 +1029,19 @@ fn survey(node: &BoxNode, in_control: bool, held: &mut Held) {
         let draws = match &node.content {
             Content::Text { text, .. } => !text.trim().is_empty(),
             Content::Drawing(_) => true,
-            Content::Children { pieces, .. } => {
-                pieces.iter().any(|piece| !piece.text.trim().is_empty())
-            }
+            Content::Children { children, pieces } => children
+                .iter()
+                .filter_map(|child| match child {
+                    Node::Paint(paint) => Some(paint),
+                    Node::Box(_) => None,
+                })
+                .chain(pieces)
+                .any(|piece| !piece.text.trim().is_empty()),
         };
         held.beside_controls |= draws || node.tag == "img" || node.tag == "svg";
     }
-    if let Content::Children { boxes, .. } = &node.content {
-        for child in boxes {
+    if let Content::Children { children, .. } = &node.content {
+        for child in children.iter().filter_map(Node::as_box) {
             survey(child, in_control, held);
         }
     }
@@ -948,10 +1054,13 @@ fn the_visible_control(node: &mut BoxNode) -> Option<&mut BoxNode> {
     if node.described.control {
         return Some(node);
     }
-    let Content::Children { boxes, .. } = &mut node.content else {
+    let Content::Children { children, .. } = &mut node.content else {
         return None;
     };
-    boxes.iter_mut().find_map(the_visible_control)
+    children
+        .iter_mut()
+        .filter_map(Node::as_box_mut)
+        .find_map(the_visible_control)
 }
 
 /// Moves the name of a box that only wraps a control onto that control, by the rule [`Role::lends_name_to_control`] gives every target. A `group` label is not a name any field inside it has, so a wrapped control is otherwise unnamed.
@@ -983,6 +1092,74 @@ fn lend_name_to_control(wrapper: &mut BoxNode) {
             None => label,
         });
     }
+}
+
+/// Names each control nothing named, of a role a browser does not name by what is inside it, by the text drawn inside it: the name every other target gives it. ARIA takes the content of a field, a combobox, a slider, a spin button or a splitter as its value, so a select showing "Small" was nameless in the document and called "Small" by a desktop reader.
+///
+/// Run once the frame is whole, after every wrapper has lent its name: a control named here would keep the name of the box around it from reaching it.
+fn name_by_drawn_text(nodes: &mut [Node]) {
+    for node in nodes.iter_mut().filter_map(Node::as_box_mut) {
+        if node.described.control
+            && node.described.label.is_none()
+            && !named_by_its_content(node.role)
+            && !is_out_of_sight(node)
+        {
+            let mut name = String::new();
+            drawn_text(node, &mut name);
+            if !name.is_empty() {
+                node.described.label = Some(name);
+            }
+        }
+        if let Content::Children { children, .. } = &mut node.content {
+            name_by_drawn_text(children);
+        }
+    }
+}
+
+/// Whether a browser names an element of this role by the text inside it, as ARIA's "name from content" says.
+fn named_by_its_content(role: Role) -> bool {
+    !matches!(
+        role,
+        Role::Slider
+            | Role::SpinButton
+            | Role::TextInput
+            | Role::MultilineTextInput
+            | Role::ComboBox
+            | Role::Splitter
+    )
+}
+
+/// The text drawn in `node` and the boxes inside it, in the order it was drawn, each piece trimmed and joined by a space as a reader's name is.
+fn drawn_text(node: &BoxNode, name: &mut String) {
+    if is_out_of_sight(node) {
+        return;
+    }
+    match &node.content {
+        Content::Text { text, .. } => add_word(name, text),
+        Content::Drawing(_) => {}
+        Content::Children { children, pieces } => {
+            for child in children {
+                match child {
+                    Node::Box(child) => drawn_text(child, name),
+                    Node::Paint(paint) => add_word(name, &paint.text),
+                }
+            }
+            for piece in pieces {
+                add_word(name, &piece.text);
+            }
+        }
+    }
+}
+
+fn add_word(name: &mut String, text: &str) {
+    let text = text.trim();
+    if text.is_empty() {
+        return;
+    }
+    if !name.is_empty() {
+        name.push(' ');
+    }
+    name.push_str(text);
 }
 
 /// A piece as the positioned element that stands for it.

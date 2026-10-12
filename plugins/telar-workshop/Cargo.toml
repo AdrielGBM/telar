@@ -34,6 +34,10 @@ serde = { workspace = true, features = ["rc"] }
 telar-icons.workspace = true
 serde_json.workspace = true
 tiny-skia.workspace = true
+telar-project.workspace = true
 
 [dev-dependencies]
 telar = { workspace = true, features = ["headless", "dev", "testing"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+telar = { workspace = true, features = ["web-dom"] }

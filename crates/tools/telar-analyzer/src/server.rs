@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use tokio::io::BufReader;
 use tokio::sync::mpsc;
 
-use crate::analysis::preview_target::PREVIEW_AT;
+use crate::analysis::preview_target::{PREVIEW_AT, WORKSHOPS};
 use crate::backend::Backend;
 use crate::rpc::{OutgoingSender, read_message, write_message};
 
@@ -107,7 +107,7 @@ enum Route {
 fn route(method: &str, params: &Value) -> Route {
     match method {
         // `workspace/symbol` looks like a passthrough but is not: the handler asks rust-analyzer itself and concatenates, since neither half answers for the whole workspace.
-        "initialize" | "shutdown" | "workspace/symbol" | PREVIEW_AT => Route::Ours,
+        "initialize" | "shutdown" | "workspace/symbol" | PREVIEW_AT | WORKSHOPS => Route::Ours,
         "initialized" | "workspace/didChangeWatchedFiles" => Route::Both,
         // Our completion items carry the resolve key `defer_completion_docs` wrote; anything else came from rust-analyzer and goes back to it.
         "completionItem/resolve" => match params.pointer("/data/g").is_some() {
@@ -211,6 +211,7 @@ async fn dispatch_request(backend: &Backend, method: &str, params: Value) -> Res
         "textDocument/rename" => ok(backend.rename(parse(params)?).await),
         "workspace/symbol" => ok(backend.workspace_symbol(parse(params)?).await),
         PREVIEW_AT => ok(backend.preview_at(parse(params)?).await),
+        WORKSHOPS => ok(backend.workshops(parse(params)?).await),
         "textDocument/semanticTokens/full" => {
             ok(backend.semantic_tokens_full(parse(params)?).await)
         }

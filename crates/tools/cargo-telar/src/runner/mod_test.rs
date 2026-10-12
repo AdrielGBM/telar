@@ -47,3 +47,28 @@ fn a_named_preview_cannot_be_listed_or_rendered() {
     assert!(preview_args(&["demo--card--a", "--png", "out"]).is_err());
     assert!(preview_args(&["--component", "Button"]).is_ok());
 }
+
+#[test]
+fn an_export_names_its_directory_and_may_name_its_base() {
+    let args = preview_args(&["--build", "site", "--target", "web", "--base", "/ui/"]).unwrap();
+    assert_eq!(args.build.as_deref(), Some(std::path::Path::new("site")));
+    assert_eq!(args.base.as_deref(), Some("/ui/"));
+    assert!(args.hot.common.target == Some(Target::Web));
+    assert!(preview_args(&["--build", "site"]).unwrap().base.is_none());
+}
+
+#[test]
+fn an_export_is_neither_a_listing_a_render_nor_a_workshop_opened_somewhere() {
+    assert!(preview_args(&["--base", "/ui/"]).is_err());
+    for other in [
+        &["--list"][..],
+        &["--png", "out"],
+        &["demo--card--a"],
+        &["--component", "Button"],
+        &["--no-hot-reload"],
+    ] {
+        let mut argv = vec!["--build", "site"];
+        argv.extend_from_slice(other);
+        assert!(preview_args(&argv).is_err(), "{argv:?}");
+    }
+}

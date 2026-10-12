@@ -1,4 +1,4 @@
-//! `textDocument/codeLens`: "▶ Open in workshop" over each `[preview "Name"]` header and "▶ Run play" over each `[play]`, wired to the `telar.openInWorkshop` and `telar.runPlay` commands the extension registers, which show the preview in the package's workshop and run `cargo telar test --preview <id> --no-snapshots` in the package.
+//! `textDocument/codeLens`: "▶ Open in workshop" and "▶ Show in panel" over each `[preview "Name"]` header and "▶ Run play" over each `[play]`, wired to the `telar.openInWorkshop`, `telar.showInPanel` and `telar.runPlay` commands the extension registers, which show the preview in a workshop that lists it, show it in the editor's preview panel, and run `cargo telar test --preview <id> --no-snapshots` in the package.
 
 use lsp_types::{CodeLens, Command, Position, Range};
 use telar_parser::RsxDocument;
@@ -7,6 +7,8 @@ use crate::analysis::preview_target::{PreviewHost, PreviewTarget};
 
 /// The command that shows a preview in the workshop, given its [`PreviewTarget`].
 pub const OPEN_IN_WORKSHOP: &str = "telar.openInWorkshop";
+/// The command that shows a preview in the editor's preview panel, given its [`PreviewTarget`].
+pub const SHOW_IN_PANEL: &str = "telar.showInPanel";
 /// The command that runs a preview's `[play]`, given its [`PreviewTarget`].
 pub const RUN_PLAY: &str = "telar.runPlay";
 
@@ -21,6 +23,12 @@ pub fn code_lenses(doc: &RsxDocument, host: &PreviewHost) -> Vec<CodeLens> {
             preview.line,
             "▶ Open in workshop",
             OPEN_IN_WORKSHOP,
+            &target,
+        ));
+        lenses.push(lens(
+            preview.line,
+            "▶ Show in panel",
+            SHOW_IN_PANEL,
             &target,
         ));
         if let Some(play) = &preview.play {

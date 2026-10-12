@@ -39,6 +39,7 @@ and [Host profiles](#host-profiles).
 | --- | --- |
 | `index.html` | The page, expanded from the template. With `--prerender` and an address that carries a locale, the [negotiating root](#the-root-of-a-site-in-several-locales) instead. |
 | `<locale>/<path>/index.html`, `404.html` | With `--prerender`, every page of the app written ahead of time; see [Prerendering](prerender.md). |
+| `preview/<id>/index.html`, `matrix/<id>/index.html`, `docs/<title…>/index.html`, `404.html` | With `cargo telar preview --build`: the workshop's page at each of its addresses; see [The workshop as a site](#the-workshop-as-a-site). |
 | `sitemap.xml` | With `--prerender` and an `origin`: every page written, with its translations; see [The sitemap](#the-sitemap). |
 | `app-<hash>.js` | The `wasm-bindgen` glue, pointed at the hashed module. |
 | `app_bg-<hash>.wasm` | The module. |
@@ -51,6 +52,8 @@ and [Host profiles](#host-profiles).
 
 The output directory is assembled beside `web/` and swapped in whole, so it only ever holds one build:
 nothing from a previous build is left behind, and a server reading it mid-build sees the last complete one.
+`cargo telar preview --build <DIR>` writes into `<DIR>` instead, assembled beside it the same way, and refuses a directory
+that holds anything but an earlier web build, since the swap would delete it.
 
 ## The page template
 
@@ -258,8 +261,8 @@ Cloudflare Pages, deployed from the output directory (with the Git integration o
 It serves the site at the root of its domain, so this profile needs `base = "/"`.
 
 - **`_headers`**: `public, max-age=31536000, immutable` for every file in `asset-manifest.json` and everything
-  under `images/`; `no-cache` for `/`, `404.html`, and every page (as `/<locale>/*` for each locale, or each
-  page's own path when the address carries none); `Vary: Accept-Language` on `/` when it negotiates. Pages
+  under `images/`; `no-cache` for `/`, `404.html`, and every page (as `/<locale>/*` for each locale, as `/<dir>/*` for each
+  directory of [the workshop's pages](#the-workshop-as-a-site), or each page's own path otherwise); `Vary: Accept-Language` on `/` when it negotiates. Pages
   joins the values of every rule a request matches, so no page rule ever covers a hashed file.
 - **`_redirects`**: when the address carries a locale, a `302` from each page's address without one
   (`/projects` and `/projects/`) to the base locale's (`/es/projects/`).
@@ -287,6 +290,38 @@ The worker can only read `Accept-Language`. A reader who chose another locale in
 `localStorage`, see [docs/user-preferences.md](user-preferences.md)) is still sent to the negotiated one at
 `/`; their choice holds from the first page they open from there.
 
+## The workshop as a site
+
+`cargo telar preview --build <DIR> --target web` exports the component workshop (see
+[docs/previews.md](previews.md#exporting-the-workshop)): the same output as any web build, with the workshop as the
+app. Its addresses are `/preview/<id>`, `/matrix/<id>` and `/docs/<group>/<title>`, under `base`, with a query that
+needs no page of its own. A static host answers a path with a file and has no app to ask, so the export writes the
+page once more for every address the workshop has, from the previews the package lists:
+
+| File | Served at |
+| --- | --- |
+| `index.html` | `/`, where the workshop opens on its first preview, or the one it last showed |
+| `preview/<id>/index.html` | each preview's canvas |
+| `matrix/<id>/index.html` | each preview's matrix |
+| `docs/<group>/<title>/index.html` | each title's docs, one segment per `/` of the title |
+| `404.html` | any other address, such as a link to a preview the site no longer has |
+
+Every copy is the plain page, described for its own address (its canonical link, when the site has an `origin`), and
+names its files from the site's base, so it works at any depth. The workshop reads where it is from the address under
+`<base href>`, so `--base` (or `[telar.web] base`) moves the files and the router together. An address no file path
+can hold is left to `404.html`, with a note.
+
+What a host does with them:
+
+- **`static`**: a server mapping paths to files serves each page at its directory. Most redirect the address without
+  its closing `/` (`/preview/<id>`) to the one with it, which the workshop reads the same; the workshop then writes the
+  address without it as it moves. GitHub Pages, Netlify and Cloudflare Pages answer any other address with
+  `404.html`; nginx needs `error_page 404 /404.html;` (under `base`, its path there) and Caddy a `handle_errors` that
+  serves it. The export is a release build, so it carries `.br` and `.gz` copies of the pages like every other file.
+- **`cloudflare-pages`**: `_headers` revalidates each directory of pages with one rule (`/preview/*`, `/matrix/*`,
+  `/docs/*`), so the export fits Pages' 100 rules however many previews there are. No worker and no redirects are
+  written: the addresses carry no locale.
+
 ## Precompression
 
 A release build for `host = "static"` writes a `.br` (brotli, quality 11) and a `.gz` (gzip, best) beside every file of at least
@@ -298,10 +333,15 @@ original; those that do not ignore them.
 
 ## The dev server
 
-`cargo telar dev --target web` serves the output on `http://localhost:8080/` (under `base`, with `/` redirecting
-there, when the site names one) with `cache-control: no-store` and reloads the page after each rebuild. It rebuilds on changes under `src/`, `crates/` and `apps/`, and on
-changes to the template's directory and the public directory.
+`cargo telar dev --target web` serves the output on `http://localhost:8080/` (or a free port, printed when it starts, if that one is taken; `--port` picks one and fails if it is taken) (under `base`, with `/` redirecting
+there, when the site names one) with `cache-control: no-store` and reloads the page after each rebuild. It rebuilds on what the desktop loop rebuilds on, every workspace member's sources, assets, catalogs and `telar.toml`, and on
+changes to the template and the public directory.
 
+`cargo telar preview --target web` is the same server and loop, building the workshop instead of the app.
+
+- **The app's addresses** are pages: a browser asking for a page (`Accept: text/html`) at a path under `base` that
+  names no file gets `index.html`, so reloading the app at one of its own locations, or following a link to one,
+  starts the app there. Any other request for a missing file is `404`.
 - **Media types** follow the file extension: HTML, JavaScript, `wasm` (`application/wasm`, which streaming
   instantiation needs), CSS, JSON, web manifests, SVG, PNG, JPEG, GIF, WebP, AVIF, ICO, `woff`/`woff2`,
   `ttf`/`otf`, MP4, WebM, Ogg, MP3, WAV, plain text, CSV, XML, VTT, PDF, glTF and more. Anything unknown is

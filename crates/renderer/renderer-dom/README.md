@@ -80,6 +80,17 @@ pinned to fill the stage, cover it. A box inside a drawing sends its frame,
 transform and clip where layout put it on the surface; the drawing rebases them into the box's own
 coordinates, where a leaf's artwork already is (see [`document.rs`](src/document.rs)'s `draw`).
 
+`src/surface_test.rs` mounts a surface nested in the frame, as a `SurfaceFrame` draws its canvas, beside a
+window box of the same id. Each surface numbers its boxes from its own counter, so the surface's boxes are
+elements of their own, named `<surface>-<id>`; its layout roots are placed inside the box it is drawn in; and
+focus, a followed link and a scroll on one of its boxes reach the app inside `Event::InSurface`. Paint the
+surface carries at its own level, such as a modal's scrim, keeps its place among the surface's roots, live and
+in a served page, rather than becoming the background of the box the surface is drawn in.
+`src/frame_tab_test.rs` mounts real widgets, a control before a `SurfaceFrame`, two inside it and one after
+it, and takes the browser's Tab one step at a time: the walk runs through the frame's controls with no stop
+for the frame itself, as Telar's own Tab does on a desktop, and the app's focus follows each step into the
+frame and out of it again.
+
 The dev shell's chromedriver may not match its Chromium. In that case run the tests in Firefox:
 
 ```sh

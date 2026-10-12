@@ -356,6 +356,7 @@ fn panel(
             rows,
         )?
         .styled_by(placed)
+        .role(Role::Menu)
         // A press on the panel's own padding is not a press away from it, and a stroke that starts on the panel is the panel's.
         .on_press(|| {})
         .holds_stroke()

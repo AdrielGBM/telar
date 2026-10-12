@@ -146,10 +146,13 @@ pub fn window_frame(
         Ok(box_item(
             StyledContainer::new(
                 LayoutStyle::new()
+                    .flex_column()
                     .align_items(AlignItems::CENTER)
                     .justify_content(JustifyContent::CENTER)
                     .padding_horizontal(8.0)
-                    .padding_vertical(2.0),
+                    .padding_vertical(2.0)
+                    .min_width(shared::MIN_TARGET)
+                    .min_height(shared::MIN_TARGET),
                 |_| RectStyle::default(),
                 vec![label],
             )?

@@ -1,6 +1,8 @@
 //! The workshop's layout: the top bar over the sidebar, and the canvas area beside it — the canvas or the docs page, as the view says — with the panels along one of its edges, each pane resized by a splitter.
 //!
 //! The shell owns where each region sits, how big it is and what it is announced as, and how that changes with the window's width (see [`Arrangement`](crate::arrangement::Arrangement)): a narrow window shows the sidebar in a drawer and the panels below the canvas. What a region shows is its own module's.
+//!
+//! The workspace — the canvas area and the panels, each a region of it — is the main landmark, and it holds both splitters: the one between it and the sidebar too, so a reader finds nothing between the landmarks.
 
 use telar::{
     Accessible, Children, Color, Key, LayoutError, LayoutItem, LayoutStyle, Movable, Reactive,
@@ -8,7 +10,7 @@ use telar::{
     effect,
 };
 use telar_components::{
-    DrawerProps, SizedPane, SplitDirection, SplitPaneProps, drawer, split_pane,
+    DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer, split_pane,
 };
 use telar_devtools::{use_workbench_tokens, workbench_fill};
 
@@ -17,7 +19,7 @@ use crate::state::{
     PANEL_MAX_FRACTION, PANEL_MIN_SIZE, PanelPosition, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
     ViewMode, WorkshopState,
 };
-use crate::strings::{self, PANELS, PREVIEWS, RESIZE_PANELS, RESIZE_SIDEBAR};
+use crate::strings::{self, PANELS, PREVIEWS, RESIZE_PANELS, RESIZE_SIDEBAR, WORKSPACE};
 use crate::view_switch::view_key;
 use crate::{canvas, docs, matrix, panels, sidebar, top_bar};
 
@@ -110,6 +112,7 @@ fn beside_sidebar(
             .max(SIDEBAR_MAX_WIDTH)
             .collapsed(state.sidebar_collapsed())
             .label(Reactive::of(|| strings::text(RESIZE_SIDEBAR)))
+            .region(SplitRegion::new(Role::Main, strings::reactive(WORKSPACE)))
             .build(),
         panes([sidebar_pane(regions)?, workspace(state, regions)?]),
     )
@@ -152,13 +155,17 @@ fn under_drawer(
             .build(),
         sidebar,
     )?;
+    let workspace = StyledContainer::new(
+        workbench_fill(),
+        |_| RectStyle::default(),
+        vec![split_workspace(state, regions, PanelPosition::Bottom)?],
+    )?
+    .role(Role::Main)
+    .a11y_label(|| strings::text(WORKSPACE));
     let column = StyledContainer::new(
         workbench_fill(),
         |_| RectStyle::default(),
-        vec![
-            split_workspace(state, regions, PanelPosition::Bottom)?,
-            drawer,
-        ],
+        vec![box_item(workspace), drawer],
     )?;
     Ok(box_item(column))
 }
@@ -226,7 +233,7 @@ fn canvas_pane(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError
         },
         vec![box_item(shown)],
     )?
-    .role(Role::Main)
+    .role(Role::Section)
     .a11y_label(move || strings::text(view_key(view.get())));
     Ok(box_item(pane))
 }
@@ -237,7 +244,7 @@ fn panels_pane(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError
         |_| RectStyle::default().with_fill(use_workbench_tokens().panel_background),
         vec![panels::panels(state)?],
     )?
-    .role(Role::Complementary)
+    .role(Role::Section)
     .a11y_label(|| strings::text(PANELS));
     Ok(box_item(pane))
 }

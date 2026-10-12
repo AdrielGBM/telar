@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use telar::testing::{advance_time, centre, press, release, route};
 use telar::{
     AvailableSpace, ComponentList, DrawCommand, Paint, compute_layout, focus, new_container,
-    relayout_if_dirty,
+    relayout_if_dirty, track_layout,
 };
 
 use super::*;

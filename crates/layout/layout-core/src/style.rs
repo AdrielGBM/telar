@@ -2,7 +2,7 @@
 
 use taffy::{
     Dimension, Display, FlexDirection, FlexWrap, GridPlacement, LengthPercentage,
-    LengthPercentageAuto, Style,
+    LengthPercentageAuto, Overflow, Style,
 };
 
 pub use taffy::{AlignItems, AvailableSpace, JustifyContent};
@@ -265,6 +265,8 @@ pub(crate) struct LogicalStyle {
     pub(crate) row_follows_direction: bool,
     /// Set by `LayoutEngine::make_flex_row` for a node whose own declared style never called `flex_row`.
     pub(crate) row_forced: bool,
+    /// Set by `LayoutEngine::set_scroll_content`: a block box whose overflow scrolls on both axes, so it contributes its content's size yet, as a flex or grid item, may shrink below it.
+    pub(crate) scrolls: bool,
     /// Set by [`LayoutStyle::shown`] / [`LayoutStyle::display_none`]: what the node's own style says about being in flow. A style is free to say the opposite of what it said last time — which is the whole of `shown:` in a `[view]`, re-resolved from whatever it reads.
     pub(crate) hidden: bool,
     /// Set by `LayoutEngine::set_display`: an answer given *out of band*, which no style knows about and so none may overwrite. `None` leaves the question to [`hidden`](Self::hidden).
@@ -872,6 +874,13 @@ impl LayoutStyle {
         } else if style.flex_direction == FlexDirection::RowReverse && direction.is_rtl() {
             // An explicit reverse runs right to left on screen in both directions, and under RTL that is what a plain row already does.
             style.flex_direction = FlexDirection::Row;
+        }
+        if logical.scrolls {
+            style.display = Display::Block;
+            style.overflow = taffy::Point {
+                x: Overflow::Scroll,
+                y: Overflow::Scroll,
+            };
         }
         if logical.is_hidden() {
             style.display = Display::None;

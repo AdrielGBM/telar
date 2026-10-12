@@ -12,8 +12,8 @@ use reactive_core::{RwSignal, signal};
 use renderer_core::{Color, RectStyle, RenderBackend, TextStyle};
 use telar_renderer_dom::{CanvasTextMetrics, DomRenderer};
 use ui_core::{
-    Accessible, ComponentList, Container, LayoutItem, StyledContainer, Text, WindowRoot, box_item,
-    focus,
+    Accessible, ComponentList, Container, LayoutItem, LayoutScrollArea, StyledContainer, Text,
+    WindowRoot, box_item, focus,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -81,6 +81,15 @@ fn stateful(
     Ok(box_item(control))
 }
 
+/// A tree whose rows overflow it: the control and the box that scrolls are one.
+fn scrolling_tree(name: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let rows = Container::new(LayoutStyle::new().width(80.0).height(400.0), vec![])?;
+    let tree = LayoutScrollArea::new(LayoutStyle::new().width(120.0).height(60.0), box_item(rows))?
+        .control(Role::Tree)
+        .a11y_label(move || name);
+    Ok(box_item(tree))
+}
+
 fn mount() {
     if PAGE.with(|page| page.borrow().is_some()) {
         return;
@@ -95,6 +104,7 @@ fn mount() {
         vec![
             stateful(Role::Switch, "Reduce motion", "≈", calm).expect("the switch builds"),
             stateful(Role::Button, "Bold", "B", bold).expect("the toggle button builds"),
+            scrolling_tree("Files").expect("the tree builds"),
         ],
     )
     .expect("the column builds");
@@ -271,4 +281,45 @@ async fn enter_presses_the_toggle_button_and_the_next_frame_says_so() {
     );
     focus::clear();
     render();
+}
+
+#[wasm_bindgen_test]
+fn a_control_that_scrolls_is_one_focusable_element_and_not_a_scroller_inside_one() {
+    render();
+    let tree = control("Files");
+    assert_eq!(tree.get_attribute("role").as_deref(), Some("tree"));
+    assert_eq!(tree.get_attribute("tabindex").as_deref(), Some("0"));
+    let overflow = |element: &web_sys::Element| {
+        web_sys::window()
+            .expect("a window")
+            .get_computed_style(element)
+            .expect("a computed style")
+            .expect("a style")
+            .get_property_value("overflow-y")
+            .expect("an overflow")
+    };
+    assert_eq!(overflow(&tree), "auto");
+    assert!(
+        tree.scroll_height() > tree.client_height(),
+        "its rows overflow it"
+    );
+    let inside = tree.query_selector_all("div").expect("a valid selector");
+    for index in 0..inside.length() {
+        let node: web_sys::Element = inside
+            .item(index)
+            .expect("a node")
+            .dyn_into()
+            .expect("an element");
+        assert_ne!(
+            overflow(&node),
+            "auto",
+            "nothing inside it scrolls on its own"
+        );
+    }
+    tree.focus().expect("focus");
+    assert_eq!(
+        document().active_element().as_ref(),
+        Some(tree.as_ref()),
+        "and the keyboard can reach what scrolls"
+    );
 }

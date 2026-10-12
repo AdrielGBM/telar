@@ -12,6 +12,7 @@ use crate::runner::config::{
     split_android_flag,
 };
 
+mod addresses;
 mod assets;
 mod cloudflare;
 mod fonts;
@@ -69,9 +70,57 @@ pub(crate) fn build_web_bundle(
     renderer: Option<WebRenderer>,
     prerender: bool,
 ) -> Result<PathBuf, String> {
+    let pages = match prerender {
+        true => SitePlan::Prerendered,
+        false => SitePlan::Root,
+    };
+    build_web_site(
+        cargo_args,
+        config,
+        &WebBuild {
+            release,
+            renderer,
+            pages,
+            out: None,
+        },
+    )
+}
+
+pub(crate) struct WebBuild<'a> {
+    pub(crate) release: bool,
+    pub(crate) renderer: Option<WebRenderer>,
+    pub(crate) pages: SitePlan,
+    /// Where the site is written; the workspace's `telar-dist/web` when `None`.
+    pub(crate) out: Option<&'a Path>,
+}
+
+pub(crate) enum SitePlan {
+    Root,
+    /// Every page the app's routes list, written by the app itself; see `docs/prerender.md`.
+    Prerendered,
+    /// The plain page again at each of these addresses, and at `404.html`.
+    Addresses(Vec<PageLocation>),
+}
+
+pub(crate) fn build_web_site(
+    cargo_args: Vec<String>,
+    config: TelarSection,
+    build: &WebBuild,
+) -> Result<PathBuf, String> {
+    let WebBuild {
+        release, renderer, ..
+    } = *build;
     let (_android, rest) = split_android_flag(cargo_args);
     let resolved = resolve_package(&rest);
     let package_root = find_package_dir(&rest);
+    // Assembled beside the output and swapped in whole, so the output only ever holds one build: every name in it is either this build's or gone, and a server reading it mid-build sees the last build rather than half of this one.
+    let (out, staging) = match build.out {
+        Some(out) => (out.to_path_buf(), staging_beside(out)?),
+        None => {
+            let dist = dist_dir(&resolved.workspace_root);
+            (dist.join("web"), dist.join("web.staging"))
+        }
+    };
 
     // Checked before cargo ever runs: `--profile web` below would otherwise fail with cargo's own "profile `web` is not defined" error, which names neither the file to fix nor what to put in it.
     if release && !has_web_profile(&resolved.workspace_root) {
@@ -122,10 +171,6 @@ pub(crate) fn build_web_bundle(
         ));
     }
 
-    // Assembled beside the output and swapped in whole, so the output only ever holds one build: every name in it is either this build's or gone, and a server reading it mid-build sees the last build rather than half of this one.
-    let dist = dist_dir(&resolved.workspace_root);
-    let out = dist.join("web");
-    let staging = dist.join("web.staging");
     recreate_dir(&staging)?;
 
     let locale = config.default_locale().unwrap_or_else(|| "en".to_string());
@@ -143,29 +188,38 @@ pub(crate) fn build_web_bundle(
             renderer,
             locale: &locale,
             site: &site,
-            reserved: &reserved_paths(prerender, host),
+            reserved: &reserved_paths(&build.pages, host),
         },
     )?;
-    let pages = if prerender {
-        let binary =
-            prerender::build_host_binary(&rest, &frontend, &package_root.join("Cargo.toml"))?;
-        let pages = prerender::write_pages(
-            &staging,
-            &page,
-            &template,
-            &binary,
-            &package_root,
-            &config.web.prerender,
-            &site,
-        )?;
-        eprintln!(
-            "[cargo-telar] Prerendered {} page(s) and a 404 page",
-            pages.pages.len()
-        );
-        write_sitemap(&staging, &site, &pages)?;
-        pages
-    } else {
-        SitePages::root_only()
+    let pages = match &build.pages {
+        SitePlan::Root => SitePages::root_only(),
+        SitePlan::Prerendered => {
+            let binary =
+                prerender::build_host_binary(&rest, &frontend, &package_root.join("Cargo.toml"))?;
+            let pages = prerender::write_pages(
+                &staging,
+                &page,
+                &template,
+                &binary,
+                &package_root,
+                &config.web.prerender,
+                &site,
+            )?;
+            eprintln!(
+                "[cargo-telar] Prerendered {} page(s) and a 404 page",
+                pages.pages.len()
+            );
+            write_sitemap(&staging, &site, &pages)?;
+            pages
+        }
+        SitePlan::Addresses(addresses) => {
+            let pages = addresses::write_pages(&staging, &page, &template, &site, addresses)?;
+            eprintln!(
+                "[cargo-telar] Wrote {} page(s) and a 404 page",
+                pages.pages.len()
+            );
+            pages
+        }
     };
     images::ship_images(
         &staging,
@@ -191,10 +245,12 @@ pub(crate) fn build_web_bundle(
 }
 
 /// The paths a build writes itself, which a public file of the same name would collide with.
-fn reserved_paths(prerender: bool, host: WebHost) -> Vec<&'static str> {
+fn reserved_paths(pages: &SitePlan, host: WebHost) -> Vec<&'static str> {
     let mut reserved = vec![PAGE_FILE, MANIFEST_FILE, telar_baker::ICONS_NOTICE_FILENAME];
-    if prerender {
-        reserved.extend([prerender::NOT_FOUND_FILE, SITEMAP_FILE]);
+    match pages {
+        SitePlan::Root => {}
+        SitePlan::Prerendered => reserved.extend([prerender::NOT_FOUND_FILE, SITEMAP_FILE]),
+        SitePlan::Addresses(_) => reserved.push(prerender::NOT_FOUND_FILE),
     }
     if host == WebHost::CloudflarePages {
         reserved.extend([cloudflare::WORKER_FILE, cloudflare::ROUTES_FILE]);
@@ -309,6 +365,40 @@ fn point_glue_at(glue: &Path, module: &str) -> Result<(), String> {
         ));
     }
     std::fs::write(glue, patched).map_err(|e| format!("could not write {}: {e}", glue.display()))
+}
+
+/// Where a build into `out` is assembled: beside it, so swapping it in is a rename.
+fn staging_beside(out: &Path) -> Result<PathBuf, String> {
+    check_site_dir(out)?;
+    let mut staging = out.file_name().unwrap_or_default().to_os_string();
+    staging.push(".staging");
+    Ok(out.with_file_name(staging))
+}
+
+/// Whether a build may be written into `out`, which it replaces whole: a new or empty directory, or an earlier web build. Anything else is refused, since the swap would delete it.
+pub(crate) fn check_site_dir(out: &Path) -> Result<(), String> {
+    if out.file_name().is_none() {
+        return Err(format!(
+            "{} names no directory to write the site into",
+            out.display()
+        ));
+    }
+    if out.exists() && !holds_web_build_or_nothing(out)? {
+        return Err(format!(
+            "{} already holds files that are not a web build (it has no {MANIFEST_FILE}), and writing the site there would delete them; name a new or empty directory",
+            out.display()
+        ));
+    }
+    Ok(())
+}
+
+fn holds_web_build_or_nothing(dir: &Path) -> Result<bool, String> {
+    if !dir.is_dir() {
+        return Ok(false);
+    }
+    let mut entries =
+        std::fs::read_dir(dir).map_err(|e| format!("could not read {}: {e}", dir.display()))?;
+    Ok(entries.next().is_none() || dir.join(MANIFEST_FILE).is_file())
 }
 
 fn recreate_dir(dir: &Path) -> Result<(), String> {

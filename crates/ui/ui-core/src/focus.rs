@@ -438,6 +438,16 @@ pub(crate) fn register_scroller(id: FocusId, node: NodeId, scrolls: impl Fn() ->
     });
 }
 
+/// Makes the scroll area `id` the control `role` itself, rather than a stop that only scrolls: it is then a stop whether or not its content overflows, and whatever sits inside it no longer takes the stop away.
+pub(crate) fn host_scroller(id: FocusId, role: Role) {
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.role = role;
+            entry.scrolls = None;
+        }
+    });
+}
+
 /// What a widget is taken to be when it has not said: the reading that matches what the keyboard does with it.
 fn default_role(kind: FocusKind) -> Role {
     match kind {
@@ -949,6 +959,22 @@ pub fn focus_first_in(node: NodeId) -> bool {
         }
         None => false,
     }
+}
+
+/// Writes into `semantics` everything the focus order knows of the control `id`: whether it holds focus, the state and number it carries, where it sits, the row its cursor rests on, and how the keyboard reaches it.
+pub(crate) fn describe(
+    id: FocusId,
+    semantics: &mut renderer_core::Semantics,
+    declared: Option<ConsumedKeys>,
+) {
+    semantics.focused = is_focused(id);
+    semantics.toggled = toggled_state(id);
+    semantics.value = value_state(id);
+    semantics.orientation = orientation_state(id);
+    semantics.expanded = expanded_state(id);
+    semantics.position = position_state(id);
+    semantics.active_descendant = active_descendant_state(id).and_then(node_of).map(u64::from);
+    semantics.focusable = Some(focusable_of(id, semantics.role, declared));
 }
 
 /// How the keyboard reaches `id` right now: whether Tab stops there, and which keys it keeps.

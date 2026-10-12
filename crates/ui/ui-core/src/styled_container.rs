@@ -275,17 +275,8 @@ impl StyledContainer {
         semantics.click_through = !self.occludes();
         // Read inside `view()`, so what a reader is told and what is drawn are the same frame.
         if let Some(id) = self.focusable.id {
-            semantics.focused = focus::is_focused(id);
-            semantics.toggled = focus::toggled_state(id);
-            semantics.value = focus::value_state(id);
-            semantics.orientation = focus::orientation_state(id);
-            semantics.expanded = focus::expanded_state(id);
-            semantics.position = focus::position_state(id);
-            semantics.active_descendant = focus::active_descendant_state(id)
-                .and_then(focus::node_of)
-                .map(u64::from);
             let declared = self.focusable.consumes.as_ref().map(|keys| keys());
-            semantics.focusable = Some(focus::focusable_of(id, semantics.role, declared));
+            focus::describe(id, &mut semantics, declared);
         }
         semantics.disabled = self.is_disabled();
         if let Some(link) = &self.link {

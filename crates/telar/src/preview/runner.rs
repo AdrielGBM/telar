@@ -1,6 +1,6 @@
-//! Where `cargo telar` enters an app: the env vars that choose between running it, previewing it and testing its previews.
+//! Where `cargo telar` enters an app: the env vars that choose between running it, previewing it and testing its previews, and, in a browser, the build itself.
 
-use telar_project::protocol::TEST_VAR;
+use telar_project::protocol::{ListedPreview, PREVIEW_LIST_FILE_VAR, PREVIEW_LIST_VAR, TEST_VAR};
 
 use crate::AppConfig;
 
@@ -16,59 +16,114 @@ use super::test_run::{TestOptions, run_previews};
 ///
 /// `entries` is a closure so a normal run pays nothing to build a list it will not read. `app!` passes the crate's `telar_all_previews` followed by each `[telar.previews] include` crate's; a runner wired by hand passes whatever list it builds, usually its own `telar_all_previews`.
 ///
-/// `shell` builds the app that shows the previews in a window under `cargo telar preview`: [`PreviewApp::new`](super::host::PreviewApp::new), or a workshop's. It reads the preview or component to open first, if any, from [`requested_preview`](super::host::requested_preview).
+/// `shell` builds the app that shows the previews under `cargo telar preview`: [`PreviewApp::new`](super::host::PreviewApp::new), or a workshop's. It reads the preview or component to open first, if any, from [`requested_preview`](super::host::requested_preview).
+///
+/// A page has no environment to be asked through, so a browser build answers from the build alone: one with the preview host, which only `cargo telar preview --target web` makes, shows the previews in `shell` as it loads, and any other starts the app.
 pub fn dev_entry<F, S, A>(entries: F, config: AppConfig, setup: impl FnOnce(), shell: S) -> bool
 where
     F: Fn() -> Vec<PreviewEntry>,
     S: FnOnce(Vec<PreviewEntry>) -> A,
     A: crate::App + 'static,
 {
-    let wanted = [
-        "TELAR_PREVIEW_LIST",
-        TEST_VAR,
-        "TELAR_PREVIEW",
-        "TELAR_PREVIEW_PNG",
-    ]
-    .iter()
-    .any(|var| std::env::var(var).is_ok());
-    if !wanted {
+    let Some(request) = Request::asked() else {
         return false;
-    }
+    };
     setup();
-    // Checked before `TELAR_PREVIEW`, so an app built with both hosts can ask for pictures rather than a window.
-    #[cfg(feature = "preview-headless")]
-    if let Ok(out_dir) = std::env::var("TELAR_PREVIEW_PNG") {
-        crate::run_preview_png(entries(), config, std::path::Path::new(&out_dir));
-    }
-    if std::env::var("TELAR_PREVIEW_LIST").is_ok() {
-        let entries = entries();
-        for entry in &entries {
-            println!("{}", entry.id);
+    match request {
+        #[cfg(feature = "preview-headless")]
+        Request::Png(out_dir) => {
+            crate::run_preview_png(entries(), config, std::path::Path::new(&out_dir))
         }
-        if let Some(duplicates) = duplicate_ids(&entries) {
-            eprintln!("{duplicates}");
-            std::process::exit(1);
-        }
-        std::process::exit(0);
-    }
-    if std::env::var(TEST_VAR).is_ok() {
-        try_run_test(entries(), config);
-    }
-    if std::env::var("TELAR_PREVIEW").is_ok() {
-        // Only a build with the feature can show a window; without it the caller starts its app as usual.
-        #[cfg(feature = "preview")]
-        {
+        Request::List(file) => list(&entries(), file.as_deref()),
+        Request::Test => try_run_test(entries(), config),
+        Request::Show => {
             let entries = entries();
             if let Some(duplicates) = duplicate_ids(&entries) {
-                eprintln!("{duplicates}");
-                std::process::exit(1);
+                refuse(&duplicates);
             }
             crate::run_app_with_name(config, shell(entries), "telar-preview");
-            return true;
+            true
         }
     }
-    let _ = shell;
-    false
+}
+
+/// What `cargo telar` asked the app to do in place of starting.
+enum Request {
+    #[cfg(feature = "preview-headless")]
+    Png(String),
+    List(Option<String>),
+    Test,
+    Show,
+}
+
+impl Request {
+    /// Checked in this order, so an app built with both hosts can ask for pictures rather than a window.
+    fn asked() -> Option<Self> {
+        if cfg!(target_arch = "wasm32") {
+            return cfg!(feature = "preview").then_some(Self::Show);
+        }
+        #[cfg(feature = "preview-headless")]
+        if let Ok(out_dir) = std::env::var("TELAR_PREVIEW_PNG") {
+            return Some(Self::Png(out_dir));
+        }
+        let set = |var: &str| std::env::var(var).is_ok();
+        if set(PREVIEW_LIST_VAR) {
+            return Some(Self::List(std::env::var(PREVIEW_LIST_FILE_VAR).ok()));
+        }
+        if set(TEST_VAR) {
+            return Some(Self::Test);
+        }
+        // Only a build with the preview host can show the previews; without it the caller starts its app as usual.
+        (cfg!(feature = "preview") && set("TELAR_PREVIEW")).then_some(Self::Show)
+    }
+}
+
+/// Prints one preview id per line, or writes every preview's id and title to `file` as JSON, and exits, failing when two previews share an id.
+fn list(entries: &[PreviewEntry], file: Option<&str>) -> ! {
+    match file {
+        Some(file) => write_listing(entries, file),
+        None => {
+            for entry in entries {
+                println!("{}", entry.id);
+            }
+        }
+    }
+    if let Some(duplicates) = duplicate_ids(entries) {
+        refuse(&duplicates);
+    }
+    std::process::exit(0);
+}
+
+fn write_listing(entries: &[PreviewEntry], file: &str) {
+    let listed: Vec<ListedPreview> = entries
+        .iter()
+        .map(|entry| ListedPreview {
+            id: entry.id.to_string(),
+            title: entry.title.to_string(),
+        })
+        .collect();
+    let written = serde_json::to_vec(&listed)
+        .map_err(|e| e.to_string())
+        .and_then(|json| std::fs::write(file, json).map_err(|e| e.to_string()));
+    if let Err(e) = written {
+        refuse(&format!(
+            "could not write the preview listing to {file}: {e}"
+        ));
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn refuse(duplicates: &str) -> ! {
+    eprintln!("{duplicates}");
+    std::process::exit(1);
+}
+
+/// A page has no exit code to fail with and no terminal to print to, so the module stops on a panic, which the browser's console shows.
+#[cfg(target_arch = "wasm32")]
+fn refuse(duplicates: &str) -> ! {
+    #[cfg(feature = "web-dom")]
+    platform_web::install_console_logging();
+    panic!("{duplicates}");
 }
 
 /// Tests every preview and every cell of its matrix — built and laid out, played, checked for accessibility, compared against its snapshots — as the `TELAR_TEST_*` variables `cargo telar test` sets ask, prints a line for each, and exits non-zero if any failed or shares its id with another. Backs `cargo telar test`, entered via the `TELAR_TEST` env var set on the app binary.

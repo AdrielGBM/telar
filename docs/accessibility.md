@@ -133,6 +133,10 @@ the box is not inside the line a reader lands on, so without the name the docume
 "Text field" and the desktop read out whatever had been typed. `label:` (`a11y_label`) with an empty string is
 no name at all: the box goes by what it draws, as if nothing had been said.
 
+In the document, a field, a combobox, a slider, a spin button or a splitter that nothing named is named by the
+text drawn inside it, the name every other target gives it. A browser takes that text as the value of those
+roles and their name only from a label, so a `select` showing "Small" was nameless there.
+
 ## Contrast of the defaults
 
 The tokens a theme leaves to `ThemeTokens` meet WCAG AA (4.5:1) for the text the catalogue draws with them.
@@ -153,6 +157,7 @@ a box under `a11y:hidden`.
 | `plugins/telar-components/src/audit_test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document. |
 | `crates/platform/platform-desktop/src/accessibility_test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen, built from `ui-core` primitives in place of the catalogue's button, field and checkbox: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, and that the tree's focus follows the Tab order. |
 | `crates/renderer/renderer-dom/src/controls_test.rs` | A switch and a toggle button in the document: their role, `aria-checked` and `aria-pressed`, that each is a Tab stop, and that Space or Enter sent to the element is kept from the page, reaches the box through the platform and flips the state the next frame writes. `semantics_test.rs` checks that a box whose role changes drops the state attribute of the old one. |
+| `crates/tools/cargo-telar/src/workshop_audit_test.rs` | The exported `apps/catalogue` workshop in headless Chrome: axe-core over the canvas of every preview and matrix page, with the same rules (`crates/renderer/renderer-dom/axe.json`), and over the workshop's chrome once with `region` on. See [previews.md](previews.md#auditing-the-exported-workshop). |
 
 axe-core is MPL-2.0 and is not vendored into the repository. The flake fetches the published npm tarball by its
 integrity hash and puts `axe.min.js` and its `LICENSE` in the store, and the dev shell names the script in

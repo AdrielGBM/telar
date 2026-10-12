@@ -97,6 +97,22 @@ impl SizedPane {
     }
 }
 
+/// The landmark a reader finds the pane that takes the rest in, with the splitter: see [`SplitPaneProps::region`].
+#[derive(Clone)]
+pub struct SplitRegion {
+    pub role: Role,
+    pub label: Reactive<String>,
+}
+
+impl SplitRegion {
+    pub fn new(role: Role, label: impl Into<Reactive<String>>) -> Self {
+        Self {
+            role,
+            label: label.into(),
+        }
+    }
+}
+
 /// The room the sized pane may take, in px or as a fraction of the whole split.
 #[derive(Clone, Copy)]
 struct Limits {
@@ -180,6 +196,9 @@ pub struct SplitPaneProps {
     /// What a reader calls the splitter. `None` (the default) uses the localized `telar_components.resize` message, which an application can override in its catalog.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
+    /// A landmark around the pane that takes the rest and the splitter, for a split whose panes are landmarks: a reader then finds the splitter inside a region rather than between two, collapsed or not. The sized pane stays the caller's to announce. `None` (the default) leaves the splitter between the panes.
+    #[props(some, default)]
+    pub region: Option<SplitRegion>,
 }
 
 pub fn split_pane(
@@ -199,6 +218,7 @@ pub fn split_pane(
         collapsible,
         step,
         label,
+        region,
     } = props;
     let default_size = if default_size > 0.0 {
         default_size
@@ -369,22 +389,74 @@ pub fn split_pane(
         true
     });
 
+    let (first, bar, second) = (box_item(first), box_item(bar), box_item(second));
+    let items = match (region, sized) {
+        (None, _) => vec![first, bar, second],
+        (Some(region), SizedPane::First) => {
+            vec![
+                first,
+                landmark(region, direction, sized, vec![bar, second])?,
+            ]
+        }
+        (Some(region), SizedPane::Second) => {
+            vec![
+                landmark(region, direction, sized, vec![first, bar])?,
+                second,
+            ]
+        }
+    };
     let root = Container::new(
-        direction.flow().flex_grow(1.0),
-        vec![box_item(first), box_item(bar), box_item(second)],
+        direction
+            .flow()
+            .flex_grow(1.0)
+            .min_width(0.0)
+            .min_height(0.0),
+        items,
     )?;
     Ok(box_item(root))
+}
+
+/// The pane that takes the rest and the splitter, announced as `region`. It reaches over the sized pane as far as the splitter's grab area does, because a grab area wins only over its own siblings: without the reach, the sized pane would take the presses the splitter's grab area lies over.
+fn landmark(
+    region: SplitRegion,
+    direction: SplitDirection,
+    sized: SizedPane,
+    items: Vec<Box<dyn LayoutItem>>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let SplitRegion { role, label } = region;
+    let style = direction.at_least(direction.flow().flex_grow(1.0).flex_shrink(1.0), 0.0);
+    let landmark = StyledContainer::new(style, |_| RectStyle::default(), items)?
+        .hit_outset(Reactive::of(move || reach_over_sized(direction, sized)))
+        .role(role)
+        .a11y_label(move || label.get());
+    Ok(box_item(landmark))
 }
 
 fn bar_thickness() -> f32 {
     (shared::spacing() * 0.75).max(4.0)
 }
 
+/// How far the splitter's grab area reaches past each long side of its bar.
+fn grab_reach() -> f32 {
+    ((shared::MIN_TARGET - bar_thickness()) / 2.0).max(0.0)
+}
+
 fn grab_outset(direction: SplitDirection) -> Insets {
-    let reach = ((shared::MIN_TARGET - bar_thickness()) / 2.0).max(0.0);
+    let reach = grab_reach();
     match direction {
         SplitDirection::Row => Insets::new(0.0, reach, 0.0, reach),
         SplitDirection::Column => Insets::new(reach, 0.0, reach, 0.0),
+    }
+}
+
+fn reach_over_sized(direction: SplitDirection, sized: SizedPane) -> Insets {
+    let reach = grab_reach();
+    let sized_before = (sized == SizedPane::First) != direction.inverted();
+    match (direction, sized_before) {
+        (SplitDirection::Row, true) => Insets::new(0.0, 0.0, 0.0, reach),
+        (SplitDirection::Row, false) => Insets::new(0.0, reach, 0.0, 0.0),
+        (SplitDirection::Column, true) => Insets::new(reach, 0.0, 0.0, 0.0),
+        (SplitDirection::Column, false) => Insets::new(0.0, 0.0, reach, 0.0),
     }
 }
 

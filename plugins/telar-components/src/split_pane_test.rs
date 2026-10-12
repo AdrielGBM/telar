@@ -616,3 +616,185 @@ fn takes_the_press_but_not_the_wheel(direction: SplitDirection) {
     assert!(focus::current().is_some(), "the press focused the splitter");
     assert_eq!(size.get(), 200.0);
 }
+
+const SPLITS: [(SplitDirection, SizedPane); 4] = [
+    (SplitDirection::Row, SizedPane::First),
+    (SplitDirection::Row, SizedPane::Second),
+    (SplitDirection::Column, SizedPane::First),
+    (SplitDirection::Column, SizedPane::Second),
+];
+
+fn in_region(
+    direction: SplitDirection,
+    sized: SizedPane,
+    size: RwSignal<f32>,
+    collapsed: RwSignal<bool>,
+) -> SplitPaneProps {
+    SplitPaneProps::props()
+        .direction(direction)
+        .sized(sized)
+        .size(size)
+        .collapsed(collapsed)
+        .region(SplitRegion::new(Role::Main, "Workspace"))
+        .build()
+}
+
+/// Each text drawn and the splitter, in draw order, with whether it is drawn inside the main landmark.
+fn inside_main(commands: &[telar::DrawCommand]) -> Vec<(String, bool)> {
+    let mut open = Vec::new();
+    let mut drawn = Vec::new();
+    for command in commands {
+        match command {
+            telar::DrawCommand::PushElement { element } => {
+                if element.semantics.role == Role::Splitter {
+                    drawn.push(("splitter".to_string(), open.contains(&Role::Main)));
+                }
+                open.push(element.semantics.role);
+            }
+            telar::DrawCommand::PopElement => {
+                open.pop();
+            }
+            telar::DrawCommand::Text { text, .. } => {
+                drawn.push((text.to_string(), open.contains(&Role::Main)));
+            }
+            _ => {}
+        }
+    }
+    drawn
+}
+
+#[test]
+fn a_region_holds_the_pane_that_takes_the_rest_and_the_splitter() {
+    for (direction, sized) in SPLITS {
+        let split = Split::build(in_region(direction, sized, signal(200.0), signal(false)));
+        let tree = telar::ComponentList::new(split.item);
+        let rest_first = sized == SizedPane::Second;
+        let expected = [
+            ("first".to_string(), rest_first),
+            ("splitter".to_string(), true),
+            ("second".to_string(), !rest_first),
+        ];
+        assert_eq!(
+            inside_main(&tree.commands()),
+            expected,
+            "{direction:?} {sized:?}"
+        );
+        let named = ui_core::accessibility::snapshot(&tree.commands())
+            .into_iter()
+            .any(|node| node.role == Role::Main && node.name == "Workspace");
+        assert!(
+            named,
+            "{direction:?} {sized:?}: the region is announced by its name"
+        );
+    }
+}
+
+#[test]
+fn a_region_leaves_the_panes_where_they_were() {
+    for (direction, sized) in SPLITS {
+        let split = Split::build(in_region(direction, sized, signal(200.0), signal(false)));
+        assert_eq!(split.applied(), 200.0, "{direction:?} {sized:?}");
+        let bar = splitter_rect();
+        let start = match sized {
+            SizedPane::First => 200.0,
+            SizedPane::Second => direction.main(split.root.get()) - 200.0 - bar_thickness(),
+        };
+        assert_eq!(
+            direction.along(bar.x, bar.y),
+            start,
+            "{direction:?} {sized:?}"
+        );
+        assert_eq!(direction.main(bar), bar_thickness());
+    }
+}
+
+#[test]
+fn the_splitter_stays_in_the_region_and_reopens_a_collapsed_pane() {
+    for (direction, sized) in SPLITS {
+        let collapsed = signal(true);
+        let split = Split::build(in_region(direction, sized, signal(200.0), collapsed));
+        assert_eq!(split.applied(), 0.0, "{direction:?} {sized:?}");
+        let mut tree = telar::ComponentList::new(split.item);
+        let drawn = inside_main(&tree.commands());
+        assert!(
+            drawn.contains(&("splitter".to_string(), true)),
+            "{direction:?} {sized:?}: {drawn:?}"
+        );
+        focus::focus_next();
+        telar::testing::route(&mut tree, &named(NamedKey::Enter));
+        assert!(!collapsed.get(), "{direction:?} {sized:?}");
+    }
+}
+
+/// The middle of the splitter's bar, and the point `offset` px from it across the bar, toward the end of the split.
+fn across_bar(direction: SplitDirection, offset: f64) -> (f64, f64) {
+    let bar = splitter_rect();
+    let (x, y) = (
+        (bar.x + bar.width / 2.0) as f64,
+        (bar.y + bar.height / 2.0) as f64,
+    );
+    match direction {
+        SplitDirection::Row => (x + offset, y),
+        SplitDirection::Column => (x, y + offset),
+    }
+}
+
+/// Every split, in a region, dragged from just inside each edge of the grab area and wheeled there: the sized pane, outside the region, never takes the press from the splitter and still takes the wheel.
+fn grabbed_from_either_edge_in_a_region(direction: SplitDirection, sized: SizedPane) {
+    let size = signal(200.0f32);
+    let panes = heard();
+    let mut split = Split::holding(in_region(direction, sized, size, signal(false)), || {
+        listening(&panes)
+    });
+    let before = match direction.inverted() {
+        true => &panes[1],
+        false => &panes[0],
+    };
+    let after = match direction.inverted() {
+        true => &panes[0],
+        false => &panes[1],
+    };
+    let reading = if direction.inverted() { -1.0 } else { 1.0 };
+    let grows = sized.toward_end() * reading * 40.0;
+    for (side, pane) in [(-1.0, before), (1.0, after)] {
+        let from = size.get();
+        let (x, y) = across_bar(direction, side * grab_edge());
+        split.item.on_event(&telar::Event::Scrolled {
+            delta: telar::ScrollDelta::Pixels { x: 0.0, y: -40.0 },
+            x,
+            y,
+        });
+        assert_eq!(
+            pane.wheels.get(),
+            1,
+            "{direction:?} {sized:?} {side}: the pane under the grab area scrolls"
+        );
+        let (to_x, to_y) = across_bar(direction, side * grab_edge() + 40.0);
+        split.item.on_event(&press(x, y));
+        split.item.on_event(&moved(to_x, to_y));
+        split.item.on_event(&release(to_x, to_y));
+        assert_eq!(
+            pane.presses.get(),
+            0,
+            "{direction:?} {sized:?} {side}: the splitter took the press"
+        );
+        assert_eq!(size.get(), from + grows, "{direction:?} {sized:?} {side}");
+        telar::testing::lay_out(split.item.layout_node(), WIDTH, HEIGHT);
+    }
+}
+
+#[test]
+fn a_splitter_in_a_region_is_grabbed_from_either_edge() {
+    for (direction, sized) in SPLITS {
+        grabbed_from_either_edge_in_a_region(direction, sized);
+    }
+}
+
+#[test]
+fn a_splitter_in_a_region_is_grabbed_from_either_edge_right_to_left() {
+    telar::set_direction(Direction::Rtl);
+    for sized in [SizedPane::First, SizedPane::Second] {
+        grabbed_from_either_edge_in_a_region(SplitDirection::Row, sized);
+    }
+    telar::set_direction(Direction::Ltr);
+}

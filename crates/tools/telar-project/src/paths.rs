@@ -88,6 +88,60 @@ pub fn find_workspace_root(start: &Path) -> Option<PathBuf> {
     find_ancestor_dir(start, is_workspace_root_dir)
 }
 
+/// The package directories of the workspace rooted at `workspace_root`: the root itself when its manifest is a package too, then every `members` entry that holds a `Cargo.toml`. A lone package with no `[workspace]` is its own only member.
+pub fn workspace_member_dirs(workspace_root: &Path) -> Vec<PathBuf> {
+    let manifest = std::fs::read_to_string(workspace_root.join("Cargo.toml"))
+        .ok()
+        .and_then(|content| content.parse::<toml::Table>().ok());
+    let mut dirs = Vec::new();
+    let mut has_workspace = false;
+    if let Some(manifest) = manifest {
+        if manifest.contains_key("package") {
+            dirs.push(workspace_root.to_path_buf());
+        }
+        if let Some(workspace) = manifest.get("workspace") {
+            has_workspace = true;
+            let patterns = workspace
+                .get("members")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(toml::Value::as_str);
+            for pattern in patterns {
+                dirs.extend(
+                    expand_member(workspace_root, pattern)
+                        .into_iter()
+                        .filter(|member| member.join("Cargo.toml").is_file()),
+                );
+            }
+        }
+    }
+    if !has_workspace && dirs.is_empty() {
+        dirs.push(workspace_root.to_path_buf());
+    }
+    dirs
+}
+
+// A `*` in any segment, not just a trailing one: a workspace nesting its members two levels deep expanded to nothing, leaving every crate under it unwatched and unfindable by name.
+fn expand_member(workspace_root: &Path, pattern: &str) -> Vec<PathBuf> {
+    let mut paths = vec![workspace_root.to_path_buf()];
+    for segment in pattern.split('/') {
+        paths = if segment == "*" {
+            paths
+                .iter()
+                .filter_map(|path| std::fs::read_dir(path).ok())
+                .flatten()
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .filter(|path| path.is_dir())
+                .collect()
+        } else {
+            paths.into_iter().map(|path| path.join(segment)).collect()
+        };
+    }
+    paths
+}
+
 fn is_workspace_root_dir(dir: &Path) -> bool {
     let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml")) else {
         return false;

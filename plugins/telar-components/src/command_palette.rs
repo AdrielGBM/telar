@@ -583,8 +583,8 @@ fn build_open_palette(
         |_r| RectStyle::default().with_fill(scrim::SCRIM),
         vec![box_item(card)],
     )?
-    .styled_by(backdrop_box)
-    .on_press(move || dismiss());
+    .styled_by(backdrop_box);
+    let backdrop = shared::dismissed_by_press(backdrop, move || dismiss());
     Ok(box_item(backdrop))
 }
 

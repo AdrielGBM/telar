@@ -141,7 +141,7 @@ impl SurfaceFrame {
         EventResult::Ignored
     }
 
-    /// A box event for a box drawn inside this frame, or inside a frame nested in it. Focus the surface moved onto a box in there brings the frame the outer focus too, so the keys that follow reach the box.
+    /// A box event or a screen reader's action for a box drawn inside this frame, or inside a frame nested in it. Focus either moved onto a box in there brings the frame the outer focus too, so the keys that follow reach the box.
     fn in_surface(&self, event: &Event) -> EventResult {
         let result = self.canvas.dispatch_in_surface(event);
         let holds_focus_inside = {

@@ -1,9 +1,13 @@
 //! The subcommands: dev, check, fmt, preview, test, build, package, publish and migrate.
 
+use std::path::Path;
 use std::process::Command;
 
 use clap::Parser;
-use telar_project::protocol::{PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, workshop_channel_file};
+use telar_project::protocol::{
+    PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, PREVIEW_LIST_VAR, workshop_channel_file,
+    workshop_server_file,
+};
 
 mod android;
 mod bake;
@@ -23,6 +27,7 @@ mod transpile;
 mod watch;
 mod web_dev;
 mod workshop_channel;
+mod workshop_export;
 
 use android::build_android_package;
 use bake::bake_workspace;
@@ -40,8 +45,10 @@ use new::{run_init_cmd, run_new_cmd};
 use package::{build_appimage, build_deb, build_desktop_dir, build_dmg, build_nsis, build_web};
 use test_cmd::run_test_cmd;
 use transpile::transpile_workspace;
-use watch::{HotLoopOpts, HotMode, run_hot_loop};
+use watch::{HotLoopOpts, HotMode, run_hot_loop, with_web_features};
 use web_dev::run_web_dev;
+use workshop_channel::WorkshopChannel;
+use workshop_export::run_workshop_export;
 
 /// Dispatches a `cargo telar` invocation to its subcommand.
 pub fn run(args: Vec<String>) {
@@ -52,6 +59,10 @@ pub fn run(args: Vec<String>) {
     {
         return;
     }
+    let workshop = match &command {
+        TelarCommand::Preview(args) => open_workshop_channel(args),
+        _ => None,
+    };
     // The one place `cargo telar` prepares a build, rather than at each of the nine sites that spawn `cargo`; the ones excluded here compile nothing or prepare for themselves. Bake first: a `src:"…"` transpiles against the artifact the bake writes.
     if !matches!(
         command,
@@ -74,7 +85,7 @@ pub fn run(args: Vec<String>) {
         TelarCommand::New(args) => run_new_cmd(args),
         TelarCommand::Init(args) => run_init_cmd(args),
         TelarCommand::Dev(args) => run_dev_cmd(args),
-        TelarCommand::Preview(args) => run_preview_cmd(args),
+        TelarCommand::Preview(args) => run_preview_cmd(args, workshop),
         TelarCommand::Build(args) => run_build_cmd(args),
         TelarCommand::Test(args) => run_test_cmd(args),
         TelarCommand::Check(args) => run_check_cmd(args),
@@ -111,6 +122,7 @@ fn default_dev_command() -> TelarCommand {
             },
             release: false,
             no_hot_reload: false,
+            port: None,
         },
         devtools: None,
     })
@@ -165,6 +177,7 @@ fn run_dev_cmd(args: DevArgs) {
         common,
         release,
         no_hot_reload,
+        port,
     } = hot;
     let mut plan = BuildPlan::new(common, release);
     // CLI `--devtools off` overrides any config-file setting.
@@ -172,7 +185,14 @@ fn run_dev_cmd(args: DevArgs) {
         plan.config.dev.devtools = Some(matches!(devtools, DevtoolsArg::On));
     }
     if plan.target == Target::Web {
-        run_web_dev(plan.cargo_args, plan.config, WEB_DEV_PORT, plan.renderer);
+        run_web_dev(
+            with_web_features(&HotMode::Dev, plan.cargo_args),
+            plan.config,
+            port,
+            plan.renderer,
+            None,
+            None,
+        );
     }
     let terminal = plan.terminal;
     run_hot_loop(
@@ -183,18 +203,63 @@ fn run_dev_cmd(args: DevArgs) {
             config: plan.config,
             // The hot-reload host opens a window of its own, so an app running in the terminal restarts on a change instead. Reloading in place is the only thing lost: the rebuild is the same one.
             no_hot_reload: no_hot_reload || terminal,
+            workshop: None,
         },
     );
 }
 
-fn run_preview_cmd(args: PreviewArgs) {
+fn run_preview_cmd(args: PreviewArgs, workshop: Option<WorkshopChannel>) {
     let PreviewArgs {
         hot,
         preview,
         component,
         list,
         png,
+        build,
+        base,
     } = args;
+    let HotArgs {
+        common,
+        release,
+        no_hot_reload,
+        port,
+    } = hot;
+    // Makes the generated entrypoint print one preview id per line and exit instead of opening a window.
+    if list {
+        run_preview_once(&common, release, "previews", PREVIEW_LIST_VAR, "1");
+    }
+    // The only answer for a shell with no display, and what a golden-image run compares.
+    if let Some(dir) = &png {
+        run_preview_once(
+            &common,
+            release,
+            "preview-headless",
+            "TELAR_PREVIEW_PNG",
+            &dir.display().to_string(),
+        );
+    }
+    if let Some(dir) = &build {
+        run_workshop_export(common, dir, base.as_deref());
+    }
+    let plan = BuildPlan::new(common, release);
+    if plan.target == Target::Web {
+        if component.is_some() {
+            eprintln!(
+                "[cargo-telar] note: a page is started by its address alone, which carries no `--component`; search the workshop's sidebar for it instead."
+            );
+        }
+        let opening = preview.as_deref().map(workshop_channel::location_of);
+        let resolved = resolve_package(&plan.cargo_args);
+        let server_file = workshop_server_file(&resolved.workspace_root, &resolved.name());
+        run_web_dev(
+            with_web_features(&HotMode::Preview, plan.cargo_args),
+            plan.config,
+            port,
+            plan.renderer,
+            opening.as_deref(),
+            Some(&server_file),
+        );
+    }
     // The preview host process inherits our env, and reads both of these as it starts.
     if let Some(component) = &component {
         // SAFETY: single-threaded at this point (set before any threads/spawns are created).
@@ -210,27 +275,7 @@ fn run_preview_cmd(args: PreviewArgs) {
         Some(link) => app_args = vec!["--location".to_string(), link],
         None => {}
     }
-    let HotArgs {
-        common,
-        release,
-        no_hot_reload,
-    } = hot;
-    // Makes the generated entrypoint print one preview id per line and exit instead of opening a window.
-    if list {
-        run_preview_once(&common, release, "previews", "TELAR_PREVIEW_LIST", "1");
-    }
-    // The only answer for a shell with no display, and what a golden-image run compares.
-    if let Some(dir) = &png {
-        run_preview_once(
-            &common,
-            release,
-            "preview-headless",
-            "TELAR_PREVIEW_PNG",
-            &dir.display().to_string(),
-        );
-    }
-    // A preview renders one component in a window of its own; there is no page to draw it as a document, so the plan's `renderer` goes unread here.
-    let plan = BuildPlan::new(common, release);
+    // A window draws the previews itself, so the plan's `renderer`, which picks how a page draws, goes unread here.
     run_hot_loop(
         HotMode::Preview,
         HotLoopOpts {
@@ -238,23 +283,85 @@ fn run_preview_cmd(args: PreviewArgs) {
             app_args,
             config: plan.config,
             no_hot_reload,
+            workshop,
         },
     );
 }
 
-/// Moves the workshop a running `cargo telar preview` shows for the package to the preview `args` names, and answers whether there was one to move. Asked before anything is built: a workshop that is already open needs nothing rebuilt to move.
+/// Hands the request to the workshop a running `cargo telar preview` already shows for the package, and answers whether there was one: moved to the preview `args` names, or brought forward when it names none. Asked before anything is built: a workshop that is already open needs nothing rebuilt. A page is not moved, since the browser showing it holds its address: where to open the preview is printed instead.
 fn open_in_running_workshop(args: &PreviewArgs) -> bool {
-    let Some(target) = &args.preview else {
+    // A `--component` narrows the list a workshop starts with, which one already running cannot be asked to do.
+    if args.list
+        || args.png.is_some()
+        || args.build.is_some()
+        || (args.preview.is_none() && args.component.is_some())
+    {
         return false;
-    };
+    }
     let common = &args.hot.common;
     let resolved = resolve_package(&build_cargo_args(&common.package, false, &None));
-    let file = workshop_channel_file(&resolved.workspace_root, &resolved.name());
-    let opened = workshop_channel::send(&file, &workshop_channel::location_of(target));
-    if opened {
-        eprintln!("[cargo-telar] Opened {target} in the running workshop.");
+    let (root, package) = (&resolved.workspace_root, resolved.name());
+    if common.target == Some(Target::Web) {
+        return show_served_workshop(
+            &workshop_server_file(root, &package),
+            args.preview.as_deref(),
+        );
     }
-    opened
+    let file = workshop_channel_file(root, &package);
+    match &args.preview {
+        Some(target) => {
+            let opened = workshop_channel::goto(&file, &workshop_channel::location_of(target));
+            if opened {
+                eprintln!("[cargo-telar] Opened {target} in the running workshop.");
+            }
+            opened
+        }
+        None => {
+            let focused = workshop_channel::focus(&file);
+            if focused {
+                eprintln!("[cargo-telar] Brought the running workshop forward.");
+            }
+            focused
+        }
+    }
+}
+
+/// Says where the page a running `cargo telar preview --target web` serves for the package is, and where it opens `preview`, and answers whether one is served.
+fn show_served_workshop(file: &Path, preview: Option<&str>) -> bool {
+    let Some(address) = workshop_channel::serving(file) else {
+        return false;
+    };
+    eprintln!("[cargo-telar] The workshop is already served at {address}");
+    if let Some(target) = preview {
+        eprintln!(
+            "[cargo-telar] Open {}",
+            web_dev::address_under(&address, &workshop_channel::location_of(target))
+        );
+    }
+    true
+}
+
+/// The channel a workshop that opens in a window takes requests on, open before anything is built so a request sent while it builds reaches it rather than starting a second one. `None` for a run that opens no such workshop.
+fn open_workshop_channel(args: &PreviewArgs) -> Option<WorkshopChannel> {
+    let common = &args.hot.common;
+    let windowed = matches!(common.target, None | Some(Target::Desktop));
+    if args.list
+        || args.png.is_some()
+        || args.build.is_some()
+        || args.hot.no_hot_reload
+        || !windowed
+    {
+        return None;
+    }
+    let resolved = resolve_package(&build_cargo_args(&common.package, false, &None));
+    // Only a hot-reload session hands requests on, and only a cdylib reloads.
+    if !resolved.produces_cdylib {
+        return None;
+    }
+    WorkshopChannel::open(workshop_channel_file(
+        &resolved.workspace_root,
+        &resolved.name(),
+    ))
 }
 
 /// Runs the app binary once with `var` set, under the `telar` feature that makes it answer, and exits with its code.
@@ -267,6 +374,14 @@ fn run_preview_once(
     var: &str,
     value: &str,
 ) -> ! {
+    let status = preview_once_command(common, release, feature)
+        .env(var, value)
+        .status()
+        .expect("[cargo-telar] failed to invoke cargo");
+    std::process::exit(status.code().unwrap_or(1));
+}
+
+fn preview_once_command(common: &CommonArgs, release: bool, feature: &str) -> Command {
     let mut cargo_args = vec!["run".to_string()];
     cargo_args.extend(build_cargo_args(&common.package, release, &common.features));
     cargo_args.extend(common.cargo_args.clone());
@@ -279,12 +394,9 @@ fn run_preview_once(
     config::warn_if_tooling_unlocked(&cargo_args, &[&tooling]);
     cargo_args.push("--features".to_string());
     cargo_args.push(tooling);
-    let status = Command::new("cargo")
-        .args(&cargo_args)
-        .env(var, value)
-        .status()
-        .expect("[cargo-telar] failed to invoke cargo");
-    std::process::exit(status.code().unwrap_or(1));
+    let mut command = Command::new("cargo");
+    command.args(&cargo_args);
+    command
 }
 
 fn build_format_name(format: &BuildFormat) -> &'static str {
@@ -417,9 +529,6 @@ fn select_frontend(
     }
     terminal
 }
-
-/// Where `cargo telar dev --target web` serves from. Fixed rather than chosen: a page reloaded by hand, a bookmark and a second terminal all have to name the same address.
-const WEB_DEV_PORT: u16 = 8080;
 
 #[cfg(test)]
 #[path = "mod_test.rs"]

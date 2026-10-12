@@ -1,19 +1,18 @@
-//! What the workshop remembers between runs: the selection, the pane sizes, the canvas toolbar's settings and whether a play runs as its canvas mounts, each under a `workshop.*` key of the preference store.
+//! What the workshop remembers between runs: the selection, the view, the pane sizes, the canvas toolbar's settings and whether a play runs as its canvas mounts, each under a `workshop.*` key of the preference store.
 //!
-//! On the desktop the workshop installs a store of its own, which keeps those keys in `<workspace>/.telar/workshop/state` and every other key in memory: a preview's own preferences last the run and no longer. Edited args are never stored; they live in memory, and in a copied link.
+//! The workshop installs a store of its own, which keeps those keys where its target keeps things — `<workspace>/.telar/workshop/state` on the desktop, the page's `localStorage` in a browser — and every other key in memory: a preview's own preferences last the run and no longer. Edited args are never stored; they live in memory, and in the workshop's address.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use telar::{
-    FileStore, MemoryStore, PreferenceStore, RwSignal, Timer, effect, hot_signal, run_after,
-};
+use telar::{MemoryStore, PreferenceStore, RwSignal, Timer, effect, hot_signal, run_after};
 
 /// The keys the workshop's state is stored under. Renaming one forgets what it held.
 pub(crate) mod keys {
@@ -33,24 +32,24 @@ const PREFIX: &str = "workshop.";
 /// How long the state rests before a change to it is written.
 pub(crate) const WRITE_DELAY: Duration = Duration::from_millis(500);
 
-/// The store a desktop workshop installs: `workshop.*` keys in a file, every other key in memory.
+/// The store the workshop installs: `workshop.*` keys where its target keeps them, every other key in memory.
 pub(crate) struct WorkshopStore {
-    file: FileStore,
+    kept: Box<dyn PreferenceStore>,
     memory: MemoryStore,
 }
 
 impl WorkshopStore {
-    /// The store kept in `file`, with what it already holds.
-    pub(crate) fn open(file: impl Into<PathBuf>) -> Self {
+    /// The store keeping the workshop's own keys in `kept`, with what it already holds.
+    pub(crate) fn keeping(kept: impl PreferenceStore) -> Self {
         Self {
-            file: FileStore::open(file),
+            kept: Box::new(kept),
             memory: MemoryStore::default(),
         }
     }
 
     fn holding(&self, key: &str) -> &dyn PreferenceStore {
         match key.starts_with(PREFIX) {
-            true => &self.file,
+            true => self.kept.as_ref(),
             false => &self.memory,
         }
     }
@@ -67,26 +66,37 @@ impl PreferenceStore for WorkshopStore {
 }
 
 /// Where the workshop of the workspace at `workspace` keeps its state.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn state_file(workspace: &Path) -> PathBuf {
     workspace.join(".telar").join("workshop").join("state")
 }
 
-/// Installs [`WorkshopStore`] for the workspace `cargo telar preview` runs from, and answers where the workshop keeps its state: there, or nowhere for a build started some other way, which keeps the store it has and remembers nothing between runs.
+/// Installs [`WorkshopStore`] over [`target_store`], and answers where the workshop keeps its state: there, or nowhere for a build that has no place to keep it, which keeps the store it has and remembers nothing between runs.
 pub(crate) fn install() -> Keeper {
-    match telar::preview::host::workspace_dir() {
-        Some(workspace) => {
-            let store: Arc<dyn PreferenceStore> =
-                Arc::new(WorkshopStore::open(state_file(&workspace)));
-            telar::set_preference_store(Arc::clone(&store));
-            Keeper::in_store(store)
-        }
-        None => Keeper::none(),
-    }
+    let Some(kept) = target_store() else {
+        return Keeper::none();
+    };
+    let store: Arc<dyn PreferenceStore> = Arc::new(WorkshopStore::keeping(kept));
+    telar::set_preference_store(Arc::clone(&store));
+    Keeper::in_store(store)
+}
+
+/// The state file of the workspace `cargo telar preview` runs from, or `None` for a build started some other way.
+#[cfg(not(target_arch = "wasm32"))]
+fn target_store() -> Option<telar::FileStore> {
+    let workspace = telar::preview::host::workspace_dir()?;
+    Some(telar::FileStore::open(state_file(&workspace)))
+}
+
+/// The page's `localStorage`, under a name of the workshop's own so the application's keys on the same origin stay apart.
+#[cfg(target_arch = "wasm32")]
+fn target_store() -> Option<telar::WebStorage> {
+    Some(telar::WebStorage::new("telar-workshop"))
 }
 
 /// Where a workshop's state is read from as it opens and written to as it changes: the store [`install`] installed, or nothing.
 ///
-/// A change is written once the state has rested for [`WRITE_DELAY`], so a splitter dragged across the window writes the file once rather than on every step; what is still waiting is written when the last handle on it goes, or on [`flush`](Self::flush).
+/// A change is written once the state has rested for [`WRITE_DELAY`], so a splitter dragged across the window writes the file once rather than on every step; what is still waiting is written when the last handle on it goes, on [`flush`](Self::flush), or, in a browser, as the page is hidden.
 #[derive(Clone)]
 pub(crate) struct Keeper(Option<Rc<Kept>>);
 
@@ -94,6 +104,8 @@ struct Kept {
     store: Arc<dyn PreferenceStore>,
     waiting: RefCell<BTreeMap<&'static str, Option<String>>>,
     timer: RefCell<Option<Timer>>,
+    #[cfg(target_arch = "wasm32")]
+    _page_hidden: telar::PageHidden,
 }
 
 impl Keeper {
@@ -104,10 +116,12 @@ impl Keeper {
 
     /// Keeps the state in `store`.
     pub(crate) fn in_store(store: Arc<dyn PreferenceStore>) -> Self {
-        Self(Some(Rc::new(Kept {
+        Self(Some(Rc::new_cyclic(|_kept: &Weak<Kept>| Kept {
             store,
             waiting: RefCell::default(),
             timer: RefCell::default(),
+            #[cfg(target_arch = "wasm32")]
+            _page_hidden: flush_when_hidden(_kept.clone()),
         })))
     }
 
@@ -148,6 +162,16 @@ impl Keeper {
             kept.flush();
         }
     }
+}
+
+/// A page is reloaded or closed without dropping anything, so what is waiting is written as it goes out of view.
+#[cfg(target_arch = "wasm32")]
+fn flush_when_hidden(kept: Weak<Kept>) -> telar::PageHidden {
+    telar::PageHidden::new(move || {
+        if let Some(kept) = kept.upgrade() {
+            kept.flush();
+        }
+    })
 }
 
 impl Kept {

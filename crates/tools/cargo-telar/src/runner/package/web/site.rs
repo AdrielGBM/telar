@@ -24,6 +24,8 @@ pub(crate) struct SitePages {
     pub(crate) base_locale: Option<String>,
     /// Whether a `404.html` was written.
     pub(crate) not_found: bool,
+    /// The first segments under which every address is a page, which a host profile names in one rule rather than one per page: a site with an open-ended set of pages, such as a workshop's one per preview, would otherwise outgrow the host's rule limit.
+    pub(crate) page_dirs: Vec<String>,
 }
 
 impl SitePages {

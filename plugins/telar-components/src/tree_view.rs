@@ -181,24 +181,20 @@ pub fn tree_view(
     let seeding = tree.clone();
     let keys = tree.clone();
     let cursor = tree.clone();
-    let container = StyledContainer::new(
-        fill().flex_column(),
-        |_r| RectStyle::default(),
-        vec![box_item(scroll)],
-    )?
-    .control(Role::Tree)
-    .focus_style(|_r| RectStyle::default())
-    .on_focus(move |now| {
-        if now {
-            seeding.seed_cursor();
-        }
-    })
-    .active_descendant(move || cursor.cursor_row())
-    .on_focused_key(move |key: &Key| keys.on_key(key));
-    tree.focus.set(container.focus_id());
+    let scroll = scroll
+        .control(Role::Tree)
+        .focus_style(|_r| RectStyle::default())
+        .on_focus(move |now| {
+            if now {
+                seeding.seed_cursor();
+            }
+        })
+        .active_descendant(move || cursor.cursor_row())
+        .on_focused_key(move |key: &Key| keys.on_key(key));
+    tree.focus.set(scroll.focus_id());
     Ok(match label {
-        Some(label) => box_item(container.a11y_label(move || label.get())),
-        None => box_item(container),
+        Some(label) => box_item(scroll.a11y_label(move || label.get())),
+        None => box_item(scroll),
     })
 }
 

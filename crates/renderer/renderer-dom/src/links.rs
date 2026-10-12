@@ -1,8 +1,9 @@
 //! A document's links followed the way a browser follows them, with the one plain click that stays in the app handed back to it.
 
-use platform_core::consumed_keys::FOCUS_BOX_ATTRIBUTE;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
+
+use crate::box_key::BoxKey;
 
 /// Listens for clicks on the app's `<a>` elements.
 ///
@@ -43,16 +44,17 @@ fn stays_in_the_app(
         return None;
     }
     let activated = match anchor.get_attribute(crate::runs::RUN_ATTRIBUTE) {
-        Some(run) => platform_core::Event::RunActivated {
-            box_id: anchor
-                .get_attribute(crate::runs::RUN_BOX_ATTRIBUTE)?
-                .parse()
-                .ok()?,
-            run: run.parse().ok()?,
-        },
-        None => platform_core::Event::BoxActivated {
-            box_id: anchor.get_attribute(FOCUS_BOX_ATTRIBUTE)?.parse().ok()?,
-        },
+        Some(run) => {
+            let owner = BoxKey::parse(&anchor.get_attribute(crate::runs::RUN_BOX_ATTRIBUTE)?)?;
+            owner.event(platform_core::Event::RunActivated {
+                box_id: owner.id,
+                run: run.parse().ok()?,
+            })
+        }
+        None => {
+            let key = crate::reconcile::focus_box_of(&anchor)?;
+            key.event(platform_core::Event::BoxActivated { box_id: key.id })
+        }
     };
     let anchor = anchor.dyn_into::<web_sys::HtmlAnchorElement>().ok()?;
     let origin = web_sys::window()?.location().origin().ok()?;

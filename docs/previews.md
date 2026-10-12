@@ -5,10 +5,12 @@ preview is shown in the component workshop, played and checked by `cargo telar t
 once and all three read it.
 
 ```sh
-cargo telar preview              # open the workshop on every preview
+cargo telar preview              # open the workshop on every preview, or bring the open one forward
 cargo telar preview <ID>         # open it on one preview, or move the open workshop there
 cargo telar preview --list       # print every preview's id and exit
 cargo telar preview --png out/   # render each preview and matrix cell to a PNG, with no window
+cargo telar preview --target web # serve the workshop on http://localhost:8080 (or a free port), rebuilt on every change
+cargo telar preview --build site/ --target web # export the workshop as a static site
 cargo telar test                 # build, play, accessibility-check and snapshot every preview, headlessly
 ```
 
@@ -169,7 +171,7 @@ A type without `PreviewArg` is shown read-only. `#[props(control = …)]` on a p
 `step(n)`, `multiline`, chained as in `range(0, 1).step(0.1)`, or `read_only`. A control that does not fit its prop's
 type leaves the control as it was.
 
-Edited args live in memory for the run. They survive a hot reload, not a restart, and a copied workshop link carries
+Edited args live in memory for the run. They survive a hot reload, not a restart, and the workshop's address carries
 them.
 
 ## Matrices
@@ -304,6 +306,35 @@ A library has no binary to run. `rsx_modules!` gives it a unit test, `telar_prev
 `cargo telar test -p <library>` runs it through `cargo test`. The first-party components are tested this way
 through `apps/catalogue`: `cargo telar test -p catalogue`.
 
+### Auditing the exported workshop
+
+`cargo telar test` checks the frame a preview draws. What a browser makes of the document the web target writes
+is checked separately, on the [exported workshop](#exporting-the-workshop): an ignored test in `cargo-telar`
+serves the export on a loopback port, opens every `preview/<id>` and `matrix/<id>` page in headless Chrome with
+`?chrome=0`, and runs [axe-core](https://github.com/dequelabs/axe-core) over the canvas. It also audits the
+workshop's own chrome once, as a whole page, so its landmarks are checked too. The rules are WCAG 2.2 A/AA plus
+best practices, read from `crates/renderer/renderer-dom/axe.json`, the same file
+`plugins/telar-components/src/audit_test.rs` uses; `region` is off for the canvas, which is a fragment of a page,
+and on for the chrome. CI's `workshop-audit` job runs it on `apps/catalogue` and keeps the export as the
+`catalogue-site` artifact. Inside the dev shell, which provides Chrome, `CHROMEDRIVER` and `TELAR_AXE_CORE`, run:
+
+```sh
+cargo telar preview -p catalogue --build target/tmp/catalogue-export --target web
+TELAR_WORKSHOP_SITE=target/tmp/catalogue-export \
+  cargo test -p cargo-telar --test workshop_audit -- --ignored --nocapture
+```
+
+A relative `TELAR_WORKSHOP_SITE` is read from the repository root. Set `TELAR_WORKSHOP_AUDIT_ONLY` to audit only
+the pages whose address contains it, such as `button--default`. A failure lists each page with every rule it
+breaks, the elements that break it and why. A page that never settles is reported too, with what its console
+logged.
+
+The audit waits for each page to settle before it looks. The browser platform keeps a `data-telar-idle`
+attribute on the app's host while its loop has no frame coming, and the audit waits until that attribute has
+stayed there for a moment and every font has loaded. A browser test of your own can wait the same way. The
+browser is asked for reduced motion, which stops looping animations, so an animation that keeps running anyway
+fails the audit.
+
 ## Previews across crates
 
 An application lists the previews of the crates it depends on after its own, in `telar.toml`:
@@ -362,6 +393,33 @@ sizes and canvas settings, which are kept in `<workspace>/.telar/workshop/state`
 preferences are not stored. **Copy link** in the canvas header copies a link that carries the preview, its edited
 args and the canvas settings; `cargo telar preview '<link>'` opens it again.
 
+`cargo telar preview --target web` serves the workshop as a page instead, and reloads it after every rebuild. The
+page keeps the same state in the browser's `localStorage`, and its address carries the preview, the view, the edited
+args and the Matrix view's axes and focused cell, so a reload, or the address pasted elsewhere, comes back to the
+same place. Run again while the page is served, it prints the page's address, and the preview's when given one,
+instead of building a second.
+
+### Exporting the workshop
+
+`cargo telar preview --build <DIR> --target web` writes the workshop as a static site, for any host that serves files:
+the first-party one is `cargo telar preview -p catalogue --build site/ --target web`.
+
+- **The build** is the page `--target web` serves, built for release like `cargo telar build --target web` (it needs
+  the project's `[profile.web]`), into `<DIR>`. The directory is replaced whole; one holding anything but an earlier
+  web build is refused rather than deleted.
+- **Every address is a file.** The previews are listed first, by running the package once on this machine as
+  `--list` does. The page is then written again at `preview/<id>/` and `matrix/<id>/` for each preview and
+  `docs/<group>/<title>/` for each title, and as `404.html`, so opening any of those addresses afresh, a reload
+  included, loads the workshop there. The query a link carries (`args`, `axes`, `cell`, `globals`, `chrome=0`) needs
+  no page of its own. See [The workshop as a site](web-packaging.md#the-workshop-as-a-site).
+- **`--base <PATH>`** serves the site under a path, in place of `[telar.web] base`: the files are written for it, and
+  the workshop reads its addresses from below it. The rest of `[telar.web]`, the host profile included, applies as
+  to any web build.
+- `--target` may be left out, since a site is only ever for the browser; any other target is refused. `-p`, `-F` and
+  `--renderer` work as they do for the other commands.
+
+The exported workshop keeps its state in the browser's `localStorage`, per site, as the served one does.
+
 [`plugins/telar-workshop`](../plugins/telar-workshop/README.md) describes each view and panel in full.
 
 ## In the editor
@@ -369,10 +427,15 @@ args and the canvas settings; `cargo telar preview '<link>'` opens it again.
 The [VS Code extension](../editors/vscode/telar/README.md) works on previews from the `.rsx` file:
 
 - A **▶ Open in workshop** lens above each `[preview]`, and the command **Telar: Show preview at cursor in
-  workshop**, move the package's running workshop to that preview, or start one on it.
-- **Telar: Open workshop** starts the workshop of the active file's package.
-- `telar.workshop.followCursor`, off by default, moves the running workshop to each preview the cursor enters. It
-  never starts a workshop.
+  workshop**, move the running workshop that lists the preview to it, or start one on it. That is the package's own
+  workshop, or for a library, the workshop of an application in the workspace whose `[telar.previews] include`
+  names it.
+- A **▶ Show in panel** lens, and the command **Telar: Show preview at cursor in panel**, show the preview's canvas
+  in a panel beside the editor, which follows the cursor from preview to preview and reloads with every rebuild. The
+  panel is the page `cargo telar preview --target web` serves, which it starts when none is running.
+- **Telar: Open workshop** brings that workshop forward, or starts it.
+- `telar.workshop.followCursor`, off by default, moves the running workshop window to each preview the cursor
+  enters. It never starts a workshop.
 - A **▶ Run play** lens above each `[play]` runs `cargo telar test --preview <id> --no-snapshots` in a terminal in
   the package, so a play can be run without a golden being compared.
 - Completion and hover for the header options, `args(…)` and the names of the matrices `telar.toml` defines.

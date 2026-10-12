@@ -27,6 +27,7 @@ fn localized() -> SitePages {
         locales: vec!["es".to_string(), "en".to_string()],
         base_locale: Some("es".to_string()),
         not_found: true,
+        ..SitePages::default()
     }
 }
 
@@ -208,5 +209,25 @@ for (const [path, language] of [
          302 /es/ Accept-Language\n\
          302 /en/?telar-renderer=dom Accept-Language\n\
          asset /app.js\n"
+    );
+}
+
+#[test]
+fn a_directory_of_pages_is_one_rule_however_many_pages_it_holds() {
+    let mut pages: Vec<PageLocation> = (0..500)
+        .map(|n| at(&["preview", &format!("demo--card--{n}")], None))
+        .collect();
+    pages.insert(0, PageLocation::root());
+    pages.push(at(&["about"], None));
+    let pages = SitePages {
+        pages,
+        not_found: true,
+        page_dirs: vec!["preview".to_string()],
+        ..SitePages::default()
+    };
+    assert_eq!(
+        headers(&site(), &pages, &[], false),
+        "/\n  Cache-Control: no-cache\n/404.html\n  Cache-Control: no-cache\n\
+         /preview/*\n  Cache-Control: no-cache\n/about/\n  Cache-Control: no-cache\n"
     );
 }

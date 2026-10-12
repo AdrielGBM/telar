@@ -404,3 +404,67 @@ fn every_problem_in_a_matrix_is_said_at_once() {
     assert!(error.contains("`1` is not a string"), "{error}");
     assert!(error.contains("is neither one of mode"), "{error}");
 }
+
+fn member(root: &Path, dir: &str, cargo_toml: &str, telar_toml: Option<&str>, binary: bool) {
+    let dir = root.join(dir);
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(dir.join("Cargo.toml"), cargo_toml).unwrap();
+    if let Some(telar_toml) = telar_toml {
+        std::fs::write(dir.join(MANIFEST_FILENAME), telar_toml).unwrap();
+    }
+    if binary {
+        std::fs::write(dir.join("src/main.rs"), "fn main() {}\n").unwrap();
+    }
+}
+
+#[test]
+fn a_librarys_previews_are_hosted_by_the_applications_that_include_it() {
+    let root = std::env::temp_dir().join(format!("telar_previews_hosts_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"apps/*\", \"libs/*\"]\n",
+    )
+    .unwrap();
+    member(
+        &root,
+        "libs/kit",
+        "[package]\nname = \"ui-kit\"\n\n[lib]\nname = \"kit\"\n",
+        Some("[telar]\nlibrary = true\n"),
+        false,
+    );
+    member(
+        &root,
+        "apps/gallery",
+        "[package]\nname = \"gallery\"\n",
+        Some("[telar.previews]\ninclude = [\"kit\"]\n"),
+        true,
+    );
+    member(
+        &root,
+        "apps/other",
+        "[package]\nname = \"other\"\n",
+        None,
+        true,
+    );
+    member(
+        &root,
+        "libs/shelf",
+        "[package]\nname = \"shelf\"\n",
+        Some("[telar]\nlibrary = true\n\n[telar.previews]\ninclude = [\"kit\"]\n"),
+        false,
+    );
+
+    assert_eq!(
+        preview_hosts(&root.join("libs/kit"), "kit"),
+        vec![root.join("apps/gallery")],
+        "a library has no workshop, and neither does one that includes another"
+    );
+    assert_eq!(
+        preview_hosts(&root.join("apps/other"), "other"),
+        vec![root.join("apps/other")],
+        "an application hosts its own"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

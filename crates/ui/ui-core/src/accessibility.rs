@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use layout_core::NodeId;
-use platform_core::{AccessNode, CurrentKind, Role};
+use platform_core::{AccessNode, CurrentKind, Event, Key, ModifiersState, NamedKey, Role};
 use renderer_core::DrawCommand;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -626,6 +626,47 @@ impl NestedSurface {
 }
 
 const NESTED_ID_SHIFT: u32 = 32;
+
+/// The control an id in [`snapshot`] names: one of the surface entered now, or one of a surface nested in its frame, which [`NestedSurface::place`] gave an id the surface's own never take.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AccessTarget {
+    Own(focus::FocusId),
+    Nested { surface: u64, id: focus::FocusId },
+}
+
+impl AccessTarget {
+    pub fn of(id: u64) -> Self {
+        match id >> NESTED_ID_SHIFT {
+            0 => Self::Own(id),
+            surface => Self::Nested {
+                surface,
+                id: id & ((1 << NESTED_ID_SHIFT) - 1),
+            },
+        }
+    }
+}
+
+/// Carries out a screen reader's request to move to the control `id` names in [`snapshot`] of the surface entered now, or to activate it.
+///
+/// A control of its own takes focus, and activation goes out as the Enter it already answers, so a reader pressing a button travels the route a keyboard does. One of a nested surface is reached the way a box event for it is, as an [`Event::AccessAction`] inside [`Event::InSurface`], which the frames along the way pass on to the surface that drew it. What has to travel through the surface's tree is handed to `dispatch`.
+pub fn perform_action(id: u64, activate: bool, dispatch: impl FnOnce(&Event)) {
+    match AccessTarget::of(id) {
+        AccessTarget::Own(id) => {
+            focus::request(id);
+            if activate {
+                dispatch(&Event::KeyPressed {
+                    key: Key::Named(NamedKey::Enter),
+                    modifiers: ModifiersState::default(),
+                    unmodified: None,
+                });
+            }
+        }
+        AccessTarget::Nested { surface, id } => dispatch(&Event::InSurface {
+            surface,
+            event: Box::new(Event::AccessAction { id, activate }),
+        }),
+    }
+}
 
 /// The surfaces drawn directly inside `commands`, in draw order. One nested deeper is inside one of these, and is found in its commands.
 pub fn nested_surfaces(commands: &[DrawCommand]) -> Vec<NestedSurface> {
