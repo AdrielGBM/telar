@@ -9,7 +9,6 @@
 #[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
 #[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
 
 #[derive(::telar::Props)]
 pub struct IndicatorsProps {}
@@ -136,28 +135,7 @@ pub fn indicators(props: IndicatorsProps, children: Children) -> Result<Box<dyn 
             );
             example(ExampleProps::props().title("spinner — an indeterminate ring; it drives its own rotation").build(), __deferred)?
         };
-        let __node_12 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_1 = {
-                            let __node_13 = prop_row(PropRowProps::props().name("value").values("signal").about("progress fill, 0..1, reactive.").build(), Children::default())?;
-                            let __node_14 = prop_row(PropRowProps::props().name("width / height").values("px").about("progress track size.").build(), Children::default())?;
-                            let __node_15 = prop_row(PropRowProps::props().name("size").values("px").about("spinner diameter.").build(), Children::default())?;
-                            let __node_16 = prop_row(PropRowProps::props().name("color / track_color").values("token").about("accent and rail colors (default: theme).").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_13, __node_14, __node_15, __node_16])?
-                        };
-                        __children.push(box_item(__col_1));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-            );
-            example(ExampleProps::props().title("Attributes").build(), __deferred)?
-        };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7, __node_12])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7])?
     };
     Ok(Box::new(__col_0))
 }

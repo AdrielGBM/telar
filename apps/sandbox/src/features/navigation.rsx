@@ -3,7 +3,6 @@ use crate::shared::components::card::{card, CardProps};
 use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
 let tab = signal(0u32);
 let open = signal(true);
 
@@ -75,10 +74,3 @@ col gap:20
             text "{$address} · {$depth} deep" font_size:14 color:$theme.ink
             text "Open it again with --location {$address} on desktop or in a terminal, or reload the page on the web." font_size:13 color:$theme.muted
         code_line code:"let panes = Navigator::new(Pane::Overview).follow_location();"
-    example title:"Attributes"
-        col gap:6
-            prop_row name:"items" values:"vec![..]" about:"tabs labels, one button each."
-            prop_row name:"selected" values:"signal" about:"tabs active index (u32), two-way."
-            prop_row name:"title" values:"text" about:"accordion header label."
-            prop_row name:"open" values:"signal" about:"accordion expanded bool, two-way."
-            prop_row name:"follow_location" values:"Navigator<R: Route>" about:"the stack becomes the app's history on every target."

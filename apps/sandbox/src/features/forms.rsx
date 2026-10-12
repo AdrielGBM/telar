@@ -3,7 +3,6 @@ use crate::shared::components::card::{card, CardProps};
 use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
 // A bound bool for the checkbox, another for the toggle, and a u32 for the radio group's selection.
 let agree = signal(false);
 let notify = signal(true);
@@ -29,9 +28,3 @@ col gap:20
             radio selected:$choice value:2u32 label:"Large"
             text "choice · {$choice}" font_size:14 color:$theme.muted
         code_line code:"radio selected:$choice value:0u32 label:'Small'      (a group shares one signal)"
-    example title:"Attributes"
-        col gap:6
-            prop_row name:"checked" values:"signal" about:"Bound bool for checkbox/toggle; the tap writes it back."
-            prop_row name:"selected" values:"signal" about:"Bound u32 shared by a radio group; a tap sets it to this button's value."
-            prop_row name:"value" values:"u32" about:"The value a radio selects when tapped (which button is on)."
-            prop_row name:"on_toggle / on_select" values:"closure" about:"Fires with the new state when it changes."

@@ -9,7 +9,6 @@
 #[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
 #[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
 
 #[derive(::telar::Props)]
 pub struct NavigationProps {}
@@ -327,29 +326,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
             );
             example(ExampleProps::props().title("follow_location — a page stack that is the app's address").build(), __deferred)?
         };
-        let __node_19 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_1 = {
-                            let __node_20 = prop_row(PropRowProps::props().name("items").values("vec![..]").about("tabs labels, one button each.").build(), Children::default())?;
-                            let __node_21 = prop_row(PropRowProps::props().name("selected").values("signal").about("tabs active index (u32), two-way.").build(), Children::default())?;
-                            let __node_22 = prop_row(PropRowProps::props().name("title").values("text").about("accordion header label.").build(), Children::default())?;
-                            let __node_23 = prop_row(PropRowProps::props().name("open").values("signal").about("accordion expanded bool, two-way.").build(), Children::default())?;
-                            let __node_24 = prop_row(PropRowProps::props().name("follow_location").values("Navigator<R: Route>").about("the stack becomes the app's history on every target.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_20, __node_21, __node_22, __node_23, __node_24])?
-                        };
-                        __children.push(box_item(__col_1));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-            );
-            example(ExampleProps::props().title("Attributes").build(), __deferred)?
-        };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_12, __node_19])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_12])?
     };
     Ok(Box::new(__col_0))
 }

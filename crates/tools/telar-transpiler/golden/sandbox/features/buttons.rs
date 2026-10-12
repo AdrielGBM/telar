@@ -9,7 +9,6 @@
 #[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
 #[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
 
 #[derive(::telar::Props)]
 pub struct ButtonsProps {}
@@ -343,28 +342,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
             );
             example(ExampleProps::props().title("Event callbacks — on_hover (a bool) and on_key (global shortcut)").build(), __deferred)?
         };
-        let __node_24 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_2 = {
-                            let __node_25 = prop_row(PropRowProps::props().name("fill").values("token").about("Filled button; label is drawn in white.").build(), Children::default())?;
-                            let __node_26 = prop_row(PropRowProps::props().name("outline").values("token").about("Outlined button that fills on hover.").build(), Children::default())?;
-                            let __node_27 = prop_row(PropRowProps::props().name("ghost").values("flag").about("Transparent button with neutral text.").build(), Children::default())?;
-                            let __node_28 = prop_row(PropRowProps::props().name("on_press").values("closure").about("Runs on click; use $signal to read or mutate state.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_25, __node_26, __node_27, __node_28])?
-                        };
-                        __children.push(box_item(__col_2));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-            );
-            example(ExampleProps::props().title("Attributes").build(), __deferred)?
-        };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_9, __node_15, __node_18, __node_21, __node_24])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_9, __node_15, __node_18, __node_21])?
     };
     Ok(Box::new(__col_0))
 }

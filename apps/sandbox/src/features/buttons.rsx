@@ -3,7 +3,6 @@ use crate::shared::components::card::{card, CardProps};
 use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
 let clicks = signal(0i32);
 let hovering = signal(false);
 let keys = signal(0i32);
@@ -56,9 +55,3 @@ col gap:20
                 text "keys pressed anywhere: {$keys}" font_size:14 color:$theme.muted
             text "on_hover fires with true/false; on_key has no per-widget focus, so it fires for every key." font_size:12 color:$theme.muted
         code_line code:"box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)"
-    example title:"Attributes"
-        col gap:6
-            prop_row name:"fill" values:"token" about:"Filled button; label is drawn in white."
-            prop_row name:"outline" values:"token" about:"Outlined button that fills on hover."
-            prop_row name:"ghost" values:"flag" about:"Transparent button with neutral text."
-            prop_row name:"on_press" values:"closure" about:"Runs on click; use $signal to read or mutate state."

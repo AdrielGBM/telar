@@ -3,7 +3,6 @@ use crate::shared::components::card::{card, CardProps};
 use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
 let volume = signal(40.0f32);
 let temp = signal(65.0f32);
 
@@ -20,9 +19,3 @@ col gap:20
             slider value:$temp min:60 max:80 step:5 label:"Temperature" width:260
             text "{$temp}°F" font_size:14 color:$theme.muted
         code_line code:"slider value:$temp min:60 max:80 step:5 label:'Temperature'"
-    example title:"Attributes"
-        col gap:6
-            prop_row name:"value" values:"signal" about:"bound number; reads back in [min,max]."
-            prop_row name:"min / max" values:"number" about:"reported range (default 0..1)."
-            prop_row name:"step" values:"number" about:"quantize to multiples (0 = continuous)."
-            prop_row name:"label" values:"text" about:"optional caption stacked above the track."

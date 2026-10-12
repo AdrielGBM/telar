@@ -3,7 +3,6 @@ use crate::shared::components::card::{card, CardProps};
 use crate::shared::components::code_line::{code_line, CodeLineProps};
 use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
 let qty = signal(1.0f32);
 let seats = signal(2.0f32);
 // Written by `on_change` rather than read from the bound signal, so the callback is what proves it fired.
@@ -24,9 +23,3 @@ col gap:20
                 stepper value:$seats min:1 max:8 step:1 on_change:(|v| $last_change.set(format!("stepped to {v:.0}")))
                 text "{$last_change}" font_size:14 color:$theme.muted
         code_line code:"stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)"
-    example title:"Attributes"
-        col gap:6
-            prop_row name:"value" values:"signal" about:"the bound number, reactive."
-            prop_row name:"min / max" values:"number" about:"clamp range; an unset max is unbounded."
-            prop_row name:"step" values:"number" about:"increment per − / + tap (default 1)."
-            prop_row name:"on_change" values:"closure" about:"fires with the new value on each tap."

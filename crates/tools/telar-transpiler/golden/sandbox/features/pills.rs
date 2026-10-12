@@ -9,7 +9,6 @@
 #[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
 #[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
 
 #[derive(::telar::Props)]
 pub struct PillsProps {}
@@ -131,27 +130,7 @@ pub fn pills(props: PillsProps, children: Children) -> Result<Box<dyn LayoutItem
             );
             example(ExampleProps::props().title("chip — a softer outlined pill; on_close makes it removable").build(), __deferred)?
         };
-        let __node_13 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_1 = {
-                            let __node_14 = prop_row(PropRowProps::props().name("label").values("text").about("the tag / pill text.").build(), Children::default())?;
-                            let __node_15 = prop_row(PropRowProps::props().name("color").values("token").about("badge fill / chip accent (default: theme).").build(), Children::default())?;
-                            let __node_16 = prop_row(PropRowProps::props().name("on_close").values("closure").about("chip only; adds a × that fires this.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_14, __node_15, __node_16])?
-                        };
-                        __children.push(box_item(__col_1));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-            );
-            example(ExampleProps::props().title("Attributes").build(), __deferred)?
-        };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7, __node_13])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7])?
     };
     Ok(Box::new(__col_0))
 }

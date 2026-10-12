@@ -9,7 +9,6 @@
 #[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
 #[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
 #[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
 
 #[derive(::telar::Props)]
 pub struct MenusProps {}
@@ -245,30 +244,7 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
             );
             example(ExampleProps::props().title("A menu is a compound component — its rows are markup, not a list of strings").build(), __deferred)?
         };
-        let __node_26 = {
-            let __deferred = Children::per_slot(
-                move |__request: SlotRequest<'_>| {
-                    let mut __slots = Slots::new();
-                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                    if __request.includes(None) {
-                        let __col_1 = {
-                            let __node_27 = prop_row(PropRowProps::props().name("selected").values("signal").about("select: the bound choice index; omit for an uncontrolled select.").build(), Children::default())?;
-                            let __node_28 = prop_row(PropRowProps::props().name("options").values("vec![…]").about("select: the labels listed in the panel, in order.").build(), Children::default())?;
-                            let __node_29 = prop_row(PropRowProps::props().name("item").values("child").about("menu: one row. Takes label, disabled, checked, hint, on_press — or markup children as its content.").build(), Children::default())?;
-                            let __node_30 = prop_row(PropRowProps::props().name("separator / group").values("child").about("menu: a rule between groups, and a heading over one. The keyboard steps over both.").build(), Children::default())?;
-                            let __node_31 = prop_row(PropRowProps::props().name("on_select").values("closure").about("Runs with the picked index when a choice is made.").build(), Children::default())?;
-                            let __node_32 = prop_row(PropRowProps::props().name("color").values("token").about("Accent for the trigger border and highlight; falls back to the theme.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_27, __node_28, __node_29, __node_30, __node_31, __node_32])?
-                        };
-                        __children.push(box_item(__col_1));
-                    }
-                    __slots.extend_default(__children);
-                    Ok(__slots)
-                }
-            );
-            example(ExampleProps::props().title("Attributes").build(), __deferred)?
-        };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_14, __node_26])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_8, __node_14])?
     };
     Ok(Box::new(__col_0))
 }
