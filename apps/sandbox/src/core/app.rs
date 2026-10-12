@@ -543,7 +543,6 @@ struct ShellPage {
     topbar: Box<dyn LayoutItem>,
     sidebar_scroll: LayoutScrollArea,
     sidebar_scroll_node: NodeId,
-    sidebar_content_node: NodeId,
     nav_host: TabHost<usize, SectionRoute>,
     menu_open: RwSignal<bool>,
     mobile: bool,
@@ -556,7 +555,6 @@ impl ShellPage {
         sidebar: Box<dyn LayoutItem>,
         stacks: TabStacks<usize, SectionRoute>,
     ) -> Result<Self, LayoutError> {
-        let sidebar_content_node = sidebar.layout_node();
         let factory_stacks = stacks.clone();
         let nav_host = TabHost::new(stacks, move |section: &usize, route: &SectionRoute| {
             build_page(&factory_stacks, *section, *route)
@@ -606,7 +604,6 @@ impl ShellPage {
             topbar,
             sidebar_scroll,
             sidebar_scroll_node,
-            sidebar_content_node,
             nav_host,
             menu_open,
             mobile: false,
@@ -667,12 +664,6 @@ impl ShellPage {
             self.sidebar_scroll_node,
             AvailableSpace::Definite(SIDEBAR_W),
             AvailableSpace::Definite(height),
-        )
-        .ok();
-        compute_layout(
-            self.sidebar_content_node,
-            AvailableSpace::Definite(SIDEBAR_W),
-            AvailableSpace::MaxContent,
         )
         .ok();
         self.sidebar_scroll.clamp_scroll();

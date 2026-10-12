@@ -309,7 +309,7 @@ impl<R: Clone + Eq + 'static> NavHost<R> {
         self.page_at(&key)
     }
 
-    /// Re-lay-out the active page's own scroll viewport(s). Forward this from the container's relayout.
+    /// Re-clamp the active page's scroll viewport(s) after a relayout. Forward this from the container's relayout.
     pub fn relayout(&mut self) {
         if let Some(page) = self.current_page() {
             page.borrow_mut().on_relayout();

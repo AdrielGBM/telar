@@ -75,7 +75,7 @@ fn tab_walks_the_controls_in_document_order_whatever_order_they_were_built_in() 
     assert_eq!(walk(3), vec![field_id, list_id, field_id]);
 }
 
-/// A scroll's content is laid out as a root of its own, so it has no place in the page by layout alone: it reads where the scroll that shows it is declared.
+/// A scroll's content has no parent link to the scroll, so it has no place in the page by layout alone: it reads where the scroll that shows it is declared.
 #[test]
 fn a_control_in_a_scroll_area_is_reached_where_the_scroll_area_stands() {
     reset_layout_runtime();

@@ -366,7 +366,7 @@ impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
         switched || navigated
     }
 
-    /// Re-lay-out the active page's own scroll viewport(s). Forward this from the container's relayout.
+    /// Re-clamp the active page's scroll viewport(s) after a relayout. Forward this from the container's relayout.
     pub fn relayout(&mut self) {
         if let Some(i) = self.current_index() {
             self.tabs[i].host.relayout();

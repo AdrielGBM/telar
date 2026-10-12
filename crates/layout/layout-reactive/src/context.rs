@@ -727,7 +727,7 @@ impl OverlayHost {
 
     /// Offers `root` as the host for the compute about to run, taking it only when the rule allows.
     ///
-    /// A top-level root computed against the window is the overlay host, refreshed each compute so it stays current across a hot-reload rebuild. A definite height marks the surface root; a detached sub-root laid out for its intrinsic height must not become the host, or a portal declared inside it would attach to that scroll and be torn down with it.
+    /// A top-level root computed against the window is the overlay host, refreshed each compute so it stays current across a hot-reload rebuild. A definite height marks the surface root; a sub-root laid out for its intrinsic height must not become the host, or a portal declared inside it would attach to that root and be torn down with it.
     ///
     /// `is_top_level` is a closure so the parent map is only borrowed once the cheaper terms have already agreed.
     fn offer(&mut self, root: NodeId, height: AvailableSpace, is_top_level: impl FnOnce() -> bool) {

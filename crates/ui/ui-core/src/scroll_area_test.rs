@@ -12,7 +12,6 @@ use crate::context::{compute_layout, new_container, track_layout};
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 
-// Laying out the scroll area lays out its content in the same pass, though the content is placed as a root of its own.
 #[test]
 fn scroll_area_lays_out_its_content() {
     reset_layout_runtime();
@@ -34,10 +33,7 @@ fn scroll_area_lays_out_its_content() {
     )
     .unwrap();
     let content_rect = track_layout(content_node).unwrap().get();
-    assert!(
-        content_rect.height > 0.0,
-        "scroll must lay out its content, got {content_rect:?}"
-    );
+    assert_eq!((content_rect.width, content_rect.height), (400.0, 1000.0));
 }
 
 /// Torn down the way a container retires a child: its owner first, then its node. Left behind, the content would be walked by the next relayout into rect signals its owner already freed.

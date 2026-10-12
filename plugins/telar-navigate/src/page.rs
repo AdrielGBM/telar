@@ -9,7 +9,7 @@ pub trait NavPage: LayoutItem {
     /// Called when this page becomes the active top of the stack, after its layout node is shown. Autofocus the primary input here.
     fn on_enter(&mut self) {}
 
-    /// Called when the host re-lays-out while this page is active — re-lay this page's own scroll viewport(s) against their now-known size (the host's layout pass does not reach those separate roots).
+    /// Called when the host re-lays-out while this page is active, to re-clamp this page's scroll viewport(s) against their new size.
     fn on_relayout(&mut self) {}
 }
 

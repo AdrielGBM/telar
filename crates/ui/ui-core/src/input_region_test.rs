@@ -592,7 +592,7 @@ fn a_shortcut_table_in_a_hidden_subtree_hears_no_keys() {
 
 /// And the chain that has to be climbed is the registry's, not the layout tree's.
 ///
-/// A scroll area lays its content out as a root of its own, with no layout link back to the viewport, so `display:none` above the scroll is invisible to anything walking parents. The registry keeps its own link across that gap, which is why the question is asked of it.
+/// A scroll area's content has no layout link back to the viewport, so `display:none` above the scroll is invisible to anything walking parents. The registry keeps its own link across that gap, which is why the question is asked of it.
 #[test]
 fn a_shortcut_table_in_a_hidden_scroll_area_hears_no_keys() {
     reset_layout_runtime();

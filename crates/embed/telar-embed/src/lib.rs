@@ -77,7 +77,7 @@ pub trait EmbeddedApp: 'static {
     /// Route an event (already translated into the content's local coordinate space by the host).
     fn on_event(&mut self, event: &Event) -> EventResult;
 
-    /// Re-lay-out internal scroll viewports after the driver has laid out the root at the new size. No-op for content without its own scroll roots.
+    /// Runs after the driver has laid out the root at the new size, for internal scroll viewports to react to it. No-op for content without scroll areas.
     fn relayout_viewports(&mut self) {}
 
     /// Called when the content becomes visible (the host activated its tab). Autofocus the primary input here.
@@ -144,7 +144,7 @@ impl EmbedInstance {
         }
     }
 
-    /// Lay the content out to the host-assigned sub-rect size, which is this guest's surface size, then let it re-lay-out its own scroll viewports.
+    /// Lay the content out to the host-assigned sub-rect size, which is this guest's surface size, then let its scroll viewports react to the new size.
     pub fn relayout(&mut self, width: f32, height: f32) {
         self.canvas.lay_out(Size::new(width, height));
         let _g = self.canvas.enter();

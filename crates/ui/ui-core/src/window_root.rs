@@ -76,7 +76,7 @@ impl Component for WindowRoot {
         }
     }
 
-    /// Lays out first, then passes the resize on, so anything that has to run once the tree has real rects — a scroll viewport that is its own layout root, a first-layout autofocus — sees it in that order.
+    /// Lays out first, then passes the resize on, so anything that has to run once the tree has real rects — a first-layout autofocus — sees it in that order.
     ///
     /// `Handled` regardless of what the content answered: the runner requests a redraw only for a handled event (`runner::handler`), so reporting the content's `Ignored` would relayout and never repaint.
     fn on_event(&mut self, event: &Event) -> EventResult {

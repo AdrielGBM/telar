@@ -1,6 +1,6 @@
 //! Which scroll shows which content: the way from any node to the viewports it scrolls in, whatever order the tree was built in, the surface's primary scroll for whoever reads it from outside its content, and the layers fixed over it.
 //!
-//! A scroll area lays its content out as a root of its own, so a climb up the layout tree from a node inside it ends at that content root and never reaches the area. This records the missing link, per surface because node ids are minted per surface.
+//! A scroll area's content has no parent link to the area, so a climb up the layout tree from a node inside it ends at that content and never reaches the area. This records the missing link, per surface because node ids are minted per surface.
 
 use layout_core::NodeId;
 use reactive_core::{RwSignal, signal};
