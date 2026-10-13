@@ -171,7 +171,7 @@ pub struct Toasts {
     posted: RwSignal<Vec<Posted>>,
 }
 
-thread_local! {
+telar::dropless_thread_local! {
     static NEXT_ID: Cell<u64> = const { Cell::new(0) };
     static SHARED: Cell<Option<Toasts>> = const { Cell::new(None) };
 }

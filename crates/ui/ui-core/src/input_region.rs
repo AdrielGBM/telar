@@ -76,7 +76,7 @@ reactive_core::surface_local! {
     context InputRegionContext, InputRegionGuard;
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     static NEXT_TOKEN: Cell<u64> = const { Cell::new(1) };
 }
 

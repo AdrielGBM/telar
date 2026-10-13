@@ -129,8 +129,7 @@ impl PreviewArg for &'static str {
     }
 }
 
-// `ManuallyDrop`, as in `hot_state`: a preview build is often a dylib, and a TLS destructor registered from one makes unloading it unsafe.
-thread_local! {
+reactive_core::dropless_thread_local! {
     static LEAKED: ManuallyDrop<RefCell<HashSet<&'static str>>> =
         ManuallyDrop::new(RefCell::new(HashSet::new()));
 }

@@ -4,6 +4,7 @@
 
 use std::any::{Any, TypeId};
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 use std::collections::HashMap;
@@ -64,10 +65,10 @@ impl Drop for SurfaceToken {
     }
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     // Keyed by the placement type because the trait is generic and so not object-safe on its own. The stored value is a `Box<dyn SurfaceHost<P>>` erased once more into `dyn Any`, which is a concrete `'static` type per `P` and so downcasts back exactly.
-    static SURFACE_HOSTS: RefCell<HashMap<TypeId, Box<dyn Any>>> =
-        RefCell::new(HashMap::new());
+    static SURFACE_HOSTS: ManuallyDrop<RefCell<HashMap<TypeId, Box<dyn Any>>>> =
+        ManuallyDrop::new(RefCell::new(HashMap::new()));
 }
 
 /// Installs `host` as the backend for placements of type `P`. A later call for the same `P` replaces it.

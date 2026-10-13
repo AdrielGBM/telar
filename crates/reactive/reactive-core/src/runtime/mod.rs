@@ -170,7 +170,7 @@ impl RuntimeCell {
     }
 }
 
-thread_local! {
+crate::dropless_thread_local! {
     static RUNTIME: RuntimeCell = RuntimeCell {
         ptr: Cell::new(Box::into_raw(Box::new(RefCell::new(Runtime::new())))),
         last_borrow: const { Cell::new(None) },

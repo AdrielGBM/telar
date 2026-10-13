@@ -334,8 +334,11 @@ pub unsafe fn __embed_on_frame(inst: *mut EmbedInstance, ctx: &mut AppCtx) -> Gu
     guest_call(|| unsafe { (*inst).on_frame(ctx) })
 }
 
-/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers. 7 is for every entry handing back a [`GuestResult`] instead of unwinding. 8 is for the table carrying the layout fingerprint.
-pub const TELAR_EMBED_ABI: u32 = 8;
+#[doc(hidden)]
+pub use platform_core::guest::{loaded as __embed_loaded, unloading as __embed_unloading};
+
+/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers. 7 is for every entry handing back a [`GuestResult`] instead of unwinding. 8 is for the table carrying the layout fingerprint. 9 is for `loaded` and `unloading`, which a host that unloads the guest calls first and last.
+pub const TELAR_EMBED_ABI: u32 = 9;
 
 /// The fingerprint of the layout of what crosses by value, which a guest reports in its table beside the version: a host and a guest built with different features or dependencies disagree about the shape of an event or a draw command without the table having changed at all.
 pub const EMBED_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
@@ -385,6 +388,8 @@ pub struct EmbedVTable {
     pub icon: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<Option<Vec<u8>>>,
     pub id: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<String>,
     pub on_frame: unsafe extern "Rust" fn(*mut EmbedInstance, &mut AppCtx) -> GuestResult<()>,
+    pub loaded: unsafe extern "Rust" fn() -> GuestResult<()>,
+    pub unloading: unsafe extern "Rust" fn() -> GuestResult<()>,
 }
 
 /// Exports a guest cdylib's one FFI symbol, the `_rsx_embed_vtable`. `$factory` is any `Fn(&[String]) -> Box<dyn EmbeddedApp>` — invoked once per instance with the launch args.
@@ -430,6 +435,8 @@ macro_rules! embed {
                 icon: $crate::__embed_icon,
                 id: $crate::__embed_id,
                 on_frame: $crate::__embed_on_frame,
+                loaded: $crate::__embed_loaded,
+                unloading: $crate::__embed_unloading,
             }
         };
     };
@@ -453,7 +460,7 @@ mod host {
         guest: Guest,
         timer_mirror: TimerMirror,
         // Declared last so it drops last: the instance is destroyed before the library unmaps. `None` for a table that is this process's own.
-        _lib: Option<libloading::Library>,
+        lib: Option<libloading::Library>,
     }
 
     /// Load a guest cdylib and create one instance from it (calling its vtable's `create` with `args`).
@@ -511,19 +518,22 @@ mod host {
     }
 
     impl LoadedEmbed {
-        /// Creates one instance through `vtable` and seeds it with the host's system preferences.
+        /// Tells a guest loaded from a library that it will be unloaded, creates one instance through `vtable` and seeds it with the host's system preferences.
         pub(crate) fn start(
             vtable: EmbedVTable,
             args: &[String],
             lib: Option<libloading::Library>,
         ) -> Result<Self, GuestPanic> {
+            if lib.is_some() {
+                unsafe { (vtable.loaded)() }?;
+            }
             let inst = unsafe { (vtable.create)(args) }?;
             let embed = Self {
                 inst,
                 vtable,
                 guest: Guest::default(),
                 timer_mirror: TimerMirror::default(),
-                _lib: lib,
+                lib,
             };
             // A guest starts with a store of its own that knows nothing, and a host only forwards changes; without this one opened mid-session would draw light on a dark desktop until the user next changed a setting.
             embed.set_system_preferences(&preferences_core::system_preferences());
@@ -656,13 +666,16 @@ mod host {
     }
 
     impl Drop for LoadedEmbed {
-        // Runs dylib code touching its thread-locals, so it must happen before `_lib` unmaps. A guest that panicked keeps its instance: destroying it would run that guest's code again.
+        // Runs dylib code touching its thread-locals, so it must happen before `lib` unmaps. A guest that panicked keeps its instance: destroying it would run that guest's code again.
         fn drop(&mut self) {
             if self.guest.has_panicked() {
                 return;
             }
             self.guest
                 .call(|| unsafe { (self.vtable.destroy)(self.inst) });
+            if self.lib.is_some() {
+                self.guest.call(|| unsafe { (self.vtable.unloading)() });
+            }
         }
     }
 }

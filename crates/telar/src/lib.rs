@@ -188,10 +188,10 @@ pub use platform_desktop::DesktopPathsProvider;
 pub use reactive_core::{
     Effect, Emitter, Memo, OwnerGuard, OwnerId, Reactive, ReadSignal, RwSignal, Source, Task,
     Timer, Transaction, TransactionError, advance_timer_clock, after_settle, batch, begin_batch,
-    current_owner, derive, derive_pair, detached, dispose_owner, drain_tasks, effect, end_batch,
-    fire_timers, memo, on_cleanup, owner_scope, reset_runtime, reset_tasks, reset_timers,
-    run_after, set_task_waker, signal, spawn_stream, spawn_task, timer_now, until_next_timer,
-    with_owner,
+    current_owner, derive, derive_pair, detached, dispose_owner, drain_tasks,
+    dropless_thread_local, effect, end_batch, fire_timers, memo, on_cleanup, owner_scope,
+    reset_runtime, reset_tasks, reset_timers, run_after, set_task_waker, signal, spawn_stream,
+    spawn_task, timer_now, until_next_timer, with_owner,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use renderer_assets::{SvgData, SvgError, VectorCommand};

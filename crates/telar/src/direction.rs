@@ -6,8 +6,8 @@ use std::cell::RefCell;
 
 use layout_core::Direction;
 
-thread_local! {
-    // Replaced on re-call, since a hot reload re-runs the app's setup. An `Effect` is an id, so the slot registers no TLS destructor and `dlclose` stays safe without a `ManuallyDrop`.
+reactive_core::dropless_thread_local! {
+    // Replaced on re-call, since a hot reload re-runs the app's setup.
     static FOLLOW: RefCell<Option<reactive_core::Effect>> = const { RefCell::new(None) };
 }
 

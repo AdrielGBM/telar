@@ -64,8 +64,7 @@ pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, 
 
 type AfterLayout = Box<dyn FnOnce()>;
 
-// `ManuallyDrop` for the reason every TLS slot here carries it: a destructor registered from the app dylib makes `dlclose` unsafe.
-thread_local! {
+reactive_core::dropless_thread_local! {
     /// Every open recording, innermost last.
     static RECORDINGS: ManuallyDrop<RefCell<Vec<Recording>>> =
         const { ManuallyDrop::new(RefCell::new(Vec::new())) };

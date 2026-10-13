@@ -1,6 +1,7 @@
 //! The animation-frame loop, and the listeners that feed it.
 
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use std::time::Duration;
 
 use platform_core::{
@@ -17,16 +18,16 @@ use crate::window::WebWindow;
 const FRAME_INTERVAL: Duration = Duration::from_nanos(1_000_000_000 / 60);
 
 // Separate from the running app on purpose: a listener must be able to record an event while a frame is running, and the browser can dispatch one synchronously from inside our own code. Sharing a cell with the running handler would make that a panic.
-thread_local! {
-    static QUEUE: RefCell<Vec<Event>> = const { RefCell::new(Vec::new()) };
-    static APP: RefCell<Option<App>> = const { RefCell::new(None) };
-    static FRAME: RefCell<Frame> = const { RefCell::new(Frame { scheduled: false, callback: None, timeout: None, wake: None, host: None, idle: false }) };
+reactive_local::dropless_thread_local! {
+    static QUEUE: ManuallyDrop<RefCell<Vec<Event>>> = const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static APP: ManuallyDrop<RefCell<Option<App>>> = const { ManuallyDrop::new(RefCell::new(None)) };
+    static FRAME: ManuallyDrop<RefCell<Frame>> = const { ManuallyDrop::new(RefCell::new(Frame { scheduled: false, callback: None, timeout: None, wake: None, host: None, idle: false })) };
     // The pointer that went down and where, until it travels far enough to be a drag or comes back up.
     static PRESSED: std::cell::Cell<Option<(i32, f32, f32)>> = const { std::cell::Cell::new(None) };
     // The safe area last reported, so a resize that leaves it where it was reports nothing.
     static SAFE_AREA: std::cell::Cell<Option<geometry_core::Insets>> = const { std::cell::Cell::new(None) };
     // The key each physical key (its DOM `code`) went down as, so its `keyup` names that key whatever the layout reads it as by then.
-    static KEYS: RefCell<KeyPairing<String>> = RefCell::new(KeyPairing::default());
+    static KEYS: ManuallyDrop<RefCell<KeyPairing<String>>> = ManuallyDrop::new(RefCell::new(KeyPairing::default()));
 }
 
 struct Frame {

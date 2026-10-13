@@ -6,6 +6,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::mem::ManuallyDrop;
 
 use renderer_cache::{Cache, CacheStat};
 use renderer_text::{TextShaper, TextShaperConfig};
@@ -66,23 +67,40 @@ impl SharedCaches {
     }
 }
 
-thread_local! {
-    static CACHES: RefCell<Option<SharedCaches>> = const { RefCell::new(None) };
+reactive_local::dropless_thread_local! {
+    // Freed through `reactive_local::thread_exit`, so a hot-reloaded app that drew can still be unloaded.
+    static CACHES: ManuallyDrop<RefCell<Option<SharedCaches>>> =
+        const { ManuallyDrop::new(RefCell::new(None)) };
+}
+
+/// This thread's caches, built by `build` if it has none yet.
+fn caches_or_build(
+    slot: &mut Option<SharedCaches>,
+    build: impl FnOnce() -> SharedCaches,
+) -> &mut SharedCaches {
+    if slot.is_none() {
+        reactive_local::thread_exit::on_thread_exit(release);
+    }
+    slot.get_or_insert_with(build)
+}
+
+fn release() {
+    CACHES.with(|slot| slot.borrow_mut().take());
 }
 
 /// Builds this thread's caches if no renderer has yet, using `config`'s budgets and fonts.
 ///
 /// Called by every [`crate::SoftwareRenderer`] before its first frame — from `bind_to_render_thread` when a render thread will drive it, and from `begin_frame` otherwise. Deliberately *not* from the constructors: these are thread-local, and an on-screen renderer is built on the UI thread but draws on its own, so seeding them at construction would furnish the wrong thread. Later surfaces sharing the thread do not resize them: budgets that grew per surface are the thing this module exists to stop, and a shared cache sized by whoever drew first is the predictable choice. Fonts are already process-wide — one database behind every shaper, see `renderer_text::fonts` — so a second surface asking for different ones is not a case telar produces.
 pub(crate) fn init(config: &SoftwareRendererConfig) {
-    CACHES.with_borrow_mut(|slot| {
-        slot.get_or_insert_with(|| SharedCaches::new(config));
+    CACHES.with(|slot| {
+        caches_or_build(&mut slot.borrow_mut(), || SharedCaches::new(config));
     });
 }
 
 /// Whether this thread has built its caches yet. Lets a test tell "the constructor seeded the wrong thread" apart from "the drawing thread seeded itself", which is the whole point of deferring [`init`].
 #[cfg(test)]
 pub(crate) fn initialised() -> bool {
-    CACHES.with_borrow(|slot| slot.is_some())
+    CACHES.with(|slot| slot.borrow().is_some())
 }
 
 /// Drops everything no frame has asked for within each cache's idle horizon.
@@ -111,7 +129,13 @@ pub(crate) fn publish_stats() {
 ///
 /// Destructure the `&mut SharedCaches` when a call needs two of them at once — a `retain` over one pending map writing into its cache, say. Field-by-field borrows are disjoint; the whole struct is not.
 pub(crate) fn with_caches<R>(f: impl FnOnce(&mut SharedCaches) -> R) -> R {
-    CACHES.with_borrow_mut(|slot| {
-        f(slot.get_or_insert_with(|| SharedCaches::new(&SoftwareRendererConfig::default())))
+    CACHES.with(|slot| {
+        f(caches_or_build(&mut slot.borrow_mut(), || {
+            SharedCaches::new(&SoftwareRendererConfig::default())
+        }))
     })
 }
+
+#[cfg(test)]
+#[path = "caches_test.rs"]
+mod tests;

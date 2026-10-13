@@ -9,7 +9,7 @@
 pub use platform_core::{ColorScheme, SystemPreferences};
 use reactive_core::{RwSignal, detached, signal};
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     static COLOR_SCHEME: RwSignal<Option<ColorScheme>> = detached(|| signal(None));
     static REDUCED_MOTION: RwSignal<Option<bool>> = detached(|| signal(None));
     static HIGH_CONTRAST: RwSignal<Option<bool>> = detached(|| signal(None));

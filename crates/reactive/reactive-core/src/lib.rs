@@ -6,7 +6,7 @@ mod effect;
 mod leaked_cell;
 mod memo;
 mod reactive;
-pub use reactive_local::reentry;
+pub use reactive_local::{reentry, thread_exit};
 mod runtime;
 mod signal;
 mod source;
@@ -20,7 +20,7 @@ mod timer;
 pub use effect::{Effect, effect};
 pub use memo::{Memo, memo};
 pub use reactive::Reactive;
-pub use reactive_local::{SurfaceSlot, detached, surface_local};
+pub use reactive_local::{SurfaceSlot, detached, dropless_thread_local, surface_local};
 pub use runtime::{
     FlushNotifyHandle, OwnerGuard, OwnerId, PanicCatch, PanicPayload, SurfaceEnterGuard,
     SurfaceHandle, after_settle, batch, begin_batch, context_provided_here, current_owner,

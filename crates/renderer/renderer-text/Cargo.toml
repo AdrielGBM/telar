@@ -22,6 +22,7 @@ rustc-hash = { workspace = true }
 skrifa = "0.44"
 tiny-skia = { workspace = true }
 tracing.workspace = true
+reactive-local.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true }

@@ -1,6 +1,7 @@
 //! The layout-side measurer: how wide and how tall a string is, asked before anything is drawn.
 
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 use renderer_core::{Span, TextStyle};
@@ -8,9 +9,11 @@ use renderer_core::{Span, TextStyle};
 use crate::TextShaper;
 use crate::fonts::{self, Fonts};
 
-thread_local! {
-    // Used only to size text during layout, held with the faces it was built from. Separate from the renderer's shaper, which may live on a render thread, but never from its fonts. Created lazily, since building it clones a font database.
-    static MEASURE_SHAPER: RefCell<Option<(Arc<Fonts>, TextShaper)>> = const { RefCell::new(None) };
+type Measurer = Option<(Arc<Fonts>, TextShaper)>;
+
+reactive_local::dropless_thread_local! {
+    // Used only to size text during layout, held with the faces it was built from. Separate from the renderer's shaper, which may live on a render thread, but never from its fonts. Created lazily, since building it clones a font database. Freed through `reactive_local::thread_exit`, so a hot-reloaded app holding one can still be unloaded.
+    static MEASURE_SHAPER: ManuallyDrop<RefCell<Measurer>> = const { ManuallyDrop::new(RefCell::new(None)) };
 }
 
 /// Hands this thread's measuring shaper to `f`, rebuilding it first if the process now shapes in other faces.
@@ -20,13 +23,19 @@ fn with_shaper<R>(f: impl FnOnce(&mut TextShaper) -> R) -> R {
     let fonts = fonts::installed();
     MEASURE_SHAPER.with(|slot| {
         let mut slot = slot.borrow_mut();
-        if matches!(slot.as_ref(), Some((built_from, _)) if !Arc::ptr_eq(built_from, &fonts)) {
-            *slot = None;
+        let current =
+            matches!(slot.as_ref(), Some((built_from, _)) if Arc::ptr_eq(built_from, &fonts));
+        if !current && slot.take().is_none() {
+            reactive_local::thread_exit::on_thread_exit(release_shaper);
         }
         let (_, shaper) =
             slot.get_or_insert_with(|| (fonts.clone(), TextShaper::with_fonts(&fonts)));
         f(shaper)
     })
+}
+
+fn release_shaper() {
+    MEASURE_SHAPER.with(|slot| slot.borrow_mut().take());
 }
 
 /// [`renderer_core::TextMetrics`] over the layout-thread shaper: the answer for any surface whose text is glyphs.

@@ -26,12 +26,11 @@ pub struct DragStart {
     pub at_surface: (f32, f32),
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     /// What armed the drag whose callback is currently running, and how far it has travelled. Ambient rather than a callback parameter for the reason [`PointerButtons`] gives: widening `on_drag` would make the whole catalogue pay for a question two widgets ask.
     static ACTIVE: Cell<Option<(DragStart, f32)>> = const { Cell::new(None) };
     /// Whether the press being dispatched right now has already armed a drag somewhere below. See [`claimed`].
     static CLAIMED: Cell<bool> = const { Cell::new(false) };
-    // `ManuallyDrop` keeps the slot trivially destructible, as the dismiss stack's is: a TLS destructor registered from a hot-reloaded dylib would make `dlclose` unsafe.
     static LIVE: ManuallyDrop<RefCell<Vec<Live>>> = const { ManuallyDrop::new(RefCell::new(Vec::new())) };
     static NEXT_LIVE: Cell<u64> = const { Cell::new(0) };
 }

@@ -377,9 +377,9 @@ struct DynamicRequest {
     close: Arc<std::sync::atomic::AtomicBool>,
 }
 
-thread_local! {
-    static DYNAMIC_QUEUE: std::cell::RefCell<Vec<DynamicRequest>> =
-        const { std::cell::RefCell::new(Vec::new()) };
+reactive_local::dropless_thread_local! {
+    static DYNAMIC_QUEUE: std::mem::ManuallyDrop<std::cell::RefCell<Vec<DynamicRequest>>> =
+        const { std::mem::ManuallyDrop::new(std::cell::RefCell::new(Vec::new())) };
 }
 
 /// Requests a new top-level window rendering `handler`, created on the next event-loop iteration by the running multi-surface runner (which shares this thread and the one reactive runtime). Returns a flag the caller flips to close the surface. rsx's winit `SurfaceHost` uses this to implement `open_surface` without a per-surface thread. If no multi-surface runner is running, the request simply sits undrained.

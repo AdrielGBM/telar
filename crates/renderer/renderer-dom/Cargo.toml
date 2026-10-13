@@ -13,6 +13,7 @@ repository = { workspace = true }
 [dependencies]
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
+reactive-local.workspace = true
 renderer-core = { workspace = true }
 
 rustc-hash = { workspace = true }

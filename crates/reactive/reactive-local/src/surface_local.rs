@@ -2,7 +2,7 @@
 //!
 //! A per-surface "world" (the layout tree, the overlay registry, focus, ...) is a thread-local singleton. Under M3 several surfaces share one UI thread, so each such world must be swappable: the runner activates a surface's instance around that surface's build/event/frame, and the reactive flush re-enters the instance that owns each effect. This macro generates that swap once — the live instance sits behind a `Cell<*mut RefCell<T>>` (like the reactive runtime's own cell), a private accessor derefs it, and a `Context`/`Guard` pair allocates and activates per-surface instances.
 //!
-//! The cell holds a raw pointer and has no `Drop`, so no TLS destructor is registered — dlclosing a hot-reload dylib on thread exit stays safe (same reasoning as the reactive runtime cell). The ambient instance is intentionally leaked; per-surface instances are freed when their `Context` drops.
+//! The cell holds raw pointers, as [`dropless_thread_local!`](crate::dropless_thread_local) requires, so the ambient instance is leaked; per-surface instances are freed when their `Context` drops.
 //!
 //! Both instances build their contents inside [`detached`](crate::detached), because a slot initialises on first access and that access is somebody's build. Without it a surface's world is adopted by whichever reactive owner happened to be running — see that module.
 
@@ -23,7 +23,7 @@ macro_rules! surface_local {
         access $with:ident, $with_ref:ident;
         context $ctx:ident, $guard:ident;
     ) => {
-        thread_local! {
+        $crate::dropless_thread_local! {
             static $slot: ::std::cell::Cell<$crate::SurfaceSlot<$ty>> = {
                 let ambient = ::std::boxed::Box::into_raw(::std::boxed::Box::new(
                     ::std::cell::RefCell::new($crate::detached(|| $init)),

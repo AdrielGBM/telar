@@ -15,9 +15,8 @@ use reactive_core::{OwnerId, PanicPayload, SurfaceHandle, current_surface, dispo
 
 use crate::context::remove_node;
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
-    // `ManuallyDrop` for the reason every other TLS slot here carries it: a destructor registered from the app dylib makes `dlclose` unsafe.
     static RETIRED: ManuallyDrop<RefCell<Vec<Retired>>> =
         const { ManuallyDrop::new(RefCell::new(Vec::new())) };
 }

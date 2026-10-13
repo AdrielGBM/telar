@@ -6,6 +6,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::mem::ManuallyDrop;
 use std::rc::{Rc, Weak};
 
 use i18n_core::{LocaleContext, LocaleGuard};
@@ -251,10 +252,10 @@ impl Drop for RestoreSurface {
     }
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     // Weak, not Rc: an Rc would keep every surface alive forever and its unregistering `Drop` would never run.
-    static SURFACES: RefCell<HashMap<SurfaceHandle, Weak<Surface>>> =
-        RefCell::new(HashMap::new());
+    static SURFACES: ManuallyDrop<RefCell<HashMap<SurfaceHandle, Weak<Surface>>>> =
+        ManuallyDrop::new(RefCell::new(HashMap::new()));
     // Handle 0 is `SurfaceHandle::NONE`, the ambient world, so real surfaces start at 1.
     static NEXT_HANDLE: Cell<u64> = const { Cell::new(1) };
     static HOOK_INSTALLED: Cell<bool> = const { Cell::new(false) };

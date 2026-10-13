@@ -81,7 +81,7 @@ pub fn line_box(style: &TextStyle) -> f32 {
     }
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     static GENERATION: reactive_core::RwSignal<u64> =
         reactive_core::detached(|| reactive_core::signal(renderer_core::text_metrics_generation()));
 }

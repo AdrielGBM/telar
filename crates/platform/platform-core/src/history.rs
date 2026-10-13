@@ -103,8 +103,7 @@ impl Hub {
     }
 }
 
-thread_local! {
-    // Leaked rather than owned: a value with a destructor registers a TLS destructor, and one registered from a hot-reloaded library runs after that library is unmapped.
+reactive_local::dropless_thread_local! {
     static HUB: &'static RefCell<Hub> = Box::leak(Box::default());
 }
 

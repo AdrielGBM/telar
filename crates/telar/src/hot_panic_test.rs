@@ -1,11 +1,11 @@
-//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
+//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, PoisonError};
 
 use telar::hot::load_hot_app;
-use telar::{AppCtx, AppRuntime, Event, PointerButton, PointerSource};
+use telar::{AppCtx, AppRuntime, Event, EventResult, PointerButton, PointerSource, Size};
 
 /// One at a time: both count what the process has mapped and what sits in the build directory.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -17,6 +17,7 @@ const FIXTURE_SOURCE: &str = include_str!("../tests/fixtures/hot-panic-guest/src
 fn a_panic_in_a_hot_guest_is_reported_and_the_next_build_takes_over() {
     let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     let library = build_fixture();
+    load_the_host_fonts();
 
     let mut broken = load_hot_app(&library).expect("the guest loads");
     assert_eq!(
@@ -86,6 +87,73 @@ fn a_hot_guest_that_ran_frames_is_unmapped_when_dropped() {
     );
 }
 
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+#[cfg(target_os = "linux")]
+fn a_hot_guest_that_mounted_a_tree_is_unmapped_when_dropped() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    run_a_session(&library);
+    assert_eq!(
+        mapped_guests(),
+        0,
+        "building, painting and driving a tree leaves nothing that pins the library"
+    );
+}
+
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+#[cfg(target_os = "linux")]
+fn reloading_a_hot_guest_again_and_again_keeps_one_mapped() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    for _ in 0..5 {
+        run_a_session(&library);
+    }
+    let mut last = load_hot_app(&library).expect("the guest loads");
+    assert!(runs_a_frame(&mut last), "precondition: its frame runs");
+    assert_eq!(
+        mapped_guests(),
+        1,
+        "only the build in use is mapped, however many came before it"
+    );
+}
+
+/// Loads the guest, mounts and lays out its tree, hands it an event it handles, runs a frame and paints it, then drops both the way the runner does on a reload.
+#[cfg(target_os = "linux")]
+fn run_a_session(library: &Path) {
+    load_the_host_fonts();
+    let mut app = load_hot_app(library).expect("the guest loads");
+    app.set_surface_size(Size::new(320.0, 200.0));
+    let mut tree = app.mount();
+    app.relayout();
+    assert_eq!(app.take_panic(), None, "precondition: the tree mounts");
+    app.begin_event_batch();
+    let overlaid = app.dispatch_overlays(&hover());
+    let handled = tree.on_event(&hover());
+    app.end_event_batch();
+    app.relayout();
+    assert_eq!(app.take_panic(), None, "precondition: the move is handled");
+    assert!(!overlaid, "precondition: no overlay takes the move");
+    assert_eq!(
+        handled,
+        EventResult::Handled,
+        "precondition: the tree takes the move"
+    );
+    assert!(runs_a_frame(&mut app), "precondition: its frame runs");
+    assert!(!tree.frame().is_empty(), "precondition: the tree paints");
+    tree.end_frame();
+    assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+    assert_eq!(mapped_guests(), 1, "precondition: it is mapped");
+    drop(tree);
+    drop(app);
+}
+
+/// What a host has done by the time it loads a guest, since its window built a renderer: loaded the faces it hands over, without which the guest has no measurer to lay its text out with.
+fn load_the_host_fonts() {
+    telar::font_families();
+}
+
 #[cfg(target_os = "linux")]
 fn mapped_guests() -> usize {
     let maps = std::fs::read_to_string("/proc/self/maps").expect("read the process maps");
@@ -102,6 +170,14 @@ fn runs_a_frame(app: &mut dyn AppRuntime) -> bool {
     let mut ctx = AppCtx::new(&mut redraw_requested, None, None, None);
     app.on_frame(&mut ctx);
     redraw_requested
+}
+
+fn hover() -> Event {
+    Event::PointerMoved {
+        x: 10.0,
+        y: 10.0,
+        source: PointerSource::Mouse,
+    }
 }
 
 fn press() -> Event {

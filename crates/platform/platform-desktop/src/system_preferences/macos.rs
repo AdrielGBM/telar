@@ -1,6 +1,7 @@
 //! macOS' answers: the accessibility display options on `NSWorkspace` and `NSLocale`'s preferred languages, plus the notifications that say one of them changed.
 
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use std::ptr::NonNull;
 
 use block2::RcBlock;
@@ -32,8 +33,8 @@ type Observer = (
     Retained<ProtocolObject<dyn NSObjectProtocol>>,
 );
 
-thread_local! {
-    static OBSERVERS: RefCell<Vec<Observer>> = const { RefCell::new(Vec::new()) };
+reactive_local::dropless_thread_local! {
+    static OBSERVERS: ManuallyDrop<RefCell<Vec<Observer>>> = const { ManuallyDrop::new(RefCell::new(Vec::new())) };
 }
 
 /// Calls `on_change` whenever the accessibility display options or the current locale change, until the next call replaces it.

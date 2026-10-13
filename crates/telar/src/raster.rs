@@ -1,6 +1,7 @@
 //! Rasterizing a widget tree into pixels off-screen, for a drag preview or an exported image.
 
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 
 use platform_headless::HeadlessWindow;
 use renderer_core::RenderBackend;
@@ -10,8 +11,10 @@ use crate::{Color, DrawCommand};
 
 type Rasterizer = SoftwareRenderer<HeadlessWindow, HeadlessWindow>;
 
-thread_local! {
-    static RASTERIZER: RefCell<Option<Rasterizer>> = const { RefCell::new(None) };
+reactive_core::dropless_thread_local! {
+    // Freed through `reactive_core::thread_exit`, so a hot-reloaded app that rasterized can still be unloaded.
+    static RASTERIZER: ManuallyDrop<RefCell<Option<Rasterizer>>> =
+        const { ManuallyDrop::new(RefCell::new(None)) };
 }
 
 /// Draws `commands` into an offscreen buffer and hands back the pixels as premultiplied RGBA8888 (`[R, G, B, A]` per pixel, row-major, `width * height * 4` bytes), or `None` if the size is empty or the frame failed to render.
@@ -67,6 +70,9 @@ fn render<T>(
 ) -> Result<T, String> {
     RASTERIZER.with(|cell| {
         let mut slot = cell.borrow_mut();
+        if slot.is_none() {
+            reactive_core::thread_exit::on_thread_exit(release);
+        }
         let renderer = slot.get_or_insert_with(|| {
             SoftwareRenderer::new_headless(
                 width,
@@ -84,6 +90,10 @@ fn render<T>(
             .map_err(|error| error.to_string())?;
         read(renderer)
     })
+}
+
+fn release() {
+    RASTERIZER.with(|cell| cell.borrow_mut().take());
 }
 
 fn no_picture() -> String {

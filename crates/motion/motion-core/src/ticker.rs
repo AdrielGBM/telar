@@ -52,8 +52,8 @@ impl Registry {
     }
 }
 
-// `ManuallyDrop` keeps this TLS trivially destructible: a destructor registered from the app dylib would make `dlclose` unsafe. The map leaks per reload, which is fine on a dev-only path.
-thread_local! {
+// The map leaks per reload, which is fine on a dev-only path.
+reactive_core::dropless_thread_local! {
     static REGISTRY: ManuallyDrop<RefCell<Registry>> = ManuallyDrop::new(RefCell::new(Registry::new()));
 }
 

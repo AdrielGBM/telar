@@ -1,6 +1,7 @@
 //! [`RenderNode`]: what a `view()` returns, before it is flattened into draw commands.
 
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -8,8 +9,9 @@ use renderer_core::{
     BlendMode, BorderRadius, DrawCommand, PathData, PathStyle, RectStyle, Span, TextStyle,
 };
 
-thread_local! {
-    static NODE_VEC_POOL: RefCell<Vec<Vec<RenderNode>>> = const { RefCell::new(Vec::new()) };
+reactive_core::dropless_thread_local! {
+    static NODE_VEC_POOL: ManuallyDrop<RefCell<Vec<Vec<RenderNode>>>> =
+        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
 }
 
 /// A pooled `Vec<RenderNode>`, returned to the pool when it drops.
@@ -18,7 +20,7 @@ pub struct NodeVec(Vec<RenderNode>);
 impl NodeVec {
     pub fn collect(iter: impl IntoIterator<Item = RenderNode>) -> Self {
         let mut v = NODE_VEC_POOL
-            .with_borrow_mut(|pool| pool.pop())
+            .with(|pool| pool.borrow_mut().pop())
             .unwrap_or_default();
         v.extend(iter);
         NodeVec(v)
@@ -29,7 +31,8 @@ impl Drop for NodeVec {
     fn drop(&mut self) {
         let mut v = std::mem::take(&mut self.0);
         v.clear();
-        NODE_VEC_POOL.with_borrow_mut(|pool| {
+        NODE_VEC_POOL.with(|pool| {
+            let mut pool = pool.borrow_mut();
             if pool.len() < 32 {
                 pool.push(v);
             }

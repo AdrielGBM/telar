@@ -47,7 +47,7 @@ impl PointerButtons {
     }
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     /// Set while a move is being dispatched into a subtree that something else is drawn over. See [`pointer_occluded`].
     static OCCLUDED: Cell<bool> = const { Cell::new(false) };
     static BUTTONS: Cell<PointerButtons> = const {

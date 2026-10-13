@@ -29,3 +29,16 @@ fn min_content_is_the_longest_word_and_keeps_every_word_whole() {
         "narrower than min-content, a word has to break: {squeezed} vs {height}"
     );
 }
+
+/// What a host does to a hot-reloaded copy's thread before unloading it, and what any thread does as it exits: the measurer is freed, and a measurement after that builds it again.
+#[test]
+fn a_released_thread_frees_its_measurer_and_measures_the_same_again() {
+    let style = renderer_core::TextStyle::new(14.0, renderer_core::Color::BLACK);
+    let before = measure_text("Features", None, 1.0e6, &style);
+    reactive_local::thread_exit::release_thread();
+    assert!(
+        super::MEASURE_SHAPER.with(|slot| slot.borrow().is_none()),
+        "the release frees it"
+    );
+    assert_eq!(measure_text("Features", None, 1.0e6, &style), before);
+}

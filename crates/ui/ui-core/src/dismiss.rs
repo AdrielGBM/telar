@@ -35,7 +35,7 @@ reactive_core::surface_local! {
     context DismissContext, DismissGuard;
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     // Per thread rather than per surface, so an id names one registration wherever it is withdrawn from.
     static NEXT_ID: Cell<u64> = const { Cell::new(0) };
 }

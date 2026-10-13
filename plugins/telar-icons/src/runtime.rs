@@ -24,8 +24,7 @@ fn warn_once(id: &str, message: impl FnOnce() -> String) {
     use std::collections::HashSet;
     use std::mem::ManuallyDrop;
 
-    thread_local! {
-        // ManuallyDrop: a hot-reload dylib is unmapped with this thread still running, and a TLS destructor left behind would point into it.
+    telar::dropless_thread_local! {
         static WARNED: ManuallyDrop<RefCell<HashSet<String>>> = ManuallyDrop::new(RefCell::new(HashSet::new()));
     }
     let first = WARNED.with(|warned| warned.borrow_mut().insert(id.to_string()));
@@ -61,8 +60,8 @@ mod installed {
         default_set: Option<String>,
     }
 
-    thread_local! {
-        // ManuallyDrop for the same reason as `WARNED`; the loader also owns the signals it handed out, which live on this thread.
+    telar::dropless_thread_local! {
+        // The loader owns the signals it handed out, which live on this thread.
         static INSTALLED: ManuallyDrop<RefCell<Option<Installed>>> =
             const { ManuallyDrop::new(RefCell::new(None)) };
     }

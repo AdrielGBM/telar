@@ -12,6 +12,7 @@ repository = { workspace = true }
 
 [dependencies]
 geometry-core = { workspace = true }
+reactive-local.workspace = true
 semantics-core = { workspace = true }
 
 bytemuck = { workspace = true }

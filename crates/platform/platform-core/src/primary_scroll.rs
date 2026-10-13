@@ -3,6 +3,7 @@
 //! A root `ScrollPage` claims it. Every target keeps that scroll where it always has — a canvas, a window or a terminal draws the content at the offset — except a document, which maps it onto its own scroll (see [`DOCUMENT_SCROLL_ATTRIBUTE`]). What reads and writes it through here is platform code that has to treat "where the page is scrolled to" as one value: a location adapter keeping a scroll position per history entry.
 
 use std::cell::{Cell, RefCell};
+use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 /// The attribute a document backend puts on its host while the primary scroll is the document's own scroll, and the attribute the platform reads to know that the host has grown with the content, so the surface is measured against the viewport rather than the host.
@@ -16,8 +17,10 @@ pub trait PrimaryScroll {
     fn scroll_to(&self, x: f32, y: f32);
 }
 
-thread_local! {
-    static PRIMARY: RefCell<Option<(u64, Rc<dyn PrimaryScroll>)>> = const { RefCell::new(None) };
+type Claimed = Option<(u64, Rc<dyn PrimaryScroll>)>;
+
+reactive_local::dropless_thread_local! {
+    static PRIMARY: ManuallyDrop<RefCell<Claimed>> = const { ManuallyDrop::new(RefCell::new(None)) };
     static NEXT_CLAIM: Cell<u64> = const { Cell::new(0) };
 }
 

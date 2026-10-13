@@ -51,7 +51,7 @@ impl TimerRegistry {
     }
 }
 
-thread_local! {
+crate::dropless_thread_local! {
     static TIMERS: LeakedCell<TimerRegistry> = LeakedCell::new();
 }
 

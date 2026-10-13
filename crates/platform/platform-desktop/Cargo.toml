@@ -28,6 +28,7 @@ system-theme = ["dep:zbus"]
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
 platform-winit = { workspace = true }
+reactive-local.workspace = true
 renderer-core = { workspace = true }
 services-core = { workspace = true, features = ["system-opener", "system-paths"] }
 

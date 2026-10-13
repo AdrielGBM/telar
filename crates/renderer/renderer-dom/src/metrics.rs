@@ -3,19 +3,20 @@
 //! Taffy still runs on this target — its rects are what hit-testing, scrolling and anchored overlays read, and what a parity test compares the browser's own layout against. For those numbers to mean anything, the measurer has to agree with whatever will actually render the text, so it asks a 2D canvas rather than shaping glyphs from a font file the page would then not use.
 
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 
 use renderer_core::{Span, TextMetrics, TextStyle, TextWrap, case_text};
 use wasm_bindgen::JsCast;
 
 // Here rather than in the measurer, so the measurer stays a unit struct and satisfies the `Send + Sync` its runtime slot is declared with — which on a single-threaded target means nothing, but has to be true for it to be installed at all.
-thread_local! {
-    static CONTEXT: RefCell<Option<web_sys::CanvasRenderingContext2d>> = const { RefCell::new(None) };
+reactive_local::dropless_thread_local! {
+    static CONTEXT: ManuallyDrop<RefCell<Option<web_sys::CanvasRenderingContext2d>>> = const { ManuallyDrop::new(RefCell::new(None)) };
     /// A face's line box, which is a property of the face and the size and of nothing a paragraph does.
-    static LINE_BOXES: RefCell<rustc_hash::FxHashMap<String, f32>> =
-        RefCell::new(rustc_hash::FxHashMap::default());
+    static LINE_BOXES: ManuallyDrop<RefCell<rustc_hash::FxHashMap<String, f32>>> =
+        ManuallyDrop::new(RefCell::new(rustc_hash::FxHashMap::default()));
     /// Widths measured with a laid-out probe, by the style's CSS and the text: see [`needs_probe`].
-    static PROBED: RefCell<rustc_hash::FxHashMap<(String, String), f32>> =
-        RefCell::new(rustc_hash::FxHashMap::default());
+    static PROBED: ManuallyDrop<RefCell<rustc_hash::FxHashMap<(String, String), f32>>> =
+        ManuallyDrop::new(RefCell::new(rustc_hash::FxHashMap::default()));
 }
 
 fn with_context<R>(f: impl FnOnce(&web_sys::CanvasRenderingContext2d) -> R) -> Option<R> {
@@ -303,7 +304,7 @@ impl TextMetrics for CanvasTextMetrics {
 ///
 /// A face the page declares with `@font-face` arrives after the first layout — nothing waits for it, which is what `font-display: swap` promises — so text was measured in whatever the browser fell back to. The browser re-flows its own boxes when the face lands; Telar's layout, which hit-testing and scrolling read, has to be told. `loadingdone` fires once per batch of faces that finished together, so one batch is one relayout however many faces it held.
 pub fn remeasure_on_font_load() {
-    thread_local! {
+    reactive_local::dropless_thread_local! {
         static LISTENING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     }
     if LISTENING.with(|listening| listening.replace(true)) {

@@ -96,7 +96,7 @@ static GLOBAL: Stats = Stats::new();
 static FRAMES: AtomicU64 = AtomicU64::new(0);
 static CAPTURES: AtomicUsize = AtomicUsize::new(0);
 
-thread_local! {
+reactive_local::dropless_thread_local! {
     static CAPTURING: Cell<bool> = const { Cell::new(false) };
     static CAPTURED: Stats = const { Stats::new() };
 }

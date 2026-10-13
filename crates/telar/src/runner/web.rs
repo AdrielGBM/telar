@@ -126,8 +126,8 @@ async fn draws_as_document(wanted: WebRenderer) -> bool {
     true
 }
 
-thread_local! {
-    // Replaced on re-call (hot reload re-runs setup), same reasoning as `direction::FOLLOW`.
+reactive_core::dropless_thread_local! {
+    // Replaced on re-call, since a hot reload re-runs the app's setup.
     static FOLLOW_LANGUAGE: std::cell::RefCell<Option<reactive_core::Effect>> =
         const { std::cell::RefCell::new(None) };
 }

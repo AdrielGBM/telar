@@ -48,7 +48,7 @@ reactive_core::surface_local! {
     context CursorContext, CursorGuard;
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     static DEPTH: Cell<u32> = const { Cell::new(0) };
     // Per thread rather than per surface: a claim can outlive its surface, and an id another surface also minted would withdraw a stranger's claim.
     static NEXT_CLAIM: Cell<u64> = const { Cell::new(0) };

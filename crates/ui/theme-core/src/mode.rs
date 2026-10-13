@@ -24,8 +24,8 @@ reactive_core::surface_scoped! {
     context ModeContext, ModeGuard;
 }
 
-thread_local! {
-    // `ManuallyDrop` so no TLS destructor is registered and unmapping the app dylib on `dlclose` stays safe; the table is leaked at thread exit instead. A list rather than a map so the modes keep the order they were registered in.
+reactive_core::dropless_thread_local! {
+    // A list rather than a map so the modes keep the order they were registered in.
     static MODES: ManuallyDrop<RefCell<Vec<(String, ApplyMode)>>> =
         const { ManuallyDrop::new(RefCell::new(Vec::new())) };
     // A signal so a surface showing a mode re-resolves its theme when that mode is registered anew.
@@ -171,8 +171,8 @@ pub fn active_mode() -> Option<String> {
     mode().peek_thread()
 }
 
-thread_local! {
-    // The (light, dark) mode-id pair, so is_dark can tell which registered mode is the dark one without the app hardcoding it. ManuallyDrop for the same dlclose-safety reason as MODES above. None until set_light_dark is called.
+reactive_core::dropless_thread_local! {
+    // The (light, dark) mode-id pair, so is_dark can tell which registered mode is the dark one without the app hardcoding it. None until set_light_dark is called.
     static SCHEME_PAIR: ManuallyDrop<RefCell<Option<(String, String)>>> =
         const { ManuallyDrop::new(RefCell::new(None)) };
 }
@@ -235,7 +235,7 @@ impl SchemePreference {
     }
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     static PREFERENCE: RwSignal<SchemePreference> = detached(|| signal(SchemePreference::default()));
 }
 
@@ -263,7 +263,7 @@ pub fn use_resolved_scheme() -> ColorScheme {
     use_scheme_preference().resolve(preferences_core::use_color_scheme())
 }
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     // An `Effect` handle is inert, so the effect gets a scope of its own that a re-call disposes; otherwise two followers would race to set the mode.
     static FOLLOW: Cell<Option<reactive_core::OwnerId>> = const { Cell::new(None) };
 }

@@ -12,8 +12,8 @@ use serde::de::DeserializeOwned;
 #[cfg(any(feature = "dev", feature = "prerender"))]
 type HotReader = Box<dyn Fn() -> Option<String>>;
 
-// `ManuallyDrop` keeps these slots trivially destructible: a TLS destructor registered from the dylib would make `dlclose` unsafe. The maps leak per reload, which is fine on a dev-only path.
-thread_local! {
+// The maps leak per reload, which is fine on a dev-only path.
+reactive_core::dropless_thread_local! {
     #[cfg(any(feature = "dev", feature = "prerender"))]
     static REGISTRY: ManuallyDrop<RefCell<HashMap<String, HotReader>>> =
         ManuallyDrop::new(RefCell::new(HashMap::new()));

@@ -2,7 +2,7 @@
 
 use std::cell::Cell;
 
-thread_local! {
+crate::dropless_thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
 }
 

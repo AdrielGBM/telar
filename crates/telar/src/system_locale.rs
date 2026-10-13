@@ -4,7 +4,7 @@
 
 use std::cell::Cell;
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     // An `Effect` handle is inert, so the effect gets a scope of its own that a re-call disposes; otherwise two followers would race to set the locale.
     static FOLLOW: Cell<Option<reactive_core::OwnerId>> = const { Cell::new(None) };
 }

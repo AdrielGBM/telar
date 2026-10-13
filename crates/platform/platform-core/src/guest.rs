@@ -36,7 +36,7 @@ pub fn open(path: &std::path::Path) -> Result<libloading::Library, libloading::E
 ///
 /// dlopen caches by path and by (device, inode), so loading a library again while an earlier load of it is still mapped, a rebuilt one written in place or one that panicked and has not been dropped yet, hands back the mapping already there, statics and all. The copy has a path no earlier load had; unlinking it after the open is safe, since the mapping keeps the inode alive.
 ///
-/// A guest dropped afterwards is unmapped by `dlclose`, except that on glibc a thread-local with a destructor keeps its library mapped until the thread exits. What the guest runtime keeps for the boundary itself, the panic slot behind [`guest_call`], therefore has none.
+/// A guest dropped afterwards is unmapped by `dlclose`, except that on glibc a thread-local with a destructor keeps its library mapped until the thread exits. No thread-local of the runtime has one, the panic slot behind [`guest_call`] included, and a guest told it was [`loaded`] registers none of its own either.
 #[cfg(feature = "dylib")]
 pub fn open_unique(
     path: &std::path::Path,
@@ -176,7 +176,7 @@ static NEXT_CALL: AtomicU64 = AtomicU64::new(1);
 /// Panics the hook has seen inside a [`guest_call`], by the call they happened in. A static of this copy of std, so one per guest; deliberately not a `thread_local`, whose `Drop` would register a destructor that keeps an unloaded guest mapped until its thread exits.
 static RECORDED: Mutex<Vec<(u64, GuestPanic)>> = Mutex::new(Vec::new());
 
-thread_local! {
+reactive_local::dropless_thread_local! {
     static CURRENT_CALL: Cell<u64> = const { Cell::new(0) };
 }
 
@@ -233,6 +233,16 @@ fn payload_message(payload: &(dyn Any + Send)) -> String {
     } else {
         "Box<dyn Any>".to_owned()
     }
+}
+
+/// What a host calls first on a guest it loaded from a library and will unload: from then on this copy of the runtime registers no thread-exit destructor, which on glibc would keep the library mapped after it is closed, and leaves what it would have freed at thread exit to [`unloading`].
+pub fn loaded() -> GuestResult<()> {
+    guest_call(reactive_local::thread_exit::leave_to_host)
+}
+
+/// What a host calls last on a guest, right before it unloads the library: frees what this copy kept for the calling thread, which would otherwise wait for a thread exit that comes after the library is gone.
+pub fn unloading() -> GuestResult<()> {
+    guest_call(reactive_local::thread_exit::release_thread)
 }
 
 /// The host's record of one loaded guest: whether it has panicked, what the panic said, and whether anybody has been told.

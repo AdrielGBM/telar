@@ -119,7 +119,7 @@ macro_rules! surface_scoped {
             #[allow(unused_imports)]
             use super::*;
 
-            ::std::thread_local! {
+            $crate::dropless_thread_local! {
                 static THREAD: $crate::RwSignal<$value> =
                     $crate::detached(|| $crate::signal($init));
             }

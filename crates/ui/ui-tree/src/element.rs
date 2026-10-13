@@ -3,7 +3,7 @@
 
 use std::cell::Cell;
 
-thread_local! {
+reactive_core::dropless_thread_local! {
     static CAPTURE: Cell<bool> = const { Cell::new(false) };
 }
 

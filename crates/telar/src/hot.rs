@@ -57,17 +57,20 @@ pub struct HotApp {
     guest: Rc<Guest>,
     exports: GuestExports,
     /// Last, so it is unmapped after everything that runs its code. `None` for exports that are this process's own.
-    _lib: Option<libloading::Library>,
+    lib: Option<libloading::Library>,
 }
 
 impl HotApp {
-    /// Hands the library the host's services, then has it build its app. A panic in either is recorded rather than returned: the host still has a window to keep, and a rebuild to wait for.
+    /// Tells a guest loaded from a library that it will be unloaded, hands it the host's services, then has it build its app. A panic in any of them is recorded rather than returned: the host still has a window to keep, and a rebuild to wait for.
     pub(crate) fn start(
         exports: GuestExports,
         create: CreateApp,
         lib: Option<libloading::Library>,
     ) -> Self {
         let guest = Rc::new(Guest::default());
+        if lib.is_some() {
+            guest.call(|| unsafe { (exports.loaded)() });
+        }
         // Before the app is made, so whatever its setup or its first build reaches for is already there.
         guest.call(|| unsafe { (exports.install_services)(HostServices::installed()) });
         let app = guest.call(|| unsafe { create() });
@@ -75,7 +78,7 @@ impl HotApp {
             app,
             guest,
             exports,
-            _lib: lib,
+            lib,
         }
     }
 
@@ -100,6 +103,9 @@ impl Drop for HotApp {
         }
         let release = self.exports.app_release;
         self.guest.call(|| unsafe { release(app) });
+        if self.lib.is_some() {
+            self.tell(|| unsafe { (self.exports.unloading)() });
+        }
     }
 }
 

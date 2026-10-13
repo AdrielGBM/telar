@@ -30,7 +30,7 @@ fn published() -> &'static Mutex<HashMap<Origin, Vec<CacheStat>>> {
     PUBLISHED.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-thread_local! {
+reactive_local::dropless_thread_local! {
     static LAST_PUBLISH: Cell<Option<Instant>> = const { Cell::new(None) };
 }
 

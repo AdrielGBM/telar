@@ -1,13 +1,14 @@
 //! The system clipboard, through the browser's asynchronous one.
 
 use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 
 use services_core::Clipboard;
 use wasm_bindgen_futures::JsFuture;
 
 // A thread-local rather than a field, so the clipboard is a unit struct and satisfies the `Send + Sync` the service is declared with — which on a single-threaded target means nothing, but has to be true for the type to be installed at all.
-thread_local! {
-    static CACHED: RefCell<Option<String>> = const { RefCell::new(None) };
+reactive_local::dropless_thread_local! {
+    static CACHED: ManuallyDrop<RefCell<Option<String>>> = const { ManuallyDrop::new(RefCell::new(None)) };
 }
 
 /// Reads and writes the clipboard through `navigator.clipboard`.

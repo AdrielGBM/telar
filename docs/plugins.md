@@ -435,13 +435,14 @@ stale build to clear by editing a source, not a wrong one.
 `cargo telar dev` builds the application as a `cdylib` and swaps it on every change. A plugin is linked into
 that dylib, so two rules follow from the old copy being unmapped (`dlclose`):
 
-- **Thread-locals must not register destructors.** A `thread_local!` holding something that drops (an `Rc`, a
-  `RefCell<HashMap<…>>`) leaves a TLS destructor pointing into code that is no longer mapped. Wrap it in
-  `ManuallyDrop`; the table is leaked at thread exit instead. `telar-theme-core` does this for its mode table
-  and its light/dark pair (`crates/ui/theme-core/src/mode.rs`):
+- **Thread-locals must not register destructors.** A thread-local holding something that drops (an `Rc`, a
+  `RefCell<HashMap<…>>`) keeps the dylib mapped after it is unloaded, until its thread exits. Declare
+  thread-locals with `telar::dropless_thread_local!`, which refuses to compile one whose type has a destructor,
+  and wrap what drops in `ManuallyDrop`; the table is leaked at thread exit instead. `telar-theme-core` does this
+  for its mode table and its light/dark pair (`crates/ui/theme-core/src/mode.rs`):
 
   ```rust
-  thread_local! {
+  telar::dropless_thread_local! {
       static MODES: ManuallyDrop<RefCell<HashMap<String, ApplyMode>>> =
           ManuallyDrop::new(RefCell::new(HashMap::new()));
   }
@@ -472,6 +473,6 @@ that dylib, so two rules follow from the old copy being unmapped (`dlclose`):
 - Colours, radii and spacing from `use_theme_tokens()`, read in a reactive closure; tokens only this plugin
   needs from `use_theme_extension::<K>()`, with `K::default()` as the built-in answers.
 - Strings through `translate_with_override` (or `t!` in a library) under the crate name.
-- No thread-local with a destructor, no stored `&'static Catalog`.
+- Thread-locals through `telar::dropless_thread_local!`, none with a destructor; no stored `&'static Catalog`.
 - Anything installed process-wide behind a function the application calls from `telar::app!`'s setup block.
 - For a `.rsx` library: `cargo telar package --check` passes, and `cargo telar publish --dry-run` succeeds.

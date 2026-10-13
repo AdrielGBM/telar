@@ -80,7 +80,7 @@ struct TaskRegistry {
     mailbox: Arc<Mailbox>,
 }
 
-thread_local! {
+crate::dropless_thread_local! {
     static TASKS: LeakedCell<TaskRegistry> = LeakedCell::new();
 }
 

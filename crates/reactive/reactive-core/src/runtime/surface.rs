@@ -1,6 +1,7 @@
 //! Which surface is active, and the hook that re-enters an effect's own surface before it runs.
 
 use std::cell::{Cell, RefCell};
+use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 /// Identifies which surface (window / layer-surface) a reactive effect belongs to. It is a cheap `Copy` id: the reactive runtime stamps one onto every effect at registration and re-enters that surface's context before running the effect during a flush, so an effect owned by surface A resolves its layout/overlay/focus world against A even when a signal set from surface B triggers it (the "owner scope" model of Solid/Floem).
@@ -40,9 +41,9 @@ impl Default for SurfaceHandle {
 
 type EnterHook = Rc<dyn Fn(SurfaceHandle) -> SurfaceEnterGuard>;
 
-thread_local! {
+crate::dropless_thread_local! {
     static CURRENT_SURFACE: Cell<SurfaceHandle> = const { Cell::new(SurfaceHandle::NONE) };
-    static ENTER_HOOK: RefCell<Option<EnterHook>> = const { RefCell::new(None) };
+    static ENTER_HOOK: ManuallyDrop<RefCell<Option<EnterHook>>> = const { ManuallyDrop::new(RefCell::new(None)) };
 }
 
 /// The surface an effect registered right now would be owned by.
