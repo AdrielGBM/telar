@@ -1064,3 +1064,208 @@ fn a_panel_widens_to_its_widest_row() {
         "short rows keep the least width"
     );
 }
+
+/// "Modo" (plain) · "Reducir" (a switch bound to the returned signal, flipped by its own `on_press`) · "Reglas" (ticked), as a menu with the given number of ticked rows.
+fn switching(ticked: bool) -> (ComponentList, RwSignal<bool>, Said) {
+    fresh_layout_runtime();
+    focus::clear();
+    let said: Said = Rc::default();
+    let closing = said.clone();
+    let on = signal(false);
+    let rows = Children::new(move || {
+        let mut slots = Slots::new();
+        slots.push(
+            None,
+            item(
+                ItemProps::props().label("Modo").build(),
+                Children::default(),
+            )?,
+        );
+        slots.push(
+            None,
+            item(
+                ItemProps::props()
+                    .label("Reducir")
+                    .switch(Reactive::of(move || on.get()))
+                    .on_press(Rc::new(move || on.update(|on| *on = !*on)) as Rc<dyn Fn()>)
+                    .build(),
+                Children::default(),
+            )?,
+        );
+        if ticked {
+            slots.push(
+                None,
+                item(
+                    ItemProps::props().label("Reglas").checked(true).build(),
+                    Children::default(),
+                )?,
+            );
+        }
+        Ok(slots)
+    });
+    let menu = context_menu(
+        ContextMenuProps::props()
+            .at((40.0, 30.0))
+            .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
+            .width(160.0)
+            .within(WINDOW)
+            .build(),
+        rows,
+    )
+    .unwrap();
+    lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+    let tree = ComponentList::new(menu);
+    settle(&tree);
+    (tree, on, said)
+}
+
+fn text_rect(tree: &ComponentList, needle: &str) -> Rect {
+    let mut found = None;
+    telar::for_each_with_matrix(&tree.commands(), |command, matrix| {
+        if let telar::DrawCommand::Text { text, rect, .. } = command
+            && text.as_ref() == needle
+        {
+            found.get_or_insert(telar::transform_clip_rect(matrix, *rect));
+        }
+    });
+    found.unwrap_or_else(|| panic!("{needle:?} is drawn"))
+}
+
+/// The switch's track: the one box drawn at the size a row's switch is.
+fn track_rect(tree: &ComponentList) -> Rect {
+    let size = crate::toggle::SwitchSize::row();
+    let (width, height) = (
+        size.knob * 2.0 + size.inset * 2.0,
+        size.knob + size.inset * 2.0,
+    );
+    let mut found = None;
+    telar::for_each_with_matrix(&tree.commands(), |command, matrix| {
+        if let telar::DrawCommand::Rect { rect, .. } = command
+            && (rect.width - width).abs() < 0.01
+            && (rect.height - height).abs() < 0.01
+        {
+            found.get_or_insert(telar::transform_clip_rect(matrix, *rect));
+        }
+    });
+    found.expect("the switch is drawn")
+}
+
+fn switch_row(tree: &ComponentList) -> Rect {
+    let _ = tree;
+    exposed_named_by(Role::MenuItemCheckBox)
+}
+
+fn exposed_named_by(role: Role) -> Rect {
+    let exposed = focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == role)
+        .expect("the row is exposed");
+    ui_core::visible_rect(exposed.node).expect("the row is laid out")
+}
+
+/// A switch stands where a tick would not: the labels of a panel with one keep the x they have without.
+#[test]
+fn a_switch_row_leaves_the_tick_column_unclaimed() {
+    let (tree, _, _) = switching(false);
+    let flush = text_rect(&tree, "Modo").x;
+    assert_eq!(flush, text_rect(&tree, "Reducir").x, "the labels are flush");
+    let (ticked, _, _) = switching(true);
+    assert!(
+        text_rect(&ticked, "Modo").x > flush,
+        "a tick still reserves its column: {} vs {}",
+        text_rect(&ticked, "Modo").x,
+        flush
+    );
+}
+
+/// The switch sits at the end of the row, inside it, and is not a control of its own.
+#[test]
+fn a_switch_row_draws_its_switch_at_the_end_and_names_it_once() {
+    let (tree, _, _) = switching(false);
+    let row = switch_row(&tree);
+    let track = track_rect(&tree);
+    assert!(track.x + track.width <= row.x + row.width);
+    assert!(
+        track.x > text_rect(&tree, "Reducir").x,
+        "the switch follows the label"
+    );
+    let checkboxes: Vec<_> = focus::exposed()
+        .into_iter()
+        .filter(|exposed| exposed.role == Role::MenuItemCheckBox)
+        .collect();
+    assert_eq!(checkboxes.len(), 1);
+    assert_eq!(checkboxes[0].toggled, Some(false));
+    assert!(
+        focus::exposed()
+            .iter()
+            .all(|exposed| exposed.role != Role::Switch),
+        "the drawn switch is hidden from readers"
+    );
+}
+
+/// Click, Enter and Space each flip the setting, and none of them shuts the panel: it is a setting, not an action.
+#[test]
+fn a_switch_row_toggles_without_closing_the_panel() {
+    let (mut tree, on, said) = switching(false);
+    let (x, y) = centre(switch_row(&tree));
+    route(&mut tree, &press(x, y));
+    route(&mut tree, &release(x, y));
+    settle(&tree);
+    assert!(on.get(), "a click switches it on");
+    route(&mut tree, &moved(x, y));
+    settle(&tree);
+
+    route(&mut tree, &named(NamedKey::Enter));
+    settle(&tree);
+    assert!(!on.get(), "Enter switches it off");
+
+    route(&mut tree, &named(NamedKey::Space));
+    settle(&tree);
+    assert!(on.get(), "Space switches it on");
+
+    assert!(
+        said.borrow().is_empty(),
+        "the panel was never asked to close: {:?}",
+        said.borrow()
+    );
+    assert_eq!(panels().len(), 1);
+    let checkbox = focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::MenuItemCheckBox)
+        .expect("the row is exposed");
+    assert_eq!(checkbox.toggled, Some(true));
+
+    route(&mut tree, &named(NamedKey::Escape));
+    assert_eq!(*said.borrow(), vec!["cerrar"], "Escape still closes it");
+}
+
+/// The track and knob follow the control size in force, as a standalone switch does.
+#[test]
+fn a_switch_row_scales_with_the_control_size() {
+    let (tree, _, _) = switching(false);
+    let regular = track_rect(&tree);
+    telar::set_control_size(telar::ControlSize::Large);
+    let (tree, _, _) = switching(false);
+    let large = track_rect(&tree);
+    telar::set_control_size(telar::ControlSize::Regular);
+    let scale = telar::ControlSize::Large.scale();
+    assert_eq!(
+        (large.width, large.height),
+        (regular.width * scale, regular.height * scale)
+    );
+}
+
+/// In a right-to-left region the switch is at the row's left edge, its logical end.
+#[test]
+fn a_switch_row_puts_its_switch_at_the_logical_end_in_a_right_to_left_region() {
+    telar::set_direction(telar::Direction::Rtl);
+    let (tree, _, _) = switching(false);
+    let row = switch_row(&tree);
+    let track = track_rect(&tree);
+    assert!(track.x < row.x + row.width / 2.0, "{track:?} in {row:?}");
+    assert!(
+        text_rect(&tree, "Reducir").x >= track.x + track.width,
+        "the label is on the switch's right"
+    );
+    telar::set_direction(telar::Direction::Ltr);
+}

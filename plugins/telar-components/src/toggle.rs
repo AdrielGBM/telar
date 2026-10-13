@@ -54,16 +54,43 @@ impl ToggleTokens {
     }
 }
 
-fn knob_box() -> LayoutStyle {
-    let knob = ToggleTokens::current().knob();
+/// The two lengths a switch is drawn from, at the control size in force: the knob's diameter and the space round it inside the track.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SwitchSize {
+    pub knob: f32,
+    pub inset: f32,
+}
+
+impl SwitchSize {
+    /// A standalone switch's: the knob and inset its [`ToggleTokens`] name.
+    pub(crate) fn control() -> Self {
+        let tokens = ToggleTokens::current();
+        Self {
+            knob: tokens.knob(),
+            inset: tokens.inset(),
+        }
+    }
+
+    /// A switch at the end of a row: as tall as the tick column's icon, so a switch row stands as tall as a ticked one, with the knob taking what the inset leaves.
+    pub(crate) fn row() -> Self {
+        let inset = ToggleTokens::current().inset();
+        Self {
+            knob: (shared::icon_size() - inset * 2.0).max(0.0),
+            inset,
+        }
+    }
+}
+
+fn knob_box(size: fn() -> SwitchSize) -> LayoutStyle {
+    let knob = size().knob;
     LayoutStyle::new().width(knob).height(knob)
 }
 
-fn track_box() -> LayoutStyle {
-    let tokens = ToggleTokens::current();
-    let (knob, inset) = (tokens.knob(), tokens.inset());
+fn track_box(size: fn() -> SwitchSize) -> LayoutStyle {
+    let SwitchSize { knob, inset } = size();
     LayoutStyle::new()
         .flex_row()
+        .flex_shrink(0.0)
         .width(knob * 2.0 + inset * 2.0)
         .height(knob + inset * 2.0)
         .padding_all(inset)
@@ -77,6 +104,45 @@ fn track_fill(on: bool, color: &Reactive<Color>) -> Color {
     } else {
         shared::pressed_wash()
     }
+}
+
+/// The drawing of a switch, shared by [`toggle`] and a menu row's switch: a pill track whose knob sits at the start while `on` reads false and at the end while it reads true, the track filling with `color` (the theme's accent when unset) while on.
+pub(crate) fn switch_track(
+    on: impl Fn() -> bool + Clone + 'static,
+    color: Reactive<Color>,
+    style: Option<SurfaceAmendment>,
+    size: fn() -> SwitchSize,
+) -> Result<StyledContainer, LayoutError> {
+    let knob_on = on.clone();
+    let knob_color = color.clone();
+    let travel_on = on.clone();
+    let knob = StyledContainer::new(
+        knob_box(size),
+        move |r| {
+            let track = shared::over(track_fill(knob_on(), &knob_color), shared::surface());
+            RectStyle::default()
+                .with_fill(shared::thumb_on(track))
+                .with_radius(ToggleTokens::current().knob_radius(r))
+        },
+        vec![],
+    )?
+    .styled_by(move || knob_box(size))
+    .with_transform(move |r| {
+        let travel = if travel_on() { size().knob } else { 0.0 };
+        box_transform(r, 0.0, 1.0, 1.0, travel, 0.0)
+    });
+
+    Ok(StyledContainer::new(
+        track_box(size),
+        move |r| {
+            let rest = RectStyle::default()
+                .with_fill(track_fill(on(), &color))
+                .with_radius(ToggleTokens::current().track_radius(r));
+            amend_surface(rest, &style)
+        },
+        vec![box_item(knob)],
+    )?
+    .styled_by(move || track_box(size)))
 }
 
 /// A labelled switch: a pill track whose knob sits at the start (off) or the end (on) and whose track fills with the accent while on; tapping the row toggles its bound `checked` signal (and fires `on_toggle`). High-level sugar over the primitives (`box` + `on_press` + a reactive fill + a `translate`); lives in `telar-components`, not the kernel. `checked` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal), `Some` is caller-bound.
@@ -109,40 +175,7 @@ pub fn toggle(props: ToggleProps, _children: Children) -> Result<Box<dyn LayoutI
     } = props;
     let checked = checked.unwrap_or_else(|| signal(false));
 
-    let knob_on = checked;
-    let knob_color = color.clone();
-    let knob = StyledContainer::new(
-        knob_box(),
-        move |r| {
-            let track = shared::over(track_fill(knob_on.get(), &knob_color), shared::surface());
-            RectStyle::default()
-                .with_fill(shared::thumb_on(track))
-                .with_radius(ToggleTokens::current().knob_radius(r))
-        },
-        vec![],
-    )?
-    .styled_by(knob_box)
-    .with_transform(move |r| {
-        let travel = if knob_on.get() {
-            ToggleTokens::current().knob()
-        } else {
-            0.0
-        };
-        box_transform(r, 0.0, 1.0, 1.0, travel, 0.0)
-    });
-
-    let track_on = checked;
-    let track = StyledContainer::new(
-        track_box(),
-        move |r| {
-            let rest = RectStyle::default()
-                .with_fill(track_fill(track_on.get(), &color))
-                .with_radius(ToggleTokens::current().track_radius(r));
-            amend_surface(rest, &style)
-        },
-        vec![box_item(knob)],
-    )?
-    .styled_by(track_box);
+    let track = switch_track(move || checked.get(), color, style, SwitchSize::control)?;
 
     let toggle_on = checked;
     let announced = checked;

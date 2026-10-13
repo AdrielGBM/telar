@@ -15,6 +15,7 @@ use telar::{
 };
 
 use crate::shared::{self, shown_chord};
+use crate::toggle::{SwitchSize, switch_track};
 use crate::type_ahead::TypeAhead;
 
 /// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them read as secondary without becoming a second colour a theme has to answer for.
@@ -394,6 +395,11 @@ pub struct ItemProps {
     /// With `checked`, makes the row one of a set of choices only one of which is on — a mode, a size — rather than a tick of its own, and a reader is told so.
     #[props(default)]
     pub radio: bool,
+    /// Draws a switch at the end of the row instead of a tick at its start — for a setting that is on or off rather than an action, where a tick's column would indent every label of the panel. The row does not claim the tick column, is announced as a checkbox of the menu with this state, and keeps one name whether it is on or off.
+    ///
+    /// Like `checked`, it only reads the state: flip it in `on_press`. Unlike every other row, committing it (click, Enter or Space) leaves a menu open, because a setting is changed and looked at, not chosen; Escape and a press outside still close it. Takes the place of `checked` when both are given.
+    #[props(some, into, default)]
+    pub switch: Option<Reactive<bool>>,
     /// Trailing text, quiet: a count, a units suffix, the value a setting holds. `Option` for the same reason as [`checked`](Self::checked).
     #[props(some, into, default)]
     pub hint: Option<Reactive<String>>,
@@ -421,6 +427,7 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         disabled,
         checked,
         radio,
+        switch,
         hint,
         shortcut,
         on_press,
@@ -434,7 +441,14 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         return bare;
     }
 
-    let mark = match (&checked, radio) {
+    let checked = match switch {
+        Some(_) => None,
+        None => checked,
+    };
+    let mark = match (
+        checked.as_ref().or(switch.as_ref()),
+        radio && switch.is_none(),
+    ) {
         (None, _) => Mark::None,
         (Some(_), false) => Mark::Tick,
         (Some(_), true) => Mark::Choice,
@@ -477,11 +491,23 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         let shown = Reactive::of(move || shown_chord(&shortcut.get()));
         content.push(box_item(hint_text(shown, &list)?));
     }
+    if let Some(on) = &switch {
+        let on = on.clone();
+        let track = switch_track(
+            move || on.get(),
+            Reactive::of(|| Color::TRANSPARENT),
+            None,
+            SwitchSize::row,
+        )?
+        .a11y_hidden();
+        content.push(box_item(track));
+    }
 
+    let switching = switch.is_some();
     let commit: Rc<dyn Fn()> = {
         let list = list.clone();
         Rc::new(move || {
-            if let (Some(ctx), Some(i)) = (&list, index) {
+            if let (false, Some(ctx), Some(i)) = (switching, &list, index) {
                 ctx.pick(i);
             }
             if let Some(cb) = &on_press {
@@ -509,7 +535,7 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         None => row,
     };
     // The tick is drawn for the eye; a reader hears the state instead, and the row keeps one name whether it is ticked or not.
-    let row = match checked {
+    let row = match checked.or(switch) {
         Some(ticked) => row.toggled(move || ticked.get()),
         None => row,
     };

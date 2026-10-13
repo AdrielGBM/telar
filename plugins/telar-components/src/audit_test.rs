@@ -667,6 +667,16 @@ fn view_rows() -> Children {
                 Children::default(),
             )?,
         );
+        slots.push(
+            None,
+            item(
+                ItemProps::props()
+                    .label("Reduce motion")
+                    .switch(false)
+                    .build(),
+                Children::default(),
+            )?,
+        );
         Ok(slots)
     })
 }
@@ -711,6 +721,38 @@ async fn an_open_menu_too_long_for_the_page_adds_no_violations() {
         Some(trigger.id),
         "Escape gives the keyboard back to the trigger"
     );
+    focus::clear();
+    render();
+}
+
+/// A row with a switch is a checkbox of the menu that says whether it is on; the switch drawn at its end is for the eye only, and the menu with it open adds no violations.
+#[cfg(feature = "overlays")]
+#[wasm_bindgen_test]
+async fn an_open_menu_with_a_switch_row_adds_no_violations() {
+    let trigger = focus::exposed()
+        .into_iter()
+        .filter(|exposed| exposed.role == Role::Button && exposed.expanded.is_some())
+        .nth(1)
+        .expect("the View menu's trigger is on the page");
+    focus::request(trigger.id);
+    key(telar::NamedKey::ArrowDown);
+    let host = render();
+    let row = host
+        .query_selector(r#"[role="menuitemcheckbox"][aria-checked="false"]"#)
+        .expect("a valid selector")
+        .expect("the switch row says it is a checkbox that is off");
+    assert_eq!(
+        row.text_content().as_deref().map(str::trim),
+        Some("Reduce motion")
+    );
+    assert!(
+        row.query_selector(r#"[role="switch"]"#)
+            .expect("a valid selector")
+            .is_none(),
+        "the drawn switch is not offered to a reader"
+    );
+    assert_clean(&host, "with a switch row in an open menu").await;
+    key(telar::NamedKey::Escape);
     focus::clear();
     render();
 }

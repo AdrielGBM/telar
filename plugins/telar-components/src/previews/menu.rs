@@ -87,6 +87,33 @@ fn view_menu(chosen: RwSignal<usize>, rulers: RwSignal<bool>) -> Children {
     })
 }
 
+fn settings_menu(chosen: RwSignal<usize>, motion: RwSignal<bool>, contrast: RwSignal<bool>) -> Children {
+    sample::children(move || {
+        let switch = |label: &'static str, on: RwSignal<bool>| {
+            item(
+                ItemProps::props()
+                    .label(label)
+                    .switch(Reactive::of(move || on.get()))
+                    .on_press(Rc::new(move || on.set(!on.get())))
+                    .build(),
+                Children::default(),
+            )
+        };
+        Ok(vec![
+            submenu(
+                SubmenuProps::props()
+                    .label("Theme")
+                    .hint(Reactive::of(move || THEMES[chosen.get()].to_string()))
+                    .build(),
+                choices(chosen),
+            )?,
+            separator(SeparatorProps::props().build(), Children::default())?,
+            switch("Reduce motion", motion)?,
+            switch("High contrast", contrast)?,
+        ])
+    })
+}
+
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(menu: MenuProps, "Default", |p| {
@@ -147,6 +174,31 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_toggled(by_role(Role::MenuItemRadio).containing("Dark"), true)?;
             canvas.click(by_role(Role::MenuItemRadio).containing("Light"))?;
             canvas.expect_absent(by_role(Role::MenuItemRadio))
+        }),
+        preview!(menu: MenuProps, "Switches", |p| {
+            let chosen = p.signal("theme", 0usize);
+            let motion = p.signal("motion", false);
+            let contrast = p.signal("contrast", true);
+            menu(
+                MenuProps::props().label(p.arg("label", "Settings")).build(),
+                settings_menu(chosen, motion, contrast),
+            )
+        })
+        .title("Overlays/Menu")
+        .layout(Layout::Padded)
+        .matrix(Matrix::Named("themes"))
+        .tags(&["stateful"])
+        .play(|canvas| {
+            let settings = by_role(Role::Button).named("Settings");
+            let motion = by_role(Role::MenuItemCheckBox).containing("Reduce motion");
+            canvas.click(settings)?;
+            canvas.expect_toggled(motion.clone(), false)?;
+            canvas.click(motion.clone())?;
+            canvas.expect_toggled(motion.clone(), true)?;
+            canvas.expect(by_role(Role::MenuItemCheckBox).containing("High contrast"))?;
+            canvas.hover(motion.clone())?;
+            canvas.press(Key::Named(NamedKey::Enter))?;
+            canvas.expect_toggled(motion, false)
         }),
     ]
 }

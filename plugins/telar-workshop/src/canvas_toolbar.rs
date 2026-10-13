@@ -251,7 +251,7 @@ trait Setting {
     }
 }
 
-/// A setting turned on and off: an icon button pressed while on, or a menu row ticked while on.
+/// A setting turned on and off: an icon button pressed while on, or a menu row with a switch.
 struct Switch {
     icon: telar_icons::IconName,
     name: &'static str,
@@ -302,7 +302,7 @@ impl Setting for Switch {
         let row = item(
             ItemProps::props()
                 .label(self.label())
-                .checked(self.is_on())
+                .switch(self.is_on())
                 .on_press(Rc::clone(&self.flip))
                 .build(),
             Children::default(),

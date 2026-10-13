@@ -315,6 +315,12 @@ fn the_preview_settings_menu_sets_the_environment_of_every_canvas() {
     workshop.click(Role::Button, "Settings");
     workshop.click(Role::MenuItemCheckBox, "High contrast");
     assert_eq!(workshop.settings().high_contrast, Some(true));
+    assert!(
+        workshop
+            .find(Role::MenuItemCheckBox, "High contrast")
+            .is_some(),
+        "a switch row leaves the menu open"
+    );
 }
 
 const WORKSPACE: &str = "main Workspace";

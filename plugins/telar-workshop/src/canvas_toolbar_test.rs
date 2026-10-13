@@ -1,11 +1,12 @@
 use telar::preview::{Layout, PreviewCtx, PreviewEntry};
-use telar::testing::{centre, mount, press, release, route, texts};
+use telar::testing::{centre, mount, named as named_key, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Color, ColorScheme, ComponentList, Container, DrawCommand,
-    LayoutError, LayoutItem, LayoutStyle, LocalApp, Rect, Role, SystemPreferences, Text, TextStyle,
-    box_item, effect, for_each_with_matrix, high_contrast_override, reduced_motion_override,
-    set_high_contrast_override, set_reduced_motion_override, set_system_preferences,
-    transform_clip_rect, use_direction, use_high_contrast, use_locale, use_safe_area_insets,
+    LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect, Role, SystemPreferences, Text,
+    TextStyle, box_item, effect, for_each_with_matrix, high_contrast_override,
+    reduced_motion_override, set_high_contrast_override, set_reduced_motion_override,
+    set_system_preferences, transform_clip_rect, use_direction, use_high_contrast, use_locale,
+    use_safe_area_insets,
 };
 
 use crate::WorkshopApp;
@@ -115,6 +116,18 @@ impl Workshop {
         }
     }
 
+    fn find(&self, role: Role, name: &str) -> Option<AccessNode> {
+        self.runtime
+            .access_snapshot(&self.tree.commands())
+            .into_iter()
+            .find(|node| node.role == role && node.name == name)
+    }
+
+    fn key(&mut self, key: NamedKey) {
+        route(&mut self.tree, &named_key(key));
+        settle(&self.tree);
+    }
+
     fn choose(&mut self, select: &str, row: &str) {
         self.click(Role::ComboBox, select);
         self.click(Role::Option, row);
@@ -132,10 +145,15 @@ impl Workshop {
         self.click(Role::MenuItemRadio, row);
     }
 
-    /// Turns the preview setting `row` on or off from the top bar's settings menu.
+    /// Turns the preview setting `row` on or off from the top bar's settings menu, which stays open for it, and shuts the menu after.
     fn switch(&mut self, row: &str) {
         self.click(Role::Button, "Settings");
         self.click(Role::MenuItemCheckBox, row);
+        assert!(
+            self.find(Role::MenuItemCheckBox, row).is_some(),
+            "a switch leaves the menu open"
+        );
+        self.key(NamedKey::Escape);
     }
 
     fn rect_of(&self, needle: &str) -> Rect {
@@ -387,7 +405,7 @@ fn reduced_motion_is_switched_for_the_whole_application() {
         Some(true),
         "the row is announced as on, under the name it had while off"
     );
-    workshop.click(Role::Button, "Settings");
+    workshop.key(NamedKey::Escape);
     workshop.switch("Reduce motion");
     assert_eq!(reduced_motion_override(), None);
 }
