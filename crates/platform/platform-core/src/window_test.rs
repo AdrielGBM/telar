@@ -55,3 +55,13 @@ fn boxed_handler_forwards_accessibility() {
         "boxed handler should forward accessibility() and return non-empty tree"
     );
 }
+
+#[test]
+fn a_window_without_a_title_takes_the_fallback_and_a_titled_one_keeps_its_own() {
+    assert_eq!(WindowConfig::default().titled_or("my-app").title, "my-app");
+    let titled = WindowConfig {
+        title: "Portfolio".to_string(),
+        ..Default::default()
+    };
+    assert_eq!(titled.titled_or("my-app").title, "Portfolio");
+}

@@ -106,10 +106,20 @@ pub struct WindowConfig {
     pub is_always_on_top: bool,
 }
 
+impl WindowConfig {
+    /// This configuration, titled `fallback` when it names no title of its own.
+    pub fn titled_or(mut self, fallback: &str) -> Self {
+        if self.title.is_empty() {
+            self.title = fallback.to_owned();
+        }
+        self
+    }
+}
+
 impl Default for WindowConfig {
     fn default() -> Self {
         Self {
-            title: String::from("RSX App"),
+            title: String::new(),
             width: 800,
             height: 600,
             min_size: None,

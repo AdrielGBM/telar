@@ -43,6 +43,7 @@ where
             fonts: faces,
             font_family,
         } = cfg;
+        let window = window.titled_or(app_name);
         titles.insert(id, window.title.clone());
         window_configs.push((id, window));
         fonts.insert(

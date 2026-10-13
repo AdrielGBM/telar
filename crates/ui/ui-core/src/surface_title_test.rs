@@ -110,10 +110,10 @@ fn a_rule_that_reads_a_signal_is_followed() {
 
 #[test]
 fn the_app_can_rename_itself_and_a_second_opening_keeps_the_name() {
-    open_surface_title("RSX App", "RSX App");
+    open_surface_title("Untitled", "Untitled");
     set_app_title("Portfolio");
     assert_eq!(surface_title(), "Portfolio");
-    open_surface_title("RSX App", "Portfolio");
+    open_surface_title("Untitled", "Portfolio");
     assert_eq!(surface_title(), "Portfolio");
     assert_eq!(titles_announced(), ["Portfolio"]);
 }

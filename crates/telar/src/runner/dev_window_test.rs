@@ -28,11 +28,25 @@ fn the_app_window_config_wins_over_the_dev_overrides() {
         ..Default::default()
     };
     assert_eq!(
-        resolved_window(dev_window.clone(), &Opinionated).title,
+        resolved_window(dev_window.clone(), &Opinionated, "pkg").title,
         "from the app"
     );
     assert_eq!(
-        resolved_window(dev_window, &Indifferent).title,
+        resolved_window(dev_window, &Indifferent, "pkg").title,
         "from cargo telar dev"
+    );
+}
+
+#[test]
+fn a_window_nobody_titled_is_named_after_the_package() {
+    struct Silent;
+    impl App for Silent {
+        fn root(&self) -> Box<dyn ui_tree::Component> {
+            unreachable!("window resolution never builds the tree")
+        }
+    }
+    assert_eq!(
+        resolved_window(platform_core::WindowConfig::default(), &Silent, "my-app").title,
+        "my-app"
     );
 }

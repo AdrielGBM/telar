@@ -109,7 +109,7 @@ where
         fonts: faces,
         font_family,
     } = config;
-    let window = super::resolved_window(window, &app);
+    let window = super::resolved_window(window, &app, app_name);
     let location = location.or_else(|| platform.location_source().map(LocationBinding::new));
     let mut handler = build_app_handler::<P::Window, D>(
         Box::new(crate::app_runtime::LocalApp(app)),

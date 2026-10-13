@@ -23,6 +23,11 @@ pub fn install(name: impl Into<String>, provider: std::sync::Arc<dyn AppPathsPro
     });
 }
 
+/// The name the runner installed, or `None` before one has.
+pub fn name() -> Option<&'static str> {
+    INSTALLED.get().map(|installed| installed.name.as_str())
+}
+
 fn scoped(base: impl Fn(&dyn AppPathsProvider) -> Option<PathBuf>) -> Option<PathBuf> {
     let installed = INSTALLED.get()?;
     Some(base(installed.provider.as_ref())?.join(&installed.name))

@@ -79,7 +79,7 @@ pub fn prerender_page<A: App>(
         },
         &SystemFonts::from_provider(&NoPaths),
     ));
-    let window = super::resolved_window(window, &app);
+    let window = super::resolved_window(window, &app, app_name);
     let mut app = LocalApp(app);
     let surface = request.surface;
 

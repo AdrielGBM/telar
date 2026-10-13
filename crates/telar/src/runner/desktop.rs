@@ -84,7 +84,10 @@ impl SurfaceControl for WinitSurfaceControl {
 
 /// Opens a **full `App`** in its own top-level window on the already-running single-thread multi-surface runner — the app is moved in (so it may be `!Send`, e.g. hold `Rc` state), keeps the one shared reactive runtime, and gets its own `Surface` world and `on_frame` driven. Unlike `open_surface` (which hosts a content closure), this hosts a real `App`, so a caller can move a live sub-app (a detached tab, with its state and background work) into a window. Returns a token; dropping it, or the window's own close, tears the window down. Only meaningful while `run_app_windowed`/the multi-surface runner is running.
 pub fn open_window<A: App>(app: A) -> SurfaceToken {
-    let window_config = app.window_config().unwrap_or_default();
+    let window_config = app
+        .window_config()
+        .unwrap_or_default()
+        .titled_or(services_core::app_paths::name().unwrap_or_default());
     let paths: Arc<dyn AppPathsProvider> = Arc::new(DesktopPathsProvider);
     #[cfg(feature = "dialogs")]
     platform_desktop::DesktopFileDialogs::install();
@@ -122,7 +125,7 @@ pub fn run_app_windowed<A: App>(config: AppConfig, app: A, app_name: &str) {
         }
     };
     // The app's own window_config (title/size/decorations) wins over the AppConfig default.
-    let window = app.window_config().unwrap_or_else(|| config.window.clone());
+    let window = super::resolved_window(config.window.clone(), &app, app_name);
     let config = AppConfig { window, ..config };
     let app = RefCell::new(Some(app));
     let result = super::run_multi_with_platform(

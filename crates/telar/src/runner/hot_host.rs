@@ -79,6 +79,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     if let Some(custom) = initial_app.window_config() {
         window = custom;
     }
+    let window = window.titled_or(app_name);
     // Share the one field literal with `run_with_platform` (via build_app_handler); only the hot-reload receiver differs from a normal single-window handler.
     let mut handler = build_app_handler::<WinitWindow, D>(
         Box::new(initial_app),

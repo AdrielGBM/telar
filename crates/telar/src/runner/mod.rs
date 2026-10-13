@@ -47,8 +47,11 @@ mod web;
 fn resolved_window<A: crate::app::App + ?Sized>(
     from_config: platform_core::WindowConfig,
     app: &A,
+    app_name: &str,
 ) -> platform_core::WindowConfig {
-    app.window_config().unwrap_or(from_config)
+    app.window_config()
+        .unwrap_or(from_config)
+        .titled_or(app_name)
 }
 
 #[cfg(any(
