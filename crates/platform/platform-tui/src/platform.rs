@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use platform_core::{
-    Event, EventHandler, Key, ModifiersState, Platform, PlatformError, WindowConfig,
+    Event, EventHandler, Key, KeyboardConvention, ModifiersState, Platform, PlatformError,
+    WindowConfig,
 };
 
 use crate::map::Mapper;
@@ -78,6 +79,11 @@ fn is_ctrl_c(event: &Event) -> bool {
 
 impl Platform for TuiPlatform {
     type Window = TuiWindow;
+
+    /// A terminal keeps Command for itself on a Mac, so what reaches the app is Ctrl wherever it runs.
+    fn keyboard_convention(&self) -> KeyboardConvention {
+        KeyboardConvention::Pc
+    }
 
     fn run<H: EventHandler<TuiWindow>>(
         self,

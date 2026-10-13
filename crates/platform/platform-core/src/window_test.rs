@@ -39,6 +39,7 @@ impl EventHandler<TestWindow> for TestHandler {
             active_descendant: None,
             controls: None,
             has_popup: None,
+            keyboard_shortcut: None,
         }]
     }
 }

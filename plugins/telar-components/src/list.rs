@@ -14,7 +14,7 @@ use telar::{
     signal, use_context,
 };
 
-use crate::shared;
+use crate::shared::{self, shown_chord};
 use crate::type_ahead::TypeAhead;
 
 /// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them read as secondary without becoming a second colour a theme has to answer for.
@@ -394,9 +394,12 @@ pub struct ItemProps {
     /// With `checked`, makes the row one of a set of choices only one of which is on — a mode, a size — rather than a tick of its own, and a reader is told so.
     #[props(default)]
     pub radio: bool,
-    /// Trailing text, quiet: a keyboard shortcut, a count, a units suffix. `Option` for the same reason as [`checked`](Self::checked).
+    /// Trailing text, quiet: a count, a units suffix, the value a setting holds. `Option` for the same reason as [`checked`](Self::checked).
     #[props(some, into, default)]
     pub hint: Option<Reactive<String>>,
+    /// The keys that run the row's command without the menu, written portably as [`telar::Chord`] reads it (`"Mod+Z"`) and shown trailing, quiet, as the platform writes it: `⌘Z` on a Mac, `Ctrl+Z` elsewhere. Only shown: the application binds the keys itself.
+    #[props(some, into, default)]
+    pub shortcut: Option<Reactive<String>>,
     /// Fired when the row is committed, on top of whatever the enclosing list does with the index.
     #[props(some, default)]
     pub on_press: Option<Rc<dyn Fn()>>,
@@ -419,6 +422,7 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         checked,
         radio,
         hint,
+        shortcut,
         on_press,
     } = props;
     let list = use_context::<ListContext>();
@@ -469,6 +473,10 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
     if let Some(hint) = hint {
         content.push(box_item(hint_text(hint, &list)?));
     }
+    if let Some(shortcut) = shortcut.clone() {
+        let shown = Reactive::of(move || shown_chord(&shortcut.get()));
+        content.push(box_item(hint_text(shown, &list)?));
+    }
 
     let commit: Rc<dyn Fn()> = {
         let list = list.clone();
@@ -495,6 +503,10 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
             row
         }
         _ => row,
+    };
+    let row = match shortcut {
+        Some(chord) => row.keyboard_shortcut(move || chord.get()),
+        None => row,
     };
     // The tick is drawn for the eye; a reader hears the state instead, and the row keeps one name whether it is ticked or not.
     let row = match checked {

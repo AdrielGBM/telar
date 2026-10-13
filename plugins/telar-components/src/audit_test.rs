@@ -260,6 +260,7 @@ fn tools() -> Result<Box<dyn LayoutItem>, LayoutError> {
                 IconButtonProps::props()
                     .icon("lucide:search")
                     .label("Find")
+                    .shortcut("Mod+F")
                     .build(),
                 Children::default(),
             )?,
@@ -659,7 +660,10 @@ fn view_rows() -> Children {
         slots.push(
             None,
             item(
-                ItemProps::props().label("Rulers").build(),
+                ItemProps::props()
+                    .label("Rulers")
+                    .shortcut("Mod+Shift+R")
+                    .build(),
                 Children::default(),
             )?,
         );
@@ -707,6 +711,53 @@ async fn an_open_menu_too_long_for_the_page_adds_no_violations() {
         Some(trigger.id),
         "Escape gives the keyboard back to the trigger"
     );
+    focus::clear();
+    render();
+}
+
+/// A command that has keys says them as `aria-keyshortcuts` on the control that runs it, in the form UI Events names the keys, and keeps them in the row's name: the row of an open menu and an icon button.
+#[cfg(feature = "overlays")]
+#[wasm_bindgen_test]
+async fn a_shortcut_is_written_on_the_control_it_runs() {
+    telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
+    let host = render();
+    let find = host
+        .query_selector(r#"[role="toolbar"] [aria-label="Find"]"#)
+        .expect("a valid selector")
+        .expect("the icon button is in the document");
+    assert_eq!(
+        find.get_attribute("aria-keyshortcuts").as_deref(),
+        Some("Control+F")
+    );
+    let bold = host
+        .query_selector(r#"[role="toolbar"] [aria-label="Bold"]"#)
+        .expect("a valid selector")
+        .expect("the icon button without keys is in the document");
+    assert_eq!(bold.get_attribute("aria-keyshortcuts"), None);
+
+    let trigger = focus::exposed()
+        .into_iter()
+        .filter(|exposed| exposed.role == Role::Button && exposed.expanded.is_some())
+        .nth(1)
+        .expect("the View menu's trigger is on the page");
+    focus::request(trigger.id);
+    key(telar::NamedKey::ArrowDown);
+    let host = render();
+    let row = host
+        .query_selector(r#"[role="menuitem"][aria-keyshortcuts]"#)
+        .expect("a valid selector")
+        .expect("the row that has keys writes them");
+    assert_eq!(
+        row.get_attribute("aria-keyshortcuts").as_deref(),
+        Some("Control+Shift+R")
+    );
+    assert!(
+        row.text_content()
+            .is_some_and(|text| text.contains("Rulers") && text.contains("Ctrl+Shift+R")),
+        "the keys are still part of what the row says for readers that skip the attribute"
+    );
+    assert_clean(&host, "with a shortcut on a menu row").await;
+    key(telar::NamedKey::Escape);
     focus::clear();
     render();
 }

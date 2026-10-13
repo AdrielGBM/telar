@@ -1027,3 +1027,91 @@ fn the_popup_offset_scales_with_the_control_size_and_follows_the_tokens() {
     };
     assert_eq!(gap(ControlSize::Regular, own).0, 20.0);
 }
+
+/// A row's shortcut is written once, portably, and shown the way the platform writes it: on a PC, `Mod` is Ctrl and the keys are words joined with `+`.
+#[test]
+fn a_row_s_shortcut_shows_as_the_platform_writes_it() {
+    use telar::{DrawCommand, KeyboardConvention, NamedKey, set_keyboard_convention};
+
+    let open_with = |convention: KeyboardConvention| {
+        crate::test_support::fresh_layout_runtime();
+        set_keyboard_convention(convention);
+        telar::focus::clear();
+        let item = menu(
+            MenuProps::props().label("Edit").build(),
+            Children::new(|| {
+                let mut slots = Slots::new();
+                for (label, shortcut) in [("Undo", "Mod+Z"), ("Redo", "Mod+Shift+Z")] {
+                    slots.push(
+                        None,
+                        crate::list::item(
+                            crate::list::ItemProps::props()
+                                .label(label)
+                                .shortcut(shortcut)
+                                .build(),
+                            Children::default(),
+                        )?,
+                    );
+                }
+                Ok(slots)
+            }),
+        )
+        .unwrap();
+        compute_layout(
+            item.layout_node(),
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        let mut tree = ComponentList::new(item);
+        settle(&tree);
+        telar::focus::focus_next();
+        route(&mut tree, &named(NamedKey::ArrowDown));
+        settle(&tree);
+        let drawn: Vec<String> = tree
+            .commands()
+            .iter()
+            .filter_map(|c| match c {
+                DrawCommand::Text { text, .. } => Some(text.to_string()),
+                _ => None,
+            })
+            .collect();
+        let rows: Vec<_> = ui_core::accessibility::snapshot(&tree.commands())
+            .into_iter()
+            .filter(|node| node.role == telar::Role::MenuItem)
+            .collect();
+        let read: Vec<String> = rows.iter().map(|node| node.name.clone()).collect();
+        let keys: Vec<Option<String>> = rows
+            .into_iter()
+            .map(|node| node.keyboard_shortcut)
+            .collect();
+        (drawn, read, keys)
+    };
+
+    let (drawn, read, keys) = open_with(KeyboardConvention::Pc);
+    for shown in ["Ctrl+Z", "Ctrl+Shift+Z"] {
+        assert!(drawn.iter().any(|text| text == shown), "{shown}: {drawn:?}");
+    }
+    assert!(
+        read.iter().any(|name| name.contains("Ctrl+Z")),
+        "a reader hears the shortcut as it is shown: {read:?}"
+    );
+    assert_eq!(
+        keys,
+        [
+            Some("Control+Z".to_string()),
+            Some("Control+Shift+Z".to_string())
+        ],
+        "and is told the keys in the form a reader takes"
+    );
+
+    let (drawn, _, keys) = open_with(KeyboardConvention::Mac);
+    for shown in ["⌘Z", "⇧⌘Z"] {
+        assert!(drawn.iter().any(|text| text == shown), "{shown}: {drawn:?}");
+    }
+    assert_eq!(
+        keys,
+        [Some("Meta+Z".to_string()), Some("Shift+Meta+Z".to_string())],
+        "a Mac names Command, not Control"
+    );
+}

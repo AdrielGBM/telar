@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use platform_core::{
-    Event, EventHandler, FixedLocation, HistorySink, Location, LocationSource,
+    Event, EventHandler, FixedLocation, HistorySink, KeyboardConvention, Location, LocationSource,
     MultiSurfacePlatform, Platform, PlatformError, SurfaceId, SystemPreferences, Window,
     WindowConfig,
 };
@@ -117,6 +117,11 @@ impl HeadlessPlatform {
 impl Platform for HeadlessPlatform {
     type Window = HeadlessWindow;
 
+    /// The same on every machine, so a frame rendered headless does not depend on where it was rendered.
+    fn keyboard_convention(&self) -> KeyboardConvention {
+        KeyboardConvention::Pc
+    }
+
     fn location_source(&mut self) -> Option<Box<dyn LocationSource>> {
         let location = FixedLocation::new(std::mem::take(&mut self.location));
         Some(Box::new(match self.location_sink.take() {
@@ -196,6 +201,10 @@ impl Platform for HeadlessPlatform {
 
 impl MultiSurfacePlatform for HeadlessPlatform {
     type Window = HeadlessWindow;
+
+    fn keyboard_convention(&self) -> KeyboardConvention {
+        KeyboardConvention::Pc
+    }
 
     fn run_surfaces<H, F>(
         self,

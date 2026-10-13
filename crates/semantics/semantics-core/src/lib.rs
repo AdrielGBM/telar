@@ -386,6 +386,8 @@ pub struct Semantics {
     pub controls: Option<u64>,
     /// What the box opens: the menu a menu button drops, the list a combobox opens. `None` where it opens nothing.
     pub has_popup: Option<HasPopup>,
+    /// The chord that runs the same command as the box, in `aria-keyshortcuts` syntax. `None` where it declared none.
+    pub keyboard_shortcut: Option<Arc<str>>,
 }
 
 /// What an application said about a box, laid over what the widget derived.

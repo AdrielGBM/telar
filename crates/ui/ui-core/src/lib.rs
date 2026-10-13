@@ -113,8 +113,8 @@ pub use input::{Caret, Input, Underline};
 pub use input_region::{interactive_rects, visible_rect};
 pub use kept::kept;
 pub use keyboard::{
-    end_frame as end_keyboard_frame, key_held, key_pressed, modifiers, observe as observe_keyboard,
-    reset as reset_keyboard, shortcut_key,
+    chord_pressed, end_frame as end_keyboard_frame, key_held, key_pressed, modifiers,
+    observe as observe_keyboard, reset as reset_keyboard, shortcut_key,
 };
 pub use keynav::{KeyNav, KeyNavMove, key_nav_apply, key_nav_apply_grid};
 pub use layout_item::{Clip, ClipAxis, ClipPointer, ClippedItem, IntoClip, LayoutItem, box_item};

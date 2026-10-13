@@ -22,7 +22,7 @@ use std::time::Duration;
 use web_time::Instant;
 
 use geometry_core::{Rect, Size, Transform};
-use platform_core::{Event, SystemPreferences, WindowCommand};
+use platform_core::{Event, KeyboardConvention, SystemPreferences, WindowCommand};
 use renderer_core::{Color, DrawCommand};
 use ui_core::{EventResult, NodeId, SurfaceCanvas, composite_surface};
 use ui_tree::{Component, RenderNode};
@@ -337,8 +337,14 @@ pub unsafe fn __embed_on_frame(inst: *mut EmbedInstance, ctx: &mut AppCtx) -> Gu
 #[doc(hidden)]
 pub use platform_core::guest::{loaded as __embed_loaded, unloading as __embed_unloading};
 
-/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers. 7 is for every entry handing back a [`GuestResult`] instead of unwinding. 8 is for the table carrying the layout fingerprint. 9 is for `loaded` and `unloading`, which a host that unloads the guest calls first and last.
-pub const TELAR_EMBED_ABI: u32 = 9;
+/// Installs the convention the host matches shortcuts in as the guest's own, which left alone answers for the system the guest was compiled on.
+#[doc(hidden)]
+pub fn __embed_set_keyboard_convention(convention: KeyboardConvention) -> GuestResult<()> {
+    guest_call(|| platform_core::set_keyboard_convention(convention))
+}
+
+/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers. 7 is for every entry handing back a [`GuestResult`] instead of unwinding. 8 is for the table carrying the layout fingerprint. 9 is for `loaded` and `unloading`, which a host that unloads the guest calls first and last. 10 is for `set_keyboard_convention`, which the host calls before it creates an instance.
+pub const TELAR_EMBED_ABI: u32 = 10;
 
 /// The fingerprint of the layout of what crosses by value, which a guest reports in its table beside the version: a host and a guest built with different features or dependencies disagree about the shape of an event or a draw command without the table having changed at all.
 pub const EMBED_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
@@ -348,6 +354,7 @@ pub const EMBED_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
     DrawCommand,
     Event,
     GuestPanic,
+    KeyboardConvention,
     SystemPreferences,
     WindowCommand,
     Duration,
@@ -390,6 +397,7 @@ pub struct EmbedVTable {
     pub on_frame: unsafe extern "Rust" fn(*mut EmbedInstance, &mut AppCtx) -> GuestResult<()>,
     pub loaded: unsafe extern "Rust" fn() -> GuestResult<()>,
     pub unloading: unsafe extern "Rust" fn() -> GuestResult<()>,
+    pub set_keyboard_convention: unsafe extern "Rust" fn(KeyboardConvention) -> GuestResult<()>,
 }
 
 /// Exports a guest cdylib's one FFI symbol, the `_rsx_embed_vtable`. `$factory` is any `Fn(&[String]) -> Box<dyn EmbeddedApp>` — invoked once per instance with the launch args.
@@ -437,6 +445,7 @@ macro_rules! embed {
                 on_frame: $crate::__embed_on_frame,
                 loaded: $crate::__embed_loaded,
                 unloading: $crate::__embed_unloading,
+                set_keyboard_convention: $crate::__embed_set_keyboard_convention,
             }
         };
     };
@@ -518,7 +527,7 @@ mod host {
     }
 
     impl LoadedEmbed {
-        /// Tells a guest loaded from a library that it will be unloaded, creates one instance through `vtable` and seeds it with the host's system preferences.
+        /// Hands the guest the host's keyboard convention, creates one instance through `vtable` and seeds it with the host's system preferences.
         pub(crate) fn start(
             vtable: EmbedVTable,
             args: &[String],
@@ -527,6 +536,7 @@ mod host {
             if lib.is_some() {
                 unsafe { (vtable.loaded)() }?;
             }
+            unsafe { (vtable.set_keyboard_convention)(platform_core::keyboard_convention()) }?;
             let inst = unsafe { (vtable.create)(args) }?;
             let embed = Self {
                 inst,

@@ -3,9 +3,13 @@
 //! Key events are broadcast to every widget (see `dispatch_container_event`), so focus is *self-filtering*: a widget handles a key only when [`is_key_target`] holds for its id — there is no central router. Focus is a reactive signal, so a widget that reads [`current`]/[`is_focused`] inside its `view()` re-renders when focus moves (e.g. to show or hide its caret). State is per-surface (each surface owns its own focus via [`FocusContext`], activated by the runner), so focus never crosses windows; preserving focus across a hot-reload dylib swap is out of scope.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
 use layout_core::NodeId;
-use platform_core::{ConsumedKeys, Key, ModifiersState, NamedKey, NumericValue, Orientation};
+use platform_core::{
+    Chord, ConsumedKeys, Key, ModifiersState, NamedKey, NumericValue, Orientation,
+    keyboard_convention,
+};
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::Focusable;
 use rustc_hash::FxHashSet;
@@ -823,6 +827,7 @@ pub fn set_orientation(id: FocusId, orientation: Orientation) {
 struct Outline {
     expanded: Option<Rc<dyn Fn() -> bool>>,
     has_popup: Option<HasPopup>,
+    shortcut: Option<Rc<dyn Fn() -> String>>,
     position: Option<SetPosition>,
 }
 
@@ -841,6 +846,16 @@ pub fn set_has_popup(id: FocusId, popup: HasPopup) {
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.outline.has_popup = Some(popup);
+        }
+    });
+}
+
+/// Declares the chord that runs the command `id` runs, written as [`Chord`] reads it and re-read whenever what it reads changes, so a reader is told the key even where it is not part of the control's name.
+pub fn set_keyboard_shortcut(id: FocusId, read: impl Fn() -> String + 'static) {
+    let read: Rc<dyn Fn() -> String> = Rc::new(read);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.outline.shortcut = Some(read);
         }
     });
 }
@@ -894,6 +909,8 @@ pub struct Exposed {
     pub expanded: Option<bool>,
     /// What it opens; `None` for a control that opens nothing.
     pub has_popup: Option<HasPopup>,
+    /// The chord that runs the same command, in `aria-keyshortcuts` syntax; `None` where it declared none or what it declared names no chord.
+    pub keyboard_shortcut: Option<Arc<str>>,
     pub position: Option<SetPosition>,
 }
 
@@ -976,6 +993,11 @@ pub fn exposed() -> Vec<Exposed> {
                 orientation,
                 expanded: outline.expanded.as_ref().map(|read| read()),
                 has_popup: outline.has_popup,
+                keyboard_shortcut: outline
+                    .shortcut
+                    .as_ref()
+                    .and_then(|read| aria_shortcut(&read()))
+                    .map(Into::into),
                 position: outline.position,
             })
         })
@@ -1044,6 +1066,7 @@ pub(crate) fn describe(
     semantics.orientation = orientation_state(id);
     semantics.expanded = expanded_state(id);
     semantics.has_popup = has_popup_state(id);
+    semantics.keyboard_shortcut = keyboard_shortcut_state(id).map(Into::into);
     semantics.position = position_state(id);
     semantics.active_descendant = active_descendant_state(id).and_then(node_of).map(u64::from);
     semantics.controls = controls_state(id).and_then(node_of).map(u64::from);
@@ -1204,6 +1227,16 @@ pub fn orientation_state(id: FocusId) -> Option<Orientation> {
 pub fn expanded_state(id: FocusId) -> Option<bool> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.outline.expanded.clone()))?;
     Some(read())
+}
+
+/// The chord `id` said runs its command, in `aria-keyshortcuts` syntax under the keyboard convention in force; `None` if it said none, or said text that names no chord.
+pub fn keyboard_shortcut_state(id: FocusId) -> Option<String> {
+    let read = with_focus(|s| s.entry(id).and_then(|e| e.outline.shortcut.clone()))?;
+    aria_shortcut(&read())
+}
+
+fn aria_shortcut(text: &str) -> Option<String> {
+    Some(Chord::parse(text).ok()?.aria(keyboard_convention()))
 }
 
 /// What `id` said it opens, if it said.

@@ -56,6 +56,7 @@ where
     let fonts = Arc::new(fonts);
     let titles = Arc::new(titles);
     let app_name = app_name.to_owned();
+    platform_core::set_keyboard_convention(platform.keyboard_convention());
 
     platform.run_surfaces(window_configs, move |id| {
         let app = app_factory(id);

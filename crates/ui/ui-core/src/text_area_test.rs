@@ -14,13 +14,11 @@ fn key(k: Key) -> Event {
     }
 }
 
+/// `k` with the primary modifier held: Command on a Mac, Ctrl elsewhere.
 fn chord(k: Key) -> Event {
     Event::KeyPressed {
         key: k,
-        modifiers: ModifiersState {
-            is_ctrl: true,
-            ..ModifiersState::default()
-        },
+        modifiers: platform_core::keyboard_convention().primary(),
         unmodified: None,
     }
 }

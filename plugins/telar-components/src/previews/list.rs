@@ -11,7 +11,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Rename"))
                     .disabled(p.arg("disabled", false))
                     .checked(p.arg("checked", false))
-                    .hint(p.arg("hint", "F2"))
+                    .shortcut(p.arg("shortcut", "F2"))
                     .build(),
                 Children::default(),
             )
@@ -24,9 +24,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_action("on_press", 1)
         }),
         preview!(group: GroupProps, "Grouped rows", |p| {
-            let row = |label: &'static str, hint: &'static str| {
+            let row = |label: &'static str, shortcut: &'static str| {
                 crate::list::item(
-                    ItemProps::props().label(label).hint(hint).build(),
+                    ItemProps::props().label(label).shortcut(shortcut).build(),
                     Children::default(),
                 )
             };
@@ -35,12 +35,12 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     GroupProps::props().label(p.arg("label", "Edit")).build(),
                     Children::default(),
                 )?,
-                row("Undo", "Ctrl+Z")?,
-                row("Redo", "Ctrl+Y")?,
+                row("Undo", "Mod+Z")?,
+                row("Redo", "Mod+Shift+Z")?,
                 separator(SeparatorProps::props().build(), Children::default())?,
                 group(GroupProps::props().label("View").build(), Children::default())?,
-                row("Zoom in", "Ctrl+=")?,
-                row("Zoom out", "Ctrl+-")?,
+                row("Zoom in", "Mod+=")?,
+                row("Zoom out", "Mod+-")?,
             ];
             Ok::<_, LayoutError>(Container::new(
                 LayoutStyle::new().flex_column().width(240.0),

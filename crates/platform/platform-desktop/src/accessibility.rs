@@ -87,6 +87,9 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
                 HasPopup::ListBox => AkHasPopup::Listbox,
             });
         }
+        if let Some(keys) = &node.keyboard_shortcut {
+            ak.set_keyboard_shortcut(keys.as_str());
+        }
         // AccessKit rejects a reference to a node the update does not carry.
         if let Some(item) = node
             .active_descendant

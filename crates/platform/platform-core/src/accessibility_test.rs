@@ -21,6 +21,7 @@ fn node(role: Role, name: &str) -> AccessNode {
         active_descendant: None,
         controls: None,
         has_popup: None,
+        keyboard_shortcut: None,
     }
 }
 
@@ -168,5 +169,16 @@ fn focus_is_read_on_the_row_a_focused_tree_s_cursor_rests_on() {
         transcript(&[tree, row(2, "src")]),
         "Files, tree, focused\nsrc, treeitem",
         "a cursor on a row that is not built leaves focus on the tree"
+    );
+}
+
+/// A control with a key that runs its command says so after its role and what it opens.
+#[test]
+fn a_control_with_a_shortcut_says_it() {
+    let mut undo = node(Role::MenuItem, "Undo");
+    undo.keyboard_shortcut = Some("Control+Z".to_string());
+    assert_eq!(
+        transcript(&[undo, node(Role::MenuItem, "Close")]),
+        "Undo, menuitem, shortcut Control+Z\nClose, menuitem"
     );
 }

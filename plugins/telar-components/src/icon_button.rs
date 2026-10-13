@@ -26,7 +26,7 @@ pub struct IconButtonProps {
     /// The button's name.
     #[props(into)]
     pub label: Reactive<String>,
-    /// The key binding that does the same thing, shown in the tooltip: `"Ctrl+K"`. Empty means none.
+    /// The key binding that does the same thing, written portably (`"Mod+K"`) and shown in the tooltip as the platform writes it. Empty means none.
     #[props(into, default)]
     pub shortcut: Reactive<String>,
     /// Makes the button a toggle that reads as pressed while this is true. Unset, it is a plain button and says nothing about being pressed.
@@ -160,6 +160,7 @@ pub fn icon_button(
         }
     };
     let name = label.clone();
+    let chord = shortcut.clone();
     let button = StyledContainer::new(
         shell(),
         move |_| rest(State::Rest, rest_cursor()),
@@ -177,6 +178,7 @@ pub fn icon_button(
         Some(_) => button.presented(Role::Button),
         None => button.control(Role::Button),
     };
+    let button = button.keyboard_shortcut(move || chord.get());
     let button = if pressed.is_some() {
         button.toggled(is_pressed)
     } else {

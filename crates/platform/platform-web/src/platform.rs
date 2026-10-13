@@ -177,6 +177,10 @@ impl Default for WebPlatform {
 impl Platform for WebPlatform {
     type Window = WebWindow;
 
+    fn keyboard_convention(&self) -> platform_core::KeyboardConvention {
+        crate::keyboard::keyboard_convention()
+    }
+
     fn location_source(&mut self) -> Option<Box<dyn platform_core::LocationSource>> {
         Some(Box::new(crate::location::WebLocation::new(
             self.config.location.clone(),

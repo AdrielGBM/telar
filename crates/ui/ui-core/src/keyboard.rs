@@ -7,7 +7,7 @@
 //!
 //! Both are answered by keeping the state as the events go past, which is what this does. The modifier half is fed by [`Event::ModifiersChanged`], which the platform layer re-sends on focus changes — so it stays right across the alt-tab-mid-chord case that reconstruction gets wrong.
 
-use platform_core::{Event, Key, ModifiersState};
+use platform_core::{Chord, Event, Key, ModifiersState};
 use rustc_hash::FxHashSet;
 use std::cell::RefCell;
 use std::mem::ManuallyDrop;
@@ -89,6 +89,15 @@ pub fn shortcut_key(key: &Key) -> Key {
         Some((pressed, unmodified)) if pressed == key => unmodified.clone(),
         _ => key.clone(),
     })
+}
+
+/// Whether the press that reported `key` is `chord`, with the modifiers held now. With Alt held it is matched on [`shortcut_key`], since the layout may have composed the key into another character.
+pub fn chord_pressed(chord: &Chord, key: &Key) -> bool {
+    let modifiers = modifiers();
+    match modifiers.is_alt {
+        true => chord.matches(&shortcut_key(key), modifiers),
+        false => chord.matches(key, modifiers),
+    }
 }
 
 /// Whether `key` went down during this frame. False for a key the OS is repeating, which is what makes it the one to drive a once-per-press action while [`key_held`] drives a continuous one.

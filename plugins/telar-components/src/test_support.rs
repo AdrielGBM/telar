@@ -1,11 +1,12 @@
 //! Setup every catalogue test starts from.
 
-/// A layout runtime with nothing in it and a measurer for the text these widgets contain.
+/// A layout runtime with nothing in it, a measurer for the text these widgets contain, and shortcuts shown as a PC shows them.
 ///
-/// The measurer is the half that is easy to forget: laying a control out asks how wide its label is, and outside a runner nobody has installed anything to answer.
+/// The measurer is the half that is easy to forget: laying a control out asks how wide its label is, and outside a runner nobody has installed anything to answer. The keyboard is pinned so a shortcut reads the same whichever machine runs the tests.
 pub(crate) fn fresh_layout_runtime() {
     telar::install_default_text_metrics();
     telar::reset_layout_runtime();
+    telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
 }
 
 /// Where each control in `role` is drawn now, in the order a reader meets them: after every transform and scroll between it and the surface.

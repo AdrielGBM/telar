@@ -8,6 +8,7 @@ pub mod access_audit;
 pub mod accessibility;
 pub mod app_ctx;
 pub mod asset_base;
+pub mod chord;
 pub mod consumed_keys;
 pub mod destination;
 pub mod dom_code;
@@ -32,6 +33,9 @@ pub use accessibility::{
 };
 pub use app_ctx::{AppCtx, RedrawWaker};
 pub use asset_base::{asset_url, set_asset_base};
+pub use chord::{
+    Chord, ChordError, KeyboardConvention, keyboard_convention, set_keyboard_convention,
+};
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};
 pub use destination::{Destination, IntoDestination, Uri, address_of, anchor, external, in_locale};
 pub use dom_code::unmodified_key_of_code;

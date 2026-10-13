@@ -27,7 +27,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             tooltip(
                 TooltipProps::props()
                     .text(p.arg("text", "Save"))
-                    .shortcut(p.arg("shortcut", "Ctrl+S"))
+                    .shortcut(p.arg("shortcut", "Mod+S"))
                     .description(p.arg("description", "Writes the file to disk."))
                     .side(side)
                     .color(p.arg("color", Color::TRANSPARENT))

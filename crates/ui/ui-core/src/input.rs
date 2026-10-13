@@ -66,7 +66,7 @@ impl Caret {
     }
 }
 
-/// A single-line editable text field bound to a `RwSignal<String>`. A base primitive: unstyled (no border or background — wrap it in a `box` for the look) and keyboard-driven. It requests focus on tap and, while focused, edits the bound signal from key events, drawing a caret at the insertion point. Selection (`Shift`+arrows/Home/End, `Ctrl+A`) with copy, cut and paste; IME composition is not yet supported. Drag-to-select waits on click-to-position, which this field does not have either.
+/// A single-line editable text field bound to a `RwSignal<String>`. A base primitive: unstyled (no border or background — wrap it in a `box` for the look) and keyboard-driven. It requests focus on tap and, while focused, edits the bound signal from key events, drawing a caret at the insertion point. Selection (`Shift`+arrows/Home/End, `Mod+A`) with copy, cut and paste on the primary modifier, Command on a Mac and Ctrl elsewhere; IME composition is not yet supported. Drag-to-select waits on click-to-position, which this field does not have either.
 pub struct Input {
     value: RwSignal<String>,
     home: HomeSurface,
@@ -289,6 +289,7 @@ impl Input {
         self.blink.wake();
         let mut text = self.value.get();
         let mut caret = self.caret_at(&text);
+        let command = mods.is_primary();
         let chord = mods.is_ctrl || mods.is_meta;
         // Set after the match so each arm can still read the selection it is replacing.
         let mut anchor = if mods.is_shift {
@@ -297,25 +298,25 @@ impl Input {
             None
         };
         match key {
-            Key::Char('a') | Key::Char('A') if chord => {
+            Key::Char('a') | Key::Char('A') if command => {
                 anchor = Some(0);
                 caret = text.len();
             }
-            Key::Char('c') | Key::Char('C') if chord => {
+            Key::Char('c') | Key::Char('C') if command => {
                 let Some(selected) = self.selected_text(&text) else {
                     return EventResult::Ignored;
                 };
                 services_core::set_clipboard_text(&selected);
                 return EventResult::Handled;
             }
-            Key::Char('x') | Key::Char('X') if chord => {
+            Key::Char('x') | Key::Char('X') if command => {
                 let Some(selected) = self.selected_text(&text) else {
                     return EventResult::Ignored;
                 };
                 services_core::set_clipboard_text(&selected);
                 caret = self.take_selection(&mut text).unwrap_or(caret);
             }
-            Key::Char('v') | Key::Char('V') if chord => {
+            Key::Char('v') | Key::Char('V') if command => {
                 let Some(pasted) = services_core::clipboard_text() else {
                     return EventResult::Ignored;
                 };

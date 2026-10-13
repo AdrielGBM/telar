@@ -26,12 +26,17 @@ pub use workbench::{
 use std::borrow::Cow;
 
 use telar::{
-    AccessNode, AccessViolation, DevAction, DevOverlay, DrawCommand, Event, Key, ModifiersState,
-    OverlayResponse, SegmentNodeInfo, Size,
+    AccessNode, AccessViolation, Chord, DevAction, DevOverlay, DrawCommand, Event, Key,
+    ModifiersState, OverlayResponse, SegmentNodeInfo, Size,
 };
 
 use meter::{Clock, FrameMeter};
 use overlay::Overlay;
+
+/// The chords the overlay answers, wherever the application runs: Ctrl rather than the primary modifier, so they never meet a Command shortcut of the application or the browser.
+pub(crate) const SWITCH_RENDERER_CHORD: &str = "Ctrl+Shift+B";
+pub(crate) const SHOW_PANEL_CHORD: &str = "Ctrl+Shift+D";
+pub(crate) const SHOW_INSPECTOR_CHORD: &str = "Ctrl+Shift+I";
 
 /// The dev overlay: an FPS badge and panel, the inspection panels and the build-error banner.
 ///
@@ -83,20 +88,18 @@ impl DevTools {
     }
 
     fn shortcut(&mut self, key: &Key, modifiers: ModifiersState) -> Option<DevAction> {
-        if !(modifiers.is_ctrl && modifiers.is_shift) {
-            return None;
-        }
-        match key {
-            Key::Char('b' | 'B') => Some(DevAction::ToggleBackend),
-            Key::Char('d' | 'D') => {
-                self.overlay()?.toggle_panel();
-                Some(DevAction::Redraw)
-            }
-            Key::Char('i' | 'I') => {
-                self.overlay()?.toggle_inspector();
-                Some(DevAction::Redraw)
-            }
-            _ => None,
+        let pressed =
+            |chord: &str| Chord::parse(chord).is_ok_and(|chord| chord.matches(key, modifiers));
+        if pressed(SWITCH_RENDERER_CHORD) {
+            Some(DevAction::ToggleBackend)
+        } else if pressed(SHOW_PANEL_CHORD) {
+            self.overlay()?.toggle_panel();
+            Some(DevAction::Redraw)
+        } else if pressed(SHOW_INSPECTOR_CHORD) {
+            self.overlay()?.toggle_inspector();
+            Some(DevAction::Redraw)
+        } else {
+            None
         }
     }
 }

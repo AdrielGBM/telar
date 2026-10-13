@@ -114,6 +114,62 @@ draws the ring for it with `StyledContainer::frames_focus_of(inner)`. `text_fiel
 `scrub_field` do. A bare `input` in `.rsx` is the unstyled kernel primitive and shows only its caret, so the
 box around it should frame it.
 
+## Shortcuts
+
+A shortcut is written once, portably, and shown and matched the way the platform it runs on does. `Chord`
+(in `telar-platform-core`, re-exported as `telar::Chord`) reads it from text: `"Mod+Z"`, `"Mod+Shift+Z"`,
+`"Alt+↑"`, `"F5"`, `"Ctrl++"` (a key that is itself `+` comes last). `Mod` is the primary modifier: Command
+on a Mac, Ctrl elsewhere. `Ctrl`, `Cmd` (or `Meta`, `Super`), `Alt` (or `Option`) and `Shift` name one key
+everywhere. A Mac's own symbols read back too, so `"⇧⌘Z"` is Shift+Command+Z.
+
+| Written | On a Mac | Elsewhere |
+| --- | --- | --- |
+| `Mod+Z` | ⌘Z | Ctrl+Z |
+| `Mod+Shift+Z` | ⇧⌘Z | Ctrl+Shift+Z |
+| `Alt+S` | ⌥S | Alt+S |
+| `Ctrl+Shift+D` | ⌃⇧D | Ctrl+Shift+D |
+| `Mod+Enter` | ⌘⏎ | Ctrl+Enter |
+
+`Chord`'s `Display` writes it the platform's way: a Mac's symbols in its order (⌃⌥⇧⌘) with nothing between
+them, and elsewhere words joined with `+` in the order Ctrl, Alt, Shift, Meta. `keys(convention)` gives the
+same one key at a time, which is what `kbd` puts on its caps.
+
+Matching follows the same rule. `Chord::matches(key, modifiers)` asks for exactly the chord's Ctrl, Alt and
+Command; a letter matches in either case with exactly the chord's Shift, and any other character matches
+whatever Shift it took to type it, so `?` needs no `Shift+`. `telar::chord_pressed(&chord, key)` matches the
+press a key handler was given against the modifiers held now, and with Alt held it reads the key with no
+modifier applied, since Option on a Mac types `†` for T. `ModifiersState::is_primary()` says whether the
+primary modifier is held, for a handler that asks without a chord.
+
+Which convention is in force is the platform's answer to `Platform::keyboard_convention`, installed before
+the app is built and read back with `telar::keyboard_convention()`:
+
+| Target | Convention |
+| --- | --- |
+| desktop | the operating system it was built for: Mac on macOS, PC elsewhere |
+| web | the system the browser says it runs on (`navigator.userAgentData.platform`, else `navigator.platform`), so a page shows ⌘ on a Mac and Ctrl+ on Windows. PC when the browser says neither |
+| TUI | PC: a terminal keeps Command for itself, so what reaches the app is Ctrl |
+| headless, snapshots | PC, so a frame does not depend on the machine that drew it |
+
+A hot-reloaded build and an embedded guest each carry their own copy of the convention, so the host hands
+over its own when it loads one, before the guest's app is built: a guest shows a shortcut the way its host
+matches it.
+
+The components that show a shortcut take it as that text and show it the platform's way: `item`'s
+`shortcut`, `kbd`'s `chord`, `tooltip`'s and `icon_button`'s `shortcut`, a tab's `.shortcut(…)` and a
+command palette entry's `with_shortcut(…)`. A reader hears the same text the row shows. Text that names no
+chord is shown as written.
+
+```text
+menu label:"Edit"
+    item label:"Undo" shortcut:"Mod+Z"
+    item label:"Redo" shortcut:"Mod+Shift+Z"
+```
+
+`item`'s `shortcut` only shows the keys; the application binds them itself, with `chord_pressed` in its key
+handler. A test pins what a shortcut shows with `telar::set_keyboard_convention`, which holds for the thread
+that calls it.
+
 ## Tests
 
 `crates/renderer/renderer-dom/src/keyboard_test.rs` checks this contract in a browser: which keys are

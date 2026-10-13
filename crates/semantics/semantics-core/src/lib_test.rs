@@ -295,3 +295,18 @@ fn only_a_role_less_box_around_exactly_one_control_lends_its_name() {
     assert!(!Role::Group.lends_name_to_control(false, 2));
     assert!(!Role::TabList.lends_name_to_control(false, 1));
 }
+
+#[test]
+fn the_shortcut_of_a_control_is_part_of_what_it_says() {
+    let bound = |keys: Option<&str>| Semantics {
+        keyboard_shortcut: keys.map(Into::into),
+        ..Semantics::of(Role::MenuItem)
+    };
+    assert_eq!(
+        Semantics::default().keyboard_shortcut,
+        None,
+        "a box has no shortcut until it says it does"
+    );
+    assert_ne!(bound(Some("Control+Z")), bound(None));
+    assert_ne!(bound(Some("Control+Z")), bound(Some("Meta+Z")));
+}

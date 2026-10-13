@@ -2486,3 +2486,55 @@ fn an_offset_ring_keeps_the_box_s_border_and_stands_inside_it() {
     assert_eq!(style.radius, renderer_core::BorderRadius::all(6.0));
     focus::release(id);
 }
+
+/// A control that runs the same command as a key says so in the form a reader takes, under the keyboard convention in force and re-read as what it reads changes; text that names no chord says nothing.
+#[test]
+fn a_control_says_the_keys_that_run_its_command() {
+    use platform_core::{KeyboardConvention, set_keyboard_convention};
+
+    focus::clear();
+    let chord = reactive_core::signal("Mod+Shift+Z".to_string());
+    let mut button = laid_out_box()
+        .control(focus::Role::Button)
+        .keyboard_shortcut(move || chord.get());
+    settle(&mut button);
+
+    set_keyboard_convention(KeyboardConvention::Pc);
+    assert_eq!(
+        semantics_of(&button).keyboard_shortcut.as_deref(),
+        Some("Control+Shift+Z")
+    );
+    assert_eq!(
+        focus::exposed()[0].keyboard_shortcut.as_deref(),
+        Some("Control+Shift+Z")
+    );
+    set_keyboard_convention(KeyboardConvention::Mac);
+    assert_eq!(
+        semantics_of(&button).keyboard_shortcut.as_deref(),
+        Some("Shift+Meta+Z")
+    );
+    set_keyboard_convention(KeyboardConvention::Pc);
+
+    chord.set("Alt+1".to_string());
+    assert_eq!(
+        semantics_of(&button).keyboard_shortcut.as_deref(),
+        Some("Alt+1")
+    );
+    chord.set(String::new());
+    assert_eq!(semantics_of(&button).keyboard_shortcut, None);
+    chord.set("not a chord".to_string());
+    assert_eq!(semantics_of(&button).keyboard_shortcut, None);
+
+    focus::clear();
+    let mut plain = laid_out_box().control(focus::Role::Button);
+    settle(&mut plain);
+    assert_eq!(semantics_of(&plain).keyboard_shortcut, None);
+
+    let mut unfocusable = laid_out_box().keyboard_shortcut(|| "Mod+K".to_string());
+    settle(&mut unfocusable);
+    assert_eq!(
+        semantics_of(&unfocusable).keyboard_shortcut,
+        None,
+        "a box with no focus id has no control to say it of"
+    );
+}

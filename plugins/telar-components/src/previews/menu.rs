@@ -10,15 +10,15 @@ use crate::menu_panel::{SubmenuProps, submenu};
 
 fn actions() -> Children {
     sample::children(|| {
-        let row = |label: &'static str, hint: &'static str| {
+        let row = |label: &'static str, shortcut: &'static str| {
             item(
-                ItemProps::props().label(label).hint(hint).build(),
+                ItemProps::props().label(label).shortcut(shortcut).build(),
                 Children::default(),
             )
         };
         Ok(vec![
-            row("New file", "Ctrl+N")?,
-            row("Open…", "Ctrl+O")?,
+            row("New file", "Mod+N")?,
+            row("Open…", "Mod+O")?,
             separator(SeparatorProps::props().build(), Children::default())?,
             item(
                 ItemProps::props().label("Close").disabled(true).build(),
@@ -64,11 +64,11 @@ fn view_menu(chosen: RwSignal<usize>, rulers: RwSignal<bool>) -> Children {
                 sample::children(|| {
                     Ok(vec![
                         item(
-                            ItemProps::props().label("Zoom in").hint("Ctrl+=").build(),
+                            ItemProps::props().label("Zoom in").shortcut("Mod+=").build(),
                             Children::default(),
                         )?,
                         item(
-                            ItemProps::props().label("Zoom out").hint("Ctrl+-").build(),
+                            ItemProps::props().label("Zoom out").shortcut("Mod+-").build(),
                             Children::default(),
                         )?,
                     ])

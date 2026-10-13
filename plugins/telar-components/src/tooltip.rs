@@ -10,7 +10,7 @@ use telar::{
 #[cfg(test)]
 use telar::Slots;
 
-use crate::shared;
+use crate::shared::{self, shown_chord};
 
 /// Leading for the description line, the only one that wraps (`leading-snug`).
 const DESCRIPTION_LEADING: f32 = 1.375;
@@ -67,7 +67,7 @@ const DESCRIPTION_RATIO: f32 = BUBBLE_RATIO * 0.92;
 pub struct TooltipProps {
     #[props(into, default)]
     pub text: Reactive<String>,
-    /// The binding that does the same thing, pushed to the far side of the first line. Empty means none.
+    /// The binding that does the same thing, written portably as [`telar::Chord`] reads it (`"Mod+S"`) and shown as the platform writes it (`⌘S` on a Mac, `Ctrl+S` elsewhere), pushed to the far side of the first line. Empty means none.
     ///
     /// A hint that names its own shortcut is how a keyboard gets learned — the pointer finds the control, and the bubble says which key would have got there first. Separate from `text` because it is *placed*, not worded: folded into the sentence it wraps with it and stops lining up down a toolbar.
     #[props(into, default)]
@@ -116,6 +116,7 @@ pub fn tooltip(
         stretch,
     } = props;
     let placement = placement_of(side);
+    let shortcut = Reactive::of(move || shown_chord(&shortcut.get()));
     let trigger_content = slots.take_default();
     let hovered = signal(false);
 

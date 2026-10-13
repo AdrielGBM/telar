@@ -194,6 +194,8 @@ pub(crate) struct Described {
     pub expanded: Option<bool>,
     /// What the box opens, beside whether it is open now.
     pub has_popup: Option<HasPopup>,
+    /// The chord that runs the same command as the box, in `aria-keyshortcuts` syntax.
+    pub keyboard_shortcut: Option<String>,
     pub position: Option<SetPosition>,
     /// The box that its cursor rests on, as the element says it. Written as nothing itself: it is resolved into [`active_descendant`](Self::active_descendant) once that box turns up inside this one, or inside the box it controls.
     pub descendant_box: Option<u64>,
@@ -265,6 +267,7 @@ impl Described {
                 self.current
                     .map(|current| aria_current(current).to_string()),
             ),
+            ("aria-keyshortcuts", self.keyboard_shortcut.clone()),
             ("aria-controls", self.controls.clone()),
             ("aria-activedescendant", self.active_descendant.clone()),
             ("aria-valuenow", self.value.map(|v| v.now.to_string())),
@@ -1325,6 +1328,7 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         orientation: semantics.orientation,
         expanded: semantics.expanded,
         has_popup: semantics.has_popup,
+        keyboard_shortcut: semantics.keyboard_shortcut.as_deref().map(str::to_string),
         position: semantics.position,
         descendant_box: semantics.active_descendant,
         active_descendant: None,

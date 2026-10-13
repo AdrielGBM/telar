@@ -56,6 +56,14 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     };
     #[cfg(feature = "shaper")]
     super::font_config::install_window_fonts(&fonts, paths.as_ref());
+    let platform = match WinitPlatform::try_new() {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::error!("Failed to create event loop: {e}");
+            std::process::exit(1);
+        }
+    };
+    platform_core::set_keyboard_convention(platform.keyboard_convention());
     let initial_app = match crate::hot::load_hot_app(std::path::Path::new(lib_path)) {
         Ok(app) => app,
         Err(e) => {
@@ -66,13 +74,6 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     let hot_rx = crate::hot::listen_hot_reload(port);
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
-    let platform = match WinitPlatform::try_new() {
-        Ok(p) => p,
-        Err(e) => {
-            tracing::error!("Failed to create event loop: {e}");
-            std::process::exit(1);
-        }
-    };
     #[cfg(feature = "hot-reload")]
     super::dev_window::apply_dev_window_overrides(&mut window);
     if let Some(custom) = initial_app.window_config() {

@@ -14,19 +14,19 @@ use crate::menu_panel::{SubmenuProps, submenu};
 
 fn rows() -> Children {
     sample::children(|| {
-        let row = |label: &'static str, hint: &'static str| {
+        let row = |label: &'static str, shortcut: &'static str| {
             item(
-                ItemProps::props().label(label).hint(hint).build(),
+                ItemProps::props().label(label).shortcut(shortcut).build(),
                 Children::default(),
             )
         };
         Ok(vec![
-            row("Cut", "Ctrl+X")?,
-            row("Copy", "Ctrl+C")?,
+            row("Cut", "Mod+X")?,
+            row("Copy", "Mod+C")?,
             item(
                 ItemProps::props()
                     .label("Paste")
-                    .hint("Ctrl+V")
+                    .shortcut("Mod+V")
                     .disabled(true)
                     .build(),
                 Children::default(),

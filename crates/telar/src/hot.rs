@@ -403,7 +403,7 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
     Ok(HotApp::start(exports, create, Some(lib)))
 }
 
-/// The platform services the host installed, handed to each library it loads: the library's copies of their stores start empty, so without them a reloaded app copies to no clipboard, opens no link, shows no file dialog and lays its text out in faces other than the ones the host draws it in.
+/// The platform services the host installed, handed to each library it loads: the library's copies of their stores start empty, so without them a reloaded app copies to no clipboard, opens no link, shows no file dialog, lays its text out in faces other than the ones the host draws it in, and shows and matches its shortcuts for the keyboard it was compiled for rather than the one the host's platform reports.
 ///
 /// The host's backends serve both sides, so a selection the clipboard owns outlives every library swapped in under it. In a build that shapes its own text the fonts are handed over too, as what they were loaded from, since a font database is not something two copies of the shaper can share.
 #[cfg(feature = "dev")]
@@ -412,6 +412,7 @@ pub struct HostServices {
     clipboard: Option<std::sync::Arc<dyn services_core::Clipboard>>,
     uri_opener: Option<std::sync::Arc<dyn services_core::UriOpener>>,
     file_dialogs: Option<std::sync::Arc<dyn services_core::FileDialogs>>,
+    keyboard_convention: platform_core::KeyboardConvention,
     #[cfg(feature = "shaper")]
     fonts: Option<renderer_core::FontSources>,
 }
@@ -433,6 +434,7 @@ impl HostServices {
                 std::sync::Arc::new(ShieldedFileDialogs(dialogs))
                     as std::sync::Arc<dyn services_core::FileDialogs>
             }),
+            keyboard_convention: platform_core::keyboard_convention(),
             #[cfg(feature = "shaper")]
             fonts: renderer_text::fonts::installed_sources(),
         }
@@ -440,6 +442,7 @@ impl HostServices {
 
     /// Installs each service on this side, as the host had it.
     pub fn install(self) {
+        platform_core::set_keyboard_convention(self.keyboard_convention);
         #[cfg(feature = "shaper")]
         if let Some(fonts) = self.fonts {
             renderer_text::fonts::install_sources(fonts);

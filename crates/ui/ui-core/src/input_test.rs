@@ -16,13 +16,11 @@ fn key(k: Key) -> Event {
     }
 }
 
+/// `k` with the primary modifier held: Command on a Mac, Ctrl elsewhere.
 fn chord(k: Key) -> Event {
     Event::KeyPressed {
         key: k,
-        modifiers: ModifiersState {
-            is_ctrl: true,
-            ..ModifiersState::default()
-        },
+        modifiers: platform_core::keyboard_convention().primary(),
         unmodified: None,
     }
 }
@@ -465,14 +463,7 @@ fn tap_focuses_and_ctrl_chord_is_ignored() {
         focus::is_focused(input.id),
         "a tap inside focuses the input"
     );
-    let paste = Event::KeyPressed {
-        key: Key::Char('v'),
-        modifiers: ModifiersState {
-            is_ctrl: true,
-            ..Default::default()
-        },
-        unmodified: None,
-    };
+    let paste = chord(Key::Char('v'));
     assert_eq!(input.on_event(&paste), EventResult::Ignored);
     assert_eq!(value.get(), "hi");
 }

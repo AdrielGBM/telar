@@ -1,17 +1,18 @@
 //! [`kbd`]: a key cap per key of a shortcut, for hints beside a command.
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, JustifyContent, LayoutError,
+    Accessible, AlignItems, Border, BorderRadius, Children, Chord, JustifyContent, LayoutError,
     LayoutItem, LayoutStyle, NodeId, Props, Reactive, ReactiveList, RectStyle, ShapeStyle,
-    StyledContainer, SurfaceAmendment, Text, TextWrap, amend_surface, box_item, style_follows,
+    StyledContainer, SurfaceAmendment, Text, TextWrap, amend_surface, box_item,
+    keyboard_convention, style_follows,
 };
 
-use crate::shared;
+use crate::shared::{self, shown_chord};
 
 /// The keys of a shortcut, each on its own cap.
 #[derive(Props)]
 pub struct KbdProps {
-    /// The chord, keys joined by `+`: `"Ctrl+K"`, `"Shift+Alt+P"`. A key that is itself `+` is written last, `"Ctrl++"`. `Mod` is the platform's command key: `⌘` on macOS, `Ctrl` elsewhere.
+    /// The chord, written portably as [`Chord`] reads it: `"Mod+K"`, `"Alt+Shift+P"`, `"Ctrl++"`. Its caps are the keys the platform names, `⌘` `K` on a Mac and `Ctrl` `K` elsewhere, and text that names no chord is one cap, as written.
     #[props(into, default)]
     pub chord: Reactive<String>,
     /// Amends the paint of every cap — the chord's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`KbdTokens`] is the right instrument instead.
@@ -52,13 +53,13 @@ pub fn kbd(props: KbdProps, _children: Children) -> Result<Box<dyn LayoutItem>, 
     let caps = ReactiveList::with_style(
         caps_row(),
         move || {
-            split_chord(&chord.get())
+            shown_keys(&chord.get())
                 .into_iter()
                 .enumerate()
                 .collect::<Vec<_>>()
         },
         |(position, key): &(usize, String)| (*position, key.clone()),
-        move |(_, key)| cap(display_name(&key, cfg!(target_os = "macos")), style.clone()),
+        move |(_, key)| cap(key, style.clone()),
     )?
     .a11y_hidden();
     style_follows(caps.layout_node(), caps_row);
@@ -67,7 +68,7 @@ pub fn kbd(props: KbdProps, _children: Children) -> Result<Box<dyn LayoutItem>, 
         |_| RectStyle::default(),
         vec![box_item(caps)],
     )?
-    .a11y_label(move || spoken_chord(&spoken.get()));
+    .a11y_label(move || shown_chord(&spoken.get()));
     Ok(box_item(row))
 }
 
@@ -114,42 +115,13 @@ fn cap(label: String, style: Option<SurfaceAmendment>) -> Result<Box<dyn LayoutI
     Ok(box_item(cap))
 }
 
-/// What a reader is told a chord is: its keys by the names their caps show, joined as they are pressed.
-pub(crate) fn spoken_chord(chord: &str) -> String {
-    split_chord(chord)
-        .iter()
-        .map(|key| display_name(key, cfg!(target_os = "macos")))
-        .collect::<Vec<_>>()
-        .join("+")
-}
-
-pub(crate) fn split_chord(chord: &str) -> Vec<String> {
-    let mut keys = Vec::new();
-    let mut current = String::new();
-    for c in chord.chars() {
-        if c == '+' && !current.is_empty() {
-            keys.push(std::mem::take(&mut current));
-        } else {
-            current.push(c);
-        }
+/// The keys of `chord` the way the platform names them, one per cap. Text that names no [`Chord`] is one cap, as written.
+fn shown_keys(chord: &str) -> Vec<String> {
+    match Chord::parse(chord) {
+        Ok(parsed) => parsed.keys(keyboard_convention()),
+        Err(_) if chord.trim().is_empty() => Vec::new(),
+        Err(_) => vec![chord.trim().to_string()],
     }
-    keys.push(current);
-    keys.into_iter()
-        .map(|key| key.trim().to_string())
-        .filter(|key| !key.is_empty())
-        .collect()
-}
-
-pub(crate) fn display_name(key: &str, mac: bool) -> String {
-    let named = match (key.to_ascii_lowercase().as_str(), mac) {
-        ("mod", true) | ("cmd" | "command" | "meta", true) => "⌘",
-        ("mod", false) => "Ctrl",
-        ("ctrl" | "control", true) => "⌃",
-        ("alt" | "option", true) => "⌥",
-        ("shift", true) => "⇧",
-        _ => return key.to_string(),
-    };
-    named.to_string()
 }
 
 #[cfg(test)]

@@ -1,11 +1,14 @@
-//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
+//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped; and that a guest shows its shortcuts for the keyboard its host matches. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, PoisonError};
 
 use telar::hot::load_hot_app;
-use telar::{AppCtx, AppRuntime, Event, EventResult, PointerButton, PointerSource, Size};
+use telar::{
+    AppCtx, AppRuntime, Chord, Event, EventResult, KeyboardConvention, PointerButton,
+    PointerSource, Size, set_keyboard_convention,
+};
 
 /// One at a time: both count what the process has mapped and what sits in the build directory.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -117,6 +120,24 @@ fn reloading_a_hot_guest_again_and_again_keeps_one_mapped() {
         1,
         "only the build in use is mapped, however many came before it"
     );
+}
+
+/// The guest's copy of the convention answers for the system it was compiled on until the host hands over its own, which is what a terminal host on a Mac needs: it matches Ctrl, and a guest left alone would show ⌘.
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+fn a_hot_guest_shows_shortcuts_for_the_keyboard_its_host_matches() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    for convention in [KeyboardConvention::Mac, KeyboardConvention::Pc] {
+        set_keyboard_convention(convention);
+        let app = load_hot_app(&library).expect("the guest loads");
+        let title = app
+            .window_config()
+            .expect("the guest titles its window with a shortcut")
+            .title;
+        let save = Chord::parse("Mod+S").expect("the shortcut parses");
+        assert_eq!(title, save.text(convention), "{convention:?}");
+    }
 }
 
 /// Loads the guest, mounts and lays out its tree, hands it an event it handles, runs a frame and paints it, then drops both the way the runner does on a reload.

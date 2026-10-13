@@ -97,6 +97,7 @@ where
 {
     // The one place every runner passes through, so app code can ask `telar::paths::cache()` instead of resolving XDG for itself and landing somewhere other than the runtime it is embedded in.
     services_core::app_paths::install(app_name, paths.clone());
+    platform_core::set_keyboard_convention(platform.keyboard_convention());
     match hydration {
         Some(_) => crate::user_preferences::install_store(app_name),
         None => crate::user_preferences::install(app_name),

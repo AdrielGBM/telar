@@ -6,8 +6,8 @@ use std::sync::Arc;
 use platform_core::guest::{BoundaryLayout, shield};
 use services_core::{Clipboard, FileDialog, FileDialogs, UriOpener};
 
-/// The shape of the exports a host can drive. A library reporting another one was built against a telar whose exports this host would misread, so it is refused rather than called. 2 is for `_rsx_hot_layout`, 3 for `_rsx_hot_loaded` and `_rsx_hot_unloading`.
-pub const GUEST_ABI: u32 = 3;
+/// The shape of the exports a host can drive. A library reporting another one was built against a telar whose exports this host would misread, so it is refused rather than called. 2 is for `_rsx_hot_layout`, 3 for `_rsx_hot_loaded` and `_rsx_hot_unloading`, 4 for the keyboard convention `HostServices` hands over.
+pub const GUEST_ABI: u32 = 4;
 
 /// The fingerprint of what crosses by value, and of the features that shape it. `HostServices` carries a field only a `shaper` build has, which is the case it exists for: a host and a dylib that differ there would otherwise read the struct as the wrong shape.
 pub const GUEST_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
@@ -15,6 +15,7 @@ pub const GUEST_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
     platform_core::AccessAudit,
     platform_core::AppCtx<'static>,
     platform_core::Event,
+    platform_core::KeyboardConvention,
     platform_core::Location,
     platform_core::RedrawWaker,
     platform_core::SystemPreferences,

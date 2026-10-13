@@ -1,8 +1,16 @@
 use super::*;
-use telar::{AvailableSpace, ComponentList, Container, DrawCommand, compute_layout};
+use telar::{
+    AvailableSpace, ComponentList, Container, DrawCommand, KeyboardConvention, compute_layout,
+    set_keyboard_convention,
+};
 
 fn texts(chord: &'static str) -> Vec<String> {
+    texts_in(KeyboardConvention::Pc, chord)
+}
+
+fn texts_in(convention: KeyboardConvention, chord: &'static str) -> Vec<String> {
     crate::test_support::fresh_layout_runtime();
+    set_keyboard_convention(convention);
     let cap = kbd(KbdProps::props().chord(chord).build(), Children::default()).unwrap();
     let root = Container::new(
         LayoutStyle::new().flex_column().width(300.0).height(100.0),
@@ -26,54 +34,37 @@ fn texts(chord: &'static str) -> Vec<String> {
 }
 
 #[test]
-fn a_chord_splits_on_plus_into_one_cap_per_key() {
-    assert_eq!(split_chord("Ctrl+K"), ["Ctrl", "K"]);
-    assert_eq!(split_chord("Ctrl+Shift+P"), ["Ctrl", "Shift", "P"]);
-    assert_eq!(split_chord("Esc"), ["Esc"]);
+fn each_key_is_drawn_on_a_cap_of_its_own_as_a_pc_names_it() {
+    assert_eq!(texts("Mod+Shift+P"), ["Ctrl", "Shift", "P"]);
+    assert_eq!(texts("Ctrl++"), ["Ctrl", "+"]);
+    assert_eq!(texts("Esc"), ["Esc"]);
 }
 
 #[test]
-fn a_plus_key_is_written_last() {
-    assert_eq!(split_chord("Ctrl++"), ["Ctrl", "+"]);
-    assert_eq!(split_chord("+"), ["+"]);
+fn a_mac_draws_its_symbols_on_the_caps() {
+    assert_eq!(
+        texts_in(KeyboardConvention::Mac, "Mod+Shift+P"),
+        ["⇧", "⌘", "P"]
+    );
+    assert_eq!(texts_in(KeyboardConvention::Mac, "Alt+↑"), ["⌥", "↑"]);
 }
 
 #[test]
-fn spacing_and_empty_chords_leave_no_empty_caps() {
-    assert_eq!(split_chord(" Shift + P "), ["Shift", "P"]);
-    assert!(split_chord("").is_empty());
+fn text_that_names_no_chord_is_one_cap_as_written() {
+    assert_eq!(texts(" Hyper+K "), ["Hyper+K"]);
+    assert!(texts("  ").is_empty());
+    assert_eq!(shown_chord(" Hyper+K "), "Hyper+K");
 }
 
 #[test]
-fn mod_is_the_command_key_on_macos_and_control_elsewhere() {
-    assert_eq!(display_name("Mod", true), "⌘");
-    assert_eq!(display_name("Mod", false), "Ctrl");
-    assert_eq!(display_name("mod", false), "Ctrl");
-}
-
-#[test]
-fn modifier_names_become_symbols_on_macos_only() {
-    assert_eq!(display_name("Shift", true), "⇧");
-    assert_eq!(display_name("Alt", true), "⌥");
-    assert_eq!(display_name("Shift", false), "Shift");
-    assert_eq!(display_name("K", true), "K");
-}
-
-#[test]
-fn each_key_is_drawn_on_a_cap_of_its_own() {
-    assert_eq!(texts("Ctrl+K"), ["Ctrl", "K"]);
-}
-
-#[test]
-fn a_chord_is_spoken_by_the_names_on_its_caps() {
-    assert_eq!(spoken_chord("Shift+Alt+P"), "Shift+Alt+P");
-    assert_eq!(spoken_chord(" Ctrl + K "), "Ctrl+K");
-    let command = if cfg!(target_os = "macos") {
-        "⌘"
-    } else {
-        "Ctrl"
-    };
-    assert_eq!(spoken_chord("Mod+K"), format!("{command}+K"));
+fn a_chord_is_spoken_as_the_platform_writes_it() {
+    crate::test_support::fresh_layout_runtime();
+    assert_eq!(shown_chord("Shift+Alt+P"), "Alt+Shift+P");
+    assert_eq!(shown_chord(" Ctrl + K "), "Ctrl+K");
+    assert_eq!(shown_chord("Mod+K"), "Ctrl+K");
+    set_keyboard_convention(KeyboardConvention::Mac);
+    assert_eq!(shown_chord("Mod+K"), "⌘K");
+    assert_eq!(shown_chord("Mod+Shift+P"), "⇧⌘P");
 }
 
 #[test]

@@ -26,7 +26,7 @@ const NO_WRAP_WIDTH: f32 = 1.0e6;
 /// Inserted by the Tab key (soft tabs).
 const TAB_INSERT: &str = "    ";
 
-/// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input). A base primitive: unstyled (wrap it in a `box` for a border/background), keyboard-driven, no soft-wrap (only `\n` breaks lines, so long lines overflow horizontally). It requests focus on tap, positions the caret at the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining lines, arrows in all four directions, Home/End, Tab), and draws a caret. Its measured height grows with the line count, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor. Selection (`Shift`+arrows, `Ctrl+A`, shift-click) with copy, cut and paste, newlines and all. IME is not yet supported.
+/// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input). A base primitive: unstyled (wrap it in a `box` for a border/background), keyboard-driven, no soft-wrap (only `\n` breaks lines, so long lines overflow horizontally). It requests focus on tap, positions the caret at the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining lines, arrows in all four directions, Home/End, Tab), and draws a caret. Its measured height grows with the line count, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor. Selection (`Shift`+arrows, `Mod+A`, shift-click) with copy, cut and paste on the primary modifier, Command on a Mac and Ctrl elsewhere, newlines and all. IME is not yet supported.
 pub struct TextArea {
     value: RwSignal<String>,
     home: HomeSurface,
@@ -208,19 +208,19 @@ impl TextArea {
             None
         };
         match key {
-            Key::Char('a') | Key::Char('A') if mods.is_ctrl || mods.is_meta => {
+            Key::Char('a') | Key::Char('A') if mods.is_primary() => {
                 self.anchor.set(Some(0));
                 self.caret.set(text.len());
                 return EventResult::Handled;
             }
-            Key::Char('c') | Key::Char('C') if mods.is_ctrl || mods.is_meta => {
+            Key::Char('c') | Key::Char('C') if mods.is_primary() => {
                 let Some(selected) = self.selected_text(&text) else {
                     return EventResult::Ignored;
                 };
                 services_core::set_clipboard_text(&selected);
                 return EventResult::Handled;
             }
-            Key::Char('x') | Key::Char('X') if mods.is_ctrl || mods.is_meta => {
+            Key::Char('x') | Key::Char('X') if mods.is_primary() => {
                 let Some(selected) = self.selected_text(&text) else {
                     return EventResult::Ignored;
                 };
@@ -229,7 +229,7 @@ impl TextArea {
                 changed = true;
             }
             // An editor is exactly where a multi-line paste belongs, so newlines are kept.
-            Key::Char('v') | Key::Char('V') if mods.is_ctrl || mods.is_meta => {
+            Key::Char('v') | Key::Char('V') if mods.is_primary() => {
                 let Some(pasted) = services_core::clipboard_text() else {
                     return EventResult::Ignored;
                 };

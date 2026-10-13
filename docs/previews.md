@@ -366,7 +366,7 @@ lists every preview, and says how to add it.
   its choices, then high contrast and reduced motion, ticked while on (the mode is System until Light, Dark or another registered
   mode is picked: a preview's own mode where it asks for one, else the application's light or dark mode as the
   system's scheme is, following it live); a search field centred on the window, showing the project's
-  name, that opens the command palette (`/` or Ctrl/Cmd+K), which folds into a search button before the views when the window is too narrow for it; and the Canvas, Matrix and Docs views as icon tabs. On the
+  name, that opens the command palette (`/` or Mod+K), which folds into a search button before the views when the window is too narrow for it; and the Canvas, Matrix and Docs views as icon tabs. On the
   desktop it is the window's title bar: the window opens without the system's decorations, the bar moves it and a
   double-click maximizes it, minimize, maximize and close sit at its end, and the window's borders resize it.
 - **Sidebar.** Search over the tree of group, component and preview, with a badge on a preview whose snapshot
@@ -376,11 +376,13 @@ lists every preview, and says how to add it.
 - **Panels,** along the bottom or the right: Controls, Actions, Interactions, Layout, Accessibility, Snapshot.
 
 Its chords hold Alt, so they never reach a control inside a preview and never meet the devtools' Ctrl+Shift ones.
-None fires while a text field has the caret.
+None fires while a text field has the caret. They are written below portably, and the workshop shows them the way
+the platform does (see [keyboard.md](keyboard.md#shortcuts)): Mod+K is ⌘K on a Mac and Ctrl+K elsewhere, Alt+S is ⌥S
+on a Mac.
 
 | Keys | Action |
 | --- | --- |
-| `/`, Ctrl/Cmd+K | Command palette: every preview and command |
+| `/`, Mod+K | Command palette: every preview and command |
 | `?` | Shortcuts |
 | Alt+↑ / ↓ | Previous / next preview |
 | Alt+← / → | Previous / next component |

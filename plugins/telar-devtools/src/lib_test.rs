@@ -459,6 +459,7 @@ fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
         active_descendant: None,
         controls: None,
         has_popup: None,
+        keyboard_shortcut: None,
     }]);
     dev.on_violations(&[telar::AccessViolation::new(
         telar::AccessRule::UnnamedControl,

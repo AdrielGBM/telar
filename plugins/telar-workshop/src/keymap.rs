@@ -10,9 +10,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::preview::PreviewEntry;
-use telar::{
-    Direction, Key, LayoutError, LayoutItem, ModifiersState, NamedKey, RwSignal, focus, signal,
-};
+use telar::{Chord, Direction, Key, LayoutError, LayoutItem, RwSignal, focus, signal};
 
 use crate::canvas_toolbar::locales;
 use crate::settings::{Zoom, mode_choices};
@@ -182,7 +180,7 @@ impl Action {
         }
     }
 
-    /// The chords that run it, written as `kbd` shows them; [`action_for`] is what answers them.
+    /// The chords that run it, written portably as `kbd` takes them and shown as the platform writes them; a tooltip names the first.
     pub(crate) fn chords(self) -> &'static [&'static str] {
         match self {
             Self::Find => &["/", "Mod+K"],
@@ -212,64 +210,31 @@ impl Action {
             Self::Remount => &["Alt+Shift+R"],
         }
     }
-}
 
-/// The action the press that reported `key` runs. With Alt held the layout may have composed `key` into another character, as Option does on macOS, so the chord is matched on the key the press makes with no modifier.
-fn pressed_action(key: &Key, modifiers: ModifiersState) -> Option<Action> {
-    if modifiers.is_alt {
-        action_for(&telar::shortcut_key(key), modifiers)
-    } else {
-        action_for(key, modifiers)
-    }
-}
-
-/// The action a key press runs. Letters are matched whatever their case, so Caps Lock changes nothing and Shift is read from `modifiers`.
-pub(crate) fn action_for(key: &Key, modifiers: ModifiersState) -> Option<Action> {
-    let command = modifiers.is_ctrl || modifiers.is_meta;
-    match key {
-        Key::Char(c) if command => {
-            (!modifiers.is_alt && c.eq_ignore_ascii_case(&'k')).then_some(Action::Find)
+    /// Chords that run it too without being listed: the keypad's, and `+`, which a layout that needs Shift for it reports as itself.
+    fn unlisted_chords(self) -> &'static [&'static str] {
+        match self {
+            Self::ZoomIn => &["Alt++", "Alt+NumAdd"],
+            Self::ZoomOut => &["Alt+NumSubtract"],
+            _ => &[],
         }
-        _ if command => None,
-        _ if modifiers.is_alt => alt_action(key, modifiers.is_shift),
-        Key::Char('/') => Some(Action::Find),
-        Key::Char('?') => Some(Action::Shortcuts),
-        _ => None,
+    }
+
+    fn bindings(self) -> impl Iterator<Item = Chord> {
+        self.chords()
+            .iter()
+            .chain(self.unlisted_chords())
+            .filter_map(|chord| Chord::parse(chord).ok())
     }
 }
 
-fn alt_action(key: &Key, shift: bool) -> Option<Action> {
-    let action = match key {
-        Key::Named(NamedKey::ArrowUp) => Action::PreviousPreview,
-        Key::Named(NamedKey::ArrowDown) => Action::NextPreview,
-        Key::Named(NamedKey::ArrowLeft) => Action::PreviousComponent,
-        Key::Named(NamedKey::ArrowRight) => Action::NextComponent,
-        Key::Named(NamedKey::NumpadAdd) => Action::ZoomIn,
-        Key::Named(NamedKey::NumpadSubtract) => Action::ZoomOut,
-        Key::Char(c) => match (c.to_ascii_lowercase(), shift) {
-            ('1', false) => Action::ShowCanvas,
-            ('2', false) => Action::ShowMatrix,
-            ('3', false) => Action::ShowDocs,
-            ('s', false) => Action::ToggleSidebar,
-            ('a', false) => Action::TogglePanels,
-            ('d', false) => Action::MovePanels,
-            ('f', false) => Action::Fullscreen,
-            ('t', false) => Action::CycleMode,
-            ('l', false) => Action::CycleLocale,
-            ('r', false) => Action::CycleDirection,
-            ('r', true) => Action::Remount,
-            ('g', false) => Action::ToggleGrid,
-            ('g', true) => Action::ToggleRulers,
-            ('m', false) => Action::ToggleMeasure,
-            ('o', false) => Action::ToggleOutline,
-            ('=' | '+', _) => Action::ZoomIn,
-            ('-', false) => Action::ZoomOut,
-            ('0', false) => Action::ZoomReset,
-            _ => return None,
-        },
-        _ => return None,
-    };
-    Some(action)
+/// The action the press that reported `key` runs, with the modifiers held now.
+fn pressed_action(key: &Key) -> Option<Action> {
+    ACTIONS.into_iter().find(|action| {
+        action
+            .bindings()
+            .any(|chord| telar::chord_pressed(&chord, key))
+    })
 }
 
 /// The id a preview is listed under in the palette.
@@ -307,7 +272,7 @@ impl Keymap {
         if focus::text_entry_focused() || self.palette.peek() {
             return false;
         }
-        let Some(action) = pressed_action(key, telar::modifiers()) else {
+        let Some(action) = pressed_action(key) else {
             return false;
         };
         if self.shortcuts.peek() && action != Action::Shortcuts {

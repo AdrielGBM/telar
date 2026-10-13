@@ -216,6 +216,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-expanded",
             "aria-haspopup",
             "aria-current",
+            "aria-keyshortcuts",
             "aria-controls",
             "aria-activedescendant",
             "aria-valuenow",
@@ -1420,4 +1421,24 @@ fn a_control_names_only_a_box_of_its_own_surface() {
     let root = only_box(&frame);
     assert_eq!(attribute(root, "aria-controls"), None);
     assert_eq!(attribute(children(root)[0], "id"), None);
+}
+
+/// A control that runs the same command as a key writes it as `aria-keyshortcuts`; one with no such key writes none.
+#[test]
+fn a_control_writes_the_keys_that_run_its_command() {
+    let keys_of = |semantics: Semantics| {
+        let frame = describe_frame(
+            &[open(1, semantics), DrawCommand::PopElement],
+            None,
+            &mut Fixed,
+            false,
+        );
+        attribute(only_box(&frame), "aria-keyshortcuts")
+    };
+    let bound = Semantics {
+        keyboard_shortcut: Some("Control+Shift+Z".into()),
+        ..Semantics::of(Role::MenuItem)
+    };
+    assert_eq!(keys_of(bound), Some("Control+Shift+Z".to_string()));
+    assert_eq!(keys_of(Semantics::of(Role::MenuItem)), None);
 }

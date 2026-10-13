@@ -228,3 +228,29 @@ fn a_style_amendment_reshapes_every_state() {
         "on the amended shape"
     );
 }
+
+/// The key binding a button's tooltip shows belongs to the button it activates, not to the bubble, and is told to a reader in the form it takes.
+#[test]
+fn the_shortcut_is_the_button_s_own_and_not_the_tooltip_s() {
+    focus::clear();
+    let _tree = mounted(
+        IconButtonProps::props()
+            .icon("lucide:search")
+            .label("Search")
+            .shortcut("Mod+K")
+            .build(),
+    );
+    assert_eq!(
+        exposed_button().keyboard_shortcut.as_deref(),
+        Some("Control+K")
+    );
+
+    focus::clear();
+    let _tree = mounted(
+        IconButtonProps::props()
+            .icon("lucide:search")
+            .label("Search")
+            .build(),
+    );
+    assert_eq!(exposed_button().keyboard_shortcut, None);
+}

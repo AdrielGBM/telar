@@ -14,6 +14,7 @@ use crate::strings::{
 use crate::workbench::{
     WORKBENCH_GRID, use_workbench_tokens, workbench_card, workbench_mono, workbench_muted,
 };
+use crate::{SHOW_INSPECTOR_CHORD, SHOW_PANEL_CHORD, SWITCH_RENDERER_CHORD};
 
 const PANEL_WIDTH: f32 = 248.0;
 const FPS_SIZE: f32 = 20.0;
@@ -148,9 +149,9 @@ fn panel(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         box_item(timing),
         renderer,
         divider()?,
-        chord("Ctrl+Shift+B", SWITCH_RENDERER)?,
-        chord("Ctrl+Shift+I", SHOW_INSPECTOR)?,
-        chord("Ctrl+Shift+D", SHOW_PANEL)?,
+        chord(SWITCH_RENDERER_CHORD, SWITCH_RENDERER)?,
+        chord(SHOW_INSPECTOR_CHORD, SHOW_INSPECTOR)?,
+        chord(SHOW_PANEL_CHORD, SHOW_PANEL)?,
     ];
     let panel = StyledContainer::new(
         LayoutStyle::new()

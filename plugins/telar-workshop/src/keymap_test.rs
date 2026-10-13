@@ -1,8 +1,9 @@
 use telar::preview::{Layout, PreviewCtx};
 use telar::testing::{key_with, mount, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, ColorScheme, ComponentList, Container, Event, Input, LayoutStyle,
-    LocalApp, Role, SizeDimension, box_item, reset_layout_runtime,
+    AccessNode, App, AppRuntime, ColorScheme, ComponentList, Container, Event, Input,
+    KeyboardConvention, LayoutStyle, LocalApp, ModifiersState, NamedKey, Role, SizeDimension,
+    box_item, reset_layout_runtime,
 };
 
 use super::*;
@@ -49,6 +50,7 @@ impl Workshop {
         reset_layout_runtime();
         focus::clear();
         telar::install_default_text_metrics();
+        telar::set_keyboard_convention(KeyboardConvention::Pc);
         let state = WorkshopState::new(entries.into(), &Default::default());
         let runtime = LocalApp(Shell { state });
         let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
@@ -342,18 +344,26 @@ fn slash_and_mod_k_open_the_palette_without_typing_into_it() {
     workshop.key(NamedKey::Escape);
     assert!(workshop.dialogs().is_empty());
 
-    for modifiers in [
-        ModifiersState {
-            is_ctrl: true,
-            ..ModifiersState::default()
-        },
-        ModifiersState {
-            is_meta: true,
-            ..ModifiersState::default()
-        },
+    let ctrl = ModifiersState {
+        is_ctrl: true,
+        ..ModifiersState::default()
+    };
+    let command = ModifiersState {
+        is_meta: true,
+        ..ModifiersState::default()
+    };
+    for (convention, primary, other) in [
+        (KeyboardConvention::Pc, ctrl, command),
+        (KeyboardConvention::Mac, command, ctrl),
     ] {
-        workshop.press(Key::Char('k'), modifiers);
-        assert_eq!(workshop.dialogs(), ["Command palette"]);
+        telar::set_keyboard_convention(convention);
+        workshop.press(Key::Char('k'), other);
+        assert!(
+            workshop.dialogs().is_empty(),
+            "{convention:?}: Mod is not {other:?}"
+        );
+        workshop.press(Key::Char('k'), primary);
+        assert_eq!(workshop.dialogs(), ["Command palette"], "{convention:?}");
         workshop.key(NamedKey::Escape);
     }
 }
@@ -512,17 +522,14 @@ fn no_shortcut_fires_while_a_field_inside_the_canvas_has_the_caret() {
 #[test]
 fn a_chord_names_one_action_whatever_the_case_of_its_letter() {
     assert_eq!(
-        action_for(&Key::Char('S'), alt(false)),
+        action_for(Key::Char('S'), alt(false)),
         Some(Action::ToggleSidebar)
     );
-    assert_eq!(
-        action_for(&Key::Char('R'), alt(true)),
-        Some(Action::Remount)
-    );
-    assert_eq!(action_for(&Key::Char('s'), ModifiersState::default()), None);
+    assert_eq!(action_for(Key::Char('R'), alt(true)), Some(Action::Remount));
+    assert_eq!(action_for(Key::Char('s'), ModifiersState::default()), None);
     assert_eq!(
         action_for(
-            &Key::Char('s'),
+            Key::Char('s'),
             ModifiersState {
                 is_alt: true,
                 is_ctrl: true,
@@ -536,43 +543,32 @@ fn a_chord_names_one_action_whatever_the_case_of_its_letter() {
 
 #[test]
 fn every_action_has_a_distinct_id_and_a_chord_that_runs_it() {
+    telar::set_keyboard_convention(KeyboardConvention::Pc);
     let mut ids: Vec<_> = ACTIONS.iter().map(|action| action.id()).collect();
     ids.sort_unstable();
     ids.dedup();
     assert_eq!(ids.len(), ACTIONS.len());
     for action in ACTIONS {
         assert!(GROUPS.contains(&action.group()));
-        for chord in action.chords() {
+        for text in action.chords().iter().chain(action.unlisted_chords()) {
+            let chord = Chord::parse(text).unwrap_or_else(|e| panic!("{text}: {e}"));
             assert_eq!(
-                parse(chord).and_then(|(key, modifiers)| action_for(&key, modifiers)),
+                action_for(chord.key().clone(), chord.modifiers(KeyboardConvention::Pc)),
                 Some(action),
-                "{chord} runs {action:?}"
+                "{text} runs {action:?}"
             );
         }
     }
 }
 
-/// The key and modifiers a chord as `kbd` shows it stands for.
-fn parse(chord: &str) -> Option<(Key, ModifiersState)> {
-    let mut modifiers = ModifiersState::default();
-    let parts: Vec<&str> = chord.split('+').collect();
-    let (last, held) = parts.split_last()?;
-    for part in held {
-        match *part {
-            "Alt" => modifiers.is_alt = true,
-            "Shift" => modifiers.is_shift = true,
-            "Mod" => modifiers.is_ctrl = true,
-            _ => return None,
-        }
-    }
-    let key = match *last {
-        "↑" => Key::Named(NamedKey::ArrowUp),
-        "↓" => Key::Named(NamedKey::ArrowDown),
-        "←" => Key::Named(NamedKey::ArrowLeft),
-        "→" => Key::Named(NamedKey::ArrowRight),
-        key => Key::Char(key.chars().next()?.to_ascii_lowercase()),
-    };
-    Some((key, modifiers))
+/// The action a press of `key` with `modifiers` held runs, as the keyboard reports it with no unmodified key.
+fn action_for(key: Key, modifiers: ModifiersState) -> Option<Action> {
+    telar::observe_keyboard(&Event::KeyPressed {
+        key: key.clone(),
+        modifiers,
+        unmodified: None,
+    });
+    pressed_action(&key)
 }
 
 fn chord_action(key: char, unmodified: Option<char>, modifiers: ModifiersState) -> Option<Action> {
@@ -582,7 +578,7 @@ fn chord_action(key: char, unmodified: Option<char>, modifiers: ModifiersState) 
         modifiers,
         unmodified: unmodified.map(Key::Char),
     });
-    pressed_action(&key, modifiers)
+    pressed_action(&key)
 }
 
 /// Option+T types `†` on macOS, so the chord has to be matched on the key the press makes with no modifier.

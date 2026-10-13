@@ -125,7 +125,7 @@ impl<T> Tab<T> {
     }
 
     #[cfg(feature = "workbench")]
-    /// The key binding that selects this tab from anywhere, shown in a tooltip over it: `"Alt+1"`.
+    /// The key binding that selects this tab from anywhere, written portably (`"Alt+1"`) and shown in a tooltip over it as the platform writes it.
     pub fn shortcut(mut self, shortcut: impl Into<Reactive<String>>) -> Self {
         self.shortcut = Some(shortcut.into());
         self
@@ -215,6 +215,8 @@ where
     } = entry;
     let name = label.clone();
     #[cfg(feature = "workbench")]
+    let chord = shortcut.clone();
+    #[cfg(feature = "workbench")]
     let hint = (icon.is_some() || shortcut.is_some()).then(|| (label.clone(), shortcut));
     #[cfg(feature = "workbench")]
     let (face, shape) = match icon {
@@ -239,6 +241,11 @@ where
     .toggled(move || selected.get() == value)
     .on_press(move || selected.set(value))
     .a11y_label(move || name.get());
+    #[cfg(feature = "workbench")]
+    let tab = match chord {
+        Some(chord) => tab.keyboard_shortcut(move || chord.get()),
+        None => tab,
+    };
     if let Some(id) = tab.focus_id() {
         focus_ids.borrow_mut().push(id);
     }

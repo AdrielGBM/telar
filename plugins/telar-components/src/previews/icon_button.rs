@@ -30,7 +30,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 IconButtonProps::props()
                     .icon(p.arg("icon", Glyph::Search).icon())
                     .label(p.arg("label", "Search"))
-                    .shortcut(p.arg("shortcut", "Ctrl+K"))
+                    .shortcut(p.arg("shortcut", "Mod+K"))
                     .disabled(p.arg("disabled", false))
                     .build(),
                 Children::default(),

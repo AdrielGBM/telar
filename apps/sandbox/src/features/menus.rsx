@@ -36,16 +36,16 @@ col gap:20
     example title:"A menu is a compound component — its rows are markup, not a list of strings"
         card gap:10
             menu label:"Edit" bordered
-                item label:"Undo" hint:"⌘Z"
-                item label:"Redo" hint:"⇧⌘Z" disabled:$cant_redo
+                item label:"Undo" shortcut:"Mod+Z"
+                item label:"Redo" shortcut:"Mod+Shift+Z" disabled:$cant_redo
                 separator
                 group label:"Clipboard"
-                item label:"Cut" hint:"⌘X"
+                item label:"Cut" shortcut:"Mod+X"
                 item label:"Show ruler" checked:$ruler on_press:(|| $ruler.set(!$ruler.get()))
             row gap:10 align:center
                 toggle checked:$cant_redo label:"Disable Redo"
                 toggle checked:$ruler label:"Ruler"
-        code_line code:"item label:'Redo' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on"
+        code_line code:"item label:'Redo' shortcut:'Mod+Shift+Z' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on"
     example title:"A row can open a submenu — its rows are its children"
         card gap:10
             menu label:"View"

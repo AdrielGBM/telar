@@ -94,7 +94,7 @@ desktop and `, current` in the terminal's reading; see [docs/links.md](links.md#
 A list that drops from a control is one of two things, and the catalogue says which. A `menu` and a
 `context_menu` open one panel, a `menu` of `menuitem`s: actions, run when chosen, and the list takes the keyboard
 as it opens. A row with a tick is a `menuitemcheckbox`, one of a set of choices (`radio`) a `menuitemradio`, each
-`checked` while it is on. A `submenu` row is a `menuitem` that has a menu and is `expanded` while it shows it, and
+`checked` while it is on. A row for a setting that is on or off is given a `switch` instead of a tick: the same `menuitemcheckbox` with the same state, the switch drawn at its end hidden from readers, and no tick column reserved for the other rows. Committing it leaves the menu open. A `submenu` row is a `menuitem` that has a menu and is `expanded` while it shows it, and
 the submenu is a `menu` of its own; the deepest panel open holds the keyboard. The rightward arrow, Enter or Space
 open a submenu with its cursor on its first row; the leftward arrow or Escape shut it and hand the keyboard back to
 the panel it opened from; Escape on the first panel closes the menu and gives the keyboard back to what held it
@@ -124,6 +124,25 @@ A control that opens a list also says which kind, so a reader names it before it
 select's combobox. It never changes; whether the list is open now is `expanded(|| …)`. It is
 `aria-haspopup="menu"` or `"listbox"` in a document, AccessKit `has_popup` on the desktop, and `, has menu` or
 `, has listbox` in the terminal's reading (`File, button, has menu, collapsed`).
+
+## Shortcuts
+
+A control that runs the same command as a key says which, so a reader can tell the key before it is used:
+from Rust `StyledContainer::keyboard_shortcut(|| "Mod+Shift+Z".to_string())` on the control the key activates
+(never on a tooltip, which only describes it). The text is a `Chord`, and the reader is told
+`Chord::aria` of it under the keyboard convention in force: the ARIA `aria-keyshortcuts` grammar with every
+key spelled as UI Events names it, so `Mod+Shift+Z` is `Control+Shift+Z` on a PC and `Shift+Meta+Z` on a
+Mac, and `Ctrl++` is `Control+Plus`. It is `aria-keyshortcuts` in a document, AccessKit `keyboard_shortcut`
+on the desktop, and `, shortcut Control+Z` in the terminal's reading. Text that names no chord says nothing.
+The catalogue sets it on a menu row with `shortcut`, on an `icon_button` and a tab with `shortcut`, and on a
+command palette row.
+
+The visible shortcut stays in the control's name (`Undo, Ctrl+Z`; a palette row is `Open file, Ctrl+O`).
+`aria-keyshortcuts` is a hint on top of the name, not a replacement for it: VoiceOver and TalkBack do not
+speak it, and WAI-ARIA gives no way to ask a reader to, so dropping the drawn keys from the name would take
+the only announcement away from them. A reader that does speak the attribute says the keys twice; that
+redundancy is the price of not leaving the others without. A tooltip's shortcut is neither: it is drawn for
+the pointer and belongs to the control, not to the bubble.
 
 ## What each target does with them
 

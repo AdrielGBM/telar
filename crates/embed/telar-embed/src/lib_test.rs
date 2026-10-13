@@ -633,3 +633,59 @@ fn a_guest_laid_out_differently_is_refused_with_what_to_do() {
     assert!(message.contains("restart the session"), "{message}");
     assert!(message.contains("matching features"), "{message}");
 }
+
+#[cfg(feature = "host")]
+thread_local! {
+    static CONVENTION_HANDED: std::cell::Cell<Option<KeyboardConvention>> = const { std::cell::Cell::new(None) };
+    static HANDED_BEFORE_BUILD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(feature = "host")]
+unsafe fn record_convention(convention: KeyboardConvention) -> GuestResult<()> {
+    CONVENTION_HANDED.set(Some(convention));
+    Ok(())
+}
+
+#[cfg(feature = "host")]
+unsafe fn create_after_convention(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
+    HANDED_BEFORE_BUILD.set(CONVENTION_HANDED.get().is_some());
+    __embed_create(|| Box::new(Stub::new()))
+}
+
+fn foreign_convention() -> KeyboardConvention {
+    match KeyboardConvention::native() {
+        KeyboardConvention::Mac => KeyboardConvention::Pc,
+        KeyboardConvention::Pc => KeyboardConvention::Mac,
+    }
+}
+
+/// A guest carries its own copy of the convention, which left alone answers for the system it was compiled on: a terminal host on a Mac matches Ctrl while the guest would show ⌘.
+#[cfg(feature = "host")]
+#[test]
+fn a_guest_is_handed_the_host_keyboard_convention_before_it_is_built() {
+    let host = foreign_convention();
+    platform_core::set_keyboard_convention(host);
+    let embed = LoadedEmbed::start(
+        EmbedVTable {
+            create: create_after_convention,
+            set_keyboard_convention: record_convention,
+            .._rsx_embed_vtable
+        },
+        &[],
+        None,
+    )
+    .expect("the guest loads");
+    assert_eq!(CONVENTION_HANDED.get(), Some(host));
+    assert!(
+        HANDED_BEFORE_BUILD.get(),
+        "the guest's build already shows shortcuts the host's way"
+    );
+    drop(embed);
+}
+
+#[test]
+fn the_exported_table_installs_the_convention_it_is_handed() {
+    let handed = foreign_convention();
+    unsafe { (_rsx_embed_vtable.set_keyboard_convention)(handed) }.expect("no panic");
+    assert_eq!(platform_core::keyboard_convention(), handed);
+}

@@ -16,10 +16,9 @@ use telar::{
 };
 
 use crate::fuzzy::fuzzy_match;
-use crate::kbd::spoken_chord;
 use crate::list::{ListTokens, row_paint, tinted};
 use crate::scrim;
-use crate::shared;
+use crate::shared::{self, shown_chord};
 use crate::strings;
 use crate::text_field::{TextFieldProps, text_field};
 use crate::{KbdProps, kbd};
@@ -82,7 +81,7 @@ pub struct Command {
     pub group: Option<Arc<str>>,
     /// Words the command is found by that its name does not say: `"theme"` for "Toggle dark mode".
     pub keywords: Arc<[Arc<str>]>,
-    /// The chord shown beside it, written as [`kbd`](crate::kbd) takes it: `"Mod+K"`.
+    /// The chord shown beside it, written portably as [`kbd`](crate::kbd) takes it: `"Mod+K"`.
     pub shortcut: Option<Arc<str>>,
     /// Listed, but passed over by the keyboard and never run.
     pub disabled: bool,
@@ -747,8 +746,9 @@ fn build_row(
         )?);
     }
 
+    let chord = command.shortcut.clone();
     let name = match &command.shortcut {
-        Some(chord) => format!("{}, {}", command.label, spoken_chord(chord)),
+        Some(chord) => format!("{}, {}", command.label, shown_chord(chord)),
         None => command.label.to_string(),
     };
     let id = command.id.clone();
@@ -796,6 +796,7 @@ fn build_row(
         .presented(Role::Option)
         .toggled(selected)
         .a11y_label(move || name.clone())
+        .keyboard_shortcut(move || chord.as_deref().unwrap_or_default().to_string())
         .on_hover(hover)
         .on_press(press);
     if let Some(focus_id) = row.focus_id() {

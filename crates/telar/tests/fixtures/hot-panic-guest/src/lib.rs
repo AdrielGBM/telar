@@ -3,8 +3,9 @@
 //! Its tree is a themed panel around a line of text that counts the moves it was handed, so mounting, painting and moving over it reach what an app's would: the reactive runtime, layout, the theme, the text measurer and the input registries.
 
 use telar::{
-    App, AppCtx, Component, Event, EventResult, LayoutItem, LayoutStyle, RectStyle, RenderNode,
-    RwSignal, StyledContainer, Text, TextStyle, box_item, signal, use_theme_tokens,
+    App, AppCtx, Chord, Component, Event, EventResult, LayoutItem, LayoutStyle, RectStyle,
+    RenderNode, RwSignal, StyledContainer, Text, TextStyle, WindowConfig, box_item, signal,
+    use_theme_tokens,
 };
 
 struct PanicsOnPress {
@@ -53,7 +54,7 @@ impl Component for PanicsOnPress {
     }
 }
 
-/// Asks for a redraw every frame, so the host can tell whether its frame reached the guest.
+/// Asks for a redraw every frame, so the host can tell whether its frame reached the guest, and titles its window with a shortcut, so the host can read which keyboard the guest shows it for.
 struct Fixture;
 
 impl App for Fixture {
@@ -63,6 +64,14 @@ impl App for Fixture {
 
     fn on_frame(&mut self, ctx: &mut AppCtx) {
         ctx.request_redraw();
+    }
+
+    fn window_config(&self) -> Option<WindowConfig> {
+        let save = Chord::parse("Mod+S").expect("the shortcut parses");
+        Some(WindowConfig {
+            title: save.to_string(),
+            ..WindowConfig::default()
+        })
     }
 }
 

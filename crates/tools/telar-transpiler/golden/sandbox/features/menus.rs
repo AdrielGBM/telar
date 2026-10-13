@@ -208,15 +208,15 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                                                     let mut __slots = Slots::new();
                                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                                     if __request.includes(None) {
-                                                        let __node_17 = item(ItemProps::props().label("Undo").hint("⌘Z").build(), Children::default())?;
+                                                        let __node_17 = item(ItemProps::props().label("Undo").shortcut("Mod+Z").build(), Children::default())?;
                                                         __children.push(box_item(__node_17));
-                                                        let __node_18 = item(ItemProps::props().label("Redo").hint("⇧⌘Z").disabled(cant_redo.clone()).build(), Children::default())?;
+                                                        let __node_18 = item(ItemProps::props().label("Redo").shortcut("Mod+Shift+Z").disabled(cant_redo.clone()).build(), Children::default())?;
                                                         __children.push(box_item(__node_18));
                                                         let __node_19 = separator(SeparatorProps::props().build(), Children::default())?;
                                                         __children.push(box_item(__node_19));
                                                         let __node_20 = group(GroupProps::props().label("Clipboard").build(), Children::default())?;
                                                         __children.push(box_item(__node_20));
-                                                        let __node_21 = item(ItemProps::props().label("Cut").hint("⌘X").build(), Children::default())?;
+                                                        let __node_21 = item(ItemProps::props().label("Cut").shortcut("Mod+X").build(), Children::default())?;
                                                         __children.push(box_item(__node_21));
                                                         let __node_22 = item(ItemProps::props().label("Show ruler").checked(ruler.clone()).on_press(std::rc::Rc::new({ let ruler = ruler.clone(); move || ruler.set(!ruler.get()) })).build(), Children::default())?;
                                                         __children.push(box_item(__node_22));
@@ -244,7 +244,7 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                             card(CardProps::props().gap(10.0).build(), __deferred)?
                         };
                         __children.push(box_item(__node_15));
-                        let __node_25 = code_line(CodeLineProps::props().code("item label:'Redo' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on").build(), Children::default())?;
+                        let __node_25 = code_line(CodeLineProps::props().code("item label:'Redo' shortcut:'Mod+Shift+Z' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on").build(), Children::default())?;
                         __children.push(box_item(__node_25));
                     }
                     __slots.extend_default(__children);

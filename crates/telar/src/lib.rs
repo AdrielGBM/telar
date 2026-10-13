@@ -161,9 +161,10 @@ pub use licenses::icon_licenses;
 pub use licenses::install_icon_licenses as __install_icon_licenses;
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    ConsumedKeys, Cursor, Event, FullscreenMode, HasPopup, Key, NamedKey, NumericValue,
-    Orientation, ResizeEdge, ScrollDelta, WindowCommand, WindowConfig, WindowPosition,
-    push_window_command, take_window_commands,
+    Chord, ChordError, ConsumedKeys, Cursor, Event, FullscreenMode, HasPopup, Key,
+    KeyboardConvention, NamedKey, NumericValue, Orientation, ResizeEdge, ScrollDelta,
+    WindowCommand, WindowConfig, WindowPosition, keyboard_convention, push_window_command,
+    set_keyboard_convention, take_window_commands,
 };
 // The seam for an application rendering its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on. Two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
 #[cfg(feature = "hardware")]
@@ -346,18 +347,18 @@ pub use ui_core::{
     ScopeProvider, Scrim, ScrollPage, ScrollViewport, ScrollbarStyle, SlotRequest, Slots,
     StyledContainer, SurfaceScaffold, SurfaceTransition, Text, TextArea, TextRun, TransformOrigin,
     Transition, Underline, VirtualList, WindowRoot, absolute_rect, anchor_rect, animate_layout,
-    apply_move, box_item, box_transform, box_transform_about, close_overlay, compute_layout,
-    confirm_top, current_direction, declare, dismiss_depth, dismiss_top, drag_start, drag_travel,
-    exits_in_flight, focus, focus_ring_border, follow_control_size, follow_theme, fragment,
-    fragment_positional, inherited_text_style, insertion_index, interactive_rects, kept, key_held,
-    key_nav_apply, key_nav_apply_grid, key_pressed, line_box, logical_border_radius,
-    logical_border_widths, mark_dirty, modifiers, new_container, new_leaf, observe_keyboard,
-    observe_pointer, on_relayout, open_overlay, overlay_state, overlay_viewport, pointer_buttons,
-    provide_control_size, provide_theme, register_transaction, register_transaction_within,
-    relayout_if_dirty, remove_node, requested_cursor, set_children, set_direction, set_display,
-    set_min_height, set_overlay_host, shortcut_key, single_line_box, step_factor, style_follows,
-    track_layout, transform_pointer, undeclare, use_context, use_direction, use_dismiss_depth,
-    visible_window,
+    apply_move, box_item, box_transform, box_transform_about, chord_pressed, close_overlay,
+    compute_layout, confirm_top, current_direction, declare, dismiss_depth, dismiss_top,
+    drag_start, drag_travel, exits_in_flight, focus, focus_ring_border, follow_control_size,
+    follow_theme, fragment, fragment_positional, inherited_text_style, insertion_index,
+    interactive_rects, kept, key_held, key_nav_apply, key_nav_apply_grid, key_pressed, line_box,
+    logical_border_radius, logical_border_widths, mark_dirty, modifiers, new_container, new_leaf,
+    observe_keyboard, observe_pointer, on_relayout, open_overlay, overlay_state, overlay_viewport,
+    pointer_buttons, provide_control_size, provide_theme, register_transaction,
+    register_transaction_within, relayout_if_dirty, remove_node, requested_cursor, set_children,
+    set_direction, set_display, set_min_height, set_overlay_host, shortcut_key, single_line_box,
+    step_factor, style_follows, track_layout, transform_pointer, undeclare, use_context,
+    use_direction, use_dismiss_depth, visible_window,
 };
 #[cfg(feature = "async-assets")]
 pub use ui_core::{

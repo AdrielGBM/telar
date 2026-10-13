@@ -17,7 +17,7 @@ use super::{
 
 /// One snapshot run: every preview and matrix cell checked against its goldens, then a report.
 ///
-/// Making one makes the faces `config` declares the only ones text sets in for the rest of the process, so it is made before anything measures text: a process that already loaded the platform's fonts cannot forget them, and is refused rather than allowed to set a snapshot in a face that only one machine has.
+/// Making one makes the faces `config` declares the only ones text sets in for the rest of the process, so it is made before anything measures text: a process that already loaded the platform's fonts cannot forget them, and is refused rather than allowed to set a snapshot in a face that only one machine has. It also shows every shortcut as a PC does, for the same reason.
 pub struct Snapshots {
     paths: SnapshotPaths,
     mode: SnapshotMode,
@@ -38,6 +38,7 @@ impl Snapshots {
             config.font_family.iter().cloned().collect(),
         )
         .map_err(SnapshotError::Fonts)?;
+        platform_core::set_keyboard_convention(platform_core::KeyboardConvention::Pc);
         Ok(Self {
             paths,
             mode,

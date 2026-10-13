@@ -340,11 +340,6 @@ fn a_reader_hears_the_dialog_s_name_and_each_row_with_its_shortcut() {
             .any(|node| node.role == Role::Dialog && node.name == "Command palette"),
         "the dialog is named"
     );
-    let command = if cfg!(target_os = "macos") {
-        "⌘"
-    } else {
-        "Ctrl"
-    };
     let rows: Vec<&str> = nodes
         .iter()
         .filter(|node| node.role == Role::Option)
@@ -353,12 +348,22 @@ fn a_reader_hears_the_dialog_s_name_and_each_row_with_its_shortcut() {
     assert_eq!(
         rows,
         [
-            format!("Open file, {command}+O").as_str(),
-            &format!("Save, {command}+S"),
+            "Open file, Ctrl+O",
+            "Save, Ctrl+S",
             "Toggle dark mode",
             "Zoom in",
             "About"
         ]
+    );
+    let keys: Vec<Option<&str>> = nodes
+        .iter()
+        .filter(|node| node.role == Role::Option)
+        .map(|node| node.keyboard_shortcut.as_deref())
+        .collect();
+    assert_eq!(
+        keys,
+        [Some("Control+O"), Some("Control+S"), None, None, None],
+        "and is told the keys of a row that has them"
     );
 }
 

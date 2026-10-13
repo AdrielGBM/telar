@@ -45,6 +45,8 @@ pub struct AccessNode {
     pub controls: Option<u64>,
     /// What the node opens: the menu a menu button drops, the list a combobox opens. `None` for a node that opens nothing.
     pub has_popup: Option<HasPopup>,
+    /// The chord that runs the same command as the node, in `aria-keyshortcuts` syntax (`Control+Shift+Z`). `None` for a node with no such key.
+    pub keyboard_shortcut: Option<String>,
 }
 
 /// The snapshot as a reader would speak it, one line per node in reading order: what a terminal, a log or a test can carry where there is no accessibility API to hand the nodes to.
@@ -71,6 +73,10 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         if let Some(popup) = node.has_popup {
             out.push_str(", has ");
             out.push_str(popup.as_str());
+        }
+        if let Some(keys) = &node.keyboard_shortcut {
+            out.push_str(", shortcut ");
+            out.push_str(keys);
         }
         if let Some(open) = node.expanded {
             out.push_str(if open { ", expanded" } else { ", collapsed" });

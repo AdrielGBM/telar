@@ -44,3 +44,69 @@ fn each_line_of_the_channel_is_the_event_its_prefix_names() {
     assert_eq!(hot_event("focus"), Some(HotEvent::Focus));
     assert_eq!(hot_event("/target/debug/libapp.so"), None);
 }
+
+thread_local! {
+    static HANDED: std::cell::Cell<Option<platform_core::KeyboardConvention>> = const { std::cell::Cell::new(None) };
+    static HANDED_BEFORE_BUILD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+struct Blank;
+
+impl App for Blank {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        Box::new(BlankView)
+    }
+}
+
+struct BlankView;
+
+impl ui_tree::Component for BlankView {
+    fn view(&self) -> ui_tree::RenderNode {
+        ui_tree::RenderNode::group([])
+    }
+}
+
+fn hand_over(services: HostServices) -> GuestResult<()> {
+    HANDED.set(Some(services.keyboard_convention));
+    Ok(())
+}
+
+fn build_blank() -> GuestResult<Box<dyn App>> {
+    HANDED_BEFORE_BUILD.set(HANDED.get().is_some());
+    guest::create_app(|| Box::new(Blank))
+}
+
+fn foreign_convention() -> platform_core::KeyboardConvention {
+    match platform_core::KeyboardConvention::native() {
+        platform_core::KeyboardConvention::Mac => platform_core::KeyboardConvention::Pc,
+        platform_core::KeyboardConvention::Pc => platform_core::KeyboardConvention::Mac,
+    }
+}
+
+/// A build carries its own copy of the convention, which left alone answers for the system it was compiled on: a terminal host on a Mac matches Ctrl while the build would show ⌘.
+#[test]
+fn a_build_is_handed_the_host_keyboard_convention_before_it_is_made() {
+    let host = foreign_convention();
+    platform_core::set_keyboard_convention(host);
+    let exports = GuestExports {
+        install_services: hand_over,
+        ..GuestExports::in_process()
+    };
+    let app = HotApp::start(exports, build_blank, None);
+    assert_eq!(HANDED.get(), Some(host));
+    assert!(
+        HANDED_BEFORE_BUILD.get(),
+        "the app's setup already shows shortcuts the host's way"
+    );
+    drop(app);
+}
+
+#[test]
+fn installing_the_host_services_installs_its_keyboard_convention() {
+    let host = foreign_convention();
+    platform_core::set_keyboard_convention(host);
+    let services = HostServices::installed();
+    platform_core::set_keyboard_convention(platform_core::KeyboardConvention::native());
+    services.install();
+    assert_eq!(platform_core::keyboard_convention(), host);
+}

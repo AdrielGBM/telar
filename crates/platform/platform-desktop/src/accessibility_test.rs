@@ -21,6 +21,7 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         active_descendant: None,
         controls: None,
         has_popup: None,
+        keyboard_shortcut: None,
     }
 }
 
@@ -814,4 +815,19 @@ fn a_splitter_publishes_its_value_and_its_orientation() {
         published.orientation(),
         Some(accesskit::Orientation::Horizontal)
     );
+}
+
+/// A control that runs the same command as a key publishes it as the node's keyboard shortcut; one with no such key publishes none.
+#[test]
+fn a_control_publishes_the_keys_that_run_its_command() {
+    let nodes = [
+        AccessNode {
+            keyboard_shortcut: Some("Control+Z".to_string()),
+            ..node(Some(1), Role::MenuItem, "Undo")
+        },
+        node(Some(2), Role::MenuItem, "Close"),
+    ];
+    let update = tree_update(&nodes, "Edit", None);
+    assert_eq!(update.nodes[0].1.keyboard_shortcut(), Some("Control+Z"));
+    assert_eq!(update.nodes[1].1.keyboard_shortcut(), None);
 }

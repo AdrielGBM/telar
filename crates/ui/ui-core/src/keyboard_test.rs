@@ -156,3 +156,51 @@ fn a_press_with_no_unmodified_key_is_its_own_shortcut_key() {
     });
     assert_eq!(shortcut_key(&up()), up());
 }
+
+fn press(key: char, unmodified: Option<char>, modifiers: ModifiersState) -> Key {
+    let key = Key::Char(key);
+    observe(&Event::KeyPressed {
+        key: key.clone(),
+        modifiers,
+        unmodified: unmodified.map(Key::Char),
+    });
+    key
+}
+
+#[test]
+fn a_chord_is_pressed_with_the_primary_modifier_of_the_convention_in_force() {
+    use platform_core::{KeyboardConvention, set_keyboard_convention};
+
+    fresh();
+    let undo = Chord::parse("Mod+Z").unwrap();
+    let ctrl = ModifiersState {
+        is_ctrl: true,
+        ..ModifiersState::default()
+    };
+    let command = ModifiersState {
+        is_meta: true,
+        ..ModifiersState::default()
+    };
+    set_keyboard_convention(KeyboardConvention::Pc);
+    assert!(chord_pressed(&undo, &press('z', None, ctrl)));
+    assert!(!chord_pressed(&undo, &press('z', None, command)));
+    set_keyboard_convention(KeyboardConvention::Mac);
+    assert!(chord_pressed(&undo, &press('z', None, command)));
+    assert!(!chord_pressed(&undo, &press('z', None, ctrl)));
+}
+
+#[test]
+fn a_chord_held_with_alt_is_matched_on_the_key_without_modifiers() {
+    fresh();
+    let alt = ModifiersState {
+        is_alt: true,
+        ..ModifiersState::default()
+    };
+    let cycle = Chord::parse("Alt+T").unwrap();
+    assert!(chord_pressed(&cycle, &press('†', Some('t'), alt)));
+    assert!(!chord_pressed(&cycle, &press('œ', Some('q'), alt)));
+    assert!(
+        chord_pressed(&Chord::parse("?").unwrap(), &press('?', Some('/'), shift())),
+        "without Alt the key is read as typed"
+    );
+}

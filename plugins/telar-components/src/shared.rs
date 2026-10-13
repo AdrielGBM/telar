@@ -3,7 +3,7 @@
 //! **The rule.** A component takes every length, corner, border, wash and weight from a function here (or from its own `XTokens`, which default to one of these), never from a literal or from a primitive token scaled by a factor of its own. Two components that draw the same kind of thing then cannot disagree, and a theme or a control size moves them together. The subset an application needs to draw controls of its own that sit beside the catalogue's is public as [`crate::metrics`].
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Color, Container, LayoutError, LayoutItem,
+    Accessible, AlignItems, Border, BorderRadius, Chord, Color, Container, LayoutError, LayoutItem,
     LayoutStyle, Reactive, Rect, RectStyle, StyledContainer, Text, TextStyle, box_item,
     focus::Role, style_follows, use_theme_tokens,
 };
@@ -474,4 +474,12 @@ pub fn mark(
     .a11y_hidden();
     style_follows(canvas.layout_node(), move || mark_box(shape()));
     Ok(box_item(canvas))
+}
+
+/// `chord` the way the platform writes it, `⇧⌘Z` on a Mac and `Ctrl+Shift+Z` elsewhere: what a hint shows and a reader hears. Text that names no [`Chord`] is shown as written.
+pub(crate) fn shown_chord(chord: &str) -> String {
+    match Chord::parse(chord) {
+        Ok(parsed) => parsed.to_string(),
+        Err(_) => chord.trim().to_string(),
+    }
 }
