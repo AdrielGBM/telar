@@ -10,6 +10,7 @@ use telar_components::DOUBLE_CLICK;
 use telar_devtools::workbench_scope;
 
 use super::*;
+use crate::arrangement::FIND_FIELD_COMFORT;
 use crate::test_support::{sample_previews, settle};
 
 const HEIGHT: u32 = 800;

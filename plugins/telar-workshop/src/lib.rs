@@ -12,6 +12,8 @@
 //! Its text is in English under the `telar_workshop` namespace, which an application translates or overrides from its own catalog with `telar_workshop.<key>`.
 #![warn(rustdoc::broken_intra_doc_links)]
 
+telar::rsx_modules!();
+
 mod address;
 mod app;
 mod arrangement;

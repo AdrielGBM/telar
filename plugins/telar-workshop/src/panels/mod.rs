@@ -1,5 +1,7 @@
 //! The panels along the canvas: a strip of tabs over the panel it shows, Controls, Actions, Interactions, Layout, Accessibility or Snapshot. Layout and Accessibility are the devtools' inspection panels over the mounted canvas, the same ones the overlay shows over a whole window. Source joins the strip as it lands.
 
+telar::rsx_modules!();
+
 mod actions;
 mod controls;
 mod editors;

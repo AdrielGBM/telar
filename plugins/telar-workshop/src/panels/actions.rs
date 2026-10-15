@@ -1,28 +1,18 @@
 //! The actions panel: the calls the mounted preview's callbacks received, newest first, each with what it was called with, narrowed by a filter.
 
-use std::rc::Rc;
-
 use telar::preview::{ActionCall, ActionLog};
 use telar::{
-    Accessible, AlignItems, Border, Children, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutScrollArea, LayoutStyle, Memo, Reactive, ReactiveList, RectStyle, Role, StyledContainer,
-    Text, box_item, children, memo,
+    Accessible, AlignItems, Children, Container, JustifyContent, LayoutError, LayoutItem,
+    LayoutScrollArea, LayoutStyle, Memo, Reactive, ReactiveList, Role, Text, box_item, children,
+    memo,
 };
-use telar_components::{
-    BadgeProps, ButtonProps, ButtonVariant, TextFieldProps, badge, button, text_field,
-};
-use telar_devtools::{
-    WORKBENCH_GRID, use_workbench_tokens, workbench_fill, workbench_mono, workbench_muted,
-};
+use telar_components::{BadgeProps, badge};
+use telar_devtools::{workbench_fill, workbench_muted};
 
+use super::action_row::{ActionRowProps, action_row};
+use super::actions_tools::{ActionsToolsProps, actions_tools};
 use crate::state::WorkshopState;
-use crate::strings::{
-    self, ACTIONS, CLEAR_ACTIONS, FILTER_ACTIONS, NO_ACTIONS, NO_MATCHING_ACTIONS,
-};
-
-const SEQ_WIDTH: f32 = 48.0;
-const NAME_WIDTH: f32 = 160.0;
-const FILTER_WIDTH: f32 = 200.0;
+use crate::strings::{self, ACTIONS, NO_ACTIONS, NO_MATCHING_ACTIONS};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Shown {
@@ -76,30 +66,13 @@ pub(super) fn matching(calls: &[ActionCall], filter: &str) -> Vec<ActionCall> {
 
 /// The filter field and the button that empties the log, for the end of the strip while this panel is shown.
 pub(super) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let filter = text_field(
-        TextFieldProps::props()
-            .value(state.actions_filter())
-            .placeholder(Reactive::of(|| strings::text(FILTER_ACTIONS)))
-            .width(FILTER_WIDTH)
+    actions_tools(
+        ActionsToolsProps::props()
+            .filter(state.actions_filter())
+            .log(state.actions())
             .build(),
         Children::default(),
-    )?;
-    let log = state.actions();
-    let clear = button(
-        ButtonProps::props()
-            .label(Reactive::of(|| strings::text(CLEAR_ACTIONS)))
-            .variant(ButtonVariant::Ghost)
-            .on_press(Rc::new(move || log.clear()))
-            .build(),
-        Children::default(),
-    )?;
-    let tools = Container::new(
-        LayoutStyle::row()
-            .align_items(AlignItems::CENTER)
-            .gap(WORKBENCH_GRID),
-        vec![filter, clear],
-    )?;
-    Ok(box_item(tools))
+    )
 }
 
 /// How many calls `log` took since it was last emptied, for the panel's tab; nothing while there are none.
@@ -127,7 +100,12 @@ fn calls(listed: Memo<Vec<ActionCall>>) -> Result<Box<dyn LayoutItem>, LayoutErr
     let rows = ReactiveList::keyed(
         move || listed.get(),
         |call: &ActionCall| call.seq,
-        |call| row(&call.peek()),
+        |call| {
+            action_row(
+                ActionRowProps::props().call(call.peek()).build(),
+                Children::default(),
+            )
+        },
     )?;
     let log = Container::column(children![rows])?
         .role(Role::Log)
@@ -135,48 +113,6 @@ fn calls(listed: Memo<Vec<ActionCall>>) -> Result<Box<dyn LayoutItem>, LayoutErr
     let scroll = LayoutScrollArea::new(LayoutStyle::new().flex_grow(1.0), box_item(log))?
         .stop_label(|| strings::text(ACTIONS));
     Ok(box_item(scroll))
-}
-
-fn row(call: &ActionCall) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let seq = format!("#{}", call.seq);
-    let seq = Text::declaring(
-        move || seq.clone(),
-        LayoutStyle::new().width(SEQ_WIDTH).flex_shrink(0.0),
-        |text| workbench_muted(workbench_mono(text)),
-    )?;
-    let name = call.name;
-    let name = Text::declaring(
-        move || name.to_string(),
-        LayoutStyle::new().width(NAME_WIDTH).flex_shrink(0.0),
-        |text| text.with_font_weight(600),
-    )?;
-    let payload = call.args.join(", ");
-    let payload = Text::declaring(
-        move || payload.clone(),
-        LayoutStyle::new()
-            .flex_grow(1.0)
-            .flex_basis(0.0)
-            .min_width(0.0),
-        workbench_mono,
-    )?;
-    let line = StyledContainer::new(
-        LayoutStyle::row()
-            .align_items(AlignItems::CENTER)
-            .gap(WORKBENCH_GRID * 2.0)
-            .padding_horizontal(WORKBENCH_GRID * 1.5)
-            .padding_vertical(WORKBENCH_GRID),
-        |_| {
-            RectStyle::default().with_border(Border::per_side(
-                use_workbench_tokens().border_subtle,
-                0.0,
-                0.0,
-                1.0,
-                0.0,
-            ))
-        },
-        children![seq, name, payload],
-    )?;
-    Ok(box_item(line))
 }
 
 fn empty(key: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {

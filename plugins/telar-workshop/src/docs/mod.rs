@@ -2,8 +2,9 @@
 //!
 //! The page is the selected preview's component, as the sidebar lists it by title. It opens with the prose its previews carry and the props' own doc, shows the component's first preview with its controls and source, lists the props, and then shows every other preview over its source, each mounted the first time it scrolls into view. The previews' callbacks log their calls in the workshop's one action log, which each page empties as it opens.
 
+telar::rsx_modules!();
+
 mod frame;
-mod props;
 
 use std::rc::Rc;
 
@@ -79,7 +80,10 @@ fn page(state: &WorkshopState, title: &'static str) -> Result<Box<dyn LayoutItem
     items.extend(source(primary)?);
     if let Some(schema) = schema.filter(|schema| !schema.fields.is_empty()) {
         items.push(section_heading(PROPS)?);
-        items.push(props::table(schema)?);
+        items.push(props_table::props_table(
+            props_table::PropsTableProps::props().schema(schema).build(),
+            Children::default(),
+        )?);
     }
     if !others.is_empty() {
         items.push(section_heading(PREVIEWS)?);

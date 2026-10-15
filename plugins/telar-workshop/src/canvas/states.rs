@@ -1,65 +1,19 @@
 //! What the canvas shows in place of a preview: that there are none, or the card for one that failed.
 
-use std::rc::Rc;
-
 use telar::preview::PreviewEntry;
-use telar::{
-    AlignItems, BuildFailure, Children, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, Role, ShapeStyle, StyledContainer, Text, box_item, children, open_uri,
-    use_theme_tokens,
-};
-use telar_components::{ButtonProps, button};
-use telar_devtools::{
-    WORKBENCH_GRID, use_workbench_tokens, workbench_card, workbench_mono, workbench_muted,
-    workbench_scope,
-};
+use telar::{BuildFailure, Children, LayoutError, LayoutItem};
 
-use super::remount_button;
+use super::failure_card::{FailureCardProps, failure_card};
+use super::no_previews::{NoPreviewsProps, no_previews};
 use crate::state::WorkshopState;
-use crate::strings::{self, BUILD_FAILED, NO_PREVIEWS, NO_PREVIEWS_HINT, OPEN_IN_EDITOR, PANICKED};
-
-const CARD_MAX_WIDTH: f32 = 480.0;
+use crate::strings::{BUILD_FAILED, PANICKED};
 
 pub(crate) fn empty() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let title = Text::declaring(
-        || strings::text(NO_PREVIEWS),
-        LayoutStyle::new(),
-        |text| text.with_font_weight(600),
-    )?;
-    let hint = Text::declaring(
-        || strings::text(NO_PREVIEWS_HINT),
-        LayoutStyle::new().max_width(CARD_MAX_WIDTH),
-        workbench_muted,
-    )?;
-    let centred = Container::new(
-        LayoutStyle::column()
-            .flex_grow(1.0)
-            .min_height(0.0)
-            .gap(WORKBENCH_GRID)
-            .padding_all(WORKBENCH_GRID * 2.0)
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER),
-        children![title, hint],
-    )?
-    .role(Role::Status);
-    Ok(box_item(centred))
+    no_previews(NoPreviewsProps::props().build(), Children::default())
 }
 
-/// The card a preview's canvas shows when building it failed: what went wrong, where the preview is written, and a way to open it there or, after a panic, to mount it afresh.
-///
-/// Built inside the canvas, in the workbench theme rather than the application's: the card is the workshop speaking.
+/// The card a preview's canvas shows when building it failed, in the workbench theme rather than the application's.
 pub(crate) fn failure(
-    state: &WorkshopState,
-    entry: &PreviewEntry,
-    failure: BuildFailure,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let (state, entry) = (state.clone(), *entry);
-    Ok(box_item(workbench_scope(move || {
-        card(&state, &entry, failure)
-    })?))
-}
-
-fn card(
     state: &WorkshopState,
     entry: &PreviewEntry,
     failure: BuildFailure,
@@ -68,65 +22,25 @@ fn card(
         BuildFailure::Failed(err) => (BUILD_FAILED, err.to_string(), false),
         BuildFailure::Panicked(message) => (PANICKED, message, true),
     };
-    let heading = Text::declaring(
-        move || strings::text(heading),
-        LayoutStyle::new(),
-        |text| {
-            text.with_font_weight(600)
-                .with_color(use_theme_tokens().error())
-        },
-    )?;
-    let detail = Text::declaring(move || detail.clone(), LayoutStyle::new(), workbench_mono)?;
-    let mut items = children![heading, detail];
-    let mut actions = Vec::new();
-    if let Some(location) = location(entry) {
-        items.push(box_item(Text::declaring(
-            move || location.clone(),
-            LayoutStyle::new(),
-            |text| workbench_muted(workbench_mono(text)),
-        )?));
-        actions.push(open_in_editor(entry.file, entry.line)?);
-    }
-    if panicked {
-        actions.push(remount_button(state)?);
-    }
-    if !actions.is_empty() {
-        items.push(box_item(Container::new(
-            LayoutStyle::row().gap(WORKBENCH_GRID),
-            actions,
-        )?));
-    }
-    let card = StyledContainer::new(
-        LayoutStyle::column()
-            .gap(WORKBENCH_GRID)
-            .padding_all(WORKBENCH_GRID * 2.0)
-            .max_width(CARD_MAX_WIDTH),
-        |_| workbench_card().with_fill(use_workbench_tokens().panel_background),
-        items,
-    )?
-    .role(Role::Status);
-    Ok(box_item(card))
+    failure_card(
+        FailureCardProps::props()
+            .state(state.clone())
+            .entry(*entry)
+            .heading(heading)
+            .detail(detail)
+            .panicked(panicked)
+            .build(),
+        Children::default(),
+    )
 }
 
 /// `file:line`, or `None` when the preview's file is unknown.
-fn location(entry: &PreviewEntry) -> Option<String> {
+pub(super) fn location(entry: &PreviewEntry) -> Option<String> {
     match (entry.file, entry.line) {
         ("", _) => None,
         (file, 0) => Some(file.to_owned()),
         (file, line) => Some(format!("{file}:{line}")),
     }
-}
-
-fn open_in_editor(file: &'static str, line: u32) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    button(
-        ButtonProps::props()
-            .label(Reactive::of(|| strings::text(OPEN_IN_EDITOR)))
-            .on_press(Rc::new(move || {
-                open_uri(&editor_uri(file, line));
-            }))
-            .build(),
-        Children::default(),
-    )
 }
 
 /// The URI that opens `file` at `line` in the editor the system hands it to, the path percent-encoded and with forward slashes on every platform.

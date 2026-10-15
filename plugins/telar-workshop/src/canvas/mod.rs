@@ -2,6 +2,8 @@
 //!
 //! Each mount is a new [`telar::SurfaceCanvas`] shown through a [`telar::SurfaceFrame`], with the preview built inside an error boundary by [`mount_preview`]: a failed build or a panic shows a card in the canvas, and the workshop around it keeps running. An arg the preview read at build builds it again inside the same canvas; [`WorkshopState::remount`] replaces the canvas itself. The preview's callbacks log their calls in the workshop's one action log, which each mount empties, and its play drives the canvas as the interactions panel says.
 
+telar::rsx_modules!();
+
 pub(crate) mod env;
 mod frame;
 mod guides;
@@ -16,9 +18,7 @@ use telar::{
     ReactiveList, RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer, Text,
     box_item, children, on_cleanup,
 };
-use telar_components::{
-    ButtonProps, ButtonVariant, IconButtonProps, ToolbarProps, button, icon_button, toolbar,
-};
+use telar_components::{IconButtonProps, ToolbarProps, icon_button, toolbar};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_fill};
 use telar_icons::icon;
 
@@ -188,18 +188,6 @@ fn canvas_tools(
             .label(Reactive::of(|| strings::text(CANVAS_TOOLS)))
             .build(),
         tools,
-    )
-}
-
-fn remount_button(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let state = state.clone();
-    button(
-        ButtonProps::props()
-            .label(Reactive::of(|| strings::text(REMOUNT)))
-            .variant(ButtonVariant::Ghost)
-            .on_press(Rc::new(move || state.remount()))
-            .build(),
-        Children::default(),
     )
 }
 

@@ -2,27 +2,27 @@
 //!
 //! The trigger is centred on the window rather than between its neighbours: the two ends split the rest of the bar evenly whatever each holds. A window too narrow for that sets it between the two groups instead, as far from one as from the other, rather than letting the group that needs more push it towards the other and leave a gap on one side only.
 
+telar::rsx_modules!();
+
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Clip, ClippedItem, Container,
-    JustifyContent, LayoutError, LayoutItem, LayoutStyle, Memo, NodeId, Reactive, ReactiveList,
-    Rect, RectStyle, Role, RwSignal, ShapeStyle, Slots, StyledContainer, Text, TextWrap, box_item,
-    children, memo, signal, style_follows, track_layout,
+    AlignItems, BorderRadius, Children, Container, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Memo, NodeId, Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal,
+    StyledContainer, Text, TextWrap, box_item, children, memo, signal, style_follows, track_layout,
 };
 use telar_components::metrics::{control_height, control_pad_x, radius_control};
 use telar_components::{
-    IconButtonProps, TitleBarOptions, TooltipProps, WindowControlsProps, icon_button, title_bar,
-    tooltip,
+    IconButtonProps, TitleBarOptions, WindowControlsProps, icon_button, title_bar,
 };
-use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, use_workbench_tokens, workbench_muted};
-use telar_icons::{IconProps, icon};
+use telar_devtools::WORKBENCH_GRID;
 
-use crate::arrangement::{FIND_FIELD_COMFORT, FindPlacement};
+use crate::arrangement::FindPlacement;
 use crate::keymap::{Action, Keymap};
 use crate::state::WorkshopState;
-use crate::strings::{self, FIND, FIND_IN, PREVIEW, PREVIEWS, WORKSHOP};
+use crate::strings::{self, FIND_IN, PREVIEW, PREVIEWS, WORKSHOP};
 use crate::{canvas_toolbar, view_switch};
+use find_field::{FindFieldProps, find_field};
 
 const HEIGHT: f32 = 40.0;
 const GAP: f32 = WORKBENCH_GRID * 2.0;
@@ -209,80 +209,6 @@ fn sidebar_opener(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutEr
     )
 }
 
-/// Drawn as the field the palette searches in, with the project's name in it, and pressed to open the palette, as the shortcut its tooltip names does from anywhere a field is not taking text.
-fn find_trigger(
-    keymap: &Keymap,
-    project: Rc<dyn Fn() -> String>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let search = icon(
-        IconProps::props()
-            .name(telar_icons::icon!("lucide:search"))
-            .size(WORKBENCH_GRID * 2.0)
-            .color(Reactive::of(|| use_workbench_tokens().text_muted))
-            .build(),
-        Children::default(),
-    )?;
-    let shown = Rc::clone(&project);
-    let name = Text::declaring(
-        move || shown(),
-        LayoutStyle::new().min_width(0.0),
-        |text| workbench_muted(text).with_text_wrap(TextWrap::NoWrap),
-    )?;
-    let keymap = keymap.clone();
-    let field = StyledContainer::new(
-        LayoutStyle::row()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER)
-            .flex_grow(1.0)
-            .min_width(0.0)
-            .height(telar_components::metrics::control_height())
-            .padding_horizontal(WORKBENCH_GRID)
-            .gap(WORKBENCH_GRID),
-        |_| field_paint(false),
-        vec![
-            search,
-            box_item(ClippedItem::new(box_item(name), Clip::x())),
-        ],
-    )?
-    .hover_style(|_| field_paint(true))
-    .control(Role::Button)
-    .a11y_label(move || strings::text_with(FIND_IN, &project()))
-    .on_press(move || keymap.run(Action::Find))
-    .holds_stroke();
-    let mut slots = Slots::new();
-    slots.push(None, box_item(field));
-    let hinted = tooltip(
-        TooltipProps::props()
-            .text(Reactive::of(|| strings::text(FIND)))
-            .shortcut(Action::Find.chords()[0].to_string())
-            .stretch(true)
-            .build(),
-        Children::from(slots),
-    )?;
-    let middle = Container::new(
-        LayoutStyle::row()
-            .align_items(AlignItems::CENTER)
-            .width(FIND_WIDTH)
-            .flex_shrink(1.0)
-            .min_width(FIND_FIELD_COMFORT),
-        vec![hinted],
-    )?;
-    Ok(box_item(middle))
-}
-
-fn field_paint(hovered: bool) -> RectStyle {
-    let tokens = use_workbench_tokens();
-    let fill = if hovered {
-        tokens.canvas_backdrop
-    } else {
-        tokens.sidebar_background
-    };
-    RectStyle::default()
-        .with_fill(fill)
-        .with_border(Border::uniform(tokens.border_subtle, 1.0))
-        .with_radius(BorderRadius::all(WORKBENCH_RADIUS))
-}
-
 /// The palette's field in the middle of the bar, while the bar has room for one: as wide as the field while the field is centred, and the whole room between the groups, the field in the middle of it, while it is not.
 fn middle(
     keymap: &Keymap,
@@ -310,7 +236,15 @@ fn middle(
             FindPlacement::Button => Vec::new(),
         },
         |_: &()| (),
-        move |_| find_trigger(&keymap, Rc::clone(&project)),
+        move |_| {
+            find_field(
+                FindFieldProps::props()
+                    .keymap(keymap.clone())
+                    .project(Rc::clone(&project))
+                    .build(),
+                Children::default(),
+            )
+        },
     )?;
     style_follows(middle.layout_node(), style);
     Ok(box_item(middle))
