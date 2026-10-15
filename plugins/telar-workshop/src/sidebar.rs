@@ -8,9 +8,9 @@ use std::rc::Rc;
 use telar::focus::{self, Role};
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Input, Key, LayoutError, LayoutItem,
+    Accessible, AlignItems, BorderRadius, Children, Container, Input, Key, LayoutError, LayoutItem,
     LayoutStyle, Memo, NamedKey, NodeId, Reactive, ReactiveList, RectStyle, StyledContainer, Text,
-    box_item, effect, memo, single_line_box, use_theme_tokens,
+    box_item, children, effect, memo, single_line_box, use_theme_tokens,
 };
 use telar_components::{TrailingBuilder, TreeNode, TreeViewProps, tree_view};
 use telar_devtools::{
@@ -35,10 +35,7 @@ pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layo
     let items = panel.items;
     let body_panel = panel.clone();
     let body = ReactiveList::with_style(
-        LayoutStyle::new()
-            .flex_column()
-            .flex_grow(1.0)
-            .min_height(0.0),
+        LayoutStyle::column().flex_grow(1.0).min_height(0.0),
         move || vec![items.with(Vec::is_empty)],
         |is_empty: &bool| *is_empty,
         move |is_empty| match is_empty {
@@ -46,12 +43,8 @@ pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layo
             false => tree(&body_panel),
         },
     )?;
-    let sidebar = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
-            .flex_grow(1.0)
-            .min_height(0.0),
-        |_| RectStyle::default(),
+    let sidebar = Container::new(
+        LayoutStyle::column().flex_grow(1.0).min_height(0.0),
         vec![box_item(heading), search_field(&panel)?, box_item(body)],
     )?;
     Ok(box_item(sidebar))
@@ -163,22 +156,19 @@ fn search_field(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let focus = input.focus_id();
     panel.state.set_search_field(focus);
     let field = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .padding_horizontal(WORKBENCH_GRID)
             .bordered(),
         |_| workbench_card(),
-        vec![box_item(input)],
+        children![input],
     )?
     .frames_focus_of(focus);
-    let margin = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+    let margin = Container::new(
+        LayoutStyle::column()
             .flex_shrink(0.0)
             .padding_horizontal(WORKBENCH_GRID)
             .padding_bottom(WORKBENCH_GRID),
-        |_| RectStyle::default(),
-        vec![box_item(field)],
+        children![field],
     )?;
     Ok(box_item(margin))
 }
@@ -195,7 +185,7 @@ fn empty(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new(),
         workbench_muted,
     )?;
-    let mut children = vec![box_item(message)];
+    let mut children = children![message];
     if !panel.state.entries().is_empty() {
         let search = panel.state.search();
         let label = Text::declaring(
@@ -204,25 +194,22 @@ fn empty(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
             |text| text.with_color(use_theme_tokens().primary()),
         )?;
         let clear = StyledContainer::new(
-            LayoutStyle::new()
-                .flex_row()
+            LayoutStyle::row()
                 .padding_horizontal(WORKBENCH_GRID)
                 .padding_vertical(WORKBENCH_GRID / 2.0),
             |_| RectStyle::default().with_radius(BorderRadius::all(WORKBENCH_RADIUS)),
-            vec![box_item(label)],
+            children![label],
         )?
         .control(Role::Button)
         .a11y_label(|| strings::text(CLEAR_SEARCH))
         .on_press(move || search.set(String::new()));
         children.push(box_item(clear));
     }
-    let column = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+    let column = Container::new(
+        LayoutStyle::column()
             .align_items(AlignItems::START)
             .padding_horizontal(WORKBENCH_GRID * 2.0)
             .gap(WORKBENCH_GRID),
-        |_| RectStyle::default(),
         children,
     )?;
     Ok(box_item(column))

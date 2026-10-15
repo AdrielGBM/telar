@@ -5,9 +5,9 @@ use std::rc::Rc;
 use telar::preview::host::{ArgState, Args};
 use telar::preview::{ControlKind, PreviewEntry, PropDefault};
 use telar::{
-    Accessible, AlignItems, Border, Children, JustifyContent, LayoutError, LayoutItem,
+    Accessible, AlignItems, Border, Children, Container, JustifyContent, LayoutError, LayoutItem,
     LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer, Text,
-    box_item,
+    box_item, children,
 };
 use telar_components::{ButtonProps, ButtonVariant, button};
 use telar_devtools::{
@@ -61,7 +61,7 @@ fn preview_controls(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> {
 pub(crate) fn arg_table(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let listed = args.clone();
     let table = ReactiveList::with_style(
-        LayoutStyle::new().flex_column(),
+        LayoutStyle::column(),
         move || match listed.states().is_empty() {
             true => Vec::new(),
             false => vec![()],
@@ -90,11 +90,7 @@ fn table(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> {
             })
         },
     )?;
-    let table = StyledContainer::new(
-        LayoutStyle::new().flex_column(),
-        |_| RectStyle::default(),
-        vec![heading()?, box_item(rows)],
-    )?;
+    let table = Container::column(vec![heading()?, box_item(rows)])?;
     Ok(box_item(table))
 }
 
@@ -125,17 +121,15 @@ fn row(binding: Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new(),
         |text| workbench_muted(workbench_mono(text)),
     )?;
-    let name = StyledContainer::new(
+    let name = Container::new(
         fixed(NAME_WIDTH).flex_column().gap(WORKBENCH_GRID / 4.0),
-        |_| RectStyle::default(),
-        vec![box_item(name), box_item(ty)],
+        children![name, ty],
     )?;
     let editor = editors::editor(&binding, state.peek().control)?;
-    let value = StyledContainer::new(
+    let value = Container::new(
         fixed(VALUE_WIDTH)
             .flex_row()
             .align_items(AlignItems::CENTER),
-        |_| RectStyle::default(),
         vec![editor.item],
     )?;
     let default = Text::declaring(
@@ -227,8 +221,7 @@ fn reset_button(binding: &Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 fn line(cells: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let line = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID * 2.0)
             .padding_horizontal(WORKBENCH_GRID * 1.5)
@@ -259,7 +252,7 @@ fn growing() -> LayoutStyle {
 }
 
 fn spacer(width: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let spacer = StyledContainer::new(fixed(width), |_| RectStyle::default(), Vec::new())?;
+    let spacer = Container::new(fixed(width), Vec::new())?;
     Ok(box_item(spacer))
 }
 
@@ -269,12 +262,11 @@ fn empty(key: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new(),
         workbench_muted,
     )?;
-    let centred = StyledContainer::new(
+    let centred = Container::new(
         workbench_fill()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
-        |_| RectStyle::default(),
-        vec![box_item(message)],
+        children![message],
     )?;
     Ok(box_item(centred))
 }

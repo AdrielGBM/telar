@@ -5,9 +5,9 @@
 //! The workspace — the canvas area and the panels, each a region of it — is the main landmark, and it holds both splitters: the one between it and the sidebar too, so a reader finds nothing between the landmarks.
 
 use telar::{
-    Accessible, Children, Color, Key, LayoutError, LayoutItem, LayoutStyle, Movable, Reactive,
-    ReactiveList, RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer, box_item,
-    effect,
+    Accessible, Children, Color, Container, Key, LayoutError, LayoutItem, LayoutStyle, Movable,
+    Reactive, ReactiveList, RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer,
+    box_item, children, effect,
 };
 use telar_components::{
     DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer, split_pane,
@@ -56,8 +56,7 @@ pub(crate) fn shell_in(
         regions.push(window_edges()?);
     }
     let root = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .width(SizeDimension::Percent(1.0))
             .height(SizeDimension::Percent(1.0)),
         |_| RectStyle::default().with_fill(use_workbench_tokens().panel_background),
@@ -169,18 +168,13 @@ fn under_drawer(
             .build(),
         sidebar,
     )?;
-    let workspace = StyledContainer::new(
+    let workspace = Container::new(
         workbench_fill(),
-        |_| RectStyle::default(),
         vec![split_workspace(state, regions, PanelPosition::Bottom)?],
     )?
     .role(Role::Main)
     .a11y_label(|| strings::text(WORKSPACE));
-    let column = StyledContainer::new(
-        workbench_fill(),
-        |_| RectStyle::default(),
-        vec![box_item(workspace), drawer],
-    )?;
+    let column = Container::new(workbench_fill(), vec![box_item(workspace), drawer])?;
     Ok(box_item(column))
 }
 
@@ -245,7 +239,7 @@ fn canvas_pane(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError
             };
             RectStyle::default().with_fill(fill)
         },
-        vec![box_item(shown)],
+        children![shown],
     )?
     .role(Role::Section)
     .a11y_label(move || strings::text(view_key(view.get())));

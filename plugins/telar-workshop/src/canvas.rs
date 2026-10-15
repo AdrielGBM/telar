@@ -12,8 +12,9 @@ use std::rc::Rc;
 use telar::preview::host::mount_preview;
 use telar::preview::{CaughtFailures, PreviewCtx, PreviewEntry};
 use telar::{
-    Accessible, AlignItems, Children, LayoutError, LayoutItem, LayoutStyle, Reactive, ReactiveList,
-    RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer, Text, box_item, on_cleanup,
+    Accessible, AlignItems, Children, Container, LayoutError, LayoutItem, LayoutStyle, Reactive,
+    ReactiveList, RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer, Text,
+    box_item, children, on_cleanup,
 };
 use telar_components::{
     ButtonProps, ButtonVariant, IconButtonProps, ToolbarProps, button, icon_button, toolbar,
@@ -98,7 +99,7 @@ fn mount(
         Header::Shown => vec![self::header(state, &entry, stage.size)?, stage.item],
         Header::Hidden => vec![stage.item],
     };
-    let column = StyledContainer::new(fill(), |_| RectStyle::default(), items)?;
+    let column = Container::new(fill(), items)?;
     Ok(box_item(column))
 }
 
@@ -114,14 +115,13 @@ fn header(
         LayoutStyle::new().min_width(0.0),
         |text| text.with_font_weight(600),
     )?;
-    let title = StyledContainer::new(
+    let title = Container::new(
         LayoutStyle::new().flex_grow(1.0).min_width(0.0),
-        |_| RectStyle::default(),
-        vec![box_item(title)],
+        children![title],
     )?
     .role(Role::Status)
     .a11y_label(move || name.clone());
-    let mut items = vec![box_item(title)];
+    let mut items = children![title];
     let framed = size.is_some();
     if let Some(size) = size {
         items.push(canvas_toolbar::frame_settings(state, entry)?);
@@ -129,8 +129,7 @@ fn header(
     }
     items.push(canvas_tools(state, entry, framed)?);
     let header = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
             .height(HEADER_HEIGHT)

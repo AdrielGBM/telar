@@ -9,8 +9,8 @@ use std::rc::Rc;
 
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, Children, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea,
-    LayoutStyle, Reactive, ReactiveList, RectStyle, Role, StyledContainer, Text, box_item,
+    Accessible, AlignItems, Children, Container, JustifyContent, LayoutError, LayoutItem,
+    LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, Role, Text, box_item, children,
 };
 use telar_components::{ButtonProps, ButtonVariant, CodeViewProps, button, code_view};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
@@ -87,13 +87,11 @@ fn page(state: &WorkshopState, title: &'static str) -> Result<Box<dyn LayoutItem
             items.push(preview(state, *entry)?);
         }
     }
-    let column = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+    let column = Container::new(
+        LayoutStyle::column()
             .gap(WORKBENCH_GRID * 2.0)
             .padding_all(PAGE_MARGIN)
             .max_width(PAGE_MAX_WIDTH),
-        |_| RectStyle::default(),
         items,
     )?;
     let scroll = LayoutScrollArea::new(workbench_fill(), box_item(column))?;
@@ -118,12 +116,7 @@ fn heading(title: &'static str) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError>
         LayoutStyle::new(),
         |text| text.with_font_size(TITLE_SIZE).with_font_weight(600),
     )?;
-    let name = StyledContainer::new(
-        LayoutStyle::new().flex_column(),
-        |_| RectStyle::default(),
-        vec![box_item(name)],
-    )?
-    .role(Role::Heading(1));
+    let name = Container::column(children![name])?.role(Role::Heading(1));
     items.push(box_item(name));
     Ok(items)
 }
@@ -140,10 +133,9 @@ fn titled(
     let text = Text::declaring(text, LayoutStyle::new(), move |text| {
         text.with_font_size(size).with_font_weight(600)
     })?;
-    let heading = StyledContainer::new(
-        LayoutStyle::new().flex_column().padding_top(WORKBENCH_GRID),
-        |_| RectStyle::default(),
-        vec![box_item(text)],
+    let heading = Container::new(
+        LayoutStyle::column().padding_top(WORKBENCH_GRID),
+        children![text],
     )?
     .role(role);
     Ok(box_item(heading))
@@ -178,9 +170,8 @@ fn paragraphs(text: &str) -> Vec<String> {
 /// One preview after the first: its name and a way to open it on the canvas, the preview mounted once it scrolls into view, and its source.
 fn preview(state: &WorkshopState, entry: PreviewEntry) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = entry.name;
-    let title = StyledContainer::new(
+    let title = Container::new(
         LayoutStyle::new().flex_grow(1.0).min_width(0.0),
-        |_| RectStyle::default(),
         vec![titled(Role::Heading(3), SECTION_SIZE * 0.875, move || {
             name.to_string()
         })?],
@@ -198,21 +189,15 @@ fn preview(state: &WorkshopState, entry: PreviewEntry) -> Result<Box<dyn LayoutI
         Children::default(),
     )?
     .a11y_label(move || format!("{}: {name}", strings::text(OPEN_IN_CANVAS)));
-    let header = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let header = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::FLEX_END)
             .gap(WORKBENCH_GRID),
-        |_| RectStyle::default(),
         vec![box_item(title), open],
     )?;
     let mut items = vec![box_item(header), frame::lazy(state, entry)?];
     items.extend(source(&entry)?);
-    let section = StyledContainer::new(
-        LayoutStyle::new().flex_column().gap(WORKBENCH_GRID),
-        |_| RectStyle::default(),
-        items,
-    )?;
+    let section = Container::new(LayoutStyle::column().gap(WORKBENCH_GRID), items)?;
     Ok(box_item(section))
 }
 
@@ -241,12 +226,11 @@ fn message(key: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new(),
         workbench_muted,
     )?;
-    let centred = StyledContainer::new(
+    let centred = Container::new(
         workbench_fill()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
-        |_| RectStyle::default(),
-        vec![box_item(message)],
+        children![message],
     )?
     .role(Role::Status);
     Ok(box_item(centred))

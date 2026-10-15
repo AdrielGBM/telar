@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use telar::preview::PreviewEntry;
 use telar::{
-    AlignItems, BuildFailure, Children, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item, open_uri,
+    AlignItems, BuildFailure, Children, Container, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Reactive, Role, ShapeStyle, StyledContainer, Text, box_item, children, open_uri,
     use_theme_tokens,
 };
 use telar_components::{ButtonProps, button};
@@ -31,17 +31,15 @@ pub(crate) fn empty() -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new().max_width(CARD_MAX_WIDTH),
         workbench_muted,
     )?;
-    let centred = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+    let centred = Container::new(
+        LayoutStyle::column()
             .flex_grow(1.0)
             .min_height(0.0)
             .gap(WORKBENCH_GRID)
             .padding_all(WORKBENCH_GRID * 2.0)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
-        |_| RectStyle::default(),
-        vec![box_item(title), box_item(hint)],
+        children![title, hint],
     )?
     .role(Role::Status);
     Ok(box_item(centred))
@@ -79,7 +77,7 @@ fn card(
         },
     )?;
     let detail = Text::declaring(move || detail.clone(), LayoutStyle::new(), workbench_mono)?;
-    let mut items = vec![box_item(heading), box_item(detail)];
+    let mut items = children![heading, detail];
     let mut actions = Vec::new();
     if let Some(location) = location(entry) {
         items.push(box_item(Text::declaring(
@@ -93,15 +91,13 @@ fn card(
         actions.push(remount_button(state)?);
     }
     if !actions.is_empty() {
-        items.push(box_item(StyledContainer::new(
-            LayoutStyle::new().flex_row().gap(WORKBENCH_GRID),
-            |_| RectStyle::default(),
+        items.push(box_item(Container::new(
+            LayoutStyle::row().gap(WORKBENCH_GRID),
             actions,
         )?));
     }
     let card = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .gap(WORKBENCH_GRID)
             .padding_all(WORKBENCH_GRID * 2.0)
             .max_width(CARD_MAX_WIDTH),

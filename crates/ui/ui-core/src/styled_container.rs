@@ -199,6 +199,7 @@ pub struct StyledContainer {
 }
 
 impl StyledContainer {
+    /// A box that paints `style` of its laid-out rect behind `children`: what a view's `box` builds, and a `col` or `row` that carries paint. One that paints nothing and only lays out is a [`Container`](crate::Container).
     pub fn new(
         layout_style: LayoutStyle,
         style: impl Fn(Rect) -> RectStyle + 'static,

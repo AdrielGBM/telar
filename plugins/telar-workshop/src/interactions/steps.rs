@@ -6,9 +6,9 @@ use std::rc::Rc;
 use telar::focus::{self, FocusId};
 use telar::preview::Frame;
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, JustifyContent, Key,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, JustifyContent, Key,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NamedKey, Reactive, ReactiveList,
-    RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item, use_theme_tokens,
+    RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item, children, use_theme_tokens,
 };
 use telar_components::{
     BadgeProps, ButtonProps, ButtonVariant, ToggleProps, badge, button, metrics, toggle,
@@ -91,7 +91,7 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
     let interactions = state.interactions().clone();
     let picked = interactions.clone();
     let live = ReactiveList::with_style(
-        LayoutStyle::new().flex_row(),
+        LayoutStyle::row(),
         move || picked.picked().map(|_| ()).into_iter().collect(),
         |_: &()| (),
         move |()| {
@@ -121,12 +121,10 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
             .build(),
         Children::default(),
     )?;
-    let tools = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let tools = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID * 1.5),
-        |_| RectStyle::default(),
         vec![box_item(live), auto_run, replay],
     )?;
     Ok(box_item(tools))
@@ -137,7 +135,7 @@ pub(crate) fn tab_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, La
     let watching = state.clone();
     let interactions = state.interactions().clone();
     let tally = ReactiveList::with_style(
-        LayoutStyle::new().flex_row(),
+        LayoutStyle::row(),
         move || match shown(&watching) {
             Shown::Steps(_) => interactions
                 .run()
@@ -171,11 +169,11 @@ fn message(
     hint: Option<&'static str>,
     action: Option<Action>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut items = vec![box_item(Text::declaring(
+    let mut items = children![Text::declaring(
         move || strings::text(key),
         LayoutStyle::new(),
         workbench_muted,
-    )?)];
+    )?];
     if let Some(hint) = hint {
         items.push(box_item(Text::declaring(
             move || strings::text(hint),
@@ -192,13 +190,12 @@ fn message(
             Children::default(),
         )?);
     }
-    let centred = StyledContainer::new(
+    let centred = Container::new(
         workbench_fill()
             .gap(WORKBENCH_GRID)
             .padding_all(WORKBENCH_GRID * 2.0)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
-        |_| RectStyle::default(),
         items,
     )?
     .role(Role::Status);
@@ -211,25 +208,20 @@ fn steps(interactions: &Interactions) -> Result<Box<dyn LayoutItem>, LayoutError
     let listing = Rc::clone(&rows);
     let building = Rc::clone(&rows);
     let list = ReactiveList::with_style(
-        LayoutStyle::new().flex_column(),
+        LayoutStyle::column(),
         move || listing.interactions.run().map(listed).unwrap_or_default(),
         |row: &Row| (row.mount, row.ran, row.index),
         move |row| step_row(&building, row),
     )?;
-    let list = StyledContainer::new(
-        LayoutStyle::new().flex_column(),
-        |_| RectStyle::default(),
-        vec![box_item(list)],
-    )?
-    .role(Role::List)
-    .a11y_label(|| strings::text(PLAY_STEPS));
+    let list = Container::column(children![list])?
+        .role(Role::List)
+        .a11y_label(|| strings::text(PLAY_STEPS));
     let scroll = LayoutScrollArea::new(
         LayoutStyle::new().flex_grow(1.0).min_height(0.0),
         box_item(list),
     )?;
-    let column = StyledContainer::new(
+    let column = Container::new(
         workbench_fill(),
-        |_| RectStyle::default(),
         vec![summary(interactions)?, box_item(scroll)],
     )?;
     Ok(box_item(column))
@@ -255,14 +247,12 @@ fn summary(interactions: &Interactions) -> Result<Box<dyn LayoutItem>, LayoutErr
             text.with_font_weight(600).with_color(color)
         },
     )?;
-    let line = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let line = Container::new(
+        LayoutStyle::row()
             .flex_shrink(0.0)
             .padding_horizontal(WORKBENCH_GRID * 1.5)
             .padding_vertical(WORKBENCH_GRID),
-        |_| RectStyle::default(),
-        vec![box_item(text)],
+        children![text],
     )?
     .role(Role::Status);
     Ok(box_item(line))
@@ -378,8 +368,7 @@ fn step_row(rows: &Rc<Rows>, row: Row) -> Result<Box<dyn LayoutItem>, LayoutErro
         items.push(failure(index, message.clone(), step.frame.clone(), pick)?);
     }
     let row = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .gap(WORKBENCH_GRID / 2.0)
             .padding_horizontal(WORKBENCH_GRID * 1.5)
             .padding_vertical(WORKBENCH_GRID),
@@ -424,21 +413,19 @@ fn failure(
     frame: Option<Frame>,
     pick: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut items = vec![box_item(Text::declaring(
+    let mut items = children![Text::declaring(
         move || message.clone(),
         LayoutStyle::new().max_width(MESSAGE_MAX_WIDTH),
         |text| workbench_mono(text).with_color(use_theme_tokens().error()),
-    )?)];
+    )?];
     if let Some(frame) = frame {
         items.push(thumbnail(frame, index, pick)?);
     }
-    let details = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+    let details = Container::new(
+        LayoutStyle::column()
             .align_items(AlignItems::START)
             .gap(WORKBENCH_GRID)
             .padding_start(NUMBER_WIDTH + MARK_WIDTH + WORKBENCH_GRID * 2.0),
-        |_| RectStyle::default(),
         items,
     )?;
     Ok(box_item(details))
@@ -453,13 +440,12 @@ fn head(index: usize, step: &Step) -> Result<StyledContainer, LayoutError> {
     )?;
     let shape = mark_of(&step.status);
     let status = step.status.clone();
-    let mark = StyledContainer::new(
+    let mark = Container::new(
         LayoutStyle::new()
             .width(MARK_WIDTH)
             .flex_shrink(0.0)
             .flex_row()
             .align_items(AlignItems::CENTER),
-        |_| RectStyle::default(),
         vec![metrics::mark(
             move || shape,
             move |_| status_color(&status).into(),
@@ -475,12 +461,11 @@ fn head(index: usize, step: &Step) -> Result<StyledContainer, LayoutError> {
         workbench_mono,
     )?;
     let head = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID),
         |_| RectStyle::default(),
-        vec![box_item(number), box_item(mark), box_item(action)],
+        children![number, mark, action],
     )?;
     Ok(head)
 }

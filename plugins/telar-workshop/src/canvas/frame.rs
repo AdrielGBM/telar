@@ -5,11 +5,11 @@ use std::rc::{Rc, Weak};
 
 use telar::preview::{Globals, Layout};
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Canvas, Clip, ClippedItem, Color, Cursor,
-    Direction, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle, Memo, NamedKey,
+    Accessible, AlignItems, Border, BorderRadius, Canvas, Clip, ClippedItem, Color, Container,
+    Cursor, Direction, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle, Memo, NamedKey,
     NumericValue, Orientation, Point, ReactiveList, Rect, RectStyle, RenderNode, Role, RwSignal,
     ShapeStyle, Size, SizeDimension, StyledContainer, SurfaceCanvas, SurfaceFrame, Text, box_item,
-    current_direction, effect, memo, signal, track_layout,
+    children, current_direction, effect, memo, signal, track_layout,
 };
 use telar_devtools::{
     WORKBENCH_GRID, inspection_marks, use_workbench_tokens, workbench_mono, workbench_muted,
@@ -46,9 +46,8 @@ pub(super) fn stage(
     if layout == Layout::Fullscreen {
         let grid = guides::grid(state.canvas_settings(), Rc::downgrade(&canvas), || 0.0)?;
         let frame = SurfaceFrame::filling(canvas, growing().width(SizeDimension::Percent(1.0)))?;
-        let edge_to_edge = StyledContainer::new(
+        let edge_to_edge = Container::new(
             growing().width(SizeDimension::Percent(1.0)),
-            |_| RectStyle::default(),
             vec![
                 box_item(frame),
                 interactions::frame_layer(state)?,
@@ -94,14 +93,13 @@ fn framed(
         |fixed: &bool| *fixed,
         move |fixed| surface_frame(Rc::clone(&shown), fixed),
     )?;
-    let surface = StyledContainer::new(
+    let surface = Container::new(
         growing().width(SizeDimension::Percent(1.0)),
-        |_| RectStyle::default(),
         vec![box_item(surface), interactions::frame_layer(state)?],
     )?;
     let box_style = move || {
         let edge = edge(device.get());
-        let style = LayoutStyle::new().flex_column().padding_all(edge);
+        let style = LayoutStyle::column().padding_all(edge);
         match viewport.get() {
             Some(size) => style
                 .width(size.width * scale.get() + 2.0 * edge)
@@ -137,8 +135,8 @@ fn framed(
     };
     let top = row(
         move || match viewport.get() {
-            Some(_) => LayoutStyle::new().flex_row(),
-            None => LayoutStyle::new().flex_row().flex_grow(1.0).min_height(0.0),
+            Some(_) => LayoutStyle::row(),
+            None => LayoutStyle::row().flex_grow(1.0).min_height(0.0),
         },
         vec![
             box_item(viewport_box),
@@ -148,12 +146,7 @@ fn framed(
         ],
     )?;
     let bottom = row(
-        || {
-            LayoutStyle::new()
-                .flex_row()
-                .height(HANDLE)
-                .flex_shrink(0.0)
-        },
+        || LayoutStyle::row().height(HANDLE).flex_shrink(0.0),
         vec![
             handle(Edge::Bottom, resize.clone(), bottom_style)?,
             handle(Edge::Corner, resize, || {
@@ -165,22 +158,16 @@ fn framed(
         ],
     )?;
     let column_style = move || match viewport.get() {
-        Some(_) => LayoutStyle::new().flex_column().flex_shrink(0.0),
+        Some(_) => LayoutStyle::column().flex_shrink(0.0),
         None => growing().width(SizeDimension::Percent(1.0)),
     };
-    let column = StyledContainer::new(
-        column_style(),
-        |_| RectStyle::default(),
-        vec![box_item(top), box_item(bottom)],
-    )?
-    .styled_by(column_style);
-    let stage = StyledContainer::new(
+    let column = Container::new(column_style(), children![top, bottom])?.styled_by(column_style);
+    let stage = Container::new(
         growing()
             .padding_all(STAGE_MARGIN)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
-        |_| RectStyle::default(),
-        vec![box_item(column)],
+        children![column],
     )?;
     let stage_rect = *stage_rect
         .get_or_init(|| track_layout(stage.layout_node()).expect("the stage is registered"));
@@ -194,11 +181,7 @@ fn framed(
         },
         STAGE_MARGIN,
     )?;
-    let stage = StyledContainer::new(
-        growing(),
-        |_| RectStyle::default(),
-        vec![box_item(stage), rulers],
-    )?;
+    let stage = Container::new(growing(), vec![box_item(stage), rulers])?;
     follow_zoom(settings, viewport, stage_rect, device, scale, &canvas);
     Ok(Stage {
         item: box_item(ClippedItem::new(box_item(stage), Clip::both().paint_only())),
@@ -285,11 +268,9 @@ impl SizeLabel {
         )?;
         let settings = state.canvas_settings();
         let label = StyledContainer::new(
-            LayoutStyle::new()
-                .flex_row()
-                .padding_horizontal(WORKBENCH_GRID / 2.0),
+            LayoutStyle::row().padding_horizontal(WORKBENCH_GRID / 2.0),
             |_| RectStyle::default(),
-            vec![box_item(text)],
+            children![text],
         )?
         .control(Role::Button)
         .a11y_label(|| strings::text(VIEWPORT_RESET))
@@ -544,8 +525,7 @@ fn row(
 }
 
 fn growing() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
+    LayoutStyle::column()
         .flex_grow(1.0)
         .min_width(0.0)
         .min_height(0.0)

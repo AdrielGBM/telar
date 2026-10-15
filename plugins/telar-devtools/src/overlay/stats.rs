@@ -2,7 +2,8 @@
 
 use telar::{
     Accessible, AlignItems, Children, Container, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    RectStyle, Role, ShapeStyle, SizeDimension, StyledContainer, Text, box_item, use_theme_tokens,
+    RectStyle, Role, ShapeStyle, SizeDimension, StyledContainer, Text, box_item, children,
+    use_theme_tokens,
 };
 use telar_components::{BadgeProps, KbdProps, badge, kbd};
 
@@ -34,9 +35,7 @@ pub(super) fn corner(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
 /// The stats as the bottom of the area right of the inspector drawer, where they are laid out with the drawer rather than over it.
 pub(super) fn beside_drawer(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     mounted_while(
-        LayoutStyle::new()
-            .flex_column()
-            .align_items(AlignItems::FLEX_END),
+        LayoutStyle::column().align_items(AlignItems::FLEX_END),
         move || model.inspector_open.get(),
         move || cluster(model),
     )
@@ -49,8 +48,7 @@ fn cluster(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move || panel(model),
     )?;
     let cluster = Container::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .align_items(AlignItems::FLEX_END)
             .max_width(SizeDimension::Percent(1.0))
             .gap(WORKBENCH_GRID / 2.0),
@@ -73,8 +71,7 @@ fn fps_badge(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         |text| workbench_mono(text).with_font_weight(600),
     )?;
     let pill = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID * 0.75)
             .padding_vertical(WORKBENCH_GRID / 2.0)
@@ -126,13 +123,13 @@ fn panel(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new(),
         workbench_muted,
     )?;
-    let renderer = row(vec![
-        box_item(Text::declaring(
+    let renderer = row(children![
+        Text::declaring(
             || strings::text(RENDERER),
             LayoutStyle::new(),
             workbench_muted,
-        )?),
-        box_item(Text::declaring(
+        )?,
+        Text::declaring(
             move || {
                 model
                     .renderer
@@ -141,7 +138,7 @@ fn panel(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             },
             LayoutStyle::new(),
             workbench_mono,
-        )?),
+        )?
     ])?;
     let items = vec![
         box_item(title),
@@ -154,8 +151,7 @@ fn panel(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         chord(SHOW_PANEL_CHORD, SHOW_PANEL)?,
     ];
     let panel = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .width(PANEL_WIDTH)
             .max_width(SizeDimension::Percent(1.0))
             .gap(WORKBENCH_GRID)
@@ -182,8 +178,7 @@ fn chord(keys: &'static str, action: &'static str) -> Result<Box<dyn LayoutItem>
 
 fn row(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let row = Container::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID),
         items,

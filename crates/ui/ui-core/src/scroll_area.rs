@@ -902,6 +902,7 @@ type KeyRule = Box<dyn Fn(&Key) -> bool>;
 type ArrivalRule = Rc<dyn Fn() -> Insets>;
 
 impl LayoutScrollArea {
+    /// A viewport onto `content` that scrolls it on both axes: what a view's `scroll` builds. Several children go in as one [`Container::column`](crate::Container::column), as a view wraps them; [`new_with`](Self::new_with) hands the content the live viewport a `virtual` loop needs, [`new_kept`](Self::new_kept) is `keep:` and [`arrival_margin`](Self::arrival_margin) is `arrival_margin:`.
     pub fn new(
         layout_style: LayoutStyle,
         content: Box<dyn LayoutItem>,

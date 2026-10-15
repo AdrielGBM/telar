@@ -8,8 +8,8 @@ use std::rc::Rc;
 
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, Children, Color, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, box_item,
+    Accessible, AlignItems, Children, Color, Container, LayoutError, LayoutItem, LayoutStyle,
+    Reactive, ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, box_item, children,
 };
 use telar_components::{ButtonProps, ButtonVariant, Tab, button, tab_list};
 use telar_devtools::{
@@ -36,32 +36,22 @@ const TABS: [PanelTab; 6] = [
 
 /// What fills the panels pane the shell sizes.
 pub(crate) fn panels(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let panels = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
-            .flex_grow(1.0)
-            .min_height(0.0),
-        |_| RectStyle::default(),
+    let panels = Container::new(
+        LayoutStyle::column().flex_grow(1.0).min_height(0.0),
         vec![header(state)?, divider()?, body(state)?],
     )?;
     Ok(box_item(panels))
 }
 
 fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let spacer = StyledContainer::new(
-        LayoutStyle::new().flex_grow(1.0),
-        |_| RectStyle::default(),
-        Vec::new(),
-    )?;
-    let header = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let spacer = Container::new(LayoutStyle::new().flex_grow(1.0), Vec::new())?;
+    let header = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
             .gap(WORKBENCH_GRID)
             .padding_horizontal(WORKBENCH_GRID)
             .padding_vertical(WORKBENCH_GRID / 2.0),
-        |_| RectStyle::default(),
         vec![strip(state)?, box_item(spacer), tools(state)?],
     )?;
     Ok(box_item(header))
@@ -104,9 +94,7 @@ fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let shown = state.panel_tab();
     let state = state.clone();
     let tools = ReactiveList::with_style(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER),
+        LayoutStyle::row().align_items(AlignItems::CENTER),
         move || vec![shown.get()],
         |tab: &PanelTab| *tab,
         move |tab| match tab {
@@ -137,13 +125,9 @@ fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
             PanelTab::Snapshot => snapshot::panel(&building),
         },
     )?;
-    let body = StyledContainer::new(
-        workbench_fill(),
-        |_| RectStyle::default(),
-        vec![box_item(panel)],
-    )?
-    .role(Role::TabPanel)
-    .a11y_label(move || strings::text(tab_key(shown.get())));
+    let body = Container::new(workbench_fill(), children![panel])?
+        .role(Role::TabPanel)
+        .a11y_label(move || strings::text(tab_key(shown.get())));
     Ok(box_item(body))
 }
 
@@ -152,7 +136,7 @@ fn reset_all(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let edited = state.clone();
     let state = state.clone();
     let cell = ReactiveList::with_style(
-        LayoutStyle::new().flex_row(),
+        LayoutStyle::row(),
         move || {
             edited
                 .selected()
@@ -178,11 +162,7 @@ fn reset_all(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> 
 }
 
 fn nothing() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    Ok(box_item(StyledContainer::new(
-        LayoutStyle::new(),
-        |_| RectStyle::default(),
-        Vec::new(),
-    )?))
+    Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?))
 }
 
 fn divider() -> Result<Box<dyn LayoutItem>, LayoutError> {

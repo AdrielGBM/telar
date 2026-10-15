@@ -9,9 +9,10 @@ use std::rc::Rc;
 
 use telar::preview::{Matrices, Matrix, MatrixCell, PreviewEntry, control_size_word};
 use telar::{
-    Accessible, AlignItems, Children, Color, ColorScheme, JustifyContent, LayoutError, LayoutItem,
-    LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, Role, RwSignal, ShapeStyle,
-    StyledContainer, Text, batch, box_item, effect, signal, use_resolved_scheme, use_theme_tokens,
+    Accessible, AlignItems, Children, Color, ColorScheme, Container, JustifyContent, LayoutError,
+    LayoutItem, LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, Role, RwSignal,
+    ShapeStyle, StyledContainer, Text, batch, box_item, children, effect, signal,
+    use_resolved_scheme, use_theme_tokens,
 };
 use telar_components::{
     ButtonProps, ButtonVariant, CheckboxProps, Tab, button, checkbox, tab_list,
@@ -51,9 +52,8 @@ pub(crate) fn matrix(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layou
 
 fn page(state: &WorkshopState, entry: PreviewEntry) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let shown: RwSignal<Rc<[MatrixCell]>> = signal(Rc::from([]));
-    let column = StyledContainer::new(
+    let column = Container::new(
         workbench_fill(),
-        |_| RectStyle::default(),
         vec![header(state, entry, shown)?, cells(state, entry, shown)?],
     )?;
     Ok(box_item(column))
@@ -70,20 +70,18 @@ fn header(
         LayoutStyle::new().min_width(0.0),
         |text| text.with_font_weight(600),
     )?;
-    let mut items = vec![box_item(title)];
+    let mut items = children![title];
     if let Some(matrix) = entry.matrix {
         items.push(source_switch(state, matrix)?);
     }
     items.push(axis_picker(state, entry)?);
-    items.push(box_item(StyledContainer::new(
+    items.push(box_item(Container::new(
         LayoutStyle::new().flex_grow(1.0),
-        |_| RectStyle::default(),
         Vec::new(),
     )?));
     items.push(open_in_canvas(state, entry, shown)?);
     let header = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .flex_wrap()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
@@ -127,7 +125,7 @@ fn axis_picker(
     let source = state.matrix_source();
     let building = state.clone();
     let picker = ReactiveList::with_style(
-        LayoutStyle::new().flex_row(),
+        LayoutStyle::row(),
         move || match source.get().shown_for(&entry) {
             MatrixSource::Custom => vec![()],
             MatrixSource::Preview => Vec::new(),
@@ -156,13 +154,11 @@ fn axes(state: &WorkshopState, entry: &PreviewEntry) -> Result<Box<dyn LayoutIte
             Reactive::of(move || name.to_string()),
         )?);
     }
-    let group = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let group = Container::new(
+        LayoutStyle::row()
             .flex_wrap()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID * 1.5),
-        |_| RectStyle::default(),
         boxes,
     )?
     .role(Role::Group)
@@ -203,7 +199,7 @@ fn open_in_canvas(
     let focus = state.matrix_focus();
     let opening = state.clone();
     let offered = ReactiveList::with_style(
-        LayoutStyle::new().flex_row(),
+        LayoutStyle::row(),
         move || {
             let focused = focus.get();
             shown.with(|cells| {
@@ -361,13 +357,11 @@ fn planned_cells(
         items.push(warning);
     }
     items.push(table(state, entry, &grid(&plan.cells), &settings, scheme)?);
-    let column = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+    let column = Container::new(
+        LayoutStyle::column()
             .align_items(AlignItems::FLEX_START)
             .gap(GAP)
             .padding_all(GAP),
-        |_| RectStyle::default(),
         items,
     )?;
     let scroll = LayoutScrollArea::new(workbench_fill(), box_item(column))?;
@@ -392,13 +386,9 @@ fn warning(plan: &Plan) -> Option<Box<dyn LayoutItem>> {
         text.with_color(use_theme_tokens().warning())
     })
     .ok()?;
-    let status = StyledContainer::new(
-        LayoutStyle::new().flex_row(),
-        |_| RectStyle::default(),
-        vec![box_item(text)],
-    )
-    .ok()?
-    .role(Role::Status);
+    let status = Container::new(LayoutStyle::row(), children![text])
+        .ok()?
+        .role(Role::Status);
     Some(box_item(status))
 }
 
@@ -436,23 +426,17 @@ fn table(
         }
         lines.push(line(items)?);
     }
-    let table = StyledContainer::new(
-        LayoutStyle::new().flex_column().gap(GAP),
-        |_| RectStyle::default(),
-        lines,
-    )?
-    .role(Role::Group)
-    .a11y_label(|| strings::text(MATRIX_CELLS));
+    let table = Container::new(LayoutStyle::column().gap(GAP), lines)?
+        .role(Role::Group)
+        .a11y_label(|| strings::text(MATRIX_CELLS));
     Ok(box_item(table))
 }
 
 fn line(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let line = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let line = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::FLEX_START)
             .gap(GAP),
-        |_| RectStyle::default(),
         items,
     )?;
     Ok(box_item(line))
@@ -467,13 +451,11 @@ fn heading(text: Option<String>, width: f32) -> Result<Box<dyn LayoutItem>, Layo
             |text| workbench_muted(text.with_font_weight(600)),
         )?));
     }
-    let heading = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+    let heading = Container::new(
+        LayoutStyle::column()
             .flex_shrink(0.0)
             .width(width)
             .padding_horizontal(WORKBENCH_GRID),
-        |_| RectStyle::default(),
         items,
     )?;
     Ok(box_item(heading))
@@ -490,13 +472,12 @@ fn notice(problem: Problem) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new(),
         workbench_muted,
     )?;
-    let centred = StyledContainer::new(
+    let centred = Container::new(
         workbench_fill()
             .padding_all(GAP)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
-        |_| RectStyle::default(),
-        vec![box_item(text)],
+        children![text],
     )?
     .role(Role::Status);
     Ok(box_item(centred))

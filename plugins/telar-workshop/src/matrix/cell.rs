@@ -7,10 +7,10 @@ use telar::preview::a11y::Severity;
 use telar::preview::snapshot::SnapshotStatus;
 use telar::preview::{Globals, MatrixCell, Play, PreviewEntry};
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, ColorScheme, Direction,
-    LayoutError, LayoutItem, LayoutStyle, Lazy, Memo, Reactive, ReactiveList, RectStyle,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, ColorScheme, Container,
+    Direction, LayoutError, LayoutItem, LayoutStyle, Lazy, Memo, Reactive, ReactiveList, RectStyle,
     RelayoutHook, Role, RwSignal, ShapeStyle, Size, StyledContainer, SurfaceFrame, Text, ViewRange,
-    box_item, effect, memo, on_cleanup, scroll_progress, signal, use_theme_tokens,
+    box_item, children, effect, memo, on_cleanup, scroll_progress, signal, use_theme_tokens,
 };
 use telar_components::{BadgeProps, badge};
 use telar_devtools::{
@@ -172,7 +172,7 @@ pub(super) fn cell(
     let seen = signal(false);
     let mounting = state.clone();
     let deferred = Lazy::new(
-        LayoutStyle::new().flex_column(),
+        LayoutStyle::column(),
         move || seen.get(),
         move || {
             Ok(vec![mounted(
@@ -190,14 +190,12 @@ pub(super) fn cell(
             )?])
         },
     )?;
-    let slot = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+    let slot = Container::new(
+        LayoutStyle::column()
             .flex_shrink(0.0)
             .width(CELL_WIDTH)
             .height(viewport.height * scale),
-        |_| RectStyle::default(),
-        vec![box_item(deferred)],
+        children![deferred],
     )?;
     let progress = scroll_progress(slot.layout_node(), ViewRange::Cover);
     effect(move || {
@@ -206,8 +204,7 @@ pub(super) fn cell(
         }
     });
     let card = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .flex_shrink(0.0)
             .width(CELL_OUTER_WIDTH)
             .gap(WORKBENCH_GRID / 2.0)
@@ -249,13 +246,12 @@ fn focus_toggle(
         |text| workbench_mono(text).with_font_weight(600),
     )?;
     let toggle = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .min_height(WORKBENCH_GRID * 3.0)
             .padding_horizontal(WORKBENCH_GRID / 2.0),
         |_| RectStyle::default().with_radius(BorderRadius::all(WORKBENCH_RADIUS)),
-        vec![box_item(text)],
+        children![text],
     )?
     .control(Role::Button)
     .toggled(move || focused.get())
@@ -266,10 +262,7 @@ fn focus_toggle(
 
 fn badges(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let row = ReactiveList::with_style(
-        LayoutStyle::new()
-            .flex_row()
-            .flex_wrap()
-            .gap(WORKBENCH_GRID / 2.0),
+        LayoutStyle::row().flex_wrap().gap(WORKBENCH_GRID / 2.0),
         move || statuses.get(),
         |status: &Status| format!("{status:?}"),
         |status| {
@@ -289,7 +282,7 @@ fn badges(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErro
 /// Why a cell failed, under its badges.
 fn details(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let lines = ReactiveList::with_style(
-        LayoutStyle::new().flex_column(),
+        LayoutStyle::column(),
         move || {
             statuses.with(|statuses| {
                 statuses
@@ -379,14 +372,10 @@ fn mounted(
     let marks = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         |_| RectStyle::default(),
-        vec![box_item(marks)],
+        children![marks],
     )?
     .input_transparent();
-    let stack = StyledContainer::new(
-        LayoutStyle::new().flex_column(),
-        |_| RectStyle::default(),
-        vec![box_item(frame), box_item(marks)],
-    )?;
+    let stack = Container::column(children![frame, marks])?;
     Ok(box_item(stack))
 }
 
@@ -427,9 +416,5 @@ fn follow_while_focused(
 }
 
 fn empty() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    Ok(box_item(StyledContainer::new(
-        LayoutStyle::new(),
-        |_| RectStyle::default(),
-        Vec::new(),
-    )?))
+    Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?))
 }

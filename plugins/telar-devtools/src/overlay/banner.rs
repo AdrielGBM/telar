@@ -2,7 +2,8 @@
 
 use telar::{
     Accessible, AlignItems, Border, Children, Container, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, Role, RwSignal, ShapeStyle, StyledContainer, Text, box_item, memo, use_theme_tokens,
+    Reactive, Role, RwSignal, ShapeStyle, StyledContainer, Text, box_item, children, memo,
+    use_theme_tokens,
 };
 use telar_components::{CodeSpan, CodeViewProps, TokenKind, code_view};
 
@@ -81,7 +82,7 @@ fn cards(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let column = Container::new(LayoutStyle::new().flex_column().gap(WORKBENCH_GRID), cards)?;
+    let column = Container::new(LayoutStyle::column().gap(WORKBENCH_GRID), cards)?;
     Ok(box_item(column))
 }
 
@@ -100,11 +101,10 @@ fn card(kind: Report) -> Result<Box<dyn LayoutItem>, LayoutError> {
         workbench_muted,
     )?;
     let heading = Container::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID),
-        vec![box_item(title), box_item(hint)],
+        children![title, hint],
     )?;
     let code = move || kind.text.get().unwrap_or_default();
     let marked = memo(move || diagnostics(&code()));
@@ -119,8 +119,7 @@ fn card(kind: Report) -> Result<Box<dyn LayoutItem>, LayoutError> {
         Children::default(),
     )?;
     let banner = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .gap(WORKBENCH_GRID)
             .padding_all(WORKBENCH_GRID * 1.5),
         |_| {

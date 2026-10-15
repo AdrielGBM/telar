@@ -4,9 +4,10 @@ use std::rc::Rc;
 
 use telar::preview::Frame;
 use telar::{
-    Accessible, AlignItems, Canvas, Children, DrawCommand, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, ReactiveList, Rect, RectStyle, RenderNode, Role, ShapeStyle, Size, SizeDimension,
-    StyledContainer, Text, Transform, box_item, composite_surface, use_theme_tokens,
+    Accessible, AlignItems, Canvas, Children, Container, DrawCommand, LayoutError, LayoutItem,
+    LayoutStyle, Reactive, ReactiveList, Rect, RectStyle, RenderNode, Role, ShapeStyle, Size,
+    SizeDimension, StyledContainer, Text, Transform, box_item, children, composite_surface,
+    use_theme_tokens,
 };
 use telar_components::{ButtonProps, button};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_card, workbench_mono};
@@ -28,17 +29,13 @@ pub(crate) fn frame_layer(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
         |key: &(u64, usize)| *key,
         move |_| match building.shown() {
             Some(shown) => cover(&building, shown),
-            None => Ok(box_item(StyledContainer::new(
-                LayoutStyle::new(),
-                |_| RectStyle::default(),
-                Vec::new(),
-            )?)),
+            None => Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?)),
         },
     )?;
     let layer = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         |_| RectStyle::default(),
-        vec![box_item(layer)],
+        children![layer],
     )?
     .input_transparent();
     Ok(box_item(layer))
@@ -97,8 +94,7 @@ fn bar(interactions: &Interactions, shown: &Shown) -> Result<Box<dyn LayoutItem>
         Children::default(),
     )?;
     let bar = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID)
             .padding_horizontal(WORKBENCH_GRID)
@@ -148,7 +144,7 @@ fn picture(
         drawn(&frame, rect)
     })?;
     let number = (index + 1).to_string();
-    let picture = StyledContainer::new(style, |_| RectStyle::default(), vec![box_item(canvas)])?
+    let picture = Container::new(style, children![canvas])?
         .role(Role::Drawing)
         .a11y_label(move || strings::text_with(STEP_FRAME, &number));
     Ok(box_item(picture))

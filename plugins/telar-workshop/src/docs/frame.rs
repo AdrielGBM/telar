@@ -3,8 +3,8 @@
 use telar::preview::host::mount_preview;
 use telar::preview::{Layout, PreviewCtx, PreviewEntry};
 use telar::{
-    LayoutError, LayoutItem, LayoutStyle, Lazy, ReactiveList, RectStyle, SizeDimension,
-    StyledContainer, SurfaceFrame, ViewRange, box_item, effect, scroll_progress, signal,
+    Container, LayoutError, LayoutItem, LayoutStyle, Lazy, ReactiveList, SizeDimension,
+    StyledContainer, SurfaceFrame, ViewRange, box_item, children, effect, scroll_progress, signal,
 };
 use telar_devtools::{WORKBENCH_GRID, workbench_card};
 
@@ -25,14 +25,13 @@ pub(super) fn lazy(
     let seen = signal(false);
     let building = state.clone();
     let deferred = Lazy::new(
-        LayoutStyle::new().flex_column(),
+        LayoutStyle::column(),
         move || seen.get(),
         move || Ok(vec![eager(&building, entry)?]),
     )?;
-    let slot = StyledContainer::new(
-        LayoutStyle::new().flex_column().min_height(MIN_HEIGHT),
-        |_| RectStyle::default(),
-        vec![box_item(deferred)],
+    let slot = Container::new(
+        LayoutStyle::column().min_height(MIN_HEIGHT),
+        children![deferred],
     )?;
     let progress = scroll_progress(slot.layout_node(), ViewRange::Cover);
     effect(move || {
@@ -51,7 +50,7 @@ pub(super) fn eager(
     let counted = state.clone();
     let mounting = state.clone();
     let mounts = ReactiveList::with_style(
-        LayoutStyle::new().flex_column(),
+        LayoutStyle::column(),
         move || vec![counted.remounts()],
         |remounts: &u64| *remounts,
         move |_| mount(&mounting, entry),
@@ -87,13 +86,12 @@ fn mount(state: &WorkshopState, entry: PreviewEntry) -> Result<Box<dyn LayoutIte
     });
     let height = move || fixed.unwrap_or_else(|| drawn.get().max(MIN_HEIGHT));
     let box_style = move || {
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .flex_shrink(0.0)
             .padding_all(BORDER)
             .height(height() + 2.0 * BORDER)
     };
-    let framed = StyledContainer::new(box_style(), |_| workbench_card(), vec![box_item(frame)])?
+    let framed = StyledContainer::new(box_style(), |_| workbench_card(), children![frame])?
         .styled_by(box_style);
     Ok(box_item(framed))
 }

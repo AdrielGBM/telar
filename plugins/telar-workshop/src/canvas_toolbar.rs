@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use telar::preview::{Matrices, PreviewEntry, ViewportPreset};
 use telar::{
-    Accessible, AlignItems, Children, ControlSize, Direction, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, RectStyle, Role, RwSignal, Size, Slots, StyledContainer, box_item, effect, signal,
+    Accessible, AlignItems, Children, Container, ControlSize, Direction, LayoutError, LayoutItem,
+    LayoutStyle, Reactive, Role, RwSignal, Size, Slots, box_item, effect, signal,
 };
 use telar_components::{
     GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, SubmenuProps,
@@ -431,12 +431,8 @@ impl<T: Clone + PartialEq + 'static> Setting for Choice<T> {
         )?
         .a11y_label(move || strings::text(name));
         // A row, so the stretched select grows along the width it is given: in a column it grew along the height instead, leaving this box no height and the select spilling out below it.
-        let sized = StyledContainer::new(
-            LayoutStyle::new()
-                .flex_row()
-                .width(self.width)
-                .flex_shrink(0.0),
-            |_| RectStyle::default(),
+        let sized = Container::new(
+            LayoutStyle::row().width(self.width).flex_shrink(0.0),
             vec![field],
         )?;
         Ok(box_item(sized))
@@ -641,13 +637,11 @@ impl<T: PartialEq> Row<T> {
 }
 
 fn frame_group(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let row = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let row = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
             .gap(WORKBENCH_GRID),
-        |_| RectStyle::default(),
         items,
     )?
     .role(Role::Group)

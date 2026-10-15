@@ -8,7 +8,7 @@ use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Clip, ClippedItem, Container,
     JustifyContent, LayoutError, LayoutItem, LayoutStyle, Memo, NodeId, Reactive, ReactiveList,
     Rect, RectStyle, Role, RwSignal, ShapeStyle, Slots, StyledContainer, Text, TextWrap, box_item,
-    memo, signal, style_follows, track_layout,
+    children, memo, signal, style_follows, track_layout,
 };
 use telar_components::metrics::{control_height, control_pad_x, radius_control};
 use telar_components::{
@@ -63,8 +63,7 @@ pub(crate) fn top_bar(
     let laid_out = signal(None::<RwSignal<Rect>>);
     let centred = centring(start.layout_node(), end.layout_node(), laid_out);
     let bar = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
             .height(HEIGHT)
@@ -112,8 +111,7 @@ fn side(
     centred: Memo<bool>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let style = move || {
-        let side = LayoutStyle::new()
-            .flex_row()
+        let side = LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(justify);
         match centred.get() {
@@ -127,8 +125,7 @@ fn side(
 
 /// The controls of one end, as wide as they are whatever share of the bar the end has.
 fn group() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .flex_shrink(0.0)
         .gap(GAP)
@@ -137,8 +134,7 @@ fn group() -> LayoutStyle {
 /// A control of the bar, which keeps every stroke started on it rather than letting it move the window.
 fn held(control: Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let held = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0),
         |_| RectStyle::default(),
@@ -189,13 +185,12 @@ fn preview_label() -> Result<Box<dyn LayoutItem>, LayoutError> {
         |text| text.with_font_weight(600).with_text_wrap(TextWrap::NoWrap),
     )?;
     let boxed = Container::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
             .height(control_height())
             .padding_horizontal(control_pad_x()),
-        vec![box_item(label)],
+        children![label],
     )?;
     Ok(box_item(boxed))
 }
@@ -235,8 +230,7 @@ fn find_trigger(
     )?;
     let keymap = keymap.clone();
     let field = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
             .flex_grow(1.0)
@@ -265,14 +259,12 @@ fn find_trigger(
             .build(),
         Children::from(slots),
     )?;
-    let middle = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let middle = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .width(FIND_WIDTH)
             .flex_shrink(1.0)
             .min_width(FIND_FIELD_COMFORT),
-        |_| RectStyle::default(),
         vec![hinted],
     )?;
     Ok(box_item(middle))
@@ -301,8 +293,7 @@ fn middle(
     let keymap = keymap.clone();
     let project = Rc::clone(project);
     let style = move || {
-        let middle = LayoutStyle::new()
-            .flex_row()
+        let middle = LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
             .flex_shrink(1.0)

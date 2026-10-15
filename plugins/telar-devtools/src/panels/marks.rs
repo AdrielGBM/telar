@@ -6,7 +6,7 @@ use std::rc::Rc;
 use telar::{
     Accessible, Border, BorderRadius, Canvas, Insets, LayoutError, LayoutItem, LayoutStyle, Rect,
     RectStyle, RenderNode, RwSignal, ShapeStyle, StyledContainer, TextStyle, TextWrap, Transform,
-    box_item, track_layout, transform_clip_rect, use_theme_tokens,
+    box_item, children, track_layout, transform_clip_rect, use_theme_tokens,
 };
 
 use super::accessibility::chosen_rect;
@@ -50,7 +50,7 @@ pub fn inspection_marks(inspection: Inspection) -> Result<Box<dyn LayoutItem>, L
     let layer = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         |_| RectStyle::default(),
-        vec![box_item(canvas.a11y_hidden())],
+        children![canvas.a11y_hidden()],
     )?
     .input_transparent();
     Ok(box_item(layer))

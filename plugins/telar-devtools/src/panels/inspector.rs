@@ -2,7 +2,7 @@
 
 use telar::{
     Accessible, AlignItems, Container, Insets, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    RectStyle, Role, Size, StyledContainer, Text, box_item, memo,
+    Role, Size, Text, box_item, children, memo,
 };
 use telar_components::{
     SizedPane, SplitDirection, SplitPaneProps, TreeNode, TreeViewProps, split_pane, tree_view,
@@ -77,7 +77,7 @@ fn level(nodes: &[InspectedNode], at: &mut usize, depth: usize) -> Vec<TreeNode>
 
 fn details(inspection: Inspection) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let chosen = mounted_while(
-        LayoutStyle::new().flex_column().gap(WORKBENCH_GRID / 2.0),
+        LayoutStyle::column().gap(WORKBENCH_GRID / 2.0),
         move || inspection.selected_node().is_some(),
         move || box_model(inspection),
     )?;
@@ -92,11 +92,10 @@ fn details(inspection: Inspection) -> Result<Box<dyn LayoutItem>, LayoutError> {
             )?))
         },
     )?;
-    let details = StyledContainer::new(
+    let details = Container::new(
         workbench_fill()
             .gap(WORKBENCH_GRID)
             .padding_all(WORKBENCH_GRID * 1.5),
-        |_| RectStyle::default(),
         vec![placeholder, chosen],
     )?
     .role(Role::Group)
@@ -136,7 +135,7 @@ fn box_model(inspection: Inspection) -> Result<Box<dyn LayoutItem>, LayoutError>
         fact(GAP, read(|node| size(node.gap)))?,
     ];
     Ok(box_item(Container::new(
-        LayoutStyle::new().flex_column().gap(WORKBENCH_GRID / 2.0),
+        LayoutStyle::column().gap(WORKBENCH_GRID / 2.0),
         rows,
     )?))
 }
@@ -152,11 +151,10 @@ fn fact(
     )?;
     let value = Text::declaring(value, LayoutStyle::new(), workbench_mono)?;
     Ok(box_item(Container::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID),
-        vec![box_item(label), box_item(value)],
+        children![label, value],
     )?))
 }
 

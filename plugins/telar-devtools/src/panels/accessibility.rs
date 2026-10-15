@@ -2,7 +2,7 @@
 
 use telar::{
     AccessAudit, AccessNode, AccessSeverity, AlignItems, Children, Container, LayoutError,
-    LayoutItem, LayoutStyle, Reactive, Text, box_item, memo,
+    LayoutItem, LayoutStyle, Reactive, Text, box_item, children, memo,
 };
 use telar_components::{TreeNode, TreeViewProps, tree_view};
 
@@ -31,13 +31,12 @@ pub fn accessibility_panel(inspection: Inspection) -> Result<Box<dyn LayoutItem>
         workbench_muted,
     )?;
     let header = Container::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .flex_shrink(0.0)
             .align_items(AlignItems::CENTER)
             .padding_horizontal(WORKBENCH_GRID * 1.5)
             .padding_vertical(WORKBENCH_GRID / 2.0),
-        vec![box_item(summary)],
+        children![summary],
     )?;
     let items = memo(move || {
         inspection

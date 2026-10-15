@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use telar::preview::snapshot::{FileStatus, SnapshotResult, SnapshotStatus};
 use telar::{
-    AlignItems, Children, Color, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea,
-    LayoutStyle, Reactive, ReactiveList, RectStyle, Role, StyledContainer, Text, box_item,
+    AlignItems, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
+    LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, Role, Text, box_item, children,
     use_theme_tokens,
 };
 use telar_components::{
@@ -94,7 +94,7 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
 pub(crate) fn tab_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let watching = state.clone();
     let count = ReactiveList::with_style(
-        LayoutStyle::new().flex_row(),
+        LayoutStyle::row(),
         move || {
             let drifted = watching
                 .selected()
@@ -123,7 +123,7 @@ pub(crate) fn drift_badge(
     let review = review.clone();
     let preview = preview.to_string();
     let shown = ReactiveList::with_style(
-        LayoutStyle::new().flex_row().flex_shrink(0.0),
+        LayoutStyle::row().flex_shrink(0.0),
         move || match review.drifted(&preview) {
             0 => Vec::new(),
             _ => vec![()],
@@ -154,14 +154,12 @@ fn reviewed(
     if result.acceptable() {
         header.push(accept(review, &result.id)?);
     }
-    let header = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let header = Container::new(
+        LayoutStyle::row()
             .flex_wrap()
             .flex_shrink(0.0)
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID * 1.5),
-        |_| RectStyle::default(),
         header,
     )?;
     let (mode, opacity, swipe) = (review.mode(), review.opacity(), review.swipe());
@@ -171,20 +169,15 @@ fn reviewed(
         |mode: &CompareMode| *mode,
         move |mode| compared(&pictures, mode, opacity, swipe),
     )?;
-    let mut content = vec![box_item(shown)];
+    let mut content = children![shown];
     if let Some(diff) = draw_diff(&result)? {
         content.push(diff);
     }
-    let content = StyledContainer::new(
-        fill().flex_row().gap(WORKBENCH_GRID * 1.5),
-        |_| RectStyle::default(),
-        content,
-    )?;
-    let column = StyledContainer::new(
+    let content = Container::new(fill().flex_row().gap(WORKBENCH_GRID * 1.5), content)?;
+    let column = Container::new(
         workbench_fill()
             .gap(WORKBENCH_GRID)
             .padding_all(WORKBENCH_GRID * 1.5),
-        |_| RectStyle::default(),
         vec![box_item(header), failure(review)?, box_item(content)],
     )?;
     Ok(box_item(column))
@@ -211,12 +204,8 @@ fn summary(result: &SnapshotResult) -> Result<Box<dyn LayoutItem>, LayoutError> 
             false => workbench_muted(text),
         },
     )?;
-    let status = StyledContainer::new(
-        LayoutStyle::new().flex_row().min_width(0.0),
-        |_| RectStyle::default(),
-        vec![box_item(summary)],
-    )?
-    .role(Role::Status);
+    let status =
+        Container::new(LayoutStyle::row().min_width(0.0), children![summary])?.role(Role::Status);
     Ok(box_item(status))
 }
 
@@ -298,7 +287,7 @@ fn accept(review: &SnapshotReview, id: &str) -> Result<Box<dyn LayoutItem>, Layo
 fn failure(review: &SnapshotReview) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let review = review.clone();
     let line = ReactiveList::with_style(
-        LayoutStyle::new().flex_row().flex_shrink(0.0),
+        LayoutStyle::row().flex_shrink(0.0),
         move || review.failure().into_iter().collect(),
         |error: &String| error.clone(),
         |error| {
@@ -307,12 +296,8 @@ fn failure(review: &SnapshotReview) -> Result<Box<dyn LayoutItem>, LayoutError> 
                 LayoutStyle::new().min_width(0.0),
                 |text| text.with_color(use_theme_tokens().error()),
             )?;
-            let status = StyledContainer::new(
-                LayoutStyle::new().flex_row().min_width(0.0),
-                |_| RectStyle::default(),
-                vec![box_item(text)],
-            )?
-            .role(Role::Status);
+            let status = Container::new(LayoutStyle::row().min_width(0.0), children![text])?
+                .role(Role::Status);
             Ok(box_item(status))
         },
     )?;
@@ -345,11 +330,7 @@ fn draw_diff(result: &SnapshotResult) -> Result<Option<Box<dyn LayoutItem>>, Lay
         |text| workbench_muted(text.with_font_weight(600)),
     )?;
     let scroll = LayoutScrollArea::new(fill(), view)?;
-    let column = StyledContainer::new(
-        fill().gap(WORKBENCH_GRID / 2.0),
-        |_| RectStyle::default(),
-        vec![box_item(caption), box_item(scroll)],
-    )?;
+    let column = Container::new(fill().gap(WORKBENCH_GRID / 2.0), children![caption, scroll])?;
     Ok(Some(box_item(column)))
 }
 
@@ -379,14 +360,14 @@ fn message(
     hint: Option<&'static str>,
     detail: Option<String>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut items = vec![box_item(Text::declaring(
+    let mut items = children![Text::declaring(
         move || match &detail {
             Some(detail) => strings::text_with(key, detail),
             None => strings::text(key),
         },
         LayoutStyle::new().max_width(MESSAGE_MAX_WIDTH),
         workbench_muted,
-    )?)];
+    )?];
     if let Some(hint) = hint {
         items.push(box_item(Text::declaring(
             move || strings::text(hint),
@@ -394,13 +375,12 @@ fn message(
             |text| workbench_muted(workbench_mono(text)),
         )?));
     }
-    let centred = StyledContainer::new(
+    let centred = Container::new(
         workbench_fill()
             .gap(WORKBENCH_GRID)
             .padding_all(WORKBENCH_GRID * 2.0)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
-        |_| RectStyle::default(),
         items,
     )?
     .role(Role::Status);
@@ -408,16 +388,14 @@ fn message(
 }
 
 fn spacer() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    Ok(box_item(StyledContainer::new(
+    Ok(box_item(Container::new(
         LayoutStyle::new().flex_grow(1.0),
-        |_| RectStyle::default(),
         Vec::new(),
     )?))
 }
 
 fn fill() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
+    LayoutStyle::column()
         .flex_grow(1.0)
         .flex_basis(0.0)
         .min_width(0.0)

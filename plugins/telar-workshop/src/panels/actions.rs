@@ -4,9 +4,9 @@ use std::rc::Rc;
 
 use telar::preview::{ActionCall, ActionLog};
 use telar::{
-    Accessible, AlignItems, Border, Children, JustifyContent, LayoutError, LayoutItem,
+    Accessible, AlignItems, Border, Children, Container, JustifyContent, LayoutError, LayoutItem,
     LayoutScrollArea, LayoutStyle, Memo, Reactive, ReactiveList, RectStyle, Role, StyledContainer,
-    Text, box_item, memo,
+    Text, box_item, children, memo,
 };
 use telar_components::{
     BadgeProps, ButtonProps, ButtonVariant, TextFieldProps, badge, button, text_field,
@@ -93,12 +93,10 @@ pub(super) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
             .build(),
         Children::default(),
     )?;
-    let tools = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let tools = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID),
-        |_| RectStyle::default(),
         vec![filter, clear],
     )?;
     Ok(box_item(tools))
@@ -107,7 +105,7 @@ pub(super) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
 /// How many calls `log` took since it was last emptied, for the panel's tab; nothing while there are none.
 pub(super) fn count_badge(log: ActionLog) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let count = ReactiveList::with_style(
-        LayoutStyle::new().flex_row(),
+        LayoutStyle::row(),
         move || match log.count() {
             0 => Vec::new(),
             _ => vec![()],
@@ -131,13 +129,9 @@ fn calls(listed: Memo<Vec<ActionCall>>) -> Result<Box<dyn LayoutItem>, LayoutErr
         |call: &ActionCall| call.seq,
         |call| row(&call.peek()),
     )?;
-    let log = StyledContainer::new(
-        LayoutStyle::new().flex_column(),
-        |_| RectStyle::default(),
-        vec![box_item(rows)],
-    )?
-    .role(Role::Log)
-    .a11y_label(|| strings::text(ACTIONS));
+    let log = Container::column(children![rows])?
+        .role(Role::Log)
+        .a11y_label(|| strings::text(ACTIONS));
     let scroll = LayoutScrollArea::new(
         LayoutStyle::new().flex_grow(1.0).min_height(0.0),
         box_item(log),
@@ -168,8 +162,7 @@ fn row(call: &ActionCall) -> Result<Box<dyn LayoutItem>, LayoutError> {
         workbench_mono,
     )?;
     let line = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID * 2.0)
             .padding_horizontal(WORKBENCH_GRID * 1.5)
@@ -183,7 +176,7 @@ fn row(call: &ActionCall) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 0.0,
             ))
         },
-        vec![box_item(seq), box_item(name), box_item(payload)],
+        children![seq, name, payload],
     )?;
     Ok(box_item(line))
 }
@@ -194,12 +187,11 @@ fn empty(key: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new(),
         workbench_muted,
     )?;
-    let centred = StyledContainer::new(
+    let centred = Container::new(
         workbench_fill()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
-        |_| RectStyle::default(),
-        vec![box_item(message)],
+        children![message],
     )?
     .role(Role::Status);
     Ok(box_item(centred))

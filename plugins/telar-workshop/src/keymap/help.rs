@@ -1,8 +1,8 @@
 //! The shortcuts overlay `?` opens: every action that has a shortcut, under its group, with its keys on caps.
 
 use telar::{
-    AlignItems, Children, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Reactive,
-    RectStyle, Slots, StyledContainer, Text, box_item,
+    AlignItems, Children, Container, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle,
+    Reactive, Slots, Text, box_item, children,
 };
 use telar_components::{KbdProps, ModalProps, kbd, modal};
 use telar_devtools::{WORKBENCH_GRID, workbench_muted};
@@ -42,16 +42,12 @@ fn listing() -> Result<Box<dyn LayoutItem>, LayoutError> {
             sections.push(row(action)?);
         }
     }
-    let column = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
-            .width(WIDTH)
-            .gap(WORKBENCH_GRID / 2.0),
-        |_| RectStyle::default(),
+    let column = Container::new(
+        LayoutStyle::column().width(WIDTH).gap(WORKBENCH_GRID / 2.0),
         sections,
     )?;
     let scroll = LayoutScrollArea::new(
-        LayoutStyle::new().flex_column().max_height(MAX_HEIGHT),
+        LayoutStyle::column().max_height(MAX_HEIGHT),
         box_item(column),
     )?;
     Ok(box_item(scroll))
@@ -73,7 +69,7 @@ fn row(action: Action) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new().flex_grow(1.0).min_width(0.0),
         |text| text,
     )?;
-    let mut items = vec![box_item(name)];
+    let mut items = children![name];
     for chord in action.chords() {
         items.push(kbd(
             KbdProps::props()
@@ -82,12 +78,10 @@ fn row(action: Action) -> Result<Box<dyn LayoutItem>, LayoutError> {
             Children::default(),
         )?);
     }
-    let row = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let row = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID),
-        |_| RectStyle::default(),
         items,
     )?;
     Ok(box_item(row))

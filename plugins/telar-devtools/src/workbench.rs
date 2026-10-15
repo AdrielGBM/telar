@@ -207,8 +207,7 @@ pub fn workbench_mono(text: TextStyle) -> TextStyle {
 
 /// A column that takes the space its parent leaves and may shrink below its content either way, so a scroll area or a list inside it bounds its own overflow.
 pub fn workbench_fill() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
+    LayoutStyle::column()
         .flex_grow(1.0)
         .min_width(0.0)
         .min_height(0.0)

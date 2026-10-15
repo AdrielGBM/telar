@@ -5,10 +5,10 @@ use std::sync::Arc;
 
 use telar::preview::snapshot::SnapshotResult;
 use telar::{
-    Accessible, AlignItems, Children, Clip, ClippedItem, Image, ImageData, JustifyContent,
-    LayoutError, LayoutItem, LayoutStyle, ObjectFit, Raster, Rect, RectStyle, Role, RwSignal,
-    ShapeStyle, SizeDimension, StyledContainer, Text, box_item, effect, signal, track_layout,
-    use_theme_tokens,
+    Accessible, AlignItems, Children, Clip, ClippedItem, Container, Image, ImageData,
+    JustifyContent, LayoutError, LayoutItem, LayoutStyle, ObjectFit, Raster, Rect, RectStyle, Role,
+    RwSignal, ShapeStyle, SizeDimension, StyledContainer, Text, box_item, children, effect, signal,
+    track_layout, use_theme_tokens,
 };
 use telar_components::{SliderProps, slider};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_muted};
@@ -95,11 +95,7 @@ fn side_by_side(pictures: &Pictures) -> Result<Box<dyn LayoutItem>, LayoutError>
             area(vec![fitted(diff.clone())?])?,
         )?);
     }
-    let row = StyledContainer::new(
-        fill().flex_row().gap(WORKBENCH_GRID),
-        |_| RectStyle::default(),
-        columns,
-    )?;
+    let row = Container::new(fill().flex_row().gap(WORKBENCH_GRID), columns)?;
     Ok(box_item(row))
 }
 
@@ -139,8 +135,7 @@ fn swiped(
             .width(width)
             .height(height)
     };
-    let held = StyledContainer::new(whole(), |_| RectStyle::default(), vec![fitted(baseline)?])?
-        .styled_by(whole);
+    let held = Container::new(whole(), vec![fitted(baseline)?])?.styled_by(whole);
     let up_to_line = move || {
         LayoutStyle::new()
             .absolute()
@@ -149,8 +144,7 @@ fn swiped(
             .inset_start(0.0)
             .width(line())
     };
-    let cut = StyledContainer::new(up_to_line(), |_| RectStyle::default(), vec![box_item(held)])?
-        .styled_by(up_to_line);
+    let cut = Container::new(up_to_line(), children![held])?.styled_by(up_to_line);
     let cut = ClippedItem::new(box_item(cut), Clip::both().paint_only());
     let at_line = move || {
         LayoutStyle::new()
@@ -205,11 +199,7 @@ fn with_slider(
             .build(),
         Children::default(),
     )?;
-    let column = StyledContainer::new(
-        fill().gap(WORKBENCH_GRID),
-        |_| RectStyle::default(),
-        vec![pictures, slider],
-    )?;
+    let column = Container::new(fill().gap(WORKBENCH_GRID), vec![pictures, slider])?;
     Ok(box_item(column))
 }
 
@@ -246,9 +236,8 @@ fn captioned(
         LayoutStyle::new().flex_shrink(0.0),
         |text| workbench_muted(text.with_font_weight(600)),
     )?;
-    let column = StyledContainer::new(
+    let column = Container::new(
         fill().gap(WORKBENCH_GRID / 2.0),
-        |_| RectStyle::default(),
         vec![box_item(caption), picture],
     )?
     .role(Role::Drawing)
@@ -267,14 +256,13 @@ fn no_golden() -> Result<Box<dyn LayoutItem>, LayoutError> {
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER),
         |_| RectStyle::default().with_fill(use_workbench_tokens().canvas_backdrop),
-        vec![box_item(text)],
+        children![text],
     )?;
     Ok(box_item(centred))
 }
 
 fn fill() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
+    LayoutStyle::column()
         .flex_grow(1.0)
         .flex_basis(0.0)
         .min_width(0.0)

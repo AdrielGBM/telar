@@ -113,8 +113,7 @@ fn workshop(
     let chrome = state.chrome();
     let building = state.clone();
     let shown = ReactiveList::with_style(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .width(SizeDimension::Percent(1.0))
             .height(SizeDimension::Percent(1.0)),
         move || vec![chrome.get()],
@@ -129,8 +128,7 @@ fn workshop(
 
 fn canvas_alone(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let pane = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .flex_grow(1.0)
             .min_width(0.0)
             .min_height(0.0),

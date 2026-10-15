@@ -29,8 +29,7 @@ pub fn inspection_toggles(inspection: Inspection) -> Result<Box<dyn LayoutItem>,
         switch(inspection.measure, MEASURE)?,
     ];
     Ok(box_item(Container::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID * 2.0),
         switches,

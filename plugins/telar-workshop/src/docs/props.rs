@@ -2,8 +2,8 @@
 
 use telar::preview::{PropDefault, PropField, PropsSchema};
 use telar::{
-    AlignItems, Border, LayoutError, LayoutItem, LayoutStyle, RectStyle, StyledContainer, Text,
-    TextStyle, box_item,
+    AlignItems, Border, Container, LayoutError, LayoutItem, LayoutStyle, RectStyle,
+    StyledContainer, Text, TextStyle, box_item,
 };
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_mono, workbench_muted};
 
@@ -21,11 +21,7 @@ pub(super) fn table(schema: &'static PropsSchema) -> Result<Box<dyn LayoutItem>,
     for field in schema.fields {
         rows.push(row(field)?);
     }
-    let table = StyledContainer::new(
-        LayoutStyle::new().flex_column(),
-        |_| RectStyle::default(),
-        rows,
-    )?;
+    let table = Container::column(rows)?;
     Ok(box_item(table))
 }
 
@@ -82,8 +78,7 @@ fn cell(
 
 fn line(cells: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let line = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::FLEX_START)
             .gap(WORKBENCH_GRID * 2.0)
             .padding_horizontal(WORKBENCH_GRID * 1.5)

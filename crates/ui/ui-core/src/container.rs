@@ -29,6 +29,7 @@ pub struct Container {
 }
 
 impl Container {
+    /// A box that lays out `children` by `layout_style` and paints nothing: what a view's `col`, `row` and `grid` build, from [`LayoutStyle::column`] or [`LayoutStyle::row`] plus their attributes. A box that paints, takes focus or lets the pointer through is a [`StyledContainer`](crate::StyledContainer).
     pub fn new(
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
@@ -116,6 +117,7 @@ impl Container {
         self.input.answer(self.node, self.rect.read_only());
     }
 
+    /// A bare flex column over `children`: a view's `col` with no attributes.
     pub fn column(children: Vec<Box<dyn LayoutItem>>) -> Result<Self, LayoutError> {
         Self::new(LayoutStyle::new().flex_column(), children)
     }

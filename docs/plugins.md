@@ -78,9 +78,7 @@ pub fn pill(props: PillProps, _children: Children) -> Result<Box<dyn LayoutItem>
         inherited.with_color(use_theme_tokens().on_primary())
     })?;
     let container = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .padding_horizontal(use_theme_tokens().spacing()),
+        LayoutStyle::row().padding_horizontal(use_theme_tokens().spacing()),
         move |rect| {
             let base = RectStyle::default()
                 .with_fill(use_theme_tokens().primary())
@@ -108,6 +106,34 @@ mod pill;
 
 pub use pill::{PillProps, pill};
 ```
+
+### The view's tags in Rust
+
+The layout tags of a `[view]` build widgets a Rust component builds the same way:
+
+| In a view    | In Rust                                                                  |
+| ------------ | ------------------------------------------------------------------------ |
+| `col gap:8`  | `Container::new(LayoutStyle::column().gap(8.0), children![a, b])?`       |
+| `row`        | `Container::new(LayoutStyle::row(), children![a, b])?`                   |
+| bare `col`   | `Container::column(children![a, b])?`                                    |
+| `box`        | `StyledContainer::new(LayoutStyle::column(), \|rect\| paint, children)?` |
+| `scroll`     | `LayoutScrollArea::new(style, box_item(content))?`                       |
+
+`LayoutStyle::column()` and `LayoutStyle::row()` are the styles those tags start from, and their attributes are the
+builder calls chained after it. Start from them rather than `LayoutStyle::new()`, which is a block box that ignores
+`gap`, `align_items` and `justify_content`.
+
+A box that only lays out is a `Container`, which takes `role`, `a11y_label`, `styled_by` and `on_press` like the
+painted one does. Reach for `StyledContainer` when the box paints, takes focus, lets the pointer through
+(`input_transparent`) or fades (`with_opacity`), not to hand it `|_| RectStyle::default()`.
+
+`children![…]` boxes each widget it is given. An item that is already a `Box<dyn LayoutItem>` goes into a plain
+`vec![…]` as it is.
+
+A `scroll`'s options are the area's other constructors: `LayoutScrollArea::new_with(style, |viewport| …)` hands its
+content the live viewport (what a `virtual` loop reads), `new_kept(key, style, build)` is `keep:`, and
+`.arrival_margin(|| insets)` is `arrival_margin:`. Several children go in as one `Container::column`, as a view
+wraps them.
 
 ### `@class` and `SurfaceStyle`
 

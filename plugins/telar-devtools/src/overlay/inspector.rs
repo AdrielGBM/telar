@@ -5,7 +5,7 @@ use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, Border, Children, Color, Container, LayoutError, LayoutItem,
     LayoutStyle, Reactive, ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, Text,
-    box_item,
+    box_item, children,
 };
 use telar_components::{
     ButtonProps, ButtonVariant, SplitPaneProps, Tab, button, split_pane, tab_list,
@@ -41,8 +41,7 @@ pub(super) fn drawer(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
 /// Where the drawer leaves the app showing, with the build-error banner at its top and the stats at its bottom. It claims no pointer itself, so a press there is the app's.
 fn uncovered(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(Container::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .flex_grow(1.0)
             .padding_all(WORKBENCH_GRID),
         vec![
@@ -91,8 +90,7 @@ fn header(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         Children::default(),
     )?;
     let header = Container::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .flex_shrink(0.0)
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID)
@@ -120,8 +118,7 @@ fn strip(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         Some(Reactive::of(|| strings::text(INSPECTOR))),
     )?;
     Ok(box_item(Container::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .flex_shrink(0.0)
             .padding_horizontal(WORKBENCH_GRID),
         vec![tabs],
@@ -138,8 +135,7 @@ fn body(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move |tab| match tab {
             DrawerTab::Components => {
                 let toggles = Container::new(
-                    LayoutStyle::new()
-                        .flex_row()
+                    LayoutStyle::row()
                         .flex_shrink(0.0)
                         .padding_horizontal(WORKBENCH_GRID * 1.5)
                         .padding_vertical(WORKBENCH_GRID / 2.0),
@@ -153,18 +149,14 @@ fn body(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
             DrawerTab::Accessibility => accessibility_panel(inspection),
         },
     )?;
-    let body = StyledContainer::new(
-        workbench_fill(),
-        |_| RectStyle::default(),
-        vec![box_item(panel)],
-    )?
-    .role(Role::TabPanel)
-    .a11y_label(move || {
-        strings::text(match shown.get() {
-            DrawerTab::Components => COMPONENTS,
-            DrawerTab::Accessibility => ACCESSIBILITY,
-        })
-    });
+    let body = Container::new(workbench_fill(), children![panel])?
+        .role(Role::TabPanel)
+        .a11y_label(move || {
+            strings::text(match shown.get() {
+                DrawerTab::Components => COMPONENTS,
+                DrawerTab::Accessibility => ACCESSIBILITY,
+            })
+        });
     Ok(box_item(body))
 }
 

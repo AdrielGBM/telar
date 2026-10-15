@@ -6,9 +6,9 @@ use std::rc::Rc;
 use telar::preview::host::{ArgState, Args};
 use telar::preview::{ArgValue, ControlKind, NumberControl};
 use telar::{
-    Accessible, AlignItems, Children, Color, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    ReadSignal, RectStyle, RwSignal, ShapeStyle, Slots, StyledContainer, Text, TextArea, box_item,
-    effect, signal,
+    Accessible, AlignItems, Children, Color, Container, LayoutError, LayoutItem, LayoutStyle,
+    Reactive, ReadSignal, RectStyle, RwSignal, ShapeStyle, Slots, StyledContainer, Text, TextArea,
+    box_item, children, effect, signal,
 };
 use telar_components::{
     ItemProps, ScrubFieldProps, SelectProps, SliderProps, TabsProps, TextFieldProps, ToggleProps,
@@ -253,14 +253,13 @@ fn text_editor(binding: &Binding, multiline: bool) -> Result<Editor, LayoutError
             let area = TextArea::declaring(bound.shown, LayoutStyle::new(), |text| text)?
                 .a11y_label(move || name);
             let framed = StyledContainer::new(
-                LayoutStyle::new()
-                    .flex_column()
+                LayoutStyle::column()
                     .width(FIELD_WIDTH)
                     .min_height(MULTILINE_HEIGHT)
                     .padding_horizontal(WORKBENCH_GRID)
                     .padding_vertical(WORKBENCH_GRID / 2.0),
                 |_| field_frame(),
-                vec![box_item(area)],
+                children![area],
             )?;
             box_item(framed)
         }
@@ -411,12 +410,10 @@ fn read_only(binding: &Binding) -> Result<Editor, LayoutError> {
 }
 
 fn inline(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let row = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let row = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(WORKBENCH_GRID),
-        |_| RectStyle::default(),
         items,
     )?;
     Ok(box_item(row))
