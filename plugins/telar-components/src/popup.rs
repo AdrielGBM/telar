@@ -71,13 +71,10 @@ pub(crate) fn popup(
         keyboard,
     } = spec;
     let mut handed = None;
-    let scroll = LayoutScrollArea::new_with(
-        LayoutStyle::new().flex_shrink(1.0).min_height(0.0),
-        |viewport| {
-            handed = Some(viewport);
-            Ok(rows)
-        },
-    )?;
+    let scroll = LayoutScrollArea::new_with(LayoutStyle::new().flex_shrink(1.0), |viewport| {
+        handed = Some(viewport);
+        Ok(rows)
+    })?;
     let view = handed.expect("a scroll area builds its content before it returns");
     let scroll = match keyboard {
         #[cfg(feature = "overlays")]

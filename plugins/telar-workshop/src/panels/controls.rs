@@ -73,7 +73,7 @@ pub(crate) fn arg_table(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> 
 }
 
 fn scrolling(table: Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let scroll = LayoutScrollArea::new(LayoutStyle::new().flex_grow(1.0).min_height(0.0), table)?
+    let scroll = LayoutScrollArea::new(LayoutStyle::new().flex_grow(1.0), table)?
         .stop_label(|| strings::text(CONTROLS));
     Ok(box_item(scroll))
 }

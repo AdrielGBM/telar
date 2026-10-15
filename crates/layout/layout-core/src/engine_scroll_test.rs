@@ -145,3 +145,42 @@ fn restyling_a_scroll_container_keeps_it_one() {
         geometry_core::Rect::new(0.0, 0.0, 240.0, 50.0)
     );
 }
+
+fn scroll_in_bounded_flex(row: bool, host_style: LayoutStyle) -> geometry_core::Rect {
+    let mut engine = LayoutEngine::new();
+    let content = engine
+        .new_leaf(LayoutStyle::new().width(900.0).height(900.0))
+        .unwrap();
+    let host = engine.new_leaf(host_style).unwrap();
+    engine.set_scroll_content(host, content).unwrap();
+    let parent = if row {
+        LayoutStyle::new().flex_row().width(200.0).height(100.0)
+    } else {
+        LayoutStyle::new().flex_column().width(200.0).height(100.0)
+    };
+    let root = engine.new_container(parent, &[host]).unwrap();
+    engine
+        .compute_layout(
+            root,
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+    engine.layout(host).unwrap()
+}
+
+#[test]
+fn a_scroll_host_shrinks_below_its_content_as_a_column_item_without_a_zero_minimum() {
+    let rect = scroll_in_bounded_flex(false, LayoutStyle::new());
+    assert_eq!(rect.height, 100.0);
+    let grown = scroll_in_bounded_flex(false, LayoutStyle::new().flex_grow(1.0));
+    assert_eq!(grown.height, 100.0);
+}
+
+#[test]
+fn a_scroll_host_shrinks_below_its_content_as_a_row_item_without_a_zero_minimum() {
+    let rect = scroll_in_bounded_flex(true, LayoutStyle::new());
+    assert_eq!(rect.width, 200.0);
+    let grown = scroll_in_bounded_flex(true, LayoutStyle::new().flex_grow(1.0));
+    assert_eq!(grown.width, 200.0);
+}

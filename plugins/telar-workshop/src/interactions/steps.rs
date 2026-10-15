@@ -216,11 +216,8 @@ fn steps(interactions: &Interactions) -> Result<Box<dyn LayoutItem>, LayoutError
     let list = Container::column(children![list])?
         .role(Role::List)
         .a11y_label(|| strings::text(PLAY_STEPS));
-    let scroll = LayoutScrollArea::new(
-        LayoutStyle::new().flex_grow(1.0).min_height(0.0),
-        box_item(list),
-    )?
-    .stop_label(|| strings::text(PLAY_STEPS));
+    let scroll = LayoutScrollArea::new(LayoutStyle::new().flex_grow(1.0), box_item(list))?
+        .stop_label(|| strings::text(PLAY_STEPS));
     let column = Container::new(
         workbench_fill(),
         vec![summary(interactions)?, box_item(scroll)],

@@ -223,7 +223,7 @@ pub fn tree_view(
 }
 
 fn fill() -> LayoutStyle {
-    LayoutStyle::new().flex_grow(1.0).min_height(0.0)
+    LayoutStyle::new().flex_grow(1.0)
 }
 
 struct Row {

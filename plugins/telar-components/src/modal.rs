@@ -79,7 +79,7 @@ fn body_column() -> LayoutStyle {
     LayoutStyle::new().flex_column().gap(shared::gap_lg())
 }
 fn body_scroll() -> LayoutStyle {
-    LayoutStyle::new().flex_shrink(1.0).min_height(0.0)
+    LayoutStyle::new().flex_shrink(1.0)
 }
 fn backdrop() -> LayoutStyle {
     LayoutStyle::new()

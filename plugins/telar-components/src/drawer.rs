@@ -152,7 +152,7 @@ fn build_open_drawer(
         None => strings::text(strings::DRAWER),
     });
     let body = LayoutScrollArea::new(
-        LayoutStyle::new().flex_shrink(1.0).min_height(0.0),
+        LayoutStyle::new().flex_shrink(1.0),
         box_item(Container::new(
             LayoutStyle::new().flex_column().gap(shared::gap_lg()),
             body,

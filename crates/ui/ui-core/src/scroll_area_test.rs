@@ -1142,3 +1142,50 @@ fn a_wheel_over_an_inner_area_that_cannot_take_it_scrolls_the_one_around_it() {
     assert_eq!(inner_x.get(), 80.0, "the inner area keeps what it can take");
     assert_eq!(outer.core.scroll_y.get(), 80.0);
 }
+
+fn scroll_area_laid_out_in_bounded_flex(row: bool, style: LayoutStyle) -> Rect {
+    reset_layout_runtime();
+    let content = Canvas::new(LayoutStyle::new().width(900.0).height(900.0), |_| {
+        RenderNode::Empty
+    })
+    .unwrap();
+    let scroll = LayoutScrollArea::new(style, Box::new(content)).unwrap();
+    let scroll_node = scroll.layout_node();
+    let parent = if row {
+        LayoutStyle::new().flex_row().width(200.0).height(100.0)
+    } else {
+        LayoutStyle::new().flex_column().width(200.0).height(100.0)
+    };
+    let surface = new_container(parent, &[scroll_node]).unwrap();
+    compute_layout(
+        surface,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    track_layout(scroll_node).unwrap().get()
+}
+
+#[test]
+fn a_scroll_area_in_a_bounded_column_shrinks_and_scrolls_without_a_zero_minimum() {
+    for style in [
+        LayoutStyle::new(),
+        LayoutStyle::new().flex_grow(1.0),
+        LayoutStyle::new().flex_shrink(1.0),
+    ] {
+        let rect = scroll_area_laid_out_in_bounded_flex(false, style);
+        assert_eq!(rect.height, 100.0);
+    }
+}
+
+#[test]
+fn a_scroll_area_in_a_bounded_row_shrinks_and_scrolls_without_a_zero_minimum() {
+    for style in [
+        LayoutStyle::new(),
+        LayoutStyle::new().flex_grow(1.0),
+        LayoutStyle::new().flex_shrink(1.0),
+    ] {
+        let rect = scroll_area_laid_out_in_bounded_flex(true, style);
+        assert_eq!(rect.width, 200.0);
+    }
+}

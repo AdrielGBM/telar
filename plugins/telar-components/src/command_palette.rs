@@ -501,8 +501,7 @@ fn build_open_palette(
     let scroll = LayoutScrollArea::new_with(
         LayoutStyle::new()
             .max_height(VISIBLE_ROWS as f32 * row_height)
-            .flex_shrink(1.0)
-            .min_height(0.0),
+            .flex_shrink(1.0),
         |viewport| {
             let palette = Rc::new(Palette {
                 results,
