@@ -56,13 +56,97 @@ pub(crate) fn run_fmt_cmd(args: FmtArgs) {
     }
 }
 
-/// Every `.rsx` and `.rs` file under `root`, skipping what is not source: `target/`, the generated `.telar/` tree (formatting it would be undone by the next build) and any dot-directory.
+/// Every `.rsx` and `.rs` file Cargo compiles under `root`: the sources of each package found there or enclosing it, not every file the tree holds, so fixtures, generated corpora and scratch directories are never touched. `target/`, the generated `.telar/` tree (formatting it would be undone by the next build) and any dot-directory are skipped.
 fn collect(root: &Path, out: &mut Vec<PathBuf>) {
-    out.extend(telar_project::collect_files_by_ext(
-        root,
-        &["rsx", "rs"],
-        &|name| name != "target" && !name.starts_with('.'),
-    ));
+    if root.is_file() {
+        out.extend(telar_project::collect_files_by_ext(
+            root,
+            &["rsx", "rs"],
+            &|_| true,
+        ));
+        return;
+    }
+    let mut packages = packages_under(root);
+    if let Some(enclosing) = root
+        .ancestors()
+        .find(|dir| dir.join("Cargo.toml").is_file())
+    {
+        packages.push(enclosing.to_path_buf());
+    }
+    packages.sort();
+    packages.dedup();
+    for package in &packages {
+        for source_root in source_roots(package) {
+            let found =
+                telar_project::collect_files_by_ext(&source_root, &["rsx", "rs"], &|name| {
+                    name != "target" && !name.starts_with('.')
+                });
+            out.extend(found.into_iter().filter(|path| path.starts_with(root)));
+        }
+    }
+}
+
+fn packages_under(root: &Path) -> Vec<PathBuf> {
+    let mut packages = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        if dir.join("Cargo.toml").is_file() {
+            packages.push(dir.clone());
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if entry.path().is_dir() && name != "target" && !name.starts_with('.') {
+                pending.push(entry.path());
+            }
+        }
+    }
+    packages
+}
+
+/// The places Cargo looks for a package's sources, plus the directory of every target whose `path` the manifest declares outside them.
+fn source_roots(package: &Path) -> Vec<PathBuf> {
+    let mut roots: Vec<PathBuf> = ["src", "tests", "examples", "benches"]
+        .iter()
+        .map(|name| package.join(name))
+        .filter(|dir| dir.is_dir())
+        .collect();
+    let build_script = package.join("build.rs");
+    if build_script.is_file() {
+        roots.push(build_script);
+    }
+    let manifest = std::fs::read_to_string(package.join("Cargo.toml"))
+        .ok()
+        .and_then(|text| text.parse::<toml::Table>().ok());
+    for declared in manifest.iter().flat_map(declared_paths) {
+        let path = package.join(declared);
+        if roots.iter().any(|root| path.starts_with(root)) {
+            continue;
+        }
+        if let Some(dir) = path.parent().filter(|dir| dir.is_dir()) {
+            roots.push(dir.to_path_buf());
+        }
+    }
+    roots
+}
+
+fn declared_paths(manifest: &toml::Table) -> Vec<String> {
+    let path_of = |table: &toml::Value| {
+        table
+            .get("path")
+            .and_then(toml::Value::as_str)
+            .map(str::to_string)
+    };
+    let mut paths: Vec<String> = manifest.get("lib").and_then(path_of).into_iter().collect();
+    for kind in ["bin", "test", "example", "bench"] {
+        if let Some(targets) = manifest.get(kind).and_then(toml::Value::as_array) {
+            paths.extend(targets.iter().filter_map(path_of));
+        }
+    }
+    paths
 }
 
 /// Formats one file, reporting whether it changed. `check` reads and compares without writing.
@@ -117,3 +201,7 @@ fn display(path: &Path) -> String {
         .display()
         .to_string()
 }
+
+#[cfg(test)]
+#[path = "fmt_test.rs"]
+mod tests;
