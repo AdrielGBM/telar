@@ -3,7 +3,7 @@
 //! An application depends on it beside `telar` and names the groups it draws. Nothing is on by default, and the widgets every interface uses are in every build:
 //!
 //! - `overlays`: menus, context menus, modals, drawers, tooltips, the command palette and the key caps its rows show, toasts, and the scrim behind them.
-//! - `chrome`: the window frame a desktop application draws itself.
+//! - `chrome`: the window frame a desktop application draws itself, and the window controls and title-bar behaviour it is built from, for a title bar of the application's own.
 //! - `advanced`: reorderable lists, accordions and steppers.
 //! - `workbench`: split panes, trees, toolbars, icon buttons, a colour picker and a code view, with the `icons` and `overlays` they build on.
 //!
@@ -85,6 +85,8 @@ mod tabs;
 #[cfg(test)]
 mod test_support;
 mod text_field;
+#[cfg(feature = "chrome")]
+mod title_bar;
 #[cfg(feature = "overlays")]
 mod toast;
 mod toggle;
@@ -159,6 +161,8 @@ pub use stepper::{StepperProps, StepperTokens, stepper};
 pub use swatches::{SwatchesProps, SwatchesTokens, swatches};
 pub use tabs::{Tab, TabsProps, TabsTokens, tab_list, tabs};
 pub use text_field::{FieldKeyHandler, TextFieldProps, TextFieldTokens, text_field};
+#[cfg(feature = "chrome")]
+pub use title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
 #[cfg(feature = "overlays")]
 pub use toast::{
     Toast, ToastAction, ToastId, ToastKind, ToastPlacement, ToastTokens, ToasterProps, Toasts,

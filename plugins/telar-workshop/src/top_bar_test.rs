@@ -6,6 +6,7 @@ use telar::{
     AccessNode, App, AppRuntime, Component, ComponentList, Event, LocalApp, Rect, ResizeEdge, Role,
     Size, WindowCommand, WindowRoot, reset_layout_runtime, take_window_commands,
 };
+use telar_components::DOUBLE_CLICK;
 use telar_devtools::workbench_scope;
 
 use super::*;

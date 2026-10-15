@@ -22,9 +22,11 @@ pub(crate) const NOTIFICATIONS: &str = "notifications";
 pub(crate) const OPACITY: &str = "opacity";
 pub(crate) const REMOVE: &str = "remove";
 pub(crate) const RESIZE: &str = "resize";
+pub(crate) const RESTORE: &str = "restore";
 pub(crate) const SATURATION_BRIGHTNESS: &str = "saturation_brightness";
 pub(crate) const SEARCH_COMMANDS: &str = "search_commands";
 pub(crate) const SELECT: &str = "select";
+pub(crate) const WINDOW: &str = "window";
 
 static CATALOG: Catalog = Catalog {
     locales: &["ar", "en", "es"],
@@ -185,6 +187,14 @@ static CATALOG: Catalog = Catalog {
             ],
         },
         Entry {
+            key: RESTORE,
+            messages: &[
+                ("ar", Message::Plain("استعادة")),
+                ("en", Message::Plain("Restore")),
+                ("es", Message::Plain("Restaurar")),
+            ],
+        },
+        Entry {
             key: SATURATION_BRIGHTNESS,
             messages: &[
                 ("ar", Message::Plain("التشبع والسطوع")),
@@ -206,6 +216,14 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("اختر")),
                 ("en", Message::Plain("Select")),
                 ("es", Message::Plain("Seleccionar")),
+            ],
+        },
+        Entry {
+            key: WINDOW,
+            messages: &[
+                ("ar", Message::Plain("النافذة")),
+                ("en", Message::Plain("Window")),
+                ("es", Message::Plain("Ventana")),
             ],
         },
     ],

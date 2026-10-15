@@ -57,6 +57,29 @@ telar::set_title_format(|parts| match parts.page {
 });
 ```
 
+## A title bar of your own
+
+A desktop app that draws its own title bar reads the title with `telar::window::title()` and builds the rest
+from `telar-components`, under its `chrome` feature: the window's controls, and the behaviour that makes a box
+the app owns the window's title bar.
+
+```rust
+use telar_components::{TitleBarOptions, WindowControlsProps, title_bar, window_controls, window_edges};
+
+let title = Text::declaring(telar::window::title, LayoutStyle::new(), |text| text)?;
+let controls = window_controls(WindowControlsProps::props().build(), Children::default())?;
+let bar = StyledContainer::new(bar_style(), |_| RectStyle::default(), vec![box_item(title), controls])?
+    .role(Role::Banner);
+let bar = title_bar(bar, TitleBarOptions { replace_decorations: true, ..TitleBarOptions::default() });
+```
+
+| Item | What it is |
+| --- | --- |
+| `window_controls` | Minimize, maximize and close, in a group a reader hears as the window's. Maximize is drawn as two squares and named Restore while the window is maximized. Close runs `on_close`, `telar::window::close` unless the app passes its own. Each button holds the strokes started on it, so a press on one never moves the window. |
+| `title_bar(bar, options)` | Makes `bar` the window's title bar while it is shown: a drag from its empty space moves the window, a double-click there maximizes or restores it (`maximize`), and with `replace_decorations` the window system's own title bar and borders are off until the bar is gone. Give `bar` its role first: a box that answers a press and has none is announced as a button. |
+| `window_edges` | Handles along the window's edges and corners that resize a window opened without decorations. Place it last among the root's children. |
+| `window_frame` | A whole frame built from `window_controls` and `title_bar`, with a title strip, a body and a resize grip, for a backend that draws a surface's chrome itself. |
+
 ## Per target
 
 The derived title reaches the platform through `Window::set_title`, once each time it changes.

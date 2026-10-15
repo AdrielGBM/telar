@@ -6,20 +6,20 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, BorderRadius, Color, JustifyContent, LayoutError, LayoutItem,
+    AlignItems, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
     LayoutStyle, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer,
-    SurfaceAmendment, Text, TextStyle, amend_surface, box_item, focus::Role, signal, track_layout,
+    SurfaceAmendment, Text, TextStyle, amend_surface, box_item, focus::Role, track_layout,
 };
 
 use crate::shared;
-use crate::strings;
+use crate::title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
 
 /// Which window-management controls a frame draws, beside the close button it always has.
 ///
 /// Off by default: a layer-shell panel has no top-level window to minimize, and drawing a control that does nothing is worse than not drawing it. A windowed backend turns on what its platform can honour.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WindowControls {
-    /// Dragging the title strip asks the platform for an interactive move.
+    /// The title strip is the window's title bar, as [`title_bar`](crate::title_bar) makes one: dragging it asks the platform for an interactive move, and double-clicking it maximizes or restores the window where `maximize` is on too.
     pub drag: bool,
     pub minimize: bool,
     pub maximize: bool,
@@ -121,59 +121,6 @@ fn resize_grip(
     ))
 }
 
-/// What a window-management button is painted in: its mark at rest, and its fill and mark under the pointer.
-struct ControlPaint {
-    glyph: Option<Reactive<Color>>,
-    hover: Option<Reactive<Color>>,
-    hover_glyph: Option<Reactive<Color>>,
-}
-
-/// One of the window-management buttons in the strip: a mark a reader hears by `name`.
-fn control_button(
-    shape: shared::Mark,
-    name: &'static str,
-    paint: ControlPaint,
-    press: Rc<dyn Fn()>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let ControlPaint {
-        glyph: rest,
-        hover,
-        hover_glyph,
-    } = paint;
-    let hovered = signal(false);
-    let label = shared::mark(
-        move || shape,
-        move |inherited| {
-            let color = match &hover_glyph {
-                Some(hover_glyph) if hovered.get() => Some(hover_glyph.get()),
-                _ => rest.as_ref().map(Reactive::get),
-            };
-            chrome_text(inherited.clone(), color).color
-        },
-    )?;
-    let shell = || {
-        LayoutStyle::new()
-            .flex_column()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER)
-            .padding_horizontal(shared::gap_md())
-            .padding_vertical(shared::gap_xs())
-            .min_width(shared::MIN_TARGET)
-            .min_height(shared::MIN_TARGET)
-    };
-    Ok(box_item(
-        StyledContainer::new(shell(), |_| RectStyle::default(), vec![label])?
-            .styled_by(shell)
-            .hover_style(move |_| {
-                RectStyle::default().with_fill(or_theme(&hover, shared::hover_wash))
-            })
-            .on_hover(move |over| hovered.set(over))
-            .control(Role::Button)
-            .a11y_label(move || strings::text(name))
-            .on_press(move || press()),
-    ))
-}
-
 /// A titled, closable window frame around `body`.
 ///
 /// `leading` is drawn before the title — an application icon, a back arrow, a status dot. `None` for a frame that is only a title, which is every panel.
@@ -195,49 +142,24 @@ pub fn window_frame(
         move |inherited| chrome_text(inherited, title_color.as_ref().map(Reactive::get)),
     )?);
 
-    let window_command = |command: telar::WindowCommand| -> Rc<dyn Fn()> {
-        Rc::new(move || telar::push_window_command(command.clone()))
+    let or_unset = |color: &Option<Reactive<Color>>| {
+        color.clone().unwrap_or_else(|| Color::TRANSPARENT.into())
     };
-    let control_paints = || ControlPaint {
-        glyph: style.close.clone(),
-        hover: style.control_hover.clone(),
-        hover_glyph: style.control_hover_glyph.clone(),
-    };
-
-    let mut controls: Vec<Box<dyn LayoutItem>> = Vec::new();
-    if style.controls.minimize {
-        controls.push(control_button(
-            shared::Mark::Minimize,
-            strings::MINIMIZE,
-            control_paints(),
-            window_command(telar::WindowCommand::Minimize),
-        )?);
-    }
-    if style.controls.maximize {
-        controls.push(control_button(
-            shared::Mark::Maximize,
-            strings::MAXIMIZE,
-            control_paints(),
-            window_command(telar::WindowCommand::ToggleMaximize),
-        )?);
-    }
-    controls.push(control_button(
-        shared::Mark::Close,
-        strings::CLOSE,
-        ControlPaint {
-            glyph: style.close.clone(),
-            hover: style.close_hover.clone(),
-            hover_glyph: style.close_hover_glyph.clone(),
+    let controls = window_controls(
+        WindowControlsProps {
+            minimize: style.controls.minimize,
+            maximize: style.controls.maximize,
+            on_close: close,
+            glyph: or_unset(&style.close),
+            hover: or_unset(&style.control_hover),
+            hover_glyph: or_unset(&style.control_hover_glyph),
+            close_hover: or_unset(&style.close_hover),
+            close_hover_glyph: or_unset(&style.close_hover_glyph),
+            min_size: None,
+            style: None,
         },
-        close,
-    )?);
-    let controls = box_item(StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER),
-        |_| RectStyle::default(),
-        controls,
-    )?);
+        Children::default(),
+    )?;
 
     // One group, so `SPACE_BETWEEN` pushes the controls to the far edge rather than spreading three things across the strip.
     let label_box = || {
@@ -259,7 +181,6 @@ pub fn window_frame(
     );
 
     let title_bar_color = style.title_bar.clone();
-    let drag_moves = style.controls.drag;
     let strip_box = || {
         LayoutStyle::new()
             .flex_row()
@@ -274,13 +195,17 @@ pub fn window_frame(
         move |_| RectStyle::default().with_fill(or_theme(&title_bar_color, shared::surface_alt)),
         vec![label_group, controls],
     )?
-    .styled_by(strip_box);
+    .styled_by(strip_box)
+    .role(Role::Group);
     // The strip is what a user grabs to move the window, so the drag lives here and not on the card: the body is content, and dragging content is a selection everywhere else.
-    let title_bar = box_item(if drag_moves {
-        title_strip.on_drag(|_, _| telar::push_window_command(telar::WindowCommand::Drag))
-    } else {
-        title_strip
-    });
+    let strip = box_item(title_bar(
+        title_strip,
+        TitleBarOptions {
+            drag: style.controls.drag,
+            maximize: style.controls.drag && style.controls.maximize,
+            replace_decorations: false,
+        },
+    ));
 
     // A flex item may not shrink below its content unless told to, and an application body sized to fill the window otherwise pushes the grip row off the bottom of the surface.
     let body_inset = style.body_inset;
@@ -299,7 +224,7 @@ pub fn window_frame(
     );
 
     let card_rect: DeferredRect = Rc::new(RefCell::new(None));
-    let mut children = vec![title_bar, body_area];
+    let mut children = vec![strip, body_area];
     if let Some(resize) = resize {
         let grip_row = || {
             LayoutStyle::new()

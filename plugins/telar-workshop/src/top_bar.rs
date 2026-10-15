@@ -2,35 +2,32 @@
 //!
 //! The trigger is centred on the window rather than between its neighbours: the two ends split the rest of the bar evenly whatever each holds. A window too narrow for that sets it between the two groups instead, as far from one as from the other, rather than letting the group that needs more push it towards the other and leave a gap on one side only.
 
-use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Clip, ClippedItem, Container,
     JustifyContent, LayoutError, LayoutItem, LayoutStyle, Memo, NodeId, Reactive, ReactiveList,
     Rect, RectStyle, Role, RwSignal, ShapeStyle, Slots, StyledContainer, Text, TextWrap, box_item,
-    memo, on_cleanup, signal, style_follows, track_layout,
+    memo, signal, style_follows, track_layout,
 };
-use telar_components::metrics::{control_height, control_pad_x};
-use telar_components::{DOUBLE_CLICK, IconButtonProps, TooltipProps, icon_button, tooltip};
+use telar_components::metrics::{control_height, control_pad_x, radius_control};
+use telar_components::{
+    IconButtonProps, TitleBarOptions, TooltipProps, WindowControlsProps, icon_button, title_bar,
+    tooltip,
+};
 use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, use_workbench_tokens, workbench_muted};
 use telar_icons::{IconProps, icon};
-use web_time::Instant;
 
 use crate::arrangement::{FIND_FIELD_COMFORT, FindPlacement};
 use crate::keymap::{Action, Keymap};
 use crate::state::WorkshopState;
-use crate::strings::{
-    self, CLOSE, FIND, FIND_IN, MAXIMIZE, MINIMIZE, PREVIEW, PREVIEWS, RESTORE, WINDOW, WORKSHOP,
-};
+use crate::strings::{self, FIND, FIND_IN, PREVIEW, PREVIEWS, WORKSHOP};
 use crate::{canvas_toolbar, view_switch};
 
 const HEIGHT: f32 = 40.0;
 const GAP: f32 = WORKBENCH_GRID * 2.0;
 /// The widest the palette's trigger grows, in a window with room to spare.
 pub(crate) const FIND_WIDTH: f32 = WORKBENCH_GRID * 60.0;
-/// How far a press on the bar travels before it moves the window rather than counting towards a double-click.
-const DRAG_THRESHOLD: f32 = WORKBENCH_GRID / 2.0;
 
 /// Who frames the window the workshop is shown in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,7 +80,13 @@ pub(crate) fn top_bar(
     .role(Role::Banner);
     laid_out.set(track_layout(bar.layout_node()));
     Ok(box_item(match frame {
-        Frame::Own => title_bar(bar),
+        Frame::Own => title_bar(
+            bar,
+            TitleBarOptions {
+                replace_decorations: true,
+                ..TitleBarOptions::default()
+            },
+        ),
         Frame::Host => bar,
     }))
 }
@@ -381,72 +384,17 @@ fn find_button(
     )
 }
 
+/// The window's minimize, maximize and close, as tall as the other controls of the bar and rounded as they are under the pointer.
 fn window_controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let minimize = icon_button(
-        IconButtonProps::props()
-            .icon(telar_icons::icon!("lucide:minus"))
-            .label(strings::reactive(MINIMIZE))
-            .on_press(Rc::new(telar::window::minimize))
+    telar_components::window_controls(
+        WindowControlsProps::props()
+            .min_size(Reactive::of(control_height))
+            .style(Rc::new(|paint: RectStyle| {
+                paint.with_radius(BorderRadius::all(radius_control()))
+            }))
             .build(),
         Children::default(),
-    )?;
-    let maximize = ReactiveList::with_style(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER),
-        || vec![telar::window::is_maximized()],
-        |maximized: &bool| *maximized,
-        |maximized| {
-            let (shape, name) = match maximized {
-                true => (telar_icons::icon!("lucide:copy"), RESTORE),
-                false => (telar_icons::icon!("lucide:square"), MAXIMIZE),
-            };
-            icon_button(
-                IconButtonProps::props()
-                    .icon(shape)
-                    .label(strings::reactive(name))
-                    .on_press(Rc::new(telar::window::toggle_maximize))
-                    .build(),
-                Children::default(),
-            )
-        },
-    )?;
-    let close = icon_button(
-        IconButtonProps::props()
-            .icon(telar_icons::icon!("lucide:x"))
-            .label(strings::reactive(CLOSE))
-            .on_press(Rc::new(telar::window::close))
-            .build(),
-        Children::default(),
-    )?;
-    let controls = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER)
-            .gap(WORKBENCH_GRID / 2.0),
-        |_| RectStyle::default(),
-        vec![minimize, box_item(maximize), close],
-    )?
-    .role(Role::Group)
-    .a11y_label(|| strings::text(WINDOW));
-    Ok(box_item(controls))
-}
-
-/// Makes `bar` the window's title bar for as long as it is shown: the window system draws none, a drag from the bar's empty space moves the window, and a double-click there maximizes or restores it.
-fn title_bar(bar: StyledContainer) -> StyledContainer {
-    telar::window::set_decorations(false);
-    on_cleanup(|| telar::window::set_decorations(true));
-    let last_press = Rc::new(Cell::new(None::<Instant>));
-    bar.drag_threshold(DRAG_THRESHOLD)
-        .on_drag(|_, _| telar::window::drag())
-        .on_press(move || {
-            let now = Instant::now();
-            let previous = last_press.replace(Some(now));
-            if previous.is_some_and(|then| now.duration_since(then) <= DOUBLE_CLICK) {
-                last_press.set(None);
-                telar::window::toggle_maximize();
-            }
-        })
+    )
 }
 
 #[cfg(test)]

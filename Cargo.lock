@@ -6400,7 +6400,6 @@ dependencies = [
  "telar-project",
  "telar-theme-core",
  "tiny-skia 0.12.0",
- "web-time",
 ]
 
 [[package]]

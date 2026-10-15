@@ -374,3 +374,84 @@ fn a_named_radius_and_a_card_amendment_reshape_the_card() {
     assert_eq!(card.fill, Some(ink.into()));
     assert_eq!(card.radius, telar::BorderRadius::all(9.0));
 }
+
+fn framed_window(controls: WindowControls) -> telar::ComponentList {
+    let style = SurfaceFrameStyle {
+        controls,
+        ..SurfaceFrameStyle::default()
+    };
+    let tree = laid_out_frame(style);
+    telar::take_window_commands();
+    tree
+}
+
+fn window_asked() -> Vec<telar::WindowCommand> {
+    telar::take_window_commands()
+        .into_iter()
+        .filter(|command| !matches!(command, telar::WindowCommand::SetCursor(_)))
+        .collect()
+}
+
+/// A point of the title strip between the title and the controls.
+const STRIP: (f64, f64) = (150.0, 12.0);
+
+fn click(tree: &mut telar::ComponentList, (x, y): (f64, f64)) {
+    use telar::testing::{release, route};
+    route(tree, &press(x, y));
+    route(tree, &release(x, y));
+}
+
+#[test]
+fn the_strip_of_a_window_frame_moves_and_maximizes_the_window_it_is_the_title_bar_of() {
+    use telar::testing::{moved, route};
+
+    let mut tree = framed_window(WindowControls {
+        drag: true,
+        minimize: true,
+        maximize: true,
+    });
+    click(&mut tree, STRIP);
+    click(&mut tree, STRIP);
+    assert_eq!(window_asked(), [telar::WindowCommand::ToggleMaximize]);
+
+    let (x, y) = STRIP;
+    route(&mut tree, &press(x, y));
+    route(&mut tree, &moved(x + 20.0, y));
+    assert_eq!(window_asked(), [telar::WindowCommand::Drag]);
+    assert!(
+        !telar::take_window_commands()
+            .iter()
+            .any(|command| matches!(command, telar::WindowCommand::SetDecorations(_))),
+        "a frame leaves the window's decorations to the backend that opened it"
+    );
+}
+
+/// A strip that does not move the window is not the window's title bar, and neither does a double-click on it maximize the window, nor a window whose frame offers no maximize.
+#[test]
+fn a_strip_that_is_not_the_window_s_title_bar_leaves_the_window_as_it_is() {
+    use telar::testing::{moved, route};
+
+    for controls in [
+        WindowControls {
+            drag: false,
+            minimize: true,
+            maximize: true,
+        },
+        WindowControls {
+            drag: true,
+            minimize: true,
+            maximize: false,
+        },
+    ] {
+        let mut tree = framed_window(controls);
+        click(&mut tree, STRIP);
+        click(&mut tree, STRIP);
+        assert!(window_asked().is_empty(), "{controls:?}");
+        if !controls.drag {
+            let (x, y) = STRIP;
+            route(&mut tree, &press(x, y));
+            route(&mut tree, &moved(x + 20.0, y));
+            assert!(window_asked().is_empty(), "{controls:?}");
+        }
+    }
+}

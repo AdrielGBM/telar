@@ -35,7 +35,6 @@ telar-icons.workspace = true
 serde_json.workspace = true
 tiny-skia.workspace = true
 telar-project.workspace = true
-web-time.workspace = true
 
 [dev-dependencies]
 telar = { workspace = true, features = ["headless", "dev", "testing"] }

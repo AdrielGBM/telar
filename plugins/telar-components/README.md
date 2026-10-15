@@ -14,7 +14,8 @@ you draw beyond them:
 
 - `overlays`: menus, context menus, modals, drawers, tooltips, the command palette and the key caps its rows
   show, and toasts
-- `chrome`: the window frame a desktop application draws itself
+- `chrome`: the window frame a desktop application draws itself, and the window controls and title-bar
+  behaviour it is built from, for a title bar of the application's own
 - `advanced`: reorderable lists, accordions and steppers
 - `workbench`: split panes, trees, toolbars, icon buttons, a colour picker and a code view, with the `icons`
   and `overlays` they build on

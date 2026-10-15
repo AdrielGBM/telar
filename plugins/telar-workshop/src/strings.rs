@@ -20,7 +20,6 @@ pub(crate) const BUILD_FAILED: &str = "build_failed";
 pub(crate) const CANVAS_TOOLS: &str = "canvas_tools";
 pub(crate) const CLEAR_ACTIONS: &str = "clear_actions";
 pub(crate) const CLEAR_SEARCH: &str = "clear_search";
-pub(crate) const CLOSE: &str = "close";
 pub(crate) const COLUMN_DEFAULT: &str = "column_default";
 pub(crate) const COLUMN_DESCRIPTION: &str = "column_description";
 pub(crate) const COLUMN_NAME: &str = "column_name";
@@ -73,8 +72,6 @@ pub(crate) const MATRIX_NONE: &str = "matrix_none";
 pub(crate) const MATRIX_OWN: &str = "matrix_own";
 pub(crate) const MATRIX_PICK: &str = "matrix_pick";
 pub(crate) const MATRIX_SOURCE: &str = "matrix_source";
-pub(crate) const MAXIMIZE: &str = "maximize";
-pub(crate) const MINIMIZE: &str = "minimize";
 pub(crate) const MODE: &str = "mode";
 pub(crate) const MODE_DARK: &str = "mode_dark";
 pub(crate) const MODE_LIGHT: &str = "mode_light";
@@ -121,7 +118,6 @@ pub(crate) const RESET_ALL: &str = "reset_all";
 pub(crate) const RESET_ARG: &str = "reset_arg";
 pub(crate) const RESIZE_PANELS: &str = "resize_panels";
 pub(crate) const RESIZE_SIDEBAR: &str = "resize_sidebar";
-pub(crate) const RESTORE: &str = "restore";
 pub(crate) const ROTATE: &str = "rotate";
 pub(crate) const RULERS: &str = "rulers";
 pub(crate) const RUN_ON_MOUNT: &str = "run_on_mount";
@@ -184,7 +180,6 @@ pub(crate) const VIEWPORT_PRESETS: &str = "viewport_presets";
 pub(crate) const VIEWPORT_PREVIEW: &str = "viewport_preview";
 pub(crate) const VIEWPORT_RESET: &str = "viewport_reset";
 pub(crate) const VIEWPORT_WIDTH: &str = "viewport_width";
-pub(crate) const WINDOW: &str = "window";
 pub(crate) const WORKSHOP: &str = "workshop";
 pub(crate) const WORKSPACE: &str = "workspace";
 pub(crate) const ZOOM: &str = "zoom";
@@ -214,7 +209,6 @@ static CATALOG: Catalog = Catalog {
         english!(CANVAS_TOOLS, "Canvas tools"),
         english!(CLEAR_ACTIONS, "Clear"),
         english!(CLEAR_SEARCH, "Clear search"),
-        english!(CLOSE, "Close"),
         english!(COLUMN_DEFAULT, "Default"),
         english!(COLUMN_DESCRIPTION, "Description"),
         english!(COLUMN_NAME, "Name"),
@@ -277,8 +271,6 @@ static CATALOG: Catalog = Catalog {
         english!(MATRIX_OWN, "The preview's matrix"),
         english!(MATRIX_PICK, "Pick axes to build a matrix."),
         english!(MATRIX_SOURCE, "Matrix shown"),
-        english!(MAXIMIZE, "Maximize"),
-        english!(MINIMIZE, "Minimize"),
         english!(MODE, "Mode"),
         english!(MODE_DARK, "Dark"),
         english!(MODE_LIGHT, "Light"),
@@ -333,7 +325,6 @@ static CATALOG: Catalog = Catalog {
         english!(RESET_ARG, "Reset ", { arg }),
         english!(RESIZE_PANELS, "Resize the panels"),
         english!(RESIZE_SIDEBAR, "Resize the sidebar"),
-        english!(RESTORE, "Restore"),
         english!(ROTATE, "Rotate"),
         english!(RULERS, "Rulers"),
         english!(RUN_ON_MOUNT, "Run on mount"),
@@ -430,7 +421,6 @@ static CATALOG: Catalog = Catalog {
         english!(VIEWPORT_PREVIEW, "Preview size"),
         english!(VIEWPORT_RESET, "Reset the viewport"),
         english!(VIEWPORT_WIDTH, "Viewport width"),
-        english!(WINDOW, "Window"),
         english!(WORKSHOP, "Workshop"),
         english!(WORKSPACE, "Workspace"),
         english!(ZOOM, "Zoom"),

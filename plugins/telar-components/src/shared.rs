@@ -383,6 +383,7 @@ pub enum Mark {
     Check,
     Minimize,
     Maximize,
+    Restore,
     Ring,
 }
 
@@ -391,6 +392,9 @@ const CHEVRON_RATIO: f32 = 0.7;
 
 /// The side of the square the other marks fill, as a share of the icon size: smaller than a chevron's span, since a cross or a box is dense where a chevron is two strokes.
 const SQUARE_RATIO: f32 = 0.6;
+
+/// How far the square behind a restore mark stands up and across from the one in front, as a share of the mark's side.
+const RESTORE_OFFSET: f32 = 0.3;
 
 /// Where a check's ends and elbow sit in its box, as shares of its width and height.
 /// The distance of a cubic handle from its end, as a share of the radius, that best fits a quarter circle.
@@ -404,9 +408,12 @@ fn mark_box(shape: Mark) -> LayoutStyle {
     let (width, height) = match shape {
         Mark::ChevronDown => (whole(CHEVRON_RATIO), whole(CHEVRON_RATIO) / 2.0),
         Mark::ChevronForward => (whole(CHEVRON_RATIO) / 2.0, whole(CHEVRON_RATIO)),
-        Mark::Close | Mark::Check | Mark::Minimize | Mark::Maximize | Mark::Ring => {
-            (whole(SQUARE_RATIO), whole(SQUARE_RATIO))
-        }
+        Mark::Close
+        | Mark::Check
+        | Mark::Minimize
+        | Mark::Maximize
+        | Mark::Restore
+        | Mark::Ring => (whole(SQUARE_RATIO), whole(SQUARE_RATIO)),
     };
     LayoutStyle::new()
         .width(width)
@@ -436,6 +443,21 @@ fn mark_path(shape: Mark, rect: Rect) -> telar::PathData {
         (Mark::Check, _) => stroke(&CHECK_POINTS.map(|(x, y)| (x * w, y * h))),
         (Mark::Minimize, _) => stroke(&[(0.0, h / 2.0), (w, h / 2.0)]),
         (Mark::Maximize, _) => stroke(&[(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]).close(),
+        (Mark::Restore, _) => {
+            let offset = (w * RESTORE_OFFSET).round();
+            stroke(&[
+                (0.0, offset),
+                (w - offset, offset),
+                (w - offset, h),
+                (0.0, h),
+            ])
+            .close()
+            .move_to(at((offset, offset)))
+            .line_to(at((offset, 0.0)))
+            .line_to(at((w, 0.0)))
+            .line_to(at((w, h - offset)))
+            .line_to(at((w - offset, h - offset)))
+        }
         (Mark::Ring, _) => ring(rect),
     }
 }

@@ -57,6 +57,8 @@ mod tooltip;
 #[cfg(feature = "workbench")]
 mod tree_view;
 #[cfg(feature = "chrome")]
+mod window_controls;
+#[cfg(feature = "chrome")]
 mod window_frame;
 
 #[cfg(test)]
@@ -122,6 +124,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     #[cfg(feature = "workbench")]
     entries.extend(code_view::previews());
     entries.extend(line_gutter::previews());
+    #[cfg(feature = "chrome")]
+    entries.extend(window_controls::previews());
     #[cfg(feature = "chrome")]
     entries.extend(window_frame::previews());
     entries
