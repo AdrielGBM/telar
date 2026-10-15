@@ -1,8 +1,8 @@
 [logic]
-use crate::shared::components::card::{card, CardProps};
-use crate::shared::components::code_line::{code_line, CodeLineProps};
-use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-use crate::shared::components::example::{example, ExampleProps};
+use crate::shared::components::card::{CardProps, card};
+use crate::shared::components::code_line::{CodeLineProps, code_line};
+use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+use crate::shared::components::example::{ExampleProps, example};
 
 fn scheme_name(scheme: telar::ColorScheme) -> &'static str {
     match scheme {
@@ -20,13 +20,22 @@ let reduced = memo(|| reading(telar::use_system_reduced_motion()));
 let contrast = memo(|| reading(telar::use_system_high_contrast()));
 let locales = memo(|| {
     let locales = telar::use_preferred_locales();
-    if locales.is_empty() { "none reported".to_string() } else { locales.join(", ") }
+    if locales.is_empty() {
+        "none reported".to_string()
+    } else {
+        locales.join(", ")
+    }
 });
-let negotiated = memo(|| telar::negotiate_locale(&telar::use_preferred_locales(), &["es", "en"], "es").to_string());
+let negotiated = memo(|| {
+    telar::negotiate_locale(&telar::use_preferred_locales(), &["es", "en"], "es").to_string()
+});
 let chosen = memo(|| telar::use_scheme_preference().as_str().to_string());
 let safe_area = memo(|| {
     let insets = telar::use_safe_area_insets();
-    format!("top {} · right {} · bottom {} · left {}", insets.top, insets.right, insets.bottom, insets.left)
+    format!(
+        "top {} · right {} · bottom {} · left {}",
+        insets.top, insets.right, insets.bottom, insets.left
+    )
 });
 
 [view]

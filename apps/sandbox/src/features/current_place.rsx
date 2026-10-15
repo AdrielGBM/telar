@@ -1,18 +1,26 @@
 [logic]
-use crate::shared::components::card::{card, CardProps};
-use crate::shared::components::code_line::{code_line, CodeLineProps};
-use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-use crate::shared::components::example::{example, ExampleProps};
+use crate::shared::components::card::{CardProps, card};
+use crate::shared::components::code_line::{CodeLineProps, code_line};
+use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+use crate::shared::components::example::{ExampleProps, example};
 
 const BAR: f32 = 44.0;
 
 let view = use_scroll_viewport();
 let here = memo(move || view.as_ref().and_then(|view| view.anchor_at(BAR)));
-let shown = memo(move || here.get().map_or_else(|| "nothing".to_string(), |name| name.to_string()));
+let shown = memo(move || {
+    here.get()
+        .map_or_else(|| "nothing".to_string(), |name| name.to_string())
+});
 let on_intro = memo(move || here.get().as_deref() == Some("place-intro"));
 let on_usage = memo(move || here.get().as_deref() == Some("place-usage"));
 let on_limits = memo(move || here.get().as_deref() == Some("place-limits"));
-let on_page = memo(|| use_anchor_at(48.0).map_or_else(|| "none: each section here scrolls itself".to_string(), |name| name.to_string()));
+let on_page = memo(|| {
+    use_anchor_at(48.0).map_or_else(
+        || "none: each section here scrolls itself".to_string(),
+        |name| name.to_string(),
+    )
+});
 
 [view]
 col gap:20

@@ -6,11 +6,11 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
-#[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
-#[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-#[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
+#[allow(unused_imports)] use crate::shared::components::card::{CardProps, card};
+#[allow(unused_imports)] use crate::shared::components::code_line::{CodeLineProps, code_line};
+#[allow(unused_imports)] use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+#[allow(unused_imports)] use crate::shared::components::example::{ExampleProps, example};
+#[allow(unused_imports)] use crate::shared::components::prop_row::{PropRowProps, prop_row};
 #[allow(unused_imports)] use std::sync::Arc;
 
 #[derive(::telar::Props)]
@@ -39,9 +39,10 @@ pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem
             Point::new(110.0, 120.0),
             Point::new(10.0, 120.0),
         ]));
-        kids.push(
-            RenderNode::path(triangle, PathStyle::default().with_fill(primary)),
-        );
+        kids.push(RenderNode::path(
+            triangle,
+            PathStyle::default().with_fill(primary),
+        ));
         kids.push(RenderNode::text(
             telar::static_rc_str!("polygon fill"),
             Rect {
@@ -64,14 +65,12 @@ pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem
                 .collect();
             Arc::new(PathData::polygon(&pts))
         };
-        kids.push(
-            RenderNode::path(
-                star,
-                PathStyle::default()
-                    .with_fill(warning)
-                    .with_stroke(Stroke::new(ink, 1.5)),
-            ),
-        );
+        kids.push(RenderNode::path(
+            star,
+            PathStyle::default()
+                .with_fill(warning)
+                .with_stroke(Stroke::new(ink, 1.5)),
+        ));
         kids.push(RenderNode::text(
             telar::static_rc_str!("fill + stroke"),
             Rect {
@@ -97,14 +96,12 @@ pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem
                 .line_to(Point::new(385.0, 95.0))
                 .close(),
         );
-        kids.push(
-            RenderNode::path(
-                donut,
-                PathStyle::default()
-                    .with_fill(purple)
-                    .with_fill_rule(FillRule::EvenOdd),
-            ),
-        );
+        kids.push(RenderNode::path(
+            donut,
+            PathStyle::default()
+                .with_fill(purple)
+                .with_fill_rule(FillRule::EvenOdd),
+        ));
         kids.push(RenderNode::text(
             telar::static_rc_str!("even-odd fill"),
             Rect {
@@ -122,12 +119,10 @@ pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem
                 .move_to(Point::new(10.0, 250.0))
                 .quad_to(Point::new(80.0, 180.0), Point::new(150.0, 250.0)),
         );
-        kids.push(
-            RenderNode::path(
-                quad,
-                PathStyle::default().with_stroke(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
-            ),
-        );
+        kids.push(RenderNode::path(
+            quad,
+            PathStyle::default().with_stroke(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
+        ));
         kids.push(RenderNode::text(
             telar::static_rc_str!("quad_to arch"),
             Rect {
@@ -144,12 +139,10 @@ pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem
             Point::new(185.0, 250.0),
             Point::new(260.0, 250.0),
         ));
-        kids.push(
-            RenderNode::path(
-                cubic,
-                PathStyle::default().with_stroke(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
-            ),
-        );
+        kids.push(RenderNode::path(
+            cubic,
+            PathStyle::default().with_stroke(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
+        ));
         kids.push(RenderNode::text(
             telar::static_rc_str!("cubic_to S-curve"),
             Rect {
@@ -189,14 +182,12 @@ pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem
                 )
                 .close(),
         );
-        kids.push(
-            RenderNode::path(
-                circle,
-                PathStyle::default()
-                    .with_fill(primary)
-                    .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4))),
-            ),
-        );
+        kids.push(RenderNode::path(
+            circle,
+            PathStyle::default()
+                .with_fill(primary)
+                .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4))),
+        ));
         kids.push(RenderNode::text(
             telar::static_rc_str!("path + drop shadow"),
             Rect {
@@ -257,13 +248,11 @@ pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem
         let mut waves: Vec<RenderNode> = Vec::new();
         let mut x = 0.0f32;
         for (stroke, label) in samples {
-            let wave = PathData::new()
-                .move_to(Point::new(x, top + 20.0))
-                .cubic_to(
-                    Point::new(x + 40.0, top - 10.0),
-                    Point::new(x + 80.0, top + 50.0),
-                    Point::new(x + 140.0, top + 20.0),
-                );
+            let wave = PathData::new().move_to(Point::new(x, top + 20.0)).cubic_to(
+                Point::new(x + 40.0, top - 10.0),
+                Point::new(x + 80.0, top + 50.0),
+                Point::new(x + 140.0, top + 20.0),
+            );
             waves.push(RenderNode::path(
                 Arc::new(wave),
                 PathStyle::default().with_stroke(stroke),
@@ -281,7 +270,10 @@ pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem
             x += 170.0;
         }
         let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
-        kids.push(RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], waves));
+        kids.push(RenderNode::transform_with(
+            [scale, 0.0, 0.0, scale, 0.0, 0.0],
+            waves,
+        ));
 
         RenderNode::group(kids)
     }

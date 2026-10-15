@@ -1,9 +1,9 @@
 [logic]
-use crate::shared::components::card::{card, CardProps};
-use crate::shared::components::code_line::{code_line, CodeLineProps};
-use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
+use crate::shared::components::card::{CardProps, card};
+use crate::shared::components::code_line::{CodeLineProps, code_line};
+use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+use crate::shared::components::example::{ExampleProps, example};
+use crate::shared::components::prop_row::{PropRowProps, prop_row};
 // Which corner the pinned badge sits in. The badge never moves in the tree — only which insets name it does.
 let corner = signal(0i32);
 let badge_top = memo(move || if corner.get() < 2 { 12.0 } else { 76.0 });

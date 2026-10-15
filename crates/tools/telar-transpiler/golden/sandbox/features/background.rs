@@ -6,11 +6,11 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
-#[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
-#[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-#[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
+#[allow(unused_imports)] use crate::shared::components::card::{CardProps, card};
+#[allow(unused_imports)] use crate::shared::components::code_line::{CodeLineProps, code_line};
+#[allow(unused_imports)] use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+#[allow(unused_imports)] use crate::shared::components::example::{ExampleProps, example};
+#[allow(unused_imports)] use crate::shared::components::prop_row::{PropRowProps, prop_row};
 #[allow(unused_imports)] use std::cell::RefCell;
 #[allow(unused_imports)] use std::rc::Rc;
 #[allow(unused_imports)] use std::time::Duration;
@@ -34,10 +34,24 @@ pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn 
 
     fn walk_project(out: Emitter<String>) {
         let names = [
-            "reactive-core", "layout-core", "ui-core", "ui-tree", "telar-components",
-            "renderer-core", "renderer-software", "renderer-hardware", "renderer-text",
-            "platform-core", "platform-winit", "platform-desktop", "motion-core",
-            "theme-core", "i18n-core", "telar-navigate", "services-core", "geometry-core",
+            "reactive-core",
+            "layout-core",
+            "ui-core",
+            "ui-tree",
+            "telar-components",
+            "renderer-core",
+            "renderer-software",
+            "renderer-hardware",
+            "renderer-text",
+            "platform-core",
+            "platform-winit",
+            "platform-desktop",
+            "motion-core",
+            "theme-core",
+            "i18n-core",
+            "telar-navigate",
+            "services-core",
+            "geometry-core",
         ];
         for name in names {
             // Nothing else can stop this loop: cancelling only drops the callback, so a long worker has to
@@ -53,11 +67,20 @@ pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn 
     // The completion callbacks. They live here rather than inline in `on_press` because they must *own* their
     // signals: the handler is an `Fn` and may run again, so it cannot hand its own captures away.
 
-    fn on_computed(total: RwSignal<String>, busy: RwSignal<bool>) -> impl FnOnce(u64) { move |sum| { total.set(sum.to_string()); busy.set(false); } }
+    fn on_computed(total: RwSignal<String>, busy: RwSignal<bool>) -> impl FnOnce(u64) {
+        move |sum| {
+            total.set(sum.to_string());
+            busy.set(false);
+        }
+    }
 
-    fn on_found(found: RwSignal<Vec<String>>) -> impl FnMut(String) { move |name| found.update(|v| v.push(name)) }
+    fn on_found(found: RwSignal<Vec<String>>) -> impl FnMut(String) {
+        move |name| found.update(|v| v.push(name))
+    }
 
-    fn on_scan_end(scanning: RwSignal<bool>) -> impl FnOnce() { move || scanning.set(false) }
+    fn on_scan_end(scanning: RwSignal<bool>) -> impl FnOnce() {
+        move || scanning.set(false)
+    }
 
     // --- UI state, all of it on this thread ---
 

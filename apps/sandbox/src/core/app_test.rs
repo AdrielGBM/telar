@@ -40,7 +40,10 @@ fn source_detail_pushes_a_page_and_back_returns_to_the_section() {
     assert_eq!(host.current_route(), Some(SectionRoute::Source));
     assert_eq!(stacks.depth(), 2);
 
-    assert!(stacks.back(), "the pushed detail page is what back walks off");
+    assert!(
+        stacks.back(),
+        "the pushed detail page is what back walks off"
+    );
     host.sync();
     assert_eq!(host.current_route(), Some(SectionRoute::Overview));
     assert!(

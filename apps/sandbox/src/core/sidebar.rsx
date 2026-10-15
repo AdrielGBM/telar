@@ -1,5 +1,4 @@
 [logic]
-
 // Reads through use_theme, so switching the theme re-runs this memo and updates the "Active" label.
 let theme_name = memo(move || theme.get().name.to_string());
 

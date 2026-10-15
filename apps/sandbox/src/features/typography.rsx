@@ -1,9 +1,9 @@
 [logic]
-use crate::shared::components::card::{card, CardProps};
-use crate::shared::components::code_line::{code_line, CodeLineProps};
-use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
+use crate::shared::components::card::{CardProps, card};
+use crate::shared::components::code_line::{CodeLineProps, code_line};
+use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+use crate::shared::components::example::{ExampleProps, example};
+use crate::shared::components::prop_row::{PropRowProps, prop_row};
 
 let heavy = signal(false);
 let weight = move || if heavy.get() { 850.0f32 } else { 250.0 };
@@ -91,7 +91,7 @@ col gap:20
                 button label:t!("nav.overview") variant:ButtonVariant::Ghost
                 text "{t!(\"greeting\", name = \"Ada\")}" font_size:13 color:$theme.muted
             text "The macro validates the key against locales/ at compile time and re-reads the locale, so a language switch re-renders both." font_size:12 color:$theme.muted
-        code_line code:"button label:t!('nav.overview')   ·   text '{t!(\'greeting\', name = n)}'"
+        code_line code:"button label:t!('nav.overview')   ·   text '{t!(\\'greeting\\', name = n)}'"
     example title:"Attributes"
         col gap:6
             prop_row name:"font_size" values:"number" about:"Font size in px (default 14)."

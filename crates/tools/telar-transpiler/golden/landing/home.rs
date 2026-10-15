@@ -5,8 +5,8 @@
 #[allow(unused_imports)] use telar_components::*;
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::feature_card::{feature_card, FeatureCardProps};
 #[allow(unused_imports)] use crate::demo_images::{make_checker, make_gradient, make_radial_alpha};
+#[allow(unused_imports)] use crate::feature_card::{FeatureCardProps, feature_card};
 #[allow(unused_imports)] use std::sync::Arc;
 
 #[derive(::telar::Props)]

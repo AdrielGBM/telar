@@ -1,7 +1,7 @@
 #[cfg(feature = "advanced")]
-use telar::{Border, BorderRadius, RectStyle, ShapeStyle, StyledContainer};
-#[cfg(feature = "advanced")]
 use telar::preview::{Play, PlayError, PlayResult, Query};
+#[cfg(feature = "advanced")]
+use telar::{Border, BorderRadius, RectStyle, ShapeStyle, StyledContainer};
 use telar::{Children, LayoutError, LayoutItem, LayoutStyle, Reactive, Slots, Text, box_item};
 
 pub(super) fn text(content: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {

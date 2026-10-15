@@ -64,11 +64,17 @@ fn view_menu(chosen: RwSignal<usize>, rulers: RwSignal<bool>) -> Children {
                 sample::children(|| {
                     Ok(vec![
                         item(
-                            ItemProps::props().label("Zoom in").shortcut("Mod+=").build(),
+                            ItemProps::props()
+                                .label("Zoom in")
+                                .shortcut("Mod+=")
+                                .build(),
                             Children::default(),
                         )?,
                         item(
-                            ItemProps::props().label("Zoom out").shortcut("Mod+-").build(),
+                            ItemProps::props()
+                                .label("Zoom out")
+                                .shortcut("Mod+-")
+                                .build(),
                             Children::default(),
                         )?,
                     ])
@@ -87,7 +93,11 @@ fn view_menu(chosen: RwSignal<usize>, rulers: RwSignal<bool>) -> Children {
     })
 }
 
-fn settings_menu(chosen: RwSignal<usize>, motion: RwSignal<bool>, contrast: RwSignal<bool>) -> Children {
+fn settings_menu(
+    chosen: RwSignal<usize>,
+    motion: RwSignal<bool>,
+    contrast: RwSignal<bool>,
+) -> Children {
     sample::children(move || {
         let switch = |label: &'static str, on: RwSignal<bool>| {
             item(

@@ -1,6 +1,6 @@
 [logic]
-use crate::shared::components::feature_card::{feature_card, FeatureCardProps};
-use crate::shared::components::stat::{stat, StatProps};
+use crate::shared::components::feature_card::{FeatureCardProps, feature_card};
+use crate::shared::components::stat::{StatProps, stat};
 
 [view]
 col gap:24

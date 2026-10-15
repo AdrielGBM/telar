@@ -1,9 +1,9 @@
 [logic]
-use crate::shared::components::card::{card, CardProps};
-use crate::shared::components::code_line::{code_line, CodeLineProps};
-use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
+use crate::shared::components::card::{CardProps, card};
+use crate::shared::components::code_line::{CodeLineProps, code_line};
+use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+use crate::shared::components::example::{ExampleProps, example};
+use crate::shared::components::prop_row::{PropRowProps, prop_row};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
@@ -18,10 +18,24 @@ fn slow_sum(n: u64) -> u64 {
 
 fn walk_project(out: Emitter<String>) {
     let names = [
-        "reactive-core", "layout-core", "ui-core", "ui-tree", "telar-components",
-        "renderer-core", "renderer-software", "renderer-hardware", "renderer-text",
-        "platform-core", "platform-winit", "platform-desktop", "motion-core",
-        "theme-core", "i18n-core", "telar-navigate", "services-core", "geometry-core",
+        "reactive-core",
+        "layout-core",
+        "ui-core",
+        "ui-tree",
+        "telar-components",
+        "renderer-core",
+        "renderer-software",
+        "renderer-hardware",
+        "renderer-text",
+        "platform-core",
+        "platform-winit",
+        "platform-desktop",
+        "motion-core",
+        "theme-core",
+        "i18n-core",
+        "telar-navigate",
+        "services-core",
+        "geometry-core",
     ];
     for name in names {
         // Nothing else can stop this loop: cancelling only drops the callback, so a long worker has to
@@ -37,11 +51,20 @@ fn walk_project(out: Emitter<String>) {
 // The completion callbacks. They live here rather than inline in `on_press` because they must *own* their
 // signals: the handler is an `Fn` and may run again, so it cannot hand its own captures away.
 
-fn on_computed(total: RwSignal<String>, busy: RwSignal<bool>) -> impl FnOnce(u64) { move |sum| { total.set(sum.to_string()); busy.set(false); } }
+fn on_computed(total: RwSignal<String>, busy: RwSignal<bool>) -> impl FnOnce(u64) {
+    move |sum| {
+        total.set(sum.to_string());
+        busy.set(false);
+    }
+}
 
-fn on_found(found: RwSignal<Vec<String>>) -> impl FnMut(String) { move |name| found.update(|v| v.push(name)) }
+fn on_found(found: RwSignal<Vec<String>>) -> impl FnMut(String) {
+    move |name| found.update(|v| v.push(name))
+}
 
-fn on_scan_end(scanning: RwSignal<bool>) -> impl FnOnce() { move || scanning.set(false) }
+fn on_scan_end(scanning: RwSignal<bool>) -> impl FnOnce() {
+    move || scanning.set(false)
+}
 
 // --- UI state, all of it on this thread ---
 

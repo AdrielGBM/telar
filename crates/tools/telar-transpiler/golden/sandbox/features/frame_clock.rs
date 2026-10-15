@@ -6,11 +6,11 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
-#[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
-#[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-#[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
+#[allow(unused_imports)] use crate::shared::components::card::{CardProps, card};
+#[allow(unused_imports)] use crate::shared::components::code_line::{CodeLineProps, code_line};
+#[allow(unused_imports)] use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+#[allow(unused_imports)] use crate::shared::components::example::{ExampleProps, example};
+#[allow(unused_imports)] use crate::shared::components::prop_row::{PropRowProps, prop_row};
 
 #[derive(::telar::Props)]
 pub struct FrameClockProps {}
@@ -27,7 +27,13 @@ pub fn frame_clock(props: FrameClockProps, children: Children) -> Result<Box<dyn
     let swing = memo(move || (time.get().as_secs_f32() * std::f32::consts::TAU / 1.6).sin() * 90.0);
     let seconds = memo(move || format!("{:.2} s", time.get().as_secs_f32()));
     let running_rsx_mv = running.clone();
-    let state = memo(move || if running_rsx_mv.get() { "reading the clock: frames are requested" } else { "not reading: the loop is asleep" });
+    let state = memo(move || {
+        if running_rsx_mv.get() {
+            "reading the clock: frames are requested"
+        } else {
+            "not reading: the loop is asleep"
+        }
+    });
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Frame clock").desc("A reactive elapsed time for motion that is a function of time rather than a transition toward a target. It advances only while a reactive reader is subscribed, so a screen that stops reading it asks for no frames, and it freezes under reduced motion.").build(), Children::default())?;

@@ -6,10 +6,10 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
-#[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
-#[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-#[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
+#[allow(unused_imports)] use crate::shared::components::card::{CardProps, card};
+#[allow(unused_imports)] use crate::shared::components::code_line::{CodeLineProps, code_line};
+#[allow(unused_imports)] use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+#[allow(unused_imports)] use crate::shared::components::example::{ExampleProps, example};
 
 #[derive(::telar::Props)]
 pub struct NavigationProps {}

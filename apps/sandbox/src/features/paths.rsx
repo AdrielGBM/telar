@@ -1,9 +1,9 @@
 [logic]
-use crate::shared::components::card::{card, CardProps};
-use crate::shared::components::code_line::{code_line, CodeLineProps};
-use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
+use crate::shared::components::card::{CardProps, card};
+use crate::shared::components::code_line::{CodeLineProps, code_line};
+use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+use crate::shared::components::example::{ExampleProps, example};
+use crate::shared::components::prop_row::{PropRowProps, prop_row};
 use std::sync::Arc;
 
 // Paths are drawn imperatively inside a Canvas — the escape hatch for vector art layout can't express.
@@ -23,9 +23,10 @@ fn draw_paths(rect: Rect) -> RenderNode {
         Point::new(110.0, 120.0),
         Point::new(10.0, 120.0),
     ]));
-    kids.push(
-        RenderNode::path(triangle, PathStyle::default().with_fill(primary)),
-    );
+    kids.push(RenderNode::path(
+        triangle,
+        PathStyle::default().with_fill(primary),
+    ));
     kids.push(RenderNode::text(
         telar::static_rc_str!("polygon fill"),
         Rect {
@@ -48,14 +49,12 @@ fn draw_paths(rect: Rect) -> RenderNode {
             .collect();
         Arc::new(PathData::polygon(&pts))
     };
-    kids.push(
-        RenderNode::path(
-            star,
-            PathStyle::default()
-                .with_fill(warning)
-                .with_stroke(Stroke::new(ink, 1.5)),
-        ),
-    );
+    kids.push(RenderNode::path(
+        star,
+        PathStyle::default()
+            .with_fill(warning)
+            .with_stroke(Stroke::new(ink, 1.5)),
+    ));
     kids.push(RenderNode::text(
         telar::static_rc_str!("fill + stroke"),
         Rect {
@@ -81,14 +80,12 @@ fn draw_paths(rect: Rect) -> RenderNode {
             .line_to(Point::new(385.0, 95.0))
             .close(),
     );
-    kids.push(
-        RenderNode::path(
-            donut,
-            PathStyle::default()
-                .with_fill(purple)
-                .with_fill_rule(FillRule::EvenOdd),
-        ),
-    );
+    kids.push(RenderNode::path(
+        donut,
+        PathStyle::default()
+            .with_fill(purple)
+            .with_fill_rule(FillRule::EvenOdd),
+    ));
     kids.push(RenderNode::text(
         telar::static_rc_str!("even-odd fill"),
         Rect {
@@ -106,12 +103,10 @@ fn draw_paths(rect: Rect) -> RenderNode {
             .move_to(Point::new(10.0, 250.0))
             .quad_to(Point::new(80.0, 180.0), Point::new(150.0, 250.0)),
     );
-    kids.push(
-        RenderNode::path(
-            quad,
-            PathStyle::default().with_stroke(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
-        ),
-    );
+    kids.push(RenderNode::path(
+        quad,
+        PathStyle::default().with_stroke(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
+    ));
     kids.push(RenderNode::text(
         telar::static_rc_str!("quad_to arch"),
         Rect {
@@ -128,12 +123,10 @@ fn draw_paths(rect: Rect) -> RenderNode {
         Point::new(185.0, 250.0),
         Point::new(260.0, 250.0),
     ));
-    kids.push(
-        RenderNode::path(
-            cubic,
-            PathStyle::default().with_stroke(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
-        ),
-    );
+    kids.push(RenderNode::path(
+        cubic,
+        PathStyle::default().with_stroke(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
+    ));
     kids.push(RenderNode::text(
         telar::static_rc_str!("cubic_to S-curve"),
         Rect {
@@ -173,14 +166,12 @@ fn draw_paths(rect: Rect) -> RenderNode {
             )
             .close(),
     );
-    kids.push(
-        RenderNode::path(
-            circle,
-            PathStyle::default()
-                .with_fill(primary)
-                .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4))),
-        ),
-    );
+    kids.push(RenderNode::path(
+        circle,
+        PathStyle::default()
+            .with_fill(primary)
+            .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4))),
+    ));
     kids.push(RenderNode::text(
         telar::static_rc_str!("path + drop shadow"),
         Rect {
@@ -241,13 +232,11 @@ fn draw_dashes(rect: Rect) -> RenderNode {
     let mut waves: Vec<RenderNode> = Vec::new();
     let mut x = 0.0f32;
     for (stroke, label) in samples {
-        let wave = PathData::new()
-            .move_to(Point::new(x, top + 20.0))
-            .cubic_to(
-                Point::new(x + 40.0, top - 10.0),
-                Point::new(x + 80.0, top + 50.0),
-                Point::new(x + 140.0, top + 20.0),
-            );
+        let wave = PathData::new().move_to(Point::new(x, top + 20.0)).cubic_to(
+            Point::new(x + 40.0, top - 10.0),
+            Point::new(x + 80.0, top + 50.0),
+            Point::new(x + 140.0, top + 20.0),
+        );
         waves.push(RenderNode::path(
             Arc::new(wave),
             PathStyle::default().with_stroke(stroke),
@@ -265,7 +254,10 @@ fn draw_dashes(rect: Rect) -> RenderNode {
         x += 170.0;
     }
     let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
-    kids.push(RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], waves));
+    kids.push(RenderNode::transform_with(
+        [scale, 0.0, 0.0, scale, 0.0, 0.0],
+        waves,
+    ));
 
     RenderNode::group(kids)
 }

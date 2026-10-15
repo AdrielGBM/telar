@@ -6,11 +6,11 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
-#[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
-#[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-#[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
+#[allow(unused_imports)] use crate::shared::components::card::{CardProps, card};
+#[allow(unused_imports)] use crate::shared::components::code_line::{CodeLineProps, code_line};
+#[allow(unused_imports)] use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+#[allow(unused_imports)] use crate::shared::components::example::{ExampleProps, example};
+#[allow(unused_imports)] use crate::shared::components::prop_row::{PropRowProps, prop_row};
 
 #[derive(::telar::Props)]
 pub struct ControlsProps {}
@@ -29,12 +29,15 @@ pub fn controls(props: ControlsProps, children: Children) -> Result<Box<dyn Layo
     let calm_reading = memo(move || if calm_rsx_mv.get() { "on" } else { "off" }.to_string());
     let bold_rsx_mv = bold.clone();
     let italic_rsx_mv = italic.clone();
-    let styles = memo(move || match (bold_rsx_mv.get(), italic_rsx_mv.get()) {
-        (true, true) => "bold and italic",
-        (true, false) => "bold",
-        (false, true) => "italic",
-        (false, false) => "plain",
-    }.to_string());
+    let styles = memo(move || {
+        match (bold_rsx_mv.get(), italic_rsx_mv.get()) {
+            (true, true) => "bold and italic",
+            (true, false) => "bold",
+            (false, true) => "italic",
+            (false, false) => "plain",
+        }
+        .to_string()
+    });
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("INTERACTION").title("Controls with state").desc("A role a person operates makes a pressable box a control: Tab stops on it, Enter and Space press it the way a tap does, and the theme's ring shows where the keyboard is. toggled: gives it an on/off state, which its role says how to announce: a switch is checked, a toggle button pressed.").build(), Children::default())?;

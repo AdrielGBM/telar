@@ -6,10 +6,10 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
-#[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
-#[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-#[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
+#[allow(unused_imports)] use crate::shared::components::card::{CardProps, card};
+#[allow(unused_imports)] use crate::shared::components::code_line::{CodeLineProps, code_line};
+#[allow(unused_imports)] use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+#[allow(unused_imports)] use crate::shared::components::example::{ExampleProps, example};
 
 #[derive(::telar::Props)]
 pub struct SystemProps {}
@@ -37,13 +37,22 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
     let contrast = memo(|| reading(telar::use_system_high_contrast()));
     let locales = memo(|| {
         let locales = telar::use_preferred_locales();
-        if locales.is_empty() { "none reported".to_string() } else { locales.join(", ") }
+        if locales.is_empty() {
+            "none reported".to_string()
+        } else {
+            locales.join(", ")
+        }
     });
-    let negotiated = memo(|| telar::negotiate_locale(&telar::use_preferred_locales(), &["es", "en"], "es").to_string());
+    let negotiated = memo(|| {
+        telar::negotiate_locale(&telar::use_preferred_locales(), &["es", "en"], "es").to_string()
+    });
     let chosen = memo(|| telar::use_scheme_preference().as_str().to_string());
     let safe_area = memo(|| {
         let insets = telar::use_safe_area_insets();
-        format!("top {} · right {} · bottom {} · left {}", insets.top, insets.right, insets.bottom, insets.left)
+        format!(
+            "top {} · right {} · bottom {} · left {}",
+            insets.top, insets.right, insets.bottom, insets.left
+        )
     });
 
     let __col_0 = {

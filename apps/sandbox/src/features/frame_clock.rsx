@@ -1,15 +1,21 @@
 [logic]
-use crate::shared::components::card::{card, CardProps};
-use crate::shared::components::code_line::{code_line, CodeLineProps};
-use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
+use crate::shared::components::card::{CardProps, card};
+use crate::shared::components::code_line::{CodeLineProps, code_line};
+use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+use crate::shared::components::example::{ExampleProps, example};
+use crate::shared::components::prop_row::{PropRowProps, prop_row};
 
 let running = signal(false);
 let time = motion::use_frame_time_while(move || running.get());
 let swing = memo(move || (time.get().as_secs_f32() * std::f32::consts::TAU / 1.6).sin() * 90.0);
 let seconds = memo(move || format!("{:.2} s", time.get().as_secs_f32()));
-let state = memo(move || if running.get() { "reading the clock: frames are requested" } else { "not reading: the loop is asleep" });
+let state = memo(move || {
+    if running.get() {
+        "reading the clock: frames are requested"
+    } else {
+        "not reading: the loop is asleep"
+    }
+});
 
 [view]
 col gap:20

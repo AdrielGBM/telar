@@ -1,6 +1,6 @@
 [logic]
-use crate::feature_card::{feature_card, FeatureCardProps};
 use crate::demo_images::{make_checker, make_gradient, make_radial_alpha};
+use crate::feature_card::{FeatureCardProps, feature_card};
 use std::sync::Arc;
 
 let signups = signal(0i32);

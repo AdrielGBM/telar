@@ -1,14 +1,17 @@
 [logic]
-use crate::shared::components::card::{card, CardProps};
-use crate::shared::components::code_line::{code_line, CodeLineProps};
-use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-use crate::shared::components::example::{example, ExampleProps};
-use crate::shared::components::prop_row::{prop_row, PropRowProps};
+use crate::shared::components::card::{CardProps, card};
+use crate::shared::components::code_line::{CodeLineProps, code_line};
+use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+use crate::shared::components::example::{ExampleProps, example};
+use crate::shared::components::prop_row::{PropRowProps, prop_row};
 
 let width = memo(|| use_surface_width().round() as i32);
 let height = memo(|| use_surface_height().round() as i32);
 
-let range = breakpoint("narrow").at(640.0, "medium").at(1024.0, "wide").follow();
+let range = breakpoint("narrow")
+    .at(640.0, "medium")
+    .at(1024.0, "wide")
+    .follow();
 let gutter = breakpoint(8.0f32).at(640.0, 16.0).at(1024.0, 28.0).follow();
 let tile = breakpoint(SizeDimension::Percent(1.0))
     .at(640.0, SizeDimension::Percent(0.48))

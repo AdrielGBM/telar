@@ -6,10 +6,10 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
-#[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
-#[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-#[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
+#[allow(unused_imports)] use crate::shared::components::card::{CardProps, card};
+#[allow(unused_imports)] use crate::shared::components::code_line::{CodeLineProps, code_line};
+#[allow(unused_imports)] use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+#[allow(unused_imports)] use crate::shared::components::example::{ExampleProps, example};
 
 #[derive(::telar::Props)]
 pub struct CurrentPlaceProps {}
@@ -25,14 +25,22 @@ pub fn current_place(props: CurrentPlaceProps, children: Children) -> Result<Box
     let view = use_scroll_viewport();
     let here = memo(move || view.as_ref().and_then(|view| view.anchor_at(BAR)));
     let here_rsx_mv = here.clone();
-    let shown = memo(move || here_rsx_mv.get().map_or_else(|| "nothing".to_string(), |name| name.to_string()));
+    let shown = memo(move || {
+        here_rsx_mv.get()
+            .map_or_else(|| "nothing".to_string(), |name| name.to_string())
+    });
     let here_rsx_mv = here.clone();
     let on_intro = memo(move || here_rsx_mv.get().as_deref() == Some("place-intro"));
     let here_rsx_mv = here.clone();
     let on_usage = memo(move || here_rsx_mv.get().as_deref() == Some("place-usage"));
     let here_rsx_mv = here.clone();
     let on_limits = memo(move || here_rsx_mv.get().as_deref() == Some("place-limits"));
-    let on_page = memo(|| use_anchor_at(48.0).map_or_else(|| "none: each section here scrolls itself".to_string(), |name| name.to_string()));
+    let on_page = memo(|| {
+        use_anchor_at(48.0).map_or_else(
+            || "none: each section here scrolls itself".to_string(),
+            |name| name.to_string(),
+        )
+    });
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("NAVIGATION").title("Current place").desc("Which place is under a line across the view of a scroll: the anchor whose box spans that distance from the view's top edge, worked out from Telar's layout and the scroll's offset on every target. A bar over the page reads it with its own height to mark the link to the section under it with current:, and to dress itself like that section.").build(), Children::default())?;

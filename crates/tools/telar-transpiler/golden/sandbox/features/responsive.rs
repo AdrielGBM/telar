@@ -6,11 +6,11 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::shared::components::card::{card, CardProps};
-#[allow(unused_imports)] use crate::shared::components::code_line::{code_line, CodeLineProps};
-#[allow(unused_imports)] use crate::shared::components::doc_header::{doc_header, DocHeaderProps};
-#[allow(unused_imports)] use crate::shared::components::example::{example, ExampleProps};
-#[allow(unused_imports)] use crate::shared::components::prop_row::{prop_row, PropRowProps};
+#[allow(unused_imports)] use crate::shared::components::card::{CardProps, card};
+#[allow(unused_imports)] use crate::shared::components::code_line::{CodeLineProps, code_line};
+#[allow(unused_imports)] use crate::shared::components::doc_header::{DocHeaderProps, doc_header};
+#[allow(unused_imports)] use crate::shared::components::example::{ExampleProps, example};
+#[allow(unused_imports)] use crate::shared::components::prop_row::{PropRowProps, prop_row};
 
 #[derive(::telar::Props)]
 pub struct ResponsiveProps {}
@@ -24,7 +24,10 @@ pub fn responsive(props: ResponsiveProps, children: Children) -> Result<Box<dyn 
     let width = memo(|| use_surface_width().round() as i32);
     let height = memo(|| use_surface_height().round() as i32);
 
-    let range = breakpoint("narrow").at(640.0, "medium").at(1024.0, "wide").follow();
+    let range = breakpoint("narrow")
+        .at(640.0, "medium")
+        .at(1024.0, "wide")
+        .follow();
     let gutter = breakpoint(8.0f32).at(640.0, 16.0).at(1024.0, 28.0).follow();
     let tile = breakpoint(SizeDimension::Percent(1.0))
         .at(640.0, SizeDimension::Percent(0.48))

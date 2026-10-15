@@ -6,8 +6,8 @@
 #[allow(unused_imports)] use telar_icons::*;
 #[allow(unused_imports)] use telar_navigate::*;
 #[allow(unused_imports)] use crate::*;
-#[allow(unused_imports)] use crate::shared::components::feature_card::{feature_card, FeatureCardProps};
-#[allow(unused_imports)] use crate::shared::components::stat::{stat, StatProps};
+#[allow(unused_imports)] use crate::shared::components::feature_card::{FeatureCardProps, feature_card};
+#[allow(unused_imports)] use crate::shared::components::stat::{StatProps, stat};
 
 #[derive(::telar::Props)]
 pub struct OverviewProps {}

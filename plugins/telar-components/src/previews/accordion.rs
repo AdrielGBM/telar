@@ -25,7 +25,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_text("Orders leave the warehouse within two working days.")?;
             canvas.click(details.clone())?;
             canvas.expect_toggled(details.clone(), false)?;
-            canvas.expect_absent(by_text("Orders leave the warehouse within two working days."))?;
+            canvas.expect_absent(by_text(
+                "Orders leave the warehouse within two working days.",
+            ))?;
             canvas.click(details.clone())?;
             canvas.expect_toggled(details, true)?;
             canvas.expect_text("Orders leave the warehouse")
