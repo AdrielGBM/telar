@@ -369,12 +369,8 @@ fn mounted(
         |_: &()| (),
         move |()| inspection_marks(inspection),
     )?;
-    let marks = StyledContainer::new(
-        LayoutStyle::new().absolute_fill(),
-        |_| RectStyle::default(),
-        children![marks],
-    )?
-    .input_transparent();
+    let marks =
+        Container::new(LayoutStyle::new().absolute_fill(), children![marks])?.input_transparent();
     let stack = Container::column(children![frame, marks])?;
     Ok(box_item(stack))
 }

@@ -123,9 +123,10 @@ The layout tags of a `[view]` build widgets a Rust component builds the same way
 builder calls chained after it. Start from them rather than `LayoutStyle::new()`, which is a block box that ignores
 `gap`, `align_items` and `justify_content`.
 
-A box that only lays out is a `Container`, which takes `role`, `a11y_label`, `styled_by` and `on_press` like the
-painted one does. Reach for `StyledContainer` when the box paints, takes focus, lets the pointer through
-(`input_transparent`) or fades (`with_opacity`), not to hand it `|_| RectStyle::default()`.
+A box that only lays out is a `Container`, which takes `role`, `a11y_label`, `styled_by`, `on_press` and
+`input_transparent` (the pointer passes through it to what is beneath, its children still draw) like the painted one
+does. Reach for `StyledContainer` when the box paints, takes focus or fades (`with_opacity`), not to
+hand it `|_| RectStyle::default()`.
 
 `children![…]` boxes each widget it is given. An item that is already a `Box<dyn LayoutItem>` goes into a plain
 `vec![…]` as it is.

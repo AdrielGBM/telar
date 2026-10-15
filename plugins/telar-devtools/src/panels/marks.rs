@@ -4,8 +4,8 @@ use std::cell::OnceCell;
 use std::rc::Rc;
 
 use telar::{
-    Accessible, Border, BorderRadius, Canvas, Insets, LayoutError, LayoutItem, LayoutStyle, Rect,
-    RectStyle, RenderNode, RwSignal, ShapeStyle, StyledContainer, TextStyle, TextWrap, Transform,
+    Accessible, Border, BorderRadius, Canvas, Container, Insets, LayoutError, LayoutItem,
+    LayoutStyle, Rect, RectStyle, RenderNode, RwSignal, ShapeStyle, TextStyle, TextWrap, Transform,
     box_item, children, track_layout, transform_clip_rect, use_theme_tokens,
 };
 
@@ -47,9 +47,8 @@ pub fn inspection_marks(inspection: Inspection) -> Result<Box<dyn LayoutItem>, L
     if let Some(rect) = track_layout(canvas.layout_node()) {
         let _ = placed_at.set(rect);
     }
-    let layer = StyledContainer::new(
+    let layer = Container::new(
         LayoutStyle::new().absolute_fill(),
-        |_| RectStyle::default(),
         children![canvas.a11y_hidden()],
     )?
     .input_transparent();

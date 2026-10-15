@@ -9,7 +9,7 @@ use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::child_host::{ChildSlot, DynHost};
 use crate::context::{new_container, track_layout};
-use crate::input_region::InputHandle;
+use crate::input_region::{InputHandle, InputMode};
 use crate::layout_item::{LayoutItem, TrackedChildren, register_container};
 use crate::pointer::dispatch_container_event;
 use crate::press::PressGesture;
@@ -26,10 +26,11 @@ pub struct Container {
     // What the box is, where it is more than a box. `None` reads it from what the box does.
     role: Option<renderer_core::Role>,
     input: InputHandle,
+    input_mode: InputMode,
 }
 
 impl Container {
-    /// A box that lays out `children` by `layout_style` and paints nothing: what a view's `col`, `row` and `grid` build, from [`LayoutStyle::column`] or [`LayoutStyle::row`] plus their attributes. A box that paints, takes focus or lets the pointer through is a [`StyledContainer`](crate::StyledContainer).
+    /// A box that lays out `children` by `layout_style` and paints nothing: what a view's `col`, `row` and `grid` build, from [`LayoutStyle::column`] or [`LayoutStyle::row`] plus their attributes. A box that paints or takes focus is a [`StyledContainer`](crate::StyledContainer).
     pub fn new(
         layout_style: LayoutStyle,
         children: Vec<Box<dyn LayoutItem>>,
@@ -43,6 +44,7 @@ impl Container {
             press: PressGesture::default(),
             role: None,
             input: InputHandle::new(),
+            input_mode: InputMode::Auto,
         })
     }
 
@@ -62,6 +64,7 @@ impl Container {
             press: PressGesture::default(),
             role: None,
             input: InputHandle::new(),
+            input_mode: InputMode::Auto,
         })
     }
 
@@ -114,7 +117,24 @@ impl Container {
     }
 
     fn mark_interactive(&mut self) {
+        debug_assert_ne!(
+            self.input_mode,
+            InputMode::Transparent,
+            "an input_transparent box cannot answer the pointer: its handlers claim its rect"
+        );
         self.input.answer(self.node, self.rect.read_only());
+    }
+
+    /// Lets the pointer through this box to what is beneath it while its children still draw and answer for themselves — see [`StyledContainer::input_transparent`](crate::StyledContainer::input_transparent), which is the same thing on a box that also paints.
+    pub fn input_transparent(mut self) -> Self {
+        debug_assert!(
+            !self.press.is_set(),
+            "an input_transparent box cannot answer the pointer: its handlers claim its rect"
+        );
+        self.input_mode = InputMode::Transparent;
+        self.input
+            .declare(self.node, self.rect.read_only(), InputMode::Transparent);
+        self
     }
 
     /// A bare flex column over `children`: a view's `col` with no attributes.
@@ -126,6 +146,10 @@ impl Container {
 impl LayoutItem for Container {
     fn layout_node(&self) -> NodeId {
         self.node
+    }
+
+    fn occludes(&self) -> bool {
+        self.input_mode != InputMode::Transparent
     }
 }
 
@@ -139,7 +163,9 @@ impl Component for Container {
         // A transparent box still owns a layout node, and its children are laid out by it, so attaching them to its parent would put them in the wrong flow.
         let role = crate::element::role_of(self.role, self.press.is_set());
         let element = crate::element::for_target(self.node, role, || {
-            crate::element::with_semantics(self.node, renderer_core::Semantics::of(role))
+            let mut semantics = renderer_core::Semantics::of(role);
+            semantics.click_through = !self.occludes();
+            crate::element::with_semantics(self.node, semantics)
         });
         RenderNode::element(element, [content])
     }

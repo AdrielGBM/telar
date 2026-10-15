@@ -3,8 +3,8 @@
 use std::rc::Weak;
 
 use telar::{
-    Canvas, Color, LayoutError, LayoutItem, LayoutStyle, Rect, RectStyle, RenderNode, RwSignal,
-    ShapeStyle, StyledContainer, SurfaceCanvas, TextStyle, TextWrap, Transform, box_item, children,
+    Canvas, Color, Container, LayoutError, LayoutItem, LayoutStyle, Rect, RectStyle, RenderNode,
+    RwSignal, ShapeStyle, SurfaceCanvas, TextStyle, TextWrap, Transform, box_item, children,
     use_theme_tokens,
 };
 use telar_devtools::use_workbench_tokens;
@@ -235,11 +235,7 @@ fn line(ink: Color) -> RectStyle {
 
 /// `canvas` drawn over what is under it, leaving the pointer to that.
 fn see_through(canvas: Canvas) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let layer = StyledContainer::new(
-        LayoutStyle::new().absolute_fill(),
-        |_| RectStyle::default(),
-        children![canvas],
-    )?
-    .input_transparent();
+    let layer =
+        Container::new(LayoutStyle::new().absolute_fill(), children![canvas])?.input_transparent();
     Ok(box_item(layer))
 }

@@ -1148,3 +1148,62 @@ fn a_box_scaled_from_its_start_claims_where_it_is_drawn() {
     tap(&mut root, 150.0, 60.0);
     assert_eq!(taps.get(), 2, "it grows upward about the vertical middle");
 }
+
+#[test]
+fn a_transparent_container_cuts_its_rect_out_of_the_opaque_box_around_it() {
+    reset_layout_runtime();
+    let (_, on_tap) = counter();
+    let button = boxed(placed(0.0, 0.0, 20.0), vec![]).on_press(on_tap);
+    let hole = Container::new(placed(50.0, 50.0, 100.0), vec![Box::new(button)])
+        .unwrap()
+        .input_transparent();
+    let panel = boxed(placed(0.0, 0.0, 200.0), vec![Box::new(hole)]).input_opaque();
+    let root = Container::new(full(), vec![Box::new(panel)]).unwrap();
+    lay_out(&root);
+
+    assert!(claimed(10.0, 10.0), "the panel claims around the hole");
+    assert!(!claimed(100.0, 100.0), "but not inside it");
+    assert!(
+        claimed(60.0, 60.0),
+        "except where something inside the hole answers the pointer"
+    );
+}
+
+#[test]
+fn the_pointer_passes_through_a_transparent_container_to_what_its_opaque_parent_covers() {
+    reset_layout_runtime();
+    let (pane_taps, pane_tap) = counter();
+    let (button_taps, button_tap) = counter();
+    let pane = boxed(full(), vec![]).on_press(pane_tap);
+    let button = boxed(placed(0.0, 0.0, 20.0), vec![]).on_press(button_tap);
+    let hole = Container::new(placed(50.0, 50.0, 100.0), vec![Box::new(button)])
+        .unwrap()
+        .input_transparent();
+    let panel = boxed(placed(0.0, 0.0, 200.0), vec![Box::new(hole)]).input_opaque();
+    let mut root = Container::new(full(), vec![Box::new(pane), Box::new(panel)]).unwrap();
+    lay_out(&root);
+
+    tap(&mut root, 10.0, 10.0);
+    assert_eq!(pane_taps.get(), 0, "the panel covers the pane");
+
+    tap(&mut root, 100.0, 100.0);
+    assert_eq!(pane_taps.get(), 1, "the hole in it does not");
+
+    tap(&mut root, 60.0, 60.0);
+    assert_eq!(
+        (button_taps.get(), pane_taps.get()),
+        (1, 1),
+        "a button inside the hole still takes its own press"
+    );
+}
+
+#[test]
+fn a_transparent_container_does_not_occlude_and_tells_a_document_so() {
+    reset_layout_runtime();
+    let plain = Container::new(placed(0.0, 0.0, 100.0), vec![]).unwrap();
+    let hole = Container::new(placed(0.0, 0.0, 100.0), vec![])
+        .unwrap()
+        .input_transparent();
+    assert!(plain.occludes());
+    assert!(!hole.occludes());
+}

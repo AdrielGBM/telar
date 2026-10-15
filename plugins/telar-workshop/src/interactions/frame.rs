@@ -32,12 +32,8 @@ pub(crate) fn frame_layer(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
             None => Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?)),
         },
     )?;
-    let layer = StyledContainer::new(
-        LayoutStyle::new().absolute_fill(),
-        |_| RectStyle::default(),
-        children![layer],
-    )?
-    .input_transparent();
+    let layer =
+        Container::new(LayoutStyle::new().absolute_fill(), children![layer])?.input_transparent();
     Ok(box_item(layer))
 }
 
