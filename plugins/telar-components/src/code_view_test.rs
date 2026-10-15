@@ -307,3 +307,91 @@ fn a_style_amendment_restyles_the_frame() {
     assert_eq!(paint.fill, Some(Paint::Solid(ink)));
     assert!(paint.border.is_some(), "the block's own frame is kept");
 }
+
+fn stop_names(mounted: &Mounted) -> Vec<String> {
+    ui_core::accessibility::snapshot(&mounted.tree.commands())
+        .into_iter()
+        .filter(|node| node.role == Role::ScrollArea)
+        .map(|node| node.name)
+        .collect()
+}
+
+fn tall_code() -> String {
+    "let x = 1;\n".repeat(40)
+}
+
+fn wide_code() -> String {
+    format!("let x = [{}];", "0, ".repeat(400))
+}
+
+#[test]
+fn an_overflowing_block_is_a_named_stop_for_the_code() {
+    let wide = Mounted::new(
+        CodeViewProps::props()
+            .code(wide_code())
+            .copyable(false)
+            .build(),
+    );
+    assert_eq!(stop_names(&wide), ["Code"]);
+    assert!(
+        telar::focus::exposed()
+            .iter()
+            .any(|exposed| exposed.role == Role::ScrollArea),
+        "a reader is told about the stop"
+    );
+}
+
+#[test]
+fn the_scroller_stop_takes_the_label_the_block_was_given() {
+    let tall = Mounted::new(
+        CodeViewProps::props()
+            .code(tall_code())
+            .max_height(100.0)
+            .copyable(false)
+            .label(Reactive::of(|| "Snippet".to_string()))
+            .build(),
+    );
+    assert_eq!(stop_names(&tall), ["Snippet"]);
+}
+
+#[test]
+fn a_block_that_fits_is_no_stop_of_its_own() {
+    let short = Mounted::new(
+        CodeViewProps::props()
+            .code("let x = 1;")
+            .copyable(false)
+            .build(),
+    );
+    assert!(stop_names(&short).is_empty());
+}
+
+#[test]
+fn a_block_taller_than_its_limit_is_a_named_stop_too() {
+    let tall = Mounted::new(
+        CodeViewProps::props()
+            .code(tall_code())
+            .max_height(100.0)
+            .copyable(false)
+            .build(),
+    );
+    assert_eq!(stop_names(&tall), ["Code"]);
+}
+
+#[test]
+fn a_line_wider_than_the_block_scrolls_sideways_under_a_scrollbar() {
+    let mounted = Mounted::new(
+        CodeViewProps::props()
+            .code(wide_code())
+            .copyable(false)
+            .build(),
+    );
+    let thumb = mounted.tree.commands().iter().any(|command| {
+        matches!(command, DrawCommand::Rect { rect, .. } if rect.width < 600.0 && rect.height < 12.0 && rect.y > mounted.height() - 12.0)
+    });
+    assert!(thumb, "the horizontal scrollbar's thumb is drawn");
+    assert!(
+        telar::focus::tab_order()
+            .iter()
+            .any(|stop| stop.role == Role::ScrollArea)
+    );
+}

@@ -305,7 +305,12 @@ pub fn code_view(
     } else {
         LayoutStyle::new()
     };
-    let scroll = LayoutScrollArea::new(viewport_box, box_item(content))?;
+    let stop_name = label.clone();
+    let scroll = LayoutScrollArea::new(viewport_box, box_item(content))?.stop_label(move || {
+        stop_name
+            .as_ref()
+            .map_or_else(|| strings::text(strings::CODE), |label| label.get())
+    });
 
     let mut layers: Vec<Box<dyn LayoutItem>> = vec![box_item(scroll)];
     if copyable {

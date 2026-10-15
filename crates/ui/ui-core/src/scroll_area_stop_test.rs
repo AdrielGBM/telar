@@ -397,3 +397,62 @@ fn a_primary_scroll_is_never_a_stop() {
     assert_eq!(the_stop(&tree, node), None);
     assert!(stops().is_empty());
 }
+
+fn wide_row() -> Container {
+    Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![box_item(
+            Container::new(
+                LayoutStyle::new()
+                    .width(1000.0)
+                    .height(40.0)
+                    .flex_shrink(0.0),
+                vec![],
+            )
+            .unwrap(),
+        )],
+    )
+    .unwrap()
+}
+
+#[test]
+fn a_row_running_past_the_area_overflows_across_and_is_a_stop() {
+    reset_layout_runtime();
+    focus::clear();
+    let _document = AsADocument::new();
+    let (area, viewport) = area(wide_row());
+    let (mut tree, node) = mounted(area);
+
+    assert_eq!(
+        the_stop(&tree, node).map(|stop| stop.consumes),
+        Some(ConsumedKeys::HORIZONTAL_ARROWS)
+    );
+    assert_eq!(stops(), vec![Role::ScrollArea]);
+    focus::focus_next();
+    tree.on_event(&press(NamedKey::ArrowRight));
+    assert_eq!(viewport.peek_offset(), (line(), 0.0));
+}
+
+#[test]
+fn the_wheel_scrolls_a_row_running_past_the_area_to_its_end() {
+    reset_layout_runtime();
+    let (area, viewport) = area(wide_row());
+    let (mut tree, _) = mounted(area);
+    tree.on_event(&Event::Scrolled {
+        delta: ScrollDelta::Pixels { x: -5000.0, y: 0.0 },
+        x: 50.0,
+        y: 50.0,
+    });
+    assert_eq!(viewport.peek_offset(), (1000.0 - VIEW.0, 0.0));
+}
+
+#[test]
+fn a_row_running_past_the_area_draws_the_horizontal_scrollbar() {
+    reset_layout_runtime();
+    let (area, _) = area(wide_row());
+    let (tree, _) = mounted(area);
+    let bar = tree.commands().iter().any(|command| {
+        matches!(command, DrawCommand::Rect { rect, .. } if rect.width < VIEW.0 && rect.height < 12.0 && rect.y > VIEW.1 - 12.0)
+    });
+    assert!(bar, "a thumb along the bottom edge");
+}

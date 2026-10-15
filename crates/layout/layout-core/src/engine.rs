@@ -484,12 +484,56 @@ impl LayoutEngine {
     pub fn layout(&self, node: NodeId) -> Result<geometry_core::Rect, LayoutError> {
         self.alive(node)?;
         let layout = self.tree.layout(node).map_err(LayoutError::from)?;
+        let size = self.laid_out_size(node, layout);
         Ok(geometry_core::Rect::new(
             layout.location.x,
             layout.location.y,
-            layout.size.width,
-            layout.size.height,
+            size.width,
+            size.height,
         ))
+    }
+
+    /// The box layout gave `node`, except for a scroll container's content, which is as large as everything it holds: a block box fills its host's width however far its children run past it, so a line that does not wrap would otherwise leave nothing to scroll to.
+    fn laid_out_size(&self, node: NodeId, layout: &taffy::Layout) -> taffy::Size<f32> {
+        if !self.scroll_contents.contains(&node) {
+            return layout.size;
+        }
+        let mut right = layout.size.width;
+        let mut bottom = layout.size.height;
+        let mut stack: Vec<(NodeId, f32, f32, bool)> = self
+            .tree
+            .child_ids(node)
+            .map(|child| (child, 0.0, 0.0, true))
+            .collect();
+        while let Some((child, x, y, direct)) = stack.pop() {
+            let Ok(child_layout) = self.tree.layout(child) else {
+                continue;
+            };
+            let Ok(style) = self.tree.style(child) else {
+                continue;
+            };
+            if style.display == taffy::Display::None || self.scroll_contents.contains(&child) {
+                continue;
+            }
+            let (end, foot) = if direct && style.position != taffy::Position::Absolute {
+                (layout.padding.right, layout.padding.bottom)
+            } else {
+                (0.0, 0.0)
+            };
+            let x = x + child_layout.location.x;
+            let y = y + child_layout.location.y;
+            right = right.max(x + child_layout.size.width + end);
+            bottom = bottom.max(y + child_layout.size.height + foot);
+            stack.extend(
+                self.tree
+                    .child_ids(child)
+                    .map(|grandchild| (grandchild, x, y, false)),
+            );
+        }
+        taffy::Size {
+            width: right,
+            height: bottom,
+        }
     }
 
     /// The width `node` was laid out at before its edges were rounded to whole pixels, which takes up to a pixel off a box sized by what it holds.
@@ -635,7 +679,8 @@ impl LayoutEngine {
             let (w, h) = if hidden {
                 (0.0, 0.0)
             } else {
-                (layout.size.width, layout.size.height)
+                let size = self.laid_out_size(visit.node, layout);
+                (size.width, size.height)
             };
             let mut x = visit.origin.0 + layout.location.x;
             let mut y = visit.origin.1 + layout.location.y;

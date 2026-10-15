@@ -184,3 +184,42 @@ fn a_scroll_host_shrinks_below_its_content_as_a_row_item_without_a_zero_minimum(
     let grown = scroll_in_bounded_flex(true, LayoutStyle::new().flex_grow(1.0));
     assert_eq!(grown.width, 200.0);
 }
+
+fn scroll_over_wide_row(
+    host_style: LayoutStyle,
+    row_style: LayoutStyle,
+) -> (geometry_core::Rect, geometry_core::Rect) {
+    let mut engine = LayoutEngine::new();
+    let wide = engine
+        .new_leaf(
+            LayoutStyle::new()
+                .width(3000.0)
+                .height(20.0)
+                .flex_shrink(0.0),
+        )
+        .unwrap();
+    let row = engine.new_container(row_style, &[wide]).unwrap();
+    let host = engine.new_leaf(host_style).unwrap();
+    engine.set_scroll_content(host, row).unwrap();
+    let root = engine
+        .new_container(
+            LayoutStyle::new().flex_column().width(600.0).height(400.0),
+            &[host],
+        )
+        .unwrap();
+    engine
+        .compute_layout(
+            root,
+            AvailableSpace::Definite(600.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+    (engine.layout(host).unwrap(), engine.layout(row).unwrap())
+}
+
+#[test]
+fn scroll_content_wider_than_its_host_keeps_its_own_width() {
+    let (host, content) = scroll_over_wide_row(LayoutStyle::new(), LayoutStyle::new().flex_row());
+    assert_eq!(host.width, 600.0);
+    assert_eq!(content.width, 3000.0);
+}

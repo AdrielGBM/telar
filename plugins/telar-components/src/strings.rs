@@ -5,6 +5,7 @@ use telar::i18n::{Catalog, Entry, Message, Part, translate_with_override};
 const NAMESPACE: &str = "telar_components";
 
 pub(crate) const CLOSE: &str = "close";
+pub(crate) const CODE: &str = "code";
 pub(crate) const COMMAND_PALETTE: &str = "command_palette";
 pub(crate) const COMMANDS: &str = "commands";
 pub(crate) const COPIED: &str = "copied";
@@ -39,6 +40,14 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("إغلاق")),
                 ("en", Message::Plain("Close")),
                 ("es", Message::Plain("Cerrar")),
+            ],
+        },
+        Entry {
+            key: CODE,
+            messages: &[
+                ("ar", Message::Plain("الكود")),
+                ("en", Message::Plain("Code")),
+                ("es", Message::Plain("Código")),
             ],
         },
         Entry {
