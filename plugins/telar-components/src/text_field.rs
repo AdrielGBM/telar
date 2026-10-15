@@ -4,9 +4,10 @@ use std::rc::Rc;
 
 use crate::shared;
 use telar::{
-    Accessible, Border, BorderRadius, Children, Color, Input, Key, LayoutError, LayoutItem,
-    LayoutStyle, ModifiersState, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    SurfaceAmendment, amend_surface, box_item, focus::FocusId, signal, style_follows,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, Input, Key, LayoutError,
+    LayoutItem, LayoutStyle, ModifiersState, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
+    StyledContainer, SurfaceAmendment, amend_surface, box_item, focus::FocusId, signal,
+    style_follows,
 };
 
 /// A field's width in ems when neither its call nor the theme names one: room for a sentence-long value.
@@ -51,13 +52,22 @@ impl TextFieldTokens {
     }
 }
 
+/// A field's width: `width` where its call names one, else [`TextFieldTokens::width`].
+pub(crate) fn field_width(width: f32) -> f32 {
+    if width > 0.0 {
+        width
+    } else {
+        TextFieldTokens::current().width()
+    }
+}
+
 /// The input is the whole height of the field, so the press and the audit see the whole field rather than the bare line inside it, and the line is centred in it.
 fn line_box() -> LayoutStyle {
     LayoutStyle::new().height(shared::control_height())
 }
-fn field_box(width: f32) -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
+/// The framed box every catalogue field is drawn in — a text field, a text area, a search field — before what it holds is arranged in it: `width` wide, never wider than its parent, and padded from the frame by [`TextFieldTokens::pad_x`].
+pub(crate) fn field_box(width: f32) -> LayoutStyle {
+    LayoutStyle::column()
         .width(width)
         .max_width(telar::SizeDimension::Percent(1.0))
         .padding_horizontal(TextFieldTokens::current().pad_x())
@@ -108,6 +118,21 @@ pub fn text_field(
     props: TextFieldProps,
     _children: Children,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    adorned_field(props, Adornments::default()).map(|(field, _)| field)
+}
+
+/// What a field draws in its frame beside the line typed into: a search field's glass before it, and its clear button after it.
+#[derive(Default)]
+pub(crate) struct Adornments {
+    pub(crate) leading: Option<Box<dyn LayoutItem>>,
+    pub(crate) trailing: Option<Box<dyn LayoutItem>>,
+}
+
+/// A text field with `adornments` in its frame, laid along the line, and the id the line holds focus by.
+pub(crate) fn adorned_field(
+    props: TextFieldProps,
+    adornments: Adornments,
+) -> Result<(Box<dyn LayoutItem>, FocusId), LayoutError> {
     let TextFieldProps {
         value,
         placeholder,
@@ -121,13 +146,7 @@ pub fn text_field(
         style,
     } = props;
     let value = value.unwrap_or_else(|| signal(String::new()));
-    let width = move || {
-        if width > 0.0 {
-            width
-        } else {
-            TextFieldTokens::current().width()
-        }
-    };
+    let width = move || field_width(width);
 
     // Always a live `Input` with a muted placeholder, so the field is typable from a cold start: a swapped-in placeholder `Text` takes no focus, leaving an empty field impossible to click into.
     let mut input = Input::declaring(value, LayoutStyle::new(), move |t| {
@@ -160,22 +179,37 @@ pub fn text_field(
     // The input is a leaf, so its node's style is followed from the box that outlives it.
     let line_node = input.layout_node();
     let line_focus = input.focus_id();
-    let field = box_item(input);
+    let Adornments { leading, trailing } = adornments;
+    let adorned = leading.is_some() || trailing.is_some();
+    let mut content: Vec<Box<dyn LayoutItem>> = leading.into_iter().collect();
+    content.push(box_item(input));
+    content.extend(trailing);
 
+    let arranged = move || match adorned {
+        true => field_box(width())
+            .flex_row()
+            .align_items(AlignItems::CENTER)
+            .gap(shared::gap_sm()),
+        false => field_box(width()),
+    };
     let box_ = StyledContainer::new(
-        field_box(width()),
+        arranged(),
         move |_r| amend_surface(frame(), &style),
-        vec![box_item(field)],
+        content,
     )?
     .frames_focus_of(line_focus)
-    .styled_by(move || field_box(width()));
-    style_follows(line_node, line_box);
+    .styled_by(arranged);
+    style_follows(line_node, move || match adorned {
+        true => line_box().flex_grow(1.0).flex_shrink(1.0).min_width(0.0),
+        false => line_box(),
+    });
 
-    shared::captioned(box_item(box_), label, Reactive::of(width))
+    let field = shared::captioned(box_item(box_), label, Reactive::of(width))?;
+    Ok((field, line_focus))
 }
 
-/// The box's paint before the caller's amendment.
-fn frame() -> RectStyle {
+/// A field box's paint before the caller's amendment.
+pub(crate) fn frame() -> RectStyle {
     let tokens = TextFieldTokens::current();
     RectStyle::default()
         .with_fill(shared::surface_alt())

@@ -477,8 +477,7 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         content.push(box_item(label_text(label, disabled.clone(), &list)?));
     } else {
         content.push(box_item(Container::new(
-            LayoutStyle::new()
-                .flex_row()
+            LayoutStyle::row()
                 .flex_grow(1.0)
                 .align_items(AlignItems::CENTER),
             supplied,
@@ -592,22 +591,17 @@ pub(crate) fn tick_column(
         let list = list.clone();
         move || {
             let ticked = own || list.as_ref().is_some_and(ListContext::is_ticked);
-            LayoutStyle::new()
+            LayoutStyle::row()
                 .width(shared::icon_size())
                 .shown(ticked)
                 .flex_shrink(0.0)
-                .flex_row()
                 .align_items(AlignItems::CENTER)
                 .justify_content(telar::JustifyContent::CENTER)
         }
     };
-    let column = StyledContainer::new(
-        column(),
-        |_r| RectStyle::default(),
-        tick.into_iter().collect(),
-    )?
-    .styled_by(column)
-    .a11y_hidden();
+    let column = Container::new(column(), tick.into_iter().collect())?
+        .styled_by(column)
+        .a11y_hidden();
     Ok(box_item(column))
 }
 
@@ -716,15 +710,13 @@ pub fn group(props: GroupProps, children: Children) -> Result<Box<dyn LayoutItem
             false => 0.0,
         };
         let pad = ListTokens::current().pad_x();
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .padding_start(pad + lead)
             .padding_end(pad)
             .padding_vertical(shared::gap_xs())
     };
-    let heading = StyledContainer::new(heading_box(), |_r| RectStyle::default(), supplied)?
-        .styled_by(heading_box);
+    let heading = Container::new(heading_box(), supplied)?.styled_by(heading_box);
     Ok(box_item(heading))
 }
 
@@ -738,8 +730,7 @@ pub(crate) fn declared_placeholder(
 }
 
 fn row_layout(look: RowLook) -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .height(look.height)
         .padding_horizontal(ListTokens::current().pad_x())

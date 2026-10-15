@@ -9,7 +9,7 @@ use telar::{
     AnchorAlign, Anchoring, Border, Children, Color, Container, HasPopup, Key, LayoutError,
     LayoutItem, LayoutStyle, NamedKey, NodeId, Overlay, Placement, PointerButton, Props, Reactive,
     Rect, RectStyle, RwSignal, ScrollViewport, StyledContainer, SurfaceStyle, amend_surface,
-    box_item, effect,
+    box_item, children, effect,
     focus::{self, FocusId},
     memo, on_cleanup, signal, track_layout, use_context,
 };
@@ -213,7 +213,7 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
     }
     let built_rows = rows.build_with(list.clone())?.take_default();
     let layers = cascade.layers.take();
-    let column = Container::new(LayoutStyle::new().flex_column(), built_rows)?;
+    let column = Container::column(built_rows)?;
 
     let cursor = {
         let list = list.clone();
@@ -363,7 +363,7 @@ pub(crate) fn overlay(
     let mut layers = vec![panel];
     layers.extend(subs);
     let backdrop = StyledContainer::new(
-        LayoutStyle::new().flex_column().flex_grow(1.0),
+        LayoutStyle::column().flex_grow(1.0),
         |_| RectStyle::default(),
         layers,
     )?
@@ -373,7 +373,7 @@ pub(crate) fn overlay(
         Some(keys) => backdrop.on_key(move |key: &Key| keys(key)),
         None => backdrop,
     };
-    let overlay = Overlay::new(LayoutStyle::new().flex_column(), vec![box_item(backdrop)])?;
+    let overlay = Overlay::new(LayoutStyle::column(), children![backdrop])?;
     hand_keyboard_in(overlay.content_node(), list, deepest);
     Ok(overlay)
 }

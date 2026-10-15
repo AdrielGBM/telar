@@ -31,7 +31,7 @@ all-features = true
 [features]
 #! Four groups rather than one knob per widget: they share `shared.rs` and `scrim.rs`, and the graph between them is what decides where a line can be drawn at all. `dropdown` stays in every build because `select` and `list` read its row styles; `scrim` travels with the two overlays that draw one.
 #!
-#! Nothing is on by default. The buttons, fields, selects, tabs, sliders and indicators are in every build, and an application names each group it draws beyond them.
+#! Nothing is on by default. The buttons, fields, text areas, search fields, links, images, selects, tabs, sliders and indicators are in every build, and an application names each group it draws beyond them.
 
 default = []
 
@@ -43,14 +43,17 @@ overlays = []
 ## else, which is the whole reason it is nameable: a terminal or a document has no chrome to draw.
 chrome = []
 
-## Reorderable lists, accordions and steppers.
+## Reorderable lists, accordions, steppers, and the long lists and data tables that build only the rows on screen.
 advanced = []
 
-## The pieces a tool's own window is built from: split panes, trees, toolbars, icon buttons, a colour picker and a code view.
+## The pieces a tool's own window is built from: split panes, resizable boxes, trees, toolbars, icon buttons, a colour picker and a code view.
 workbench = ["icons", "overlays"]
 
 ## Draws `icon:"set:name"` ids through `telar-icons`. Without it, icon buttons fall back to Unicode glyphs.
 icons = ["dep:telar-icons"]
+
+## Lets an `image` follow an `AssetLoader`: the state a load hands out converts into the picture an image shows.
+async-assets = ["telar/async-assets"]
 
 [dependencies]
 telar = { workspace = true, features = ["runtime", "svg"] }

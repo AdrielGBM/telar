@@ -502,7 +502,11 @@ impl Component for ReactiveList {
         self.version.get();
         let _ = self.rect.get();
         let st = self.state.borrow();
-        let content = RenderNode::group(st.children.iter().map(Child::boundary));
+        let content = RenderNode::group(
+            crate::layout_item::paint_order(st.children.iter().collect())
+                .into_iter()
+                .map(Child::boundary),
+        );
         crate::element::wrap(self.node, content)
     }
 

@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{
-    Children, Container, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Rect, ReactiveList,
-    Role, RwSignal, box_item,
+    Children, Container, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, ReactiveList, Rect,
+    Role, RwSignal, box_item, children,
 };
 
 use super::sample;
@@ -40,7 +40,10 @@ fn rows() -> Children {
                             ItemProps::props().label("Copy link").build(),
                             Children::default(),
                         )?,
-                        item(ItemProps::props().label("Email").build(), Children::default())?,
+                        item(
+                            ItemProps::props().label("Email").build(),
+                            Children::default(),
+                        )?,
                     ])
                 }),
             )?,
@@ -89,17 +92,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .build(),
                 Children::default(),
             )?;
-            Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column(),
-                vec![
-                    box_item(reopen),
-                    box_item(shown_at(
-                        move || open.get(),
-                        || Place::Point(24.0, 64.0),
-                        Rc::new(move || open.set(false)),
-                    )?),
-                ],
-            )?)
+            Ok::<_, LayoutError>(Container::column(children![
+                reopen,
+                shown_at(
+                    move || open.get(),
+                    || Place::Point(24.0, 64.0),
+                    Rc::new(move || open.set(false)),
+                )?,
+            ])?)
         })
         .title("Overlays/Context menu")
         .layout(Layout::Padded)
@@ -124,7 +124,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 Children::default(),
             )?;
             let asks = telar::StyledContainer::new(
-                LayoutStyle::new().flex_column(),
+                LayoutStyle::column(),
                 |_| telar::RectStyle::default(),
                 vec![target],
             )?
@@ -135,17 +135,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 }
                 asked
             });
-            Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column(),
-                vec![
-                    box_item(asks),
-                    box_item(shown_at(
-                        move || shown.get().is_some(),
-                        move || Place::Around(shown.peek().unwrap_or_default()),
-                        Rc::new(move || shown.set(None)),
-                    )?),
-                ],
-            )?)
+            Ok::<_, LayoutError>(Container::column(children![
+                asks,
+                shown_at(
+                    move || shown.get().is_some(),
+                    move || Place::Around(shown.peek().unwrap_or_default()),
+                    Rc::new(move || shown.set(None)),
+                )?,
+            ])?)
         })
         .title("Overlays/Context menu")
         .layout(Layout::Padded)

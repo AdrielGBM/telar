@@ -74,7 +74,6 @@ element group
                 element slider
                   rect 328,327 184x24
                   element group
-                    rect 328,333 184x12
                     element group
                       rect 328,333 184x12 fill=linear(328,333>512,333;#ff0000ff@0;#ffff00ff@0.17;#00ff00ff@0.33;#00ffffff@0.5;#0000ffff@0.67;#ff00ffff@0.83;#ff0000ff@1) border=1 border-color=#dbdeedff radius=6
                     end
@@ -88,7 +87,6 @@ element group
                 element slider
                   rect 328,351 184x24
                   element group
-                    rect 328,357 184x12
                     element group
                       clip 328,357 184x12 radius=6
                         matrix 1,0,0,1,328,357

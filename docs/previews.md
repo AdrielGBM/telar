@@ -229,14 +229,16 @@ scope in a `[play]` zone, and an `Ok(())` is added at its end.
 
 | Does | Steps |
 | --- | --- |
-| Acts | `click`, `hover`, `drag`, `type_text`, `press`, `tab`, `tab_back` |
+| Acts | `click`, `click_outside`, `hover`, `drag`, `type_text`, `press`, `tab`, `tab_back` |
 | Waits | `settle`, `advance` |
 | Asserts | `expect`, `expect_absent`, `expect_text`, `expect_no_text`, `expect_focused`, `expect_toggled`, `expect_expanded`, `expect_value`, `expect_action`, `expect_accessible` |
 
 A step finds its target in the accessibility tree, as a screen reader would: `by_role(Role::Button).named("Save")`,
 `by_text("Sign in")`, with `.containing(…)` and `.nth(i)` to narrow a match. A control without a name or a role
 cannot be found, which is the point. Each step dispatches the events a person's input would and settles the frame
-before it returns.
+before it returns. While a modal layer is open the page behind it is not in the tree, as it is not for a reader, so
+a tap that puts a dialog or a drawer away is `click_outside(by_role(Role::Dialog))`: a press in the widest room
+beside the target.
 
 The workshop runs a play on the canvas and lists its steps in the Interactions panel; a failed step is red, with
 the frame it left. `cargo telar test` runs it on a headless canvas.

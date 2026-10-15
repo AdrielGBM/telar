@@ -1,11 +1,12 @@
 //! The first-party widget catalogue for Telar: buttons, fields, selects, tabs, sliders, menus, modals, accordions and the rest, built on the kernel's primitives through the `telar` facade the way an application's own components are.
 //!
-//! An application depends on it beside `telar` and names the groups it draws. Nothing is on by default, and the widgets every interface uses are in every build:
+//! An application depends on it beside `telar` and names the groups it draws. Nothing is on by default, and the widgets every interface uses — buttons, text fields, text areas, search fields, links, images, selects, tabs, sliders and indicators — are in every build:
 //!
 //! - `overlays`: menus, context menus, modals, drawers, tooltips, the command palette and the key caps its rows show, toasts, and the scrim behind them.
 //! - `chrome`: the window frame a desktop application draws itself, and the window controls and title-bar behaviour it is built from, for a title bar of the application's own.
-//! - `advanced`: reorderable lists, accordions and steppers.
-//! - `workbench`: split panes, trees, toolbars, icon buttons, a colour picker and a code view, with the `icons` and `overlays` they build on.
+//! - `advanced`: reorderable lists, accordions, steppers, and the virtual lists and data tables that build only the rows on screen.
+//! - `workbench`: split panes, resizable boxes, trees, toolbars, icon buttons, a colour picker and a code view, with the `icons` and `overlays` they build on.
+//! - `async-assets`: lets an [`image`] follow an `AssetLoader`, whose load state converts into what the image shows.
 //!
 //! ```toml
 //! # Cargo.toml
@@ -38,6 +39,8 @@ mod color_picker;
 mod command_palette;
 #[cfg(test)]
 mod consistency_test;
+#[cfg(feature = "advanced")]
+mod data_table;
 #[cfg(feature = "overlays")]
 mod drawer;
 mod dropdown;
@@ -48,9 +51,11 @@ mod handle;
 mod heading;
 #[cfg(feature = "workbench")]
 mod icon_button;
+mod image;
 #[cfg(feature = "overlays")]
 mod kbd;
 mod line_gutter;
+mod link;
 mod list;
 #[cfg(feature = "overlays")]
 mod menu;
@@ -65,9 +70,16 @@ mod radio;
 mod reorder_zones;
 #[cfg(feature = "advanced")]
 mod reorderable;
+#[cfg(feature = "workbench")]
+mod resizable;
+#[cfg(any(feature = "chrome", feature = "workbench"))]
+mod resize;
+#[cfg(any(feature = "advanced", feature = "overlays", feature = "workbench"))]
+mod rows;
 #[cfg(feature = "overlays")]
 mod scrim;
 mod scrub_field;
+mod search_field;
 mod section;
 mod select;
 mod shared;
@@ -85,6 +97,7 @@ mod tabs;
 #[cfg(test)]
 mod test_support;
 mod text_field;
+mod textarea;
 #[cfg(feature = "chrome")]
 mod title_bar;
 #[cfg(feature = "overlays")]
@@ -97,6 +110,8 @@ mod tooltip;
 #[cfg(feature = "workbench")]
 mod tree_view;
 mod type_ahead;
+#[cfg(feature = "advanced")]
+mod virtual_list;
 #[cfg(feature = "chrome")]
 mod window_edges;
 #[cfg(feature = "chrome")]
@@ -118,6 +133,11 @@ pub use color_picker::{ColorPickerProps, ColorPickerTokens, color_picker};
 pub use command_palette::{
     Command, CommandPaletteProps, CommandPaletteTokens, RunHandler, command_palette,
 };
+#[cfg(feature = "advanced")]
+pub use data_table::{
+    CellAlign, CellBuilder, Column, ColumnWidth, Comparator, DataTableProps, DataTableTokens,
+    SortHandler, TableRow, TableRowHandler, TableSort, data_table,
+};
 #[cfg(feature = "overlays")]
 pub use drawer::{DrawerProps, DrawerTokens, drawer};
 #[cfg(feature = "overlays")]
@@ -126,9 +146,11 @@ pub use handle::{HandleProps, HandleTokens, ToPoint, ToValue, handle};
 pub use heading::{HeadingProps, heading};
 #[cfg(feature = "workbench")]
 pub use icon_button::{IconButtonProps, IconButtonTokens, icon_button};
+pub use image::{ImageProps, ImageSource, ImageTokens, image};
 #[cfg(feature = "overlays")]
 pub use kbd::{KbdProps, KbdTokens, kbd};
 pub use line_gutter::LineGutter;
+pub use link::{LinkProps, LinkTarget, LinkTokens, link};
 pub use list::{GroupProps, ItemProps, ListTokens, SeparatorProps, group, item, separator};
 #[cfg(feature = "overlays")]
 pub use menu::{
@@ -145,7 +167,13 @@ pub use radio::{RadioProps, RadioTokens, radio};
 pub use reorder_zones::{ReorderGroup, ReorderZoneProps, Slot, apply_zone_move};
 #[cfg(feature = "advanced")]
 pub use reorderable::{ItemBuilder, ReorderableProps, reorderable};
+#[cfg(feature = "workbench")]
+pub use resizable::{
+    ResizableProps, ResizableTokens, ResizeEdge, ResizeEdges, ResizeGrowth, ResizeHandleProps,
+    resizable, resize_handle,
+};
 pub use scrub_field::{Format, Parse, ScrubFieldProps, ScrubFieldTokens, scrub_field};
+pub use search_field::{SearchFieldProps, SearchHandler, search_field};
 pub use section::{SectionProps, section};
 pub use select::{SelectProps, SelectTokens, select};
 pub use shared::DOUBLE_CLICK;
@@ -160,6 +188,7 @@ pub use stepper::{StepperProps, StepperTokens, stepper};
 pub use swatches::{SwatchesProps, SwatchesTokens, swatches};
 pub use tabs::{Tab, TabsProps, TabsTokens, tab_list, tabs};
 pub use text_field::{FieldKeyHandler, TextFieldProps, TextFieldTokens, text_field};
+pub use textarea::{TextareaProps, textarea};
 #[cfg(feature = "chrome")]
 pub use title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
 #[cfg(feature = "overlays")]
@@ -176,6 +205,8 @@ pub use tooltip::{TooltipProps, TooltipTokens, tooltip};
 pub use tree_view::{
     SelectHandler, TrailingBuilder, TreeNode, TreeViewProps, TreeViewTokens, tree_view,
 };
+#[cfg(feature = "advanced")]
+pub use virtual_list::{ListRow, RowBuilder, RowHandler, VirtualListProps, virtual_list};
 #[cfg(feature = "chrome")]
 pub use window_edges::window_edges;
 #[cfg(feature = "chrome")]

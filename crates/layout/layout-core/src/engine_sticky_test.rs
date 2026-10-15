@@ -216,3 +216,18 @@ fn a_sticky_box_switched_back_on_sticks_again() {
     );
     assert_eq!(rects[&page.bar].y, 310.0);
 }
+
+#[test]
+fn the_engine_says_which_boxes_stick_and_follows_a_restyle() {
+    let mut page = page(LayoutStyle::new().sticky().inset_top(0.0));
+    assert!(page.engine.is_sticky(page.bar));
+    assert!(!page.engine.is_sticky(page.section));
+    assert!(!page.engine.is_sticky(page.label));
+    page.engine
+        .set_style(page.bar, LayoutStyle::new().height(50.0))
+        .unwrap();
+    assert!(
+        !page.engine.is_sticky(page.bar),
+        "a box that stops sticking says so"
+    );
+}

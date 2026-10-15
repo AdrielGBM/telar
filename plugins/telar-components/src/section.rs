@@ -23,7 +23,7 @@ pub fn section(
         Children::default(),
     )?];
     children.extend(slots.take_default());
-    let column = || LayoutStyle::new().flex_column().gap(shared::gap_md());
+    let column = || LayoutStyle::column().gap(shared::gap_md());
     let col = Container::new(column(), children)?.styled_by(column);
     Ok(box_item(col))
 }

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, LayoutError,
     LayoutItem, LayoutStyle, Props, Reactive, Rect, RectStyle, ShapeStyle, StyledContainer,
-    SurfaceAmendment, Text, amend_surface, box_item, focus::Role,
+    SurfaceAmendment, Text, amend_surface, box_item, children, focus::Role,
 };
 
 use crate::shared;
@@ -52,14 +52,12 @@ fn dot_box() -> LayoutStyle {
         .height(shared::gap_md())
 }
 fn inner_row() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .gap(shared::gap_sm())
 }
 fn pill_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .padding_horizontal(ChipTokens::current().pad_x())
         .padding_vertical(shared::gap_xs())
@@ -110,7 +108,7 @@ pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>
     if let Some(cb) = on_close {
         let close_mark = shared::mark(|| shared::Mark::Close, |text| text.color)?;
         let close = StyledContainer::new(
-            LayoutStyle::new().flex_row(),
+            LayoutStyle::row(),
             |_r| RectStyle::default(),
             vec![close_mark],
         )?
@@ -132,7 +130,7 @@ pub fn chip(props: ChipProps, _children: Children) -> Result<Box<dyn LayoutItem>
                 .with_radius(BorderRadius::all(tokens.radius(r)));
             amend_surface(rect, &style)
         },
-        vec![box_item(row)],
+        children![row],
     )?
     .styled_by(pill_box);
     Ok(box_item(pill))

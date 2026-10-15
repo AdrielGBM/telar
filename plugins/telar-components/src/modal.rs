@@ -6,7 +6,8 @@ use telar::Slots;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, JustifyContent,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, RectStyle, RwSignal,
-    ShapeStyle, StyledContainer, SurfaceAmendment, Text, amend_surface, box_item, focus::Role,
+    ShapeStyle, StyledContainer, SurfaceAmendment, Text, amend_surface, box_item, children,
+    focus::Role,
 };
 
 use crate::heading::heading_style;
@@ -57,8 +58,7 @@ impl ModalTokens {
 const CLOSE_RATIO: f32 = 0.93;
 
 fn header_row() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::SPACE_BETWEEN)
         .gap(shared::gap_lg())
@@ -66,8 +66,7 @@ fn header_row() -> LayoutStyle {
 fn card(room: scrim::Room) -> LayoutStyle {
     let tokens = ModalTokens::current();
     let room = room.inside(tokens.pad());
-    LayoutStyle::new()
-        .flex_column()
+    LayoutStyle::column()
         .gap(shared::gap_lg())
         // So the dialog never collapses to its min-content width: the header and body leaves are unmeasured, with 0 intrinsic width, which would shrink the card to a strip. Capped by the room, so a narrow window wins over the minimum.
         .min_width(tokens.min_width().min(room.width))
@@ -76,14 +75,13 @@ fn card(room: scrim::Room) -> LayoutStyle {
         .padding_all(tokens.pad())
 }
 fn body_column() -> LayoutStyle {
-    LayoutStyle::new().flex_column().gap(shared::gap_lg())
+    LayoutStyle::column().gap(shared::gap_lg())
 }
 fn body_scroll() -> LayoutStyle {
     LayoutStyle::new().flex_shrink(1.0)
 }
 fn backdrop() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
+    LayoutStyle::column()
         .flex_grow(1.0)
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
@@ -159,9 +157,9 @@ fn build_open_modal(
         |t| shared::control_text(t, CLOSE_RATIO),
     )?;
     let close = StyledContainer::new(
-        LayoutStyle::new().flex_row(),
+        LayoutStyle::row(),
         |_r| RectStyle::default(),
-        vec![box_item(close_label)],
+        children![close_label],
     )?
     .control(Role::Button)
     .on_press({
@@ -169,15 +167,14 @@ fn build_open_modal(
         move || (*dismiss)()
     });
 
-    let header = Container::new(header_row(), vec![box_item(heading), box_item(close)])?
-        .styled_by(header_row);
+    let header = Container::new(header_row(), children![heading, close])?.styled_by(header_row);
 
     let body = LayoutScrollArea::new(
         body_scroll(),
         box_item(Container::new(body_column(), body)?),
     )?
     .stop_label(move || body_name.get());
-    let dialog_children: Vec<Box<dyn LayoutItem>> = vec![box_item(header), box_item(body)];
+    let dialog_children: Vec<Box<dyn LayoutItem>> = children![header, body];
 
     let room = scrim::Room::new();
     let dialog = StyledContainer::new(card(room), move |_r| paint(), dialog_children)?
@@ -190,7 +187,7 @@ fn build_open_modal(
     let scrim = StyledContainer::new(
         backdrop(),
         |_r| RectStyle::default().with_fill(shared::overlay()),
-        vec![box_item(dialog)],
+        children![dialog],
     )?
     .styled_by(backdrop);
     room.follow(scrim.layout_node());

@@ -78,6 +78,8 @@ fn access_node(name: &str, role: Role, rect: Rect) -> AccessNode {
         controls: None,
         has_popup: None,
         keyboard_shortcut: None,
+        sort: None,
+        modal: false,
     }
 }
 

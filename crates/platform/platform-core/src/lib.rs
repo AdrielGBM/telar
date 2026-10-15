@@ -29,7 +29,8 @@ pub mod window_command;
 
 pub use access_audit::{AccessAudit, AccessRule, AccessSeverity, AccessViolation};
 pub use accessibility::{
-    AccessNode, CurrentKind, HasPopup, NumericValue, Orientation, Role, SetPosition, ToggleKind,
+    AccessNode, CurrentKind, HasPopup, Modal, NumericValue, Orientation, Positioning, Role,
+    SetPosition, SortDirection, ToggleKind,
 };
 pub use app_ctx::{AppCtx, RedrawWaker};
 pub use asset_base::{asset_url, set_asset_base};

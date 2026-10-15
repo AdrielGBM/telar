@@ -4,9 +4,10 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use telar::{
-    Axis, ConsumedKeys, Cursor, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Props,
-    Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer,
-    Transaction, box_item, focus::Role, insertion_index, on_cleanup, signal, track_layout,
+    Axis, ConsumedKeys, Container, Cursor, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey,
+    Props, Reactive, ReactiveList, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension,
+    StyledContainer, Transaction, box_item, children, focus::Role, insertion_index, on_cleanup,
+    signal, track_layout,
 };
 
 use crate::reorderable::ItemBuilder;
@@ -253,13 +254,11 @@ impl ReorderGroup {
             })
         });
 
-        let container = StyledContainer::new(
-            LayoutStyle::new()
-                .flex_column()
+        let container = Container::new(
+            LayoutStyle::column()
                 .min_width(min_extent)
                 .min_height(min_extent),
-            |_| RectStyle::default(),
-            vec![box_item(list), box_item(line)],
+            children![list, line],
         )?
         .role(Role::List);
         let rect = track_layout(container.layout_node()).ok_or_else(|| {
@@ -309,7 +308,7 @@ impl ReorderGroup {
         let wrapper = StyledContainer::new(
             LayoutStyle::new(),
             |_| RectStyle::default(),
-            vec![box_item(child)],
+            children![child],
         )?
         .with_transform(move |laid| {
             let held = held.get().filter(|held| held.from == slot)?;

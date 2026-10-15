@@ -6,7 +6,8 @@ use std::rc::Rc;
 use telar::{
     AlignItems, BorderRadius, Children, Container, Cursor, DragAxis, Input, Key, LayoutError,
     LayoutItem, LayoutStyle, NamedKey, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
-    StyledContainer, SurfaceAmendment, Text, Transaction, amend_surface, box_item, effect,
+    StyledContainer, SurfaceAmendment, Text, Transaction, amend_surface, box_item, children,
+    effect,
     focus::{self, Role},
     signal, step_factor, style_follows,
 };
@@ -195,7 +196,7 @@ pub fn scrub_field(
                 .with_radius(BorderRadius::all(ScrubFieldTokens::current().radius()));
             amend_surface(rect, &style)
         },
-        vec![box_item(caption), box_item(shown)],
+        children![caption, shown],
     )?
     .styled_by(handle_box)
     .control(Role::SpinButton)
@@ -274,7 +275,7 @@ pub fn scrub_field(
             RectStyle::default()
                 .with_radius(BorderRadius::all(ScrubFieldTokens::current().radius()))
         },
-        vec![box_item(input)],
+        children![input],
     )?
     .frames_focus_of(input_id);
     style_follows(typed.layout_node(), move || match editing.get() {
@@ -282,21 +283,18 @@ pub fn scrub_field(
         false => LayoutStyle::new().display_none(),
     });
 
-    let row =
-        Container::new(row_box(), vec![box_item(handle), box_item(typed)])?.styled_by(row_box);
+    let row = Container::new(row_box(), children![handle, typed])?.styled_by(row_box);
     Ok(box_item(row))
 }
 
 fn row_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .gap(shared::gap_sm())
 }
 
 fn handle_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .gap(shared::gap_md())
         .padding_horizontal(ScrubFieldTokens::current().pad_x())
@@ -304,8 +302,7 @@ fn handle_box() -> LayoutStyle {
 }
 
 fn typed_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .padding_horizontal(shared::gap_sm())
         .min_height(shared::control_height())

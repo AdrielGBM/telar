@@ -43,6 +43,8 @@ pub struct TextArea {
     blink: Blink,
     // Keeps the blink running while the area holds the keyboard, and stops it when it does not.
     _blinking: Effect,
+    // Keeps the caret in view of the scroll the area sits in while the area holds the keyboard: a reveal of the whole area cannot, once it is taller than the view.
+    _follow_caret: Effect,
     _input: InputHandle,
 }
 
@@ -94,7 +96,7 @@ impl TextArea {
         });
         let (node, rect) = new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         node_cell.set(Some(node));
-        let caret = value.with(|s| s.len());
+        let caret = signal(value.with(|s| s.len()));
         let id = focus::next_id();
         focus::register_with_role(
             id,
@@ -118,6 +120,35 @@ impl TextArea {
                 mark_dirty(node).ok();
             })
         };
+        let follow_caret = {
+            let style = Rc::clone(&style);
+            effect(move || {
+                if !focus::is_focused(id) {
+                    return;
+                }
+                let Some(viewport) = crate::scroll_viewports::enclosing_scroll_viewport(node)
+                else {
+                    return;
+                };
+                let area = rect.get();
+                let style = style();
+                let line_h = crate::text_metrics::line_box(&style);
+                let at = caret.get();
+                let (x, line) = value.with(|text| {
+                    let at = char_boundary_at_or_before(text, at);
+                    (caret_x(text, at, &style), line_index(text, at))
+                });
+                viewport.reveal_rect(
+                    Rect {
+                        x: area.x + x,
+                        y: area.y + line as f32 * line_h,
+                        width: CARET_WIDTH,
+                        height: line_h,
+                    },
+                    0.0,
+                );
+            })
+        };
         let blink = Blink::new();
         let watching = blink.clone();
         let mut input = InputHandle::new();
@@ -125,7 +156,7 @@ impl TextArea {
         Ok(Self {
             value,
             home: HomeSurface::here(),
-            caret: signal(caret),
+            caret,
             anchor: signal(None),
             style,
             id,
@@ -134,6 +165,7 @@ impl TextArea {
             _remeasure: remeasure,
             blink,
             _blinking: effect(move || watching.follow(focus::is_focused(id))),
+            _follow_caret: follow_caret,
             _input: input,
         })
     }
@@ -159,26 +191,24 @@ impl TextArea {
         focus::handle(self.id)
     }
 
+    /// The id this area holds in the tab order, for a box that frames it and has to know when it holds the keyboard. See [`Input::focus_id`](crate::Input::focus_id).
+    pub fn focus_id(&self) -> FocusId {
+        self.id
+    }
+
     fn line_height(&self) -> f32 {
         crate::text_metrics::line_box(&(self.style)())
     }
 
     /// The current caret byte offset, clamped to the text and snapped to a char boundary.
     fn caret_at(&self, text: &str) -> usize {
-        let mut c = self.caret.get().min(text.len());
-        while c > 0 && !text.is_char_boundary(c) {
-            c -= 1;
-        }
-        c
+        char_boundary_at_or_before(text, self.caret.get())
     }
 
     /// The selected byte range, low end first, or `None` when nothing is selected.
     fn selection(&self, text: &str) -> Option<(usize, usize)> {
         let caret = self.caret_at(text);
-        let mut anchor = self.anchor.get()?.min(text.len());
-        while anchor > 0 && !text.is_char_boundary(anchor) {
-            anchor -= 1;
-        }
+        let anchor = char_boundary_at_or_before(text, self.anchor.get()?);
         (anchor != caret).then(|| (anchor.min(caret), anchor.max(caret)))
     }
 
@@ -531,6 +561,15 @@ fn offset_at_line_x(text: &str, style: &TextStyle, n: usize, x: f32) -> usize {
         idx = next_boundary(line, idx);
     }
     best
+}
+
+/// Byte offset `i` clamped to `s` and moved back onto a char boundary, for an offset kept while the text changed under it.
+fn char_boundary_at_or_before(s: &str, i: usize) -> usize {
+    let mut j = i.min(s.len());
+    while j > 0 && !s.is_char_boundary(j) {
+        j -= 1;
+    }
+    j
 }
 
 /// The char boundary strictly before byte offset `i` (or 0).

@@ -9,7 +9,7 @@ use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, FixedLayer,
     JustifyContent, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, RectStyle,
     RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, Timer, amend_surface,
-    box_item, detached, focus::Role, on_cleanup, run_after, signal, style_follows,
+    box_item, children, detached, focus::Role, on_cleanup, run_after, signal, style_follows,
 };
 
 use crate::shared;
@@ -329,32 +329,27 @@ pub fn toaster(
         }
         shown
     };
-    let stack_box = || LayoutStyle::new().flex_column().gap(shared::gap_md());
+    let stack_box = || LayoutStyle::column().gap(shared::gap_md());
     let stack = ReactiveList::with_style(stack_box(), shown, |entry: &Posted| entry.id, {
         let held = held.clone();
         move |entry| notice(queue, entry, width, &style, &held)
     })?;
     style_follows(stack.layout_node(), stack_box);
-    let region_box = move || LayoutStyle::new().flex_column().width(width.get());
-    let region = StyledContainer::new(
-        region_box(),
-        |_r| RectStyle::default(),
-        vec![box_item(stack)],
-    )?
-    .styled_by(region_box)
-    .on_hover({
-        let held = held.clone();
-        move |inside| held.pointer(inside)
-    })
-    .role(Role::Status)
-    .a11y_label(move || match &label {
-        Some(label) => label.get(),
-        None => strings::text(strings::NOTIFICATIONS),
-    });
+    let region_box = move || LayoutStyle::column().width(width.get());
+    let region = StyledContainer::new(region_box(), |_r| RectStyle::default(), children![stack])?
+        .styled_by(region_box)
+        .on_hover({
+            let held = held.clone();
+            move |inside| held.pointer(inside)
+        })
+        .role(Role::Status)
+        .a11y_label(move || match &label {
+            Some(label) => label.get(),
+            None => strings::text(strings::NOTIFICATIONS),
+        });
 
     let layer_box = move || {
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .align_items(placement.across())
             .justify_content(if placement.is_top() {
                 JustifyContent::START
@@ -363,7 +358,7 @@ pub fn toaster(
             })
             .padding_all(shared::gap_xl())
     };
-    let layer = FixedLayer::new(layer_box(), vec![box_item(region)])?;
+    let layer = FixedLayer::new(layer_box(), children![region])?;
     style_follows(layer.layout_node(), layer_box);
     Ok(box_item(layer))
 }
@@ -459,8 +454,7 @@ fn notice(
         |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::Wrap),
     )?));
     let column = || {
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .flex_grow(1.0)
             .flex_shrink(1.0)
             .min_width(0.0)
@@ -490,8 +484,7 @@ fn notice(
     )?);
 
     let card_box = move || {
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::START)
             .width(width.get())
             .padding_all(ToastTokens::current().pad())
@@ -553,8 +546,7 @@ fn text_button(
         }
     })?;
     let shell = || {
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
             .padding_horizontal(shared::gap_sm())
@@ -570,7 +562,7 @@ fn text_button(
         });
     }
     let held = held.clone();
-    let button = StyledContainer::new(shell(), move |_r| shape(), vec![box_item(text)])?
+    let button = StyledContainer::new(shell(), move |_r| shape(), children![text])?
         .styled_by(shell)
         .hover_style(move |_r| shape().with_fill(shared::hover_wash()))
         .active_style(move |_r| shape().with_fill(shared::pressed_wash()))

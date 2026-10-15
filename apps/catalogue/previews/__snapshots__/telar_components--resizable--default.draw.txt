@@ -1,0 +1,37 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              clip 16,16 240x160
+                element group
+                  rect 16,16 240x160 fill=#f5f7fcff border=1 border-color=#dbdeedff
+                  element group
+                    matrix 1,0,0,1,28,28
+                      text 0,0 216x16.8 "Panel" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                    end
+                  end
+                end
+              end
+            end
+            element separator
+              rect 256,16 8x160
+            end
+          end
+          element group
+            element separator
+              rect 16,176 240x8
+            end
+            element group
+              rect 256,176 8x8 fill=#dbdeedff
+            end
+          end
+        end
+      end
+    end
+  end
+end

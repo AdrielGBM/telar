@@ -214,14 +214,16 @@ pub(crate) fn dispatch_container_event(
         Event::PointerMoved { .. } | Event::PointerReleased { .. }
     ) {
         // The others still get the move too, for gestures already running, but under the occlusion mark.
+        let stacking = Stacking::of(children);
         let point = pointer_coords(event).map(|(x, y)| (x as f32, y as f32));
-        let reaching = point.and_then(|(x, y)| reaching(children, x, y));
-        let over = point.and_then(|(x, y)| children.iter().rposition(|child| covers(child, x, y)));
+        let reaching = point.and_then(|(x, y)| reaching(children, &stacking, x, y));
+        let over =
+            point.and_then(|(x, y)| stacking.top_down().find(|&i| covers(&children[i], x, y)));
         let mut any_handled = false;
         for (i, child) in children.iter().enumerate() {
             let covered = match reaching {
                 Some(reach) => reach != i,
-                None => over.is_some_and(|top| top > i),
+                None => over.is_some_and(|top| stacking.rank(top) > stacking.rank(i)),
             };
             let _covered = covered.then(occlude);
             if child.deliver(event) == EventResult::Handled {
@@ -237,9 +239,10 @@ pub(crate) fn dispatch_container_event(
     let Some((x, y)) = pointer_coords(event).map(|(x, y)| (x as f32, y as f32)) else {
         return dispatch_to_children(children, event);
     };
+    let stacking = Stacking::of(children);
     // A press only: the wheel stays with the pane a grab area lies over, or the pane would stop scrolling at its edge.
     let reached = match event {
-        Event::PointerPressed { .. } => reaching(children, x, y),
+        Event::PointerPressed { .. } => reaching(children, &stacking, x, y),
         _ => None,
     };
     if let Some(reach) = reached
@@ -248,7 +251,8 @@ pub(crate) fn dispatch_container_event(
         return EventResult::Handled;
     }
     // Back to front, the order they are painted in: where two children overlap, the one on top takes the event whether or not it wants it. Falling sideways to a covered sibling is what made a wheel over a floating panel zoom the pane underneath.
-    for (i, child) in children.iter_mut().enumerate().rev() {
+    for i in stacking.top_down() {
+        let child = &mut children[i];
         // Offered even when its box misses the point: an absolutely placed descendant is painted, and pressed, outside it.
         let result = if reached == Some(i) {
             EventResult::Ignored
@@ -263,13 +267,45 @@ pub(crate) fn dispatch_container_event(
 }
 
 /// The topmost child whose hit outset holds the point: it is tested before its siblings, however they are stacked.
-fn reaching(children: &TrackedChildren, x: f32, y: f32) -> Option<usize> {
-    children.iter().rposition(|child| {
+fn reaching(children: &TrackedChildren, stacking: &Stacking, x: f32, y: f32) -> Option<usize> {
+    stacking.top_down().find(|&i| {
+        let child = &children[i];
         child
             .rect
             .as_ref()
             .is_some_and(|rect| input_region::reaches(child.node(), rect.get(), x, y))
     })
+}
+
+/// The order a container's children stack in, which is the order the pointer meets them in from the top: see [`stacking_order`](crate::layout_item::stacking_order).
+enum Stacking {
+    Given(usize),
+    Restacked(Vec<usize>),
+}
+
+impl Stacking {
+    fn of(children: &TrackedChildren) -> Self {
+        match crate::layout_item::stacking_order(children) {
+            Some(order) => Self::Restacked(order),
+            None => Self::Given(children.len()),
+        }
+    }
+
+    /// The children's indices, topmost first.
+    fn top_down(&self) -> Box<dyn Iterator<Item = usize> + '_> {
+        match self {
+            Self::Given(count) => Box::new((0..*count).rev()),
+            Self::Restacked(order) => Box::new(order.iter().rev().copied()),
+        }
+    }
+
+    /// How high child `index` stands: the higher, the nearer the top.
+    fn rank(&self, index: usize) -> usize {
+        match self {
+            Self::Given(_) => index,
+            Self::Restacked(order) => order.iter().position(|&i| i == index).unwrap_or(index),
+        }
+    }
 }
 
 fn covers(child: &Child, x: f32, y: f32) -> bool {

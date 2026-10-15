@@ -9,7 +9,6 @@ element group
           element group
             rect 228,178 344x40 fill=#f5f7fcff
             element group
-              rect 240,190 54x16
               element group
                 matrix 1,0,0,1,240,190
                   text 0,0 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
@@ -17,7 +16,6 @@ element group
               end
             end
             element group
-              rect 482,186 78x24
               element group
                 element group
                   rect 482,186 26x24
@@ -72,7 +70,6 @@ element group
             end
           end
           element group
-            rect 228,218 344x184
             element group
               element group
                 matrix 1,0,0,1,240,230
@@ -87,7 +84,6 @@ element group
             end
           end
           element group
-            rect 228,402 344x20
             element group
               rect 552,402 16x16 fill=#616680ff radius=6
             end

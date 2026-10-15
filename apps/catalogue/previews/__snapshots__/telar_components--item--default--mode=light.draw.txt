@@ -7,7 +7,6 @@ element group
         element button
           rect 16,16 117x32
           element group
-            rect 24,27 16x10
             element group
               matrix 1,0,0,1,27,27
                 path M0,5.5 L3.8,9.5 L10,1 stroke=1.5 stroke-color=#00000000

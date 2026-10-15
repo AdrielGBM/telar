@@ -4,7 +4,7 @@ use std::rc::Rc;
 use telar::{
     Accessible, Border, Children, Color, Insets, LayoutError, LayoutItem, LayoutStyle, Props,
     Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Transform,
-    amend_surface, box_item, box_transform, focus::Role, signal,
+    amend_surface, box_item, box_transform, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -184,7 +184,7 @@ pub fn slider(props: SliderProps, _children: Children) -> Result<Box<dyn LayoutI
                 .with_radius(shared::pill(r));
             amend_surface(rest, &style)
         },
-        vec![box_item(fill), box_item(thumb)],
+        children![fill, thumb],
     )?
     .styled_by(move || track_box(width))
     .hit_outset(Reactive::of(grab_outset))

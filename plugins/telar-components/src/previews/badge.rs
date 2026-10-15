@@ -33,7 +33,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-            let row = || LayoutStyle::new().flex_row().gap(metrics::gap_md());
+            let row = || LayoutStyle::row().gap(metrics::gap_md());
             Ok::<_, LayoutError>(Container::new(row(), badges)?.styled_by(row))
         })
         .title("Display/Badge")

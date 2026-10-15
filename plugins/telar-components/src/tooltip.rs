@@ -4,7 +4,7 @@ use telar::{
     AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
     LayoutStyle, Overlay, Placement, Props, Reactive, ReactiveList, RectStyle, ShapeStyle,
     StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextStyle, TextWrap, amend_surface,
-    box_item, signal, use_theme_tokens,
+    box_item, children, signal, use_theme_tokens,
 };
 
 #[cfg(test)]
@@ -120,7 +120,7 @@ pub fn tooltip(
     let trigger_content = slots.take_default();
     let hovered = signal(false);
 
-    let mut trigger_style = LayoutStyle::new().flex_row();
+    let mut trigger_style = LayoutStyle::row();
     if stretch {
         trigger_style = trigger_style.flex_grow(1.0).align_self_stretch();
     }
@@ -158,13 +158,13 @@ pub fn tooltip(
     )?;
 
     // The bubble node is a 0-size portal placeholder, so it never shifts the trigger. `stretch` has to reach this root as well: the root is what the parent lays out, so growing only the inner node would leave the pair hugging its content.
-    let mut root_style = LayoutStyle::new().flex_column();
+    let mut root_style = LayoutStyle::column();
     if stretch {
         root_style = root_style.flex_grow(1.0).align_self_stretch();
     }
     Ok(box_item(Container::new(
         root_style,
-        vec![box_item(trigger), box_item(bubble)],
+        children![trigger, bubble],
     )?))
 }
 
@@ -179,8 +179,7 @@ fn build_bubble(
     // Laid out at the origin and translated to the trigger by the anchored overlay, rather than pushed there with a left margin: a margin eats the width the bubble had to lay out in, so a trigger near the right edge left it a 50px column. The translate happens after layout, when the real size is known, which is also what lets it flip and slide to stay on screen.
     let bubble = move || {
         let tokens = TooltipTokens::current();
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .max_width(tokens.max_width())
             .padding_horizontal(tokens.pad_x())
             .padding_vertical(tokens.pad_y())
@@ -201,8 +200,8 @@ fn build_bubble(
     .styled_by(bubble);
     // A flex row, for the chip to hug: a `LayoutStyle::new()` is a CSS block, and a block child fills its containing block whatever `align_items` says — so every bubble came out at its 240px cap. Click-through, because a tooltip must not eat clicks on the page it is describing.
     let overlay = Overlay::anchored_click_through(
-        LayoutStyle::new().flex_row().align_items(AlignItems::START),
-        vec![box_item(chip)],
+        LayoutStyle::row().align_items(AlignItems::START),
+        children![chip],
         trigger_node,
         placement,
     )?;
@@ -240,25 +239,19 @@ impl Content {
         })?;
         // `SPACE_BETWEEN` rather than a growing spacer: a spacer wants all the width there is, so the bubble took its 240px maximum whatever it said. This way the row stretches to the column and the key lands on its edge.
         let title_box = || {
-            LayoutStyle::new()
-                .flex_row()
+            LayoutStyle::row()
                 .align_items(AlignItems::CENTER)
                 .justify_content(JustifyContent::SPACE_BETWEEN)
                 .align_self_stretch()
                 .gap(shared::gap_lg())
         };
-        let title = StyledContainer::new(
-            title_box(),
-            |_r| RectStyle::default(),
-            vec![box_item(name), box_item(key)],
-        )?
-        .styled_by(title_box);
+        let title = Container::new(title_box(), children![name, key])?.styled_by(title_box);
         // The only line in a bubble that wraps, so the only one whose leading is set: at the shaper's default 1.2 a two-line hint reads as squashed text rather than short leading.
         let body = optional_line(description, {
             let line = line(DESCRIPTION_RATIO, 0.72);
             move |t| line(t).with_line_height(DESCRIPTION_LEADING)
         })?;
-        Ok(vec![box_item(title), box_item(body)])
+        Ok(children![title, body])
     }
 }
 

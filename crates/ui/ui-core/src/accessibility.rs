@@ -71,6 +71,8 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
         .filter_map(|e| visible_rect(e.node).map(|rect| (e, rect)))
         .collect();
     let focused = focus::current();
+    let layers = focus::ModalLayers::now();
+    let modal = |role: Role, node: NodeId| role == Role::Dialog && layers.holds(node);
 
     let mut named_controls = vec![false; controls.len()];
     let mut nodes: Vec<AccessNode> = controls
@@ -93,6 +95,7 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 expanded: e.expanded,
                 has_popup: e.has_popup,
                 keyboard_shortcut: e.keyboard_shortcut.as_deref().map(str::to_string),
+                sort: e.sort,
                 position: e.position,
                 lang: reading.scope(e.node).lang.as_deref().map(str::to_string),
                 url: link.map(|(destination, _)| platform_core::address_of(destination)),
@@ -101,6 +104,7 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                     .filter(|item| controls.iter().any(|(c, _)| c.id == *item)),
                 controls: focus::controls_state(e.id)
                     .filter(|item| controls.iter().any(|(c, _)| c.id == *item)),
+                modal: modal(e.role, e.node),
             }
         })
         .collect();
@@ -128,9 +132,11 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                     wraps: wrapped_control(named, &controls),
                 }),
                 drawn_at: Some(named.opened_at),
+                drawn_in: Some(named.node),
             })
         })
-        .chain(reading.text.iter().cloned());
+        .chain(reading.text.iter().cloned())
+        .filter(|piece| !piece.drawn_in.is_some_and(|node| layers.behind(node)));
 
     for piece in pieces {
         let owner = match &piece.named_box {
@@ -169,6 +175,8 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 controls: None,
                 has_popup: None,
                 keyboard_shortcut: None,
+                sort: None,
+                modal: piece.drawn_in.is_some_and(|node| modal(piece.role, node)),
             }),
         }
     }
@@ -191,6 +199,8 @@ struct Piece {
     named_box: Option<NamedBox>,
     /// Where in the frame a run of text was drawn, or a named box began.
     drawn_at: Option<usize>,
+    /// The innermost box a run of text was drawn in, or the named box itself.
+    drawn_in: Option<NodeId>,
 }
 
 #[derive(Clone)]
@@ -512,6 +522,7 @@ impl Reading {
                         url: None,
                         named_box: None,
                         drawn_at: Some(at),
+                        drawn_in: innermost,
                     });
                     for span in spans.iter().flat_map(|spans| spans.iter()) {
                         let (Some(link), Some(words)) = (
@@ -528,6 +539,7 @@ impl Reading {
                             url: Some(platform_core::address_of(link)),
                             named_box: None,
                             drawn_at: Some(at),
+                            drawn_in: innermost,
                         });
                     }
                 }

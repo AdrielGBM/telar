@@ -18,14 +18,16 @@ use std::sync::Arc;
 mod destination;
 mod keys;
 mod location;
+mod modal;
 mod outline;
 mod reading;
 
 pub use destination::{CurrentKind, Destination, Uri};
 pub use keys::ConsumedKeys;
 pub use location::Location;
-pub use outline::SetPosition;
-pub use reading::{NumericValue, Orientation};
+pub use modal::Modal;
+pub use outline::{Positioning, SetPosition};
+pub use reading::{NumericValue, Orientation, SortDirection};
 
 /// What a box is.
 ///
@@ -114,6 +116,14 @@ pub enum Role {
     ProgressBar,
     /// A hierarchy of rows that expand and collapse, such as a file or component tree. Its rows are [`TreeItem`](Self::TreeItem)s.
     Tree,
+    /// Rows of cells read across as well as down and walked with all four arrows: a data table. Its rows are [`Row`](Self::Row)s.
+    Grid,
+    /// A row of a [`Grid`](Self::Grid), holding its [`ColumnHeader`](Self::ColumnHeader)s or its [`GridCell`](Self::GridCell)s; selected when the grid selects rows.
+    Row,
+    /// One cell of a [`Row`](Self::Row), read with the header of its column.
+    GridCell,
+    /// The cell that names a column, and says which way the rows are sorted by it.
+    ColumnHeader,
     /// A row of a [`Tree`](Self::Tree): chosen, and expanded or collapsed when it has children.
     TreeItem,
     /// A row of controls that is one Tab stop and is walked with the arrows.
@@ -225,6 +235,10 @@ impl Role {
             Self::ProgressBar => "progressbar",
             Self::Tree => "tree",
             Self::TreeItem => "treeitem",
+            Self::Grid => "grid",
+            Self::Row => "row",
+            Self::GridCell => "gridcell",
+            Self::ColumnHeader => "columnheader",
             Self::Toolbar => "toolbar",
             Self::Splitter => "separator",
             Self::Status => "status",
@@ -244,8 +258,26 @@ impl Role {
             | Self::MenuItemCheckBox
             | Self::MenuItemRadio => Some(ToggleKind::Checked),
             Self::Button => Some(ToggleKind::Pressed),
-            Self::Tab | Self::TreeItem | Self::Option => Some(ToggleKind::Selected),
+            Self::Tab | Self::TreeItem | Self::Option | Self::Row | Self::GridCell => {
+                Some(ToggleKind::Selected)
+            }
             Self::Disclosure => Some(ToggleKind::Expanded),
+            _ => None,
+        }
+    }
+
+    /// Which numbers of a [`SetPosition`] an item of this role says, or `None` for a role that says none: a heading's level is its role, and a box that is no item of a set has no place in one.
+    pub fn positioning(&self) -> Option<Positioning> {
+        match self {
+            Self::TreeItem | Self::ListItem => Some(Positioning::Nested),
+            Self::Option
+            | Self::MenuItem
+            | Self::MenuItemCheckBox
+            | Self::MenuItemRadio
+            | Self::Radio
+            | Self::Tab
+            | Self::Article => Some(Positioning::InSet),
+            Self::Row => Some(Positioning::GridRow),
             _ => None,
         }
     }
@@ -299,6 +331,10 @@ impl Role {
             "progressbar" | "progress" => Self::ProgressBar,
             "tree" => Self::Tree,
             "treeitem" => Self::TreeItem,
+            "grid" | "table" => Self::Grid,
+            "row" => Self::Row,
+            "gridcell" | "cell" => Self::GridCell,
+            "columnheader" => Self::ColumnHeader,
             "toolbar" => Self::Toolbar,
             "splitter" | "separator" => Self::Splitter,
             "status" => Self::Status,
@@ -388,6 +424,10 @@ pub struct Semantics {
     pub has_popup: Option<HasPopup>,
     /// The chord that runs the same command as the box, in `aria-keyshortcuts` syntax. `None` where it declared none.
     pub keyboard_shortcut: Option<Arc<str>>,
+    /// Which way the rows of a grid are sorted by the column a [`ColumnHeader`](Role::ColumnHeader) names. `None` on the header of every column they are not sorted by, and on every other role.
+    pub sort: Option<SortDirection>,
+    /// Set on the box a modal layer is made of. `None` on every other box, those inside it included.
+    pub modal: Option<Modal>,
 }
 
 /// What an application said about a box, laid over what the widget derived.
@@ -399,11 +439,17 @@ pub struct Annotation {
     pub lang: Option<Arc<str>>,
     pub hidden: bool,
     pub anchor: Option<Arc<str>>,
+    /// Said by the overlay the box is the top of rather than by the application: the box is a modal layer.
+    pub modal: Option<Modal>,
 }
 
 impl Annotation {
     pub fn is_empty(&self) -> bool {
-        self.label.is_none() && self.lang.is_none() && !self.hidden && self.anchor.is_none()
+        self.label.is_none()
+            && self.lang.is_none()
+            && !self.hidden
+            && self.anchor.is_none()
+            && self.modal.is_none()
     }
 }
 
@@ -469,6 +515,9 @@ impl Semantics {
         self.hidden |= annotation.hidden;
         if let Some(anchor) = &annotation.anchor {
             self.anchor = Some(anchor.clone());
+        }
+        if annotation.modal.is_some() {
+            self.modal = annotation.modal;
         }
         self
     }

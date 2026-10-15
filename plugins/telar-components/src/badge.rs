@@ -3,7 +3,7 @@
 use telar::{
     AlignItems, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
     LayoutStyle, Props, Reactive, Rect, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
-    Text, amend_surface, box_item,
+    Text, amend_surface, box_item, children,
 };
 
 use crate::shared;
@@ -38,8 +38,7 @@ impl BadgeTokens {
 }
 
 fn pill_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .padding_horizontal(BadgeTokens::current().pad_x())
@@ -85,7 +84,7 @@ pub fn badge(props: BadgeProps, _children: Children) -> Result<Box<dyn LayoutIte
                 .with_radius(BorderRadius::all(BadgeTokens::current().radius(r)));
             amend_surface(rect, &style)
         },
-        vec![box_item(label_widget)],
+        children![label_widget],
     )?
     .styled_by(pill_box);
     Ok(box_item(container))

@@ -1,0 +1,40 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              matrix 1,0,0,1,250,250
+                text 0,0 300x14.28 "Notes" size=11.9 family=sans-serif weight=400 color=#99a1b8ff lang=en
+              end
+            end
+            element group
+              rect 250,273 300x62 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+              element scrollarea
+                clip 262,279 276x50
+                  matrix 1,0,0,1,262,279
+                    element group
+                      matrix 1,0,0,1,0,0
+                        text 0,0 1000000x50 "Anything we should know?" size=14 family=sans-serif weight=400 color=#ebedf5b3
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+          element group
+            element group
+              matrix 1,0,0,1,512,336
+                text 0,0 38.11x14.28 "0 / 120" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 lang=en
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

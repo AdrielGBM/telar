@@ -34,11 +34,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             .close_hover(token(|t| t.error()))
             .close_hover_glyph(token(|t| t.on_error()));
             let body = Container::new(
-                LayoutStyle::new()
-                    .flex_column()
-                    .gap(8.0)
-                    .width(320.0)
-                    .height(160.0),
+                LayoutStyle::column().gap(8.0).width(320.0).height(160.0),
                 vec![
                     line("Telar can draw its own window chrome.")?,
                     line("Drag the corner grip to resize.")?,

@@ -210,6 +210,8 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "lang",
             "id",
             "aria-hidden",
+            "inert",
+            "aria-modal",
             "aria-checked",
             "aria-pressed",
             "aria-selected",
@@ -217,6 +219,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-haspopup",
             "aria-current",
             "aria-keyshortcuts",
+            "aria-sort",
             "aria-controls",
             "aria-activedescendant",
             "aria-valuenow",
@@ -226,6 +229,8 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-level",
             "aria-posinset",
             "aria-setsize",
+            "aria-rowindex",
+            "aria-rowcount",
             "aria-disabled",
             "tabindex",
             CONSUMED_KEYS_ATTRIBUTE,
@@ -698,6 +703,58 @@ fn a_control_writes_what_it_opens() {
         (Some("listbox".to_string()), Some("true".to_string()))
     );
     assert_eq!(popup_of(Semantics::of(Role::Button)), (None, None));
+}
+
+/// A grid's parts are `div`s that say what they are, its chosen row says so, and only the header of the column the rows are sorted by writes `aria-sort`.
+#[test]
+fn a_grid_writes_its_roles_and_the_header_it_is_sorted_by() {
+    let written = |semantics: Semantics| {
+        let frame = describe_frame(
+            &[open(1, semantics), DrawCommand::PopElement],
+            None,
+            &mut Fixed,
+            false,
+        );
+        let node = only_box(&frame);
+        (
+            attribute(node, "role"),
+            attribute(node, "aria-sort"),
+            attribute(node, "aria-selected"),
+        )
+    };
+    let header = |sort: Option<SortDirection>| Semantics {
+        sort,
+        ..Semantics::of(Role::ColumnHeader)
+    };
+    assert_eq!(
+        written(header(Some(SortDirection::Ascending))),
+        (
+            Some("columnheader".to_string()),
+            Some("ascending".to_string()),
+            None
+        )
+    );
+    assert_eq!(
+        written(header(None)),
+        (Some("columnheader".to_string()), None, None)
+    );
+    let row = Semantics {
+        toggled: Some(true),
+        ..Semantics::of(Role::Row)
+    };
+    assert_eq!(
+        written(row),
+        (Some("row".to_string()), None, Some("true".to_string()))
+    );
+    assert_eq!(
+        written(Semantics::of(Role::Grid)).0.as_deref(),
+        Some("grid")
+    );
+    assert_eq!(
+        written(Semantics::of(Role::GridCell)).0.as_deref(),
+        Some("gridcell")
+    );
+    assert_eq!(tag_of(&Role::Grid), "div");
 }
 
 fn attribute(node: &BoxNode, name: &str) -> Option<String> {
@@ -1441,4 +1498,284 @@ fn a_control_writes_the_keys_that_run_its_command() {
     };
     assert_eq!(keys_of(bound), Some("Control+Shift+Z".to_string()));
     assert_eq!(keys_of(Semantics::of(Role::MenuItem)), None);
+}
+
+/// The numbers an item says about where it sits, written for a box of `role` that says `position`, leaving out the ones that are absent.
+fn placed_attributes(role: Role, position: SetPosition) -> Vec<(&'static str, String)> {
+    let frame = describe_frame(
+        &[
+            open(
+                1,
+                Semantics {
+                    position: Some(position),
+                    ..Semantics::of(role)
+                },
+            ),
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let node = only_box(&frame);
+    node.described
+        .attributes(node.key)
+        .into_iter()
+        .filter(|(name, _)| {
+            matches!(
+                *name,
+                "aria-level" | "aria-posinset" | "aria-setsize" | "aria-rowindex" | "aria-rowcount"
+            )
+        })
+        .filter_map(|(name, value)| Some((name, value?)))
+        .collect()
+}
+
+/// Each role says only the numbers ARIA lets it: a tree's row its level and place, an option or a menu's row its place and no level, a grid's row its index, and a role that is no item of a set none of them.
+#[test]
+fn an_item_writes_only_the_numbers_its_role_takes() {
+    let third_of_forty = SetPosition {
+        level: 1,
+        position: 3,
+        size: 40,
+    };
+    let place = |level: Option<&str>| {
+        level
+            .map(|level| ("aria-level", level.to_string()))
+            .into_iter()
+            .chain([
+                ("aria-posinset", "3".to_string()),
+                ("aria-setsize", "40".to_string()),
+            ])
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        placed_attributes(Role::TreeItem, third_of_forty),
+        place(Some("1"))
+    );
+    assert_eq!(
+        placed_attributes(Role::ListItem, third_of_forty),
+        place(Some("1"))
+    );
+    for role in [
+        Role::Option,
+        Role::MenuItem,
+        Role::MenuItemRadio,
+        Role::Tab,
+        Role::Radio,
+    ] {
+        assert_eq!(
+            placed_attributes(role, third_of_forty),
+            place(None),
+            "{role:?}"
+        );
+    }
+    assert_eq!(
+        placed_attributes(Role::Row, third_of_forty),
+        [("aria-rowindex", "3".to_string())]
+    );
+    for role in [Role::Button, Role::Heading(2), Role::GridCell] {
+        assert_eq!(placed_attributes(role, third_of_forty), [], "{role:?}");
+    }
+}
+
+/// A grid that builds only the rows on screen is told how many it has by the rows it holds, so a reader counts the ones it never built.
+#[test]
+fn a_grid_counts_the_rows_its_built_rows_say_it_has() {
+    let row = |id: u64, position: u32| {
+        open(
+            id,
+            Semantics {
+                position: Some(SetPosition {
+                    level: 1,
+                    position,
+                    size: 41,
+                }),
+                ..Semantics::of(Role::Row)
+            },
+        )
+    };
+    let frame = describe_frame(
+        &[
+            open(1, Semantics::of(Role::Grid)),
+            open(2, Semantics::group()),
+            row(3, 7),
+            DrawCommand::PopElement,
+            row(4, 8),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let grid = only_box(&frame);
+    assert_eq!(attribute(grid, "aria-rowcount").as_deref(), Some("41"));
+    let rows = children(children(grid)[0]);
+    assert_eq!(attribute(rows[0], "aria-rowindex").as_deref(), Some("7"));
+    assert_eq!(attribute(rows[1], "aria-rowindex").as_deref(), Some("8"));
+    assert_eq!(attribute(rows[0], "aria-rowcount"), None);
+
+    let unplaced = describe_frame(
+        &[
+            open(1, Semantics::of(Role::Grid)),
+            open(2, Semantics::of(Role::Row)),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    assert_eq!(
+        attribute(only_box(&unplaced), "aria-rowcount"),
+        None,
+        "a grid that builds every row leaves the counting to the reader"
+    );
+}
+
+fn modal_layer(layer: u64, opened_from: Option<u64>) -> Semantics {
+    Semantics {
+        modal: Some(Modal { layer, opened_from }),
+        ..Semantics::group()
+    }
+}
+
+fn inert(node: &BoxNode) -> bool {
+    attribute(node, "inert").is_some()
+}
+
+/// A page, and a layer holding a dialog over it, as a modal draws them.
+fn page_under(layer_semantics: Semantics) -> Vec<DrawCommand> {
+    vec![
+        open(1, Semantics::group()),
+        open(2, Semantics::of(Role::Button)),
+        DrawCommand::PopElement,
+        open(3, Semantics::of(Role::ScrollArea)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+        open(10, layer_semantics),
+        open(11, Semantics::of(Role::Dialog)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+    ]
+}
+
+/// While a modal layer is up the page under it is inert, written once on its outermost box; the layer is not, and the dialog in it says it is modal.
+#[test]
+fn a_modal_layer_makes_the_page_under_it_inert() {
+    let frame = describe_frame(&page_under(modal_layer(10, None)), None, &mut Fixed, false);
+    let [page, layer] = roots(&frame)[..] else {
+        panic!("the page and the layer");
+    };
+    assert_eq!(attribute(page, "inert").as_deref(), Some(""));
+    assert!(
+        children(page).iter().all(|inside| !inert(inside)),
+        "inert reaches the boxes inside by itself"
+    );
+    assert!(!inert(layer));
+    let dialog = children(layer)[0];
+    assert!(!inert(dialog));
+    assert_eq!(attribute(dialog, "aria-modal").as_deref(), Some("true"));
+}
+
+/// A layer that is no modal one, and a page with no layer up, shut nothing out.
+#[test]
+fn without_a_modal_layer_up_nothing_is_inert() {
+    for commands in [
+        page_under(Semantics::group()),
+        page_under(Semantics::group())[..6].to_vec(),
+    ] {
+        let frame = describe_frame(&commands, None, &mut Fixed, false);
+        for root in roots(&frame) {
+            assert!(!inert(root));
+            assert!(children(root).iter().all(|inside| !inert(inside)));
+        }
+    }
+    let frame = describe_frame(&page_under(Semantics::group()), None, &mut Fixed, false);
+    assert_eq!(attribute(children(roots(&frame)[1])[0], "aria-modal"), None);
+}
+
+/// The control a layer was opened from stays within reach, a select's combobox keeping the keyboard while its list is open: what holds it stays too, and only what sits beside them goes inert.
+#[test]
+fn the_control_a_layer_was_opened_from_stays_within_reach() {
+    let commands = [
+        open(1, Semantics::group()),
+        open(2, Semantics::of(Role::Toolbar)),
+        open(3, Semantics::of(Role::ComboBox)),
+        open(4, Semantics::group()),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+        open(5, Semantics::of(Role::Button)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+        open(6, Semantics::of(Role::ScrollArea)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+        open(10, modal_layer(10, Some(3))),
+        DrawCommand::PopElement,
+    ];
+    let frame = describe_frame(&commands, None, &mut Fixed, false);
+    let [page, list] = roots(&frame)[..] else {
+        panic!("the page and the list");
+    };
+    assert!(!inert(page) && !inert(list));
+    let [toolbar, scroller] = children(page)[..] else {
+        panic!("a toolbar and a scroll area");
+    };
+    assert!(!inert(toolbar));
+    assert!(inert(scroller));
+    let [combobox, beside] = children(toolbar)[..] else {
+        panic!("the combobox and a button beside it");
+    };
+    assert!(!inert(combobox));
+    assert!(children(combobox).iter().all(|inside| !inert(inside)));
+    assert!(inert(beside));
+}
+
+/// Only the topmost layer holds the keyboard: a list opened from a field inside a dialog shuts the dialog out with the page, and every box of the topmost layer stays.
+#[test]
+fn the_topmost_modal_layer_shuts_out_the_one_under_it() {
+    let commands = [
+        open(1, Semantics::group()),
+        DrawCommand::PopElement,
+        open(10, modal_layer(10, None)),
+        open(11, Semantics::of(Role::Dialog)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+        open(20, modal_layer(20, None)),
+        DrawCommand::PopElement,
+        open(21, modal_layer(20, None)),
+        DrawCommand::PopElement,
+    ];
+    let frame = describe_frame(&commands, None, &mut Fixed, false);
+    let shut: Vec<bool> = roots(&frame).into_iter().map(inert).collect();
+    assert_eq!(shut, [true, true, false, false]);
+    assert_eq!(
+        attribute(children(roots(&frame)[1])[0], "aria-modal"),
+        None,
+        "the dialog under the topmost layer is not the modal one"
+    );
+}
+
+/// A modal layer of a surface drawn in the window's frame shuts out that surface's other boxes and nothing of the window's: the keyboard is held per surface.
+#[test]
+fn a_modal_layer_in_a_nested_surface_shuts_out_only_that_surface() {
+    let mut commands = vec![open(5, Semantics::group()), DrawCommand::PopElement];
+    commands.extend(framed(vec![
+        open(1, Semantics::group()),
+        DrawCommand::PopElement,
+        open(2, modal_layer(2, None)),
+        DrawCommand::PopElement,
+    ]));
+    let frame = describe_frame(&commands, None, &mut Fixed, false);
+    let [beside, window_box] = roots(&frame)[..] else {
+        panic!("a box of the window, and the one the surface is drawn in");
+    };
+    assert!(!inert(beside) && !inert(window_box));
+    let nested = children(window_box);
+    assert_eq!(nested[0].key, in_nested(1));
+    assert!(inert(nested[0]));
+    assert!(!inert(nested[1]));
 }

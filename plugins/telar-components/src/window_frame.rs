@@ -2,15 +2,17 @@
 //!
 //! It lived in `ui-core` while that crate was the only place a full-surface root could be assembled, and it never belonged there: it is `Text` plus two `StyledContainer`s plus a closure over `track_layout` — a composed widget using nothing the primitive layer has that the catalogue lacks. "Titled closable window chrome" is a catalogue entry, not a layout primitive.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer,
-    SurfaceAmendment, Text, TextStyle, amend_surface, box_item, focus::Role, track_layout,
+    AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, Size, SizeDimension,
+    StyledContainer, SurfaceAmendment, Text, TextStyle, amend_surface, box_item, focus::Role,
+    track_layout,
 };
 
+use crate::resize::Latch;
 use crate::shared;
 use crate::title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
 
@@ -82,7 +84,7 @@ type DeferredRect = Rc<RefCell<Option<RwSignal<Rect>>>>;
 
 /// A resize grip for the bottom-right corner of a frame, reporting the size the *surface* should become.
 ///
-/// The arithmetic is the whole of it. `on_drag` reports where the pointer is **inside the grip**, so the grip's own laid-out origin has to be added back to reach surface space — and then the grab offset, the distance from the pointer to the corner when the drag began, has to come off it, or the corner jumps to the cursor the instant it is touched. The offset is latched once per drag rather than recomputed, because the card it was measured against is resizing underneath the gesture.
+/// The surface grows by the distance the pointer travelled from where it pressed the grip, measured in surface space and against the card's size when the drag took hold, so the corner neither jumps to the cursor nor drifts as the card resizes under the gesture.
 fn resize_grip(
     color: Option<Reactive<Color>>,
     card_rect: DeferredRect,
@@ -95,29 +97,26 @@ fn resize_grip(
     )?
     .styled_by(grip_box);
     let grip_rect = track_layout(grip.layout_node());
-    let grab: Rc<Cell<Option<(f32, f32)>>> = Rc::new(Cell::new(None));
-    let release = grab.clone();
+    let latch = Rc::new(Latch::default());
+    let held = latch.clone();
     Ok(box_item(
         grip.on_drag(move |local_x, local_y| {
             let (Some(grip_rect), Some(card_rect)) = (&grip_rect, *card_rect.borrow()) else {
                 return;
             };
-            let (grip, card) = (grip_rect.get(), card_rect.get());
-            let (x, y) = (grip.x + local_x, grip.y + local_y);
-            let (offset_x, offset_y) = match grab.get() {
-                Some(offset) => offset,
-                None => {
-                    let offset = (x - (card.x + card.width), y - (card.y + card.height));
-                    grab.set(Some(offset));
-                    offset
-                }
-            };
+            let (grab, pointer) = latch.hold(grip_rect.get(), (local_x, local_y), || {
+                let card = card_rect.get();
+                Size::new(card.width, card.height)
+            });
+            let (dx, dy) = grab.travel(pointer);
             resize(
-                (x - offset_x - card.x).max(MIN_FRAME_SIZE.0),
-                (y - offset_y - card.y).max(MIN_FRAME_SIZE.1),
+                (grab.from.width + dx).max(MIN_FRAME_SIZE.0),
+                (grab.from.height + dy).max(MIN_FRAME_SIZE.1),
             );
         })
-        .on_drag_end(move |_, _| release.set(None)),
+        .on_drag_end(move |_, _| {
+            held.release();
+        }),
     ))
 }
 
@@ -163,15 +162,13 @@ pub fn window_frame(
 
     // One group, so `SPACE_BETWEEN` pushes the controls to the far edge rather than spreading three things across the strip.
     let label_box = || {
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(shared::gap_md())
     };
     let label_group = box_item(
-        StyledContainer::new(
+        Container::new(
             label_box(),
-            |_| RectStyle::default(),
             match leading {
                 Some(leading) => vec![leading, title_label],
                 None => vec![title_label],
@@ -182,8 +179,7 @@ pub fn window_frame(
 
     let title_bar_color = style.title_bar.clone();
     let strip_box = || {
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::SPACE_BETWEEN)
             .width(SizeDimension::Percent(1.0))
@@ -210,8 +206,7 @@ pub fn window_frame(
     // A flex item may not shrink below its content unless told to, and an application body sized to fill the window otherwise pushes the grip row off the bottom of the surface.
     let body_inset = style.body_inset;
     let body_box = move || {
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .flex_grow(1.0)
             .min_height(0.0)
             .width(SizeDimension::Percent(1.0))
@@ -219,16 +214,13 @@ pub fn window_frame(
             .justify_content(JustifyContent::CENTER)
             .padding_all(body_inset.unwrap_or_else(shared::gap_lg))
     };
-    let body_area = box_item(
-        StyledContainer::new(body_box(), |_| RectStyle::default(), vec![body])?.styled_by(body_box),
-    );
+    let body_area = box_item(Container::new(body_box(), vec![body])?.styled_by(body_box));
 
     let card_rect: DeferredRect = Rc::new(RefCell::new(None));
     let mut children = vec![strip, body_area];
     if let Some(resize) = resize {
         let grip_row = || {
-            LayoutStyle::new()
-                .flex_row()
+            LayoutStyle::row()
                 .width(SizeDimension::Percent(1.0))
                 .flex_shrink(0.0)
                 .justify_content(JustifyContent::END)
@@ -236,9 +228,8 @@ pub fn window_frame(
                 .padding_bottom(shared::gap_sm())
         };
         children.push(box_item(
-            StyledContainer::new(
+            Container::new(
                 grip_row(),
-                |_| RectStyle::default(),
                 vec![resize_grip(style.close.clone(), card_rect.clone(), resize)?],
             )?
             .styled_by(grip_row),
@@ -252,8 +243,7 @@ pub fn window_frame(
         ..
     } = style;
     let card = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .width(SizeDimension::Percent(1.0))
             .height(SizeDimension::Percent(1.0)),
         move |_| {

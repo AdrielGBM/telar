@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Chord, Color, Container, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, Rect, RectStyle, StyledContainer, Text, TextStyle, box_item,
+    LayoutStyle, Reactive, Rect, RectStyle, StyledContainer, Text, TextStyle, box_item, children,
     focus::Role, style_follows, use_theme_tokens,
 };
 
@@ -302,10 +302,7 @@ fn caption_box(text_size: f32) -> LayoutStyle {
 }
 
 fn caption_column(width: f32) -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_column()
-        .gap(spacing() * 0.75)
-        .width(width)
+    LayoutStyle::column().gap(spacing() * 0.75).width(width)
 }
 
 /// Stacks an optional small caption above `control`, or hands `control` back untouched when the label is empty. The counterpart of [`labelled_control`], which puts the label *beside* the control instead.
@@ -325,11 +322,8 @@ pub(crate) fn captioned(
     )?;
     // The caption is a leaf, so its style is followed from the column that outlives it and owns the effect.
     let caption_node = caption.layout_node();
-    let col = Container::new(
-        caption_column(width.get()),
-        vec![box_item(caption), box_item(control)],
-    )?
-    .styled_by(move || caption_column(width.get()));
+    let col = Container::new(caption_column(width.get()), children![caption, control])?
+        .styled_by(move || caption_column(width.get()));
     style_follows(caption_node, move || {
         caption_box(control_text_size(caption_node, CAPTION_RATIO))
     });
@@ -338,8 +332,7 @@ pub(crate) fn captioned(
 
 /// A control height tall whatever the box drawn in it, so a checkbox stands level with a button or a field beside it and is never a smaller target than one.
 fn labelled_row() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .gap(gap_md())
         .min_height(control_height())
         .align_items(AlignItems::CENTER)
@@ -353,7 +346,7 @@ pub(crate) fn labelled_control(
     toggled: impl Fn() -> bool + 'static,
     on_press: impl Fn() + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut children: Vec<Box<dyn LayoutItem>> = vec![box_item(control)];
+    let mut children: Vec<Box<dyn LayoutItem>> = children![control];
     if !label.get().is_empty() {
         let text = Text::declaring(
             move || label.get(),
@@ -383,6 +376,7 @@ pub(crate) fn dismissed_by_press(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mark {
     ChevronDown,
+    ChevronUp,
     ChevronForward,
     Close,
     Check,
@@ -390,6 +384,10 @@ pub enum Mark {
     Maximize,
     Restore,
     Ring,
+    /// A magnifying glass: a search field's.
+    Search,
+    /// An arrow leaving its box up and toward the end of the line: a link that leaves the application. Turns round in a right-to-left region.
+    External,
 }
 
 /// A chevron's long side as a share of the icon size: wide enough to read beside a label at the body size, narrow enough not to compete with it.
@@ -405,20 +403,31 @@ const RESTORE_OFFSET: f32 = 0.3;
 /// The distance of a cubic handle from its end, as a share of the radius, that best fits a quarter circle.
 const CIRCLE_HANDLE: f32 = 0.552_284_8;
 
+/// A magnifying glass's lens, as a share of the mark's side; the handle runs from the lens's edge to the far corner.
+const SEARCH_LENS: f32 = 0.7;
+
+/// Where a circle's edge crosses its diagonal toward the far corner, as a share of its diameter: the middle plus the radius times one over the square root of two.
+const CIRCLE_EDGE: f32 = 0.5 + std::f32::consts::FRAC_1_SQRT_2 / 2.0;
+
+/// How far an arrowhead's two strokes run back from its point, as a share of the mark's side.
+const EXTERNAL_HEAD: f32 = 0.6;
+
 const CHECK_POINTS: [(f32, f32); 3] = [(0.0, 0.55), (0.38, 0.95), (1.0, 0.1)];
 
 fn mark_box(shape: Mark) -> LayoutStyle {
     // Whole, even pixels on both sides, so the strokes meet at the same point wherever the box lands on the pixel grid.
     let whole = |ratio: f32| (icon_size() * ratio / 2.0).round() * 2.0;
     let (width, height) = match shape {
-        Mark::ChevronDown => (whole(CHEVRON_RATIO), whole(CHEVRON_RATIO) / 2.0),
+        Mark::ChevronDown | Mark::ChevronUp => (whole(CHEVRON_RATIO), whole(CHEVRON_RATIO) / 2.0),
         Mark::ChevronForward => (whole(CHEVRON_RATIO) / 2.0, whole(CHEVRON_RATIO)),
         Mark::Close
         | Mark::Check
         | Mark::Minimize
         | Mark::Maximize
         | Mark::Restore
-        | Mark::Ring => (whole(SQUARE_RATIO), whole(SQUARE_RATIO)),
+        | Mark::Ring
+        | Mark::Search
+        | Mark::External => (whole(SQUARE_RATIO), whole(SQUARE_RATIO)),
     };
     LayoutStyle::new()
         .width(width)
@@ -438,6 +447,7 @@ fn mark_path(shape: Mark, rect: Rect) -> telar::PathData {
     };
     match (shape, telar::current_direction()) {
         (Mark::ChevronDown, _) => stroke(&[(0.0, 0.0), (w / 2.0, h), (w, 0.0)]),
+        (Mark::ChevronUp, _) => stroke(&[(0.0, h), (w / 2.0, 0.0), (w, h)]),
         (Mark::ChevronForward, telar::Direction::Rtl) => {
             stroke(&[(w, 0.0), (0.0, h / 2.0), (w, h)])
         }
@@ -464,6 +474,25 @@ fn mark_path(shape: Mark, rect: Rect) -> telar::PathData {
             .line_to(at((w - offset, h - offset)))
         }
         (Mark::Ring, _) => ring(rect),
+        (Mark::Search, _) => {
+            let lens = (w * SEARCH_LENS).round();
+            let reach = lens * CIRCLE_EDGE;
+            ring(Rect::new(0.0, 0.0, lens, lens))
+                .move_to(at((reach, reach)))
+                .line_to(at((w, h)))
+        }
+        (Mark::External, telar::Direction::Rtl) => {
+            let (head_x, head_y) = (w * EXTERNAL_HEAD, h * EXTERNAL_HEAD);
+            stroke(&[(head_x, 0.0), (0.0, 0.0), (0.0, head_y)])
+                .move_to(at((0.0, 0.0)))
+                .line_to(at((w, h)))
+        }
+        (Mark::External, _) => {
+            let (head_x, head_y) = (w * EXTERNAL_HEAD, h * EXTERNAL_HEAD);
+            stroke(&[(w - head_x, 0.0), (w, 0.0), (w, head_y)])
+                .move_to(at((w, 0.0)))
+                .line_to(at((0.0, h)))
+        }
     }
 }
 
@@ -501,6 +530,21 @@ pub fn mark(
     .a11y_hidden();
     style_follows(canvas.layout_node(), move || mark_box(shape()));
     Ok(box_item(canvas))
+}
+
+/// What `build` makes while `show` reads true, and nothing at all while it reads false: a mark only some states draw, a button only a filled field needs. Laid out in a box of `style` that is empty and takes no room while there is nothing in it, so whatever spaces it from its neighbours belongs in what `build` makes.
+pub(crate) fn shown_while(
+    show: impl Fn() -> bool + 'static,
+    style: LayoutStyle,
+    build: impl Fn() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let list = telar::ReactiveList::with_style(
+        style.flex_shrink(0.0),
+        move || if show() { vec![()] } else { Vec::new() },
+        |()| (),
+        move |()| build(),
+    )?;
+    Ok(box_item(list))
 }
 
 /// `chord` the way the platform writes it, `⇧⌘Z` on a Mac and `Ctrl+Shift+Z` elsewhere: what a hint shows and a reader hears. Text that names no [`Chord`] is shown as written.

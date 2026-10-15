@@ -5,7 +5,6 @@ element group
     element group
       element group
         element group
-          rect 361,288 78x24
           element group
             element group
               rect 361,288 26x24

@@ -47,7 +47,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                         .with_action("Retry", || {})
                 })?,
             ];
-            let row = Container::new(LayoutStyle::new().flex_row().gap(8.0), buttons)?;
+            let row = Container::new(LayoutStyle::row().gap(8.0), buttons)?;
             let stack = toaster(
                 ToasterProps::props()
                     .toasts(queue)
@@ -55,10 +55,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .build(),
                 Children::default(),
             )?;
-            Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column(),
-                vec![box_item(row), stack],
-            )?)
+            Ok::<_, LayoutError>(Container::column(vec![box_item(row), stack])?)
         })
         .title("Overlays/Toast")
         .layout(Layout::Centered)

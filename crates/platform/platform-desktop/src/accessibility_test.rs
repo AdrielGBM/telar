@@ -22,6 +22,8 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         controls: None,
         has_popup: None,
         keyboard_shortcut: None,
+        sort: None,
+        modal: false,
     }
 }
 
@@ -830,4 +832,80 @@ fn a_control_publishes_the_keys_that_run_its_command() {
     let update = tree_update(&nodes, "Edit", None);
     assert_eq!(update.nodes[0].1.keyboard_shortcut(), Some("Control+Z"));
     assert_eq!(update.nodes[1].1.keyboard_shortcut(), None);
+}
+
+/// A data table reaches a reader as a grid of rows and cells, its chosen row selected, and the header of the column it is sorted by says which way.
+#[test]
+fn a_grid_says_its_rows_its_cells_and_how_it_is_sorted() {
+    let header = AccessNode {
+        sort: Some(SortDirection::Descending),
+        ..node(Some(2), Role::ColumnHeader, "Name")
+    };
+    let unsorted = node(Some(3), Role::ColumnHeader, "Size");
+    let row = AccessNode {
+        toggled: Some(true),
+        ..node(Some(4), Role::Row, "")
+    };
+    let nodes = [
+        node(Some(1), Role::Grid, "Files"),
+        header,
+        unsorted,
+        row,
+        node(Some(5), Role::GridCell, "notes.txt"),
+    ];
+    let update = tree_update(&nodes, "Explorer", None);
+    let roles: Vec<AkRole> = update.nodes[..5].iter().map(|(_, ak)| ak.role()).collect();
+    assert_eq!(
+        roles,
+        [
+            AkRole::Grid,
+            AkRole::ColumnHeader,
+            AkRole::ColumnHeader,
+            AkRole::Row,
+            AkRole::GridCell
+        ]
+    );
+    assert_eq!(
+        update.nodes[1].1.sort_direction(),
+        Some(AkSortDirection::Descending)
+    );
+    assert_eq!(update.nodes[2].1.sort_direction(), None);
+    assert_eq!(update.nodes[3].1.is_selected(), Some(true));
+}
+
+/// An option or a menu's row says its place and no level, a grid's row its index among the grid's rows, and a role that is no item of a set neither.
+#[test]
+fn an_item_publishes_only_the_numbers_its_role_takes() {
+    let placed = |role: Role| {
+        let item = AccessNode {
+            position: Some(platform_core::SetPosition {
+                level: 1,
+                position: 3,
+                size: 40,
+            }),
+            ..node(Some(4), role, "Item")
+        };
+        let update = tree_update(&[item], "Window", None);
+        let ak = &update.nodes[0].1;
+        (ak.level(), ak.position_in_set(), ak.row_index())
+    };
+    assert_eq!(placed(Role::TreeItem), (Some(0), Some(2), None));
+    assert_eq!(placed(Role::Option), (None, Some(2), None));
+    assert_eq!(placed(Role::MenuItem), (None, Some(2), None));
+    assert_eq!(placed(Role::Row), (None, None, Some(2)));
+    assert_eq!(placed(Role::Button), (None, None, None));
+}
+
+/// A dialog inside the modal layer that is up says so, which is what keeps a reader inside it; any other dialog does not.
+#[test]
+fn a_dialog_in_a_modal_layer_is_published_modal() {
+    let dialog = |modal: bool| {
+        let node = AccessNode {
+            modal,
+            ..node(None, Role::Dialog, "Terms")
+        };
+        tree_update(&[node], "Window", None).nodes[0].1.is_modal()
+    };
+    assert!(dialog(true));
+    assert!(!dialog(false));
 }

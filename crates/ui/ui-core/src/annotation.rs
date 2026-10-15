@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use layout_core::NodeId;
 use reactive_core::{RwSignal, signal};
-use renderer_core::Annotation;
+use renderer_core::{Annotation, Modal};
 use rustc_hash::FxHashMap;
 
 use crate::layout_item::LayoutItem;
@@ -90,6 +90,28 @@ fn forget(node: NodeId, generation: u64) {
             .is_some_and(|slot| slot.generation == generation)
         {
             a.by_node.remove(&node);
+        }
+    });
+}
+
+/// Says `node` is one of the boxes the modal layer `layer` is made of. Said before the box is first drawn, so the element it draws subscribes to it.
+pub(crate) fn mark_modal(node: NodeId, layer: NodeId) {
+    slot(node).update(|annotation| {
+        annotation.modal = Some(Modal {
+            layer: layer.into(),
+            opened_from: None,
+        })
+    });
+}
+
+/// Names the control the modal layer `node` was opened from, once it is known.
+pub(crate) fn modal_opened_from(node: NodeId, owner: NodeId) {
+    let Some(annotation) = signal_of(node).filter(RwSignal::is_alive) else {
+        return;
+    };
+    annotation.update(|annotation| {
+        if let Some(modal) = &mut annotation.modal {
+            modal.opened_from = Some(owner.into());
         }
     });
 }

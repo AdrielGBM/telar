@@ -39,7 +39,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 Children::default(),
             )?;
             Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column().width(260.0).height(320.0),
+                LayoutStyle::column().width(260.0).height(320.0),
                 vec![tree],
             )?)
         })

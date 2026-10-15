@@ -266,6 +266,23 @@ impl Play {
         self.step(format!("click {query}"), outcome)
     }
 
+    /// Presses and releases the pointer on the canvas beside the node `query` matches, in the widest room left around it, as a person taps outside a panel to put it away. What lies there is not looked for: behind a modal layer a reader finds nothing.
+    pub fn click_outside(&mut self, query: Query) -> PlayResult {
+        let size = self.canvas().size();
+        let outcome = self
+            .find(&query)
+            .and_then(|node| {
+                room_outside(node.rect, size).ok_or_else(|| {
+                    PlayError::new(format!("{query} leaves no room outside it on the canvas"))
+                })
+            })
+            .map(|room| {
+                self.press_at(room);
+                self.settle_now();
+            });
+        self.step(format!("click outside {query}"), outcome)
+    }
+
     /// Moves the pointer onto the node `query` matches.
     pub fn hover(&mut self, query: Query) -> PlayResult {
         let outcome = self.find(&query).map(|node| {
@@ -636,6 +653,20 @@ fn none_found(query: &Query, snapshot: &[AccessNode]) -> PlayError {
         transcript => transcript,
     };
     PlayError::new(format!("found no {query}; the canvas reads:\n{reads}"))
+}
+
+/// The widest strip of a canvas of `size` beside `rect`, left of it, right of it, above or below; `None` when `rect` leaves no whole pixel on any side.
+fn room_outside(rect: crate::Rect, size: Size) -> Option<crate::Rect> {
+    let (right, bottom) = (rect.x + rect.width, rect.y + rect.height);
+    [
+        crate::Rect::new(0.0, 0.0, rect.x, size.height),
+        crate::Rect::new(right, 0.0, size.width - right, size.height),
+        crate::Rect::new(0.0, 0.0, size.width, rect.y),
+        crate::Rect::new(0.0, bottom, size.width, size.height - bottom),
+    ]
+    .into_iter()
+    .filter(|strip| strip.width >= 1.0 && strip.height >= 1.0)
+    .max_by(|a, b| (a.width * a.height).total_cmp(&(b.width * b.height)))
 }
 
 fn describe(node: &AccessNode) -> String {

@@ -261,16 +261,17 @@ impl DynHost {
     pub(crate) fn child_boundaries(&self) -> Vec<RenderNode> {
         self.version.get();
         let st = self.state.borrow();
-        let mut out = Vec::new();
+        let mut children = Vec::new();
         for slot in &st.slots {
             match slot {
-                SlotState::Static(child) => out.push(child.segment.boundary()),
-                SlotState::Dynamic(dyn_state) => {
-                    out.extend(dyn_state.items.iter().map(|c| c.segment.boundary()))
-                }
+                SlotState::Static(child) => children.push(child),
+                SlotState::Dynamic(dyn_state) => children.extend(dyn_state.items.iter()),
             }
         }
-        out
+        crate::layout_item::paint_order(children)
+            .into_iter()
+            .map(|c| c.segment.boundary())
+            .collect()
     }
 
     /// Dispatch an event to the current children (cheap `Rc`-clone flatten, so hit-testing sees every live item in order).

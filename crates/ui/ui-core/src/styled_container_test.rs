@@ -2288,6 +2288,40 @@ fn a_presented_box_is_announced_but_a_tap_leaves_focus_alone() {
     assert_eq!(focus::current(), None, "nor is the box a Tab stop");
 }
 
+/// A box that is no control says where it sits too, as the header row of a table whose rows are not all built does, and it stays no control for saying so.
+#[test]
+fn a_box_that_is_no_control_says_where_it_sits() {
+    focus::clear();
+    let place = focus::SetPosition {
+        level: 1,
+        position: 1,
+        size: 41,
+    };
+    let mut header = laid_out_box().role(focus::Role::Row).positioned(place);
+    settle(&mut header);
+    let said = semantics_of(&header);
+    assert_eq!(said.role, focus::Role::Row);
+    assert_eq!(said.position, Some(place));
+    assert_eq!(said.focusable, None);
+    assert_eq!(semantics_of(&laid_out_box()).position, None);
+
+    let rows = reactive_core::signal(41);
+    let mut header = laid_out_box()
+        .role(focus::Role::Row)
+        .positioned_by(move || focus::SetPosition {
+            size: rows.get(),
+            ..place
+        });
+    settle(&mut header);
+    assert_eq!(semantics_of(&header).position, Some(place));
+    rows.set(3);
+    assert_eq!(
+        semantics_of(&header).position.map(|place| place.size),
+        Some(3),
+        "re-read as the table's rows change"
+    );
+}
+
 /// A menu button and a submenu row say what they open beside whether it is open, to the element and to the reader alike; a box that opens nothing says nothing.
 #[test]
 fn a_control_says_what_it_opens() {
@@ -2537,4 +2571,26 @@ fn a_control_says_the_keys_that_run_its_command() {
         None,
         "a box with no focus id has no control to say it of"
     );
+}
+
+/// The header of a grid's column says which way the rows are sorted by it, to the element and to the reader alike, and follows the sort as it moves.
+#[test]
+fn a_column_header_says_which_way_its_column_sorts_the_rows() {
+    focus::clear();
+    let sort = reactive_core::signal(None);
+    let mut header = laid_out_box()
+        .presented(focus::Role::ColumnHeader)
+        .sorted(move || sort.get());
+    settle(&mut header);
+
+    assert_eq!(semantics_of(&header).sort, None);
+    sort.set(Some(focus::SortDirection::Ascending));
+    assert_eq!(
+        semantics_of(&header).sort,
+        Some(focus::SortDirection::Ascending)
+    );
+    let exposed = focus::exposed();
+    assert_eq!(exposed.len(), 1);
+    assert_eq!(exposed[0].role, focus::Role::ColumnHeader);
+    assert_eq!(exposed[0].sort, Some(focus::SortDirection::Ascending));
 }

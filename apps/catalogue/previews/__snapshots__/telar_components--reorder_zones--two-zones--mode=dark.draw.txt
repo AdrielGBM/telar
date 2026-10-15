@@ -6,7 +6,6 @@ element group
       element group
         element group
           element list
-            rect 324,249 71x102
             element group
               element listitem
                 rect 324,249 71x29
@@ -36,7 +35,6 @@ element group
             end
           end
           element list
-            rect 419,249 57x102
             element group
               element listitem
                 rect 419,249 57x29

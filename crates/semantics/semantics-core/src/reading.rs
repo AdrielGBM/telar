@@ -47,3 +47,27 @@ impl Orientation {
         }
     }
 }
+
+/// Which way a column sorts the rows of a grid, as ARIA's `aria-sort` says it: said only by the header of the column the rows are sorted by.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum SortDirection {
+    Ascending,
+    Descending,
+}
+
+impl SortDirection {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ascending => "ascending",
+            Self::Descending => "descending",
+        }
+    }
+
+    /// The other way round: what a second press on the header of the sorted column asks for.
+    pub fn reversed(self) -> Self {
+        match self {
+            Self::Ascending => Self::Descending,
+            Self::Descending => Self::Ascending,
+        }
+    }
+}

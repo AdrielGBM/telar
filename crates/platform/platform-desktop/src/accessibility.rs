@@ -6,10 +6,12 @@
 
 use accesskit::{
     Action, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Node, NodeId,
-    Orientation as AkOrientation, Rect as AkRect, Role as AkRole, Toggled, TreeId, TreeInfo,
-    TreeUpdate,
+    Orientation as AkOrientation, Rect as AkRect, Role as AkRole, SortDirection as AkSortDirection,
+    Toggled, TreeId, TreeInfo, TreeUpdate,
 };
-use platform_core::{AccessNode, CurrentKind, HasPopup, Orientation, Role, ToggleKind};
+use platform_core::{
+    AccessNode, CurrentKind, HasPopup, Orientation, Positioning, Role, SortDirection, ToggleKind,
+};
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
 const ROOT: NodeId = NodeId(0);
@@ -90,6 +92,12 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         if let Some(keys) = &node.keyboard_shortcut {
             ak.set_keyboard_shortcut(keys.as_str());
         }
+        if let Some(sort) = node.sort {
+            ak.set_sort_direction(match sort {
+                SortDirection::Ascending => AkSortDirection::Ascending,
+                SortDirection::Descending => AkSortDirection::Descending,
+            });
+        }
         // AccessKit rejects a reference to a node the update does not carry.
         if let Some(item) = node
             .active_descendant
@@ -104,9 +112,23 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
             ak.set_controls(vec![control_id(target)]);
         }
         // AccessKit counts from zero, and reads a set's size off a container this flat tree does not have, so only the level and the place are said.
-        if let Some(place) = node.position {
-            ak.set_level(place.level.saturating_sub(1) as usize);
-            ak.set_position_in_set(place.position.saturating_sub(1) as usize);
+        if let Some((kind, place)) = node
+            .position
+            .and_then(|place| Some((node.role.positioning()?, place)))
+        {
+            match kind {
+                Positioning::Nested => {
+                    ak.set_level(place.level.saturating_sub(1) as usize);
+                    ak.set_position_in_set(place.position.saturating_sub(1) as usize);
+                }
+                Positioning::InSet => {
+                    ak.set_position_in_set(place.position.saturating_sub(1) as usize)
+                }
+                Positioning::GridRow => ak.set_row_index(place.position.saturating_sub(1) as usize),
+            }
+        }
+        if node.modal {
+            ak.set_modal();
         }
         children.push(id);
         updates.push((id, ak));
@@ -172,6 +194,10 @@ fn role_of(role: Role) -> AkRole {
         Role::ProgressBar => AkRole::ProgressIndicator,
         Role::Tree => AkRole::Tree,
         Role::TreeItem => AkRole::TreeItem,
+        Role::Grid => AkRole::Grid,
+        Role::Row => AkRole::Row,
+        Role::GridCell => AkRole::GridCell,
+        Role::ColumnHeader => AkRole::ColumnHeader,
         Role::Toolbar => AkRole::Toolbar,
         Role::Splitter => AkRole::Splitter,
         Role::Status => AkRole::Status,

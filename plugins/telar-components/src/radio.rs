@@ -5,7 +5,7 @@ use std::rc::Rc;
 use telar::{
     AlignItems, Border, Children, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
     Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment,
-    amend_surface, box_item, focus::Role, signal,
+    amend_surface, box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -40,8 +40,7 @@ impl RadioTokens {
 
 fn ring_style() -> LayoutStyle {
     let size = RadioTokens::current().size();
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .width(size)
         .height(size)
         .align_items(AlignItems::CENTER)
@@ -124,7 +123,7 @@ pub fn radio(props: RadioProps, _children: Children) -> Result<Box<dyn LayoutIte
                 .with_radius(shared::pill(r));
             amend_surface(rest, &style)
         },
-        vec![box_item(dot)],
+        children![dot],
     )?
     .styled_by(ring_style);
 

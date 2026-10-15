@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
-use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role, box_item};
+use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::{Children, Color, Container, LayoutError, Role, box_item};
 
 use super::sample;
 use crate::button::{ButtonProps, button};
@@ -42,10 +42,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     ])
                 }),
             )?;
-            Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column(),
-                vec![box_item(reopen), panel],
-            )?)
+            Ok::<_, LayoutError>(Container::column(vec![box_item(reopen), panel])?)
         })
         .title("Overlays/Drawer")
         .layout(Layout::Centered)
@@ -54,7 +51,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .play(|canvas| {
             canvas.expect(by_role(Role::Dialog).named("Drawer"))?;
             canvas.expect_text("Filters")?;
-            canvas.click(by_text("Open the drawer"))?;
+            canvas.click_outside(by_role(Role::Dialog))?;
             canvas.expect_absent(by_role(Role::Dialog))?;
             canvas.expect_no_text("Filters")?;
             canvas.expect_action("on_close", 1)?;

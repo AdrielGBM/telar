@@ -45,8 +45,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-            let row = Container::new(LayoutStyle::new().flex_row().gap(metrics::gap_md()), buttons)?
-                .styled_by(|| LayoutStyle::new().flex_row().gap(metrics::gap_md()));
+            let row = Container::new(LayoutStyle::row().gap(metrics::gap_md()), buttons)?
+                .styled_by(|| LayoutStyle::row().gap(metrics::gap_md()));
             Ok::<_, LayoutError>(row)
         })
         .title("Inputs/Button")

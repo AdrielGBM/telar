@@ -16,7 +16,7 @@ use crate::edit::write_through;
 use crate::shared::{self, DOUBLE_CLICK};
 use crate::strings;
 
-const DRAG_THRESHOLD: f32 = 3.0;
+pub(crate) const DRAG_THRESHOLD: f32 = 3.0;
 const DEFAULT_SIZE: f32 = 240.0;
 const DEFAULT_STEP: f32 = 16.0;
 
@@ -98,8 +98,8 @@ impl SplitDirection {
 
     fn flow(self) -> LayoutStyle {
         match self {
-            Self::Row => LayoutStyle::new().flex_row(),
-            Self::Column => LayoutStyle::new().flex_column(),
+            Self::Row => LayoutStyle::row(),
+            Self::Column => LayoutStyle::column(),
         }
     }
 
@@ -276,7 +276,7 @@ pub fn split_pane(
     let second_items: Vec<_> = slots.collect();
 
     let fixed = move || {
-        let style = LayoutStyle::new().flex_column().flex_shrink(0.0);
+        let style = LayoutStyle::column().flex_shrink(0.0);
         if collapsed.get() {
             return style.shown(false);
         }
@@ -291,13 +291,7 @@ pub fn split_pane(
             Container::new(fixed(), items)?.styled_by(fixed)
         } else {
             Container::new(
-                direction.at_least(
-                    LayoutStyle::new()
-                        .flex_column()
-                        .flex_grow(1.0)
-                        .flex_shrink(1.0),
-                    0.0,
-                ),
+                direction.at_least(LayoutStyle::column().flex_grow(1.0).flex_shrink(1.0), 0.0),
                 items,
             )?
         };

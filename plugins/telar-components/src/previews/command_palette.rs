@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar::{Children, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, box_item};
+use telar::{Children, Container, Key, LayoutError, NamedKey, Role, box_item};
 
 use crate::button::{ButtonProps, button};
 use crate::command_palette::{Command, CommandPaletteProps, command_palette};
@@ -55,10 +55,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .build(),
                 Children::default(),
             )?;
-            Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column(),
-                vec![box_item(reopen), palette],
-            )?)
+            Ok::<_, LayoutError>(Container::column(vec![box_item(reopen), palette])?)
         })
         .title("Overlays/Command palette")
         .layout(Layout::Centered)

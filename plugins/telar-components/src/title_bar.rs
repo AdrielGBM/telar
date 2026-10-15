@@ -4,8 +4,8 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, Children, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
-    Paint, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
+    Accessible, AlignItems, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
+    LayoutStyle, Paint, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
     amend_surface, box_item, focus::Role, on_cleanup, signal,
 };
 use web_time::Instant;
@@ -71,8 +71,7 @@ impl ControlLook {
             .min_size
             .as_ref()
             .map_or(shared::MIN_TARGET, Reactive::get);
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
             .padding_horizontal(shared::gap_md())
@@ -221,15 +220,9 @@ pub fn window_controls(
         on_close,
     )?);
 
-    let group = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(AlignItems::CENTER),
-        |_| RectStyle::default(),
-        buttons,
-    )?
-    .role(Role::Group)
-    .a11y_label(|| strings::text(strings::WINDOW));
+    let group = Container::new(LayoutStyle::row().align_items(AlignItems::CENTER), buttons)?
+        .role(Role::Group)
+        .a11y_label(|| strings::text(strings::WINDOW));
     Ok(box_item(group))
 }
 

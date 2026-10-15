@@ -3,7 +3,7 @@
 use std::rc::Rc;
 use telar::{
     Anchoring, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, Rect, RectStyle,
-    Size, StyledContainer, box_item, effect,
+    Size, StyledContainer, children, effect,
     focus::{self, FocusId, Role},
 };
 
@@ -102,11 +102,10 @@ pub(crate) fn popup(
         move || {
             telar::use_surface_size();
             let room = anchoring().room();
-            let sheet = LayoutStyle::new()
+            let sheet = LayoutStyle::column()
                 .absolute()
                 .inset_top(0.0)
                 .inset_start(0.0)
-                .flex_column()
                 .max_height(room.height)
                 .padding_all(padding);
             match width {
@@ -118,7 +117,7 @@ pub(crate) fn popup(
             }
         }
     };
-    let panel = StyledContainer::new(sheet(), paint, vec![box_item(scroll)])?
+    let panel = StyledContainer::new(sheet(), paint, children![scroll])?
         .styled_by(sheet)
         .with_transform(move |laid| {
             let spot = anchoring().place(Size::new(laid.width, laid.height));

@@ -313,3 +313,57 @@ fn an_area_shows_what_was_typed_whatever_case_it_inherits() {
         renderer_core::TextCase::AsWritten
     );
 }
+
+/// An area taller than the scroll it sits in keeps the line being typed on in view: a reveal of the whole area could not, and the caret would walk off the bottom of the view.
+#[test]
+fn the_caret_stays_in_view_of_the_scroll_the_area_sits_in() {
+    reset_layout_runtime();
+    let style = || TextStyle::new(14.0, Color::BLACK);
+    let line_h = crate::text_metrics::line_box(&style());
+    let value = signal(
+        (1..=20)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
+    let made: Rc<RefCell<Option<(FocusId, crate::ScrollViewport)>>> = Rc::default();
+    let sink = Rc::clone(&made);
+    let mut scroll = crate::LayoutScrollArea::new_with(
+        LayoutStyle::new().width(300.0).height(line_h * 3.0),
+        move |viewport| {
+            let area = TextArea::new(value, LayoutStyle::new().width(300.0), style)?;
+            *sink.borrow_mut() = Some((area.focus_id(), viewport));
+            Ok(Box::new(area) as Box<dyn LayoutItem>)
+        },
+    )
+    .unwrap();
+    compute_layout(
+        scroll.layout_node(),
+        AvailableSpace::Definite(300.0),
+        AvailableSpace::Definite(line_h * 3.0),
+    )
+    .unwrap();
+    let (id, viewport) = made.borrow().clone().expect("the builder ran");
+    assert_eq!(viewport.peek_offset().1, 0.0);
+
+    focus::request(id);
+    reactive_core::batch(|| {});
+    let bottom = line_h * 20.0 - line_h * 3.0;
+    assert!(
+        (viewport.peek_offset().1 - bottom).abs() < 0.5,
+        "the caret starts on the last line, so the view is scrolled to it: {:?}",
+        viewport.peek_offset()
+    );
+
+    for _ in 0..19 {
+        scroll.on_event(&key(Key::Named(NamedKey::ArrowUp)));
+    }
+    relayout_if_dirty();
+    reactive_core::batch(|| {});
+    assert_eq!(
+        viewport.peek_offset().1,
+        0.0,
+        "walking the caret up to the first line brings the view up with it"
+    );
+    focus::clear();
+}

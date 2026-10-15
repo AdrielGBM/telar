@@ -32,7 +32,6 @@ element group
               element menuitem
                 rect 0,0 174x32 radius=6
                 element group
-                  rect 0,0 0x0
                 end
                 element group
                   matrix 1,0,0,1,8,0
@@ -48,7 +47,6 @@ element group
               element menuitem
                 rect 0,32 174x32 radius=6
                 element group
-                  rect 0,32 0x0
                 end
                 element group
                   matrix 1,0,0,1,8,32
@@ -64,7 +62,6 @@ element group
               element menuitem
                 rect 0,64 174x32 radius=6
                 element group
-                  rect 0,64 0x0
                 end
                 element group
                   matrix 1,0,0,1,8,64
@@ -83,7 +80,6 @@ element group
               element menuitem
                 rect 0,101 174x32 radius=6
                 element group
-                  rect 0,101 0x0
                 end
                 element group
                   matrix 1,0,0,1,8,101

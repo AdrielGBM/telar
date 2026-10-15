@@ -42,10 +42,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_row().gap(24.0),
-                columns,
-            )?)
+            Ok::<_, LayoutError>(Container::new(LayoutStyle::row().gap(24.0), columns)?)
         })
         .props(<ReorderZoneProps as telar::preview::HasPropsSchema>::schema)
         .title("Layout/Reorder zones")
@@ -65,4 +62,3 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         }),
     ]
 }
-

@@ -38,6 +38,8 @@ fn label(name: &str) -> AccessNode {
         controls: None,
         has_popup: None,
         keyboard_shortcut: None,
+        sort: None,
+        modal: false,
     }
 }
 

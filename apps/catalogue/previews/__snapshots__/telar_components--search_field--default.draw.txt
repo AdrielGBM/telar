@@ -1,0 +1,25 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 260,286 280x28 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+          element group
+            matrix 1,0,0,1,272,295
+              path M7,3.5 C7,5.43 5.43,7 3.5,7 C1.57,7 0,5.43 0,3.5 C0,1.57 1.57,0 3.5,0 C5.43,0 7,1.57 7,3.5 Z M5.97,5.97 L10,10 stroke=1.5 stroke-color=#171a2eb3
+            end
+          end
+          element group
+            matrix 1,0,0,1,286,286
+              text 0,4 238x20 "Search" size=14 family=sans-serif weight=400 color=#171a2eb3
+            end
+          end
+          element group
+          end
+        end
+      end
+    end
+  end
+end

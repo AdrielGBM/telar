@@ -1,16 +1,16 @@
 //! The stage a canvas sits on: centred in its pane inside a viewport frame, or a device's bezel, at the size the toolbar, the handles or the preview ask for or else filling the pane, zoomed as the toolbar asks, with handles that resize it; or, for a fullscreen preview, edge to edge with no frame.
 
-use std::cell::{Cell, OnceCell};
+use std::cell::{OnceCell, RefCell};
 use std::rc::{Rc, Weak};
 
 use telar::preview::{Globals, Layout};
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Canvas, Clip, ClippedItem, Color, Container,
-    Cursor, Direction, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle, Memo, NamedKey,
-    NumericValue, Orientation, Point, ReactiveList, Rect, RectStyle, RenderNode, Role, RwSignal,
-    ShapeStyle, Size, SizeDimension, StyledContainer, SurfaceCanvas, SurfaceFrame, Text, box_item,
-    children, current_direction, effect, memo, signal, track_layout,
+    Accessible, AlignItems, Border, BorderRadius, Canvas, Children, Clip, ClippedItem, Color,
+    Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Memo, Reactive, ReactiveList,
+    Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, Size, SizeDimension, StyledContainer,
+    SurfaceCanvas, SurfaceFrame, Text, box_item, children, effect, memo, signal, track_layout,
 };
+use telar_components::{ResizeEdge, ResizeGrowth, ResizeHandleProps, resize_handle};
 use telar_devtools::{
     WORKBENCH_GRID, inspection_marks, use_workbench_tokens, workbench_mono, workbench_muted,
 };
@@ -129,32 +129,18 @@ fn framed(
         stage: Rc::clone(&stage_rect),
         scale,
     };
-    let bottom_style = move || match viewport.get() {
-        Some(size) => LayoutStyle::new().width(size.width * scale.get() + 2.0 * edge(device.get())),
-        None => LayoutStyle::new().flex_grow(1.0),
-    };
     let top = row(
         move || match viewport.get() {
             Some(_) => LayoutStyle::row(),
             None => LayoutStyle::row().flex_grow(1.0).min_height(0.0),
         },
-        vec![
-            box_item(viewport_box),
-            handle(Edge::Right, resize.clone(), || {
-                LayoutStyle::new().width(HANDLE).flex_shrink(0.0)
-            })?,
-        ],
+        vec![box_item(viewport_box), handle(ResizeEdge::End, &resize)?],
     )?;
     let bottom = row(
         || LayoutStyle::row().height(HANDLE).flex_shrink(0.0),
         vec![
-            handle(Edge::Bottom, resize.clone(), bottom_style)?,
-            handle(Edge::Corner, resize, || {
-                LayoutStyle::new()
-                    .width(HANDLE)
-                    .height(HANDLE)
-                    .flex_shrink(0.0)
-            })?,
+            handle(ResizeEdge::Bottom, &resize)?,
+            handle(ResizeEdge::Corner, &resize)?,
         ],
     )?;
     let column_style = move || match viewport.get() {
@@ -284,47 +270,6 @@ impl SizeLabel {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Edge {
-    Right,
-    Bottom,
-    Corner,
-}
-
-impl Edge {
-    fn widens(self) -> bool {
-        self != Self::Bottom
-    }
-
-    fn deepens(self) -> bool {
-        self != Self::Right
-    }
-
-    /// The axis a reader hears the handle move along, and the name it hears. `None` for the corner: a separator moves along one axis and no role a reader knows moves along two, so the corner is a pointer's shortcut to the sizes the other two handles reach from the keyboard.
-    fn axis(self) -> Option<(Orientation, &'static str)> {
-        match self {
-            Self::Right => Some((Orientation::Vertical, VIEWPORT_WIDTH)),
-            Self::Bottom => Some((Orientation::Horizontal, VIEWPORT_HEIGHT)),
-            Self::Corner => None,
-        }
-    }
-
-    fn cursor(self) -> Cursor {
-        match self {
-            Self::Right => Cursor::EwResize,
-            Self::Bottom => Cursor::NsResize,
-            Self::Corner => Cursor::NwseResize,
-        }
-    }
-}
-
-/// The viewport a drag started from, and where the pointer was then.
-#[derive(Clone, Copy)]
-struct Grab {
-    from: Size,
-    origin: Point,
-}
-
 /// What a handle reads and writes: the settings it sets a custom size in, the frame's box, the stage's and the zoom the canvas is shown at.
 #[derive(Clone)]
 struct Resize {
@@ -352,11 +297,6 @@ impl Resize {
         logical(room(stage, BORDER), zoom)
     }
 
-    /// `outer` px of pointer travel, in the canvas's logical px.
-    fn travel(&self, outer: f32) -> f32 {
-        outer / self.scale.peek()
-    }
-
     fn set(&self, size: Size) {
         let size = clamp_viewport(size, self.room());
         self.settings.update(|settings| {
@@ -367,108 +307,41 @@ impl Resize {
             settings.rotated = false;
         });
     }
-
-    fn range(&self, edge: Edge) -> NumericValue {
-        let (now, room) = (self.current(), self.room());
-        let (now, max) = match edge {
-            Edge::Bottom => (now.height, room.height),
-            _ => (now.width, room.width),
-        };
-        NumericValue {
-            now: now as f64,
-            min: VIEWPORT_MIN as f64,
-            max: max.max(VIEWPORT_MIN) as f64,
-        }
-    }
 }
 
-fn handle(
-    edge: Edge,
-    resize: Resize,
-    style: impl Fn() -> LayoutStyle + 'static,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let active = signal(false);
-    let handle = StyledContainer::new(
-        style(),
-        move |_| {
-            let tokens = use_workbench_tokens();
-            match (active.get(), edge) {
-                (true, _) => RectStyle::default().with_fill(tokens.selection),
-                (false, Edge::Corner) => RectStyle::default().with_fill(tokens.border_subtle),
-                (false, _) => RectStyle::default(),
+/// A handle on `edge` of the centred frame, in the canvas's logical px whatever the zoom. A cancelled drag puts back the settings it started from, a preset or the preview's own size included.
+fn handle(edge: ResizeEdge, resize: &Resize) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let settings = resize.settings;
+    let before: Rc<RefCell<Option<CanvasSettings>>> = Rc::default();
+    let (measured, bounded, resized) = (resize.clone(), resize.clone(), resize.clone());
+    let mut props = ResizeHandleProps::props()
+        .edge(edge)
+        .size(Reactive::of(move || measured.current()))
+        .on_resize(Rc::new(move |size| resized.set(size)))
+        .min(Size::new(VIEWPORT_MIN, VIEWPORT_MIN))
+        .max(Reactive::of(move || bounded.room()))
+        .growth(ResizeGrowth::Centred)
+        .scale(resize.scale)
+        .step(KEY_STEP)
+        .thickness(HANDLE)
+        .on_start(Rc::new({
+            let before = Rc::clone(&before);
+            move || *before.borrow_mut() = Some(settings.peek())
+        }))
+        .on_end(Rc::new(move |kept| {
+            if let Some(before) = before.take()
+                && !kept
+            {
+                settings.set(before);
             }
-        },
-        Vec::new(),
-    )?
-    .styled_by(style);
-    let own = track_layout(handle.layout_node()).expect("the handle is registered");
-    let grab: Rc<Cell<Option<Grab>>> = Rc::default();
-    let (dragged, ended, cancelled) = (resize.clone(), Rc::clone(&grab), Rc::clone(&grab));
-    let handle = handle
-        .cursor(edge.cursor())
-        .on_hover(move |hovered| active.set(hovered))
-        .on_drag(move |x, y| {
-            let rect = own.peek();
-            let pointer = Point::new(rect.x + x, rect.y + y);
-            let Grab { from, origin } = grab.get().unwrap_or_else(|| {
-                let held = Grab {
-                    from: dragged.current(),
-                    origin: pointer,
-                };
-                grab.set(Some(held));
-                held
-            });
-            // The frame is centred, so it grows by twice the travel for its edge to stay under the pointer.
-            let dx = dragged.travel(2.0 * (pointer.x - origin.x) * outward());
-            let dy = dragged.travel(2.0 * (pointer.y - origin.y));
-            dragged.set(Size::new(
-                from.width + if edge.widens() { dx } else { 0.0 },
-                from.height + if edge.deepens() { dy } else { 0.0 },
-            ));
-        })
-        .on_drag_end(move |_, _| ended.set(None))
-        .on_drag_cancel(move || cancelled.set(None));
-    let Some((orientation, label)) = edge.axis() else {
-        return Ok(box_item(handle));
+        }))
+        .build();
+    props.label = match edge {
+        ResizeEdge::End => Some(Reactive::of(|| strings::text(VIEWPORT_WIDTH))),
+        ResizeEdge::Bottom => Some(Reactive::of(|| strings::text(VIEWPORT_HEIGHT))),
+        ResizeEdge::Corner => None,
     };
-    let stepped = resize.clone();
-    let handle = handle
-        .control(Role::Splitter)
-        .a11y_label(move || strings::text(label))
-        .oriented(orientation)
-        .valued(move || resize.range(edge))
-        .on_focused_key(move |key: &Key| -> bool {
-            let Some((dx, dy)) = key_step(edge, key) else {
-                return false;
-            };
-            let from = stepped.current();
-            stepped.set(Size::new(from.width + dx, from.height + dy));
-            true
-        });
-    Ok(box_item(handle))
-}
-
-/// How far an arrow key moves `edge`, as `(width, height)`; `None` for a key that does not move it.
-fn key_step(edge: Edge, key: &Key) -> Option<(f32, f32)> {
-    let Key::Named(named) = key else {
-        return None;
-    };
-    let across = KEY_STEP * outward();
-    match named {
-        NamedKey::ArrowRight if edge.widens() => Some((across, 0.0)),
-        NamedKey::ArrowLeft if edge.widens() => Some((-across, 0.0)),
-        NamedKey::ArrowDown if edge.deepens() => Some((0.0, KEY_STEP)),
-        NamedKey::ArrowUp if edge.deepens() => Some((0.0, -KEY_STEP)),
-        _ => None,
-    }
-}
-
-/// `1` where the width handle sits on the right, and `-1` where a right-to-left layout puts it on the left.
-fn outward() -> f32 {
-    match current_direction() {
-        Direction::Ltr => 1.0,
-        Direction::Rtl => -1.0,
-    }
+    resize_handle(props, Children::default())
 }
 
 /// A transparent background shows through to the checker; anything else covers it, so it is not drawn.

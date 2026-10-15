@@ -381,6 +381,11 @@ impl LayoutEngine {
         });
     }
 
+    /// Whether the node sticks to the edges of the view it is seen through: what stacks it above the boxes beside it, as a document stacks a `position: sticky` box.
+    pub fn is_sticky(&self, node: NodeId) -> bool {
+        self.sticky.contains_key(&node)
+    }
+
     /// Whether the node lays its children along the main (horizontal) axis — a flex row. A column, or any non-row node (missing / errored), is `false`. A transparent fragment reads its host's axis to know which margin edge a per-item gap sits on.
     pub fn is_row(&self, node: NodeId) -> bool {
         // Same guard every other read takes, and for the same reason: taffy panics on a freed key rather than reporting it, so a node removed since the caller last saw it has to be answered here.

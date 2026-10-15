@@ -13,10 +13,12 @@ use std::sync::Arc;
 
 use geometry_core::{Insets, Rect};
 use platform_core::consumed_keys::{CONSUMED_KEYS_ATTRIBUTE, FOCUS_BOX_ATTRIBUTE};
-use platform_core::{Destination, HasPopup, NumericValue, Orientation, SetPosition};
+use platform_core::{
+    Destination, HasPopup, NumericValue, Orientation, Positioning, SetPosition, SortDirection,
+};
 use renderer_core::{
-    BlendMode, Color, CurrentKind, DrawCommand, Element, Focusable, ImageData, Picture, Role,
-    TextStyle, ToggleKind,
+    BlendMode, Color, CurrentKind, DrawCommand, Element, Focusable, ImageData, Modal, Picture,
+    Role, TextStyle, ToggleKind,
 };
 
 use crate::box_key::BoxKey;
@@ -131,6 +133,8 @@ pub(crate) struct BoxNode {
     /// The element a role *is*; a box whose role changes needs a different element, not a new attribute.
     pub tag: &'static str,
     pub role: Role,
+    /// The modal layer the box belongs to, as its element says.
+    pub modal: Option<Modal>,
     /// Whether the box scrolls its own content, as an element with an overflow of its own.
     pub scrolls: bool,
     /// Whether the box is the surface's primary scroll, which the document scrolls for it.
@@ -184,6 +188,10 @@ pub(crate) struct Described {
     pub lang: Option<String>,
     pub anchor: Option<String>,
     pub hidden: bool,
+    /// Whether a modal layer that is up shuts the box out, and nothing around it already is.
+    pub inert: bool,
+    /// Whether the box is a dialog inside the modal layer that is up.
+    pub modal: bool,
     /// A control's on/off state and what its role makes it, which decides the attribute that carries it.
     pub toggled: Option<(ToggleKind, bool)>,
     /// What a link marked current is the current one of.
@@ -196,7 +204,12 @@ pub(crate) struct Described {
     pub has_popup: Option<HasPopup>,
     /// The chord that runs the same command as the box, in `aria-keyshortcuts` syntax.
     pub keyboard_shortcut: Option<String>,
-    pub position: Option<SetPosition>,
+    /// Where an item sits, and which of those numbers its role takes.
+    pub position: Option<(Positioning, SetPosition)>,
+    /// How many rows a grid has, its header's included, as the rows it holds say.
+    pub row_count: Option<u32>,
+    /// Which way the rows are sorted by the column a header names.
+    pub sort: Option<SortDirection>,
     /// The box that its cursor rests on, as the element says it. Written as nothing itself: it is resolved into [`active_descendant`](Self::active_descendant) once that box turns up inside this one, or inside the box it controls.
     pub descendant_box: Option<u64>,
     /// The `id` of the element this one's cursor rests on, once that element is in the frame.
@@ -250,6 +263,8 @@ impl Described {
             ("lang", self.lang.clone()),
             ("id", self.element_id(key)),
             ("aria-hidden", flag(self.hidden)),
+            ("inert", self.inert.then(String::new)),
+            ("aria-modal", flag(self.modal)),
             ("aria-checked", self.state_of(ToggleKind::Checked)),
             ("aria-pressed", self.state_of(ToggleKind::Pressed)),
             ("aria-selected", self.state_of(ToggleKind::Selected)),
@@ -268,6 +283,7 @@ impl Described {
                     .map(|current| aria_current(current).to_string()),
             ),
             ("aria-keyshortcuts", self.keyboard_shortcut.clone()),
+            ("aria-sort", self.sort.map(|sort| sort.as_str().to_string())),
             ("aria-controls", self.controls.clone()),
             ("aria-activedescendant", self.active_descendant.clone()),
             ("aria-valuenow", self.value.map(|v| v.now.to_string())),
@@ -287,12 +303,26 @@ impl Described {
                 "aria-orientation",
                 self.orientation.map(|o| o.as_str().to_string()),
             ),
-            ("aria-level", self.position.map(|p| p.level.to_string())),
+            (
+                "aria-level",
+                self.placed(&[Positioning::Nested], |p| p.level),
+            ),
             (
                 "aria-posinset",
-                self.position.map(|p| p.position.to_string()),
+                self.placed(&[Positioning::Nested, Positioning::InSet], |p| p.position),
             ),
-            ("aria-setsize", self.position.map(|p| p.size.to_string())),
+            (
+                "aria-setsize",
+                self.placed(&[Positioning::Nested, Positioning::InSet], |p| p.size),
+            ),
+            (
+                "aria-rowindex",
+                self.placed(&[Positioning::GridRow], |p| p.position),
+            ),
+            (
+                "aria-rowcount",
+                self.row_count.map(|count| count.to_string()),
+            ),
             ("aria-disabled", flag(self.disabled)),
             ("tabindex", tabindex.map(str::to_string)),
             (CONSUMED_KEYS_ATTRIBUTE, keys),
@@ -307,6 +337,12 @@ impl Described {
             (self.is_active_descendant || self.is_controlled)
                 .then(|| format!("{BOX_ID_PREFIX}{key}"))
         })
+    }
+
+    fn placed(&self, kinds: &[Positioning], number: impl Fn(SetPosition) -> u32) -> Option<String> {
+        self.position
+            .filter(|(kind, _)| kinds.contains(kind))
+            .map(|(_, position)| number(position).to_string())
     }
 
     /// The value of the state attribute for `kind`: written only on the role that state belongs to, so a switch never carries `aria-pressed` and a toggle button never `aria-checked`.
@@ -424,6 +460,7 @@ pub(crate) fn describe_frame(
         }
     }
     point_at_controlled(&mut roots);
+    shut_out_behind_modal_layers(&mut roots);
     name_by_drawn_text(&mut roots);
     Frame {
         background: clear.filter(|color| color.a > 0.0),
@@ -533,6 +570,111 @@ fn controlling(nodes: &[Node], found: &mut Vec<Controlling>) {
         if let Content::Children { children, .. } = &node.content {
             controlling(children, found);
         }
+    }
+}
+
+/// Makes inert whatever the topmost modal layer of each surface shuts out, as Telar's focus shuts Tab out of it: everything the surface draws but the layer and the control it was opened from, which stay with every box they are in, the rest taking `inert` as high up as it can. A dialog inside the layer says it is modal.
+///
+/// The topmost layer is the last drawn, which is the one the keyboard is held in: a list a field inside a dialog opened shuts the dialog out too.
+fn shut_out_behind_modal_layers(roots: &mut [Node]) {
+    let mut layers = Vec::new();
+    modal_layers(roots, &mut layers);
+    let mut topmost: Vec<(Option<u64>, Modal)> = Vec::new();
+    for (surface, modal) in layers.into_iter().rev() {
+        if !topmost.iter().any(|(seen, _)| *seen == surface) {
+            topmost.push((surface, modal));
+        }
+    }
+    for (surface, modal) in topmost {
+        let in_layer = |node: &BoxNode| {
+            node.key.surface == surface && node.modal.is_some_and(|m| m.layer == modal.layer)
+        };
+        let kept = |node: &BoxNode| {
+            in_layer(node)
+                || (node.key.surface == surface && Some(node.key.id) == modal.opened_from)
+        };
+        if let Some(level) = surface_level(roots, surface) {
+            shut_out(level, &kept, &in_layer);
+        }
+    }
+}
+
+fn modal_layers(nodes: &[Node], found: &mut Vec<(Option<u64>, Modal)>) {
+    for node in nodes.iter().filter_map(Node::as_box) {
+        if let Some(modal) = node.modal {
+            found.push((node.key.surface, modal));
+        }
+        if let Content::Children { children, .. } = &node.content {
+            modal_layers(children, found);
+        }
+    }
+}
+
+/// The top level of `surface` among `nodes`: the frame's own for the window, and for a nested surface the children of the box it is drawn in.
+fn surface_level(nodes: &mut [Node], surface: Option<u64>) -> Option<&mut [Node]> {
+    if surface.is_none() {
+        return Some(nodes);
+    }
+    for node in nodes.iter_mut().filter_map(Node::as_box_mut) {
+        let holds = node.key.surface != surface
+            && matches!(&node.content, Content::Children { children, .. }
+                if children.iter().filter_map(Node::as_box).any(|child| child.key.surface == surface));
+        let Content::Children { children, .. } = &mut node.content else {
+            continue;
+        };
+        if holds {
+            return Some(children);
+        }
+        if let Some(level) = surface_level(children, surface) {
+            return Some(level);
+        }
+    }
+    None
+}
+
+fn shut_out(
+    nodes: &mut [Node],
+    kept: &impl Fn(&BoxNode) -> bool,
+    in_layer: &impl Fn(&BoxNode) -> bool,
+) {
+    for node in nodes.iter_mut().filter_map(Node::as_box_mut) {
+        if in_layer(node) {
+            say_dialogs_modal(node);
+            continue;
+        }
+        if kept(node) {
+            continue;
+        }
+        match &mut node.content {
+            Content::Children { children, .. } if holds_any(children, kept) => {
+                shut_out(children, kept, in_layer)
+            }
+            _ => node.described.inert = true,
+        }
+    }
+}
+
+fn holds_any(nodes: &[Node], kept: &impl Fn(&BoxNode) -> bool) -> bool {
+    nodes.iter().filter_map(Node::as_box).any(|node| {
+        kept(node)
+            || matches!(&node.content, Content::Children { children, .. } if holds_any(children, kept))
+    })
+}
+
+fn say_dialogs_modal(node: &mut BoxNode) {
+    let surface = node.key.surface;
+    if node.role == Role::Dialog {
+        node.described.modal = true;
+    }
+    let Content::Children { children, .. } = &mut node.content else {
+        return;
+    };
+    for child in children
+        .iter_mut()
+        .filter_map(Node::as_box_mut)
+        .filter(|child| child.key.surface == surface)
+    {
+        say_dialogs_modal(child);
     }
 }
 
@@ -977,6 +1119,7 @@ impl Walk<'_> {
             key,
             tag,
             role: element.semantics.role,
+            modal: element.semantics.modal,
             scrolls,
             primary,
             style: String::new(),
@@ -993,6 +1136,7 @@ impl Walk<'_> {
             },
         };
         self.point_cursor_at(&mut node);
+        self.count_rows_of_grid(&node);
         self.open.push(Open {
             node: Some(node),
             box_rect: element.rect,
@@ -1026,6 +1170,22 @@ impl Walk<'_> {
         };
         node.described.is_active_descendant = true;
         owner.described.active_descendant = node.described.element_id(node.key);
+    }
+
+    /// Gives the grid `row` is in the count of rows the row says it is one of: a grid that builds only the rows on screen holds fewer than it has.
+    fn count_rows_of_grid(&mut self, row: &BoxNode) {
+        let Some((Positioning::GridRow, position)) = row.described.position else {
+            return;
+        };
+        if let Some(grid) = self
+            .open
+            .iter_mut()
+            .rev()
+            .filter_map(|open| open.node.as_mut())
+            .find(|grid| grid.key.surface == row.key.surface && grid.role == Role::Grid)
+        {
+            grid.described.row_count = Some(position.size);
+        }
     }
 
     fn pop(&mut self) {
@@ -1320,6 +1480,8 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         lang: semantics.lang.as_deref().map(str::to_string),
         anchor: semantics.anchor.as_deref().map(str::to_string),
         hidden,
+        inert: false,
+        modal: false,
         toggled: semantics
             .toggled
             .and_then(|on| Some((semantics.role.toggle_kind()?, on))),
@@ -1329,7 +1491,11 @@ fn describe(element: &Element, tag: &'static str) -> Described {
         expanded: semantics.expanded,
         has_popup: semantics.has_popup,
         keyboard_shortcut: semantics.keyboard_shortcut.as_deref().map(str::to_string),
-        position: semantics.position,
+        position: semantics
+            .position
+            .and_then(|position| Some((semantics.role.positioning()?, position))),
+        row_count: None,
+        sort: semantics.sort,
         descendant_box: semantics.active_descendant,
         active_descendant: None,
         is_active_descendant: false,

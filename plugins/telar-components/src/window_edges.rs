@@ -1,7 +1,7 @@
 //! [`window_edges`]: the handles a window drawn without decorations is resized by.
 
 use telar::{
-    Direction, LayoutError, LayoutItem, LayoutStyle, Reactive, RectStyle, ResizeEdge,
+    Container, Direction, LayoutError, LayoutItem, LayoutStyle, Reactive, RectStyle, ResizeEdge,
     StyledContainer, box_item, current_direction,
 };
 
@@ -18,12 +18,7 @@ pub fn window_edges() -> Result<Box<dyn LayoutItem>, LayoutError> {
         .into_iter()
         .map(handle)
         .collect::<Result<Vec<_>, _>>()?;
-    let layer = StyledContainer::new(
-        LayoutStyle::new().absolute_fill(),
-        |_| RectStyle::default(),
-        handles,
-    )?
-    .input_transparent();
+    let layer = Container::new(LayoutStyle::new().absolute_fill(), handles)?.input_transparent();
     Ok(box_item(layer))
 }
 

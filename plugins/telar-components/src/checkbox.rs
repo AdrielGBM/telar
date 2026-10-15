@@ -5,7 +5,7 @@ use std::rc::Rc;
 use telar::{
     AlignItems, Border, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
     LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    SurfaceAmendment, amend_surface, box_item, focus::Role, signal,
+    SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -51,8 +51,7 @@ fn mark_inset() -> f32 {
 
 fn box_style() -> LayoutStyle {
     let size = CheckboxTokens::current().size();
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .width(size)
         .height(size)
         .align_items(AlignItems::CENTER)
@@ -134,7 +133,7 @@ pub fn checkbox(
                 .with_radius(BorderRadius::all(tokens.radius()));
             amend_surface(rest, &style)
         },
-        vec![box_item(mark)],
+        children![mark],
     )?
     .styled_by(box_style);
 

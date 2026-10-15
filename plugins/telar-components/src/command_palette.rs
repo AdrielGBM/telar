@@ -1,6 +1,5 @@
 //! [`command_palette`]: a dialog that finds a command by typing part of its name and runs it, with the keyboard never leaving the search field.
 
-use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -10,13 +9,14 @@ use telar::{
     Declared, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
     ModifiersState, NamedKey, Props, Reactive, ReactiveList, RectStyle, RwSignal, ScrollViewport,
     ShapeStyle, Span, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap, VirtualList,
-    amend_surface, box_item, effect,
+    amend_surface, box_item, children, effect,
     focus::{FocusId, Role},
-    memo, on_cleanup, signal,
+    memo, signal,
 };
 
 use crate::fuzzy::fuzzy_match;
 use crate::list::{ListTokens, row_paint, tinted};
+use crate::rows::{BuiltRows, reveal_band};
 use crate::scrim;
 use crate::shared::{self, shown_chord};
 use crate::strings;
@@ -338,8 +338,7 @@ struct Palette {
     /// The command the keyboard is on, by id. `None`, or an id no longer listed, means the first one it can stop on.
     cursor: RwSignal<Option<Arc<str>>>,
     viewport: ScrollViewport,
-    /// The presented control of each row that is built, by command id: what the field points a reader at.
-    built: RwSignal<HashMap<Arc<str>, FocusId>>,
+    built: BuiltRows<Arc<str>>,
     run: Rc<dyn Fn(&Command)>,
     color: Reactive<Color>,
     /// Fixed while the palette is open: the list is virtual, and places rows it has not built by it.
@@ -378,7 +377,7 @@ impl Palette {
         let id = entries[self.cursor_index(&entries)?]
             .reachable_id()?
             .clone();
-        self.built.with(|built| built.get(&id).copied())
+        self.built.get(&id)
     }
 
     /// Moves the cursor `delta` reachable rows, wrapping at the ends, and scrolls it into view.
@@ -399,24 +398,12 @@ impl Palette {
         }
     }
 
-    /// Scrolls the least distance that brings row `index` fully into view, from the fixed row height because the row may not be built.
     fn reveal(&self, index: usize) {
-        let (x, offset) = self.viewport.peek_offset();
-        let height = self.viewport.rect().peek().height;
-        if height <= 0.0 {
-            return;
-        }
-        let row = self.row_height;
-        let top = index as f32 * row;
-        let bottom = top + row;
-        let target = if top < offset {
-            top
-        } else if bottom > offset + height {
-            bottom - height
-        } else {
-            return;
-        };
-        self.viewport.scroll_to(x, target);
+        reveal_band(
+            &self.viewport,
+            index as f32 * self.row_height,
+            self.row_height,
+        );
     }
 
     fn run_cursor(&self) {
@@ -441,20 +428,6 @@ impl Palette {
             _ => return false,
         }
         true
-    }
-
-    fn row_built(&self, id: Arc<str>, row: FocusId) {
-        self.built.update(|built| {
-            built.insert(id, row);
-        });
-    }
-
-    fn row_dropped(&self, id: &str, row: FocusId) {
-        if self.built.is_alive() && self.built.peek_with(|built| built.get(id) == Some(&row)) {
-            self.built.update(|built| {
-                built.remove(id);
-            });
-        }
     }
 }
 
@@ -507,7 +480,7 @@ fn build_open_palette(
                 results,
                 cursor,
                 viewport,
-                built: signal(HashMap::new()),
+                built: BuiltRows::new(),
                 run,
                 color,
                 row_height,
@@ -518,7 +491,7 @@ fn build_open_palette(
                 move || palette.entries().as_ref().clone()
             };
             let rows = VirtualList::new(
-                LayoutStyle::new().flex_column(),
+                LayoutStyle::column(),
                 palette.viewport.clone(),
                 row_height,
                 OVERSCAN,
@@ -600,8 +573,7 @@ fn build_open_palette(
 
     let room = scrim::Room::new();
     let card_box = move || {
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .width(width.min(room.inside(card_pad()).width))
             .padding_all(card_pad())
             .gap(card_pad())
@@ -628,8 +600,7 @@ fn build_open_palette(
     .on_press(|| {});
 
     let backdrop_box = || {
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .flex_grow(1.0)
             .min_height(0.0)
             .align_items(AlignItems::CENTER)
@@ -641,7 +612,7 @@ fn build_open_palette(
     let backdrop = StyledContainer::new(
         backdrop_box(),
         |_r| RectStyle::default().with_fill(shared::overlay()),
-        vec![box_item(card)],
+        children![card],
     )?
     .styled_by(backdrop_box);
     room.follow(backdrop.layout_node());
@@ -664,13 +635,11 @@ fn empty_state(
         LayoutStyle::new(),
         |t| shared::quiet(t, 1.0),
     )?;
-    let status = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let status = Container::new(
+        LayoutStyle::row()
             .justify_content(JustifyContent::CENTER)
             .padding_vertical(card_pad()),
-        |_r| RectStyle::default(),
-        vec![box_item(text)],
+        children![text],
     )?
     .role(Role::Status);
     Ok(box_item(status))
@@ -691,8 +660,7 @@ fn heading(group: Arc<str>, row_height: f32) -> Result<Box<dyn LayoutItem>, Layo
         Children::default(),
     )?;
     let slot = Container::new(
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .height(row_height)
             .flex_shrink(0.0)
             .justify_content(JustifyContent::END),
@@ -735,7 +703,7 @@ fn build_row(
         |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap),
     )?;
     let mut content: Vec<Box<dyn LayoutItem>> =
-        vec![box_item(ClippedItem::new(box_item(text), Clip::both()))];
+        children![ClippedItem::new(box_item(text), Clip::both())];
     if let Some(chord) = command.shortcut.clone() {
         content.push(kbd(
             KbdProps::props()
@@ -774,8 +742,7 @@ fn build_row(
     };
     let row_height = palette.row_height;
     let row_box = move || {
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::SPACE_BETWEEN)
             .height(row_height)
@@ -799,9 +766,7 @@ fn build_row(
         .on_hover(hover)
         .on_press(press);
     if let Some(focus_id) = row.focus_id() {
-        palette.row_built(id.clone(), focus_id);
-        let palette = palette.clone();
-        on_cleanup(move || palette.row_dropped(&id, focus_id));
+        palette.built.track(id, focus_id);
     }
     Ok(box_item(row))
 }

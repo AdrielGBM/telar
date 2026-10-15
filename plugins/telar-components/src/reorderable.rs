@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use telar::{
     Axis, Children, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, Rect,
-    RwSignal, StyledContainer, box_item, insertion_index, signal, track_layout,
+    RwSignal, StyledContainer, box_item, children, insertion_index, signal, track_layout,
 };
 
 /// One item's widget, built on demand from its position in the caller's storage.
@@ -99,61 +99,58 @@ pub fn reorderable(
             move || slot_style(index, gap_count.get(), gap_drag.get().as_ref(), axis, gap);
         // The drag signal is read only by `styled_by`'s own effect, never here and never by the list's `source`: `build` runs inside the reconcile effect, so a read at either place would subscribe that effect to the drag and reconcile the list from inside its own event dispatch. Restyling one node touches the list not at all, which is why the gap is a layout style rather than a reordered source.
         let carried = build_drag;
-        let wrapper = StyledContainer::new(
-            LayoutStyle::new(),
-            |_| Default::default(),
-            vec![box_item(child)],
-        )?
-        .styled_by(slot_style)
-        // The gap says where the item will land; without this the item sits in the slot it is leaving, and a hole opening beside an item that has not moved reads as two of it.
-        .with_transform(move |rect| {
-            let held = carried.get()?;
-            if held.from != index {
-                return None;
-            }
-            // Measured from where it was, not where it is: the gap moves every item after it, this one included, so a translate taken from the laid-out place would carry the gap as well as the pointer.
-            let was = held.rects.get(index).copied().unwrap_or(rect);
-            let (dx, dy) = (
-                held.at.0 - held.from_point.0 + was.x - rect.x,
-                held.at.1 - held.from_point.1 + was.y - rect.y,
-            );
-            Some([1.0, 0.0, 0.0, 1.0, dx, dy])
-        })
-        .drag_threshold(drag_threshold)
-        // The other coordinate says nothing about where an item lands, so carrying it only lets the one in hand wander off the line the strip lives on.
-        .drag_axis(match axis {
-            Axis::Horizontal => telar::DragAxis::Horizontal,
-            Axis::Vertical => telar::DragAxis::Vertical,
-        })
-        // A pointer dragged out of the window goes on reporting, and an item that followed it there is one nobody can see to drop.
-        .drag_within(move || carried_within(bounds_drag, &bounds_rects, bounds_rect))
-        // `on_drag` reports widget-local coordinates and the strip's slots are in surface coordinates, so the item's own origin converts between them.
-        .on_drag(move |x, y| {
-            let origin = move_rect.peek();
-            let point = (origin.x + x, origin.y + y);
-            let (frozen, from_point) = match move_drag.peek() {
-                Some(existing) => (existing.rects, existing.from_point),
-                // The press point itself is not reported, so starting from it would jump the item by the threshold the moment it moved.
-                None => (Rc::new(snapshot(&move_rects)), point),
-            };
-            let to = insertion_index(&frozen, point, axis);
-            move_drag.set(Some(Drag {
-                from: index,
-                to,
-                rects: frozen,
-                from_point,
-                at: point,
-            }));
-        })
-        .on_drag_end(move |_x, _y| {
-            let Some(landed) = end_drag.peek() else {
-                return;
-            };
-            end_drag.set(None);
-            if landed.to != landed.from && landed.to != landed.from + 1 {
-                end_move(landed.from, landed.to);
-            }
-        });
+        let wrapper =
+            StyledContainer::new(LayoutStyle::new(), |_| Default::default(), children![child])?
+                .styled_by(slot_style)
+                // The gap says where the item will land; without this the item sits in the slot it is leaving, and a hole opening beside an item that has not moved reads as two of it.
+                .with_transform(move |rect| {
+                    let held = carried.get()?;
+                    if held.from != index {
+                        return None;
+                    }
+                    // Measured from where it was, not where it is: the gap moves every item after it, this one included, so a translate taken from the laid-out place would carry the gap as well as the pointer.
+                    let was = held.rects.get(index).copied().unwrap_or(rect);
+                    let (dx, dy) = (
+                        held.at.0 - held.from_point.0 + was.x - rect.x,
+                        held.at.1 - held.from_point.1 + was.y - rect.y,
+                    );
+                    Some([1.0, 0.0, 0.0, 1.0, dx, dy])
+                })
+                .drag_threshold(drag_threshold)
+                // The other coordinate says nothing about where an item lands, so carrying it only lets the one in hand wander off the line the strip lives on.
+                .drag_axis(match axis {
+                    Axis::Horizontal => telar::DragAxis::Horizontal,
+                    Axis::Vertical => telar::DragAxis::Vertical,
+                })
+                // A pointer dragged out of the window goes on reporting, and an item that followed it there is one nobody can see to drop.
+                .drag_within(move || carried_within(bounds_drag, &bounds_rects, bounds_rect))
+                // `on_drag` reports widget-local coordinates and the strip's slots are in surface coordinates, so the item's own origin converts between them.
+                .on_drag(move |x, y| {
+                    let origin = move_rect.peek();
+                    let point = (origin.x + x, origin.y + y);
+                    let (frozen, from_point) = match move_drag.peek() {
+                        Some(existing) => (existing.rects, existing.from_point),
+                        // The press point itself is not reported, so starting from it would jump the item by the threshold the moment it moved.
+                        None => (Rc::new(snapshot(&move_rects)), point),
+                    };
+                    let to = insertion_index(&frozen, point, axis);
+                    move_drag.set(Some(Drag {
+                        from: index,
+                        to,
+                        rects: frozen,
+                        from_point,
+                        at: point,
+                    }));
+                })
+                .on_drag_end(move |_x, _y| {
+                    let Some(landed) = end_drag.peek() else {
+                        return;
+                    };
+                    end_drag.set(None);
+                    if landed.to != landed.from && landed.to != landed.from + 1 {
+                        end_move(landed.from, landed.to);
+                    }
+                });
         Ok(box_item(wrapper))
     };
 

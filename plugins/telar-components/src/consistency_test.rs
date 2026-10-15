@@ -68,6 +68,26 @@ fn probes() -> Vec<Probe> {
             surface: Surface::Root,
         },
         Probe {
+            name: "search_field",
+            build: || {
+                crate::search_field(
+                    crate::SearchFieldProps::props().build(),
+                    Children::default(),
+                )
+            },
+            surface: Surface::Root,
+        },
+        Probe {
+            name: "textarea of one row",
+            build: || {
+                crate::textarea(
+                    crate::TextareaProps::props().rows(1).build(),
+                    Children::default(),
+                )
+            },
+            surface: Surface::Root,
+        },
+        Probe {
             name: "select",
             build: || crate::select(crate::SelectProps::props().build(), Children::default()),
             surface: Surface::First(Role::ComboBox),
@@ -484,6 +504,41 @@ fn row_probes() -> Vec<Rows> {
         open: nothing_to_open,
         row: Surface::First(Role::TreeItem),
     });
+    #[cfg(feature = "advanced")]
+    probes.extend([
+        Rows {
+            name: "virtual list",
+            build: || {
+                crate::virtual_list(
+                    crate::VirtualListProps::props()
+                        .items(vec![
+                            crate::ListRow::new("cut", "Cut"),
+                            crate::ListRow::new("copy", "Copy"),
+                        ])
+                        .label("Edit")
+                        .build(),
+                    Children::default(),
+                )
+            },
+            open: nothing_to_open,
+            row: Surface::First(Role::Option),
+        },
+        Rows {
+            name: "data table",
+            build: || {
+                crate::data_table(
+                    crate::DataTableProps::props()
+                        .columns(vec![crate::Column::new("name", "Name")])
+                        .rows(vec![crate::TableRow::new("a", ["lib.rs"])])
+                        .label("Files")
+                        .build(),
+                    Children::default(),
+                )
+            },
+            open: nothing_to_open,
+            row: Surface::First(Role::GridCell),
+        },
+    ]);
     probes
 }
 
@@ -498,7 +553,7 @@ fn expected_row_height(size: ControlSize) -> f32 {
     height
 }
 
-/// Every list, menu, select, tree and context menu stands its rows at the one row height of the control size in force, so a menu and the list beside it cannot disagree about how tall a row is.
+/// Every list, menu, select, tree, context menu, virtual list and data table stands its rows at the one row height of the control size in force, so a menu and the list beside it cannot disagree about how tall a row is.
 #[test]
 fn every_row_of_every_list_is_the_one_row_height_at_every_control_size() {
     let mut failures = Vec::new();

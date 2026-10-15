@@ -158,7 +158,11 @@ impl Component for Container {
         // Each child is its own segment, referenced by a cheap `Rc` clone, so this `view()` neither re-runs them nor subscribes to their signals.
         let content = match &self.dyn_host {
             Some(host) => RenderNode::group(host.child_boundaries()),
-            None => RenderNode::group(self.children.iter().map(|c| c.segment.boundary())),
+            None => RenderNode::group(
+                crate::layout_item::paint_order(self.children.iter().collect())
+                    .into_iter()
+                    .map(|c| c.segment.boundary()),
+            ),
         };
         // A transparent box still owns a layout node, and its children are laid out by it, so attaching them to its parent would put them in the wrong flow.
         let role = crate::element::role_of(self.role, self.press.is_set());

@@ -6,8 +6,8 @@ use telar::{
     Accessible, AlignItems, Border, BorderRadius, Canvas, Children, Clip, ClippedItem, Color,
     Container, Cursor, Gradient, Key, LayoutError, LayoutItem, LayoutStyle, ModifiersState,
     NamedKey, NumericValue, Paint, Point, Props, Reactive, Rect, RectStyle, RenderNode, RwSignal,
-    ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item, box_transform, effect,
-    focus::Role, signal, step_factor,
+    ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item, box_transform,
+    children, effect, focus::Role, signal, step_factor,
 };
 
 use crate::shared;
@@ -260,14 +260,11 @@ pub fn color_picker(
         sliders.push(alpha_slider(&picker, slider_width)?);
     }
     let slider_column = Container::new(
-        LayoutStyle::new()
-            .flex_column()
-            .justify_content(telar::JustifyContent::CENTER),
+        LayoutStyle::column().justify_content(telar::JustifyContent::CENTER),
         sliders,
     )?;
     rows.push(box_item(Container::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .gap(gap()),
         vec![chip(value)?, box_item(slider_column)],
@@ -277,7 +274,7 @@ pub fn color_picker(
         rows.push(swatch_row(&picker, palette, swatch_names)?);
     }
 
-    let column = move || LayoutStyle::new().flex_column().width(width).gap(gap());
+    let column = move || LayoutStyle::column().width(width).gap(gap());
     let picker_box = Container::new(column(), rows)?.styled_by(column);
     shared::captioned(box_item(picker_box), label, width)
 }
@@ -359,7 +356,7 @@ fn area(
                 &style,
             )
         },
-        vec![box_item(whiten), box_item(darken), box_item(thumb)],
+        children![whiten, darken, thumb],
     )?
     .control(Role::Slider)
     .a11y_label(|| strings::text(strings::SATURATION_BRIGHTNESS))
@@ -537,19 +534,17 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
 
     let (announced, keyed) = (read.clone(), read);
     let drag = write.clone();
-    let track = StyledContainer::new(
+    let track = Container::new(
         LayoutStyle::new().width(width).height(track_height()),
-        |_r| RectStyle::default(),
         layers,
     )?;
     let track = StyledContainer::new(
-        LayoutStyle::new()
+        LayoutStyle::column()
             .width(width)
             .height(shared::MIN_TARGET)
-            .flex_column()
             .justify_content(telar::JustifyContent::CENTER),
         |_r| RectStyle::default(),
-        vec![box_item(track)],
+        children![track],
     )?
     .control(Role::Slider)
     .a11y_label(move || strings::text(name))

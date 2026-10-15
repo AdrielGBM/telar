@@ -5,7 +5,6 @@ element group
     element group
       element group
         element group
-          rect 357,291 86x18
           element group
             element group
               rect 357,291 28x18 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=6

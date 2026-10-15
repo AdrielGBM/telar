@@ -5,7 +5,7 @@ use std::rc::Rc;
 use telar::{
     AlignItems, Border, BorderRadius, Children, Color, JustifyContent, LayoutError, LayoutItem,
     LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Text,
-    TextWrap, amend_surface, box_item, focus::Role,
+    TextWrap, amend_surface, box_item, children, focus::Role,
 };
 
 use crate::shared;
@@ -60,8 +60,7 @@ impl ButtonTokens {
 
 /// The label never wraps: a button names one action, and two lines of it without vertical padding would crowd the edge, so the layout around it gives way instead. A row so the label's measured width sets the box's main-axis size (a column would collapse the cross axis: `Text::new` sets `align_self_stretch`, which fights content-sizing and renders 0-wide). No vertical padding: the line is centred in the shared control height, so a button stands level with a field beside it.
 fn shell() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .padding_horizontal(ButtonTokens::current().pad_x())
@@ -125,7 +124,7 @@ pub fn button(props: ButtonProps, _children: Children) -> Result<Box<dyn LayoutI
     let container = StyledContainer::new(
         shell(),
         move |_r| rest(State::Rest),
-        vec![box_item(label_widget)],
+        children![label_widget],
     )?
     .styled_by(shell)
     .hover_style(move |_r| hover(State::Hovered))

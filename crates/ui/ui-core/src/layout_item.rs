@@ -256,6 +256,27 @@ pub(crate) fn dispose_child(child: &Child) {
 
 pub(crate) type TrackedChildren = Vec<Child>;
 
+/// The order `children` stack in, bottom first, as indices into what was given: the order given, but with every child that sticks above the in-flow siblings beside it, as a document stacks a `position: sticky` box over the content scrolling under it. `None` while none of them sticks, which leaves them as given.
+pub(crate) fn stacking_order<C: std::borrow::Borrow<Child>>(children: &[C]) -> Option<Vec<usize>> {
+    let sticky = |i: usize| layout_reactive::is_sticky(children[i].borrow().node());
+    if !(0..children.len()).any(sticky) {
+        return None;
+    }
+    let (flow, stuck): (Vec<usize>, Vec<usize>) = (0..children.len()).partition(|&i| !sticky(i));
+    Some(flow.into_iter().chain(stuck).collect())
+}
+
+/// `children` in the order a target that draws them paints them: their [`stacking_order`]. A document is handed them as given, which is the order it reads them in, and stacks a sticky box over its siblings by itself.
+pub(crate) fn paint_order(children: Vec<&Child>) -> Vec<&Child> {
+    if ui_tree::element_capture() {
+        return children;
+    }
+    match stacking_order(&children) {
+        Some(order) => order.into_iter().map(|i| children[i]).collect(),
+        None => children,
+    }
+}
+
 /// Mounts a reactive segment that renders a shared boxed item via its `view()`. Uses `try_borrow` so a re-entrant render while the item is mid event-dispatch (mutably borrowed) keeps the previous frame instead of panicking; a later flush re-runs it.
 pub(crate) fn mount_item_segment(item: Rc<RefCell<Box<dyn LayoutItem>>>) -> Rc<Segment> {
     let name = item

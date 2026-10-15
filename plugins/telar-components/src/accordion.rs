@@ -4,7 +4,7 @@ use telar::{
     AlignItems, BorderRadius, Children, Clip, ClippedItem, Color, Component, Container, Effect,
     Event, EventResult, JustifyContent, LayoutError, LayoutItem, LayoutStyle, NodeId, Props,
     Reactive, RectStyle, RenderNode, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text,
-    amend_surface, box_item, effect, focus::Role, mark_dirty, set_display, signal,
+    amend_surface, box_item, children, effect, focus::Role, mark_dirty, set_display, signal,
 };
 
 #[cfg(test)]
@@ -41,8 +41,7 @@ impl AccordionTokens {
 
 /// A header is a row of a list, a control height with the step that parts one row's wash from the next, so a stack of accordions reads like one.
 fn header_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::SPACE_BETWEEN)
         .gap(shared::gap_md())
@@ -135,14 +134,11 @@ pub fn accordion(
     .on_press(move || toggle_open.update(|o| *o = !*o));
 
     // Built once from the slot children, and clipped to its own rect so a collapsed body draws nothing even if a child paints at fixed coordinates.
-    let body = Container::new(LayoutStyle::new().flex_column(), body_children)?;
+    let body = Container::column(body_children)?;
     let body_node = body.layout_node();
     let clipped_body = ClippedItem::new(box_item(body), Clip::both());
 
-    let root = Container::new(
-        LayoutStyle::new().flex_column(),
-        vec![box_item(header), box_item(clipped_body)],
-    )?;
+    let root = Container::column(children![header, clipped_body])?;
 
     let display_open = open;
     let _effect = effect(move || {

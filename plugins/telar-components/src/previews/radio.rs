@@ -26,7 +26,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column().gap(metrics::gap_xs()),
+                LayoutStyle::column().gap(metrics::gap_xs()),
                 options,
             )?)
         })

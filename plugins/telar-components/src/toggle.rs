@@ -5,7 +5,7 @@ use std::rc::Rc;
 use telar::{
     AlignItems, BorderRadius, Children, Color, LayoutError, LayoutItem, LayoutStyle, Props,
     Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface,
-    box_item, box_transform, focus::Role, signal,
+    box_item, box_transform, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -88,8 +88,7 @@ fn knob_box(size: fn() -> SwitchSize) -> LayoutStyle {
 
 fn track_box(size: fn() -> SwitchSize) -> LayoutStyle {
     let SwitchSize { knob, inset } = size();
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .flex_shrink(0.0)
         .width(knob * 2.0 + inset * 2.0)
         .height(knob + inset * 2.0)
@@ -140,7 +139,7 @@ pub(crate) fn switch_track(
                 .with_radius(ToggleTokens::current().track_radius(r));
             amend_surface(rest, &style)
         },
-        vec![box_item(knob)],
+        children![knob],
     )?
     .styled_by(move || track_box(size)))
 }

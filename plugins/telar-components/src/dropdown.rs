@@ -6,7 +6,7 @@ use telar::{
     Container, DismissRegistration, HasPopup, JustifyContent, Key, LayoutError, LayoutItem,
     LayoutStyle, Memo, NamedKey, NodeId, Overlay, Placement, Reactive, ReactiveList, Rect,
     RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceStyle, Text, TextWrap, amend_surface,
-    box_item, effect,
+    box_item, children, effect,
     focus::{FocusId, Role},
     memo, signal, track_layout,
 };
@@ -85,7 +85,7 @@ pub(crate) fn trigger(
     });
     let (rest, hover) = (paint.clone(), paint);
     let trigger_box = move || trigger_layout(geometry(), caret, sized_by_root);
-    let mut children: Vec<Box<dyn LayoutItem>> = vec![box_item(label_text)];
+    let mut children: Vec<Box<dyn LayoutItem>> = children![label_text];
     if caret {
         children.push(shared::mark(
             || shared::Mark::ChevronDown,
@@ -168,14 +168,14 @@ pub(crate) fn root(
     holder: ReactiveList,
     stretch: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let root_box = LayoutStyle::new().flex_column();
+    let root_box = LayoutStyle::column();
     let root_box = match stretch {
         true => root_box.flex_grow(1.0).flex_basis(0.0).min_width(0.0),
         false => root_box,
     };
     Ok(box_item(Container::new(
         root_box,
-        vec![box_item(trigger), box_item(holder)],
+        children![trigger, holder],
     )?))
 }
 
@@ -335,7 +335,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         list.begin();
         let row_items = rows.build_with(list.clone())?.take_default();
         let width = panel_width(geometry().width, stretch, trigger_node, &trigger_rect);
-        let row_column = Container::new(LayoutStyle::new().flex_column(), row_items)?;
+        let row_column = Container::column(row_items)?;
         let cursor = {
             let list = list.clone();
             Rc::new(move || highlighted.get().and_then(|i| list.node_of(i)))
@@ -352,13 +352,13 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         open_list.set(Some(opened_list));
         // A transparent full-viewport backdrop inside a blocking overlay: stops hover and clicks bleeding through to the page behind, and dismisses when a click lands outside the panel.
         let backdrop = StyledContainer::new(
-            LayoutStyle::new().flex_column().flex_grow(1.0),
+            LayoutStyle::column().flex_grow(1.0),
             |_r| RectStyle::default(),
-            vec![box_item(panel)],
+            children![panel],
         )?;
         let backdrop = shared::dismissed_by_press(backdrop, move || open.set(false));
-        let overlay = Overlay::new(LayoutStyle::new().flex_column(), vec![box_item(backdrop)])?
-            .owned_by(trigger_node);
+        let overlay =
+            Overlay::new(LayoutStyle::column(), children![backdrop])?.owned_by(trigger_node);
         remembering.remember(overlay.content_node());
         Ok(box_item(overlay))
     })?;
@@ -387,8 +387,7 @@ fn trigger_layout(geometry: Geometry, with_caret: bool, sized_by_root: bool) -> 
     } else {
         JustifyContent::CENTER
     };
-    let row = LayoutStyle::new()
-        .flex_row()
+    let row = LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(justify)
         .min_height(shared::control_height())

@@ -39,7 +39,6 @@ element group
           element group
             element group
               element group
-                rect 0,14 544x18
                 element group
                   matrix 1,0,0,1,8,16
                     text 0,0 20x14.28 "File" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
@@ -57,7 +56,6 @@ element group
                 end
               end
               element group
-                rect 485,39 51x18
                 element group
                   element group
                     rect 485,39 28x18 fill=#12141cff border=1 border-color=#3d4252ff radius=6
@@ -88,7 +86,6 @@ element group
                 end
               end
               element group
-                rect 485,71 51x18
                 element group
                   element group
                     rect 485,71 28x18 fill=#12141cff border=1 border-color=#3d4252ff radius=6
@@ -119,7 +116,6 @@ element group
                 end
               end
               element group
-                rect 450,103 86x18
                 element group
                   element group
                     rect 450,103 28x18 fill=#12141cff border=1 border-color=#3d4252ff radius=6
@@ -160,7 +156,6 @@ element group
             end
             element group
               element group
-                rect 0,174 544x18
                 element group
                   matrix 1,0,0,1,8,176
                     text 0,0 28x14.28 "View" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
@@ -188,7 +183,6 @@ element group
                 end
               end
               element group
-                rect 485,231 51x18
                 element group
                   element group
                     rect 485,231 28x18 fill=#12141cff border=1 border-color=#3d4252ff radius=6
@@ -219,7 +213,6 @@ element group
                 end
               end
               element group
-                rect 485,263 51x18
                 element group
                   element group
                     rect 485,263 28x18 fill=#12141cff border=1 border-color=#3d4252ff radius=6
@@ -250,7 +243,6 @@ element group
                 end
               end
               element group
-                rect 490,295 46x18
                 element group
                   element group
                     rect 490,295 23x18 fill=#12141cff border=1 border-color=#3d4252ff radius=6

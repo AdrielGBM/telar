@@ -33,6 +33,10 @@ fn a_role_reads_back_as_the_name_it_was_written_with() {
         "progressbar",
         "tree",
         "treeitem",
+        "grid",
+        "row",
+        "gridcell",
+        "columnheader",
         "toolbar",
         "separator",
         "status",
@@ -138,6 +142,7 @@ fn an_annotation_names_a_box_over_what_the_widget_derived() {
         lang: Some("es".into()),
         hidden: false,
         anchor: Some("logo".into()),
+        modal: None,
     };
     let said = derived.annotated(&annotation);
     assert_eq!(said.role, Role::Drawing, "the role is still the widget's");
@@ -309,4 +314,70 @@ fn the_shortcut_of_a_control_is_part_of_what_it_says() {
     );
     assert_ne!(bound(Some("Control+Z")), bound(None));
     assert_ne!(bound(Some("Control+Z")), bound(Some("Meta+Z")));
+}
+
+#[test]
+fn a_grid_s_rows_and_cells_are_chosen_and_its_headers_say_the_sort() {
+    assert_eq!(Role::Row.toggle_kind(), Some(ToggleKind::Selected));
+    assert_eq!(Role::GridCell.toggle_kind(), Some(ToggleKind::Selected));
+    assert_eq!(Role::Grid.toggle_kind(), None);
+    assert_eq!(Role::ColumnHeader.toggle_kind(), None);
+    assert_eq!(Role::parse("table"), Some(Role::Grid));
+    assert_eq!(Role::parse("cell"), Some(Role::GridCell));
+    let header = |sort: Option<SortDirection>| Semantics {
+        sort,
+        ..Semantics::of(Role::ColumnHeader)
+    };
+    assert_eq!(Semantics::default().sort, None);
+    assert_ne!(header(Some(SortDirection::Ascending)), header(None));
+    assert_ne!(
+        header(Some(SortDirection::Ascending)),
+        header(Some(SortDirection::Descending))
+    );
+    assert_eq!(SortDirection::Ascending.as_str(), "ascending");
+    assert_eq!(SortDirection::Descending.as_str(), "descending");
+    assert_eq!(
+        SortDirection::Ascending.reversed(),
+        SortDirection::Descending
+    );
+}
+
+#[test]
+fn an_item_says_only_the_numbers_its_role_takes() {
+    assert_eq!(Role::TreeItem.positioning(), Some(Positioning::Nested));
+    assert_eq!(Role::ListItem.positioning(), Some(Positioning::Nested));
+    for role in [
+        Role::Option,
+        Role::MenuItem,
+        Role::MenuItemCheckBox,
+        Role::MenuItemRadio,
+        Role::Radio,
+        Role::Tab,
+    ] {
+        assert_eq!(role.positioning(), Some(Positioning::InSet), "{role:?}");
+    }
+    assert_eq!(Role::Row.positioning(), Some(Positioning::GridRow));
+    for role in [Role::Heading(2), Role::Button, Role::Grid, Role::GridCell] {
+        assert_eq!(role.positioning(), None, "{role:?}");
+    }
+}
+
+#[test]
+fn a_modal_layer_is_said_by_an_annotation_and_is_part_of_what_the_box_is() {
+    let layer = Annotation {
+        modal: Some(Modal {
+            layer: 3,
+            opened_from: Some(7),
+        }),
+        ..Annotation::default()
+    };
+    assert!(!layer.is_empty());
+    let said = Semantics::group().annotated(&layer);
+    assert_eq!(said.modal, layer.modal);
+    assert_ne!(said, Semantics::group());
+    assert_eq!(
+        said.clone().annotated(&Annotation::default()).modal,
+        said.modal,
+        "an annotation that says nothing of it leaves it"
+    );
 }

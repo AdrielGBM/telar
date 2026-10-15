@@ -380,3 +380,23 @@ fn a_failure_the_host_caught_before_an_attached_run_fails_it() {
     assert_eq!(play.steps().len(), 1);
     assert_eq!(play.steps()[0].action, "play");
 }
+
+/// A tap outside a panel lands in the widest room left around it, and a panel that covers the canvas leaves none.
+#[test]
+fn the_room_outside_a_node_is_the_widest_strip_beside_it() {
+    let canvas = Size::new(400.0, 300.0);
+    let drawer = crate::Rect::new(0.0, 0.0, 120.0, 300.0);
+    assert_eq!(
+        room_outside(drawer, canvas),
+        Some(crate::Rect::new(120.0, 0.0, 280.0, 300.0))
+    );
+    let sheet = crate::Rect::new(0.0, 200.0, 400.0, 100.0);
+    assert_eq!(
+        room_outside(sheet, canvas),
+        Some(crate::Rect::new(0.0, 0.0, 400.0, 200.0))
+    );
+    assert_eq!(
+        room_outside(crate::Rect::new(0.0, 0.0, 400.0, 300.0), canvas),
+        None
+    );
+}

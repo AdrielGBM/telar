@@ -40,6 +40,8 @@ impl EventHandler<TestWindow> for TestHandler {
             controls: None,
             has_popup: None,
             keyboard_shortcut: None,
+            sort: None,
+            modal: false,
         }]
     }
 }

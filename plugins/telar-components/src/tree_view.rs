@@ -1,20 +1,20 @@
 //! [`tree_view`]: a hierarchy of rows, opened, closed and walked from the keyboard, with only the rows on screen built.
 
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Clip, ClippedItem, Color, Container,
-    Direction, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
-    NamedKey, Props, Reactive, RectStyle, RwSignal, ScrollViewport, ShapeStyle, StyledContainer,
-    Text, TextWrap, VirtualList, box_item, current_direction,
+    Accessible, AlignItems, Children, Clip, ClippedItem, Color, Container, Direction,
+    JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey,
+    Props, Reactive, RectStyle, RwSignal, ScrollViewport, StyledContainer, Text, TextWrap,
+    VirtualList, box_item, current_direction,
     focus::{self, FocusId, Role, SetPosition},
-    memo, on_cleanup, signal,
+    memo, signal,
 };
 
-use crate::list::tinted;
+use crate::rows::{BuiltRows, RowState, cursor_row_paint, reveal_band};
 use crate::shared;
 use crate::type_ahead::TypeAhead;
 
@@ -174,7 +174,7 @@ pub fn tree_view(
             viewport,
             row_height,
             focus: Cell::new(None),
-            built: signal(HashMap::new()),
+            built: BuiltRows::new(),
         });
         made = Some(tree.clone());
         let source = {
@@ -182,7 +182,7 @@ pub fn tree_view(
             move || tree.flat.with(|flat| flat.0.as_ref().clone())
         };
         let rows = VirtualList::new(
-            LayoutStyle::new().flex_column(),
+            LayoutStyle::column(),
             tree.viewport.clone(),
             row_height,
             OVERSCAN,
@@ -287,8 +287,7 @@ struct Tree {
     viewport: ScrollViewport,
     row_height: f32,
     focus: Cell<Option<FocusId>>,
-    /// The presented control of each row that is built, by node id: what the cursor names to a reader.
-    built: RwSignal<HashMap<Arc<str>, FocusId>>,
+    built: BuiltRows<Arc<str>>,
 }
 
 impl Tree {
@@ -322,22 +321,7 @@ impl Tree {
     }
 
     fn cursor_row(&self) -> Option<FocusId> {
-        let id = self.cursor.get()?;
-        self.built.with(|built| built.get(&id).copied())
-    }
-
-    fn row_built(&self, id: Arc<str>, row: FocusId) {
-        self.built.update(|built| {
-            built.insert(id, row);
-        });
-    }
-
-    fn row_dropped(&self, id: &str, row: FocusId) {
-        if self.built.is_alive() && self.built.peek_with(|built| built.get(id) == Some(&row)) {
-            self.built.update(|built| {
-                built.remove(id);
-            });
-        }
+        self.built.get(&self.cursor.get()?)
     }
 
     /// Puts the cursor where Tab arriving at the tree should find it: on the selection, or on the first row.
@@ -358,23 +342,12 @@ impl Tree {
         self.reveal(index);
     }
 
-    /// Scrolls the least distance that brings row `index` fully into view, worked out from the fixed row height because the row may not be built.
     fn reveal(&self, index: usize) {
-        let (x, offset) = self.viewport.peek_offset();
-        let height = self.viewport.rect().peek().height;
-        if height <= 0.0 {
-            return;
-        }
-        let top = index as f32 * self.row_height;
-        let bottom = top + self.row_height;
-        let target = if top < offset {
-            top
-        } else if bottom > offset + height {
-            bottom - height
-        } else {
-            return;
-        };
-        self.viewport.scroll_to(x, target);
+        reveal_band(
+            &self.viewport,
+            index as f32 * self.row_height,
+            self.row_height,
+        );
     }
 
     /// What a click, Enter or Space does to the row at `index`: selects it, or opens or shuts it when it is a branch the tree does not select.
@@ -572,20 +545,17 @@ fn build_row(
         built
     };
     if let Some(focus_id) = built.focus_id() {
-        tree.row_built(id.clone(), focus_id);
-        let tree = tree.clone();
-        on_cleanup(move || tree.row_dropped(&id, focus_id));
+        tree.built.track(id, focus_id);
     }
     Ok(box_item(built))
 }
 
 /// The open-or-shut chevron, or the empty column a leaf keeps so its label lines up with its siblings'. Pressing it toggles the branch without selecting the row, and a reader hears the row's state rather than the mark.
 fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let column = LayoutStyle::new()
+    let column = LayoutStyle::row()
         .width(shared::icon_size())
         .height(tree.row_height)
         .flex_shrink(0.0)
-        .flex_row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER);
     if !row.node.is_branch() {
@@ -606,7 +576,7 @@ fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError>
             tree.take_focus();
         }
     };
-    let caret = StyledContainer::new(column, |_r| RectStyle::default(), vec![mark])?
+    let caret = Container::new(column, vec![mark])?
         .role(Role::Group)
         .on_press(toggle)
         .a11y_hidden();
@@ -615,8 +585,7 @@ fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError>
 
 fn row_box(level: u32, height: f32) -> LayoutStyle {
     let tokens = TreeViewTokens::current();
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .height(height)
         .flex_shrink(0.0)
@@ -627,27 +596,15 @@ fn row_box(level: u32, height: f32) -> LayoutStyle {
 
 /// The selection and the pointer wash the row, at the theme's strengths and in the tree's colour when it was given one; the keyboard cursor rings it while the tree shows focus, so the two read apart when they are on different rows.
 fn row_paint(tree: &Tree, id: &str, color: &Reactive<Color>, hovered: bool) -> RectStyle {
-    let mut style =
-        RectStyle::default().with_radius(BorderRadius::all(TreeViewTokens::current().radius()));
-    if tree.is_selected(id) {
-        style = style.with_fill(tinted(color, shared::held_wash()));
-    } else if hovered {
-        style = style.with_fill(tinted(color, shared::hover_wash()));
-    }
-    if tree.shows_cursor(id) {
-        let ring = shared::focus_ring();
-        let tone = color.get();
-        let ring = if tone == Color::TRANSPARENT {
-            ring
-        } else {
-            Border {
-                paint: tone.into(),
-                ..ring
-            }
-        };
-        style = style.with_border(ring);
-    }
-    style
+    cursor_row_paint(
+        TreeViewTokens::current().radius(),
+        color,
+        RowState {
+            selected: tree.is_selected(id),
+            hovered,
+            cursor: tree.shows_cursor(id),
+        },
+    )
 }
 
 #[cfg(test)]

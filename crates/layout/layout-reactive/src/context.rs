@@ -617,6 +617,11 @@ pub fn set_container_row(node: NodeId) {
     mark_dirty(node).ok();
 }
 
+/// Whether `node` sticks to the edges of the view it is seen through, which stacks it above the boxes beside it. See [`LayoutStyle::sticky`](layout_core::LayoutStyle::sticky).
+pub fn is_sticky(node: NodeId) -> bool {
+    with_runtime(|rt| rt.engine.is_sticky(node))
+}
+
 /// Whether `node` is a flex row (main axis horizontal). A transparent `for … gap:N` fragment reads its host container's axis to know which edge the per-item gap margin sits on.
 pub fn container_is_row(node: NodeId) -> bool {
     with_runtime(|rt| rt.engine.is_row(node))

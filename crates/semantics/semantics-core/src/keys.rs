@@ -141,6 +141,9 @@ impl Role {
             Self::Slider | Self::Toolbar => K::ARROWS,
             Self::Splitter => K::ARROWS | K::EDGES | K::ENTER,
             Self::Tree | Self::TreeItem => K::ARROWS | K::EDGES | K::ENTER | K::SPACE,
+            Self::Grid | Self::Row | Self::GridCell | Self::ColumnHeader => {
+                K::ARROWS | K::EDGES | K::PAGING | K::ENTER | K::SPACE
+            }
             Self::SpinButton => K::ARROWS | K::ENTER,
             Self::TextInput => K::ARROWS | K::EDGES | K::SPACE | K::ENTER | K::BACKSPACE,
             Self::MultilineTextInput => {

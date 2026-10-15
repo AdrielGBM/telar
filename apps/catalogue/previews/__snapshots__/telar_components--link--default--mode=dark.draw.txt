@@ -1,0 +1,49 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element link
+            rect 351,263 98x17 radius=6
+            element group
+              matrix 1,0,0,1,351,263
+                text 0,0 98.53x16.8 "Getting started" size=14 family=sans-serif weight=400 color=#7394ffff wrap=none underline=font underline-offset=font lang=en
+              end
+            end
+            element group
+            end
+          end
+          element link
+            rect 351,292 98x16 radius=6
+            element group
+              matrix 1,0,0,1,351,292
+                text 0,0 84x16.8 "Source code" size=14 family=sans-serif weight=400 color=#7394ffff wrap=none underline=font underline-offset=font lang=en
+              end
+            end
+            element group
+              element group
+                element group
+                  matrix 1,0,0,1,437,295
+                    path M4,0 L10,0 L10,6 M10,0 L0,10 stroke=1.5 stroke-color=#7394ffff
+                  end
+                end
+              end
+            end
+          end
+          element link
+            rect 351,321 98x17 radius=6
+            element group
+              matrix 1,0,0,1,351,321
+                text 0,0 40x16.8 "Home" size=14 family=sans-serif weight=600 color=#7394ffff wrap=none underline=font underline-offset=font lang=en
+              end
+            end
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

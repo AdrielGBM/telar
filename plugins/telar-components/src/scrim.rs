@@ -5,8 +5,8 @@ use std::rc::Rc;
 
 use telar::{
     Component, Container, DismissRegistration, Effect, Event, EventResult, LayoutError, LayoutItem,
-    LayoutStyle, NodeId, Overlay, ReactiveList, Rect, RenderNode, RwSignal, Size, box_item, effect,
-    signal,
+    LayoutStyle, NodeId, Overlay, ReactiveList, Rect, RenderNode, RwSignal, Size, box_item,
+    children, effect, signal,
 };
 
 /// The dismiss handler the helper hands to each widget's scrim (and, for `modal`, its Close): shared so both affordances run the same "set `open = false`, then `on_close`" without rebuilding it per tap target.
@@ -158,11 +158,8 @@ pub(crate) fn scrim_overlay(
             let inner = build_inner(dismiss.clone())?;
             // Kept mounted; shown only while `open`. So the pre-built body survives a close/reopen (not rebuilt).
             let open = open;
-            let overlay = Overlay::toggleable(
-                LayoutStyle::new().flex_column(),
-                vec![box_item(inner)],
-                move || open.get(),
-            )?;
+            let overlay =
+                Overlay::toggleable(LayoutStyle::column(), children![inner], move || open.get())?;
             let registration = track_dismissible(open, overlay.layout_node(), dismiss.clone());
             let focus_handover = track_focus_handover(open, overlay.content_node());
             Ok(box_item(Dismissible {

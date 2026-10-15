@@ -38,7 +38,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )?;
             let echo = super::sample::text_of(Reactive::of(move || format!("agree · {}", agree.get())))?;
             Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column().gap(metrics::gap_md()),
+                LayoutStyle::column().gap(metrics::gap_md()),
                 vec![check, echo],
             )?)
         })

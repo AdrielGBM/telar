@@ -62,8 +62,7 @@ impl IconButtonTokens {
 }
 
 fn shell() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .padding_all(shared::icon_pad())
@@ -249,16 +248,14 @@ pub(crate) fn picture(
             }
         },
     )?;
-    let frame = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+    let frame = Container::new(
+        LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
             .width(size)
             .height(size)
             .flex_shrink(0.0),
-        |_| RectStyle::default(),
-        vec![box_item(glyph)],
+        telar::children![glyph],
     )?
     .a11y_hidden();
     Ok(box_item(frame))

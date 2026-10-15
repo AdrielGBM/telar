@@ -1,0 +1,38 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              matrix 1,0,0,1,192,252
+                clip 0,0 144x96 radius=6
+                  image 0,0 144x96 source=96x64
+                end
+              end
+            end
+          end
+          element group
+            element group
+              rect 352,252 96x96 fill=#f5f7fcff radius=6
+            end
+          end
+          element group
+            element group
+              rect 464,252 144x96 fill=#f5f7fcff radius=6
+              element group
+                clip 497,252 78x96
+                  matrix 1,0,0,1,497,252
+                    text 0,40 78.28x14.28 "Chart of sales" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

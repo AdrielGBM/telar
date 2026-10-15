@@ -187,14 +187,12 @@ pub fn toolbar(
     let items = children.build_with(context.clone())?.take_default();
 
     let layout = move || {
-        let style = LayoutStyle::new()
-            .gap(shared::gap_xs())
-            .align_items(AlignItems::CENTER);
-        if vertical {
-            style.flex_column()
+        let style = if vertical {
+            LayoutStyle::column()
         } else {
-            style.flex_row()
-        }
+            LayoutStyle::row()
+        };
+        style.gap(shared::gap_xs()).align_items(AlignItems::CENTER)
     };
     let keys = if vertical {
         ConsumedKeys::VERTICAL_ARROWS

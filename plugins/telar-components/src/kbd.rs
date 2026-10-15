@@ -1,10 +1,10 @@
 //! [`kbd`]: a key cap per key of a shortcut, for hints beside a command.
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Chord, JustifyContent, LayoutError,
-    LayoutItem, LayoutStyle, NodeId, Props, Reactive, ReactiveList, RectStyle, ShapeStyle,
-    StyledContainer, SurfaceAmendment, Text, TextWrap, amend_surface, box_item,
-    keyboard_convention, style_follows,
+    Accessible, AlignItems, Border, BorderRadius, Children, Chord, Container, JustifyContent,
+    LayoutError, LayoutItem, LayoutStyle, NodeId, Props, Reactive, ReactiveList, RectStyle,
+    ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, amend_surface, box_item,
+    children, keyboard_convention, style_follows,
 };
 
 use crate::shared::{self, shown_chord};
@@ -63,18 +63,13 @@ pub fn kbd(props: KbdProps, _children: Children) -> Result<Box<dyn LayoutItem>, 
     )?
     .a11y_hidden();
     style_follows(caps.layout_node(), caps_row);
-    let row = StyledContainer::new(
-        LayoutStyle::new().flex_row(),
-        |_| RectStyle::default(),
-        vec![box_item(caps)],
-    )?
-    .a11y_label(move || shown_chord(&spoken.get()));
+    let row = Container::new(LayoutStyle::row(), children![caps])?
+        .a11y_label(move || shown_chord(&spoken.get()));
     Ok(box_item(row))
 }
 
 fn caps_row() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .gap(shared::gap_xs())
 }
@@ -83,8 +78,7 @@ fn caps_row() -> LayoutStyle {
 fn cap_box(text: NodeId) -> LayoutStyle {
     let pad_y = shared::gap_xs();
     let line = telar::single_line_box(shared::control_text_size(text, shared::CAPTION_RATIO));
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .min_width(line + pad_y * 2.0)
@@ -109,7 +103,7 @@ fn cap(label: String, style: Option<SurfaceAmendment>) -> Result<Box<dyn LayoutI
                 .with_radius(BorderRadius::all(tokens.radius()));
             amend_surface(rect, &style)
         },
-        vec![box_item(text)],
+        children![text],
     )?
     .styled_by(move || cap_box(text_node));
     Ok(box_item(cap))

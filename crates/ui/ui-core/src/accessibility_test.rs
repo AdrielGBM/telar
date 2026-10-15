@@ -1004,6 +1004,8 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
         controls: None,
         has_popup: None,
         keyboard_shortcut: None,
+        sort: None,
+        modal: false,
     };
     let nested = |surface| NestedSurface {
         surface,
@@ -1022,4 +1024,75 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
         "a surface nested deeper keeps its own handle in the id"
     );
     assert_eq!(AccessTarget::of(3), AccessTarget::Own(3));
+}
+
+/// While a modal layer is up a reader keeps to it, as Tab does: the page's text under it is not read, the layer's is, and a dialog in it is modal. The control it was opened from is still read by what it draws, and closing the layer gives the page back.
+#[test]
+fn a_modal_layer_that_is_up_keeps_a_reader_inside_it() {
+    use crate::annotation::Accessible;
+    use crate::{Overlay, WindowRoot, relayout_if_dirty};
+
+    reset_layout_runtime();
+    focus::clear();
+    let words = |text: &'static str| {
+        box_item(
+            Text::new(
+                move || text.to_string(),
+                LayoutStyle::new().width(120.0).height(16.0),
+                || TextStyle::new(12.0, renderer_core::Color::BLACK),
+            )
+            .unwrap(),
+        )
+    };
+    let open = reactive_core::signal(true);
+    let opener = StyledContainer::new(
+        LayoutStyle::new().width(120.0).height(30.0),
+        |_r| RectStyle::default(),
+        vec![words("Choose")],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {});
+    let opener_node = opener.layout_node();
+    let dialog = StyledContainer::new(
+        LayoutStyle::new().width(200.0).height(100.0),
+        |_r| RectStyle::default(),
+        vec![words("Accept the terms")],
+    )
+    .unwrap()
+    .role(Role::Dialog)
+    .a11y_label(|| "Terms");
+    let layer = Overlay::toggleable(LayoutStyle::new(), vec![box_item(dialog)], move || {
+        open.get()
+    })
+    .unwrap()
+    .owned_by(opener_node);
+    let page = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![words("Background notes"), box_item(opener), box_item(layer)],
+    )
+    .unwrap();
+    crate::set_surface_size(geometry_core::Size::new(400.0, 300.0));
+    let mut tree = ui_tree::ComponentList::new(WindowRoot::wrapping(Box::new(page)).unwrap());
+    tree.on_event(&Event::WindowResized {
+        width: 400,
+        height: 300,
+    });
+    relayout_if_dirty();
+
+    let nodes = snapshot(&tree.commands());
+    assert!(!read_on_its_own(&nodes, "Background notes"), "{nodes:#?}");
+    assert!(read_on_its_own(&nodes, "Accept the terms"));
+    let dialog = nodes
+        .iter()
+        .find(|n| n.role == Role::Dialog)
+        .expect("the dialog is read");
+    assert!(dialog.modal);
+    assert_eq!(names_of(&nodes, Role::Button), ["Choose"]);
+
+    open.set(false);
+    relayout_if_dirty();
+    let nodes = snapshot(&tree.commands());
+    assert!(read_on_its_own(&nodes, "Background notes"));
+    assert!(nodes.iter().all(|n| n.role != Role::Dialog && !n.modal));
 }

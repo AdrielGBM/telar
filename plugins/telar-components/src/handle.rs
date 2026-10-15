@@ -9,7 +9,7 @@ use telar::{
     Transaction, amend_surface, box_item, focus::Role, signal, step_factor, use_theme_tokens,
 };
 
-use crate::edit::write_through;
+use crate::edit::{Stroke, write_through};
 use crate::shared;
 
 /// Where on the canvas the pointer asks for a value, as `(x, y)` → value.
@@ -105,28 +105,6 @@ struct Grab {
     offset: (f32, f32),
 }
 
-/// A drag under way, so [`HandleProps::on_end`] answers each [`HandleProps::on_start`] exactly once: at the release, at a cancel, or — when neither comes because the handle is gone — as the last closure holding it drops.
-struct Stroke {
-    on_end: Option<Rc<dyn Fn(bool)>>,
-    live: Cell<bool>,
-}
-
-impl Stroke {
-    fn end(&self, kept: bool) {
-        if self.live.replace(false)
-            && let Some(on_end) = &self.on_end
-        {
-            on_end(kept);
-        }
-    }
-}
-
-impl Drop for Stroke {
-    fn drop(&mut self) {
-        self.end(false);
-    }
-}
-
 pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let HandleProps {
         value,
@@ -169,10 +147,7 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
     let value = transaction.signal();
     let clamped = clamped.unwrap_or_else(|| signal(false));
     let grab: Rc<Cell<Option<Grab>>> = Rc::new(Cell::new(None));
-    let stroke = Rc::new(Stroke {
-        on_end,
-        live: Cell::new(false),
-    });
+    let stroke = Rc::new(Stroke::new(on_start, on_end));
 
     let placed = {
         let to_point = to_point.clone();
@@ -247,11 +222,7 @@ pub fn handle(props: HandleProps, _children: Children) -> Result<Box<dyn LayoutI
         let stroke = stroke.clone();
         move |local_x, local_y| {
             let held = grab.get().unwrap_or_else(|| {
-                if !stroke.live.replace(true)
-                    && let Some(on_start) = &on_start
-                {
-                    on_start();
-                }
+                stroke.start();
                 let at = value.peek();
                 let lift = placed(at);
                 let centre = to_point(at);

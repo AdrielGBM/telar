@@ -196,6 +196,8 @@ pub struct StyledContainer {
     link_token: Option<u64>,
     current: Option<Rc<dyn Fn() -> bool>>,
     hit_outset: Option<Rc<dyn Fn() -> Insets>>,
+    // Where a box that is no control sits; a control keeps it in the focus order with the rest of its state.
+    position: Option<Rc<dyn Fn() -> focus::SetPosition>>,
 }
 
 impl StyledContainer {
@@ -246,6 +248,7 @@ impl StyledContainer {
             link_token: None,
             current: None,
             hit_outset: None,
+            position: None,
         }
     }
 
@@ -279,6 +282,9 @@ impl StyledContainer {
             let declared = self.focusable.consumes.as_ref().map(|keys| keys());
             focus::describe(id, &mut semantics, declared);
         }
+        semantics.position = semantics
+            .position
+            .or_else(|| self.position.as_ref().map(|read| read()));
         semantics.disabled = self.is_disabled();
         if let Some(link) = &self.link {
             semantics = match link() {
@@ -705,10 +711,25 @@ impl StyledContainer {
         self
     }
 
-    /// Declares where this control sits in its hierarchy and among its siblings, for a reader that cannot count them: a row of a virtualised tree, whose neighbours may not be built.
-    pub fn positioned(self, position: focus::SetPosition) -> Self {
+    /// Declares where this box sits in its hierarchy and among its siblings, for a reader that cannot count them: a row of a virtualised tree, whose neighbours may not be built, or the header row of a table whose rows are not all built. A target says only the numbers the box's role takes ([`Role::positioning`](renderer_core::Role::positioning)).
+    pub fn positioned(mut self, position: focus::SetPosition) -> Self {
+        match self.focusable.id {
+            Some(id) => focus::set_position(id, position),
+            None => self.position = Some(Rc::new(move || position)),
+        }
+        self
+    }
+
+    /// [`positioned`](Self::positioned) for a box that is no control, re-read whenever what `read` reads changes: the header row of a table, whose count of rows is the table's.
+    pub fn positioned_by(mut self, read: impl Fn() -> focus::SetPosition + 'static) -> Self {
+        self.position = Some(Rc::new(read));
+        self
+    }
+
+    /// Declares which way the rows of the grid this column header heads are sorted by its column, re-read whenever what it reads changes: `None` while they are sorted by another column, or not at all. See [`focus::set_sort`].
+    pub fn sorted(self, read: impl Fn() -> Option<focus::SortDirection> + 'static) -> Self {
         if let Some(id) = self.focusable.id {
-            focus::set_position(id, position);
+            focus::set_sort(id, read);
         }
         self
     }
@@ -1161,7 +1182,11 @@ impl Component for StyledContainer {
         let content = match &self.dyn_host {
             Some(host) => RenderNode::group(background.chain(host.child_boundaries())),
             None => RenderNode::group(
-                background.chain(self.children.iter().map(|c| c.segment.boundary())),
+                background.chain(
+                    crate::layout_item::paint_order(self.children.iter().collect())
+                        .into_iter()
+                        .map(|c| c.segment.boundary()),
+                ),
             ),
         };
         let opacity = self.opacity.as_ref().map_or(1.0, |o| o());

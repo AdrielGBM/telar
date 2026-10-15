@@ -31,7 +31,7 @@ pub enum FocusKind {
 /// What a focusable *is*, for the reader that has to say it out loud — a separate question from [`FocusKind`], which asks what the widget does with a key.
 ///
 /// Defined in `platform-core` because it is the vocabulary the UI and the platform share, the same way [`Key`] is. Re-exported here because this is where it is *authored*: a widget declares its role at the moment it declares itself focusable, and the two are one call.
-pub use platform_core::{HasPopup, Role, SetPosition};
+pub use platform_core::{HasPopup, Role, SetPosition, SortDirection};
 
 /// A cheap, `Copy` handle to a focusable widget's identity, so a caller that has moved the widget into a container (and no longer holds a reference to it) can still drive its focus — e.g. autofocus a hosted editor when its tab activates. Obtain one from the widget (see [`crate::TextArea::focus_handle`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -912,6 +912,7 @@ struct Outline {
     has_popup: Option<HasPopup>,
     shortcut: Option<Rc<dyn Fn() -> String>>,
     position: Option<SetPosition>,
+    sort: Option<Rc<dyn Fn() -> Option<SortDirection>>>,
 }
 
 /// Declares that `id` has rows under it, and how to read whether it shows them now.
@@ -948,6 +949,16 @@ pub fn set_position(id: FocusId, position: SetPosition) {
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
             entry.outline.position = Some(position);
+        }
+    });
+}
+
+/// Declares that `id` heads a column of a grid, and how to read which way the rows are sorted by it now: `None` while they are sorted by another column, or not at all.
+pub fn set_sort(id: FocusId, read: impl Fn() -> Option<SortDirection> + 'static) {
+    let read: Rc<dyn Fn() -> Option<SortDirection>> = Rc::new(read);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.outline.sort = Some(read);
         }
     });
 }
@@ -995,6 +1006,8 @@ pub struct Exposed {
     /// The chord that runs the same command, in `aria-keyshortcuts` syntax; `None` where it declared none or what it declared names no chord.
     pub keyboard_shortcut: Option<Arc<str>>,
     pub position: Option<SetPosition>,
+    /// Which way a column header says the rows are sorted by its column; `None` for every other control.
+    pub sort: Option<SortDirection>,
 }
 
 /// The focusables a screen reader should be told about, in the order they registered; a scroll area only while it is a stop of its own.
@@ -1082,9 +1095,46 @@ pub fn exposed() -> Vec<Exposed> {
                     .and_then(|read| aria_shortcut(&read()))
                     .map(Into::into),
                 position: outline.position,
+                sort: outline.sort.as_ref().and_then(|read| read()),
             })
         })
         .collect()
+}
+
+/// The scopes that hold the keyboard inside themselves while they show, read once for a reader walking a whole frame: what keeps a box that is not a control out of what a reader is told, by the rule [`exposed`] keeps a control out by.
+pub(crate) struct ModalLayers(Vec<ModalLayer>);
+
+/// A modal layer's box, whether it is showing, and the control it was opened from.
+type ModalLayer = (NodeId, Rc<dyn Fn() -> bool>, Option<NodeId>);
+
+impl ModalLayers {
+    pub(crate) fn now() -> Self {
+        Self(with_focus_ref(|s| {
+            s.scopes
+                .iter()
+                .filter(|sc| sc.traps && sc.reason == ScopeReason::NotShowing)
+                .map(|sc| (sc.node, sc.showing.clone(), sc.owner))
+                .collect()
+        }))
+    }
+
+    /// Whether `node` is out of reach behind the topmost layer that is up, which it is unless it is inside that layer or inside the control the layer was opened from.
+    pub(crate) fn behind(&self, node: NodeId) -> bool {
+        self.0
+            .iter()
+            .rev()
+            .find(|(_, showing, owner)| {
+                showing() && !owner.is_some_and(|owner| crate::input_region::is_inside(node, owner))
+            })
+            .is_some_and(|(layer, ..)| !crate::input_region::is_inside(node, *layer))
+    }
+
+    /// Whether `node` is inside a layer that is up.
+    pub(crate) fn holds(&self, node: NodeId) -> bool {
+        self.0
+            .iter()
+            .any(|(layer, showing, _)| showing() && crate::input_region::is_inside(node, *layer))
+    }
 }
 
 /// Moves focus to the first reachable focusable inside `node`, reporting whether it found one.
@@ -1151,6 +1201,7 @@ pub(crate) fn describe(
     semantics.has_popup = has_popup_state(id);
     semantics.keyboard_shortcut = keyboard_shortcut_state(id).map(Into::into);
     semantics.position = position_state(id);
+    semantics.sort = sort_state(id);
     semantics.active_descendant = active_descendant_state(id).and_then(node_of).map(u64::from);
     semantics.controls = controls_state(id).and_then(node_of).map(u64::from);
     semantics.focusable = Some(focusable_of(id, semantics.role, declared));
@@ -1326,6 +1377,12 @@ pub fn has_popup_state(id: FocusId) -> Option<HasPopup> {
 /// Where `id` said it sits, if it said.
 pub fn position_state(id: FocusId) -> Option<SetPosition> {
     with_focus(|s| s.entry(id).and_then(|e| e.outline.position))
+}
+
+/// Which way `id` said the rows are sorted by the column it heads, read now. Read inside `view()` for the same reason as [`toggled_state`].
+pub fn sort_state(id: FocusId) -> Option<SortDirection> {
+    let read = with_focus(|s| s.entry(id).and_then(|e| e.outline.sort.clone()))?;
+    read()
 }
 
 /// The control the cursor of `container` rests on, read now; `None` when it declared no cursor, or names a control no longer registered. Read inside `view()` for the same reason as [`toggled_state`].

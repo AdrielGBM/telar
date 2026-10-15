@@ -125,6 +125,48 @@ select's combobox. It never changes; whether the list is open now is `expanded(|
 `aria-haspopup="menu"` or `"listbox"` in a document, AccessKit `has_popup` on the desktop, and `, has menu` or
 `, has listbox` in the terminal's reading (`File, button, has menu, collapsed`).
 
+## What a modal layer shuts out
+
+A layer that holds the keyboard inside itself shuts the rest of its surface out for a reader as it does for Tab:
+the catalogue's `modal`, `drawer` and command palette, and also a `menu`, a `context_menu`, a submenu and the list a
+`select` opens. From Rust it is an `Overlay::new` or `Overlay::toggleable`, and its rule is the one `focus`
+already walks Tab by: only the topmost layer that is up is reachable, and a layer opened from a field inside a
+dialog shuts the dialog out too.
+
+Menus are included on purpose. WAI-ARIA's menu button does not make the page inert, and a browser's own menus do
+not, but a Telar menu traps focus (Tab stays in it) and its backdrop takes every press outside it. What the
+keyboard and the pointer cannot reach while it is open, a reader is not offered either: one rule for every layer
+that traps, rather than a page a reader can wander through and nothing else can.
+
+The control a layer was opened from stays (`Overlay::owned_by`): a menu button keeps saying its menu is expanded,
+and a select's combobox keeps the keyboard and points at the option its cursor is on. A tooltip, a toast and a
+layer fixed over the page hold nothing and shut nothing out.
+
+| Target | While a modal layer is up |
+| --- | --- |
+| Browser, document (`web-dom`) | `inert` on every box of the surface beside the layer and the control it was opened from, written as high up as it can go: the page's outermost box, or the boxes beside the path down to the control. A `dialog` inside the layer says `aria-modal="true"`. Both go when it closes. A layer in a surface drawn inside a frame shuts out only that surface, since each surface holds its own keyboard. |
+| Desktop | The controls behind it were already left out of the AccessKit tree; the text and the named boxes behind it are left out too, and a dialog inside it is AccessKit `modal`. |
+| Terminal | The reading is the same snapshot, so what is behind it is not in the reading. |
+
+In a play the page behind a modal layer is not in the tree either; a tap that puts the layer away is
+`click_outside` (see [previews.md](previews.md#play)).
+
+## Where an item sits
+
+A list or a tree that builds only the rows on screen leaves a reader counting a screenful, so each row it builds
+says where it sits among them all: from Rust `StyledContainer::positioned(SetPosition { level, position, size })`,
+counted from one, or `positioned_by(|| …)` for a box that is no control and whose place changes, such as the header
+row of a table. A target says only the numbers the row's role takes (`Role::positioning`):
+
+| Role | Browser, document (`web-dom`) | Desktop |
+| --- | --- | --- |
+| `treeitem`, `listitem` | `aria-level`, `aria-posinset`, `aria-setsize` | AccessKit level and position in set, from zero |
+| `option`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `radio`, `tab`, `article` | `aria-posinset`, `aria-setsize` | Position in set |
+| `row` | `aria-rowindex`, and the `grid` it is in `aria-rowcount`: the row's `size`, its header row included | Row index |
+
+Any other role says none of them. `tree_view` says it for its rows, `virtual_list` for its options and `data_table`
+for its rows, its header row first.
+
 ## Regions that scroll
 
 A scroll area whose content overflows and holds nothing the keyboard can stop on (a dialog's long text, a log,
@@ -140,10 +182,11 @@ The page's own scroll is never one: it scrolls with nothing focused. A scroll ar
 (`LayoutScrollArea::control`, a tree or a list box) is a stop whether or not it overflows, and one that is
 only presented (`LayoutScrollArea::presented`, the list a select opens) never is.
 
-A reader landing on it has to hear what it scrolls. From Rust, `LayoutScrollArea::stop_label(|| …)` names it
-while it is a stop and leaves it nameless otherwise, so a region that fits is not announced a second time
-inside the box that already names it. The catalogue's `modal` names its body after its title and `drawer`
-after its label. `label:` on `scroll` (`.a11y_label`) names it always.
+A reader landing on it has to hear what it scrolls. `label:` on `scroll` (`LayoutScrollArea::stop_label(|| …)`
+from Rust) names it while it is a stop and leaves it nameless otherwise, so a region that fits is not announced
+a second time inside the box that already names it. The catalogue's `modal` names its body after its title and
+`drawer` after its label. A scroll area that is a control is named the way any box is, with `.a11y_label`; markup
+has no way to make a `scroll` one, so there `label:` always means the stop's name.
 
 | Target | A scroll area that is a stop |
 | --- | --- |

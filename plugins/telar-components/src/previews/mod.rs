@@ -14,15 +14,19 @@ mod color_picker;
 mod command_palette;
 #[cfg(feature = "overlays")]
 mod context_menu;
+#[cfg(feature = "advanced")]
+mod data_table;
 #[cfg(feature = "overlays")]
 mod drawer;
 mod handle;
 mod heading;
 #[cfg(feature = "workbench")]
 mod icon_button;
+mod image;
 #[cfg(feature = "overlays")]
 mod kbd;
 mod line_gutter;
+mod link;
 mod list;
 #[cfg(feature = "overlays")]
 mod menu;
@@ -34,8 +38,11 @@ mod radio;
 mod reorder_zones;
 #[cfg(feature = "advanced")]
 mod reorderable;
+#[cfg(feature = "workbench")]
+mod resizable;
 mod sample;
 mod scrub_field;
+mod search_field;
 mod section;
 mod select;
 mod slider;
@@ -47,6 +54,7 @@ mod stepper;
 mod swatches;
 mod tabs;
 mod text_field;
+mod textarea;
 #[cfg(feature = "overlays")]
 mod toast;
 mod toggle;
@@ -56,6 +64,8 @@ mod toolbar;
 mod tooltip;
 #[cfg(feature = "workbench")]
 mod tree_view;
+#[cfg(feature = "advanced")]
+mod virtual_list;
 #[cfg(feature = "chrome")]
 mod window_controls;
 #[cfg(feature = "chrome")]
@@ -71,6 +81,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     let mut entries = Vec::new();
     entries.extend(button::previews());
     entries.extend(text_field::previews());
+    entries.extend(textarea::previews());
+    entries.extend(search_field::previews());
     entries.extend(select::previews());
     entries.extend(checkbox::previews());
     entries.extend(toggle::previews());
@@ -83,6 +95,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(stepper::previews());
     entries.extend(badge::previews());
     entries.extend(chip::previews());
+    entries.extend(image::previews());
+    entries.extend(link::previews());
     #[cfg(feature = "overlays")]
     entries.extend(kbd::previews());
     entries.extend(progress::previews());
@@ -90,6 +104,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(heading::previews());
     entries.extend(section::previews());
     entries.extend(list::previews());
+    #[cfg(feature = "advanced")]
+    entries.extend(virtual_list::previews());
+    #[cfg(feature = "advanced")]
+    entries.extend(data_table::previews());
     #[cfg(feature = "advanced")]
     entries.extend(accordion::previews());
     #[cfg(feature = "advanced")]
@@ -117,6 +135,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(toolbar::previews());
     #[cfg(feature = "workbench")]
     entries.extend(split_pane::previews());
+    #[cfg(feature = "workbench")]
+    entries.extend(resizable::previews());
     #[cfg(feature = "workbench")]
     entries.extend(tree_view::previews());
     #[cfg(feature = "workbench")]

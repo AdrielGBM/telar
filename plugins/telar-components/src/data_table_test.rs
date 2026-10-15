@@ -1,0 +1,360 @@
+use std::cell::RefCell;
+
+use telar::testing::{centre, lay_out, named, press, release, route};
+use telar::{AccessNode, ComponentList, Event, Rect, relayout_if_dirty};
+
+use super::*;
+
+fn columns() -> Vec<Column> {
+    vec![
+        Column::new("name", "Name").sortable(true),
+        Column::new("size", "Size")
+            .fixed(80.0)
+            .align(CellAlign::End)
+            .sortable(true),
+        Column::new("kind", "Kind"),
+    ]
+}
+
+fn files() -> Vec<TableRow> {
+    vec![
+        TableRow::new("b", ["beta.txt", "12", "Text"]),
+        TableRow::new("a", ["Alpha.rs", "9", "Rust"]),
+        TableRow::new("c", ["gamma.png", "100", "Image"]),
+    ]
+}
+
+fn many(count: usize) -> Vec<TableRow> {
+    (0..count)
+        .map(|i| {
+            TableRow::new(
+                format!("r{i}"),
+                [format!("Row {i}"), i.to_string(), "x".into()],
+            )
+        })
+        .collect()
+}
+
+struct Mounted {
+    tree: ComponentList,
+    sort: RwSignal<Option<TableSort>>,
+    selected: RwSignal<Option<Arc<str>>>,
+    log: Rc<RefCell<Vec<String>>>,
+}
+
+impl Mounted {
+    fn new(rows: Vec<TableRow>, height: f32) -> Self {
+        Self::build(rows, height, true)
+    }
+
+    fn build(rows: Vec<TableRow>, height: f32, sort_rows: bool) -> Self {
+        crate::test_support::fresh_layout_runtime();
+        telar::focus::clear();
+        let sort = signal(None);
+        let selected = signal(None);
+        let log = Rc::new(RefCell::new(Vec::new()));
+        let (sorted, chosen) = (log.clone(), log.clone());
+        let item = data_table(
+            DataTableProps::props()
+                .columns(columns())
+                .rows(rows)
+                .sort(sort)
+                .sort_rows(sort_rows)
+                .on_sort(Rc::new(move |sort: &TableSort| {
+                    sorted.borrow_mut().push(format!(
+                        "sort {} {}",
+                        sort.column,
+                        sort.direction.as_str()
+                    ))
+                }))
+                .selected(selected)
+                .on_select(Rc::new(move |row: &TableRow| {
+                    chosen.borrow_mut().push(format!("select {}", row.id))
+                }))
+                .label("Files")
+                .build(),
+            Children::default(),
+        )
+        .unwrap();
+        lay_out(item.layout_node(), 400.0, height);
+        let tree = ComponentList::new(item);
+        let mut mounted = Self {
+            tree,
+            sort,
+            selected,
+            log,
+        };
+        mounted.settle();
+        mounted
+    }
+
+    fn focused(rows: Vec<TableRow>, height: f32) -> Self {
+        let mut mounted = Self::new(rows, height);
+        let grid = telar::focus::exposed()
+            .into_iter()
+            .find(|exposed| exposed.role == Role::Grid)
+            .expect("a grid");
+        telar::focus::request(grid.id);
+        mounted.settle();
+        mounted
+    }
+
+    fn settle(&mut self) {
+        relayout_if_dirty();
+        let _ = self.tree.commands();
+        relayout_if_dirty();
+        let _ = self.tree.commands();
+    }
+
+    fn send(&mut self, event: Event) {
+        route(&mut self.tree, &event);
+        self.settle();
+    }
+
+    fn key(&mut self, key: NamedKey) {
+        self.send(named(key));
+    }
+
+    fn read(&self) -> Vec<AccessNode> {
+        ui_core::accessibility::snapshot(&self.tree.commands())
+    }
+
+    fn of_role(&self, role: Role) -> Vec<AccessNode> {
+        self.read()
+            .into_iter()
+            .filter(|node| node.role == role)
+            .collect()
+    }
+
+    fn names(&self, role: Role) -> Vec<String> {
+        self.of_role(role)
+            .into_iter()
+            .map(|node| node.name)
+            .collect()
+    }
+
+    fn first_column(&self) -> Vec<String> {
+        self.names(Role::GridCell).into_iter().step_by(3).collect()
+    }
+
+    fn header(&self, name: &str) -> AccessNode {
+        self.of_role(Role::ColumnHeader)
+            .into_iter()
+            .find(|node| node.name == name)
+            .unwrap_or_else(|| panic!("a `{name}` header"))
+    }
+
+    fn pointed(&self) -> Option<String> {
+        let nodes = self.read();
+        let grid = nodes.iter().find(|node| node.role == Role::Grid)?;
+        let cell = grid.active_descendant?;
+        nodes
+            .iter()
+            .find(|node| node.id == Some(cell))
+            .map(|node| node.name.clone())
+    }
+
+    fn click(&mut self, rect: Rect) {
+        let (x, y) = centre(rect);
+        self.send(press(x, y));
+        self.send(release(x, y));
+    }
+}
+
+#[test]
+fn a_table_is_a_named_grid_of_rows_under_its_column_headers() {
+    let mounted = Mounted::new(files(), 300.0);
+    let grid = mounted.of_role(Role::Grid);
+    assert_eq!(grid.len(), 1);
+    assert_eq!(grid[0].name, "Files");
+    assert_eq!(mounted.names(Role::ColumnHeader), ["Name", "Size", "Kind"]);
+    assert_eq!(mounted.of_role(Role::Row).len(), 3, "a row per row of data");
+    assert_eq!(
+        mounted.first_column(),
+        ["beta.txt", "Alpha.rs", "gamma.png"],
+        "unsorted, the rows stand as given"
+    );
+}
+
+#[test]
+fn a_press_on_a_sortable_header_sorts_by_it_and_a_second_turns_it_round() {
+    let mut mounted = Mounted::new(files(), 300.0);
+    assert_eq!(mounted.header("Name").sort, None);
+    mounted.click(mounted.header("Name").rect);
+    assert_eq!(
+        mounted.first_column(),
+        ["Alpha.rs", "beta.txt", "gamma.png"]
+    );
+    assert_eq!(
+        mounted.header("Name").sort,
+        Some(SortDirection::Ascending),
+        "a reader is told which way"
+    );
+    assert_eq!(mounted.header("Size").sort, None);
+    mounted.click(mounted.header("Name").rect);
+    assert_eq!(
+        mounted.first_column(),
+        ["gamma.png", "beta.txt", "Alpha.rs"]
+    );
+    assert_eq!(
+        *mounted.log.borrow(),
+        ["sort name ascending", "sort name descending"]
+    );
+}
+
+#[test]
+fn figures_sort_as_numbers() {
+    let mut mounted = Mounted::new(files(), 300.0);
+    mounted.click(mounted.header("Size").rect);
+    assert_eq!(
+        mounted.first_column(),
+        ["Alpha.rs", "beta.txt", "gamma.png"],
+        "9 before 12 before 100"
+    );
+}
+
+#[test]
+fn a_column_that_is_not_sortable_ignores_a_press() {
+    let mut mounted = Mounted::new(files(), 300.0);
+    mounted.click(mounted.header("Kind").rect);
+    assert_eq!(mounted.sort.get(), None);
+    assert!(mounted.log.borrow().is_empty());
+}
+
+#[test]
+fn rows_the_application_orders_itself_are_shown_as_given() {
+    let mut mounted = Mounted::build(files(), 300.0, false);
+    mounted.click(mounted.header("Name").rect);
+    assert_eq!(*mounted.log.borrow(), ["sort name ascending"]);
+    assert_eq!(
+        mounted.first_column(),
+        ["beta.txt", "Alpha.rs", "gamma.png"]
+    );
+}
+
+#[test]
+fn the_arrows_walk_a_cursor_from_cell_to_cell_and_enter_chooses_its_row() {
+    let mut mounted = Mounted::focused(files(), 300.0);
+    assert_eq!(mounted.pointed().as_deref(), Some("beta.txt"));
+    mounted.key(NamedKey::ArrowRight);
+    assert_eq!(mounted.pointed().as_deref(), Some("12"));
+    mounted.key(NamedKey::ArrowDown);
+    assert_eq!(mounted.pointed().as_deref(), Some("9"));
+    mounted.key(NamedKey::End);
+    assert_eq!(mounted.pointed().as_deref(), Some("Rust"));
+    mounted.key(NamedKey::Home);
+    assert_eq!(mounted.pointed().as_deref(), Some("Alpha.rs"));
+    assert_eq!(mounted.selected.get(), None, "walking chooses nothing");
+    mounted.key(NamedKey::Enter);
+    assert_eq!(mounted.selected.get().as_deref(), Some("a"));
+    assert_eq!(*mounted.log.borrow(), ["select a"]);
+    let chosen: Vec<bool> = mounted
+        .of_role(Role::Row)
+        .into_iter()
+        .map(|row| row.toggled == Some(true))
+        .collect();
+    assert_eq!(chosen, [false, true, false], "the chosen row says so");
+}
+
+#[test]
+fn up_from_the_first_row_reaches_the_header_where_enter_sorts() {
+    let mut mounted = Mounted::focused(files(), 300.0);
+    mounted.key(NamedKey::ArrowUp);
+    assert_eq!(mounted.pointed().as_deref(), Some("Name"));
+    mounted.key(NamedKey::Enter);
+    assert_eq!(mounted.header("Name").sort, Some(SortDirection::Ascending));
+    assert_eq!(mounted.pointed().as_deref(), Some("Name"));
+}
+
+#[test]
+fn only_a_screenful_of_thousands_of_rows_is_built_and_the_header_stays_on_top() {
+    let mut mounted = Mounted::focused(many(5_000), 240.0);
+    let row_height = DataTableTokens::current().row_height();
+    let screenful = (240.0 / row_height).ceil() as usize + 1;
+    let built = mounted.of_role(Role::Row).len();
+    assert!(
+        built <= screenful + OVERSCAN * 2,
+        "{built} rows built for a view of {screenful}"
+    );
+    let top = mounted.header("Name").rect.y;
+    mounted.key(NamedKey::PageDown);
+    mounted.key(NamedKey::PageDown);
+    mounted.key(NamedKey::PageDown);
+    let page = ((240.0 - row_height) / row_height).floor() as usize;
+    let expected = format!("Row {}", page * 3);
+    assert_eq!(mounted.pointed().as_deref(), Some(expected.as_str()));
+    assert_eq!(
+        mounted.header("Name").rect.y,
+        top,
+        "the header is held at the top while the rows scroll"
+    );
+    let cursor = mounted
+        .of_role(Role::GridCell)
+        .into_iter()
+        .find(|cell| cell.name == expected)
+        .expect("the cursor's row is built");
+    assert!(
+        cursor.rect.y >= top + row_height - 0.5,
+        "and the cursor's row is below it, not under it"
+    );
+    let ctrl = telar::ModifiersState {
+        is_ctrl: true,
+        ..Default::default()
+    };
+    mounted.send(Event::ModifiersChanged { modifiers: ctrl });
+    mounted.send(telar::testing::key_with(Key::Named(NamedKey::End), ctrl));
+    mounted.send(Event::ModifiersChanged {
+        modifiers: Default::default(),
+    });
+    assert_eq!(
+        mounted.pointed().as_deref(),
+        Some("x"),
+        "the last cell of the last row"
+    );
+}
+
+#[test]
+fn the_corner_of_the_cursor_follows_the_role_until_the_tokens_name_one() {
+    let radius = || DataTableTokens::current().radius();
+    telar::set_theme(crate::test_support::TokensTheme::<DataTableTokens> {
+        role: 7.0,
+        tokens: None,
+    });
+    assert_eq!(radius(), 7.0);
+    telar::set_theme(crate::test_support::TokensTheme {
+        role: 7.0,
+        tokens: Some(DataTableTokens {
+            radius: Some(2.0),
+            ..Default::default()
+        }),
+    });
+    assert_eq!(radius(), 2.0);
+}
+
+/// Every row built says its index among all the grid's rows, the header first, so a reader counts the table rather than the screenful.
+#[test]
+fn each_row_built_says_its_index_among_all_the_rows() {
+    let mut mounted = Mounted::focused(many(500), 240.0);
+    let indexes = |mounted: &Mounted| -> Vec<Option<u32>> {
+        mounted
+            .of_role(Role::Row)
+            .into_iter()
+            .map(|row| row.position.map(|place| place.position))
+            .collect()
+    };
+    let sizes: Vec<Option<u32>> = mounted
+        .of_role(Role::Row)
+        .into_iter()
+        .map(|row| row.position.map(|place| place.size))
+        .collect();
+    assert!(sizes.iter().all(|size| *size == Some(501)), "{sizes:?}");
+    assert_eq!(
+        indexes(&mounted)[0],
+        Some(2),
+        "the first row is under the header"
+    );
+    for _ in 0..100 {
+        mounted.key(NamedKey::PageDown);
+    }
+    assert_eq!(indexes(&mounted).last(), Some(&Some(501)));
+}

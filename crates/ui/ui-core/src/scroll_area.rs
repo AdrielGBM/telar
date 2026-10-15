@@ -784,7 +784,11 @@ impl ScrollViewport {
         let Some(item_rect) = track_layout(item) else {
             return;
         };
-        let item = item_rect.get();
+        self.reveal_rect(item_rect.get(), margin);
+    }
+
+    /// [`reveal`](Self::reveal) for a part of the content no node stands for — the caret of an editor, a row a virtual list has not built — given in the content-local space the offset indexes into.
+    pub fn reveal_rect(&self, item: Rect, margin: f32) {
         let viewport = self.rect.get();
         let arrival = self.arrival.get();
 

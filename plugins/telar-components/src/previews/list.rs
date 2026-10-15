@@ -43,7 +43,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 row("Zoom out", "Mod+-")?,
             ];
             Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column().width(240.0),
+                LayoutStyle::column().width(240.0),
                 rows,
             )?)
         })

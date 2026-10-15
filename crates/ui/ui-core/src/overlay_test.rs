@@ -701,3 +701,68 @@ fn a_box_hiding_where_the_overlay_was_declared_hides_the_overlay() {
         .unwrap();
     assert!(drawn(&root), "and back when the section is");
 }
+
+/// The boxes a modal overlay is made of say so, naming the layer and, once it is given, the control it was opened from: what lets a document make the rest of the page inert. An overlay that takes no pointer says nothing.
+#[test]
+fn a_modal_overlay_marks_its_boxes_and_names_what_opened_it() {
+    use crate::{Container, StyledContainer};
+    use renderer_core::{DrawCommand, ElementId, Modal};
+    use ui_tree::SegmentRoot;
+
+    reset_layout_runtime();
+    let was = ui_tree::set_element_capture(true);
+    let boxed = || {
+        StyledContainer::new(
+            LayoutStyle::new().width(50.0).height(20.0),
+            |_r| renderer_core::RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+    };
+    let trigger = boxed();
+    let trigger_node = trigger.layout_node();
+    let (first, second, tip) = (boxed(), boxed(), boxed());
+    let (first_node, second_node, tip_node) =
+        (first.layout_node(), second.layout_node(), tip.layout_node());
+    let menu = Overlay::new(LayoutStyle::new(), vec![Box::new(first), Box::new(second)])
+        .unwrap()
+        .owned_by(trigger_node);
+    let tooltip = Overlay::anchored_click_through(
+        LayoutStyle::new(),
+        vec![Box::new(tip)],
+        trigger_node,
+        Placement::Below,
+    )
+    .unwrap();
+    let section = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![Box::new(trigger), Box::new(menu), Box::new(tooltip)],
+    )
+    .unwrap();
+    let root = SegmentRoot::mount(section);
+    let modal_of = |node: NodeId| {
+        let id = ElementId(node.into());
+        root.commands()
+            .iter()
+            .find_map(|command| match command {
+                DrawCommand::PushElement { element } if element.id == id => {
+                    Some(element.semantics.modal)
+                }
+                _ => None,
+            })
+            .expect("the box is drawn")
+    };
+    let layer = Some(Modal {
+        layer: first_node.into(),
+        opened_from: Some(trigger_node.into()),
+    });
+    assert_eq!(modal_of(first_node), layer);
+    assert_eq!(
+        modal_of(second_node),
+        layer,
+        "one layer, however many boxes"
+    );
+    assert_eq!(modal_of(trigger_node), None);
+    assert_eq!(modal_of(tip_node), None);
+    ui_tree::set_element_capture(was);
+}

@@ -58,7 +58,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 body(),
             )?;
             Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::new().flex_column().gap(8.0),
+                LayoutStyle::column().gap(8.0),
                 vec![box_item(reopen), dialog],
             )?)
         })

@@ -5,6 +5,7 @@ use telar::{
     LayoutItem, LayoutStyle, RectStyle, ScopeProvider, ScopedTheme, TextStyle, ThemeTokens,
     follow_theme, provide_theme, use_resolved_scheme, use_theme_extension, use_theme_tokens,
 };
+use telar_components::ResizableTokens;
 
 pub const WORKBENCH_TEXT_SIZE: f32 = 13.0;
 pub const WORKBENCH_RADIUS: f32 = 6.0;
@@ -103,6 +104,16 @@ pub struct WorkbenchTheme {
     pub highlight_high: Color,
     #[theme(extension)]
     pub workbench: WorkbenchTokens,
+    #[theme(extension)]
+    pub resizable: ResizableTokens,
+}
+
+fn resizable(workbench: &WorkbenchTokens) -> ResizableTokens {
+    ResizableTokens {
+        grip: Some(workbench.border_subtle),
+        active: Some(workbench.selection),
+        ..ResizableTokens::default()
+    }
 }
 
 impl WorkbenchTheme {
@@ -128,6 +139,7 @@ impl WorkbenchTheme {
             highlight_low: neutral(0.07),
             highlight_med: neutral(0.13),
             highlight_high: neutral(0.22),
+            resizable: resizable(&workbench),
             workbench,
         }
     }
@@ -154,6 +166,7 @@ impl WorkbenchTheme {
             highlight_low: neutral(0.10),
             highlight_med: neutral(0.18),
             highlight_high: neutral(0.28),
+            resizable: resizable(&workbench),
             workbench,
         }
     }

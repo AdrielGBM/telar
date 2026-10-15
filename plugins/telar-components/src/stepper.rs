@@ -4,7 +4,7 @@ use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError,
     LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    SurfaceAmendment, Text, amend_surface, box_item, focus::Role, signal,
+    SurfaceAmendment, Text, amend_surface, box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -31,14 +31,12 @@ impl StepperTokens {
 }
 
 fn row_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .gap(shared::gap_md())
 }
 fn button_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .width(shared::control_height())
@@ -127,11 +125,7 @@ pub fn stepper(
         |t| shared::control_text(t, 1.0),
     )?;
 
-    let row = Container::new(
-        row_box(),
-        vec![box_item(minus), box_item(display), box_item(plus)],
-    )?
-    .styled_by(row_box);
+    let row = Container::new(row_box(), children![minus, display, plus])?.styled_by(row_box);
     Ok(box_item(row))
 }
 
@@ -187,7 +181,7 @@ fn stepper_button(
     let container = StyledContainer::new(
         button_box(),
         move |_r| rest.surface(State::Rest),
-        vec![box_item(glyph_widget)],
+        children![glyph_widget],
     )?
     .styled_by(button_box)
     .hover_style(move |_r| hover.surface(State::Hovered))

@@ -6,7 +6,8 @@ use geometry_core::Rect;
 
 /// The vocabulary itself lives a layer down, where a renderer can reach it too: the desktop announcing a checkbox and a document drawing one have to be describing the same box.
 pub use semantics_core::{
-    CurrentKind, HasPopup, NumericValue, Orientation, Role, SetPosition, ToggleKind,
+    CurrentKind, HasPopup, Modal, NumericValue, Orientation, Positioning, Role, SetPosition,
+    SortDirection, ToggleKind,
 };
 
 /// One thing a screen reader can land on.
@@ -47,6 +48,10 @@ pub struct AccessNode {
     pub has_popup: Option<HasPopup>,
     /// The chord that runs the same command as the node, in `aria-keyshortcuts` syntax (`Control+Shift+Z`). `None` for a node with no such key.
     pub keyboard_shortcut: Option<String>,
+    /// Which way the rows of a grid are sorted by the column a header names. `None` on every other node.
+    pub sort: Option<SortDirection>,
+    /// Whether a dialog is inside a modal layer that is up, so a reader keeps to it as the keyboard does.
+    pub modal: bool,
 }
 
 /// The snapshot as a reader would speak it, one line per node in reading order: what a terminal, a log or a test can carry where there is no accessibility API to hand the nodes to.
@@ -80,6 +85,10 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         }
         if let Some(open) = node.expanded {
             out.push_str(if open { ", expanded" } else { ", collapsed" });
+        }
+        if let Some(sort) = node.sort {
+            out.push_str(", sorted ");
+            out.push_str(sort.as_str());
         }
         if node.current.is_some() {
             out.push_str(", current");

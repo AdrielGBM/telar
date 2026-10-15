@@ -45,8 +45,7 @@ impl TabsTokens {
 }
 
 fn tab_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .padding_horizontal(TabsTokens::current().pad_x())
@@ -54,8 +53,7 @@ fn tab_box() -> LayoutStyle {
 }
 #[cfg(feature = "workbench")]
 fn icon_tab_box() -> LayoutStyle {
-    LayoutStyle::new()
-        .flex_row()
+    LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .padding_all(shared::icon_pad())
@@ -63,7 +61,7 @@ fn icon_tab_box() -> LayoutStyle {
         .min_height(shared::control_height())
 }
 fn bar() -> LayoutStyle {
-    LayoutStyle::new().flex_row().gap(shared::gap_sm())
+    LayoutStyle::row().gap(shared::gap_sm())
 }
 
 /// A horizontal tab bar: one button per label, driving a `selected` index. Renders only the row of tab buttons — the matching content panel is the caller's responsibility (typically the DSL's reactive `if selected == i`, mirroring the sandbox's own nav-button/section-switch split). Modelled on `select.rs`'s items/selected handling, but rendered inline (a row) rather than as an anchored overlay. High-level sugar over the primitives; lives in `telar-components`, not the kernel.

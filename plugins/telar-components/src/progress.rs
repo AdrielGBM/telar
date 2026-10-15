@@ -3,6 +3,7 @@
 use telar::{
     BorderRadius, Children, Color, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, Rect,
     RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, Transform, amend_surface, box_item,
+    children,
 };
 
 use crate::shared;
@@ -121,7 +122,7 @@ pub fn progress(
                 .with_radius(ProgressTokens::current().radius(r));
             amend_surface(track, &style)
         },
-        vec![box_item(fill)],
+        children![fill],
     )?
     .styled_by(track_box);
     Ok(box_item(track))

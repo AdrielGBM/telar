@@ -7,7 +7,7 @@ use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Direction,
     JustifyContent, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive,
     RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface, box_item,
-    current_direction, focus::Role,
+    children, current_direction, focus::Role,
 };
 
 use crate::scrim;
@@ -139,8 +139,7 @@ fn build_open_drawer(
     let room = scrim::Room::new();
     let sheet = move || {
         let tokens = DrawerTokens::current();
-        LayoutStyle::new()
-            .flex_column()
+        LayoutStyle::column()
             .width(width.unwrap_or_else(|| tokens.width()))
             .max_width(room.inside(0.0).width)
             .min_height(0.0)
@@ -154,7 +153,7 @@ fn build_open_drawer(
     let body = LayoutScrollArea::new(
         LayoutStyle::new().flex_shrink(1.0),
         box_item(Container::new(
-            LayoutStyle::new().flex_column().gap(shared::gap_lg()),
+            LayoutStyle::column().gap(shared::gap_lg()),
             body,
         )?),
     )?
@@ -162,7 +161,7 @@ fn build_open_drawer(
         let name = name.clone();
         move || name()
     });
-    let panel = StyledContainer::new(sheet(), move |_r| paint(), vec![box_item(body)])?
+    let panel = StyledContainer::new(sheet(), move |_r| paint(), children![body])?
         .styled_by(sheet)
         .role(Role::Dialog)
         .a11y_label(move || name())
@@ -171,8 +170,7 @@ fn build_open_drawer(
 
     // Cross axis (STRETCH) gives the panel full viewport height; the main axis (justify) pins it to the edge.
     let scrim = StyledContainer::new(
-        LayoutStyle::new()
-            .flex_row()
+        LayoutStyle::row()
             .flex_grow(1.0)
             .align_items(AlignItems::STRETCH)
             .min_height(0.0)
@@ -182,7 +180,7 @@ fn build_open_drawer(
                 JustifyContent::END
             }),
         |_r| RectStyle::default().with_fill(shared::overlay()),
-        vec![box_item(panel)],
+        children![panel],
     )?;
     room.follow(scrim.layout_node());
     let scrim = shared::dismissed_by_press(scrim, move || (*dismiss)());

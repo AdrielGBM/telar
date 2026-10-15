@@ -1,4 +1,4 @@
-//! The document real widgets render to, audited the way an accessibility review would: axe-core's WCAG A/AA and best-practice rules, run over buttons, links, a field, a checkbox, a switch and a toggle button, a named tab list, a paragraph with a link in it and the boxes an application named, gave a language or hid; with `workbench`, a tree, a toolbar and a split pane too. Needs a browser and the dev shell's `TELAR_AXE_CORE`, so it runs under `wasm-bindgen-test` rather than `cargo test`.
+//! The document real widgets render to, audited the way an accessibility review would: axe-core's WCAG A/AA and best-practice rules, run over buttons, links, a field, a checkbox, a switch and a toggle button, a named tab list, a paragraph with a link in it and the boxes an application named, gave a language or hid; with `workbench`, a tree, a toolbar, a split pane and a resizable box too. Needs a browser and the dev shell's `TELAR_AXE_CORE`, so it runs under `wasm-bindgen-test` rather than `cargo test`.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -11,8 +11,9 @@ use telar::{
     Text, TextRun, TextStyle, WindowRoot, box_item, external, focus,
 };
 use telar_components::{
-    ButtonProps, CheckboxProps, ItemProps, ScrubFieldProps, SelectProps, TabsProps, TextFieldProps,
-    button, checkbox, item, scrub_field, select, tabs, text_field,
+    ButtonProps, CheckboxProps, ImageProps, ImageSource, ItemProps, LinkProps, ScrubFieldProps,
+    SearchFieldProps, SelectProps, TabsProps, TextFieldProps, TextareaProps, button, checkbox,
+    image, item, link as text_link, scrub_field, search_field, select, tabs, text_field, textarea,
 };
 #[cfg(feature = "overlays")]
 use telar_components::{
@@ -201,8 +202,11 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
         sections,
     ];
     controls.extend(labelled_fields()?);
+    controls.extend(everyday()?);
+    #[cfg(feature = "advanced")]
+    controls.extend(data()?);
     #[cfg(feature = "workbench")]
-    controls.extend([tree()?, tools()?, split()?]);
+    controls.extend([tree()?, tools()?, split()?, resizable_box()?]);
     #[cfg(feature = "overlays")]
     controls.extend(overlays()?);
     let column = Container::new(
@@ -286,6 +290,22 @@ fn split() -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::new().flex_row().height(60.0),
         vec![split],
     )?))
+}
+
+/// A box of words with handles on its end edge, its bottom edge and the corner between them.
+#[cfg(feature = "workbench")]
+fn resizable_box() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    use telar_components::{ResizableProps, resizable};
+    let mut slots = telar::Slots::new();
+    slots.push(None, box_item(words("Notes")?));
+    resizable(
+        ResizableProps::props()
+            .default_size(Size::new(160.0, 48.0))
+            .min(Size::new(80.0, 32.0))
+            .max(Size::new(400.0, 0.0))
+            .build(),
+        Children::from(slots),
+    )
 }
 
 fn mount() {
@@ -473,11 +493,11 @@ async fn a_tree_s_rows_carry_their_state_into_the_document() {
     focus::clear();
 }
 
-/// The element the box of `role` points a reader at with `aria-activedescendant`, which has to be inside it.
-#[cfg(any(feature = "workbench", feature = "overlays"))]
+/// The element the box of `role` that has a cursor points a reader at with `aria-activedescendant`, which has to be inside it. Only a focused list, tree or table has one: the page holds several of each.
+#[cfg(any(feature = "advanced", feature = "workbench", feature = "overlays"))]
 fn pointed_at(host: &web_sys::HtmlElement, role: &str) -> web_sys::Element {
     let container = host
-        .query_selector(&format!(r#"[role="{role}"]"#))
+        .query_selector(&format!(r#"[role="{role}"][aria-activedescendant]"#))
         .expect("a valid selector")
         .unwrap_or_else(|| panic!("a {role} is in the document"));
     let id = container
@@ -734,6 +754,60 @@ async fn an_open_menu_too_long_for_the_page_adds_no_violations() {
         focus::current(),
         Some(trigger.id),
         "Escape gives the keyboard back to the trigger"
+    );
+    focus::clear();
+    render();
+}
+
+#[cfg(all(feature = "overlays", feature = "advanced"))]
+fn inert_within(element: &web_sys::Element) -> bool {
+    std::iter::successors(Some(element.clone()), |node| node.parent_element())
+        .any(|node| node.has_attribute("inert"))
+}
+
+/// An open menu holds the keyboard, and the page behind it, the list and the table that overflow it included, is inert while it is open: out of reach of a reader as of Tab, not a scroll region left in the tree with no way to focus it. The menu's button stays, saying its menu is open; closing the menu gives the page back.
+#[cfg(all(feature = "overlays", feature = "advanced"))]
+#[wasm_bindgen_test]
+async fn an_open_menu_makes_the_page_behind_it_inert() {
+    let trigger = focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::Button && exposed.expanded.is_some())
+        .expect("the menu's trigger is on the page");
+    focus::request(trigger.id);
+    key(telar::NamedKey::Enter);
+    let host = render();
+    let behind = |role: &str| {
+        host.query_selector(&format!(r#"[role="{role}"]"#))
+            .expect("a valid selector")
+            .unwrap_or_else(|| panic!("a {role} is on the page"))
+    };
+    for role in ["listbox", "grid", "tablist"] {
+        assert!(
+            inert_within(&behind(role)),
+            "the {role} behind the menu is inert"
+        );
+    }
+    assert!(!inert_within(&element_of(focusable(Role::Menu).node)));
+    let button = element_of(trigger.node);
+    assert!(!inert_within(&button), "the menu's button stays");
+    assert_eq!(
+        button.get_attribute("aria-expanded").as_deref(),
+        Some("true")
+    );
+    assert_clean(
+        &host,
+        "with a menu open over a list and a table that overflow",
+    )
+    .await;
+
+    key(telar::NamedKey::Escape);
+    let host = render();
+    assert_eq!(
+        host.query_selector_all("[inert]")
+            .expect("a valid selector")
+            .length(),
+        0,
+        "closing the menu gives the page back"
     );
     focus::clear();
     render();
@@ -1033,4 +1107,339 @@ async fn an_open_dialog_whose_body_scrolls_adds_no_violations() {
     telar::close_overlay(NOTICE);
     focus::clear();
     render();
+}
+
+/// Each edge of a resizable box reaches the document as a named separator with its axis and its range, and an edge with no largest size writes none.
+#[cfg(feature = "workbench")]
+#[wasm_bindgen_test]
+async fn a_resizable_box_s_edges_carry_their_axis_and_range() {
+    focus::clear();
+    let host = render();
+    let edge = |name: &str| {
+        host.query_selector(&format!(r#"[role="separator"][aria-label="{name}"]"#))
+            .expect("a valid selector")
+            .unwrap_or_else(|| panic!("the {name} edge is in the document"))
+    };
+    let width = edge("Resize width");
+    assert_eq!(
+        width.get_attribute("aria-orientation").as_deref(),
+        Some("vertical")
+    );
+    assert_eq!(width.get_attribute("aria-valuenow").as_deref(), Some("160"));
+    assert_eq!(width.get_attribute("aria-valuemin").as_deref(), Some("80"));
+    assert_eq!(width.get_attribute("aria-valuemax").as_deref(), Some("400"));
+    let height = edge("Resize height");
+    assert_eq!(
+        height.get_attribute("aria-orientation").as_deref(),
+        Some("horizontal")
+    );
+    assert_eq!(height.get_attribute("aria-valuenow").as_deref(), Some("48"));
+    assert_eq!(height.get_attribute("aria-valuemax"), None);
+    assert_clean(&host, "with a resizable box").await;
+}
+
+/// A picture worked out rather than loaded: a band of colour, which is all a reader is told about through its name.
+fn swatch_picture() -> std::sync::Arc<telar::ImageData> {
+    let pixels = (0..16 * 8)
+        .flat_map(|i: u32| [(i * 2) as u8, 90, 160, 255])
+        .collect();
+    std::sync::Arc::new(telar::ImageData::new(pixels, 16, 8))
+}
+
+/// A link inside the application and one out of it, a picture and one that only decorates, a text area with its count, and a search field holding a query.
+fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+    let links = Container::new(
+        LayoutStyle::new().flex_row().gap(16.0),
+        vec![
+            text_link(
+                LinkProps::props()
+                    .label("Changelog")
+                    .to(Location::root().segment("changelog"))
+                    .current(true)
+                    .build(),
+                Children::default(),
+            )?,
+            text_link(
+                LinkProps::props()
+                    .label("Sponsor")
+                    .to(external("https://example.com/sponsor"))
+                    .build(),
+                Children::default(),
+            )?,
+        ],
+    )?;
+    let pictures = Container::new(
+        LayoutStyle::new().flex_row().gap(16.0),
+        vec![
+            image(
+                ImageProps::props()
+                    .source(ImageSource::Ready(swatch_picture()))
+                    .alt("A blue gradient")
+                    .width(48.0)
+                    .build(),
+                Children::default(),
+            )?,
+            image(
+                ImageProps::props()
+                    .source(ImageSource::Ready(swatch_picture()))
+                    .alt("")
+                    .width(24.0)
+                    .build(),
+                Children::default(),
+            )?,
+            image(
+                ImageProps::props()
+                    .source(ImageSource::Failed)
+                    .alt("Team photo")
+                    .width(96.0)
+                    .height(32.0)
+                    .build(),
+                Children::default(),
+            )?,
+        ],
+    )?;
+    let notes = textarea(
+        TextareaProps::props()
+            .label("Notes")
+            .rows(2)
+            .counter(true)
+            .max_length(80)
+            .build(),
+        Children::default(),
+    )?;
+    let search = search_field(
+        SearchFieldProps::props()
+            .value(telar::signal("buttons".to_string()))
+            .build(),
+        Children::default(),
+    )?;
+    Ok(vec![box_item(links), box_item(pictures), notes, search])
+}
+
+/// A list to choose from and a sortable table, each with more rows than the box it fills shows, as a real one has: both build only the rows on screen and say where each sits among them all.
+#[cfg(feature = "advanced")]
+fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+    use telar_components::{
+        CellAlign, Column, DataTableProps, ListRow, TableRow, VirtualListProps, data_table,
+        virtual_list,
+    };
+    let rows: Vec<ListRow> = (0..40)
+        .map(|i| ListRow::new(format!("c{i}"), format!("Contact {i}")).disabled(i == 3))
+        .collect();
+    let list = virtual_list(
+        VirtualListProps::props()
+            .items(rows)
+            .selected(telar::signal(Some("c1".into())))
+            .label("Contacts")
+            .build(),
+        Children::default(),
+    )?;
+    let files: Vec<TableRow> = (0..40)
+        .map(|i| {
+            TableRow::new(
+                format!("f{i}"),
+                [format!("file_{i}.rs"), format!("{}", i * 3)],
+            )
+        })
+        .collect();
+    let table = data_table(
+        DataTableProps::props()
+            .columns(vec![
+                Column::new("name", "Name").sortable(true),
+                Column::new("size", "Size")
+                    .fixed(80.0)
+                    .align(CellAlign::End)
+                    .sortable(true),
+            ])
+            .rows(files)
+            .selected(telar::signal(Some("f2".into())))
+            .label("Files")
+            .build(),
+        Children::default(),
+    )?;
+    Ok(vec![
+        box_item(Container::new(
+            LayoutStyle::new().flex_column().height(176.0),
+            vec![list],
+        )?),
+        box_item(Container::new(
+            LayoutStyle::new().flex_column().height(200.0),
+            vec![table],
+        )?),
+    ])
+}
+
+/// A picture reaches the document named by its words, and one that only decorates is hidden from a reader.
+#[wasm_bindgen_test]
+fn a_picture_is_named_and_a_decoration_is_hidden() {
+    focus::clear();
+    let host = render();
+    assert!(
+        host.query_selector(r#"[role="img"][aria-label="A blue gradient"]"#)
+            .expect("a valid selector")
+            .is_some(),
+        "the picture is an image named by its words"
+    );
+    let hidden = host
+        .query_selector_all(r#"[role="img"]:not([aria-label])"#)
+        .expect("a valid selector");
+    for i in 0..hidden.length() {
+        let picture: web_sys::Element = hidden
+            .item(i)
+            .expect("a node")
+            .dyn_into()
+            .expect("an element");
+        let hidden_above = std::iter::successors(Some(picture), |node| node.parent_element())
+            .any(|node| node.get_attribute("aria-hidden").as_deref() == Some("true"));
+        assert!(hidden_above, "an unnamed picture is hidden from a reader");
+    }
+}
+
+/// A link out of the application says so in its name, and is written as a link a page cannot reach back from.
+#[wasm_bindgen_test]
+fn a_link_out_of_the_application_says_where_it_goes() {
+    focus::clear();
+    let host = render();
+    let out = host
+        .query_selector(r#"a[aria-label="Sponsor (external link)"]"#)
+        .expect("a valid selector")
+        .expect("the external link is in the document");
+    assert_eq!(
+        out.get_attribute("href").as_deref(),
+        Some("https://example.com/sponsor")
+    );
+    assert_eq!(out.get_attribute("rel").as_deref(), Some("noopener"));
+    let current = host
+        .query_selector(r#"a[aria-current]"#)
+        .expect("a valid selector")
+        .expect("the current link says so");
+    assert_eq!(
+        current.get_attribute("aria-current").as_deref(),
+        Some("page")
+    );
+}
+
+/// The text area and the search field are named fields, and the search field's clear button is named and no Tab stop.
+#[wasm_bindgen_test]
+async fn a_text_area_and_a_search_field_are_named_and_add_no_violations() {
+    focus::clear();
+    let host = render();
+    assert!(
+        host.query_selector(r#"[role="textbox"][aria-label="Notes"]"#)
+            .expect("a valid selector")
+            .is_some()
+    );
+    let clear = host
+        .query_selector(r#"button[aria-label="Clear search"]"#)
+        .expect("a valid selector")
+        .expect("a query brings a clear button");
+    assert_eq!(clear.get_attribute("tabindex").as_deref(), Some("-1"));
+    focus::request(
+        focus::exposed()
+            .into_iter()
+            .find(|exposed| exposed.role == Role::MultilineTextInput)
+            .expect("a text area")
+            .id,
+    );
+    let host = render();
+    assert_clean(&host, "with the text area focused").await;
+    focus::clear();
+}
+
+/// A focused list points a reader at the option its cursor is on, inside itself.
+#[cfg(feature = "advanced")]
+#[wasm_bindgen_test]
+async fn a_focused_virtual_list_points_a_reader_at_its_cursor_option() {
+    mount();
+    let list = focus::exposed()
+        .into_iter()
+        .filter(|exposed| exposed.role == Role::ListBox)
+        .find(|exposed| {
+            render();
+            element_of(exposed.node)
+                .get_attribute("aria-label")
+                .as_deref()
+                == Some("Contacts")
+        })
+        .expect("the contacts list is on the page");
+    focus::request(list.id);
+    key(telar::NamedKey::ArrowDown);
+    let host = render();
+    let contacts = element_of(list.node);
+    let id = contacts
+        .get_attribute("aria-activedescendant")
+        .expect("the focused list points at its cursor");
+    let option = document()
+        .get_element_by_id(&id)
+        .unwrap_or_else(|| panic!("`{id}` names an element"));
+    assert!(contacts.contains(Some(option.as_ref())));
+    assert_eq!(option.get_attribute("role").as_deref(), Some("option"));
+    assert_eq!(
+        option.get_attribute("aria-selected").as_deref(),
+        Some("false")
+    );
+    assert_eq!(option.get_attribute("aria-posinset").as_deref(), Some("3"));
+    assert_eq!(option.get_attribute("aria-setsize").as_deref(), Some("40"));
+    assert_eq!(
+        option.get_attribute("aria-level"),
+        None,
+        "an option has no level"
+    );
+    assert_clean(&host, "with the list focused").await;
+    focus::clear();
+}
+
+/// A focused table points a reader at the cell its cursor is on, the header of the column it is sorted by says which way, and the chosen row says it is chosen.
+#[cfg(feature = "advanced")]
+#[wasm_bindgen_test]
+async fn a_focused_data_table_points_a_reader_at_its_cursor_cell() {
+    focus::request(focusable(Role::Grid).id);
+    let host = render();
+    let cell = pointed_at(&host, "grid");
+    assert_eq!(cell.get_attribute("role").as_deref(), Some("gridcell"));
+    let row = cell
+        .closest(r#"[role="row"]"#)
+        .expect("a valid selector")
+        .expect("a cell sits in a row");
+    assert_eq!(row.get_attribute("aria-selected").as_deref(), Some("true"));
+    assert_eq!(row.get_attribute("aria-rowindex").as_deref(), Some("4"));
+    assert_eq!(
+        row.get_attribute("aria-level"),
+        None,
+        "a grid's row has no level"
+    );
+    let grid = row
+        .closest(r#"[role="grid"]"#)
+        .expect("a valid selector")
+        .expect("a row sits in a grid");
+    assert_eq!(grid.get_attribute("aria-rowcount").as_deref(), Some("41"));
+    let header = grid
+        .query_selector(r#"[role="row"]"#)
+        .expect("a valid selector")
+        .expect("the header is the first row");
+    assert_eq!(header.get_attribute("aria-rowindex").as_deref(), Some("1"));
+
+    for _ in 0..3 {
+        key(telar::NamedKey::ArrowUp);
+    }
+    key(telar::NamedKey::Enter);
+    let host = render();
+    let header = pointed_at(&host, "grid");
+    assert_eq!(
+        header.get_attribute("role").as_deref(),
+        Some("columnheader")
+    );
+    assert_eq!(
+        header.get_attribute("aria-sort").as_deref(),
+        Some("ascending")
+    );
+    assert_eq!(
+        host.query_selector_all("[aria-sort]")
+            .expect("a valid selector")
+            .length(),
+        1,
+        "only the column the rows are sorted by says so"
+    );
+    assert_clean(&host, "with the table focused and sorted").await;
+    focus::clear();
 }

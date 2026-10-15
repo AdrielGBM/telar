@@ -125,7 +125,7 @@ The rules every catalogue component follows, and a control of an application's o
 | Frames | A frame that is the control's shape — a checkbox's box, a radio's ring, an outline button, the ring round a chosen swatch or a thumb — is `border_width_strong`; a selection control draws its frame in `border` until it is on and in its colour once it is. A passive hairline — a field's frame, a chip, a key cap, a panel's edge, a divider — is `border_width` in `border`. |
 | Thumbs | A knob, a thumb or the ring round one is `thumb_on(fill)` over what it sits on: the theme's `thumb` wherever that stands out from the fill at 3:1, else the ink that reads on it. A toggle's knob, a slider's thumb, a handle and a colour picker's thumbs all take it. |
 | Washes | A pointer resting on a control or a row lays `hover_wash` over it, the selected row or a control held open `held_wash`, a press `pressed_wash`. A filled control cannot take a wash over its own fill, so it darkens instead: `hovered_fill`, `pressed_fill`. A soft surface is its colour at a wash's strength. |
-| Marks | A caret, a disclosure, a close, a tick or a window control is `mark`, strokes sized from `icon_size`, never a text glyph a face may not carry. |
+| Marks | A caret, a disclosure, a sort, a close, a tick, a magnifying glass, an external link's arrow or a window control is `mark`, strokes sized from `icon_size`, never a text glyph a face may not carry. |
 
 ## A component's own tokens
 
@@ -159,16 +159,20 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 | `CodeViewTokens` | `radius` → `radius_surface`; `pad` → `gap_md` |
 | `ColorPickerTokens` | `width` → `measure(16)`; `radius` → `radius_control`; `ring` → `border_width_strong` |
 | `CommandPaletteTokens` | `width` → `measure(40)`; `radius` → `radius_dialog`; `inset_top` → six `gap_xl` |
+| `DataTableTokens` | `row_height` (the header's too) → `row_height`; `pad_x` → `gap_md`; `radius` (a row's wash and the cursor's ring) → `radius_item` |
 | `DrawerTokens` | `radius` → `radius_dialog`; `pad` → `gap_xl`; `width` → `measure(20)` |
 | `HandleTokens` | `size` → a slider's thumb less `gap_sm`; `ring` → `border_width_strong` |
 | `IconButtonTokens` | `radius` → `radius_control` |
+| `ImageTokens` | `radius` (the picture and its placeholder; an image's own `radius` wins) → `radius_item` |
 | `KbdTokens` | `radius` → `radius_item`; `border_width` → `border_width` |
-| `ListTokens` | `row_height` → `row_height`; `radius` → `radius_item`; `pad_x` → `gap_md` |
+| `LinkTokens` | `radius` (the wash under the pointer) → `radius_item` |
+| `ListTokens` | the rows of a `select`, a menu, the command palette and a `virtual_list`: `row_height` → `row_height`; `radius` → `radius_item`; `pad_x` → `gap_md` |
 | `MenuTokens` | a `menu`'s and a `context_menu`'s panels alike: `background` → `surface`; `border` → `border`; `label` → the inherited ink; `faint` → `muted`; `highlight` → `highlight_low`; `radius` → `radius_surface`; `row_height` → `ListTokens::row_height`; `padding` → `panel_pad`; `width` (the least; a panel widens to its widest row) → `measure(13)`; `offset` → `popup_offset` |
 | `MenuTriggerTokens` | the button a `menu` drops from: `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(13)` |
 | `ModalTokens` | `radius` → `radius_dialog`; `pad` → `gap_xl`; `min_width` → `measure(24)`; `max_width` → `measure(32)` |
 | `ProgressTokens` | `radius` → a pill; `width` → `measure(16)`; `height` → `gap_md` |
 | `RadioTokens` | `size` → `icon_size`; `border_width` → `border_width_strong` |
+| `ResizableTokens` | a `resizable`'s and a `resize_handle`'s handles: `thickness` → `spacing`; `grip` (the corner at rest) → `border`; `active` (under the pointer or dragged) → the accent |
 | `ScrubFieldTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x` |
 | `SelectTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(13)`; `offset` → `popup_offset` |
 | `SliderTokens` | `width` → `measure(16)`; `track` → `spacing`; `thumb` → `icon_size`; `ring` → `border_width_strong` |
@@ -177,7 +181,7 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 | `StepperTokens` | `radius` → `radius_control` |
 | `SwatchesTokens` | `size` → `icon_size` and `gap_sm`; `ring` → `border_width_strong` |
 | `TabsTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x` |
-| `TextFieldTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(21.5)` |
+| `TextFieldTokens` | a `text_field`'s frame, and the `textarea`'s and `search_field`'s drawn in it: `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(21.5)` |
 | `ToastTokens` | `radius` → `radius_surface`; `pad` → `gap_lg`; `width` → `measure(26)`; `stripe_width` → `gap_xs` |
 | `ToggleTokens` | `knob` → `icon_size`; `inset` → `gap_xs`; `radius` → a pill. A menu row's `switch` draws the same track as tall as `icon_size`, its knob what the inset leaves |
 | `TooltipTokens` | `radius` → `radius_surface`; `pad_x` → `gap_md`; `pad_y` → `gap_sm`; `max_width` → `measure(17)` |

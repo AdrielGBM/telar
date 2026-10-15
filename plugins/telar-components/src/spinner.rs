@@ -4,7 +4,7 @@ use std::time::Duration;
 use telar::{
     AlignItems, Border, Children, Color, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
     Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment, amend_surface,
-    box_item, box_transform,
+    box_item, box_transform, children,
     motion::{Easing, Keyframes, Repeat},
 };
 
@@ -88,13 +88,12 @@ pub fn spinner(
 
     // The rotor overlays the track and centres the head against its top edge, so rotating it on its own centre carries the head around the circle.
     let rotor = StyledContainer::new(
-        LayoutStyle::new()
+        LayoutStyle::column()
             .absolute_fill()
-            .flex_column()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::START),
         |_r| RectStyle::default(),
-        vec![box_item(head)],
+        children![head],
     )?
     .with_transform(move |r| box_transform(r, angle.get(), 1.0, 1.0, 0.0, 0.0));
 
@@ -109,7 +108,7 @@ pub fn spinner(
                 .with_radius(shared::pill(r));
             amend_surface(rest, &style)
         },
-        vec![box_item(rotor)],
+        children![rotor],
     )?
     .styled_by(ring_box);
 

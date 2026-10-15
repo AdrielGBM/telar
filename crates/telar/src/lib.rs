@@ -163,8 +163,8 @@ pub use licenses::install_icon_licenses as __install_icon_licenses;
 pub use platform_core::{
     Chord, ChordError, ConsumedKeys, Cursor, Event, FullscreenMode, HasPopup, Key,
     KeyboardConvention, NamedKey, NumericValue, Orientation, ResizeEdge, ScrollDelta,
-    WindowCommand, WindowConfig, WindowPosition, keyboard_convention, push_window_command,
-    set_keyboard_convention, take_window_commands,
+    SortDirection, WindowCommand, WindowConfig, WindowPosition, keyboard_convention,
+    push_window_command, set_keyboard_convention, take_window_commands,
 };
 // The seam for an application rendering its own GPU content: it borrows the device Telar draws with, and re-exports the `wgpu` both sides must agree on. Two `wgpu` versions in one binary are two incompatible `Device` types, and the error names neither crate.
 #[cfg(feature = "hardware")]

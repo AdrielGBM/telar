@@ -299,7 +299,7 @@ impl OverlaySink for OverlaySinkImpl {
 /// Positioned pointer events reach the content with priority via a thread-local overlay registry (see `ui_tree::overlay_dispatch`): a click on the overlay is routed here before the main tree walk and does not fall through to the content behind it, so a scrim that fills the viewport reads as a modal.
 ///
 /// Variants (all portal the same way, they differ in how they route clicks and where the content sits):
-/// - [`Overlay::new`] — modal: blocks every click inside its content rect (a full-viewport scrim).
+/// - [`Overlay::new`] — modal: blocks every click inside its content rect (a full-viewport scrim), holds the keyboard inside itself, and marks its top boxes [`Modal`](renderer_core::Modal), so a document makes the rest of the surface inert while it shows.
 /// - [`Overlay::anchored_click_through`] — positions the content next to a trigger widget (dropdowns, menus, tooltips) and takes no pointer, so clicks anywhere fall through to the tree behind.
 pub struct Overlay {
     // Handed to the DOM parent: an empty placeholder when portaled, the content itself otherwise.
@@ -367,6 +367,11 @@ impl Overlay {
         anchor: Option<Anchor>,
         visible: Rc<dyn Fn() -> bool>,
     ) -> Result<Self, LayoutError> {
+        if blocking && let Some(first) = children.first().map(|child| child.layout_node()) {
+            for child in &children {
+                crate::annotation::mark_modal(child.layout_node(), first);
+            }
+        }
         // `absolute_fill` takes the layer out of flow and sizes it to its container, which attaching to the host makes the viewport. An anchored overlay instead sizes intrinsically and moves with a transform.
         let (content, content_rect, children) =
             register_container(layout_style.absolute_fill(), children)?;
@@ -441,6 +446,9 @@ impl Overlay {
     /// Declares the control this overlay was opened from, which stays in what a reader is told while the overlay holds focus inside itself. See [`focus::set_scope_owner`](crate::focus::set_scope_owner).
     pub fn owned_by(self, owner: NodeId) -> Self {
         crate::focus::set_scope_owner(self.focus_scope, owner);
+        for child in &self.children {
+            crate::annotation::modal_opened_from(child.node(), owner);
+        }
         self
     }
 

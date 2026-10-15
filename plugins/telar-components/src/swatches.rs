@@ -5,7 +5,7 @@ use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, Border, Children, Color, Container, Cursor, JustifyContent, Key,
     LayoutError, LayoutItem, LayoutStyle, NamedKey, Props, RectStyle, RwSignal, ShapeStyle,
-    StyledContainer, SurfaceAmendment, amend_surface, box_item, focus::Role, signal,
+    StyledContainer, SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
 };
 
 use crate::shared;
@@ -46,7 +46,7 @@ fn hit_size(size: f32) -> f32 {
 /// The swatches stand `gap_sm` apart where they are drawn, so the air their hit areas already take is subtracted from it.
 fn row(size: f32) -> LayoutStyle {
     let spacing = (shared::gap_sm() - (hit_size(size) - size)).max(0.0);
-    LayoutStyle::new().flex_row().flex_wrap().gap(spacing)
+    LayoutStyle::row().flex_wrap().gap(spacing)
 }
 
 fn disc(size: f32) -> LayoutStyle {
@@ -131,32 +131,29 @@ pub fn swatches(
             vec![],
         )?
         .styled_by(move || disc(size()));
-        let swatch = StyledContainer::new(
-            cell(size()),
-            |_r| RectStyle::default(),
-            vec![box_item(face)],
-        )?
-        .styled_by(move || cell(size()))
-        .a11y_label(move || name.clone())
-        .control(Role::Radio)
-        .toggled(move || announced.get() == Some(idx))
-        .cursor(Cursor::Pointer)
-        .on_press(move || choose(press_selected, idx, press_cb.as_deref()))
-        .on_focused_key(move |key: &Key| -> bool {
-            let Key::Named(named) = key else {
-                return false;
-            };
-            let current = key_selected.peek().unwrap_or(idx);
-            let target = match named {
-                NamedKey::ArrowRight | NamedKey::ArrowDown => (current + 1).min(count - 1),
-                NamedKey::ArrowLeft | NamedKey::ArrowUp => current.saturating_sub(1),
-                NamedKey::Home => 0,
-                NamedKey::End => count - 1,
-                _ => return false,
-            };
-            choose(key_selected, target, key_cb.as_deref());
-            true
-        });
+        let swatch =
+            StyledContainer::new(cell(size()), |_r| RectStyle::default(), children![face])?
+                .styled_by(move || cell(size()))
+                .a11y_label(move || name.clone())
+                .control(Role::Radio)
+                .toggled(move || announced.get() == Some(idx))
+                .cursor(Cursor::Pointer)
+                .on_press(move || choose(press_selected, idx, press_cb.as_deref()))
+                .on_focused_key(move |key: &Key| -> bool {
+                    let Key::Named(named) = key else {
+                        return false;
+                    };
+                    let current = key_selected.peek().unwrap_or(idx);
+                    let target = match named {
+                        NamedKey::ArrowRight | NamedKey::ArrowDown => (current + 1).min(count - 1),
+                        NamedKey::ArrowLeft | NamedKey::ArrowUp => current.saturating_sub(1),
+                        NamedKey::Home => 0,
+                        NamedKey::End => count - 1,
+                        _ => return false,
+                    };
+                    choose(key_selected, target, key_cb.as_deref());
+                    true
+                });
         cells.push(box_item(swatch));
     }
 

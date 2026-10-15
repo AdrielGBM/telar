@@ -9,8 +9,8 @@ use telar::{
     Accessible, Border, BorderRadius, Canvas, Children, Color, Container, Declared, FontFamily,
     FontStyle, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Props, Reactive, Rect,
     RectStyle, RenderNode, ShapeStyle, Span, StyledContainer, SurfaceAmendment, Text, TextStyle,
-    TextWrap, Timer, amend_surface, box_item, focus::Role, inherited_text_style, line_box, memo,
-    run_after, signal,
+    TextWrap, Timer, amend_surface, box_item, children, focus::Role, inherited_text_style,
+    line_box, memo, run_after, signal,
 };
 
 use crate::line_gutter::LineGutter;
@@ -281,7 +281,7 @@ pub fn code_view(
     )?
     .a11y_hidden();
 
-    let mut row: Vec<Box<dyn LayoutItem>> = vec![box_item(marks)];
+    let mut row: Vec<Box<dyn LayoutItem>> = children![marks];
     if line_numbers {
         let gutter = LineGutter::starting_at(
             move || first_line as usize,
@@ -293,12 +293,7 @@ pub fn code_view(
         row.push(box_item(gutter));
     }
     row.push(box_item(source));
-    let content_box = || {
-        LayoutStyle::new()
-            .flex_row()
-            .padding_all(pad())
-            .gap(shared::gap_lg())
-    };
+    let content_box = || LayoutStyle::row().padding_all(pad()).gap(shared::gap_lg());
     let content = Container::new(content_box(), row)?.styled_by(content_box);
     let viewport_box = if max_height > 0.0 {
         LayoutStyle::new().max_height(max_height)
@@ -312,12 +307,12 @@ pub fn code_view(
             .map_or_else(|| strings::text(strings::CODE), |label| label.get())
     });
 
-    let mut layers: Vec<Box<dyn LayoutItem>> = vec![box_item(scroll)];
+    let mut layers: Vec<Box<dyn LayoutItem>> = children![scroll];
     if copyable {
         layers.push(copy_button(code, on_copy)?);
     }
     let frame = StyledContainer::new(
-        LayoutStyle::new().flex_column(),
+        LayoutStyle::column(),
         move |_r| amend_surface(frame_paint(), &style),
         layers,
     )?

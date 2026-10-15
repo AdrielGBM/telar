@@ -6,7 +6,6 @@ element group
       element group
         element group
           element group
-            rect 16,16 240x18
             element group
               matrix 1,0,0,1,24,18
                 text 0,0 21.22x14.28 "Edit" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
@@ -16,7 +15,6 @@ element group
           element button
             rect 16,34 240x32
             element group
-              rect 16,34 0x0
             end
             element group
               matrix 1,0,0,1,24,34
@@ -32,7 +30,6 @@ element group
           element button
             rect 16,66 240x32
             element group
-              rect 16,66 0x0
             end
             element group
               matrix 1,0,0,1,24,66
@@ -49,7 +46,6 @@ element group
             rect 16,100 240x1 fill=#dbdeedff
           end
           element group
-            rect 16,103 240x19
             element group
               matrix 1,0,0,1,24,105
                 text 0,0 28x14.28 "View" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
@@ -59,7 +55,6 @@ element group
           element button
             rect 16,122 240x32
             element group
-              rect 16,122 0x0
             end
             element group
               matrix 1,0,0,1,24,122
@@ -75,7 +70,6 @@ element group
           element button
             rect 16,154 240x32
             element group
-              rect 16,154 0x0
             end
             element group
               matrix 1,0,0,1,24,154
