@@ -135,7 +135,8 @@ fn calls(listed: Memo<Vec<ActionCall>>) -> Result<Box<dyn LayoutItem>, LayoutErr
     let scroll = LayoutScrollArea::new(
         LayoutStyle::new().flex_grow(1.0).min_height(0.0),
         box_item(log),
-    )?;
+    )?
+    .stop_label(|| strings::text(ACTIONS));
     Ok(box_item(scroll))
 }
 

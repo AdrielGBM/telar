@@ -298,4 +298,11 @@ fn a_tall_body_scrolls_inside_a_panel_as_tall_as_the_window() {
         "an overflowing body is a stop the keyboard can scroll"
     );
     assert!(stops[0].y + stops[0].height <= rect.y + rect.height);
+
+    let names: Vec<String> = ui_core::accessibility::snapshot(&tree.commands())
+        .into_iter()
+        .filter(|node| node.role == Role::ScrollArea)
+        .map(|node| node.name)
+        .collect();
+    assert_eq!(names, ["Drawer"], "named as the panel is");
 }

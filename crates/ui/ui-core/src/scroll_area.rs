@@ -2,10 +2,13 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use geometry_core::{Insets, LayoutGrid, Rect};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
-use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton, ScrollDelta};
+use platform_core::{
+    ConsumedKeys, Event, Key, ModifiersState, NamedKey, PointerButton, ScrollDelta,
+};
 use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::{current_control_size, use_theme_tokens};
@@ -868,6 +871,8 @@ impl platform_core::PrimaryScroll for ScrollViewport {
 }
 
 /// Taffy-layout viewport; always valid as a `LayoutItem`, so no panic is possible.
+///
+/// A Tab stop of its own, which the keyboard scrolls, while its content overflows and nothing inside it is a stop: see [`stop_label`](Self::stop_label) for what a reader hears there, and [`control`](Self::control) for a scroller that is the control itself.
 pub struct LayoutScrollArea {
     leaf: LayoutLeaf,
     home: HomeSurface,
@@ -1049,7 +1054,7 @@ impl LayoutScrollArea {
 
     /// Makes this scroll area the control `role` itself: the box that holds focus, carries the role and scrolls are one, so a reader and the keyboard meet a single element where a control wrapped around a scroll area gave them two.
     ///
-    /// For the composite widget whose items are reached by a cursor while focus stays on the widget (a tree, a listbox): its rows are no Tab stops, so a scroller that merely contained them could not be focused, and a document's checker rightly refuses a region that scrolls out of the keyboard's reach. It is a stop whether or not its content overflows, keeps the keys [`on_focused_key`](Self::on_focused_key) takes, and scrolls with the rest. Call it first: the other methods of the control act on what it declares.
+    /// For the composite widget whose items are reached by a cursor while focus stays on the widget (a tree, a listbox): its rows are no Tab stops, so a plain scroller around them would be a stop of its own only while they overflow, and a second element beside the control that holds the cursor. It is a stop whether or not its content overflows, keeps the keys [`on_focused_key`](Self::on_focused_key) takes, and scrolls with the rest. Call it first: the other methods of the control act on what it declares.
     pub fn control(mut self, role: focus::Role) -> Self {
         if let Some(id) = self.focus {
             focus::host_scroller(id, role);
@@ -1072,6 +1077,22 @@ impl LayoutScrollArea {
             host.presented = true;
         }
         this
+    }
+
+    /// The name a reader hears for this area while it is a stop of its own: while its content overflows and nothing inside it is a stop. Re-read when what `label` reads changes.
+    ///
+    /// Only then, because only then is the area something a reader lands on: a region that fits, or is scrolled by moving through the controls in it, is part of whatever names the box around it, and a name of its own would be said a second time on the way in. A [`control`](Self::control) is named the way any box is, with [`a11y_label`](crate::Accessible::a11y_label). It takes the place of an `a11y_label` on the same area.
+    pub fn stop_label<S: Into<Arc<str>>>(self, label: impl Fn() -> S + 'static) -> Self {
+        let (None, Some(id)) = (&self.host, self.focus) else {
+            return self;
+        };
+        let (viewport, content) = (self.leaf.rect, self.core.content_rect_signal);
+        crate::annotation::label_follows(self.leaf.node, move || {
+            viewport.get();
+            content.get();
+            focus::tracks_scroll_stop(id).then(&label)
+        });
+        self
     }
 
     /// The focus id this control holds focus by, or is announced by when it is [`presented`](Self::presented); `None` unless it is a [`control`](Self::control).
@@ -1166,10 +1187,24 @@ impl LayoutScrollArea {
         self
     }
 
-    /// Where a key held by this scroll moves its content, clamped to how far the content goes; `None` for a key that does not scroll.
+    /// Whether a primary press inside this area, which its content answered with `result`, gives it focus. A control takes it unless it is only presented or its content took the press; a plain area takes it while it is a stop of its own, whatever inside it was pressed, as a browser focuses a scroller it made focusable.
+    fn pressed_into_focus(&self, id: FocusId, result: &EventResult) -> bool {
+        match &self.host {
+            Some(host) => !host.presented && *result != EventResult::Handled,
+            None => focus::is_scroll_stop(id),
+        }
+    }
+
+    /// Where a key held by this scroll moves its content, clamped to how far the content goes; `None` for a key that does not scroll, or scrolls an axis the content fits along.
     fn keyed_offset(&self, key: &Key, modifiers: ModifiersState) -> Option<(f32, f32)> {
+        if modifiers.is_ctrl || modifiers.is_alt || modifiers.is_meta {
+            return None;
+        }
         let viewport = self.leaf.rect.peek();
         let content = self.core.content_rect_signal.peek();
+        if !platform_core::consumes(scrolling_keys(viewport, content), key) {
+            return None;
+        }
         let (x, y) = (self.core.scroll_x.peek(), self.core.scroll_y.peek());
         let (_, line) = ScrollDelta::Lines { x: 0.0, y: 1.0 }.pixels();
         let page = (viewport.height - line).max(line);
@@ -1209,8 +1244,14 @@ impl Component for LayoutScrollArea {
             .map_or(renderer_core::Role::ScrollArea, |host| host.role);
         let element = crate::element::for_target(self.leaf.node, role, || {
             let mut semantics = renderer_core::Semantics::of(role);
-            if let (Some(_), Some(id)) = (&self.host, self.focus) {
-                focus::describe(id, &mut semantics, None);
+            match (&self.host, self.focus) {
+                (Some(_), Some(id)) => focus::describe(id, &mut semantics, None),
+                (None, Some(id)) if focus::tracks_scroll_stop(id) => {
+                    let keys =
+                        scrolling_keys(self.leaf.rect.get(), self.core.content_rect_signal.get());
+                    focus::describe(id, &mut semantics, Some(keys));
+                }
+                _ => {}
             }
             crate::element::with_semantics_scrolled(
                 self.leaf.node,
@@ -1264,10 +1305,9 @@ impl Component for LayoutScrollArea {
             button: PointerButton::Primary,
             ..
         } = event
-            && result != EventResult::Handled
-            && let Some(id) = self.focus_id()
-            && !self.host.as_ref().is_some_and(|host| host.presented)
-            && self.leaf.rect.get().contains(*x as f32, *y as f32)
+            && let Some(id) = self.focus
+            && self.leaf.rect.peek().contains(*x as f32, *y as f32)
+            && self.pressed_into_focus(id, &result)
         {
             focus::request_from_pointer(id);
         }
@@ -1292,10 +1332,37 @@ impl Drop for LayoutScrollArea {
 
 /// Whether content of `content`'s size can scroll in a laid-out `viewport`, past the rounding a layout leaves between two boxes meant to be equal.
 fn overflows(viewport: Rect, content: Rect) -> bool {
+    let (across, down) = overflow_axes(viewport, content);
+    across || down
+}
+
+/// Along which axes, across and down, content of `content`'s size can scroll in a laid-out `viewport`.
+fn overflow_axes(viewport: Rect, content: Rect) -> (bool, bool) {
     const SLACK: f32 = 0.5;
-    viewport.width > 0.0
-        && viewport.height > 0.0
-        && (content.width - viewport.width > SLACK || content.height - viewport.height > SLACK)
+    if viewport.width <= 0.0 || viewport.height <= 0.0 {
+        return (false, false);
+    }
+    (
+        content.width - viewport.width > SLACK,
+        content.height - viewport.height > SLACK,
+    )
+}
+
+/// The keys that scroll content of `content`'s size in `viewport`: the arrows along each axis it overflows, and paging, Home, End and Space while it overflows downwards, as a page scrolls.
+fn scrolling_keys(viewport: Rect, content: Rect) -> ConsumedKeys {
+    let (across, down) = overflow_axes(viewport, content);
+    let mut keys = ConsumedKeys::EMPTY;
+    if across {
+        keys = keys | ConsumedKeys::HORIZONTAL_ARROWS;
+    }
+    if down {
+        keys = keys
+            | ConsumedKeys::VERTICAL_ARROWS
+            | ConsumedKeys::PAGING
+            | ConsumedKeys::EDGES
+            | ConsumedKeys::SPACE;
+    }
+    keys
 }
 
 #[cfg(test)]
@@ -1326,3 +1393,7 @@ mod intrinsic_tests;
 #[cfg(test)]
 #[path = "scroll_area_control_test.rs"]
 mod control_tests;
+
+#[cfg(test)]
+#[path = "scroll_area_stop_test.rs"]
+mod stop_tests;

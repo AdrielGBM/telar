@@ -106,6 +106,16 @@ fn follow(node: NodeId, amend: impl Fn(&mut Annotation) + 'static) {
     });
 }
 
+/// Keeps `node`'s name at what `read` answers, `None` or an empty name being none.
+pub(crate) fn label_follows<S: Into<Arc<str>>>(
+    node: NodeId,
+    read: impl Fn() -> Option<S> + 'static,
+) {
+    follow(node, move |annotation| {
+        annotation.label = read().map(Into::into).filter(|label| !label.is_empty());
+    });
+}
+
 /// The annotations every widget with a layout node takes. See the module docs.
 ///
 /// Prefixed because a widget may well have a `label` of its own that means something else — the text a button draws — and a method of that name here would silently lose to it.
@@ -116,10 +126,7 @@ pub trait Accessible: LayoutItem + Sized {
     ///
     /// An empty name is no name: the box goes by what it draws, as if it had been given none. A control named `""` would otherwise be announced as nothing at all.
     fn a11y_label<S: Into<Arc<str>>>(self, label: impl Fn() -> S + 'static) -> Self {
-        follow(self.layout_node(), move |annotation| {
-            let label: Arc<str> = label().into();
-            annotation.label = (!label.is_empty()).then_some(label);
-        });
+        label_follows(self.layout_node(), move || Some(label()));
         self
     }
 

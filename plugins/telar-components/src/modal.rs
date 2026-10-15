@@ -147,6 +147,7 @@ fn build_open_modal(
     dismiss: scrim::DismissFn,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = title.clone();
+    let body_name = title.clone();
     let heading = Text::declaring(move || title.get(), LayoutStyle::new(), heading_style)?;
 
     let close_label = Text::declaring(
@@ -174,7 +175,8 @@ fn build_open_modal(
     let body = LayoutScrollArea::new(
         body_scroll(),
         box_item(Container::new(body_column(), body)?),
-    )?;
+    )?
+    .stop_label(move || body_name.get());
     let dialog_children: Vec<Box<dyn LayoutItem>> = vec![box_item(header), box_item(body)];
 
     let room = scrim::Room::new();

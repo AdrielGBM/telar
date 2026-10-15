@@ -604,3 +604,48 @@ fn a_short_body_is_no_stop_of_its_own() {
             .all(|exposed| exposed.role != Role::ScrollArea)
     );
 }
+
+/// The body as a document has it: the box its scroll area is, if it has one, carrying its name and whether Tab stops on it.
+fn body_in_document(body: impl FnOnce() -> Slots) -> Option<(Option<String>, bool)> {
+    let was = ui_tree::set_element_capture(true);
+    let tree = open_modal_with(body, (600.0, 400.0));
+    let body = tree.commands().iter().find_map(|command| match command {
+        DrawCommand::PushElement { element } if element.semantics.role == Role::ScrollArea => {
+            Some((
+                element.semantics.label.as_deref().map(str::to_string),
+                element.semantics.focusable.is_some_and(|f| f.tab_stop),
+            ))
+        }
+        _ => None,
+    });
+    ui_tree::set_element_capture(was);
+    body
+}
+
+#[test]
+fn a_body_that_scrolls_is_a_stop_named_after_the_dialog() {
+    plain_theme(None);
+    let tree = open_modal_with(|| tall_body(40), (600.0, 400.0));
+    let names: Vec<String> = ui_core::accessibility::snapshot(&tree.commands())
+        .into_iter()
+        .filter(|node| node.role == Role::ScrollArea)
+        .map(|node| node.name)
+        .collect();
+    assert_eq!(names, ["Confirm"], "a reader hears what it is scrolling");
+
+    assert_eq!(
+        body_in_document(|| tall_body(40)),
+        Some((Some("Confirm".to_string()), true)),
+        "a document makes it a named Tab stop"
+    );
+}
+
+#[test]
+fn a_body_that_fits_says_nothing_of_its_own() {
+    plain_theme(None);
+    assert_eq!(
+        body_in_document(|| slot_with_body("Body")),
+        Some((None, false)),
+        "the dialog's name is not said a second time on the way in"
+    );
+}

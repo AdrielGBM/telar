@@ -18,7 +18,7 @@ use telar_project::protocol::title_path;
 
 use crate::panels::arg_table;
 use crate::state::{ViewMode, WorkshopState};
-use crate::strings::{self, NO_PREVIEWS, OPEN_IN_CANVAS, PREVIEWS, PROPS, SOURCE_OF};
+use crate::strings::{self, NO_PREVIEWS, OPEN_IN_CANVAS, PREVIEWS, PROPS, SOURCE_OF, VIEW_DOCS};
 
 const PAGE_MARGIN: f32 = WORKBENCH_GRID * 3.0;
 const PAGE_MAX_WIDTH: f32 = 960.0;
@@ -94,7 +94,8 @@ fn page(state: &WorkshopState, title: &'static str) -> Result<Box<dyn LayoutItem
             .max_width(PAGE_MAX_WIDTH),
         items,
     )?;
-    let scroll = LayoutScrollArea::new(workbench_fill(), box_item(column))?;
+    let scroll = LayoutScrollArea::new(workbench_fill(), box_item(column))?
+        .stop_label(|| strings::text(VIEW_DOCS));
     Ok(box_item(scroll))
 }
 

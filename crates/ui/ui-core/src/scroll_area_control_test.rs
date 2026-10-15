@@ -137,11 +137,25 @@ fn a_control_is_one_element_that_has_the_role_scrolls_and_is_a_tab_stop() {
 }
 
 #[test]
-fn a_plain_scroll_area_stays_a_scroll_area_without_a_stop_of_its_own_in_the_document() {
+fn a_plain_scroll_area_holding_a_stop_stays_a_scroll_area_without_a_stop_of_its_own() {
     reset_layout_runtime();
     focus::clear();
     let _document = AsADocument::new();
-    let tree = mounted(scroll(1000.0));
+    let button = StyledContainer::new(
+        LayoutStyle::new().width(80.0).height(1000.0),
+        |_| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .control(Role::Button);
+    let rows = Container::new(LayoutStyle::new().flex_column(), vec![box_item(button)]).unwrap();
+    let tree = mounted(
+        LayoutScrollArea::new(
+            LayoutStyle::new().width(200.0).height(100.0),
+            box_item(rows),
+        )
+        .unwrap(),
+    );
 
     let all = elements(&tree);
     assert_eq!(all[0].semantics.role, Role::ScrollArea);
@@ -246,7 +260,7 @@ fn a_control_tells_when_it_gains_and_loses_focus() {
 }
 
 #[test]
-fn a_press_in_a_control_focuses_it_and_a_press_in_a_plain_scroll_area_does_not() {
+fn a_press_in_a_control_focuses_it_and_a_press_in_a_presented_one_does_not() {
     reset_layout_runtime();
     focus::clear();
     let pressed = Event::PointerPressed {
@@ -262,8 +276,8 @@ fn a_press_in_a_control_focuses_it_and_a_press_in_a_plain_scroll_area_does_not()
     assert_eq!(focus::current(), id);
     focus::clear();
 
-    let mut plain = mounted(scroll(1000.0));
-    plain.on_event(&pressed);
+    let mut presented = mounted(scroll(1000.0).presented(Role::ListBox));
+    presented.on_event(&pressed);
     assert_eq!(focus::current(), None);
 }
 

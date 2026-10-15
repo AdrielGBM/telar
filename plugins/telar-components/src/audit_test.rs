@@ -16,7 +16,8 @@ use telar_components::{
 };
 #[cfg(feature = "overlays")]
 use telar_components::{
-    Command, CommandPaletteProps, MenuProps, SubmenuProps, command_palette, menu, submenu,
+    Command, CommandPaletteProps, MenuProps, ModalProps, SubmenuProps, command_palette, menu,
+    modal, submenu,
 };
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -635,7 +636,20 @@ fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
             .build(),
         Children::default(),
     )?;
-    Ok(vec![actions, view, palette])
+    let terms = Children::new(|| {
+        let mut slots = Slots::new();
+        for n in 1..=40 {
+            let clause = Text::new(
+                move || format!("Clause {n} of the terms."),
+                LayoutStyle::new(),
+                ink,
+            )?;
+            slots.push(None, box_item(clause));
+        }
+        Ok(slots)
+    });
+    let notice = modal(ModalProps::props().id(NOTICE).title("Terms").build(), terms)?;
+    Ok(vec![actions, view, palette, notice])
 }
 
 /// A submenu of choices, one of them on, and a row beside it.
@@ -979,4 +993,44 @@ fn controlled(control: &web_sys::Element) -> (web_sys::Element, Option<web_sys::
         row
     });
     (list, row)
+}
+
+#[cfg(feature = "overlays")]
+const NOTICE: &str = "notice";
+
+/// A dialog whose body holds more than it shows makes the body a Tab stop the keyboard scrolls, named after the dialog, and adds no violations.
+#[cfg(feature = "overlays")]
+#[wasm_bindgen_test]
+async fn an_open_dialog_whose_body_scrolls_adds_no_violations() {
+    telar::open_overlay(NOTICE);
+    // The card is sized to the room the first layout finds, so its body only overflows from the second.
+    render();
+    let host = render();
+    let dialog = host
+        .query_selector("[role=dialog][aria-label=Terms]")
+        .expect("a valid selector")
+        .expect("the dialog is open");
+    let body = dialog
+        .query_selector("[tabindex='0'][aria-label=Terms]")
+        .expect("a valid selector")
+        .expect("the body is a named Tab stop");
+    assert!(
+        body.scroll_height() > body.client_height(),
+        "and it scrolls"
+    );
+    assert_eq!(body.get_attribute("role").as_deref(), Some("group"));
+    assert_clean(&host, "with a dialog whose body scrolls open").await;
+
+    let stop = focus::tab_order()
+        .into_iter()
+        .find(|stop| stop.role == Role::ScrollArea)
+        .expect("Tab stops on the body");
+    focus::request(stop.id);
+    key(telar::NamedKey::PageDown);
+    let host = render();
+    assert!(body.scroll_top() > 0, "Page Down scrolled it");
+    assert_clean(&host, "with the dialog's body focused").await;
+    telar::close_overlay(NOTICE);
+    focus::clear();
+    render();
 }

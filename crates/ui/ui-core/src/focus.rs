@@ -94,7 +94,7 @@ struct Entry {
     role: Role,
     /// Whether Tab stops here. `false` for a control that is driven some other way and still has to be announced: the rows of a menu answer to arrow keys, and putting each one in the tab order would make Tab walk a list the user opened precisely so as not to.
     tabbable: bool,
-    /// For a scroll area, whether its content can scroll now: it is a stop only then, and only while nothing inside it takes focus. See [`register_scroller`].
+    /// For a scroll area, whether its content can scroll now: it is a stop only then, and only while no stop inside it is reachable. See [`register_scroller`].
     scrolls: Option<Rc<dyn Fn() -> bool>>,
     /// A checked state, for the controls that have one. A closure and not a flag, for the same reason "reachable" is one: a checkbox toggles without being rebuilt, and a reader asking a moment later has to get the answer that is true then.
     toggled: Option<Rc<dyn Fn() -> bool>>,
@@ -124,6 +124,8 @@ struct FocusState {
     text_entries: FxHashSet<FocusId>,
     // Bumped when a gate or an ownership link is registered, so the guard re-reads an ancestry it could not have subscribed to yet.
     reach: RwSignal<u64>,
+    // Bumped when an entry joins or leaves the order, so a scroll area re-reads whether a stop inside it takes its own away.
+    roster: RwSignal<u64>,
     guard: Option<Effect>,
     // The one request still waiting for its batch to settle, stamped so a request that lost to a later give, blur or request does not act when it is finally judged.
     deferred: Option<(u64, FocusId)>,
@@ -155,6 +157,7 @@ impl FocusState {
             scopes: Vec::new(),
             text_entries: FxHashSet::default(),
             reach: signal(0),
+            roster: signal(0),
             guard: None,
             deferred: None,
             requests: 0,
@@ -383,8 +386,7 @@ pub fn blur_from_pointer(x: f32, y: f32) {
     if current().is_none() {
         return;
     }
-    // Collected before the rects are asked for: reading layout under the focus borrow would hold one runtime across a call into another.
-    // A scroll area is not one: the keyboard reaches it, a press does not.
+    // Collected before the rects are asked for: reading layout under the focus borrow would hold one runtime across a call into another. A scroll area is left out: one that is a stop takes focus from the press itself, as it reaches it.
     let nodes: Vec<NodeId> = with_focus_ref(|s| {
         s.order
             .iter()
@@ -431,9 +433,9 @@ pub fn register_presented(id: FocusId, node: NodeId, role: Role) {
     register_node(id, FocusKind::Widget, Some(node), role, false);
 }
 
-/// Registers a scroll area as a stop of its own, so the keyboard can scroll it — but only while `scrolls` reads true and nothing reachable inside `node` takes focus.
+/// Registers a scroll area as a stop of its own, so the keyboard can scroll it — but only while `scrolls` reads true and no stop inside `node` is reachable, or while it holds focus.
 ///
-/// A region that holds controls is scrolled by moving through them, and a stop of its own there would be one more Tab between the field above it and the first control in it. One that holds only text has nothing else the keyboard could reach it by.
+/// A region that holds controls is scrolled by moving through them, and a stop of its own there would be one more Tab between the field above it and the first control in it. One that holds only text has nothing else the keyboard could reach it by. Holding focus keeps it a stop, so content that grows a control or shrinks to fit never takes focus from under the keyboard.
 pub(crate) fn register_scroller(id: FocusId, node: NodeId, scrolls: impl Fn() -> bool + 'static) {
     register_node(id, FocusKind::Widget, Some(node), Role::ScrollArea, true);
     let scrolls: Rc<dyn Fn() -> bool> = Rc::new(scrolls);
@@ -452,6 +454,7 @@ pub(crate) fn host_scroller(id: FocusId, role: Role) {
             entry.scrolls = None;
         }
     });
+    roster_changed();
 }
 
 /// [`host_scroller`] for a control that is announced and never holds focus, as [`register_presented`] registers one: the list a combobox opens, which the combobox keeps the keyboard for.
@@ -473,8 +476,8 @@ fn default_role(kind: FocusKind) -> Role {
 }
 
 fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role, tabbable: bool) {
-    with_focus(|s| {
-        match s.entry_mut(id) {
+    let joined = with_focus(|s| {
+        let joined = match s.entry_mut(id) {
             // Re-registering only adds knowledge: a widget that learns its node later keeps its place.
             Some(existing) => {
                 existing.node = existing.node.or(node);
@@ -483,26 +486,41 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                     existing.role = role;
                 }
                 existing.tabbable &= tabbable;
+                false
             }
-            None => s.order.push(Entry {
-                id,
-                node,
-                role,
-                tabbable,
-                scrolls: None,
-                toggled: None,
-                value: None,
-                orientation: None,
-                outline: Outline::default(),
-                active_descendant: None,
-                controls: None,
-                keyboard: None,
-            }),
-        }
+            None => {
+                s.order.push(Entry {
+                    id,
+                    node,
+                    role,
+                    tabbable,
+                    scrolls: None,
+                    toggled: None,
+                    value: None,
+                    orientation: None,
+                    outline: Outline::default(),
+                    active_descendant: None,
+                    controls: None,
+                    keyboard: None,
+                });
+                true
+            }
+        };
         if kind == FocusKind::TextEntry {
             s.text_entries.insert(id);
         }
+        joined
     });
+    if joined {
+        roster_changed();
+    }
+}
+
+fn roster_changed() {
+    let roster = with_focus_ref(|s| s.roster);
+    if roster.is_alive() {
+        roster.set(roster.peek().wrapping_add(1));
+    }
 }
 
 /// Declares a region whose focusables are only reachable while `showing` reads true, and — when `traps` — that holds focus inside itself while it is up.
@@ -552,11 +570,16 @@ pub fn unregister_scope(id: ScopeId) {
 
 /// Removes `id` from the tab order and drops its focus if it held it. A focusable widget calls this on drop, so a destroyed widget never lingers in traversal or as the focused id.
 pub fn unregister(id: FocusId) {
-    with_focus(|s| {
+    let left = with_focus(|s| {
+        let before = s.order.len();
         s.order.retain(|e| e.id != id);
         s.text_entries.remove(&id);
+        s.order.len() != before
     });
     release(id);
+    if left {
+        roster_changed();
+    }
 }
 
 /// Forgets every focusable and scope that names a layout node, for a layout runtime being replaced: the next tree is handed the same node ids, and an entry left behind would be announced, and stepped onto, as part of it.
@@ -573,6 +596,9 @@ pub(crate) fn forget_nodes() {
     });
     for entry in &entries {
         release(entry.id);
+    }
+    if !entries.is_empty() {
+        roster_changed();
     }
     // Dropped outside the slot: a closure they hold may own a widget whose teardown reaches back into it.
     drop((entries, scopes));
@@ -759,13 +785,15 @@ fn in_document_order(mut order: Vec<TabStop>) -> Vec<TabStop> {
     order
 }
 
-/// The scroll areas that are no stop right now: their content fits, or something reachable inside them takes focus. See [`register_scroller`].
-fn idle_scrollers(scopes: &[ScopeView]) -> Vec<FocusId> {
-    type Scroller = (FocusId, NodeId, Rc<dyn Fn() -> bool>);
-    let (scrollers, holders) = with_focus_ref(|s| {
+type Scroller = (FocusId, NodeId, Rc<dyn Fn() -> bool>);
+
+/// The scroll areas registered with [`register_scroller`] that `pick` keeps, and the boxes of the stops that could take a scroll area's own away: every Tab stop that is not such a scroll area.
+fn scrollers_and_holders(pick: impl Fn(FocusId) -> bool) -> (Vec<Scroller>, Vec<NodeId>) {
+    with_focus_ref(|s| {
         let scrollers: Vec<Scroller> = s
             .order
             .iter()
+            .filter(|e| pick(e.id))
             .filter_map(|e| Some((e.id, e.node?, e.scrolls.clone()?)))
             .collect();
         if scrollers.is_empty() {
@@ -774,21 +802,76 @@ fn idle_scrollers(scopes: &[ScopeView]) -> Vec<FocusId> {
         let holders: Vec<NodeId> = s
             .order
             .iter()
-            .filter(|e| e.scrolls.is_none())
+            .filter(|e| e.scrolls.is_none() && e.tabbable)
             .filter_map(|e| e.node)
             .collect();
         (scrollers, holders)
-    });
+    })
+}
+
+/// Whether the scroll area at `node` is no stop now. See [`register_scroller`].
+fn idles(
+    (id, node, scrolls): &Scroller,
+    holders: &[NodeId],
+    scopes: &[ScopeView],
+    focused: Option<FocusId>,
+) -> bool {
+    focused != Some(*id)
+        && (!scrolls()
+            || holders.iter().any(|&held| {
+                crate::input_region::is_inside(held, *node) && reachable(Some(held), scopes)
+            }))
+}
+
+/// The scroll areas that are no stop right now: their content fits, or a stop inside them is reachable, and focus is not on them. See [`register_scroller`].
+fn idle_scrollers(scopes: &[ScopeView]) -> Vec<FocusId> {
+    let (scrollers, holders) = scrollers_and_holders(|_| true);
+    let focused = focused_signal().peek();
     scrollers
         .into_iter()
-        .filter(|(_, node, scrolls)| {
-            !scrolls()
-                || holders.iter().any(|&held| {
-                    crate::input_region::is_inside(held, *node) && reachable(Some(held), scopes)
-                })
-        })
+        .filter(|scroller| idles(scroller, &holders, scopes, focused))
         .map(|(id, _, _)| id)
         .collect()
+}
+
+/// Whether the scroll area `id`, registered with [`register_scroller`], is a stop of its own now, read without subscribing.
+pub(crate) fn is_scroll_stop(id: FocusId) -> bool {
+    scroll_stop(id, false)
+}
+
+/// [`is_scroll_stop`], read reactively: the caller runs again when focus moves, when a focusable joins or leaves the order, or when one inside the area is hidden or shown. Its content's size and its viewport's are the caller's to subscribe to, since the area's `scrolls` reads them without subscribing.
+pub(crate) fn tracks_scroll_stop(id: FocusId) -> bool {
+    scroll_stop(id, true)
+}
+
+fn scroll_stop(id: FocusId, track: bool) -> bool {
+    let focused = if track {
+        with_focus_ref(|s| s.roster).get();
+        current()
+    } else {
+        focused_signal().peek()
+    };
+    let (scrollers, holders) = scrollers_and_holders(|entry| entry == id);
+    let Some(scroller) = scrollers.first() else {
+        return false;
+    };
+    if track {
+        for &held in &holders {
+            if crate::input_region::is_inside(held, scroller.1) {
+                crate::input_region::tracks_hidden(held);
+            }
+        }
+    }
+    !idles(scroller, &holders, &scope_views(), focused)
+}
+
+fn scope_views() -> Vec<ScopeView> {
+    with_focus_ref(|s| {
+        s.scopes
+            .iter()
+            .map(|sc| (sc.node, sc.showing.clone(), sc.traps))
+            .collect()
+    })
 }
 
 /// Declares that `id` carries an on/off state, and how to read it now. What the state is — checked, pressed, selected, expanded — is its role's [`Role::toggle_kind`].
@@ -1077,25 +1160,21 @@ pub(crate) fn describe(
 ///
 /// `declared` is the widget's own set for the state it is in; `None` takes `role`'s. A control out of reach keeps nothing, and one inside a modal that holds focus keeps Tab as well, because stepping inside the trap is Telar's and a host walking its own order would leave it. Reactive, like [`current`]: the box re-emits when a scope it sits in opens or closes.
 pub fn focusable_of(id: FocusId, role: Role, declared: Option<ConsumedKeys>) -> Focusable {
-    let (entry, scopes) = with_focus_ref(|s| {
-        let entry = s.entry(id).map(|e| (e.node, e.tabbable));
-        let scopes: Vec<ScopeView> = s
-            .scopes
-            .iter()
-            .map(|sc| (sc.node, sc.showing.clone(), sc.traps))
-            .collect();
-        (entry, scopes)
+    let entry = with_focus_ref(|s| {
+        s.entry(id)
+            .map(|e| (e.node, e.tabbable, e.scrolls.is_some()))
     });
-    let Some((node, tabbable)) = entry else {
+    let Some((node, tabbable, scroller)) = entry else {
         return Focusable::default();
     };
+    let scopes = scope_views();
     if !reachable(node, &scopes) {
         return Focusable::default();
     }
     let consumes = declared.unwrap_or_else(|| role.consumed_keys());
     let trapped = scopes.iter().any(|(_, showing, traps)| *traps && showing());
     Focusable {
-        tab_stop: tabbable,
+        tab_stop: tabbable && (!scroller || tracks_scroll_stop(id)),
         consumes: if trapped {
             consumes | ConsumedKeys::TAB
         } else {

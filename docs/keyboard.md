@@ -24,7 +24,7 @@ Each role has a default, `Role::consumed_keys()`:
 | spin button | the arrows, Enter |
 | text field | the arrows, Home/End, Space, Enter, Backspace |
 | multi-line editor | a text field's keys, and Tab (it types one) |
-| scroll area | everything that scrolls |
+| scroll area | everything that scrolls; a plain one only the keys for the axes it overflows (see [Scroll areas](#scroll-areas)) |
 | everything else | nothing |
 
 State adjusts it (`ui_core::focus::focusable_of`):
@@ -63,6 +63,26 @@ buttons written as boxes with a role.
 
 The result reaches the renderer as `Semantics::focusable`: whether Tab stops on the box right now, and the
 set it keeps. A box that cannot hold focus has `None`.
+
+## Scroll areas
+
+A scroll area that is not a control is a Tab stop while its content overflows and no Tab stop inside it is
+reachable, and for as long as it holds focus (see [accessibility.md](accessibility.md#regions-that-scroll)).
+Focused, it scrolls the way a page does, by a line for an arrow and by the view less a line for a page:
+
+| Key | Scrolls |
+| --- | --- |
+| Up, Down | a line, while the content is taller than the view |
+| Left, Right | a line, while the content is wider than the view. The arrows move the view the way they point, in a right-to-left layout too, as a browser scrolls |
+| Page Up, Page Down | a page up or down |
+| Space, Shift+Space | a page down or up |
+| Home, End | to the top or the bottom |
+
+It keeps only the keys for the axes its content overflows, so a block that only scrolls sideways leaves Up,
+Down, the paging keys and Space to the page around it, and a key held with Ctrl, Alt or Command is left to the
+app's shortcuts. A press inside it focuses it as a tap does, without a ring, which is also what a browser does
+with the element, and Tab or the app focusing it shows the ring. A control scroll area (a tree, a list box)
+keeps its role's keys, answers them with `on_focused_key` first, and scrolls with the keys it leaves.
 
 ## Per target
 

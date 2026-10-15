@@ -147,20 +147,25 @@ fn build_open_drawer(
             .gap(shared::gap_lg())
             .padding_all(tokens.pad())
     };
+    let name = Rc::new(move || match &label {
+        Some(label) => label.get(),
+        None => strings::text(strings::DRAWER),
+    });
     let body = LayoutScrollArea::new(
         LayoutStyle::new().flex_shrink(1.0).min_height(0.0),
         box_item(Container::new(
             LayoutStyle::new().flex_column().gap(shared::gap_lg()),
             body,
         )?),
-    )?;
+    )?
+    .stop_label({
+        let name = name.clone();
+        move || name()
+    });
     let panel = StyledContainer::new(sheet(), move |_r| paint(), vec![box_item(body)])?
         .styled_by(sheet)
         .role(Role::Dialog)
-        .a11y_label(move || match &label {
-            Some(label) => label.get(),
-            None => strings::text(strings::DRAWER),
-        })
+        .a11y_label(move || name())
         // Swallow taps on the panel so only the scrim dismisses.
         .on_press(|| {});
 

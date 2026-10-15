@@ -17,8 +17,8 @@ use telar_devtools::{
 use super::editors::{self, Binding};
 use crate::state::WorkshopState;
 use crate::strings::{
-    self, COLUMN_DEFAULT, COLUMN_DESCRIPTION, COLUMN_NAME, COLUMN_VALUE, NO_ARGS, NOTHING_SELECTED,
-    RESET, RESET_ARG,
+    self, COLUMN_DEFAULT, COLUMN_DESCRIPTION, COLUMN_NAME, COLUMN_VALUE, CONTROLS, NO_ARGS,
+    NOTHING_SELECTED, RESET, RESET_ARG,
 };
 
 const NAME_WIDTH: f32 = 160.0;
@@ -73,7 +73,8 @@ pub(crate) fn arg_table(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> 
 }
 
 fn scrolling(table: Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let scroll = LayoutScrollArea::new(LayoutStyle::new().flex_grow(1.0).min_height(0.0), table)?;
+    let scroll = LayoutScrollArea::new(LayoutStyle::new().flex_grow(1.0).min_height(0.0), table)?
+        .stop_label(|| strings::text(CONTROLS));
     Ok(box_item(scroll))
 }
 

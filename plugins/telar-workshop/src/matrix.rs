@@ -364,7 +364,8 @@ fn planned_cells(
             .padding_all(GAP),
         items,
     )?;
-    let scroll = LayoutScrollArea::new(workbench_fill(), box_item(column))?;
+    let scroll = LayoutScrollArea::new(workbench_fill(), box_item(column))?
+        .stop_label(|| strings::text(MATRIX_CELLS));
     Ok(box_item(scroll))
 }
 

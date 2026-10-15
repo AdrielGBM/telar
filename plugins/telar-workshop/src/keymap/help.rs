@@ -49,7 +49,8 @@ fn listing() -> Result<Box<dyn LayoutItem>, LayoutError> {
     let scroll = LayoutScrollArea::new(
         LayoutStyle::column().max_height(MAX_HEIGHT),
         box_item(column),
-    )?;
+    )?
+    .stop_label(|| strings::text(KEYBOARD_SHORTCUTS));
     Ok(box_item(scroll))
 }
 

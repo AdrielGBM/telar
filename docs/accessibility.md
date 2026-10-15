@@ -125,6 +125,32 @@ select's combobox. It never changes; whether the list is open now is `expanded(|
 `aria-haspopup="menu"` or `"listbox"` in a document, AccessKit `has_popup` on the desktop, and `, has menu` or
 `, has listbox` in the terminal's reading (`File, button, has menu, collapsed`).
 
+## Regions that scroll
+
+A scroll area whose content overflows and holds nothing the keyboard can stop on (a dialog's long text, a log,
+a code block wider than its frame) is a Tab stop of its own, or no key could ever move it. It is one exactly
+while its content overflows along an axis it scrolls and no Tab stop inside it is reachable, and it stays one
+while it holds focus, so content that grows a control or shrinks to fit never takes focus from under the
+keyboard. It follows its content: a control that is built into it, shown or hidden in it, or a resize, is
+reflected the next frame, without moving focus. A region that holds controls is scrolled by moving through
+them and adds no stop. Rows a cursor walks while focus stays on another control are not Tab stops and do not
+count. The keys it scrolls with are in [keyboard.md](keyboard.md#scroll-areas).
+
+The page's own scroll is never one: it scrolls with nothing focused. A scroll area that is a control
+(`LayoutScrollArea::control`, a tree or a list box) is a stop whether or not it overflows, and one that is
+only presented (`LayoutScrollArea::presented`, the list a select opens) never is.
+
+A reader landing on it has to hear what it scrolls. From Rust, `LayoutScrollArea::stop_label(|| …)` names it
+while it is a stop and leaves it nameless otherwise, so a region that fits is not announced a second time
+inside the box that already names it. The catalogue's `modal` names its body after its title and `drawer`
+after its label. `label:` on `scroll` (`.a11y_label`) names it always.
+
+| Target | A scroll area that is a stop |
+| --- | --- |
+| Browser, document (`web-dom`) | `tabindex="0"`, with `role="group"` and `aria-label` once it is named, and `data-telar-keys` holding only the keys for the axes it overflows. The browser scrolls the element itself, the way Telar asks it to. |
+| Desktop | An AccessKit `ScrollView` with `Focus`, named by its name or, without one, by the text it draws. |
+| Terminal, browser canvas (`web`), Android and headless | A stop in Telar's own Tab order, ringed when focused, and a scroll area with its name in the snapshot. |
+
 ## Shortcuts
 
 A control that runs the same command as a key says which, so a reader can tell the key before it is used:
@@ -210,7 +236,7 @@ a box under `a11y:hidden`.
 
 | Test | What it checks |
 | --- | --- |
-| `plugins/telar-components/src/audit_test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document. |
+| `plugins/telar-components/src/audit_test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document, and with `overlays` that a dialog whose body scrolls makes the body a named Tab stop that Page Down scrolls. |
 | `crates/platform/platform-desktop/src/accessibility_test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen, built from `ui-core` primitives in place of the catalogue's button, field and checkbox: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, and that the tree's focus follows the Tab order. |
 | `crates/renderer/renderer-dom/src/controls_test.rs` | A switch and a toggle button in the document: their role, `aria-checked` and `aria-pressed`, that each is a Tab stop, and that Space or Enter sent to the element is kept from the page, reaches the box through the platform and flips the state the next frame writes. `semantics_test.rs` checks that a box whose role changes drops the state attribute of the old one. |
 | `crates/tools/cargo-telar/src/workshop_audit_test.rs` | The exported `apps/catalogue` workshop in headless Chrome: axe-core over the canvas of every preview and matrix page, with the same rules (`crates/renderer/renderer-dom/axe.json`), and over the workshop's chrome once with `region` on. See [previews.md](previews.md#auditing-the-exported-workshop). |

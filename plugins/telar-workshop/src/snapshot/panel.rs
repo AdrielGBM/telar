@@ -329,7 +329,8 @@ fn draw_diff(result: &SnapshotResult) -> Result<Option<Box<dyn LayoutItem>>, Lay
         LayoutStyle::new().flex_shrink(0.0),
         |text| workbench_muted(text.with_font_weight(600)),
     )?;
-    let scroll = LayoutScrollArea::new(fill(), view)?;
+    let scroll =
+        LayoutScrollArea::new(fill(), view)?.stop_label(|| strings::text(SNAPSHOT_DRAW_DIFF));
     let column = Container::new(fill().gap(WORKBENCH_GRID / 2.0), children![caption, scroll])?;
     Ok(Some(box_item(column)))
 }
