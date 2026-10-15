@@ -2,7 +2,6 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
-use std::time::Duration;
 
 use telar::{
     AlignItems, BorderRadius, Children, Container, Cursor, DragAxis, Input, Key, LayoutError,
@@ -14,15 +13,12 @@ use telar::{
 use web_time::Instant;
 
 use crate::edit::{snap, write_through};
-use crate::shared;
+use crate::shared::{self, DOUBLE_CLICK};
 
 /// Turns the value into the text the field shows and starts typed entry from.
 pub type Format = Rc<dyn Fn(f32) -> String>;
 /// Reads typed text back into a value; `None` rejects it and leaves the value as it was.
 pub type Parse = Rc<dyn Fn(&str) -> Option<f32>>;
-
-/// The longest gap between two clicks that still reads as a double-click.
-pub const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 
 /// How far the pointer travels before a press on the label is a scrub rather than a click.
 const SCRUB_THRESHOLD: f32 = 3.0;

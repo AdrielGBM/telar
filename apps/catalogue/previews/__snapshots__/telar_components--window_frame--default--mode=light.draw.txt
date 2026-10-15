@@ -18,27 +18,54 @@ element group
             end
             element group
               rect 482,186 78x24
-              element button
-                rect 482,186 26x24
+              element group
                 element group
-                  matrix 1,0,0,1,490,193
-                    path M0,5 L10,5 stroke=1.5 stroke-color=#171a2eff
+                  rect 482,186 26x24
+                  element button
+                    rect 482,186 26x24
+                    element group
+                      matrix 1,0,0,1,490,193
+                        path M0,5 L10,5 stroke=1.5 stroke-color=#171a2eff
+                      end
+                    end
+                  end
+                end
+                element group
+                  element group
                   end
                 end
               end
-              element button
-                rect 508,186 26x24
+              element group
                 element group
-                  matrix 1,0,0,1,516,193
-                    path M0,0 L10,0 L10,10 L0,10 Z stroke=1.5 stroke-color=#171a2eff
+                  rect 508,186 26x24
+                  element button
+                    rect 508,186 26x24
+                    element group
+                      matrix 1,0,0,1,516,193
+                        path M0,0 L10,0 L10,10 L0,10 Z stroke=1.5 stroke-color=#171a2eff
+                      end
+                    end
+                  end
+                end
+                element group
+                  element group
                   end
                 end
               end
-              element button
-                rect 534,186 26x24
+              element group
                 element group
-                  matrix 1,0,0,1,542,193
-                    path M0,0 L10,10 M10,0 L0,10 stroke=1.5 stroke-color=#171a2eff
+                  rect 534,186 26x24
+                  element button
+                    rect 534,186 26x24
+                    element group
+                      matrix 1,0,0,1,542,193
+                        path M0,0 L10,10 M10,0 L0,10 stroke=1.5 stroke-color=#171a2eff
+                      end
+                    end
+                  end
+                end
+                element group
+                  element group
                   end
                 end
               end

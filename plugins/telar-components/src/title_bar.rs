@@ -10,8 +10,7 @@ use telar::{
 };
 use web_time::Instant;
 
-use crate::DOUBLE_CLICK;
-use crate::shared::{self, Mark};
+use crate::shared::{self, DOUBLE_CLICK, Mark};
 use crate::strings;
 
 /// How far a press on a title bar travels before it moves the window rather than counting towards a double-click.
@@ -92,7 +91,7 @@ fn named(color: &Reactive<Color>) -> Option<Color> {
 /// One window-control button: a mark a reader hears by `name`. It holds every stroke started on it, so a title bar around it never takes a press on it for a move of the window.
 fn control_button(
     shape: impl Fn() -> Mark + Clone + 'static,
-    name: impl Fn() -> String + 'static,
+    name: impl Fn() -> String + Clone + 'static,
     paint: ControlPaint,
     look: ControlLook,
     press: Rc<dyn Fn()>,
@@ -128,9 +127,32 @@ fn control_button(
     })
     .on_hover(move |over| hovered.set(over))
     .control(Role::Button)
-    .a11y_label(name)
+    .a11y_label(name.clone())
     .on_press(move || press())
     .holds_stroke();
+    hinted(button, name)
+}
+
+#[cfg(feature = "overlays")]
+fn hinted(
+    button: StyledContainer,
+    name: impl Fn() -> String + 'static,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let mut slots = telar::Slots::new();
+    slots.push(None, box_item(button));
+    crate::tooltip(
+        crate::TooltipProps::props()
+            .text(Reactive::of(name))
+            .build(),
+        Children::from(slots),
+    )
+}
+
+#[cfg(not(feature = "overlays"))]
+fn hinted(
+    button: StyledContainer,
+    _name: impl Fn() -> String + 'static,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(button))
 }
 
@@ -234,8 +256,12 @@ impl Default for TitleBarOptions {
 
 /// Makes `bar` the window's title bar for as long as it is shown, as `options` say: a drag from its empty space moves the window, a double-click there maximizes or restores it, and the window system's own decorations can be taken off meanwhile.
 ///
-/// A press on a control inside the bar stays the control's, and so does a stroke started on one that holds it, as [`window_controls`] does, so only the bar's empty space moves the window. A box that answers a press is announced as a button unless it was given a role, so give `bar` its role first: a `Role::Banner` for an application's top bar, a `Role::Group` for a frame's strip.
+/// A press on a control inside the bar stays the control's, and so does a stroke started on one that holds it, as [`window_controls`] does, so only the bar's empty space moves the window. A bar without a role is made a `Role::Group`, since a box that answers a press would otherwise be announced as a button; give it a `Role::Banner` first for an application's top bar.
 pub fn title_bar(bar: StyledContainer, options: TitleBarOptions) -> StyledContainer {
+    let bar = match bar.declared_role() {
+        Some(_) => bar,
+        None => bar.role(Role::Group),
+    };
     let TitleBarOptions {
         drag,
         maximize,

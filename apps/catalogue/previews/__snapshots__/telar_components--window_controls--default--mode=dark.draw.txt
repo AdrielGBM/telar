@@ -6,27 +6,54 @@ element group
       element group
         element group
           rect 361,288 78x24
-          element button
-            rect 361,288 26x24
+          element group
             element group
-              matrix 1,0,0,1,369,295
-                path M0,5 L10,5 stroke=1.5 stroke-color=#ebedf5ff
+              rect 361,288 26x24
+              element button
+                rect 361,288 26x24
+                element group
+                  matrix 1,0,0,1,369,295
+                    path M0,5 L10,5 stroke=1.5 stroke-color=#ebedf5ff
+                  end
+                end
+              end
+            end
+            element group
+              element group
               end
             end
           end
-          element button
-            rect 387,288 26x24
+          element group
             element group
-              matrix 1,0,0,1,395,295
-                path M0,0 L10,0 L10,10 L0,10 Z stroke=1.5 stroke-color=#ebedf5ff
+              rect 387,288 26x24
+              element button
+                rect 387,288 26x24
+                element group
+                  matrix 1,0,0,1,395,295
+                    path M0,0 L10,0 L10,10 L0,10 Z stroke=1.5 stroke-color=#ebedf5ff
+                  end
+                end
+              end
+            end
+            element group
+              element group
               end
             end
           end
-          element button
-            rect 413,288 26x24
+          element group
             element group
-              matrix 1,0,0,1,421,295
-                path M0,0 L10,10 M10,0 L0,10 stroke=1.5 stroke-color=#ebedf5ff
+              rect 413,288 26x24
+              element button
+                rect 413,288 26x24
+                element group
+                  matrix 1,0,0,1,421,295
+                    path M0,0 L10,10 M10,0 L0,10 stroke=1.5 stroke-color=#ebedf5ff
+                  end
+                end
+              end
+            end
+            element group
+              element group
               end
             end
           end

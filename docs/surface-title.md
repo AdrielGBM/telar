@@ -76,7 +76,7 @@ let bar = title_bar(bar, TitleBarOptions { replace_decorations: true, ..TitleBar
 | Item | What it is |
 | --- | --- |
 | `window_controls` | Minimize, maximize and close, in a group a reader hears as the window's. Maximize is drawn as two squares and named Restore while the window is maximized. Close runs `on_close`, `telar::window::close` unless the app passes its own. Each button holds the strokes started on it, so a press on one never moves the window. |
-| `title_bar(bar, options)` | Makes `bar` the window's title bar while it is shown: a drag from its empty space moves the window, a double-click there maximizes or restores it (`maximize`), and with `replace_decorations` the window system's own title bar and borders are off until the bar is gone. Give `bar` its role first: a box that answers a press and has none is announced as a button. |
+| `title_bar(bar, options)` | Makes `bar` the window's title bar while it is shown: a drag from its empty space moves the window, a double-click there maximizes or restores it (`maximize`), and with `replace_decorations` the window system's own title bar and borders are off until the bar is gone. A bar without a role is made a group; give it `Role::Banner` for an application's top bar. |
 | `window_edges` | Handles along the window's edges and corners that resize a window opened without decorations. Place it last among the root's children. |
 | `window_frame` | A whole frame built from `window_controls` and `title_bar`, with a title strip, a body and a resize grip, for a backend that draws a surface's chrome itself. |
 

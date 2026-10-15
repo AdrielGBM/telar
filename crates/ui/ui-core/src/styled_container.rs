@@ -636,6 +636,11 @@ impl StyledContainer {
         self
     }
 
+    /// The role given by [`role`](Self::role), [`control`](Self::control) or [`presented`](Self::presented); `None` while the box has none and its role is still derived from what it answers.
+    pub fn declared_role(&self) -> Option<renderer_core::Role> {
+        self.role
+    }
+
     /// Announces the box as a control of `role` that something else drives: the rows of a tree, walked with the arrows while the tree holds focus. It is no Tab stop, and a tap on it leaves focus where it is, but it carries [`toggled`](Self::toggled), [`expanded`](Self::expanded) and [`positioned`](Self::positioned) like any control.
     pub fn presented(mut self, role: focus::Role) -> Self {
         self.role = Some(role);

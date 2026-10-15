@@ -2,7 +2,6 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
-use std::time::Duration;
 
 use telar::{
     Accessible, BorderRadius, Children, Clip, ClippedItem, Container, Cursor, Direction, DragAxis,
@@ -14,10 +13,9 @@ use telar::{
 use web_time::Instant;
 
 use crate::edit::write_through;
-use crate::shared;
+use crate::shared::{self, DOUBLE_CLICK};
 use crate::strings;
 
-const DOUBLE_CLICK: Duration = Duration::from_millis(400);
 const DRAG_THRESHOLD: f32 = 3.0;
 const DEFAULT_SIZE: f32 = 240.0;
 const DEFAULT_STEP: f32 = 16.0;

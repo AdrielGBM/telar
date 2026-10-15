@@ -145,11 +145,10 @@ pub use radio::{RadioProps, RadioTokens, radio};
 pub use reorder_zones::{ReorderGroup, ReorderZoneProps, Slot, apply_zone_move};
 #[cfg(feature = "advanced")]
 pub use reorderable::{ItemBuilder, ReorderableProps, reorderable};
-pub use scrub_field::{
-    DOUBLE_CLICK, Format, Parse, ScrubFieldProps, ScrubFieldTokens, scrub_field,
-};
+pub use scrub_field::{Format, Parse, ScrubFieldProps, ScrubFieldTokens, scrub_field};
 pub use section::{SectionProps, section};
 pub use select::{SelectProps, SelectTokens, select};
+pub use shared::DOUBLE_CLICK;
 pub use slider::{SliderProps, SliderTokens, slider};
 pub use spinner::{SpinnerProps, SpinnerTokens, spinner};
 #[cfg(feature = "workbench")]

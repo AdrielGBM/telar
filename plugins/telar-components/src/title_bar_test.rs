@@ -165,17 +165,22 @@ fn every_button_is_at_least_the_size_asked_for() {
 }
 
 /// A bar of `width` with nothing in it, made a title bar as `options` say.
-fn bar(options: TitleBarOptions) -> ComponentList {
+fn plain_bar() -> StyledContainer {
     crate::test_support::fresh_layout_runtime();
     take_window_commands();
-    let bar = StyledContainer::new(
+    StyledContainer::new(
         LayoutStyle::new().width(BAR.0).height(BAR.1),
         |_| RectStyle::default(),
         vec![],
     )
     .unwrap()
-    .role(Role::Banner);
-    laid_out(box_item(title_bar(bar, options)), BAR)
+}
+
+fn bar(options: TitleBarOptions) -> ComponentList {
+    laid_out(
+        box_item(title_bar(plain_bar().role(Role::Banner), options)),
+        BAR,
+    )
 }
 
 fn click_at(tree: &mut ComponentList, (x, y): (f64, f64)) {
@@ -283,4 +288,16 @@ fn a_bar_that_leaves_the_decorations_alone_never_touches_them() {
             .iter()
             .any(|command| matches!(command, WindowCommand::SetDecorations(_)))
     );
+}
+
+#[test]
+fn a_bar_without_a_role_becomes_a_group() {
+    let bar = title_bar(plain_bar(), TitleBarOptions::default());
+    assert_eq!(bar.declared_role(), Some(Role::Group));
+}
+
+#[test]
+fn a_bar_with_a_role_keeps_it() {
+    let bar = title_bar(plain_bar().role(Role::Banner), TitleBarOptions::default());
+    assert_eq!(bar.declared_role(), Some(Role::Banner));
 }
