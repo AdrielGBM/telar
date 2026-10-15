@@ -55,50 +55,42 @@ fn tui_selected() -> bool {
     std::env::var("TELAR_TARGET").is_ok_and(|target| target.eq_ignore_ascii_case("tui"))
 }
 
-#[cfg(all(
-    feature = "desktop-bare",
-    not(target_os = "android"),
-    not(target_arch = "wasm32")
-))]
-fn run_default_frontend<A: App, D: crate::DevOverlay>(config: AppConfig, app: A, app_name: &str) {
-    super::desktop::run_desktop_app_with_devtools::<A, D>(config, app, app_name)
-}
-
-#[cfg(all(
-    feature = "web-dom",
-    target_arch = "wasm32",
-    not(all(
-        feature = "desktop-bare",
-        not(target_os = "android"),
-        not(target_arch = "wasm32")
-    ))
-))]
-fn run_default_frontend<A: App, D: crate::DevOverlay>(config: AppConfig, app: A, app_name: &str) {
-    super::run_web_app_with_name(config, super::WebOptions::default(), app, app_name)
-}
-
-#[cfg(not(any(
-    all(
-        feature = "desktop-bare",
-        not(target_os = "android"),
-        not(target_arch = "wasm32")
-    ),
-    all(feature = "web-dom", target_arch = "wasm32")
-)))]
 #[allow(
     clippy::extra_unused_type_parameters,
-    reason = "same signature as the frontend variants, so every caller names `D` whichever is compiled"
+    reason = "only a window draws an overlay, but `run_app_with_devtools` names `D` on every target"
 )]
-fn run_default_frontend<A: App, D: crate::DevOverlay>(
-    _config: AppConfig,
-    _app: A,
-    _app_name: &str,
-) {
-    // Reachable only from a build with no frontend at all: a `tui`-only build never gets here, because `tui_selected` answers `true` when nothing else is compiled in.
-    panic!(
-        "this build of telar has no frontend to run on — enable `desktop` for a window, `web` for a page, \
-         or `tui` for the terminal"
-    );
+fn run_default_frontend<A: App, D: crate::DevOverlay>(config: AppConfig, app: A, app_name: &str) {
+    #[cfg(all(
+        feature = "desktop-bare",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
+    super::desktop::run_desktop_app_with_devtools::<A, D>(config, app, app_name);
+    #[cfg(all(
+        feature = "web-dom",
+        target_arch = "wasm32",
+        not(all(
+            feature = "desktop-bare",
+            not(target_os = "android"),
+            not(target_arch = "wasm32")
+        ))
+    ))]
+    super::run_web_app_with_name(config, super::WebOptions::default(), app, app_name);
+    #[cfg(not(any(
+        all(
+            feature = "desktop-bare",
+            not(target_os = "android"),
+            not(target_arch = "wasm32")
+        ),
+        all(feature = "web-dom", target_arch = "wasm32")
+    )))]
+    {
+        let _ = (config, app, app_name);
+        panic!(
+            "this build of telar has no frontend to run on — enable `desktop` for a window, `web` for a page, \
+             or `tui` for the terminal"
+        );
+    }
 }
 
 /// Installs what lays text out for the frontend a `cargo telar test` run stands in for, since no runner is going to.

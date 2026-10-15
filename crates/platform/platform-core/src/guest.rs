@@ -14,7 +14,7 @@ use crate::{AppCtx, RedrawWaker};
 /// Opens `path` with the loading policy a guest needs: resolve every symbol now, and keep the guest's symbols **local** so its own copy of the runtime never interposes on the host's.
 ///
 /// Two runtimes in one process is the premise of every model that loads one, and each is only sound while the two stay apart. A global-scope load lets the guest's copy of a `thread_local` accessor answer for the host's, and what that looks like is not a crash: it is a registry the host fills and the guest never reads, silently, for the life of the process.
-#[cfg(feature = "dylib")]
+#[cfg(all(feature = "dylib", not(target_arch = "wasm32")))]
 pub fn open(path: &std::path::Path) -> Result<libloading::Library, libloading::Error> {
     #[cfg(unix)]
     {
@@ -37,7 +37,7 @@ pub fn open(path: &std::path::Path) -> Result<libloading::Library, libloading::E
 /// dlopen caches by path and by (device, inode), so loading a library again while an earlier load of it is still mapped, a rebuilt one written in place or one that panicked and has not been dropped yet, hands back the mapping already there, statics and all. The copy has a path no earlier load had; unlinking it after the open is safe, since the mapping keeps the inode alive.
 ///
 /// A guest dropped afterwards is unmapped by `dlclose`, except that on glibc a thread-local with a destructor keeps its library mapped until the thread exits. No thread-local of the runtime has one, the panic slot behind [`guest_call`] included, and a guest told it was [`loaded`] registers none of its own either.
-#[cfg(feature = "dylib")]
+#[cfg(all(feature = "dylib", not(target_arch = "wasm32")))]
 pub fn open_unique(
     path: &std::path::Path,
 ) -> Result<libloading::Library, Box<dyn std::error::Error>> {
@@ -48,7 +48,7 @@ pub fn open_unique(
     Ok(library?)
 }
 
-#[cfg(feature = "dylib")]
+#[cfg(all(feature = "dylib", not(target_arch = "wasm32")))]
 fn unique_copy_path(path: &std::path::Path) -> std::path::PathBuf {
     static COPIES: AtomicU64 = AtomicU64::new(0);
     let nanos = std::time::SystemTime::now()

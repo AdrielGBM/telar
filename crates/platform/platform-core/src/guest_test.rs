@@ -168,7 +168,7 @@ fn a_matching_layout_is_accepted_and_a_different_one_refused_with_what_to_do() {
     }
 }
 
-#[cfg(feature = "dylib")]
+#[cfg(all(feature = "dylib", not(target_arch = "wasm32")))]
 mod unique_copies {
     use super::super::*;
     use std::path::Path;

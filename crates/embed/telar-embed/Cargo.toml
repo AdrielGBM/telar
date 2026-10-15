@@ -45,8 +45,10 @@ ui-core = { workspace = true }
 ui-tree = { workspace = true }
 
 document-features = { workspace = true, optional = true }
-libloading = { version = "0.8", optional = true }
 web-time = { workspace = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+libloading = { version = "0.8", optional = true }

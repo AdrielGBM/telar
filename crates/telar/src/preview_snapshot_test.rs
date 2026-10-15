@@ -2,6 +2,8 @@
 //!
 //! A test binary of its own because a snapshot run makes the declared faces the only ones in the process: a binary whose other tests had loaded the platform's fonts would be refused. Every test here declares the same face, so they share the process happily.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::path::{Path, PathBuf};
 
 use telar::preview::snapshot::{

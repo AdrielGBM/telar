@@ -179,17 +179,17 @@ fn composite_translates_into_the_sub_rect_and_clips_to_it() {
 }
 
 // What a guest built before ABI 2 exports: a shorter table whose only field the host may read is the version at offset 0.
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[repr(C)]
 struct AbiOneTable {
     abi: u32,
     _create: usize,
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 static ABI_ONE: AbiOneTable = AbiOneTable { abi: 1, _create: 0 };
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn a_guest_built_for_abi_one_is_refused_before_its_table_is_read() {
     let refused = unsafe { crate::host::read_vtable((&raw const ABI_ONE).cast::<EmbedVTable>()) };
@@ -201,7 +201,7 @@ fn a_guest_built_for_abi_one_is_refused_before_its_table_is_read() {
     );
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn a_guest_built_for_this_abi_is_read_whole() {
     let read = unsafe { crate::host::read_vtable(&raw const _rsx_embed_vtable) }
@@ -359,7 +359,7 @@ fn a_move_an_overlay_takes_still_reaches_the_content_under_it() {
     ui_tree::unregister_overlay(overlay);
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn the_host_follows_a_guest_deadline_without_arming_it_again() {
     let mirror = crate::host::TimerMirror::default();
@@ -468,23 +468,23 @@ fn a_guest_whose_build_panics_hands_back_no_instance() {
     assert_eq!(panic.message, "the guest could not find its assets");
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe fn create_panicking(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
     __embed_create(|| Box::new(BorrowsTwice::new(true)))
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe fn create_fixed(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
     __embed_create(|| Box::new(BorrowsTwice::new(false)))
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe fn create_nothing(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
     __embed_create(|| panic!("the guest could not find its assets"))
 }
 
 /// A guest served by this process's own table, through the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries.
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 fn embedded(
     create: unsafe fn(&[String]) -> GuestResult<*mut EmbedInstance>,
 ) -> Result<LoadedEmbed, GuestPanic> {
@@ -499,7 +499,7 @@ fn embedded(
 }
 
 /// A panic in an embedded guest's handler used to unwind into the host and abort it. Now the host is told what panicked and where, nothing more of that guest runs, and a fresh one takes its place.
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn a_guest_that_panics_is_reported_and_never_called_again() {
     PRESSES_HEARD.with(|heard| heard.set(0));
@@ -560,7 +560,7 @@ fn a_guest_that_panics_is_reported_and_never_called_again() {
     );
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn a_guest_whose_build_panics_is_refused_with_the_report() {
     let panic = embedded(create_nothing)
@@ -569,7 +569,7 @@ fn a_guest_whose_build_panics_is_refused_with_the_report() {
     assert_eq!(panic.message, "the guest could not find its assets");
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 fn run_embedded_frame(embed: &LoadedEmbed) {
     let waker = platform_core::RedrawWaker::new(|| panic!("the host's loop is gone"));
     let mut redraw_requested = false;
@@ -578,10 +578,10 @@ fn run_embedded_frame(embed: &LoadedEmbed) {
 }
 
 /// A guest that wakes the host's loop every frame.
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 struct WakesTheHost(Stub);
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 impl EmbeddedApp for WakesTheHost {
     fn build(&mut self) {
         self.0.build();
@@ -608,13 +608,13 @@ impl EmbeddedApp for WakesTheHost {
     }
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe fn create_waking(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
     __embed_create(|| Box::new(WakesTheHost(Stub::new())))
 }
 
 /// The waker the guest is handed is host code; a panic in it stays on the host's side instead of unwinding through the guest.
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn a_panic_in_the_host_waker_does_not_reach_the_guest() {
     let embed = embedded(create_waking).expect("the guest loads");
@@ -622,7 +622,7 @@ fn a_panic_in_the_host_waker_does_not_reach_the_guest() {
     assert_eq!(embed.panic(), None, "the guest kept running");
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn a_guest_laid_out_differently_is_refused_with_what_to_do() {
     let mut table = _rsx_embed_vtable;
@@ -634,19 +634,19 @@ fn a_guest_laid_out_differently_is_refused_with_what_to_do() {
     assert!(message.contains("matching features"), "{message}");
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 thread_local! {
     static CONVENTION_HANDED: std::cell::Cell<Option<KeyboardConvention>> = const { std::cell::Cell::new(None) };
     static HANDED_BEFORE_BUILD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe fn record_convention(convention: KeyboardConvention) -> GuestResult<()> {
     CONVENTION_HANDED.set(Some(convention));
     Ok(())
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 unsafe fn create_after_convention(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
     HANDED_BEFORE_BUILD.set(CONVENTION_HANDED.get().is_some());
     __embed_create(|| Box::new(Stub::new()))
@@ -660,7 +660,7 @@ fn foreign_convention() -> KeyboardConvention {
 }
 
 /// A guest carries its own copy of the convention, which left alone answers for the system it was compiled on: a terminal host on a Mac matches Ctrl while the guest would show ⌘.
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn a_guest_is_handed_the_host_keyboard_convention_before_it_is_built() {
     let host = foreign_convention();

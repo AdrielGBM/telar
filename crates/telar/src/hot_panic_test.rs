@@ -1,5 +1,7 @@
 //! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped; and that a guest shows its shortcuts for the keyboard its host matches. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, PoisonError};

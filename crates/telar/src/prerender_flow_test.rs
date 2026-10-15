@@ -1,5 +1,7 @@
 //! A page written ahead of time is the page the runner builds: the same inputs give the same tree, the same layout nodes and so the same element ids, whichever of the two built it.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::sync::Arc;
 
 use platform_headless::HeadlessPlatform;

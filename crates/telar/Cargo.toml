@@ -410,7 +410,6 @@ ui-core = { workspace = true, optional = true }
 ui-tree = { workspace = true, optional = true }
 
 document-features = { workspace = true, optional = true }
-libloading = { version = "0.8", optional = true }
 raw-window-handle = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
@@ -447,6 +446,9 @@ tiny-skia.workspace = true
 # The snapshot tests draw on the CPU rasterizer, which a browser build of the tests has no use for.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 telar = { path = ".", features = ["preview-snapshots"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+libloading = { version = "0.8", optional = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

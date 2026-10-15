@@ -1044,7 +1044,7 @@ fn a_history_the_platform_reports_is_not_echoed_to_it() {
 }
 
 /// A location the hot channel names opens as a link opened into the running app does: on top of where the app is.
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 #[test]
 fn a_link_from_the_hot_channel_opens_on_top_of_where_the_app_is() {
     let at = |path: &str| platform_core::LocationFormat::root().parse(path).unwrap();
@@ -1063,13 +1063,13 @@ fn a_link_from_the_hot_channel_opens_on_top_of_where_the_app_is() {
 }
 
 /// Counts the loop wakes the runner hands the app's runtime.
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 struct Woken {
     app: LocalApp<Unchanging>,
     wakers: Rc<Cell<u32>>,
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl AppRuntime for Woken {
     fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
         self.app.mount()
@@ -1092,7 +1092,7 @@ impl AppRuntime for Woken {
     }
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 fn woken(wakers: &Rc<Cell<u32>>) -> Box<dyn AppRuntime> {
     Box::new(Woken {
         app: LocalApp(Unchanging),
@@ -1101,7 +1101,7 @@ fn woken(wakers: &Rc<Cell<u32>>) -> Box<dyn AppRuntime> {
 }
 
 /// A reloaded dylib links a reactive-core copy of its own, whose waker slot starts empty: without the wake handed over again, its tasks and timers sit until the next input event.
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 #[test]
 fn a_runtime_swapped_in_by_a_reload_is_handed_the_loop_wake() {
     let first = Rc::new(Cell::new(0));
@@ -1686,16 +1686,16 @@ fn the_app_hears_whether_its_window_is_maximized_as_the_window_resizes() {
     assert_eq!(SHOWN_MAXIMIZED.with(Cell::get), Some(true));
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 thread_local! {
     static PRESSES_HEARD: Cell<u32> = const { Cell::new(0) };
 }
 
 /// A tree whose press handler panics, as one that writes a signal its own effect still borrows does.
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 struct BorrowsTwice;
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl ui_tree::Component for BorrowsTwice {
     fn view(&self) -> ui_tree::RenderNode {
         ui_tree::RenderNode::group([])
@@ -1710,10 +1710,10 @@ impl ui_tree::Component for BorrowsTwice {
     }
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 struct Panicking;
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl App for Panicking {
     fn root(&self) -> Box<dyn ui_tree::Component> {
         Box::new(BorrowsTwice)
@@ -1721,10 +1721,10 @@ impl App for Panicking {
 }
 
 /// A tree that hears presses and does nothing else with them.
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 struct Counting;
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl ui_tree::Component for Counting {
     fn view(&self) -> ui_tree::RenderNode {
         ui_tree::RenderNode::group([])
@@ -1738,33 +1738,33 @@ impl ui_tree::Component for Counting {
     }
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 struct Fixed;
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl App for Fixed {
     fn root(&self) -> Box<dyn ui_tree::Component> {
         Box::new(Counting)
     }
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 fn create_panicking() -> crate::hot::GuestResult<Box<dyn App>> {
     crate::hot::guest::create_app(|| Box::new(Panicking))
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 fn create_fixed() -> crate::hot::GuestResult<Box<dyn App>> {
     crate::hot::guest::create_app(|| Box::new(Fixed))
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 fn create_nothing() -> crate::hot::GuestResult<Box<dyn App>> {
     crate::hot::guest::create_app(|| panic!("the app's setup could not find its assets"))
 }
 
 /// A build served by this process's own exports, through the same table, the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries.
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 fn hot_build(create: crate::hot::CreateApp) -> Box<dyn AppRuntime> {
     fn keep_services(_: crate::hot::HostServices) -> crate::hot::GuestResult<()> {
         Ok(())
@@ -1777,14 +1777,14 @@ fn hot_build(create: crate::hot::CreateApp) -> Box<dyn AppRuntime> {
 }
 
 /// What the overlay was told about builds and panics.
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 #[derive(Default)]
 struct Reporting {
     build_error: Option<String>,
     app_panic: Option<String>,
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl DevOverlay for Reporting {
     fn on_frame<'a>(
         &mut self,
@@ -1806,7 +1806,7 @@ impl DevOverlay for Reporting {
 }
 
 /// A panic in the app's event handler used to unwind out of the dylib into the host, whose copy of std can only abort on it: the window closed and the session with it. Now the window stays, says what panicked and where, runs nothing more of that build, and the next build takes over.
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 #[test]
 fn a_panic_in_the_app_is_shown_and_the_next_build_takes_over() {
     let window = HeadlessWindow::new(120, 80);
@@ -1861,7 +1861,7 @@ fn a_panic_in_the_app_is_shown_and_the_next_build_takes_over() {
 }
 
 /// A build whose setup panics leaves no app to run, but the window it would have drawn in is the one the next build draws in.
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 #[test]
 fn a_build_that_panics_as_it_starts_keeps_the_window_for_the_next() {
     let window = HeadlessWindow::new(120, 80);

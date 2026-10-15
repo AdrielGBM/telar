@@ -24,7 +24,7 @@ fn a_literal_backslash_is_not_read_as_an_escape() {
     assert_eq!(unescape_lines(&escaped), message);
 }
 
-#[cfg(feature = "dev")]
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 #[test]
 fn each_line_of_the_channel_is_the_event_its_prefix_names() {
     assert_eq!(

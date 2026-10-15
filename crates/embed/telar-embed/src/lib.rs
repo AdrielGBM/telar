@@ -451,10 +451,10 @@ macro_rules! embed {
     };
 }
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 pub use host::{LoadedEmbed, load_embedded};
 
-#[cfg(feature = "host")]
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 mod host {
     use super::*;
     use platform_core::guest::{Guest, LayoutMismatch};

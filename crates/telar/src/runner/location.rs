@@ -39,13 +39,10 @@ impl LocationBinding {
     }
 
     /// A desktop window's binding: [`remembered`](Self::remembered), except in a `cargo telar preview` run. Its address is the workshop's, which keeps its own place between runs, and remembering it under the application's name would reopen the application at a workshop address and the workshop at the application's.
-    #[cfg(any(
-        test,
-        all(
-            feature = "desktop-bare",
-            not(target_os = "android"),
-            not(target_arch = "wasm32")
-        )
+    #[cfg(all(
+        feature = "desktop-bare",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
     ))]
     pub(crate) fn for_window(source: Box<dyn LocationSource>) -> Self {
         match std::env::var_os("TELAR_PREVIEW") {

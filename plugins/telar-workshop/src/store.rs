@@ -201,6 +201,6 @@ impl Drop for Kept {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 #[path = "store_test.rs"]
 mod tests;

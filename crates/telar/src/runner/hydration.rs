@@ -110,6 +110,6 @@ pub(crate) fn settle_motion(app: &dyn crate::app_runtime::AppRuntime) {
     motion_core::set_scale(scale);
 }
 
-#[cfg(all(test, feature = "prerender"))]
+#[cfg(all(test, feature = "prerender", not(target_arch = "wasm32")))]
 #[path = "hydration_test.rs"]
 mod tests;
