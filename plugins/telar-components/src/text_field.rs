@@ -108,6 +108,9 @@ pub struct TextFieldProps {
     /// Amends the paint of the framed box — the field's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`TextFieldTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// Receives the id the line typed into holds in the tab order, once the field exists, and is emptied when the field goes. For the caller that has to take the keyboard to the field later, as `focus_id:$sig` does on an `input`.
+    #[props(some, into, default)]
+    pub focus_id: Option<RwSignal<Option<FocusId>>>,
 }
 
 /// What [`TextFieldProps::on_key`] is called with: the key and the modifiers held with it.
@@ -144,6 +147,7 @@ pub(crate) fn adorned_field(
         active_descendant,
         controls,
         style,
+        focus_id,
     } = props;
     let value = value.unwrap_or_else(|| signal(String::new()));
     let width = move || field_width(width);
@@ -179,6 +183,10 @@ pub(crate) fn adorned_field(
     // The input is a leaf, so its node's style is followed from the box that outlives it.
     let line_node = input.layout_node();
     let line_focus = input.focus_id();
+    if let Some(published) = focus_id {
+        published.set(Some(line_focus));
+        telar::on_cleanup(move || published.set(None));
+    }
     let Adornments { leading, trailing } = adornments;
     let adorned = leading.is_some() || trailing.is_some();
     let mut content: Vec<Box<dyn LayoutItem>> = leading.into_iter().collect();

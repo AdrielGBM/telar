@@ -166,3 +166,12 @@ fn a_list_under_the_field_hears_its_keys_first() {
         "the list took Escape, so nothing was cleared"
     );
 }
+
+#[test]
+fn the_focus_id_is_published_and_requesting_it_focuses_the_line() {
+    let published = signal(None);
+    let _mounted = Mounted::new(SearchFieldProps::props().focus_id(published));
+    let id = published.get().expect("the field publishes its id");
+    focus::request(id);
+    assert!(focus::text_entry_focused());
+}

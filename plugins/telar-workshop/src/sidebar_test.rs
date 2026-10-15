@@ -289,3 +289,47 @@ fn the_search_field_is_a_full_size_target() {
         field.rect
     );
 }
+
+#[test]
+fn escape_clears_the_search_and_a_second_escape_leaves_for_the_tree() {
+    let mut sidebar = Mounted::new(entries());
+    sidebar.tab(1);
+    sidebar.type_text("modal");
+    sidebar.key(NamedKey::Escape);
+    assert_eq!(sidebar.state().search().get(), "");
+    assert!(sidebar.drawn("Primary"));
+    assert!(focus::text_entry_focused());
+    sidebar.key(NamedKey::Escape);
+    assert!(!focus::text_entry_focused());
+}
+
+#[test]
+fn arrow_down_in_the_search_hands_the_keyboard_to_the_tree() {
+    let mut sidebar = Mounted::new(entries());
+    sidebar.tab(1);
+    assert!(focus::text_entry_focused());
+    sidebar.key(NamedKey::ArrowDown);
+    assert!(!focus::text_entry_focused());
+}
+
+#[test]
+fn the_clear_button_empties_the_search() {
+    let mut sidebar = Mounted::new(entries());
+    sidebar.search("modal");
+    let nodes = sidebar.runtime.access_snapshot(&sidebar.tree.commands());
+    let clear = nodes
+        .iter()
+        .find(|node| node.role == Role::Button && node.name == "Clear search")
+        .expect("a clear button shows while there is a query")
+        .rect;
+    sidebar.click(clear);
+    assert_eq!(sidebar.state().search().get(), "");
+}
+
+#[test]
+fn focus_search_takes_the_keyboard_to_the_field() {
+    let sidebar = Mounted::new(entries());
+    sidebar.state().focus_search();
+    settle(&sidebar.tree);
+    assert!(focus::text_entry_focused());
+}

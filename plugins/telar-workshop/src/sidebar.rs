@@ -8,17 +8,17 @@ use std::rc::Rc;
 use telar::focus::{self, Role};
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Container, Input, Key, LayoutError, LayoutItem,
+    Accessible, AlignItems, BorderRadius, Children, Container, Key, LayoutError, LayoutItem,
     LayoutStyle, Memo, NamedKey, NodeId, Reactive, ReactiveList, RectStyle, StyledContainer, Text,
-    box_item, children, effect, memo, single_line_box, use_theme_tokens,
+    box_item, children, effect, memo, signal, use_theme_tokens,
 };
-use telar_components::{TrailingBuilder, TreeNode, TreeViewProps, tree_view};
-use telar_devtools::{
-    WORKBENCH_GRID, WORKBENCH_RADIUS, WORKBENCH_TEXT_SIZE, workbench_card, workbench_muted,
+use telar_components::{
+    SearchFieldProps, TrailingBuilder, TreeNode, TreeViewProps, search_field, tree_view,
 };
+use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, workbench_muted};
 
 use crate::snapshot::drift_badge;
-use crate::state::WorkshopState;
+use crate::state::{SIDEBAR_MAX_WIDTH, WorkshopState};
 use crate::strings::{self, CLEAR_SEARCH, NO_MATCHES, NO_PREVIEWS, PREVIEWS, SEARCH};
 
 pub(crate) use model::{group_ids, listed};
@@ -45,7 +45,11 @@ pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layo
     )?;
     let sidebar = Container::new(
         LayoutStyle::column().flex_grow(1.0).min_height(0.0),
-        vec![box_item(heading), search_field(&panel)?, box_item(body)],
+        vec![
+            box_item(heading),
+            search_field_item(&panel)?,
+            box_item(body),
+        ],
     )?;
     Ok(box_item(sidebar))
 }
@@ -123,46 +127,35 @@ fn first_leaf(nodes: &[TreeNode]) -> Option<&TreeNode> {
     })
 }
 
-/// The input carries the field's vertical padding in its own height, so the press and the audit see the whole field.
-fn search_height() -> f32 {
-    (single_line_box(WORKBENCH_TEXT_SIZE) + WORKBENCH_GRID).max(telar::inspect::a11y::MIN_TARGET)
-}
-
-fn search_field(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn search_field_item(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let keys = panel.clone();
     let submit = panel.clone();
     let search = panel.state.search();
-    let input = Input::declaring(search, LayoutStyle::new().height(search_height()), |text| {
-        text
-    })?
-    .placeholder(strings::text(SEARCH))
-    .a11y_label(|| strings::text(SEARCH))
-    .on_submit(move || submit.select_first_match())
-    .on_key(move |key, _modifiers| match key {
-        Key::Named(NamedKey::ArrowDown) => {
-            keys.focus_tree();
-            true
-        }
-        Key::Named(NamedKey::Escape) => {
-            if search.with(String::is_empty) {
-                keys.focus_tree();
-            } else {
-                search.set(String::new());
-            }
-            true
-        }
-        _ => false,
-    });
-    let focus = input.focus_id();
-    panel.state.set_search_field(focus);
-    let field = StyledContainer::new(
-        LayoutStyle::column()
-            .padding_horizontal(WORKBENCH_GRID)
-            .bordered(),
-        |_| workbench_card(),
-        children![input],
-    )?
-    .frames_focus_of(focus);
+    let focus = signal(None);
+    let field = search_field(
+        SearchFieldProps::props()
+            .value(search)
+            .width(SIDEBAR_MAX_WIDTH)
+            .placeholder(Reactive::of(|| strings::text(SEARCH)))
+            .focus_id(focus)
+            .on_submit(Rc::new(move |_: &str| submit.select_first_match()))
+            .on_key(Rc::new(move |key: &Key, _modifiers| match key {
+                Key::Named(NamedKey::ArrowDown) => {
+                    keys.focus_tree();
+                    true
+                }
+                Key::Named(NamedKey::Escape) if search.with(String::is_empty) => {
+                    keys.focus_tree();
+                    true
+                }
+                _ => false,
+            }))
+            .build(),
+        Children::default(),
+    )?;
+    if let Some(id) = focus.peek() {
+        panel.state.set_search_field(id);
+    }
     let margin = Container::new(
         LayoutStyle::column()
             .flex_shrink(0.0)

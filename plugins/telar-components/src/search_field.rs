@@ -55,6 +55,9 @@ pub struct SearchFieldProps {
     /// Amends the paint of the framed box — the field's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`TextFieldTokens`](crate::TextFieldTokens) is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
+    /// Receives the id the line typed into holds in the tab order, once the field exists, and is emptied when the field goes. For the caller that has to take the keyboard to the field later, as `focus_id:$sig` does on an `input`.
+    #[props(some, into, default)]
+    pub focus_id: Option<RwSignal<Option<FocusId>>>,
 }
 
 /// A field for a query, with a magnifying glass, a clear button and Escape to clear.
@@ -73,6 +76,7 @@ pub fn search_field(
         active_descendant,
         controls,
         style,
+        focus_id,
     } = props;
     let value = value.unwrap_or_else(|| signal(String::new()));
     let line: Rc<Cell<Option<FocusId>>> = Rc::default();
@@ -130,6 +134,9 @@ pub fn search_field(
     }
     if let Some(style) = style {
         field = field.style(style);
+    }
+    if let Some(focus_id) = focus_id {
+        field = field.focus_id(focus_id);
     }
     let (field, focus_id) = adorned_field(
         field.build(),
