@@ -8,7 +8,7 @@ use layout_core::{LayoutError, LayoutStyle, NodeId};
 use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton, ScrollDelta};
 use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
-use theme_core::use_theme_tokens;
+use theme_core::{current_control_size, use_theme_tokens};
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::track_layout;
@@ -22,20 +22,28 @@ use crate::pointer::{clip_pointer_event, occlude, offset_pointer, pointer_coords
 use crate::styled_container::default_focus_ring;
 use crate::surface_context::HomeSurface;
 
-/// How a scroll area's bars are painted, and how wide they are.
+/// How a scroll area's bars are painted, and how wide they are. The default reads the theme's `scrollbar`, `scrollbar_width`, `scrollbar_inset` and `scrollbar_radius` each time the bars are drawn or grabbed, the width scaled by the control size in force; a style given to the area replaces it.
+#[derive(Clone, Copy)]
 pub struct ScrollbarStyle {
     pub color: Color,
     pub width: f32,
+    pub inset: f32,
     pub corner_radius: f32,
 }
 
 impl Default for ScrollbarStyle {
     fn default() -> Self {
-        let color = use_theme_tokens().scrollbar();
+        let tokens = use_theme_tokens();
+        let width = tokens.scrollbar_width() * current_control_size().scale();
+        let inset = tokens.scrollbar_inset();
         Self {
-            color,
-            width: 8.0,
-            corner_radius: 3.0,
+            color: tokens.scrollbar(),
+            width,
+            inset,
+            corner_radius: tokens
+                .scrollbar_radius()
+                .min((width - inset) / 2.0)
+                .max(0.0),
         }
     }
 }
@@ -140,7 +148,7 @@ fn draw_scrollbars(
             Rect::new(
                 viewport.x + viewport.width - scrollbar_style.width,
                 thumb.start,
-                scrollbar_style.width - 2.0,
+                scrollbar_style.width - scrollbar_style.inset,
                 thumb.length,
             ),
             style(),
@@ -162,7 +170,7 @@ fn draw_scrollbars(
                 thumb.start,
                 viewport.y + viewport.height - scrollbar_style.width,
                 thumb.length,
-                scrollbar_style.width - 2.0,
+                scrollbar_style.width - scrollbar_style.inset,
             ),
             style(),
         )
@@ -308,7 +316,7 @@ pub(crate) struct ScrollCore {
     // Shared between event dispatch (borrow_mut) and the content segment (borrow). The content is its own segment, so a scroll tick rewrites the transform without re-flattening it.
     content: Rc<RefCell<Box<dyn LayoutItem>>>,
     content_segment: Rc<Segment>,
-    scrollbar_style: ScrollbarStyle,
+    scrollbar_style: Option<ScrollbarStyle>,
     // Finger travel accumulated while a pointer is pressed. Content children see coords pinned under the finger and cannot detect the scroll themselves, so past `SCROLL_TAP_SLOP` the area cancels their pending tap. Gated on `press_active`, so a wheel scroll never cancels anything.
     press_active: bool,
     gesture_scroll: f32,
@@ -375,7 +383,7 @@ impl ScrollCore {
             scroll_y,
             content,
             content_segment,
-            scrollbar_style: ScrollbarStyle::default(),
+            scrollbar_style: None,
             press_active: false,
             gesture_scroll: 0.0,
             tap_cancelled: false,
@@ -387,6 +395,9 @@ impl ScrollCore {
         }
     }
 
+    fn scrollbar_style(&self) -> ScrollbarStyle {
+        self.scrollbar_style.unwrap_or_default()
+    }
     fn command(&self, x: f32, y: f32) {
         command_offset(self.scroll_x, self.scroll_y, &self.commanded, x, y);
     }
@@ -451,7 +462,7 @@ impl ScrollCore {
             return false;
         }
         let content = self.content_rect_signal.get();
-        let width = self.scrollbar_style.width;
+        let width = self.scrollbar_style().width;
         let on_vertical = x >= viewport.x + viewport.width - width;
         let on_horizontal = y >= viewport.y + viewport.height - width;
 
@@ -588,7 +599,7 @@ impl ScrollCore {
             scroll_x,
             scroll_y,
             content_rect,
-            &self.scrollbar_style,
+            &self.scrollbar_style(),
         );
         RenderNode::group([scrollable, vbar, hbar])
     }

@@ -139,6 +139,18 @@ pub trait ThemeTokens: 'static {
     fn scrollbar(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
     }
+    /// Thickness of the lane a scroll area's bar runs in, at the regular control size.
+    fn scrollbar_width(&self) -> f32 {
+        8.0
+    }
+    /// How much narrower the thumb is than its lane, which leaves it clear of the edge.
+    fn scrollbar_inset(&self) -> f32 {
+        2.0
+    }
+    /// Corner of a scroll area's thumb. By default the thumb is fully rounded.
+    fn scrollbar_radius(&self) -> f32 {
+        (self.scrollbar_width() - self.scrollbar_inset()) / 2.0
+    }
 
     /// Primary text ink for component labels/titles/values. A theme should override it, but the default follows the active light/dark mode rather than assuming light: a theme that overrides `surface` and forgets `ink` used to paint near-black text on its own dark panel.
     fn ink(&self) -> Color {

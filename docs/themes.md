@@ -79,6 +79,7 @@ defaults to a primitive or a convention, so a theme that names none of them stil
 | `radius_item` | rows, options and items inside a surface | `radius_sm` |
 | `border_width`, `border_width_strong` | a hairline; a frame that is the control's shape | `1`, `1.5` |
 | `focus_ring`, `focus_ring_width`, `focus_ring_offset` | the keyboard's ring, and a list's cursor | `primary`, `2`, `0` |
+| `scrollbar_width`, `scrollbar_inset`, `scrollbar_radius` | the lane a scroll area's bar runs in (scaled by the control size); how much narrower the thumb is than its lane; the corner of its thumb | `8`, `2`, fully rounded (`(width - inset) / 2`) |
 | `highlight_low/med/high` | the wash of hover, of selected or held open, of pressed | neutral washes |
 | `inverse_surface`, `inverse_ink` | a tooltip's bubble and its text | `ink`, `surface` |
 | `overlay` | the scrim behind a modal or a drawer | black at 50% |

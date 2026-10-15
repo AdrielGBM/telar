@@ -146,3 +146,44 @@ fn on_a_cell_grid_the_thumb_is_whole_cells_wherever_it_is() {
         "a surface that does not quantise keeps the exact length"
     );
 }
+
+#[derive(Clone)]
+struct Silent;
+impl theme_core::ThemeTokens for Silent {}
+
+#[derive(Clone)]
+struct Chunky;
+impl theme_core::ThemeTokens for Chunky {
+    fn scrollbar_width(&self) -> f32 {
+        12.0
+    }
+}
+
+fn thumb_rect(view: RenderNode) -> (f32, BorderRadius) {
+    let RenderNode::Group { children, .. } = view else {
+        panic!("expected Group");
+    };
+    match &children[1] {
+        RenderNode::Primitive(renderer_core::DrawCommand::Rect { rect, style }) => {
+            (rect.width, style.radius)
+        }
+        _ => panic!("expected the thumb"),
+    }
+}
+
+#[test]
+fn default_style_follows_theme_and_control_size_after_construction() {
+    theme_core::set_theme(Silent);
+    theme_core::set_control_size(theme_core::ControlSize::Regular);
+    let sa = tall();
+    assert_eq!(thumb_rect(sa.view()), (6.0, BorderRadius::all(3.0)));
+
+    theme_core::set_theme(Chunky);
+    assert_eq!(thumb_rect(sa.view()), (10.0, BorderRadius::all(5.0)));
+
+    theme_core::set_control_size(theme_core::ControlSize::Large);
+    assert_eq!(thumb_rect(sa.view()), (13.0, BorderRadius::all(5.0)));
+
+    theme_core::set_control_size(theme_core::ControlSize::Regular);
+    theme_core::set_theme(Silent);
+}
