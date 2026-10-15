@@ -6,7 +6,7 @@ use std::fmt::Write;
 use telar_parser::{Attr, Element, Value};
 
 use crate::registry::ValueKind;
-use crate::style::{PropCall, format_f32, layout_prop_call};
+use crate::style::{PropCall, format_f32, in_application_order, layout_prop_call};
 use telar_project::naming::style_function_name;
 
 use super::ViewGen;
@@ -36,40 +36,32 @@ impl ViewGen<'_> {
         attrs
     }
 
-    /// Builds the `(styling closure, .with_opacity(..) suffix)` for a styled container from paint attributes. The closure's param is `r` only when a gradient needs the rendered bounds. `transitions` maps an animated property to its `motion::` curve; any `fill`/`stroke`/`opacity` it names is wrapped in the animation retarget+get block and its `Animated` handle appended to `hoists`. Any `$ident` among the paint attrs (see `color_attr_keys`) is cloned into the closure (`wrap_signal_clones`) so the outer signal binding stays usable elsewhere. Extracts `shadow-*` attrs and produces a `Some(Shadow::new(...))` expression, or `None` when no shadow attrs are present.
+    /// The `Some(Shadow::new(...))` the `shadow_*` attrs ask for, or `None` when there are none. Each value is emitted as written, so `shadow_blur:$theme.elevation` follows the theme like any other paint value; only an unwritten one takes its default.
     fn shadow_expr(&self, attrs: &[Attr]) -> Option<String> {
         if !attrs.iter().any(|a| a.key.starts_with("shadow")) {
             return None;
         }
-        let sx = attrs
-            .iter()
-            .find(|a| a.key == "shadow_x")
-            .and_then(|a| a.value.text().parse::<f32>().ok())
-            .unwrap_or(0.0);
-        let sy = attrs
-            .iter()
-            .find(|a| a.key == "shadow_y")
-            .and_then(|a| a.value.text().parse::<f32>().ok())
-            .unwrap_or(4.0);
-        let blur = attrs
-            .iter()
-            .find(|a| a.key == "shadow_blur")
-            .and_then(|a| a.value.text().parse::<f32>().ok())
-            .unwrap_or(8.0);
+        let number = |key: &str, unwritten: &str| {
+            attrs
+                .iter()
+                .find(|a| a.key == key)
+                .map(|a| crate::style::number_or(a.value.text(), unwritten, self.theme_access))
+                .unwrap_or_else(|| unwritten.to_string())
+        };
         let color = attrs
             .iter()
             .find(|a| a.key == "shadow_color")
             .map(|a| self.color_expr(a.value.text(), Some(a.value_start)))
             .unwrap_or_else(|| "Color::rgba(0.0, 0.0, 0.0, 0.25)".to_string());
         Some(format!(
-            "Some(Shadow::new({}, {}, {}, {}))",
-            format_f32(sx),
-            format_f32(sy),
-            format_f32(blur),
-            color
+            "Some(Shadow::new({}, {}, {}, {color}))",
+            number("shadow_x", "0.0"),
+            number("shadow_y", "4.0"),
+            number("shadow_blur", "8.0"),
         ))
     }
 
+    /// Builds the `(styling closure, .with_opacity(..) suffix)` for a styled container from paint attributes. The closure's param is `r` only when a gradient needs the rendered bounds. `transitions` maps an animated property to its `motion::` curve; any `fill`/`stroke`/`opacity` it names is wrapped in the animation retarget+get block and its `Animated` handle appended to `hoists`. Any `$ident` among the paint attrs (see `color_attr_keys`) is cloned into the closure (`wrap_signal_clones`) so the outer signal binding stays usable elsewhere.
     pub(super) fn rect_style_pieces(
         &mut self,
         pattrs: &[Attr],
@@ -97,23 +89,11 @@ impl ViewGen<'_> {
         {
             stroke = Some(self.wrap_transition(curve, &s, hoists));
         }
-        let stroke_width = pattrs
-            .iter()
-            .find(|a| a.key == "stroke_width")
-            .and_then(|a| a.value.text().parse::<f32>().ok())
-            .unwrap_or(1.0);
         let border_widths = self.border_widths_expr(pattrs);
         let radius = self.radius_expr(pattrs);
         let param = if gradient.is_some() { "r" } else { "_" };
-        let rect_style = build_rect_style(
-            gradient,
-            solid_fill,
-            stroke,
-            stroke_width,
-            border_widths,
-            shadow,
-            &radius,
-        );
+        let rect_style =
+            build_rect_style(gradient, solid_fill, stroke, border_widths, shadow, &radius);
         let mut layer_calls = String::new();
         for (key, method) in [
             ("opacity", "with_opacity"),
@@ -138,10 +118,10 @@ impl ViewGen<'_> {
         (closure, layer_calls)
     }
 
-    /// The four border thicknesses for a box, or `None` when the plain `stroke_width` says all it needs to.
+    /// The four border thicknesses for a box: the one width on every side while that is all the author wrote, the four sides once one is named on its own, and the hairline a `stroke` draws when no width is written at all.
     ///
-    /// `None` is not "no border": it is that one width on every side. Only a box that named an edge carries four of its own.
-    pub(super) fn border_widths_expr(&self, pattrs: &[Attr]) -> Option<String> {
+    /// The one width is emitted as written, never parsed: `stroke_width:$theme.border_width` is a read the closure re-runs, where parsing it as a literal had it drawn one pixel wide whatever the theme said.
+    pub(super) fn border_widths_expr(&self, pattrs: &[Attr]) -> String {
         let edges = crate::edges::collect(
             pattrs,
             "stroke_width",
@@ -149,16 +129,19 @@ impl ViewGen<'_> {
             crate::edges::side_target,
             self.theme_access,
         );
-        if edges.uniform.is_some() || edges.is_empty() {
-            return None;
+        if let Some(all) = edges.uniform {
+            return format!("[{all}; 4]");
+        }
+        if edges.is_empty() {
+            return "[1.0; 4]".to_string();
         }
         let [top, right, bottom, left] = edges.resolved("0.0");
-        Some(if edges.has_logical() {
+        if edges.has_logical() {
             let (start, end) = edges.logical_args();
             format!("logical_border_widths({top}, {right}, {bottom}, {left}, {start}, {end})")
         } else {
             format!("[{top}, {right}, {bottom}, {left}]")
-        })
+        }
     }
 
     /// The `BorderRadius` for a box: the one-value form while that is all the author wrote, and the four corners `BorderRadius` has always had as soon as one of them is named on its own.
@@ -290,7 +273,7 @@ impl ViewGen<'_> {
             let mut base = format!("{}()", style_function_name(first));
             for name in rest {
                 if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
-                    for prop in &class.props {
+                    for prop in in_application_order(&class.props, |prop| &prop.key) {
                         if let PropCall::Call(call) =
                             layout_prop_call(&prop.key, &prop.value, self.theme_access)
                         {
@@ -328,7 +311,7 @@ impl ViewGen<'_> {
         };
 
         // Applied on top of the base style and taking precedence. A value the key cannot mean is dropped here and reported by `value_errors` instead.
-        for attr in attrs {
+        for attr in in_application_order(attrs, |attr| &attr.key) {
             if let PropCall::Call(call) =
                 layout_prop_call(&attr.key, attr.value.text(), self.theme_access)
             {
@@ -423,7 +406,7 @@ fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
         Some(ValueKind::Number) => number(v) || crate::style::surface_fraction(v).is_some(),
         // The three spellings that cannot change; anything else is read, and a style that reads follows.
         Some(ValueKind::Boolean) => v.is_empty() || v == "true" || v == "false",
-        Some(ValueKind::Edges) => v.split_whitespace().all(number),
+        Some(ValueKind::Edges) => crate::edges::tokens(v).into_iter().all(number),
         // A colour is paint, already a closure the renderer re-runs; anything else is a key with no schema.
         Some(ValueKind::Color) | None => true,
     }

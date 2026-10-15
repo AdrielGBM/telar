@@ -1652,6 +1652,106 @@ fn a_plain_stroke_width_stays_uniform() {
     );
 }
 
+/// A width that is not a literal is emitted as written: it used to be parsed as one, fail, and draw a one-pixel border whatever the theme said.
+#[test]
+fn a_uniform_stroke_width_that_reads_is_not_replaced_by_a_hairline() {
+    let themed = paint_code("box stroke:#ff0000 stroke_width:$theme.border_width");
+    assert!(
+        themed.contains("border_width; 4]") && !themed.contains("[1.0; 4]"),
+        "the theme's width reaches all four sides:\n{themed}"
+    );
+    let called = paint_code("box stroke:#ff0000 stroke_width:(hairline() * 2.0)");
+    assert!(
+        called.contains("widths: [hairline() * 2.0; 4]"),
+        "an expression is spliced as written:\n{called}"
+    );
+    let unwritten = paint_code("box stroke:#ff0000");
+    assert!(
+        unwritten.contains("widths: [1.0; 4]"),
+        "a stroke with no width is still a hairline:\n{unwritten}"
+    );
+}
+
+/// The same silent default the stroke width had: a shadow's offsets and blur were parsed as literals and fell back to `0`, `4` and `8` for anything else.
+#[test]
+fn a_shadow_number_that_reads_is_emitted_as_written() {
+    let code = paint_code(
+        "box fill:#ff0000 shadow_x:offset() shadow_y:$theme.lift shadow_blur:(blur * 2.0)",
+    );
+    assert!(
+        code.contains("Shadow::new(offset(), ") && code.contains(".lift, blur * 2.0, "),
+        "every shadow number reaches `Shadow::new`:\n{code}"
+    );
+    let unwritten = paint_code("box fill:#ff0000 shadow_color:#000000");
+    assert!(
+        unwritten.contains("Shadow::new(0.0, 4.0, 8.0, "),
+        "an unwritten one keeps its default:\n{unwritten}"
+    );
+    let invalid = paint_code("box fill:#ff0000 shadow_blur:5x%");
+    assert!(
+        invalid.contains("compile_error!"),
+        "a value the key cannot mean is refused rather than defaulted:\n{invalid}"
+    );
+}
+
+/// A class's paint values are checked as an inline attribute's are, since nothing else would stop one reaching a default.
+#[test]
+fn a_class_paint_value_the_key_cannot_mean_is_refused() {
+    let code = transpile_source(
+        "[style]\n@card\n    stroke: #ff0000\n    stroke_width: 5x%\n[view]\nbox @card\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        code.contains("compile_error!(\"in `@card`: `5x%` is not a percentage\")"),
+        "{code}"
+    );
+}
+
+/// A class on a component strokes its surface with the width the class names, read as written.
+#[test]
+fn a_component_class_stroke_width_is_emitted_as_written() {
+    let code = transpile_source(
+        "[style]\n@outlined\n    stroke: #ff0000\n    stroke_width: hairline()\n[view]\nbutton @outlined label:\"Save\"\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    assert!(
+        code.contains(", hairline()))"),
+        "the width reaches `Stroke::new`:\n{code}"
+    );
+}
+
+/// `fill_rule` used to fall back to winding for any spelling it did not know, so a misspelled `evenodd` filled the other way with nothing to say why.
+#[test]
+fn a_path_fill_rule_takes_only_the_words_it_knows() {
+    let even =
+        paint_code("path d:\"M0,0 L10,0 Z\" fill:#ff0000 fill_rule:evenodd width:10 height:10");
+    assert!(even.contains("fill_rule: FillRule::EvenOdd"), "{even}");
+    let misspelled =
+        paint_code("path d:\"M0,0 L10,0 Z\" fill:#ff0000 fill_rule:even_od width:10 height:10");
+    assert!(
+        misspelled.contains("compile_error!(\"`fill_rule:even_od` is not a value of `fill_rule`"),
+        "{misspelled}"
+    );
+}
+
+/// An empty quoted family used to become sans-serif, a choice nobody wrote.
+#[test]
+fn an_empty_font_family_is_refused() {
+    let code = paint_code("text \"x\" font_family:\"\"");
+    assert!(
+        code.contains("compile_error!(\"`font_family:\\\"\\\"` names no family"),
+        "{code}"
+    );
+}
+
 /// `key(…)` is the only spelling left that admits a space, so every value needing one has to arrive through it. A consumer that only ever saw the quoted or comma-joined spelling would drop the parenthesized one silently, which is the one failure this grammar cannot afford.
 #[test]
 fn the_parenthesized_form_reaches_every_multi_token_value() {

@@ -29,6 +29,32 @@ fn width_prop() {
 }
 
 #[test]
+fn block_edge_props_map_to_their_builder_calls() {
+    for (key, expected) in [
+        ("padding_top", ".padding_top(12.0)"),
+        ("pad_top", ".padding_top(12.0)"),
+        ("padding_bottom", ".padding_bottom(12.0)"),
+        ("pad_bottom", ".padding_bottom(12.0)"),
+        ("margin_top", ".margin_block_start(12.0)"),
+        ("margin_bottom", ".margin_block_end(12.0)"),
+    ] {
+        assert_eq!(call(key, "12").as_deref(), Some(expected), "{key}");
+    }
+}
+
+/// The narrower padding wins whichever was written first, so moving an attribute along its line never changes the box.
+#[test]
+fn a_padding_naming_fewer_edges_is_applied_after_one_naming_more() {
+    let keys = ["padding_top", "width", "pad", "padding_y", "gap"];
+    let ordered: Vec<&&str> = in_application_order(&keys, |key| key);
+    assert_eq!(
+        ordered,
+        [&"pad", &"width", &"padding_y", &"padding_top", &"gap"],
+        "only the paddings move, among their own places"
+    );
+}
+
+#[test]
 fn logical_edge_props_map_to_their_builder_calls() {
     for (key, expected) in [
         ("pad_start", ".padding_start(12.0)"),

@@ -14,7 +14,12 @@ impl ViewGen<'_> {
         let find = |key: &str| el.attributes.iter().find(|a| a.key == key);
         let mut calls = String::new();
         if let Some(label) = find("label") {
-            calls.push_str(&format!(".a11y_label({})", self.annotation_text(label)));
+            // A `scroll` is never a control in markup, so its name is the one a reader hears while it is a Tab stop of its own; `a11y_label` there would name a region that fits as well, said again on the way into it.
+            let method = match el.tag.as_str() {
+                "scroll" => "stop_label",
+                _ => "a11y_label",
+            };
+            calls.push_str(&format!(".{method}({})", self.annotation_text(label)));
         }
         if let Some(lang) = find("lang") {
             calls.push_str(&format!(".a11y_lang({})", self.annotation_text(lang)));

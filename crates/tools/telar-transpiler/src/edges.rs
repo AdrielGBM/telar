@@ -108,9 +108,17 @@ impl Edges {
     }
 }
 
+/// The keys that take the CSS shorthand, one to four values; every per-edge name beside them takes one.
+pub const SHORTHAND_KEYS: &[&str] = &["stroke_width", "radius", "arrival_margin"];
+
+/// The values a per-edge property was written with, cut at each space outside a bracket: `(gap * 2) 0` is two values and `(hairline() * 2.0)` one, where cutting at every space made the latter three pieces of a shorthand.
+pub fn tokens(value: &str) -> Vec<&str> {
+    crate::split::split_top_level(value, char::is_whitespace, false)
+}
+
 /// Expands a CSS-style shorthand into its four values, with CSS's own arities: one value for all four, two for the two axes, three with the last axis' pair split, four verbatim. `None` for no tokens or more than four, which leaves the value for the caller to reject.
 pub fn expand_shorthand(value: &str) -> Option<[&str; 4]> {
-    match value.split_whitespace().collect::<Vec<_>>().as_slice() {
+    match tokens(value).as_slice() {
         [a] => Some([a, a, a, a]),
         [a, b] => Some([a, b, a, b]),
         [a, b, c] => Some([a, b, c, b]),
@@ -145,7 +153,7 @@ pub fn collect(
     // The one-value form survives only if it is the whole story: a single token, and no edge named apart from it.
     if let Some(value) = bare
         && named.is_empty()
-        && value.split_whitespace().count() == 1
+        && tokens(value).len() == 1
     {
         edges.uniform = Some(crate::style::number_or(value, ZERO, theme));
         return edges;

@@ -86,7 +86,7 @@ fn a_name_the_site_declares_itself_is_left_alone() {
     std::fs::write(root.join("tests.rs"), "").unwrap();
 
     let generated = root.join("build");
-    let (out, _) = discover_rust_modules(&root, &root, &generated);
+    let out = discover_rust_modules(&root, &root, &generated).declarations;
 
     assert!(!out.contains("mod helper;"), "declared by hand: {out}");
     assert!(!out.contains("mod editor;"), "declared by hand: {out}");
@@ -111,14 +111,94 @@ fn a_module_that_must_place_its_own_rsx_is_told_to() {
     std::fs::write(root.join("drawer/panel.rsx"), "[view]\ncol\n").unwrap();
 
     let generated = root.join("build");
-    let (out, _) = discover_rust_modules(&root, &root, &generated);
+    let out = discover_rust_modules(&root, &root, &generated).declarations;
     assert!(out.contains("compile_error!"), "{out}");
     assert!(out.contains("telar::rsx_modules!();"), "{out}");
 
     std::fs::write(root.join("drawer/mod.rs"), "telar::rsx_modules!();\n").unwrap();
-    let (quiet, _) = discover_rust_modules(&root, &root, &generated);
+    let quiet = discover_rust_modules(&root, &root, &generated).declarations;
     assert!(!quiet.contains("compile_error!"), "{quiet}");
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// `keymap.rs` beside `keymap/` is the Rust 2018 layout, and the `.rsx` in that directory used to be silently left out: nothing can place it, since the macro's `include!` in `keymap.rs` resolves beside `keymap.rs` rather than in `keymap/`. Each one is named, along with the move that places it, by the build and by the CLI alike.
+#[test]
+fn a_rsx_under_a_directory_beside_its_module_file_is_named() {
+    let root = std::env::temp_dir().join(format!("rsx_beside_module_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("src/keymap/nested")).unwrap();
+    std::fs::create_dir_all(root.join("src/keymap/placed")).unwrap();
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "telar::rsx_modules!();\nmod keymap;\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("src/keymap.rs"),
+        "telar::rsx_modules!();\nmod palette;\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("src/keymap/palette.rs"), "").unwrap();
+    std::fs::write(root.join("src/keymap/help.rsx"), "[view]\ncol\n").unwrap();
+    std::fs::write(root.join("src/keymap/nested/card.rsx"), "[view]\ncol\n").unwrap();
+    std::fs::write(
+        root.join("src/keymap/placed/mod.rs"),
+        "telar::rsx_modules!();\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("src/keymap/placed/row.rsx"), "[view]\ncol\n").unwrap();
+
+    let walk = discover_rust_modules(&root.join("src"), &root.join("src"), &root.join("build"));
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    let problem = &walk.problems[0];
+    assert!(
+        problem.starts_with("src/keymap/help.rsx, src/keymap/nested/card.rsx cannot be placed"),
+        "every unplaced file is named, and one a nested `mod.rs` places is not: {problem}"
+    );
+    assert!(
+        problem.contains("move src/keymap.rs to src/keymap/mod.rs"),
+        "{problem}"
+    );
+    assert!(
+        walk.declarations
+            .contains(&format!("compile_error!({problem:?});")),
+        "the build reports it too:\n{}",
+        walk.declarations
+    );
+    assert!(
+        !walk.declarations.contains("pub mod keymap;"),
+        "the directory is `keymap.rs`'s, declared by hand:\n{}",
+        walk.declarations
+    );
+}
+
+/// Declared from the module tree, `keymap.rs` is loaded through a `#[path]`, and rustc looks for its `mod palette;` beside it instead of in `keymap/`: a `file not found` naming a path under `.telar/`. Said in terms of the layout instead, and the directory is no longer declared a second time beside the file.
+#[test]
+fn a_module_file_the_tree_declares_cannot_keep_children_beside_it() {
+    let root = std::env::temp_dir().join(format!("rsx_tree_module_file_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("keymap")).unwrap();
+    std::fs::write(root.join("keymap.rs"), "mod palette;\n").unwrap();
+    std::fs::write(root.join("keymap/palette.rs"), "").unwrap();
+
+    let walk = discover_rust_modules(&root, &root, &root.join("build"));
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(
+        walk.declarations.matches("pub mod keymap;").count(),
+        1,
+        "{}",
+        walk.declarations
+    );
+    assert_eq!(walk.problems.len(), 1, "{:?}", walk.problems);
+    assert!(
+        walk.problems[0]
+            .contains("write `mod keymap;` in the crate root or `mod.rs` that places it"),
+        "{:?}",
+        walk.problems
+    );
 }
 
 /// A nested `rsx_modules!()` places its own directory. Rooting the walk at `src/` instead would declare an ancestor of the file doing the declaring, which rustc reads as a circular module.
@@ -133,7 +213,7 @@ fn a_nested_invocation_places_its_own_directory() {
     std::fs::write(root.join("app/editor/top_bar.rsx"), "[view]\ncol\n").unwrap();
 
     let generated = root.join("build");
-    let (out, _) = discover_rust_modules(&root, &root.join("app/editor"), &generated);
+    let out = discover_rust_modules(&root, &root.join("app/editor"), &generated).declarations;
 
     assert!(
         !out.contains("pub mod app;"),
@@ -180,7 +260,11 @@ fn discover_rust_modules_mirrors_tree() {
 
     let generated = root.join("__generated");
     let modtree = generated.join(MODULE_TREE_DIR);
-    let (out, files) = discover_rust_modules(&root, &root, &generated);
+    let SiteWalk {
+        declarations: out,
+        files,
+        ..
+    } = discover_rust_modules(&root, &root, &generated);
     let core_rs = content(&files, &modtree.join("core.rs"));
     let shared_rs = content(&files, &modtree.join("shared.rs"));
     let features_rs = content(&files, &modtree.join("features.rs"));
@@ -366,7 +450,11 @@ fn a_mod_rsx_owns_its_directory() {
     std::fs::write(root.join("media/state.rs"), "").unwrap();
 
     let generated = root.join("build");
-    let (out, files) = discover_rust_modules(&root, &root, &generated);
+    let SiteWalk {
+        declarations: out,
+        files,
+        ..
+    } = discover_rust_modules(&root, &root, &generated);
 
     assert!(
         out.contains("#[path = \"../build/media/mod.rs\"] pub mod media;"),
@@ -404,7 +492,7 @@ fn a_mod_rs_beside_a_mod_rsx_is_included_unless_it_opens_with_an_inner_attribute
     let generated = root.join("build");
     let children_file = generated.join("media").join(MODULE_CHILDREN_FILENAME);
 
-    let (_, files) = discover_rust_modules(&root, &root, &generated);
+    let files = discover_rust_modules(&root, &root, &generated).files;
     let combined = content(&files, &children_file);
     assert!(combined.contains("include!("), "{combined}");
     assert!(
@@ -417,7 +505,7 @@ fn a_mod_rs_beside_a_mod_rsx_is_included_unless_it_opens_with_an_inner_attribute
         "//! The bar.\npub fn helper() {}\n",
     )
     .unwrap();
-    let (_, files) = discover_rust_modules(&root, &root, &generated);
+    let files = discover_rust_modules(&root, &root, &generated).files;
     let refused = content(&files, &children_file);
     assert!(refused.contains("compile_error!"), "{refused}");
     assert!(!refused.contains("include!("), "{refused}");
@@ -436,7 +524,11 @@ fn the_crate_roots_bin_directory_is_left_to_cargo() {
     std::fs::write(root.join("app/bin/helper.rs"), "").unwrap();
 
     let generated = root.join("build");
-    let (out, files) = discover_rust_modules(&root, &root, &generated);
+    let SiteWalk {
+        declarations: out,
+        files,
+        ..
+    } = discover_rust_modules(&root, &root, &generated);
     assert!(!out.contains("pub mod bin;"), "{out}");
 
     let nested = content(&files, &generated.join(MODULE_TREE_DIR).join("app.rs"));
@@ -795,7 +887,7 @@ fn a_previews_file_is_declared_as_a_module_beside_the_component_it_previews() {
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(root.join("checkbox.rsx"), "").unwrap();
     std::fs::write(root.join("checkbox.previews.rsx"), "").unwrap();
-    let (out, _) = discover_rust_modules(&root, &root, &root.join("__generated"));
+    let out = discover_rust_modules(&root, &root, &root.join("__generated")).declarations;
     let _ = std::fs::remove_dir_all(&root);
 
     assert!(out.contains("pub mod checkbox;"), "{out}");

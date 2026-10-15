@@ -89,22 +89,30 @@ pub(crate) struct ModuleTreeFile {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ModuleTree {
     files: Vec<ModuleTreeFile>,
+    problems: Vec<String>,
 }
 
 impl ModuleTree {
     /// The tree every placement site under `src_dir` wires, declaring the `.rsx` output under `generated_dir`, with each site's declarations in `<site>/.telar/<site_file_name>`.
     pub fn discover(src_dir: &Path, generated_dir: &Path, site_file_name: &str) -> Self {
         let mut files = Vec::new();
+        let mut problems = Vec::new();
         for site in placement_sites(src_dir) {
             let holder = site.join(SITE_DIR);
-            let (declarations, children) = discover_rust_modules(src_dir, &site, generated_dir);
-            files.extend(children);
+            let walk = discover_rust_modules(src_dir, &site, generated_dir);
+            files.extend(walk.files);
+            problems.extend(walk.problems);
             files.push(ModuleTreeFile {
                 path: holder.join(site_file_name),
-                content: declarations,
+                content: walk.declarations,
             });
         }
-        Self { files }
+        Self { files, problems }
+    }
+
+    /// What the tree cannot place, each said as the `compile_error!` it writes says it, so the CLI can report it before a build reaches the error.
+    pub fn problems(&self) -> &[String] {
+        &self.problems
     }
 
     /// Writes every file whose content differs, returning every path the tree holds for the caller's stale-output sweep.
@@ -129,7 +137,7 @@ impl ModuleTree {
     }
 }
 
-/// Declares `pub mod` for every `.rsx` and every hand-written `.rs` module mirroring the `src_dir` tree, so a package needs no `mod` statements of its own. Returns the declarations for the site at `from_dir` and, for each discovered subdirectory, a generated file under the flavour's [`MODULE_TREE_DIR`] holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`), directories with no `.rs` under them (asset- or markup-only dirs), and any name the site declares itself. A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery.
+/// Declares `pub mod` for every `.rsx` and every hand-written `.rs` module mirroring the `src_dir` tree, so a package needs no `mod` statements of its own. Returns the declarations for the site at `from_dir` and, for each discovered subdirectory, a generated file under the flavour's [`MODULE_TREE_DIR`] holding that directory's children. Skips the crate roots (`lib.rs`, `main.rs`), directories with no `.rs` under them (asset- or markup-only dirs), and any name the site declares itself. A directory that has its own `mod.rs` is declared but not descended into, so it stays hand-managed — the escape hatch for opting a subtree out of discovery. A directory beside a `foo.rs` or `foo.rsx` is that file's module and is not declared either; nothing can place a `.rsx` in it, so each one is reported rather than left out.
 ///
 /// Every module — top-level file, subdirectory, and the children inside each generated file — is a *file-based* `#[path] pub mod` (the exact shape the `.rsx` build files use). It deliberately never emits an inline `mod dir { … }` block: rust-analyzer mis-resolves a `#[path]` attribute on a module nested inside an inline block produced by a proc macro, string-joining the inline module's name onto the child's path and failing to find it (E0583), while rustc joins those pieces with real path semantics. Routing every directory through a real generated file (`#[path = "…/core.rs"] pub mod core;`, its children flat inside that file) keeps the analyzer and the compiler in step.
 ///
@@ -138,7 +146,7 @@ pub(crate) fn discover_rust_modules(
     src_dir: &Path,
     from_dir: &Path,
     generated_dir: &Path,
-) -> (String, Vec<ModuleTreeFile>) {
+) -> SiteWalk {
     let prefix = from_dir
         .strip_prefix(src_dir)
         .unwrap_or(Path::new(""))
@@ -156,6 +164,7 @@ pub(crate) fn discover_rust_modules(
         modtree_dir: generated_dir.join(MODULE_TREE_DIR),
         generated_dir,
         files: Vec::new(),
+        problems: Vec::new(),
     };
     let mut out = String::new();
     walk.emit_children(
@@ -165,7 +174,18 @@ pub(crate) fn discover_rust_modules(
         &reserved,
         &mut out,
     );
-    (out, walk.files)
+    SiteWalk {
+        declarations: out,
+        files: walk.files,
+        problems: walk.problems,
+    }
+}
+
+/// What [`discover_rust_modules`] produces for one site: its declarations, the module-tree files they point at, and what it could not place.
+pub(crate) struct SiteWalk {
+    pub(crate) declarations: String,
+    pub(crate) files: Vec<ModuleTreeFile>,
+    pub(crate) problems: Vec<String>,
 }
 
 /// What one walk over the source tree is writing into, and the files it has produced so far.
@@ -175,6 +195,7 @@ struct TreeWalk<'a> {
     modtree_dir: PathBuf,
     generated_dir: &'a Path,
     files: Vec<ModuleTreeFile>,
+    problems: Vec<String>,
 }
 
 /// The module names the site's own file already declares, which the discovered tree leaves alone. Redeclaring one is `E0428`, and `mod menu;` written by hand next to a `pub mod menu;` written here would also be a visibility the author did not ask for.
@@ -253,14 +274,34 @@ impl TreeWalk<'_> {
                 } else if mod_rs.exists() {
                     // A `mod.rs` places its own `.rsx` children by invoking `rsx_modules!()`, the only place they can be declared from — an outside module cannot add items to one. Saying so beats a "cannot find" about a file that is plainly there.
                     if dir_has_rsx(&path) && !file_places_its_own(&mod_rs) {
-                        let _ = writeln!(
-                            out,
-                            "compile_error!(\"{} holds `.rsx` files and a `mod.rs`, so only that file can place them: add `telar::rsx_modules!();` to it, or give the directory a `mod.rsx` and let telar own the module\");",
+                        let message = format!(
+                            "{} holds `.rsx` files and a `mod.rs`, so only that file can place them: add `telar::rsx_modules!();` to it, or give the directory a `mod.rsx` and let telar own the module",
                             self.shown(&path)
                         );
+                        self.report(message, out);
                     }
                     if declared_here {
                         out.push_str(&mod_decl(name, &mod_rs, holder));
+                    }
+                } else if let Some(owner) = module_file_beside(&path) {
+                    // The directory is the module of the file beside it, which declares what is in it; declaring it here as well would be a second `pub mod` of one name.
+                    let unplaced = unplaced_rsx(&path);
+                    if !unplaced.is_empty() {
+                        let message = self.orphans_message(&unplaced, &path, &owner);
+                        self.report(message, out);
+                    }
+                    let markup_owner = owner.extension().is_some_and(|e| e == "rsx");
+                    if dir_has_rust_file(&path) && (markup_owner || declared_here) {
+                        let (owner, dir) = (self.shown(&owner), self.shown(&path));
+                        let message = match markup_owner {
+                            true => format!(
+                                "{dir} holds Rust modules nothing declares: it is the directory of {owner}, and only a `mod.rsx` declares the modules beside it. Move {owner} to {dir}/mod.rsx"
+                            ),
+                            false => format!(
+                                "{owner} keeps its modules in {dir}, where rustc looks only for a `mod {name};` written by hand beside it: declared from the module tree through a `#[path]`, its `mod` items are looked for beside it instead. Move it to {dir}/mod.rs, or write `mod {name};` in the crate root or `mod.rs` that places it"
+                            ),
+                        };
+                        self.report(message, out);
                     }
                 } else if declared_here && dir_has_rust_module(&path) {
                     let gen_file = self.modtree_dir.join(format!("{flat}.rs"));
@@ -344,6 +385,33 @@ impl TreeWalk<'_> {
             content: body,
         });
         out.push_str(&mod_decl(name, &module_file, holder));
+    }
+
+    /// Writes `message` where the build reads it, as a `compile_error!` in the file being produced, and keeps it for the CLI to report before any build does.
+    fn report(&mut self, message: String, out: &mut String) {
+        let _ = writeln!(out, "compile_error!({message:?});");
+        self.problems.push(message);
+    }
+
+    /// Why the `.rsx` under a directory that is the module of the file beside it are never compiled, naming each one.
+    ///
+    /// Only a crate root, a `mod.rs` and a `mod.rsx` can place the markup beside them, because the placement macro reaches its declarations through an `include!` resolved against the file holding the call: in `keymap.rs` that is the directory `keymap.rs` sits in, which is its parent's, not `keymap/`. A proc macro cannot see which file it was written in under rust-analyzer, so it cannot tell `keymap.rs` from the crate root beside it.
+    fn orphans_message(&self, unplaced: &[PathBuf], dir: &Path, owner: &Path) -> String {
+        let files = unplaced
+            .iter()
+            .map(|path| self.shown(path))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let (dir, owner_shown) = (self.shown(dir), self.shown(owner));
+        let fix = match owner.extension().and_then(|e| e.to_str()) {
+            Some("rsx") => format!("move {owner_shown} to {dir}/mod.rsx"),
+            _ => format!(
+                "move {owner_shown} to {dir}/mod.rs and add `telar::rsx_modules!();` to it, or give {dir} a `mod.rsx`"
+            ),
+        };
+        format!(
+            "{files} cannot be placed: {dir} is the directory of {owner_shown}, and only a crate root, a `mod.rs` or a `mod.rsx` places the `.rsx` beside it. To place them, {fix}"
+        )
     }
 
     /// `path` as a diagnostic names it: from the package root, `/`-separated, so the same tree is generated on every machine.
@@ -444,6 +512,60 @@ fn dir_has_rust_module(dir: &Path) -> bool {
         .iter()
         .any(|p| is_rust_module_file(p) || p.file_name().and_then(|n| n.to_str()) == Some("mod.rs"))
         || !collect_files_by_ext(dir, &["rsx"], &|_| true).is_empty()
+}
+
+/// The file whose module `dir` is, Rust 2018 style: `keymap.rs` or `keymap.rsx` beside `keymap/`.
+fn module_file_beside(dir: &Path) -> Option<PathBuf> {
+    let name = dir.file_name()?.to_str()?;
+    let parent = dir.parent()?;
+    let rust = parent.join(format!("{name}.rs"));
+    let markup = parent.join(format!("{name}.rsx"));
+    match (
+        rust.is_file() && is_rust_module_file(&rust),
+        markup.is_file(),
+    ) {
+        (true, _) => Some(rust),
+        (false, true) => Some(markup),
+        (false, false) => None,
+    }
+}
+
+/// Every `.rsx` under `dir` that nothing places: all of them, except those under a directory that places its own, through a `mod.rsx` or a `mod.rs` invoking the macro.
+fn unplaced_rsx(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+    paths.sort();
+    paths
+        .into_iter()
+        .filter(|path| {
+            !path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+        })
+        .flat_map(|path| {
+            if path.is_dir() {
+                let places_itself = path.join(MODULE_ROOT_FILENAME).is_file()
+                    || file_places_its_own(&path.join("mod.rs"));
+                match places_itself {
+                    true => Vec::new(),
+                    false => unplaced_rsx(&path),
+                }
+            } else if path.extension().and_then(|e| e.to_str()) == Some("rsx") {
+                vec![path]
+            } else {
+                Vec::new()
+            }
+        })
+        .collect()
+}
+
+/// Whether any Rust module source sits under `dir`: a declarable `.rs` or a `mod.rs`.
+fn dir_has_rust_file(dir: &Path) -> bool {
+    collect_files_by_ext(dir, &["rs"], &|name| !name.starts_with('.'))
+        .iter()
+        .any(|p| is_rust_module_file(p) || p.file_name().and_then(|n| n.to_str()) == Some("mod.rs"))
 }
 
 /// Whether the file — a crate root or a `mod.rs` — invokes the macro that places its own directory.

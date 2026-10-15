@@ -18,7 +18,7 @@ mod text;
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use telar_parser::{Attr, Element, IfBlock, StyleClass, ViewNode};
+use telar_parser::{Element, IfBlock, StyleClass, ViewNode};
 
 use crate::lexer::contains_ident;
 use crate::registry::ValueKind;
@@ -632,37 +632,54 @@ impl<'a> ViewGen<'a> {
         let pad = self.indent_str();
         el.attributes
             .iter()
-            .filter_map(|attr| self.attr_value_error(&el.tag, attr))
+            .filter_map(|attr| {
+                value_error(&el.tag, &attr.key, attr.value.text(), self.theme_access)
+            })
             .map(|message| format!("{pad}compile_error!({});\n", rust_str(&message)))
             .collect()
     }
+}
 
-    /// Why `attr`'s value is not one its key takes, or `None` when it is (or when the key takes anything).
-    fn attr_value_error(&self, tag: &str, attr: &Attr) -> Option<String> {
-        let value = attr.value.text().trim();
-        let Some(kind) = crate::registry::value_kind(tag, &attr.key) else {
-            return match crate::style::layout_prop_call(&attr.key, value, self.theme_access) {
-                crate::style::PropCall::Invalid(message) => Some(message),
-                _ => None,
-            };
+/// Why `value` is not one `tag`'s `key` takes, or `None` when it is (or when the key takes anything). Shared by an inline attribute and a `[style]` class property, so a value refused on one line is refused on the other.
+pub(crate) fn value_error(tag: &str, key: &str, value: &str, theme: ThemeAccess) -> Option<String> {
+    let value = value.trim();
+    let Some(kind) = crate::registry::value_kind(tag, key) else {
+        return match crate::style::layout_prop_call(key, value, theme) {
+            crate::style::PropCall::Invalid(message) => Some(message),
+            _ => None,
         };
-        match kind {
-            // Only a flag key carries the empty spelling, so a valueless `align` is caught here too.
-            ValueKind::Keywords(table) => crate::style::keyword(&attr.key, value, table).err(),
-            // A number is the axis itself and the names are steps of it, so either spelling is the same value.
-            ValueKind::KeywordsOrNumber(table) => (value.parse::<f32>().is_err())
-                .then(|| crate::style::keyword(&attr.key, value, table).err())
-                .flatten(),
-            ValueKind::Number => crate::style::format_number(value, self.theme_access).err(),
-            // A yes or a no is whatever rustc can make one of, so there is nothing here to refuse.
-            ValueKind::Boolean => None,
-            ValueKind::Edges => value
-                .split_whitespace()
-                .find_map(|token| crate::style::format_number(token, self.theme_access).err()),
-            ValueKind::Color => crate::style::color(value).err(),
+    };
+    match kind {
+        // Only a flag key carries the empty spelling, so a valueless `align` is caught here too.
+        ValueKind::Keywords(table) => crate::style::keyword(key, value, table).err(),
+        // A number is the axis itself and the names are steps of it, so either spelling is the same value.
+        ValueKind::KeywordsOrNumber(table) => (value.parse::<f32>().is_err())
+            .then(|| crate::style::keyword(key, value, table).err())
+            .flatten(),
+        ValueKind::Number => crate::style::format_number(value, theme).err(),
+        // A yes or a no is whatever rustc can make one of, so there is nothing here to refuse.
+        ValueKind::Boolean => None,
+        ValueKind::Edges => {
+            let tokens = crate::edges::tokens(value);
+            let shorthand = crate::edges::SHORTHAND_KEYS.contains(&key);
+            match (tokens.len(), shorthand) {
+                (0, _) => Some(format!("`{key}` needs a value")),
+                (1, _) | (2..=4, true) => tokens
+                    .into_iter()
+                    .find_map(|token| crate::style::format_number(token, theme).err()),
+                (n, true) => Some(format!(
+                    "`{key}:{value}` names {n} edges: write one value, or two to four as CSS does"
+                )),
+                (n, false) => Some(format!(
+                    "`{key}:{value}` is {n} values, and `{key}` names its edges with one"
+                )),
+            }
         }
+        ValueKind::Color => crate::style::color(value).err(),
     }
+}
 
+impl ViewGen<'_> {
     fn emit_element(&mut self, el: &Element) -> ChildEmit {
         let errors = format!("{}{}", self.unknown_attr_errors(el), self.value_errors(el));
         let emit = self.emit_element_inner(el);

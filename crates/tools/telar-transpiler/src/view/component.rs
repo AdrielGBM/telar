@@ -177,14 +177,20 @@ impl ViewGen<'_> {
             let _ = write!(chain, ".with_fill({})", self.color_expr(fill, None));
         }
         if let Some(stroke) = find("stroke") {
-            let width = find("stroke_width")
-                .and_then(|w| w.parse::<f32>().ok())
-                .unwrap_or(1.0);
+            let width = match find("stroke_width") {
+                None => "1.0".to_string(),
+                Some(w) if crate::edges::tokens(w).len() > 1 => format!(
+                    "compile_error!({})",
+                    rust_str(&format!(
+                        "`stroke_width:{w}` names one width per side, and a class on a component strokes its surface with one"
+                    ))
+                ),
+                Some(w) => crate::style::number_or_error(w, self.theme_access),
+            };
             let _ = write!(
                 chain,
-                ".with_stroke(Stroke::new({}, {}))",
+                ".with_stroke(Stroke::new({}, {width}))",
                 self.color_expr(stroke, None),
-                format_f32(width)
             );
         }
         if let Some(radius) = find("radius") {
@@ -197,10 +203,15 @@ impl ViewGen<'_> {
         if chain.is_empty() {
             return None;
         }
-        let raw: Vec<&str> = [find("fill"), find("stroke")]
-            .into_iter()
-            .flatten()
-            .collect();
+        let raw: Vec<&str> = [
+            find("fill"),
+            find("stroke"),
+            find("stroke_width"),
+            find("radius"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
         let closure = wrap_signal_clones(
             &raw,
             format!("move |__s: RectStyle| __s{chain}"),

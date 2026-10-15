@@ -5,7 +5,6 @@ use std::fmt::Write;
 use telar_parser::{Attr, ViewNode};
 
 use crate::lexer::contains_ident;
-use crate::style::format_f32;
 use crate::theme_access::{ThemeAccess, TokensRead};
 
 use super::{ViewGen, expr_marker};
@@ -578,8 +577,7 @@ pub(super) fn build_rect_style(
     gradient: Option<String>,
     solid_fill: Option<String>,
     stroke: Option<String>,
-    stroke_width: f32,
-    border_widths: Option<String>,
+    border_widths: String,
     shadow: Option<String>,
     radius: &str,
 ) -> String {
@@ -588,10 +586,10 @@ pub(super) fn build_rect_style(
             .map(|g| format!("Some({g})"))
             .or_else(|| solid_fill.map(|f| format!("Some(Paint::Solid({f}))")))
             .unwrap_or_else(|| "None".to_string());
-        let widths_s =
-            border_widths.unwrap_or_else(|| format!("[{}; 4]", format_f32(stroke_width)));
         let border_s = match stroke {
-            Some(s) => format!("Some(Border {{ paint: Paint::Solid({s}), widths: {widths_s} }})"),
+            Some(s) => {
+                format!("Some(Border {{ paint: Paint::Solid({s}), widths: {border_widths} }})")
+            }
             None => "None".to_string(),
         };
         let shadow_s = shadow.unwrap_or_else(|| "None".to_string());

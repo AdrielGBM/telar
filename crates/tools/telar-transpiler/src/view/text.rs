@@ -564,7 +564,12 @@ fn quoted_font_family_expr(text: &str) -> String {
         .filter(|n| !n.is_empty())
         .collect();
     match names.as_slice() {
-        [] => "FontFamily::SansSerif".to_string(),
+        [] => format!(
+            "::core::compile_error!({})",
+            rust_str(
+                "`font_family:\"\"` names no family: write a generic, a face, or a comma list of them"
+            )
+        ),
         [one] => registry::keyword(registry::FONT_FAMILY_VALUES, one)
             .map(str::to_string)
             .unwrap_or_else(|| rust_str(one)),

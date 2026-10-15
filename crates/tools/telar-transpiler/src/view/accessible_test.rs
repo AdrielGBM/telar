@@ -47,6 +47,22 @@ fn a11y_takes_only_the_words_it_knows() {
     );
 }
 
+/// A `scroll` in markup is never a control, so its name is the one a reader hears while it is a Tab stop of its own, and a region that fits is not announced inside the box that already names it.
+#[test]
+fn a_scroll_is_named_as_a_stop() {
+    let code = transpile("scroll label:$name max_height:40\n    text \"x\"\n");
+    assert!(!code.contains("compile_error!"), "{code}");
+    let call = code
+        .split(".stop_label(")
+        .nth(1)
+        .expect("the scroll names its stop");
+    assert!(
+        call.contains("name.get()"),
+        "the name follows its signal:\n{code}"
+    );
+    assert!(!code.contains("a11y_label"), "{code}");
+}
+
 /// On a component `label` is one of its props, and taking it would steal the button's own text.
 #[test]
 fn a_component_keeps_its_label_prop() {

@@ -66,7 +66,8 @@ fn generate_class_function(
             PropCall::Other if !is_style_key(&prop.key) => {
                 Some(format!("`{}` is not a style property", prop.key))
             }
-            _ => None,
+            PropCall::Other => crate::view::value_error("box", &prop.key, &prop.value, theme),
+            PropCall::Call(_) => None,
         };
         if let Some(message) = message {
             let _ = writeln!(
@@ -90,13 +91,33 @@ fn generate_class_function(
         );
     }
     out.push_str("    LayoutStyle::new()");
-    for prop in &class.props {
+    for prop in in_application_order(&class.props, |prop| &prop.key) {
         if let PropCall::Call(call) = layout_prop_call(&prop.key, &prop.value, theme) {
             let _ = write!(out, "\n        {call}");
         }
     }
     out.push_str("\n}");
     out
+}
+
+/// The order one element's layout keys are applied in: a padding naming fewer edges after one naming more, so the narrower key wins however the author ordered them, as an edge does for `radius` and `stroke_width`. Every other key keeps its written place.
+pub fn in_application_order<T>(props: &[T], key: impl Fn(&T) -> &str) -> Vec<&T> {
+    let rank = |prop: &T| match key(prop) {
+        "padding" | "pad" => Some(0),
+        "padding_x" | "pad_x" | "padding_y" | "pad_y" => Some(1),
+        "padding_top" | "pad_top" | "padding_bottom" | "pad_bottom" => Some(2),
+        _ => None,
+    };
+    let mut paddings: Vec<&T> = props.iter().filter(|prop| rank(prop).is_some()).collect();
+    paddings.sort_by_key(|prop| rank(prop));
+    let mut paddings = paddings.into_iter();
+    props
+        .iter()
+        .map(|prop| match rank(prop) {
+            Some(_) => paddings.next().unwrap_or(prop),
+            None => prop,
+        })
+        .collect()
 }
 
 /// Maps a style property to the `LayoutStyle` builder call it contributes — or reports the value as one this key cannot mean, which is what stops a misspelling from being a property that silently does nothing.
@@ -127,6 +148,12 @@ fn layout_call(key: &str, value: &str, theme: ThemeAccess) -> Result<Option<Stri
         "padding" | "pad" => format!(".padding_all({})", format_number(value, theme)?),
         "padding_x" | "pad_x" => format!(".padding_horizontal({})", format_number(value, theme)?),
         "padding_y" | "pad_y" => format!(".padding_vertical({})", format_number(value, theme)?),
+        "padding_top" | "pad_top" => format!(".padding_top({})", format_number(value, theme)?),
+        "padding_bottom" | "pad_bottom" => {
+            format!(".padding_bottom({})", format_number(value, theme)?)
+        }
+        "margin_top" => format!(".margin_block_start({})", format_number(value, theme)?),
+        "margin_bottom" => format!(".margin_block_end({})", format_number(value, theme)?),
         // Resolved against the writing direction at layout time, so one build serves LTR and RTL.
         "padding_start" | "pad_start" => {
             format!(".padding_start({})", format_number(value, theme)?)

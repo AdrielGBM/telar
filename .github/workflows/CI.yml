@@ -182,6 +182,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # The generated projects compile the plugins from this checkout by path, where nothing transpiles their `.rsx` or bakes their `icon!` ids: the workshop's `.telar/` has to be on disk before they do.
+      - run: cargo run -q -p cargo-telar -- transpile
       - name: Generate a project per target, compile the two that need no extra toolchain
         run: |
           # Outside the repo so a generated project cannot pick up the workspace's lockfile, and shared

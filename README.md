@@ -188,6 +188,8 @@ src/media/
 
 Without a `mod.rsx`, a directory that holds both `.rsx` files and a hand-written `mod.rs` places them from that file with a `telar::rsx_modules!();` of its own — only a module's own file can add items to it.
 
+A module written as `keymap.rs` beside `keymap/` cannot place the `.rsx` in `keymap/`: the macro reaches its declarations through an `include!` resolved beside the file that invokes it, which for `keymap.rs` is its parent's directory, and a proc macro cannot tell which file it was written in under rust-analyzer. The build names every such `.rsx` instead of leaving it out; move `keymap.rs` to `keymap/mod.rs`, or give the directory a `mod.rsx`.
+
 `apps/sandbox` in this repo is the reference app and covers most of the surface.
 
 ## What's in the box

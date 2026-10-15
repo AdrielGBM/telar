@@ -207,3 +207,25 @@ fn a_member_that_never_invokes_the_macro_is_left_alone() {
     let _ = std::fs::remove_dir_all(&root);
     assert!(!site && !telar);
 }
+
+/// A `.rsx` nothing can place fails the run, so it is named before a build compiles around it; the tree still carries the error for the build that follows.
+#[test]
+fn a_rsx_nothing_can_place_fails_the_run() {
+    let root = package("unplaced");
+    std::fs::create_dir_all(root.join("src/keymap")).unwrap();
+    std::fs::write(
+        root.join("src/lib.rs"),
+        "telar::rsx_modules!();\nmod keymap;\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("src/keymap.rs"), "").unwrap();
+    std::fs::write(root.join("src/keymap/help.rsx"), "[view]\ncol\n").unwrap();
+    let ok = transpile_member(&root, "test", "0.0.0");
+    let site = std::fs::read_to_string(root.join("src/.telar/modules.rs")).unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(!ok);
+    assert!(
+        site.contains("compile_error!(\"src/keymap/help.rsx cannot be placed"),
+        "{site}"
+    );
+}

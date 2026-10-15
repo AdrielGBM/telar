@@ -105,15 +105,14 @@ impl ViewGen<'_> {
             }
             None => "None".to_string(),
         };
-        let fill_rule = match el
+        let fill_rule = el
             .attributes
             .iter()
             .find(|a| a.key == "fill_rule")
-            .map(|a| a.value.text().trim().to_ascii_lowercase())
-        {
-            Some(v) if v == "even_odd" || v == "even-odd" || v == "evenodd" => "FillRule::EvenOdd",
-            _ => "FillRule::Winding",
-        };
+            .and_then(|a| {
+                crate::registry::keyword(crate::registry::FILL_RULE_VALUES, a.value.text().trim())
+            })
+            .unwrap_or("FillRule::Winding");
         format!(
             "PathStyle {{ fill: {fill}, stroke: {stroke}, shadow: None, fill_rule: {fill_rule} }}"
         )

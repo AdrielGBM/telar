@@ -2,7 +2,8 @@
 //!
 //! Its chords hold Alt, so they never reach a control inside a preview and never meet the devtools' Ctrl+Shift ones. None fires while a text entry has the caret, in the chrome or inside a canvas: the keys are the field's.
 
-mod help;
+telar::rsx_modules!();
+
 mod palette;
 
 use std::cell::Cell;
@@ -10,8 +11,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use telar::preview::PreviewEntry;
-use telar::{Chord, Direction, Key, LayoutError, LayoutItem, RwSignal, focus, signal};
+use telar::{Children, Chord, Direction, Key, LayoutError, LayoutItem, RwSignal, focus, signal};
 
+use self::help::{HelpProps, help};
 use crate::canvas_toolbar::locales;
 use crate::settings::{Zoom, mode_choices};
 use crate::sidebar::listed;
@@ -264,7 +266,11 @@ impl Keymap {
 
     /// The palette and the shortcuts overlay, each drawn over the workshop while open, for the shell to place.
     pub(crate) fn overlays(&self) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
-        Ok(vec![palette::palette(self)?, help::shortcuts(self)?])
+        let shortcuts = help(
+            HelpProps::props().open(self.shortcuts).build(),
+            Children::default(),
+        )?;
+        Ok(vec![palette::palette(self)?, shortcuts])
     }
 
     /// Runs the action `key` names, and answers whether there was one. Nothing runs while a text entry has the caret, nor while the palette is open; while the shortcuts overlay is, only `?` does, closing it.

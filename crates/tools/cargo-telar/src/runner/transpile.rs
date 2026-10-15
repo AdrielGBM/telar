@@ -123,6 +123,13 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
                 &generated_dir,
                 flavour.site_file_name(),
             );
+            for problem in tree.problems() {
+                all_ok = false;
+                if !reported.contains(problem) {
+                    eprintln!("[cargo-telar] error: {problem}");
+                    reported.push(problem.clone());
+                }
+            }
             match tree.write() {
                 Ok(written) => live.extend(written),
                 Err(e) => {

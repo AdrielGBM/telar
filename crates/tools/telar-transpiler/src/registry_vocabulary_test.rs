@@ -65,8 +65,8 @@ fn stroke_means_what_the_tag_says_it_means() {
         "an svg strokes like a shape"
     );
     assert!(
-        value_kind("path", "stroke_width").is_none(),
-        "and a path takes no stroke width either"
+        matches!(value_kind("path", "stroke_width"), Some(ValueKind::Number)),
+        "and a path's is one plain width, not four edges"
     );
 }
 

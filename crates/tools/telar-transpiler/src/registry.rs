@@ -74,6 +74,16 @@ const LAYOUT_ATTRS: &[AttrSpec] = &[
     AttrSpec::num("pad_start"),
     AttrSpec::num("padding_end"),
     AttrSpec::num("pad_end"),
+    AttrSpec::num("padding_top").doc(
+        "Padding on the top edge alone. A key naming fewer edges wins over one naming more, whatever their order: `pad:8 padding_top:0` and `padding_top:0 pad:8` are the same box.",
+    ),
+    AttrSpec::num("pad_top"),
+    AttrSpec::num("padding_bottom").doc(
+        "Padding on the bottom edge alone. A key naming fewer edges wins over one naming more, whatever their order.",
+    ),
+    AttrSpec::num("pad_bottom"),
+    AttrSpec::num("margin_top"),
+    AttrSpec::num("margin_bottom"),
     AttrSpec::num("margin_start"),
     AttrSpec::num("margin_end"),
     AttrSpec::num("inset_start"),
@@ -179,7 +189,7 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::color("stroke"),
     AttrSpec::edges("stroke_width"),
     AttrSpec::edges("radius"),
-    AttrSpec::free("shadow_x"),
+    AttrSpec::num("shadow_x"),
     AttrSpec::edges("stroke_top").doc(
         "One number per edge. `stroke_width` and `radius` also take the CSS shorthand (`radius:\"8 8 0 0\"`); these name a single edge, and `start`/`end`, the only form that follows the writing direction.",
     ),
@@ -200,8 +210,8 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::edges("radius_bottom_left"),
     AttrSpec::edges("radius_start"),
     AttrSpec::edges("radius_end"),
-    AttrSpec::free("shadow_y"),
-    AttrSpec::free("shadow_blur"),
+    AttrSpec::num("shadow_y"),
+    AttrSpec::num("shadow_blur"),
     AttrSpec::color("shadow_color"),
     AttrSpec::free("opacity"),
     AttrSpec::keywords("blend", BLEND_VALUES).doc(
@@ -346,6 +356,14 @@ pub const FIT_VALUES: &[(&str, &str)] = &[
     ("cover", "ObjectFit::Cover"),
     ("contain_integer", "ObjectFit::ContainInteger"),
     ("tile", "ObjectFit::Tile { scale: 1.0 }"),
+];
+
+/// `fill_rule:` on a `path`: which overlapping regions count as inside, with SVG's `nonzero`/`evenodd` beside the `FillRule` variants' own names.
+pub const FILL_RULE_VALUES: &[(&str, &str)] = &[
+    ("winding", "FillRule::Winding"),
+    ("nonzero", "FillRule::Winding"),
+    ("even_odd", "FillRule::EvenOdd"),
+    ("evenodd", "FillRule::EvenOdd"),
 ];
 
 /// `cursor:` — the pointer's shape over a box, one spelling per `Cursor` variant.
@@ -723,18 +741,26 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
             specs
         }
         // `keep` names the kept scroll position, so a remounted tree reopens where it was.
-        "scroll" => with(&[
-            AttrSpec::free("keep"),
-            AttrSpec::edges("arrival_margin").doc(
-                "How far short of each edge of its view the scroll stops what it brings into view (an anchor arrived at, a selection followed, a control focused), for a bar drawn over that strip: one number, or the CSS shorthand as `scroll-padding` takes it (`arrival_margin:\"40 0 0\"`). `arrival_margin_top` and its siblings name one edge. A document makes it the element's `scroll-padding`; every other target stops its own reveals there.",
-            ),
-            AttrSpec::edges("arrival_margin_top"),
-            AttrSpec::edges("arrival_margin_right"),
-            AttrSpec::edges("arrival_margin_bottom"),
-            AttrSpec::edges("arrival_margin_left"),
-            AttrSpec::edges("arrival_margin_x"),
-            AttrSpec::edges("arrival_margin_y"),
-        ]),
+        "scroll" => {
+            let mut specs = with(&[
+                AttrSpec::free("keep"),
+                AttrSpec::edges("arrival_margin").doc(
+                    "How far short of each edge of its view the scroll stops what it brings into view (an anchor arrived at, a selection followed, a control focused), for a bar drawn over that strip: one number, or the CSS shorthand as `scroll-padding` takes it (`arrival_margin:\"40 0 0\"`). `arrival_margin_top` and its siblings name one edge. A document makes it the element's `scroll-padding`; every other target stops its own reveals there.",
+                ),
+                AttrSpec::edges("arrival_margin_top"),
+                AttrSpec::edges("arrival_margin_right"),
+                AttrSpec::edges("arrival_margin_bottom"),
+                AttrSpec::edges("arrival_margin_left"),
+                AttrSpec::edges("arrival_margin_x"),
+                AttrSpec::edges("arrival_margin_y"),
+            ]);
+            for spec in specs.iter_mut().filter(|spec| spec.key == "label") {
+                *spec = AttrSpec::free("label").doc(
+                    "The name a reader hears for the scroll while it is a Tab stop of its own: while its content overflows and nothing inside it is a stop. A scroll that fits, or is scrolled by moving through the controls in it, stays nameless, so the box around it is not announced twice. A quoted string, `t!(…)`, or an expression reading `$state`.",
+                );
+            }
+            specs
+        }
         "canvas" => with(&[AttrSpec::free("paint")]),
         // `input` amends the text style the tree declared, so it takes the same inheritable keys a `text` does.
         "input" => {
@@ -765,14 +791,14 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
             AttrSpec::free("d"),
             AttrSpec::color("fill"),
             AttrSpec::free("stroke"),
-            AttrSpec::free("stroke_width"),
+            AttrSpec::num("stroke_width"),
             AttrSpec::free("stroke_dash").doc(
                 "Draws the `stroke` in dashes: lengths that alternate drawn and skipped, drawn first, separated by spaces or commas. `stroke_dash:\"1 4\"` is a dotted line; an odd list repeats, as in SVG. Every target dashes it except the terminal, which draws a dashed or dotted line character.",
             ),
             AttrSpec::free("stroke_dash_offset").doc(
                 "How far into the `stroke_dash` pattern the stroke starts, a plain number; a positive one shifts the dashes back along the path.",
             ),
-            AttrSpec::free("fill_rule"),
+            AttrSpec::keywords("fill_rule", FILL_RULE_VALUES),
         ]),
         _ if is_builtin_tag(tag) => LAYOUT_ATTRS.to_vec(),
         _ => vec![],
