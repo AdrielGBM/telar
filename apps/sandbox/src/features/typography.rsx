@@ -74,10 +74,10 @@ col gap:20
         card
             text "Text nodes wrap to the width they are given and report the exact height the wrapped lines need, so the sibling below them is never overlapped — resize the window and watch this paragraph reflow while the box grows to fit it." font_size:14 color:$theme.muted max_width:520
         code_line code:"text '…long copy…' color:$theme.muted max_width:520"
-    example title:"Interpolation — embed values with { } (see the Reactivity section)"
+    example title:"Interpolation — embed values with {{ }} (see the Reactivity section)"
         card
             text "Braces splice a signal or expression straight into the string." font_size:13 color:$theme.muted
-        code_line code:"text 'Count: {$count}'      text '{props.title}'"
+        code_line code:"text 'Count: {{$count}}'      text '{{props.title}}'"
     example title:"heading and section — an accent title, alone or above its content"
         card gap:12
             heading text:"A heading is a real title"
@@ -91,7 +91,7 @@ col gap:20
                 button label:t!("nav.overview") variant:ButtonVariant::Ghost
                 text "{t!(\"greeting\", name = \"Ada\")}" font_size:13 color:$theme.muted
             text "The macro validates the key against locales/ at compile time and re-reads the locale, so a language switch re-renders both." font_size:12 color:$theme.muted
-        code_line code:"button label:t!('nav.overview')   ·   text '{t!(\\'greeting\\', name = n)}'"
+        code_line code:"button label:t!('nav.overview')   ·   text '{{t!(\\'greeting\\', name = n)}}'"
     example title:"Attributes"
         col gap:6
             prop_row name:"font_size" values:"number" about:"Font size in px (default 14)."

@@ -62,7 +62,7 @@ pub fn keyboard(props: KeyboardProps, children: Children) -> Result<Box<dyn Layo
                                                 let __text_0 = {
                                                     let level = level.clone();
                                                     Text::declaring(
-                                                        move || format!("level {} / 10", { level.get() }),
+                                                        move || format!("level {} / 10", level.get()),
                                                         LayoutStyle::new(),
                                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                                     )?
@@ -76,7 +76,7 @@ pub fn keyboard(props: KeyboardProps, children: Children) -> Result<Box<dyn Layo
                                         let __text_1 = {
                                             let pressed = pressed.clone();
                                             Text::declaring(
-                                                move || format!("Tab moves between all three. With the level focused, the arrows change it and the page does not scroll; on a button, the arrows scroll the page. Buttons pressed · {}", { pressed.get() }),
+                                                move || format!("Tab moves between all three. With the level focused, the arrows change it and the page does not scroll; on a button, the arrows scroll the page. Buttons pressed · {}", pressed.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?

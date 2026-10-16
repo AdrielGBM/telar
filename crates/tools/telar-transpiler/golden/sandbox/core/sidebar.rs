@@ -58,7 +58,7 @@ pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn Layout
                 let __text_3 = {
                     let theme_name = theme_name.clone();
                     Text::declaring(
-                        move || format!("Active · {}", { theme_name.get() }),
+                        move || format!("Active · {}", theme_name.get()),
                         LayoutStyle::new(),
                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                     )?

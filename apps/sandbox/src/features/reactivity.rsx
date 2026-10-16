@@ -57,7 +57,7 @@ let pct = memo(move || (slider.get() * 100.0) as i32);
 
 [view]
 col gap:20
-    doc_header kicker:"INTERACTION" title:"Reactivity" desc:"A signal is reactive state; a memo derives from it. Read one with {$signal} and only the widgets that touch it recompute — no virtual DOM, no diffing."
+    doc_header kicker:"INTERACTION" title:"Reactivity" desc:"A signal is reactive state; a memo derives from it. Read one with {{$signal}} and only the widgets that touch it recompute — no virtual DOM, no diffing."
     example title:"One signal, several derived readers"
         card gap:8
             text "count · {$count}" font_size:22 color:$theme.ink
@@ -140,5 +140,5 @@ col gap:20
         col gap:6
             prop_row name:"signal(v)" values:"RwSignal<T>" about:"Reactive state. .get() .set() .update() .peek()."
             prop_row name:"memo(f)" values:"Memo<T>" about:"Cached value that recomputes when its deps change."
-            prop_row name:"{$name}" values:"interpolation" about:"Read a signal or memo inside a string."
+            prop_row name:"{{$name}}" values:"interpolation" about:"Read a signal or memo inside a string."
             prop_row name:"$name" values:"in closures" about:"The handle itself, for .set / .update."

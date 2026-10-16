@@ -13,6 +13,9 @@
 pub struct HomeProps {}
 
 #[allow(dead_code)]
+const PRIMARY: Color = Color::rgba(0.263, 0.380, 0.933, 1.0);
+
+#[allow(dead_code)]
 fn style_page() -> LayoutStyle {
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
     LayoutStyle::new()
@@ -86,7 +89,6 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<theme::LandingTheme>::default();
-
     let signups = signal(0i32);
     let signups_rsx_mv = signups.clone();
     let spots_left = memo(move || (200 - signups_rsx_mv.get()).max(0));
@@ -94,7 +96,6 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
     let checker_img = Arc::new(make_checker(640, 400, 32));
     let radial_img = Arc::new(make_radial_alpha(640, 400));
 
-    const PRIMARY: Color = Color::rgba(0.263, 0.380, 0.933, 1.0);
 
     let __col_0 = {
         let __sbox_0 = {
@@ -165,7 +166,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                         let __text_6 = {
                             let spots_left = spots_left.clone();
                             Text::declaring(
-                                move || format!("{} of 200 early-access seats left", { spots_left.get() }),
+                                move || format!("{} of 200 early-access seats left", spots_left.get()),
                                 LayoutStyle::new(),
                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().accent) },
                             )?
@@ -525,7 +526,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                 let __text_27 = {
                     let spots_left = spots_left.clone();
                     Text::declaring(
-                        move || format!("{} of 200 seats remaining", { spots_left.get() }),
+                        move || format!("{} of 200 seats remaining", spots_left.get()),
                         LayoutStyle::new(),
                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().on_primary) },
                     )?
@@ -535,7 +536,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                     let __text_28 = {
                         let signups = signups.clone();
                         Text::declaring(
-                            move || format!("{} developers reserved", { signups.get() }),
+                            move || format!("{} developers reserved", signups.get()),
                             LayoutStyle::new(),
                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().on_primary) },
                         )?

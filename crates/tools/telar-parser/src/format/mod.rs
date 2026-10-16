@@ -29,7 +29,10 @@ pub fn format_document(source: &str) -> Option<String> {
     if present.contains(&Section::Logic) || !doc.logic.source.trim().is_empty() {
         sections.push(format_logic_section(&doc.logic.source));
     }
-    if present.contains(&Section::Style) || !doc.style.classes.is_empty() {
+    if present.contains(&Section::Style)
+        || !doc.style.classes.is_empty()
+        || !doc.style.imports.is_empty()
+    {
         sections.push(format_style_section(&doc));
     }
     if present.contains(&Section::View) || !doc.view.nodes.is_empty() {

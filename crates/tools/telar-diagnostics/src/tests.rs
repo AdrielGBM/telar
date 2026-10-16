@@ -50,7 +50,9 @@ fn undefined_style_class_warns() {
             name: "card".into(),
             props: Vec::new(),
             line: 2,
+            public: false,
         }],
+        ..Default::default()
     };
     let doc = document(
         style,
@@ -60,10 +62,26 @@ fn undefined_style_class_warns() {
             5,
         ))],
     );
-    let diags = semantic_diagnostics(&doc, None);
+    let diags = semantic_diagnostics(&doc, None, &[]);
     assert_eq!(diags.len(), 1);
     assert_eq!(diags[0].severity, Severity::Warning);
     assert_eq!(diags[0].span.line, 5);
+    assert!(diags[0].message.contains("@missing"));
+}
+
+/// A class an import of `[style]` brings in is as much the view's as one it declares.
+#[test]
+fn an_imported_class_is_defined() {
+    let doc = document(
+        StyleSection::default(),
+        vec![ViewNode::Element(element(
+            &["mono", "missing"],
+            Vec::new(),
+            3,
+        ))],
+    );
+    let diags = semantic_diagnostics(&doc, None, &["mono"]);
+    assert_eq!(diags.len(), 1);
     assert!(diags[0].message.contains("@missing"));
 }
 
@@ -107,7 +125,7 @@ fn unknown_i18n_key_in_markup_warns() {
     );
     let keys = catalog_keys();
     let catalog = CatalogView { keys: &keys };
-    let diags = semantic_diagnostics(&doc, Some(&catalog));
+    let diags = semantic_diagnostics(&doc, Some(&catalog), &[]);
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert_eq!(diags[0].severity, Severity::Warning);
     assert_eq!(diags[0].span.line, 6);
@@ -121,5 +139,5 @@ fn a_project_without_a_catalog_gets_no_key_diagnostics() {
         StyleSection::default(),
         vec![ViewNode::Element(i18n_element("anything.at.all", 2))],
     );
-    assert!(semantic_diagnostics(&doc, None).is_empty());
+    assert!(semantic_diagnostics(&doc, None, &[]).is_empty());
 }

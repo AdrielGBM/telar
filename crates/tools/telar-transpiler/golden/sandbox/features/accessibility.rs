@@ -21,7 +21,6 @@ pub fn accessibility(props: AccessibilityProps, children: Children) -> Result<Bo
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let demo_icon = make_icon();
     let letters: Vec<String> = "TELAR".chars().map(String::from).collect();
     let mood = signal(String::from("calm"));

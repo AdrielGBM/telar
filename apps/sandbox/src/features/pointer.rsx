@@ -50,7 +50,7 @@ col gap:20
         card gap:10
             box fill:$theme.surface_alt stroke:$theme.border radius:10 height:96 width:100% cursor:crosshair on_pointer_move:(|x, y| { $at_x.set(x); $at_y.set(y) })
             text "x {$at_x.round()} · y {$at_y.round()}" font_size:13 color:$theme.primary
-        code_line code:"box on_pointer_move:|x, y| { $at_x.set(x); $at_y.set(y) }"
+        code_line code:"box on_pointer_move:|x, y| {{ $at_x.set(x); $at_y.set(y) }}"
     example title:"on_drag_end — the gesture is over, and this is where it stopped"
         card gap:10
             box fill:$theme.surface_alt stroke:$theme.border radius:10 height:80 width:100% cursor:grab active_style(fill:$theme.primary) on_drag:(|x, _y| $at_x.set(x)) on_drag_end:(|x, y| $settled.set(format!("{x:.0}, {y:.0}")))

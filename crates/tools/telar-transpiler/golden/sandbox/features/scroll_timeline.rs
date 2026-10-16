@@ -19,7 +19,6 @@ pub fn scroll_timeline(props: ScrollTimelineProps, children: Children) -> Result
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let scene = signal(0.0f32);
     let arrival = signal(0.0f32);
 
@@ -87,7 +86,7 @@ pub fn scroll_timeline(props: ScrollTimelineProps, children: Children) -> Result
                                                             let __text_1 = {
                                                                 let scene = scene.clone();
                                                                 Text::declaring(
-                                                                    move || format!("p = {}", { (scene.get() * 100.0).round() / 100.0 }),
+                                                                    move || format!("p = {}", (scene.get() * 100.0).round() / 100.0),
                                                                     LayoutStyle::new(),
                                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().on_primary) },
                                                                 )?

@@ -20,7 +20,11 @@ impl ViewGen<'_> {
         let pad = self.indent_str();
 
         // `slot:"name"` routes this element into a parent's named slot; it is consumed there, never passed as a prop.
-        let props_attrs: Vec<&Attr> = el.attributes.iter().filter(|a| a.key != "slot").collect();
+        let props_attrs: Vec<&Attr> = el
+            .attributes
+            .iter()
+            .filter(|a| a.key != "slot" && !crate::registry::is_component_instance_attr(&a.key))
+            .collect();
         let has_children = !el.children.is_empty();
 
         let props_arg = self.component_props_arg(el, tag, &props_attrs);
@@ -126,7 +130,9 @@ impl ViewGen<'_> {
     pub(crate) fn implicit_args<'e>(&self, el: &'e Element) -> Vec<&'e Attr> {
         el.attributes
             .iter()
-            .filter(|attr| attr.key != "slot")
+            .filter(|attr| {
+                attr.key != "slot" && !crate::registry::is_component_instance_attr(&attr.key)
+            })
             .filter(|attr| crate::preview::is_literal(&attr.value))
             .filter(|attr| self.baked_id_expr(&el.tag, attr).is_none())
             .collect()
@@ -352,7 +358,7 @@ impl ViewGen<'_> {
             None => (attr.value_start + lead, value),
         };
         let marker = expr_marker(start, expr.len());
-        let reused = self.must_clone_local(expr) || !self.loop_variables.is_empty();
+        let reused = self.must_clone_local(expr) || self.loop_depth > 0;
         if self.is_local(expr) && reused {
             format!("{marker}{expr}.clone()")
         } else {
@@ -378,7 +384,7 @@ impl ViewGen<'_> {
     /// Simple lowercase identifiers (e.g. `fill:primary`) are routed through `color_expr` so they follow the same [style]-vs-theme precedence as built-in elements. PascalCase or complex expressions are passed through verbatim.
     fn component_attr_expr(&self, attr: &Attr) -> String {
         let v = match &attr.value {
-            Value::Quoted(text) => return rust_str(text),
+            Value::Quoted(text) => return self.quoted_prop(text, attr.value_start),
             Value::Flag => return "true".to_string(),
             value => value.text().trim(),
         };
@@ -409,7 +415,7 @@ impl ViewGen<'_> {
         // Includes the delimiting paren stripped above: `value_start` still points at it, so a span built from `v` would start one byte early and end one short.
         let lead = attr.value.text().len() - attr.value.text().trim_start().len() + delimiters;
         // Cloned only where the clone is load-bearing: a reactive builder closure runs again and cannot consume its capture. Outside one, moving is correct, and cloning would demand `Clone` of every forwarded binding — which a `Box<dyn Fn()>` prop can never satisfy. A loop variable counts as a local; without that a bare `panel:p` fell through to the style scope and resolved `p` against the theme as a colour.
-        let in_loop = self.loop_variables.iter().any(|l| l == v);
+        let in_loop = self.loop_bound.iter().any(|l| l == v);
         if self.is_local(v) || in_loop {
             let marker = expr_marker(attr.value_start + lead, v.len());
             // A loop variable is bound once per iteration and the builder closure is `Fn`, so it cannot be moved out.
@@ -427,6 +433,11 @@ impl ViewGen<'_> {
                 self.theme_access,
             ));
         }
+        // The same read written without the sigil: a hook read through, or a signal's `.get()`. A plain value stays one, evaluated once.
+        if self.reads_reactive_context(v) {
+            let marker = expr_marker(attr.value_start + lead, v.len());
+            return reads_state(&self.clone_captures(&[v], format!("move || {marker}{v}")));
+        }
         // The delimiting parens are dropped here rather than at the call, so the span covers the expression and nothing wider.
         match super::redundant_parens(v) {
             Some(inner) => format!(
@@ -434,6 +445,19 @@ impl ViewGen<'_> {
                 expr_marker(attr.value_start + lead + 1, inner.len())
             ),
             None => format!("{}{v}", expr_marker(attr.value_start + lead, v.len())),
+        }
+    }
+}
+
+impl ViewGen<'_> {
+    /// A quoted prop, read as text: a string literal while it has no `{…}` hole, the string formatted once while its holes read nothing that moves, and re-formatted as it moves while one does.
+    fn quoted_prop(&self, text: &str, start: usize) -> String {
+        match self.interpolation(text, start, false) {
+            super::interp::Interpolated::Literal(text) => rust_str(&text),
+            super::interp::Interpolated::Formatted { reactive: true, .. } => {
+                reads_state(&self.text_closure(text, start))
+            }
+            super::interp::Interpolated::Formatted { format, .. } => format,
         }
     }
 }

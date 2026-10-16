@@ -19,8 +19,25 @@ impl Parser {
             }
 
             if line.content.starts_with('@') {
-                let class = self.parse_style_class()?;
+                let class = self.parse_style_class(false)?;
                 section.classes.push(class);
+            } else if let Some(class) = line.content.strip_prefix("pub ") {
+                if !class.trim_start().starts_with('@') {
+                    return Err(ParseError {
+                        message: format!(
+                            "`pub` in `[style]` makes a class importable: write `pub @name`, got `{}`",
+                            line.content
+                        ),
+                        line: line.number,
+                    });
+                }
+                let class = self.parse_style_class(true)?;
+                section.classes.push(class);
+            } else if line.content.starts_with("use ") {
+                section
+                    .imports
+                    .push(parse_style_import(&line.content, line.number)?);
+                self.pos += 1;
             } else {
                 // `[style]` is classes — named bundles of properties, which are reuse. A constant was a second evaluation model with a namespace of its own, and `[logic]` is already Rust.
                 let name = line.content.split(':').next().unwrap_or("").trim();
@@ -36,12 +53,13 @@ impl Parser {
         Ok(section)
     }
 
-    /// Parses either an inline `@class: k:v k:v` or a multi-line `@class` with indented props.
-    fn parse_style_class(&mut self) -> Result<StyleClass, ParseError> {
+    /// Parses either an inline `@class: k:v k:v` or a multi-line `@class` with indented props, `public` when the header was written `pub @class`.
+    fn parse_style_class(&mut self, public: bool) -> Result<StyleClass, ParseError> {
         let header = &self.lines[self.pos];
         let header_line = header.number;
         let header_indent = header.indent;
-        let after_sigil = header.content[1..].to_string();
+        let content = header.content.trim_start_matches("pub").trim_start();
+        let after_sigil = content[1..].to_string();
         self.pos += 1;
 
         if let Some((name, rest)) = split_once_colon(&after_sigil) {
@@ -51,6 +69,7 @@ impl Parser {
                 name,
                 props,
                 line: header_line,
+                public,
             });
         }
 
@@ -100,7 +119,84 @@ impl Parser {
             name,
             props,
             line: header_line,
+            public,
         })
+    }
+}
+
+/// Parses `use crate::styles::{mono, line as rule};`, `use super::styles::mono;` or `use crate::styles::*;`: Rust's own spelling, with class names where Rust has items.
+fn parse_style_import(content: &str, line: usize) -> Result<StyleImport, ParseError> {
+    let error = |why: &str| ParseError {
+        message: format!("{why}: `{content}`"),
+        line,
+    };
+    let body = content["use ".len()..].trim();
+    let body = body
+        .strip_suffix(';')
+        .ok_or_else(|| error("a class import ends with `;`, as a `use` does"))?
+        .trim();
+    let (path, items) = match body.strip_suffix('}') {
+        Some(braced) => {
+            let open = braced
+                .find("::{")
+                .ok_or_else(|| error("expected `module::{name, …}`"))?;
+            let names = braced[open + 3..]
+                .split(',')
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .map(|name| import_name(name).ok_or_else(|| error("expected a class name")))
+                .collect::<Result<Vec<_>, _>>()?;
+            if names.is_empty() {
+                return Err(error("the import names no class"));
+            }
+            (&braced[..open], StyleImportItems::Names(names))
+        }
+        None => {
+            let (path, last) = body
+                .rsplit_once("::")
+                .ok_or_else(|| error("expected `module::name`"))?;
+            let items = match last.trim() {
+                "*" => StyleImportItems::Glob,
+                name => StyleImportItems::Names(vec![
+                    import_name(name).ok_or_else(|| error("expected a class name"))?,
+                ]),
+            };
+            (path, items)
+        }
+    };
+    let module: Vec<String> = path.split("::").map(|s| s.trim().to_string()).collect();
+    let is_segment =
+        |s: &String| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if !module.iter().all(is_segment) || !matches!(module[0].as_str(), "crate" | "super" | "self") {
+        return Err(error(
+            "a class import names a module of this crate: start its path with `crate`, `super` or `self`",
+        ));
+    }
+    Ok(StyleImport {
+        module,
+        items,
+        line,
+    })
+}
+
+/// `name` or `name as alias`, with class names written as they are declared, without the `@`.
+fn import_name(text: &str) -> Option<StyleImportName> {
+    let ident = |s: &str| {
+        let s = s.trim();
+        (!s.is_empty()
+            && s.chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '-'))
+        .then(|| s.to_string())
+    };
+    match text.split_once(" as ") {
+        Some((name, alias)) => Some(StyleImportName {
+            name: ident(name)?,
+            alias: Some(ident(alias)?),
+        }),
+        None => Some(StyleImportName {
+            name: ident(text)?,
+            alias: None,
+        }),
     }
 }
 

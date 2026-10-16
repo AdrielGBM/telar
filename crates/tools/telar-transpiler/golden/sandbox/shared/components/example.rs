@@ -28,7 +28,7 @@ pub fn example(props: ExampleProps, children: Children) -> Result<Box<dyn Layout
         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
         let __text_0 = {
             Text::declaring(
-                move || format!("{}", { props.title }),
+                move || format!("{}", props.title),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
             )?

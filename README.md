@@ -34,6 +34,8 @@ feature_card icon:"⚡" title:"Fast" body:"Software and wgpu renderers with dirt
 
 A `.rsx` file has up to four sections: `[logic]` for verbatim Rust (a `pub struct Props` declares the component's props), `[style]` for reusable style classes, `[view]` for the node tree, and `[preview]` blocks that the tooling renders in isolation, with live controls, a `[play]` that drives them and snapshots that guard them ([docs/previews.md](docs/previews.md)).
 
+`[logic]` is Rust at two levels. An item written at its left margin — `use`, `const`, `static`, `fn`, `struct`, `enum`, `impl`, `trait`, `type`, `mod`, `macro_rules!` — is an item of the file's module, so a `[style]` class, a `[preview]`, a `#[cfg(test)] mod tests` and another module can name it. A statement — a `let`, an `effect(…)` — runs in the component each time it is built, where `props` is in scope.
+
 ## Quick start
 
 ```sh
@@ -136,6 +138,12 @@ col gap:8 pad:(space::lg() * 2.0) align:center
     text "Hola {name}" font_size:14
 ```
 
+A quoted value is text, as a `text`'s content is: `{expr}` interpolates and `{{`/`}}` is a brace, whether it is the
+content, a `label:` or a component's prop (`button label:"Open {name}"`). A closure that formats it borrows what it
+reads, and copies in a `[logic]` binding — or the field of `props` it reads — that another part of the view still
+needs, so `text "{props.detail}"` and `text "{project()}"` need no re-binding first. What an `if let` or a `match`
+arm binds is copied into the closures under it, so `if let Some(place) = &location` can be read by a `text` below.
+
 Parenthesise an expression that holds a space — `(a + b)` *is* an expression, so nothing new is invented.
 Four sugars survive, because each is a token shape rather than a second language:
 
@@ -150,9 +158,12 @@ Four sugars survive, because each is a token shape rather than a second language
 all: `transition(fill 250ms ease-out)` is a clause list, `hover_style(fill:$theme.accent)` a nested
 attribute list. The spelling says which world you are in.
 
-**Reactivity is reading, not marking.** A layout value that is not a literal is re-resolved whenever what it
-reads changes — `pad:$theme.gutter` follows a theme switch, and so does `pad:gutter()`. The `$` is `.get()`
-sugar; it does not decide anything.
+**Reactivity is reading, not marking.** A layout value that can change is re-resolved whenever what it
+reads changes — `pad:$theme.gutter` follows a theme switch, and so does `pad:gutter()`. One that cannot — a literal,
+or arithmetic on constants spelled as constants are, `gap:(GRID * 2.0)` — costs nothing to keep. A component's prop
+follows what it reads the same way: a `$` read, a `use_…()` hook read through (`color:(use_workbench_tokens().accent)`)
+or a signal's `.get()` hands the prop a `Reactive` that re-reads it, and a plain value, or a hook's handle passed on,
+is handed over as it is. The `$` is `.get()` sugar; it does not decide anything.
 
 ### Components are Rust paths
 
@@ -191,6 +202,35 @@ Without a `mod.rsx`, a directory that holds both `.rsx` files and a hand-written
 A module written as `keymap.rs` beside `keymap/` cannot place the `.rsx` in `keymap/`: the macro reaches its declarations through an `include!` resolved beside the file that invokes it, which for `keymap.rs` is its parent's directory, and a proc macro cannot tell which file it was written in under rust-analyzer. The build names every such `.rsx` instead of leaving it out; move `keymap.rs` to `keymap/mod.rs`, or give the directory a `mod.rsx`.
 
 `apps/sandbox` in this repo is the reference app and covers most of the surface.
+
+### Shared classes
+
+A class is the file's own until it says otherwise. `pub @name` shares it, and a `use` in another file's `[style]`
+brings it in by its module path, Rust's own spelling with class names where Rust has items:
+
+```rsx
+[style]
+pub @mono
+    font_family: telar_devtools::use_workbench_tokens().mono_family
+    font_size: telar_devtools::use_workbench_tokens().mono_size
+```
+
+```rsx
+[style]
+use crate::styles::{mono, line as rule};
+use super::cards::*;
+
+[view]
+row @rule align:center
+    text @mono "{seq}"
+```
+
+A `.rsx` with classes and no `[view]` — `src/styles.rsx` above — is a module of them rather than a component, and a
+directory's `mod.rsx` may hold the classes its modules share. A class is a bundle of attributes written onto each
+element that names it, so its values are Rust read where it is used, the way a `macro_rules!` macro's paths are: a
+shared class names what it reads by a path any file can reach, or each file that uses it imports that name. A class
+no `[style]` declares or imports is an error on the element naming it, and so is an import of a module that is not
+there, of a class it does not declare, or of one it keeps private.
 
 ## What's in the box
 

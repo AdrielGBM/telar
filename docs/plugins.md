@@ -210,8 +210,10 @@ per type. The rules:
   `setup` re-installs that theme (and the restored mode re-applies its variant), extensions included.
 
 A library's `.rsx` has no syntax for an extension: `$theme.x` stays the shared vocabulary. A `.rsx` library that
-needs its own tokens calls `use_theme_extension` from Rust, in a `[logic]` closure or a helper function, and
-reads it inside the closure that builds the style like any other theme read.
+needs its own tokens reads them through a hook of its own, `use_chip_tokens().radius` — a function of `[logic]`
+wrapping `use_theme_extension` — and the view reads it where it reads any other value: a paint value or a layout
+value built from it follows the theme, and so does a component's prop, which a hook read through hands a `Reactive`
+as it does a `$theme` read.
 
 ### Overridable strings
 

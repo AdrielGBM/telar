@@ -146,6 +146,27 @@ pub const VIEW_RANGE_VALUES: &[(&str, &str)] = &[
 /// `a11y:` — how assistive technology treats the box, paired with the `Accessible` method it calls.
 pub const A11Y_VALUES: &[(&str, &str)] = &[("hidden", "a11y_hidden")];
 
+/// What a component call may say about the item the component returns, beside its props. Spelled after the `Accessible` methods they call, since `label` and `lang` are a component's own props to declare.
+const COMPONENT_INSTANCE_ATTRS: &[AttrSpec] = &[
+    AttrSpec::free("a11y_label").doc(
+        "The name assistive technology reads for the item the component returns, over whatever it is named by: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. `label` stays the component's own prop.",
+    ),
+    AttrSpec::free("a11y_lang").doc(
+        "The language of the item the component returns and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`).",
+    ),
+    AttrSpec::keywords("a11y", A11Y_VALUES).doc(
+        "`a11y:hidden` takes the item the component returns, and everything under it, out of what assistive technology is told.",
+    ),
+];
+
+pub fn component_instance_attrs() -> Vec<AttrSpec> {
+    COMPONENT_INSTANCE_ATTRS.to_vec()
+}
+
+pub fn is_component_instance_attr(key: &str) -> bool {
+    COMPONENT_INSTANCE_ATTRS.iter().any(|spec| spec.key == key)
+}
+
 /// The layout keys, spelling only. Completion and the emitter's unknown-attribute check read the same table [`value_kind`] does.
 pub fn layout_attr_keys() -> Vec<&'static str> {
     LAYOUT_ATTRS.iter().map(|spec| spec.key).collect()
@@ -569,6 +590,11 @@ impl AttrSpec {
 ///
 /// A component tag has no table of its own — its keys are `Props` fields, which rustc checks — but the layout and paint attributes written on one still mean what they mean on a container, so it is read against `box`.
 pub fn attr_spec(tag: &str, key: &str) -> Option<AttrSpec> {
+    if !is_builtin_tag(tag)
+        && let Some(spec) = COMPONENT_INSTANCE_ATTRS.iter().find(|spec| spec.key == key)
+    {
+        return Some(*spec);
+    }
     let lens = if is_builtin_tag(tag) { tag } else { "box" };
     tag_attr_specs(lens)
         .into_iter()

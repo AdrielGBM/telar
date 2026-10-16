@@ -16,127 +16,130 @@
 #[derive(::telar::Props)]
 pub struct TransformsProps {}
 
+#[allow(dead_code)]
+fn arrow(cx: f32, cy: f32, size: f32) -> PathData {
+    let hs = size * 0.5;
+    let head = size * 0.35;
+    let sh = size * 0.18;
+    PathData::new()
+        .move_to(Point::new(cx - hs, cy - sh))
+        .line_to(Point::new(cx + hs - head, cy - sh))
+        .line_to(Point::new(cx + hs - head, cy - hs * 0.5))
+        .line_to(Point::new(cx + hs, cy))
+        .line_to(Point::new(cx + hs - head, cy + hs * 0.5))
+        .line_to(Point::new(cx + hs - head, cy + sh))
+        .line_to(Point::new(cx - hs, cy + sh))
+        .close()
+}
+
+#[allow(dead_code)]
+// Widest x reached by the fixed-coordinate cells below; the drawing is scaled to fit narrower canvases.
+const TRANSFORMS_DESIGN_W: f32 = 640.0;
+
+#[allow(dead_code)]
+fn draw_transforms(rect: Rect) -> RenderNode {
+    let t = crate::core::theme::theme();
+    let muted = t.muted;
+    let palette = [t.primary, t.success, t.warning, t.danger, t.purple];
+    let mut kids: Vec<RenderNode> = Vec::new();
+
+    // Uniform scale around each cell's center.
+    kids.push(RenderNode::text(
+        telar::static_rc_str!("scale around center — 0.5× · 0.75× · 1× · 1.5× · 2×"),
+        Rect {
+            x: 0.0,
+            y: 8.0,
+            width: 640.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+    let scales = [0.5f32, 0.75, 1.0, 1.5, 2.0];
+    for (i, (&s, &color)) in scales.iter().zip(palette.iter()).enumerate() {
+        let cx = i as f32 * 130.0 + 40.0;
+        let cy = 70.0f32;
+        let m = Transform::scale_around(s, s, cx, cy).to_array();
+        kids.push(RenderNode::transform_with(
+            m,
+            [RenderNode::rect(
+                Rect {
+                    x: cx - 26.0,
+                    y: cy - 26.0,
+                    width: 52.0,
+                    height: 52.0,
+                },
+                RectStyle::filled(color, 6.0),
+            )],
+        ));
+    }
+
+    // Rotation of a shared arrow shape.
+    kids.push(RenderNode::text(
+        telar::static_rc_str!("rotate around center — 0° · 30° · 60° · 90° · 120°"),
+        Rect {
+            x: 0.0,
+            y: 140.0,
+            width: 640.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+    let angles = [0.0f32, 30.0, 60.0, 90.0, 120.0];
+    for (i, (&a, &color)) in angles.iter().zip(palette.iter()).enumerate() {
+        let cx = i as f32 * 130.0 + 45.0;
+        let cy = 200.0f32;
+        let m = Transform::rotate_around(a, cx, cy).to_array();
+        kids.push(RenderNode::transform_with(
+            m,
+            [RenderNode::path(
+                Arc::new(arrow(cx, cy, 54.0)),
+                PathStyle::default().with_fill(color),
+            )],
+        ));
+    }
+
+    // Compose: rotate then scale, both around the same center.
+    kids.push(RenderNode::text(
+        telar::static_rc_str!("compose — rotate then scale (transforms multiply)"),
+        Rect {
+            x: 0.0,
+            y: 270.0,
+            width: 640.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+    let steps = [0.0f32, 20.0, 40.0, 60.0, 80.0];
+    for (i, &a) in steps.iter().enumerate() {
+        let cx = i as f32 * 130.0 + 40.0;
+        let cy = 325.0f32;
+        let s = 1.0 - i as f32 * 0.16;
+        let m = Transform::rotate_around(a, cx, cy)
+            .then(Transform::scale_around(s, s, cx, cy))
+            .to_array();
+        kids.push(RenderNode::transform_with(
+            m,
+            [RenderNode::rect(
+                Rect {
+                    x: cx - 26.0,
+                    y: cy - 26.0,
+                    width: 52.0,
+                    height: 52.0,
+                },
+                RectStyle::filled(palette[i % palette.len()], 8.0),
+            )],
+        ));
+    }
+
+    let scale = (rect.width / TRANSFORMS_DESIGN_W).min(1.0);
+    RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
+}
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn transforms(props: TransformsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
-    fn arrow(cx: f32, cy: f32, size: f32) -> PathData {
-        let hs = size * 0.5;
-        let head = size * 0.35;
-        let sh = size * 0.18;
-        PathData::new()
-            .move_to(Point::new(cx - hs, cy - sh))
-            .line_to(Point::new(cx + hs - head, cy - sh))
-            .line_to(Point::new(cx + hs - head, cy - hs * 0.5))
-            .line_to(Point::new(cx + hs, cy))
-            .line_to(Point::new(cx + hs - head, cy + hs * 0.5))
-            .line_to(Point::new(cx + hs - head, cy + sh))
-            .line_to(Point::new(cx - hs, cy + sh))
-            .close()
-    }
-
-    // Widest x reached by the fixed-coordinate cells below; the drawing is scaled to fit narrower canvases.
-    const TRANSFORMS_DESIGN_W: f32 = 640.0;
-
-    fn draw_transforms(rect: Rect) -> RenderNode {
-        let t = crate::core::theme::theme();
-        let muted = t.muted;
-        let palette = [t.primary, t.success, t.warning, t.danger, t.purple];
-        let mut kids: Vec<RenderNode> = Vec::new();
-
-        // Uniform scale around each cell's center.
-        kids.push(RenderNode::text(
-            telar::static_rc_str!("scale around center — 0.5× · 0.75× · 1× · 1.5× · 2×"),
-            Rect {
-                x: 0.0,
-                y: 8.0,
-                width: 640.0,
-                height: 14.0,
-            },
-            TextStyle::new(11.0, muted),
-        ));
-        let scales = [0.5f32, 0.75, 1.0, 1.5, 2.0];
-        for (i, (&s, &color)) in scales.iter().zip(palette.iter()).enumerate() {
-            let cx = i as f32 * 130.0 + 40.0;
-            let cy = 70.0f32;
-            let m = Transform::scale_around(s, s, cx, cy).to_array();
-            kids.push(RenderNode::transform_with(
-                m,
-                [RenderNode::rect(
-                    Rect {
-                        x: cx - 26.0,
-                        y: cy - 26.0,
-                        width: 52.0,
-                        height: 52.0,
-                    },
-                    RectStyle::filled(color, 6.0),
-                )],
-            ));
-        }
-
-        // Rotation of a shared arrow shape.
-        kids.push(RenderNode::text(
-            telar::static_rc_str!("rotate around center — 0° · 30° · 60° · 90° · 120°"),
-            Rect {
-                x: 0.0,
-                y: 140.0,
-                width: 640.0,
-                height: 14.0,
-            },
-            TextStyle::new(11.0, muted),
-        ));
-        let angles = [0.0f32, 30.0, 60.0, 90.0, 120.0];
-        for (i, (&a, &color)) in angles.iter().zip(palette.iter()).enumerate() {
-            let cx = i as f32 * 130.0 + 45.0;
-            let cy = 200.0f32;
-            let m = Transform::rotate_around(a, cx, cy).to_array();
-            kids.push(RenderNode::transform_with(
-                m,
-                [RenderNode::path(
-                    Arc::new(arrow(cx, cy, 54.0)),
-                    PathStyle::default().with_fill(color),
-                )],
-            ));
-        }
-
-        // Compose: rotate then scale, both around the same center.
-        kids.push(RenderNode::text(
-            telar::static_rc_str!("compose — rotate then scale (transforms multiply)"),
-            Rect {
-                x: 0.0,
-                y: 270.0,
-                width: 640.0,
-                height: 14.0,
-            },
-            TextStyle::new(11.0, muted),
-        ));
-        let steps = [0.0f32, 20.0, 40.0, 60.0, 80.0];
-        for (i, &a) in steps.iter().enumerate() {
-            let cx = i as f32 * 130.0 + 40.0;
-            let cy = 325.0f32;
-            let s = 1.0 - i as f32 * 0.16;
-            let m = Transform::rotate_around(a, cx, cy)
-                .then(Transform::scale_around(s, s, cx, cy))
-                .to_array();
-            kids.push(RenderNode::transform_with(
-                m,
-                [RenderNode::rect(
-                    Rect {
-                        x: cx - 26.0,
-                        y: cy - 26.0,
-                        width: 52.0,
-                        height: 52.0,
-                    },
-                    RectStyle::filled(palette[i % palette.len()], 8.0),
-                )],
-            ));
-        }
-
-        let scale = (rect.width / TRANSFORMS_DESIGN_W).min(1.0);
-        RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
-    }
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Transforms").desc("Wrap any render node in an affine matrix to scale, rotate, or translate it. Transforms compose with .then(), so you can rotate and then scale around the same point.").build(), Children::default())?;

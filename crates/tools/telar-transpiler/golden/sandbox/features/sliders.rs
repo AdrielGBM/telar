@@ -51,7 +51,7 @@ pub fn sliders(props: SlidersProps, children: Children) -> Result<Box<dyn Layout
                                         let __text_0 = {
                                             let volume = volume.clone();
                                             Text::declaring(
-                                                move || format!("Volume · {}%", { volume.get() }),
+                                                move || format!("Volume · {}%", volume.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?
@@ -103,7 +103,7 @@ pub fn sliders(props: SlidersProps, children: Children) -> Result<Box<dyn Layout
                                         let __text_1 = {
                                             let temp = temp.clone();
                                             Text::declaring(
-                                                move || format!("{}°F", { temp.get() }),
+                                                move || format!("{}°F", temp.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?

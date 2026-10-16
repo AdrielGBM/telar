@@ -268,7 +268,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                             let at_x = at_x.clone();
                                             let at_y = at_y.clone();
                                             Text::declaring(
-                                                move || format!("x {} · y {}", { at_x.get().round() }, { at_y.get().round() }),
+                                                move || format!("x {} · y {}", at_x.get().round(), at_y.get().round()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().primary) },
                                             )?
@@ -326,7 +326,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                         let __text_9 = {
                                             let settled = settled.clone();
                                             Text::declaring(
-                                                move || format!("settled at {}", { settled.get() }),
+                                                move || format!("settled at {}", settled.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                             )?
@@ -444,7 +444,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                             let __text_12 = {
                                                 let wheel = wheel.clone();
                                                 Text::declaring(
-                                                    move || format!("wheel {}", { wheel.get().round() }),
+                                                    move || format!("wheel {}", wheel.get().round()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().primary) },
                                                 )?
@@ -452,7 +452,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                             let __text_13 = {
                                                 let alt = alt.clone();
                                                 Text::declaring(
-                                                    move || format!("{}", { alt.get() }),
+                                                    move || format!("{}", alt.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                 )?

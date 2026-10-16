@@ -66,10 +66,41 @@ pub struct LogicZone {
     pub start_line: usize,
 }
 
-/// The `[style]` section: the named property bundles a view reuses.
+/// The `[style]` section: the named property bundles a view reuses, and the ones it brings in from other `.rsx` modules.
 #[derive(Debug, Clone, Default)]
 pub struct StyleSection {
+    pub imports: Vec<StyleImport>,
     pub classes: Vec<StyleClass>,
+}
+
+/// A `use path::to::module::{name, other as alias};` line of `[style]`: classes another `.rsx` declares `pub`, brought into this one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StyleImport {
+    /// The module's path as written: `crate`, `super` or `self` first, then each module name.
+    pub module: Vec<String>,
+    pub items: StyleImportItems,
+    /// 1-based `.rsx` line of the `use`.
+    pub line: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StyleImportItems {
+    /// `*`: every class the module makes `pub`.
+    Glob,
+    Names(Vec<StyleImportName>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct StyleImportName {
+    pub name: String,
+    pub alias: Option<String>,
+}
+
+impl StyleImportName {
+    /// The name this file writes the class as.
+    pub fn local(&self) -> &str {
+        self.alias.as_deref().unwrap_or(&self.name)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,6 +117,8 @@ pub struct StyleClass {
     pub name: String,
     pub props: Vec<StyleProp>,
     pub line: usize,
+    /// Written `pub @name`: other `.rsx` modules may `use` it.
+    pub public: bool,
 }
 
 /// A single `key: value` property within a style class.

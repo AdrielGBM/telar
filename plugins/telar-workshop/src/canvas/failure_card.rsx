@@ -22,18 +22,15 @@ pub struct Props {
 let location = location(&props.entry);
 let (file, line) = (props.entry.file, props.entry.line);
 let state = props.state;
-let detail = props.detail;
 
 [style]
-@mono
-    font_family: use_workbench_tokens().mono_family
-    font_size: use_workbench_tokens().mono_size
+use crate::styles::mono;
 
 [view]
 col theme:(workbench_theme()) gap:WORKBENCH_GRID pad:(WORKBENCH_GRID * 2.0) max_width:480 fill:(use_workbench_tokens().panel_background) stroke:(use_workbench_tokens().border_subtle) stroke_width:$theme.border_width radius:$theme.radius_control role:status
     text "{strings::text(props.heading)}" font_weight:semibold color:$theme.error
-    text @mono "{detail}"
-    if let Some(location) = location.clone()
+    text @mono "{props.detail}"
+    if let Some(location) = &location
         text @mono "{location}" color:$theme.muted
     if location.is_some() || props.panicked
         row gap:WORKBENCH_GRID

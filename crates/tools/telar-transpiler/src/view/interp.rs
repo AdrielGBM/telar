@@ -9,30 +9,174 @@ use super::signals::{
     Segment, parse_interpolation, rust_str, substitute_reads, substitute_reads_spanned,
 };
 
-impl ViewGen<'_> {
-    /// Builds the `content_fn` closure for a text node, handling `{...}` interpolation. `content_start` is the source byte offset of `content`, used to tag each interpolated expression with its source span.
-    pub fn interpolate_content(&self, content: &str, content_start: usize) -> String {
-        let segments = parse_interpolation(content);
-        if segments.iter().all(|s| matches!(s, Segment::Literal(_))) {
-            return format!("|| {}.to_string()", rust_str(content));
-        }
+/// A quoted string read as text: `{…}` holes formatted into it, and `{{`/`}}` its braces.
+pub(super) enum Interpolated {
+    /// No hole: the string as it reads, braces unescaped.
+    Literal(String),
+    Formatted {
+        format: String,
+        /// One `let` per capture a closure around `format` must copy in rather than consume.
+        clones: Vec<String>,
+        /// Whether a hole reads state, so a value built from it has to be re-read to follow it.
+        reactive: bool,
+    },
+}
 
+impl Interpolated {
+    pub(super) fn closure(&self, literal: impl FnOnce(&str) -> String) -> String {
+        match self {
+            Interpolated::Literal(text) => format!("|| {}", literal(text)),
+            Interpolated::Formatted { format, clones, .. } if clones.is_empty() => {
+                format!("move || {format}")
+            }
+            Interpolated::Formatted { format, clones, .. } => {
+                format!("{{ {} move || {format} }}", clones.join(" "))
+            }
+        }
+    }
+}
+
+impl ViewGen<'_> {
+    /// `content` read as text, starting at source byte `content_start`. A `capturing` caller puts the `format!` inside a `move` closure, so each `[logic]` binding and `props` place a hole reads is copied in wherever consuming it would leave another reader without it; a caller formatting once, in place, borrows and copies nothing.
+    pub(super) fn interpolation(
+        &self,
+        content: &str,
+        content_start: usize,
+        capturing: bool,
+    ) -> Interpolated {
+        let segments = parse_interpolation(content);
+        let escaped_at = content
+            .find(['"', '\\', '\n', '\t', '\r'])
+            .unwrap_or(usize::MAX);
         let mut fmt = String::new();
+        let mut literal = String::new();
         let mut args = Vec::new();
+        let mut clones = Vec::new();
+        let mut holes: Vec<&str> = Vec::new();
         for seg in &segments {
             match seg {
                 Segment::Literal(text) => {
+                    literal.push_str(text);
                     fmt.push_str(&text.replace('{', "{{").replace('}', "}}"));
                 }
                 Segment::Expr { text, byte_offset } => {
                     fmt.push_str("{}");
-                    args.push(self.render_interp_expr(text, content_start + byte_offset));
+                    // The parser hands the string back unescaped, so past the first escape every offset is out by the bytes it dropped.
+                    let start = (escaped_at >= byte_offset + text.len())
+                        .then_some(content_start + byte_offset);
+                    args.push(match capturing {
+                        true => self.render_captured_expr(text, start, &mut clones),
+                        false => self.render_interp_expr(text, start),
+                    });
+                    holes.push(text);
                 }
             }
         }
+        if holes.is_empty() {
+            return Interpolated::Literal(literal);
+        }
+        let reactive = holes
+            .iter()
+            .any(|hole| hole.contains('$') || self.reads_reactive_context(hole));
+        if capturing {
+            let locals: Vec<String> = self
+                .locals
+                .iter()
+                .filter(|local| {
+                    *local != "props" && self.must_copy_capture(self.reads.local(local))
+                })
+                .cloned()
+                .collect();
+            let captured = super::signals::captured_idents_with(
+                &holes,
+                &self.loop_variables,
+                &locals,
+                self.theme_access,
+            );
+            clones.extend(
+                captured.iter().map(|name| {
+                    format!("let {}{name} = {name}.clone();", super::shadow_marker(name))
+                }),
+            );
+        }
+        Interpolated::Formatted {
+            format: format!("format!({}, {})", rust_str(&fmt), args.join(", ")),
+            clones,
+            reactive,
+        }
+    }
 
-        let args_joined = args.join(", ");
-        format!("move || format!({}, {args_joined})", rust_str(&fmt))
+    /// A hole of a string a `move` closure formats: each `props` place it reads that another reader still needs is copied into a binding of its own ahead of the closure, so the closure takes that copy and leaves the rest of `props` — whatever `[logic]` moved out of it included — alone.
+    fn render_captured_expr(
+        &self,
+        expr: &str,
+        raw_start: Option<usize>,
+        clones: &mut Vec<String>,
+    ) -> String {
+        let trimmed = expr.trim();
+        let copied: Vec<(usize, usize)> = crate::rust::field_places(trimmed, "props")
+            .into_iter()
+            .filter(|&(start, end)| {
+                let place = crate::rust::place_text(&trimmed[start..end]);
+                self.must_copy_capture(self.reads.place(&place))
+            })
+            .collect();
+        if copied.is_empty() {
+            return self.render_interp_expr(expr, raw_start);
+        }
+        let lead = expr.len() - expr.trim_start().len();
+        let mut rewritten = String::with_capacity(trimmed.len());
+        let mut done = 0;
+        for (start, end) in copied {
+            let place = &trimmed[start..end];
+            let binding = format!("__{}", crate::rust::place_text(place).replace('.', "_"));
+            let marker = raw_start
+                .map(|at| expr_marker(at + lead + start, place.len()))
+                .unwrap_or_default();
+            let copy = format!("let {binding} = {marker}{place}.clone();");
+            if !clones.contains(&copy) {
+                clones.push(copy);
+            }
+            rewritten.push_str(&trimmed[done..start]);
+            rewritten.push_str(&binding);
+            done = end;
+        }
+        rewritten.push_str(&trimmed[done..]);
+        let body = match rewritten.contains('$') {
+            true => substitute_reads(&rewritten, self.theme_access),
+            false => rewritten,
+        };
+        format_arg(body)
+    }
+
+    /// Whether `expr` reads reactive state without a `$` saying so: a `use_…()` hook read through (`use_workbench_tokens().border`), or a `[logic]` signal read with `.get()` or `.with(…)`. Passing a hook's or a signal's handle on is not a read; the handle is what the callee follows.
+    pub(super) fn reads_reactive_context(&self, expr: &str) -> bool {
+        let bytes = expr.as_bytes();
+        let follows = |at: usize, len: usize, rest: &[&str]| {
+            let after = expr[at + len..].trim_start();
+            rest.iter().any(|r| after.starts_with(r))
+        };
+        let hook_read = (0..bytes.len()).any(|at| {
+            expr[at..].starts_with("use_")
+                && (at == 0 || !telar_project::naming::is_ident_byte(bytes[at - 1]))
+                && {
+                    let name_len = expr[at..]
+                        .bytes()
+                        .take_while(|b| telar_project::naming::is_ident_byte(*b))
+                        .count();
+                    let after = expr[at + name_len..].trim_start();
+                    let after = match after.strip_prefix("::<") {
+                        Some(generic) => generic.find('>').map_or("", |end| &generic[end + 1..]),
+                        None => after,
+                    };
+                    after.starts_with('(') && closes_into_read(after)
+                }
+        });
+        hook_read
+            || self.signals.iter().any(|signal| {
+                crate::lexer::ident_positions(expr, signal)
+                    .any(|at| follows(at, signal.len(), &[".get(", ".with("]))
+            })
     }
 
     /// The runtime catalog-lookup expression for an i18n key written in markup (`t"key"`). Reads the active locale reactively, so wrapping it in a `move ||` content/label closure makes the widget live-switch on a language change. Markup keys take no arguments (parameterized strings use the Rust `t!` macro).
@@ -44,31 +188,30 @@ impl ViewGen<'_> {
         )
     }
 
-    /// Renders an interpolation expression: a `$ident` reactive read becomes `ident.get()`; a `$`-free expression is emitted verbatim (a plain value). `raw_start` is the source byte offset of the raw (untrimmed) expression text; an [`expr_marker`] is emitted right before a verbatim (`$`-free) expression so the analyzer can complete inside it.
-    fn render_interp_expr(&self, expr: &str, raw_start: usize) -> String {
+    /// Renders an interpolation expression: a `$ident` reactive read becomes `ident.get()`; a `$`-free expression is emitted verbatim (a plain value). `raw_start` is the source byte offset of the raw (untrimmed) expression text, or `None` where an escape before it makes that unknowable; an [`expr_marker`] is emitted right before a verbatim (`$`-free) expression so the analyzer can complete inside it.
+    fn render_interp_expr(&self, expr: &str, raw_start: Option<usize>) -> String {
         let trimmed = expr.trim();
         if trimmed.is_empty() {
             return format!("{{ {expr} }}");
         }
+        let lead = expr.len() - expr.trim_start().len();
+        let Some(raw_start) = raw_start else {
+            let body = match trimmed.contains('$') {
+                true => substitute_reads(trimmed, self.theme_access),
+                false => trimmed.to_string(),
+            };
+            return format_arg(body);
+        };
         // The expression around a `$` is rewritten, so it carries no span of its own — but each identifier inside it is copied byte for byte and keeps one, which is what a cursor on `$name` resolves through.
         if trimmed.contains('$') {
-            let lead = expr.len() - expr.trim_start().len();
-            return format!(
-                "{{ {} }}",
-                substitute_reads_spanned(trimmed, raw_start + lead, self.theme_access)
-            );
+            return format_arg(substitute_reads_spanned(
+                trimmed,
+                raw_start + lead,
+                self.theme_access,
+            ));
         }
-        // Nor an expression carrying a string literal: the parser hands content back unescaped, so a `"` here was `\"` in the `.rsx` and every offset after it is off by one. The span is dropped rather than made to lie.
-        if trimmed.contains('"') {
-            return format!("{{ {trimmed} }}");
-        }
-        let lead = expr.len() - expr.trim_start().len();
         let marker = expr_marker(raw_start + lead, trimmed.len());
-        if is_ident(trimmed) {
-            format!("{marker}{trimmed}")
-        } else {
-            format!("{{ {marker}{trimmed} }}")
-        }
+        format_arg(format!("{marker}{trimmed}"))
     }
 
     /// Resolves a color reference: an inline hex value, a `$signal` read, a computed reactive expression, a CSS keyword, a `Color::*` literal, a `[style]`-declared local constant, or a theme field.
@@ -116,5 +259,41 @@ impl ViewGen<'_> {
             return v.to_string();
         }
         v.to_string()
+    }
+}
+
+fn closes_into_read(call: &str) -> bool {
+    let mut depth = 0i32;
+    for (i, c) in call.char_indices() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    let rest = call[i + 1..].trim_start();
+                    return rest.starts_with('.') && !rest.starts_with("..");
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+impl ViewGen<'_> {
+    pub(super) fn text_closure(&self, text: &str, start: usize) -> String {
+        self.interpolation(text, start, true).closure(rust_str)
+    }
+}
+
+/// A hole as a `format!` argument: as written, since `format!` borrows what it is given, where a block around it would move a place like `props.detail` out of the closure that formats it. A hole reading `name = …` is parenthesised, so it stays a value rather than naming an argument.
+fn format_arg(hole: String) -> String {
+    let unmarked = hole.rsplit(super::SRC_EXPR_CLOSE).next().unwrap_or(&hole);
+    let named = unmarked
+        .split_once('=')
+        .is_some_and(|(name, rest)| is_ident(name.trim()) && !rest.starts_with('='));
+    match named {
+        true => format!("({hole})"),
+        false => hole,
     }
 }

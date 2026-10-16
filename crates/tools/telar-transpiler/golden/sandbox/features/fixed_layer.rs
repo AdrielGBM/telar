@@ -19,7 +19,6 @@ pub fn fixed_layer(props: FixedLayerProps, children: Children) -> Result<Box<dyn
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let shown = signal(false);
     let taps = signal(0u32);
     let primary = memo(|| match use_primary_scroll() {
@@ -63,7 +62,7 @@ pub fn fixed_layer(props: FixedLayerProps, children: Children) -> Result<Box<dyn
                                         let __text_0 = {
                                             let taps = taps.clone();
                                             Text::declaring(
-                                                move || format!("Taps on the bar: {}", { taps.get() }),
+                                                move || format!("Taps on the bar: {}", taps.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                             )?
@@ -153,7 +152,7 @@ pub fn fixed_layer(props: FixedLayerProps, children: Children) -> Result<Box<dyn
                                         let __text_3 = {
                                             let primary = primary.clone();
                                             Text::declaring(
-                                                move || format!("Primary scroll: {}", { primary.get() }),
+                                                move || format!("Primary scroll: {}", primary.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?

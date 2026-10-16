@@ -270,3 +270,13 @@ fn a_play_zone_is_formatted_like_logic() {
     );
     assert_eq!(format_document(&out).unwrap(), out);
 }
+
+/// Class imports come first, as written in Rust, and a shared class keeps its `pub`.
+#[test]
+fn style_imports_and_pub_classes_round_trip() {
+    let src = "[style]\nuse   crate::styles::{ mono , line as rule };\nuse super::shared::*;\npub   @card\n        gap: 4\n@local: gap:2\n[view]\ncol @card\n";
+    let out = format_document(src).unwrap();
+    let expected = "[style]\nuse crate::styles::{mono, line as rule};\nuse super::shared::*;\n\npub @card\n    gap: 4\n\n@local\n    gap: 2\n\n[view]\ncol @card\n";
+    assert_eq!(out, expected);
+    assert_eq!(out, format_document(&out).unwrap());
+}

@@ -174,7 +174,8 @@ box pad:$gutter
     box width:$tile height:40
 ```
 
-A layout value that is not a literal is already resolved again whenever what it reads changes. That is the
+A layout value that can change — anything but a literal or arithmetic on constants — is already resolved again
+whenever what it reads changes. That is the
 `style_follows` mechanism described in [animations.md](animations.md). So a breakpoint needs no new syntax
 and no registry entry. It also has the same cost as a theme switch: one relayout when a threshold is
 crossed, and none for each pixel of the resize.

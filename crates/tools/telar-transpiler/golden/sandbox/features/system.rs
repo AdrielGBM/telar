@@ -14,24 +14,25 @@
 #[derive(::telar::Props)]
 pub struct SystemProps {}
 
+#[allow(dead_code)]
+fn scheme_name(scheme: telar::ColorScheme) -> &'static str {
+    match scheme {
+        telar::ColorScheme::Light => "light",
+        telar::ColorScheme::Dark => "dark",
+    }
+}
+
+#[allow(dead_code)]
+fn reading<T: std::fmt::Debug>(value: Option<T>) -> String {
+    value.map_or_else(|| "unknown".to_string(), |v| format!("{v:?}"))
+}
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     #[allow(unused_variables)] let scheme = telar::ResolvedScheme;
-
-    fn scheme_name(scheme: telar::ColorScheme) -> &'static str {
-        match scheme {
-            telar::ColorScheme::Light => "light",
-            telar::ColorScheme::Dark => "dark",
-        }
-    }
-
-    fn reading<T: std::fmt::Debug>(value: Option<T>) -> String {
-        value.map_or_else(|| "unknown".to_string(), |v| format!("{v:?}"))
-    }
-
     let system_scheme = memo(|| reading(telar::use_color_scheme()));
     let reduced = memo(|| reading(telar::use_system_reduced_motion()));
     let contrast = memo(|| reading(telar::use_system_high_contrast()));
@@ -98,7 +99,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                         let __text_0 = {
                                             let system_scheme = system_scheme.clone();
                                             Text::declaring(
-                                                move || format!("color scheme · {}", { system_scheme.get() }),
+                                                move || format!("color scheme · {}", system_scheme.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                             )?
@@ -107,7 +108,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                         let __text_1 = {
                                             let reduced = reduced.clone();
                                             Text::declaring(
-                                                move || format!("reduced motion · {}", { reduced.get() }),
+                                                move || format!("reduced motion · {}", reduced.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                             )?
@@ -116,7 +117,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                         let __text_2 = {
                                             let contrast = contrast.clone();
                                             Text::declaring(
-                                                move || format!("high contrast · {}", { contrast.get() }),
+                                                move || format!("high contrast · {}", contrast.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                             )?
@@ -125,7 +126,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                         let __text_3 = {
                                             let locales = locales.clone();
                                             Text::declaring(
-                                                move || format!("languages · {}", { locales.get() }),
+                                                move || format!("languages · {}", locales.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                             )?
@@ -134,7 +135,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                         let __text_4 = {
                                             let negotiated = negotiated.clone();
                                             Text::declaring(
-                                                move || format!("negotiated against es, en · {}", { negotiated.get() }),
+                                                move || format!("negotiated against es, en · {}", negotiated.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().primary) },
                                             )?
@@ -184,7 +185,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                         let __text_5 = {
                                             let safe_area = safe_area.clone();
                                             Text::declaring(
-                                                move || format!("{}", { safe_area.get() }),
+                                                move || format!("{}", safe_area.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?
@@ -247,7 +248,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                             let chosen = chosen.clone();
                                             let scheme = scheme.clone();
                                             Text::declaring(
-                                                move || format!("Chosen: {} · in use: {}", { chosen.get() }, { scheme_name(scheme.get()) }),
+                                                move || format!("Chosen: {} · in use: {}", chosen.get(), scheme_name(scheme.get())),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?

@@ -19,7 +19,6 @@ pub fn text_fit(props: TextFitProps, children: Children) -> Result<Box<dyn Layou
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let narrow = signal(false);
     let narrow_rsx_mv = narrow.clone();
     let share = memo(move || FitWidth::Containing(if narrow_rsx_mv.get() { 0.4 } else { 0.9 }));

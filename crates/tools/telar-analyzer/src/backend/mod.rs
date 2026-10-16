@@ -488,7 +488,13 @@ impl Backend {
                 }
                 CompletionKind::AttributeKey(tag) => attribute_key_items(&tag),
                 CompletionKind::ColorValue => color_items(project.as_ref()),
-                CompletionKind::StyleClass => style_class_items(&parsed.document),
+                CompletionKind::StyleClass => style_class_items(
+                    &parsed.document,
+                    &file_path
+                        .as_deref()
+                        .map(|path| store.style_imports(path, &parsed.document))
+                        .unwrap_or_default(),
+                ),
                 CompletionKind::SignalRef => {
                     signal_items(&parsed.source, &parsed.document, pos.line)
                 }
@@ -542,7 +548,11 @@ impl Backend {
             )
             .await?;
         let items = match component_props {
-            true => props_setter_items(items),
+            true => {
+                let mut items = props_setter_items(items);
+                items.extend(crate::analysis::completions::component_instance_items());
+                items
+            }
             false => items,
         };
         Some(CompletionResponse::Array(self.defer_completion_docs(items)))
@@ -665,6 +675,10 @@ impl Backend {
             let parsed = store.get(uri)?;
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             // Native `.rsx` definitions (classes / colors / component files) win when present.
+            let imports = file_path
+                .as_deref()
+                .map(|path| store.style_imports(path, &parsed.document))
+                .unwrap_or_default();
             let native = goto_definition(
                 &parsed.document,
                 &parsed.source,
@@ -672,6 +686,7 @@ impl Backend {
                 pos.line,
                 pos.character,
                 project.as_ref(),
+                &imports,
             );
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             (parsed.source.clone(), native, theme)
@@ -1074,6 +1089,18 @@ impl Backend {
         let single_file = if let Some(name) =
             crate::analysis::occurrences::class_at(&source, pos.line, pos.character)
         {
+            let shared = telar_parser::parse(&source).is_ok_and(|doc| {
+                !doc.style
+                    .classes
+                    .iter()
+                    .any(|class| class.name == name && !class.public)
+            });
+            if shared {
+                self.rename_refused(&format!(
+                    "`@{name}` is shared with other modules through `use`, which a rename in one file would leave naming the old name"
+                ));
+                return None;
+            }
             Some(crate::analysis::occurrences::class_occurrences(
                 &source, &name,
             ))

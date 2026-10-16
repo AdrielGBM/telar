@@ -11,6 +11,29 @@ use super::signals::{
 use super::{ChildEmit, ChildMode, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
+    fn with_bindings<R>(&mut self, names: Vec<String>, emit: impl FnOnce(&mut Self) -> R) -> R {
+        let added = names.len();
+        self.loop_variables.extend(names);
+        let result = emit(self);
+        self.loop_variables
+            .truncate(self.loop_variables.len() - added);
+        result
+    }
+
+    fn with_loop_bindings<R>(
+        &mut self,
+        names: Vec<String>,
+        emit: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let added = names.len();
+        self.loop_bound.extend(names.iter().cloned());
+        self.loop_depth += 1;
+        let result = self.with_bindings(names, emit);
+        self.loop_depth -= 1;
+        self.loop_bound.truncate(self.loop_bound.len() - added);
+        result
+    }
+
     /// The clone prelude a `move` closure reading `snippets` needs: one `let x = x.clone();` per `$signal` (and per in-scope loop variable) it names.
     ///
     /// Without it the closure *moves* those bindings, so a signal read inside a reactive branch stops being available to the rest of the view — a trap the author never wrote and cannot see in their `.rsx`. What the closure itself declares is left out, which is why the snippets arrive scoped: the prelude runs above the closure, where a loop variable, an arm binding and a view `let` all name nothing yet.
@@ -45,7 +68,8 @@ impl ViewGen<'_> {
             let amarker = expr_marker(arm.pattern_start, arm.pattern.len());
             let _ = writeln!(code, "{apad}{amarker}{} => {{", arm.pattern);
             self.indent += 1;
-            self.emit_branch_into_children(&arm.body, &mut code);
+            let bound = crate::rust::arm_bindings(&arm.pattern).unwrap_or_default();
+            self.with_bindings(bound, |g| g.emit_branch_into_children(&arm.body, &mut code));
             self.indent -= 1;
             let _ = writeln!(code, "{apad}}}");
             self.indent -= 1;
@@ -144,7 +168,10 @@ impl ViewGen<'_> {
         let marker = expr_marker(block.condition_start, cond.len());
         let _ = writeln!(code, "{pad}if {marker}{cond} {{");
         self.indent += 1;
-        self.emit_branch_into_children(&block.then_branch, &mut code);
+        let bound = crate::rust::condition_bindings(cond).unwrap_or_default();
+        self.with_bindings(bound, |g| {
+            g.emit_branch_into_children(&block.then_branch, &mut code)
+        });
         self.indent -= 1;
 
         if let Some(else_branch) = &block.else_branch {
@@ -296,11 +323,9 @@ impl ViewGen<'_> {
         for ident in &idents {
             let _ = writeln!(code, "{body_pad}let {ident} = {ident}.to_owned();");
         }
-        let added = idents.len();
-        self.loop_variables.extend(idents);
-        self.emit_branch_into_children(&block.body, &mut code);
-        self.loop_variables
-            .truncate(self.loop_variables.len() - added);
+        self.with_loop_bindings(idents, |g| {
+            g.emit_branch_into_children(&block.body, &mut code)
+        });
         self.indent -= 1;
         let _ = write!(code, "{pad}}}");
         ChildEmit::Dynamic { code }
@@ -371,11 +396,9 @@ impl ViewGen<'_> {
         self.indent += 2;
         let idents = pattern_idents(block.pattern.trim());
         let snippets = scoped_snippets(&block.body, &idents);
-        let added = idents.len();
-        self.loop_variables.extend(idents);
-        let cell = self.in_reactive(|g| g.emit_content_cell(&block.body, &mut body));
-        self.loop_variables
-            .truncate(self.loop_variables.len() - added);
+        let cell = self.with_loop_bindings(idents, |g| {
+            g.in_reactive(|g| g.emit_content_cell(&block.body, &mut body))
+        });
         let ipad = self.indent_str();
         let _ = writeln!(body, "{ipad}Ok(box_item({cell}))");
         self.indent -= 2;

@@ -268,6 +268,13 @@ impl ViewGen<'_> {
         classes: &[String],
         attrs: &[Attr],
     ) -> String {
+        // An unknown class is reported on its element; calling the constructor it would have had only adds rustc's word for the same thing.
+        let classes: Vec<String> = classes
+            .iter()
+            .filter(|name| self.classes.iter().any(|class| &&class.name == name))
+            .cloned()
+            .collect();
+        let classes = classes.as_slice();
         let mut expr = if let Some((first, rest)) = classes.split_first() {
             // The first class is the base; further classes inline their layout props as chained calls, so a later one overrides an earlier one.
             let mut base = format!("{}()", style_function_name(first));
@@ -390,13 +397,14 @@ impl ViewGen<'_> {
     }
 }
 
-/// Whether `value` under `key` is a literal — a number, a percentage, or a spelling from the key's own closed set. Everything else names something, and a name can answer differently the next time it is asked.
+/// Whether `value` under `key` cannot change — a number, a percentage, a spelling from the key's own closed set, or arithmetic on constants (`WORKBENCH_GRID * 2.0`). Everything else names something, and a name can answer differently the next time it is asked.
 fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
     let v = value.trim();
     let number = |s: &str| {
         s.parse::<f32>().is_ok()
             || s.strip_suffix('%')
                 .is_some_and(|pct| pct.trim().parse::<f32>().is_ok())
+            || crate::rust::is_const_expr(s)
     };
     match crate::registry::value_kind(tag, key) {
         Some(ValueKind::Keywords(table)) => table.iter().any(|(name, _)| *name == v),

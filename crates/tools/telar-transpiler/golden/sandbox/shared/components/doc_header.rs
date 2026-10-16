@@ -25,21 +25,21 @@ pub fn doc_header(props: DocHeaderProps, children: Children) -> Result<Box<dyn L
     let __col_0 = {
         let __text_0 = {
             Text::declaring(
-                move || format!("{}", { props.kicker }),
+                move || format!("{}", props.kicker),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().primary) },
             )?
         };
         let __text_1 = {
             Text::declaring(
-                move || format!("{}", { props.title }),
+                move || format!("{}", props.title),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(26.0).with_color(theme.get().ink) },
             )?
         };
         let __text_2 = {
             Text::declaring(
-                move || format!("{}", { props.desc }),
+                move || format!("{}", props.desc),
                 LayoutStyle::new().max_width(760.0),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
             )?

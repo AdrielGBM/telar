@@ -13,6 +13,7 @@ fn transpiled(source: &str, theme_type: Option<&str>, library: bool) -> Transpil
         library,
         hot_reload: false,
         rsx_path: None,
+        imports: &crate::style_import::ResolvedImports::default(),
     })
     .expect("the fixture transpiles");
     if let Err(e) = syn::parse_file(&out.rust_code) {

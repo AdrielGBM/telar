@@ -1,6 +1,5 @@
 [logic]
 use telar::preview::{PropDefault, PropsSchema};
-use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens};
 
 use crate::strings::{
     self, COLUMN_DEFAULT, COLUMN_DESCRIPTION, COLUMN_NAME, COLUMN_TYPE, REQUIRED,
@@ -26,17 +25,7 @@ fn default_text(default: PropDefault) -> String {
 }
 
 [style]
-@line
-    align: flex-start
-    gap: WORKBENCH_GRID * 2.0
-    padding_x: WORKBENCH_GRID * 1.5
-    padding_y: WORKBENCH_GRID
-    stroke: use_workbench_tokens().border_subtle
-    stroke_bottom: 1
-
-@mono
-    font_family: use_workbench_tokens().mono_family
-    font_size: use_workbench_tokens().mono_size
+use crate::styles::{line, mono};
 
 @doc
     grow: 1
@@ -45,13 +34,13 @@ fn default_text(default: PropDefault) -> String {
 
 [view]
 col
-    row @line
+    row @line align:flex-start
         text "{strings::text(COLUMN_NAME)}" width:NAME_WIDTH shrink:0 color:$theme.muted
         text "{strings::text(COLUMN_TYPE)}" width:TYPE_WIDTH shrink:0 color:$theme.muted
         text "{strings::text(COLUMN_DEFAULT)}" width:DEFAULT_WIDTH shrink:0 color:$theme.muted
         text @doc "{strings::text(COLUMN_DESCRIPTION)}" color:$theme.muted
     for field in props.schema.fields
-        row @line
+        row @line align:flex-start
             text @mono "{field.name}" width:NAME_WIDTH shrink:0 font_weight:semibold
             text @mono "{field.ty}" width:TYPE_WIDTH shrink:0 color:$theme.muted
             text @mono "{default_text(field.default)}" width:DEFAULT_WIDTH shrink:0 color:$theme.muted

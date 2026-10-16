@@ -143,5 +143,5 @@
 142	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-819..822	3506	`pct`
-1016..1036	4289	`ButtonVariant::Ghost`
+819..822	3504	`pct`
+1016..1036	4285	`ButtonVariant::Ghost`

@@ -332,7 +332,7 @@ fn generates_counter() {
     );
     assert!(code.contains("fn style_card() -> LayoutStyle"), "{code}");
     assert!(
-        code.contains("move || format!(\"Count: {}\", { count.get() })"),
+        code.contains("move || format!(\"Count: {}\", count.get())"),
         "{code}"
     );
     assert!(code.contains("button(ButtonProps::props()"), "{code}");
@@ -2961,6 +2961,7 @@ fn transpile_logic(logic: &str, hot_reload: bool) -> String {
         library: false,
         hot_reload,
         rsx_path: None,
+        imports: &crate::style_import::ResolvedImports::default(),
     })
     .unwrap()
     .rust_code;

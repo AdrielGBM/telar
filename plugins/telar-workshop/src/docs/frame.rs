@@ -95,3 +95,16 @@ fn mount(state: &WorkshopState, entry: PreviewEntry) -> Result<Box<dyn LayoutIte
         .styled_by(box_style);
     Ok(box_item(framed))
 }
+
+/// A preview as the page shows it: mounted as the page is built, or, `lazy`, the first time its place scrolls into view.
+#[telar::component]
+pub(super) fn preview_frame(
+    state: WorkshopState,
+    entry: PreviewEntry,
+    #[props(default)] lazy: bool,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    match lazy {
+        true => self::lazy(&state, entry),
+        false => eager(&state, entry),
+    }
+}

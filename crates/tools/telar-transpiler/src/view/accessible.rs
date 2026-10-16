@@ -2,16 +2,24 @@
 
 use telar_parser::{Attr, Element, Value};
 
-use super::signals::{rust_str, substitute_reads};
+use super::signals::substitute_reads;
 use super::{ChildEmit, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
-    /// Chains the annotations an element carries onto the widget it built, through `telar::Accessible`, which every widget with a layout node takes. A component tag is left alone: there `label` is one of its props.
+    /// Chains the annotations an element carries onto the widget it built, through `telar::Accessible`, which every widget with a layout node takes. A component call says them about the item it returns, spelled `a11y_label`/`a11y_lang` there because `label` and `lang` are its own props to declare.
     pub(super) fn accessible_tail(&self, el: &Element, emit: ChildEmit) -> ChildEmit {
-        if !crate::registry::is_builtin_tag(&el.tag) {
-            return emit;
-        }
         let find = |key: &str| el.attributes.iter().find(|a| a.key == key);
+        if !crate::registry::is_builtin_tag(&el.tag) {
+            let mut calls = String::new();
+            if let Some(label) = find("a11y_label") {
+                calls.push_str(&format!(".a11y_label({})", self.annotation_text(label)));
+            }
+            if let Some(lang) = find("a11y_lang") {
+                calls.push_str(&format!(".a11y_lang({})", self.annotation_text(lang)));
+            }
+            calls.push_str(&self.a11y_keyword_call(find("a11y")));
+            return self.chain_calls(emit, &calls);
+        }
         let mut calls = String::new();
         if let Some(label) = find("label") {
             // A `scroll` is never a control in markup, so its name is the one a reader hears while it is a Tab stop of its own; `a11y_label` there would name a region that fits as well, said again on the way into it.
@@ -24,11 +32,7 @@ impl ViewGen<'_> {
         if let Some(lang) = find("lang") {
             calls.push_str(&format!(".a11y_lang({})", self.annotation_text(lang)));
         }
-        if let Some(method) = find("a11y").and_then(|a| {
-            crate::registry::keyword(crate::registry::A11Y_VALUES, a.value.text().trim())
-        }) {
-            calls.push_str(&format!(".{method}()"));
-        }
+        calls.push_str(&self.a11y_keyword_call(find("a11y")));
         if let Some(anchor) = find("anchor") {
             calls.push_str(&format!(".page_anchor({})", self.annotation_text(anchor)));
         }
@@ -46,6 +50,18 @@ impl ViewGen<'_> {
                 ".view_progress(ViewRange::{range}, {target}.clone())"
             ));
         }
+        self.chain_calls(emit, &calls)
+    }
+
+    fn a11y_keyword_call(&self, attr: Option<&Attr>) -> String {
+        attr.and_then(|a| {
+            crate::registry::keyword(crate::registry::A11Y_VALUES, a.value.text().trim())
+        })
+        .map(|method| format!(".{method}()"))
+        .unwrap_or_default()
+    }
+
+    fn chain_calls(&self, emit: ChildEmit, calls: &str) -> ChildEmit {
         if calls.is_empty() {
             return emit;
         }
@@ -60,10 +76,10 @@ impl ViewGen<'_> {
         }
     }
 
-    /// A closure yielding the attribute's text, re-read when what it reads changes, so a name built from `t!(…)` follows the locale.
+    /// A closure yielding the attribute's text, re-read when what it reads changes, so a name built from `t!(…)` follows the locale. A quoted one interpolates `{…}` as a `text` does.
     fn annotation_text(&self, attr: &Attr) -> String {
         let value = match &attr.value {
-            Value::Quoted(text) => return format!("|| {}", rust_str(text)),
+            Value::Quoted(text) => return self.text_closure(text, attr.value_start),
             value => value.text().trim(),
         };
         let inner = super::redundant_parens(value).unwrap_or(value);

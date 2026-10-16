@@ -20,7 +20,6 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let accent = signal(theme.get().primary);
     let alt = signal(false);
     let fade = signal(1.0f32);

@@ -20,7 +20,6 @@ pub fn responsive(props: ResponsiveProps, children: Children) -> Result<Box<dyn 
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let width = memo(|| use_surface_width().round() as i32);
     let height = memo(|| use_surface_height().round() as i32);
 
@@ -70,7 +69,7 @@ pub fn responsive(props: ResponsiveProps, children: Children) -> Result<Box<dyn 
                                             let width = width.clone();
                                             let height = height.clone();
                                             Text::declaring(
-                                                move || format!("{} × {}", { width.get() }, { height.get() }),
+                                                move || format!("{} × {}", width.get(), height.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(22.0).with_color(theme.get().ink) },
                                             )?
@@ -79,7 +78,7 @@ pub fn responsive(props: ResponsiveProps, children: Children) -> Result<Box<dyn 
                                         let __text_1 = {
                                             let range = range.clone();
                                             Text::declaring(
-                                                move || format!("range · {}", { range.get() }),
+                                                move || format!("range · {}", range.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
                                             )?

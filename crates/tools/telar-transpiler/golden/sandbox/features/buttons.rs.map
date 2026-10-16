@@ -354,8 +354,8 @@
 903..925	3142	`ButtonVariant::Outline`
 970..989	3307	`ButtonVariant::Soft`
 1035..1055	3470	`ButtonVariant::Ghost`
-1402..1408	6691	`clicks`
-1675..1695	7907	`ButtonVariant::Ghost`
-2092..2098	10875	`clicks`
-3424..3432	20672	`hovering`
-3553..3557	21855	`keys`
+1402..1408	6689	`clicks`
+1675..1695	7903	`ButtonVariant::Ghost`
+2092..2098	10869	`clicks`
+3424..3432	20662	`hovering`
+3553..3557	21841	`keys`

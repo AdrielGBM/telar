@@ -18,7 +18,7 @@ col gap:20
             row gap:4 label:"Telar" role:h2
                 for letter in letters.clone()
                     text "{letter}" a11y:hidden font_size:32 font_weight:bold color:$theme.primary
-        code_line code:"row label:'Telar'  ·  text '{letter}' a11y:hidden"
+        code_line code:"row label:'Telar'  ·  text '{{letter}}' a11y:hidden"
     example title:"A picture is decoration until it is named"
         card
             row gap:20 align:center
@@ -39,7 +39,7 @@ col gap:20
                 box fill:$theme.surface_alt radius:8 pad:12 label:(format!("Mood: {}", $mood)) on_press:(|| $mood.set(if $mood.get() == "calm" { "busy".into() } else { "calm".into() }))
                     icon name:"lucide:smile" size:20 color:$theme.ink
                 text "press to change the name a reader hears" font_size:12 color:$theme.muted
-        code_line code:"box label:(format!('Mood: {}', $mood))"
+        code_line code:"box label:(format!('Mood: {{}}', $mood))"
     example title:"Attributes"
         col gap:6
             prop_row name:"label" values:"text · t!(…) · $state expr" about:"The name assistive technology reads. On img and svg it is what makes a picture more than decoration."

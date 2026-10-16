@@ -16,267 +16,271 @@
 #[derive(::telar::Props)]
 pub struct PathsProps {}
 
+#[allow(dead_code)]
+// Paths are drawn imperatively inside a Canvas — the escape hatch for vector art layout can't express.
+// Widest x reached by the fixed-coordinate art below; the drawing is scaled to fit narrower canvases.
+const PATHS_DESIGN_W: f32 = 520.0;
+
+#[allow(dead_code)]
+fn draw_paths(rect: Rect) -> RenderNode {
+    let t = crate::core::theme::theme();
+    let (primary, success, danger, warning, purple, ink, muted) = (
+        t.primary, t.success, t.danger, t.warning, t.purple, t.ink, t.muted,
+    );
+    let mut kids: Vec<RenderNode> = Vec::new();
+
+    // Row 1 — filled and stroked polygons.
+    let triangle = Arc::new(PathData::polygon(&[
+        Point::new(60.0, 30.0),
+        Point::new(110.0, 120.0),
+        Point::new(10.0, 120.0),
+    ]));
+    kids.push(RenderNode::path(
+        triangle,
+        PathStyle::default().with_fill(primary),
+    ));
+    kids.push(RenderNode::text(
+        telar::static_rc_str!("polygon fill"),
+        Rect {
+            x: 0.0,
+            y: 128.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+
+    let star = {
+        let (cx, cy, outer, inner) = (230.0f32, 76.0f32, 48.0f32, 20.0f32);
+        let pts: Vec<Point> = (0..10)
+            .map(|i| {
+                let a = std::f32::consts::TAU * i as f32 / 10.0 - std::f32::consts::FRAC_PI_2;
+                let r = if i % 2 == 0 { outer } else { inner };
+                Point::new(cx + r * a.cos(), cy + r * a.sin())
+            })
+            .collect();
+        Arc::new(PathData::polygon(&pts))
+    };
+    kids.push(RenderNode::path(
+        star,
+        PathStyle::default()
+            .with_fill(warning)
+            .with_stroke(Stroke::new(ink, 1.5)),
+    ));
+    kids.push(RenderNode::text(
+        telar::static_rc_str!("fill + stroke"),
+        Rect {
+            x: 175.0,
+            y: 128.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+
+    // Even-odd fill carves a hole where two rectangles overlap.
+    let donut = Arc::new(
+        PathData::new()
+            .move_to(Point::new(360.0, 30.0))
+            .line_to(Point::new(460.0, 30.0))
+            .line_to(Point::new(460.0, 120.0))
+            .line_to(Point::new(360.0, 120.0))
+            .close()
+            .move_to(Point::new(385.0, 55.0))
+            .line_to(Point::new(435.0, 55.0))
+            .line_to(Point::new(435.0, 95.0))
+            .line_to(Point::new(385.0, 95.0))
+            .close(),
+    );
+    kids.push(RenderNode::path(
+        donut,
+        PathStyle::default()
+            .with_fill(purple)
+            .with_fill_rule(FillRule::EvenOdd),
+    ));
+    kids.push(RenderNode::text(
+        telar::static_rc_str!("even-odd fill"),
+        Rect {
+            x: 350.0,
+            y: 128.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+
+    // Row 2 — Bézier curves.
+    let quad = Arc::new(
+        PathData::new()
+            .move_to(Point::new(10.0, 250.0))
+            .quad_to(Point::new(80.0, 180.0), Point::new(150.0, 250.0)),
+    );
+    kids.push(RenderNode::path(
+        quad,
+        PathStyle::default().with_stroke(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
+    ));
+    kids.push(RenderNode::text(
+        telar::static_rc_str!("quad_to arch"),
+        Rect {
+            x: 0.0,
+            y: 258.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+
+    let cubic = Arc::new(PathData::new().move_to(Point::new(185.0, 200.0)).cubic_to(
+        Point::new(260.0, 200.0),
+        Point::new(185.0, 250.0),
+        Point::new(260.0, 250.0),
+    ));
+    kids.push(RenderNode::path(
+        cubic,
+        PathStyle::default().with_stroke(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
+    ));
+    kids.push(RenderNode::text(
+        telar::static_rc_str!("cubic_to S-curve"),
+        Rect {
+            x: 175.0,
+            y: 258.0,
+            width: 160.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+
+    // A drop shadow under a hand-rolled circle.
+    let k = 0.5523f32;
+    let (cx, cy, r) = (410.0f32, 220.0f32, 34.0f32);
+    let circle = Arc::new(
+        PathData::new()
+            .move_to(Point::new(cx, cy - r))
+            .cubic_to(
+                Point::new(cx + k * r, cy - r),
+                Point::new(cx + r, cy - k * r),
+                Point::new(cx + r, cy),
+            )
+            .cubic_to(
+                Point::new(cx + r, cy + k * r),
+                Point::new(cx + k * r, cy + r),
+                Point::new(cx, cy + r),
+            )
+            .cubic_to(
+                Point::new(cx - k * r, cy + r),
+                Point::new(cx - r, cy + k * r),
+                Point::new(cx - r, cy),
+            )
+            .cubic_to(
+                Point::new(cx - r, cy - k * r),
+                Point::new(cx - k * r, cy - r),
+                Point::new(cx, cy - r),
+            )
+            .close(),
+    );
+    kids.push(RenderNode::path(
+        circle,
+        PathStyle::default()
+            .with_fill(primary)
+            .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4))),
+    ));
+    kids.push(RenderNode::text(
+        telar::static_rc_str!("path + drop shadow"),
+        Rect {
+            x: 350.0,
+            y: 268.0,
+            width: 170.0,
+            height: 14.0,
+        },
+        TextStyle::new(11.0, muted),
+    ));
+
+    let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
+    RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
+}
+
+#[allow(dead_code)]
+const DASH_CELL: f32 = 24.0;
+
+#[allow(dead_code)]
+fn draw_dashes(rect: Rect) -> RenderNode {
+    let t = crate::core::theme::theme();
+    let mut kids: Vec<RenderNode> = Vec::new();
+
+    let (cols, rows) = ((rect.width / DASH_CELL).floor() as usize, 3usize);
+    let mut grid = PathData::new();
+    for row in 0..=rows {
+        let y = row as f32 * DASH_CELL + 0.5;
+        grid = grid
+            .move_to(Point::new(0.0, y))
+            .line_to(Point::new(cols as f32 * DASH_CELL, y));
+    }
+    for col in 0..=cols {
+        let x = col as f32 * DASH_CELL + 0.5;
+        grid = grid
+            .move_to(Point::new(x, 0.0))
+            .line_to(Point::new(x, rows as f32 * DASH_CELL));
+    }
+    kids.push(RenderNode::path(
+        Arc::new(grid),
+        PathStyle::default().with_stroke(Stroke::new(t.muted, 1.0).with_dash(&[1.0, 4.0], 0.0)),
+    ));
+
+    let top = rows as f32 * DASH_CELL + 28.0;
+    let samples = [
+        (
+            Stroke::new(t.primary, 2.0).with_dash(&[8.0, 4.0], 0.0),
+            "8 4",
+        ),
+        (
+            Stroke::new(t.success, 3.0)
+                .with_cap(LineCap::Round)
+                .with_dash(&[0.0, 7.0], 0.0),
+            "0 7, round caps",
+        ),
+        (
+            Stroke::new(t.danger, 2.0).with_dash(&[10.0, 4.0, 2.0, 4.0], 0.0),
+            "10 4 2 4",
+        ),
+    ];
+    let mut waves: Vec<RenderNode> = Vec::new();
+    let mut x = 0.0f32;
+    for (stroke, label) in samples {
+        let wave = PathData::new().move_to(Point::new(x, top + 20.0)).cubic_to(
+            Point::new(x + 40.0, top - 10.0),
+            Point::new(x + 80.0, top + 50.0),
+            Point::new(x + 140.0, top + 20.0),
+        );
+        waves.push(RenderNode::path(
+            Arc::new(wave),
+            PathStyle::default().with_stroke(stroke),
+        ));
+        waves.push(RenderNode::text(
+            label,
+            Rect {
+                x,
+                y: top + 50.0,
+                width: 150.0,
+                height: 14.0,
+            },
+            TextStyle::new(11.0, t.muted),
+        ));
+        x += 170.0;
+    }
+    let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
+    kids.push(RenderNode::transform_with(
+        [scale, 0.0, 0.0, scale, 0.0, 0.0],
+        waves,
+    ));
+
+    RenderNode::group(kids)
+}
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn paths(props: PathsProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
-    // Paths are drawn imperatively inside a Canvas — the escape hatch for vector art layout can't express.
-    // Widest x reached by the fixed-coordinate art below; the drawing is scaled to fit narrower canvases.
-    const PATHS_DESIGN_W: f32 = 520.0;
-
-    fn draw_paths(rect: Rect) -> RenderNode {
-        let t = crate::core::theme::theme();
-        let (primary, success, danger, warning, purple, ink, muted) = (
-            t.primary, t.success, t.danger, t.warning, t.purple, t.ink, t.muted,
-        );
-        let mut kids: Vec<RenderNode> = Vec::new();
-
-        // Row 1 — filled and stroked polygons.
-        let triangle = Arc::new(PathData::polygon(&[
-            Point::new(60.0, 30.0),
-            Point::new(110.0, 120.0),
-            Point::new(10.0, 120.0),
-        ]));
-        kids.push(RenderNode::path(
-            triangle,
-            PathStyle::default().with_fill(primary),
-        ));
-        kids.push(RenderNode::text(
-            telar::static_rc_str!("polygon fill"),
-            Rect {
-                x: 0.0,
-                y: 128.0,
-                width: 160.0,
-                height: 14.0,
-            },
-            TextStyle::new(11.0, muted),
-        ));
-
-        let star = {
-            let (cx, cy, outer, inner) = (230.0f32, 76.0f32, 48.0f32, 20.0f32);
-            let pts: Vec<Point> = (0..10)
-                .map(|i| {
-                    let a = std::f32::consts::TAU * i as f32 / 10.0 - std::f32::consts::FRAC_PI_2;
-                    let r = if i % 2 == 0 { outer } else { inner };
-                    Point::new(cx + r * a.cos(), cy + r * a.sin())
-                })
-                .collect();
-            Arc::new(PathData::polygon(&pts))
-        };
-        kids.push(RenderNode::path(
-            star,
-            PathStyle::default()
-                .with_fill(warning)
-                .with_stroke(Stroke::new(ink, 1.5)),
-        ));
-        kids.push(RenderNode::text(
-            telar::static_rc_str!("fill + stroke"),
-            Rect {
-                x: 175.0,
-                y: 128.0,
-                width: 160.0,
-                height: 14.0,
-            },
-            TextStyle::new(11.0, muted),
-        ));
-
-        // Even-odd fill carves a hole where two rectangles overlap.
-        let donut = Arc::new(
-            PathData::new()
-                .move_to(Point::new(360.0, 30.0))
-                .line_to(Point::new(460.0, 30.0))
-                .line_to(Point::new(460.0, 120.0))
-                .line_to(Point::new(360.0, 120.0))
-                .close()
-                .move_to(Point::new(385.0, 55.0))
-                .line_to(Point::new(435.0, 55.0))
-                .line_to(Point::new(435.0, 95.0))
-                .line_to(Point::new(385.0, 95.0))
-                .close(),
-        );
-        kids.push(RenderNode::path(
-            donut,
-            PathStyle::default()
-                .with_fill(purple)
-                .with_fill_rule(FillRule::EvenOdd),
-        ));
-        kids.push(RenderNode::text(
-            telar::static_rc_str!("even-odd fill"),
-            Rect {
-                x: 350.0,
-                y: 128.0,
-                width: 160.0,
-                height: 14.0,
-            },
-            TextStyle::new(11.0, muted),
-        ));
-
-        // Row 2 — Bézier curves.
-        let quad = Arc::new(
-            PathData::new()
-                .move_to(Point::new(10.0, 250.0))
-                .quad_to(Point::new(80.0, 180.0), Point::new(150.0, 250.0)),
-        );
-        kids.push(RenderNode::path(
-            quad,
-            PathStyle::default().with_stroke(Stroke::new(success, 3.0).with_cap(LineCap::Round)),
-        ));
-        kids.push(RenderNode::text(
-            telar::static_rc_str!("quad_to arch"),
-            Rect {
-                x: 0.0,
-                y: 258.0,
-                width: 160.0,
-                height: 14.0,
-            },
-            TextStyle::new(11.0, muted),
-        ));
-
-        let cubic = Arc::new(PathData::new().move_to(Point::new(185.0, 200.0)).cubic_to(
-            Point::new(260.0, 200.0),
-            Point::new(185.0, 250.0),
-            Point::new(260.0, 250.0),
-        ));
-        kids.push(RenderNode::path(
-            cubic,
-            PathStyle::default().with_stroke(Stroke::new(danger, 3.0).with_cap(LineCap::Round)),
-        ));
-        kids.push(RenderNode::text(
-            telar::static_rc_str!("cubic_to S-curve"),
-            Rect {
-                x: 175.0,
-                y: 258.0,
-                width: 160.0,
-                height: 14.0,
-            },
-            TextStyle::new(11.0, muted),
-        ));
-
-        // A drop shadow under a hand-rolled circle.
-        let k = 0.5523f32;
-        let (cx, cy, r) = (410.0f32, 220.0f32, 34.0f32);
-        let circle = Arc::new(
-            PathData::new()
-                .move_to(Point::new(cx, cy - r))
-                .cubic_to(
-                    Point::new(cx + k * r, cy - r),
-                    Point::new(cx + r, cy - k * r),
-                    Point::new(cx + r, cy),
-                )
-                .cubic_to(
-                    Point::new(cx + r, cy + k * r),
-                    Point::new(cx + k * r, cy + r),
-                    Point::new(cx, cy + r),
-                )
-                .cubic_to(
-                    Point::new(cx - k * r, cy + r),
-                    Point::new(cx - r, cy + k * r),
-                    Point::new(cx - r, cy),
-                )
-                .cubic_to(
-                    Point::new(cx - r, cy - k * r),
-                    Point::new(cx - k * r, cy - r),
-                    Point::new(cx, cy - r),
-                )
-                .close(),
-        );
-        kids.push(RenderNode::path(
-            circle,
-            PathStyle::default()
-                .with_fill(primary)
-                .with_shadow(Shadow::new(3.0, 5.0, 8.0, Color::rgba(0.0, 0.0, 0.0, 0.4))),
-        ));
-        kids.push(RenderNode::text(
-            telar::static_rc_str!("path + drop shadow"),
-            Rect {
-                x: 350.0,
-                y: 268.0,
-                width: 170.0,
-                height: 14.0,
-            },
-            TextStyle::new(11.0, muted),
-        ));
-
-        let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
-        RenderNode::transform_with([scale, 0.0, 0.0, scale, 0.0, 0.0], kids)
-    }
-
-    const DASH_CELL: f32 = 24.0;
-
-    fn draw_dashes(rect: Rect) -> RenderNode {
-        let t = crate::core::theme::theme();
-        let mut kids: Vec<RenderNode> = Vec::new();
-
-        let (cols, rows) = ((rect.width / DASH_CELL).floor() as usize, 3usize);
-        let mut grid = PathData::new();
-        for row in 0..=rows {
-            let y = row as f32 * DASH_CELL + 0.5;
-            grid = grid
-                .move_to(Point::new(0.0, y))
-                .line_to(Point::new(cols as f32 * DASH_CELL, y));
-        }
-        for col in 0..=cols {
-            let x = col as f32 * DASH_CELL + 0.5;
-            grid = grid
-                .move_to(Point::new(x, 0.0))
-                .line_to(Point::new(x, rows as f32 * DASH_CELL));
-        }
-        kids.push(RenderNode::path(
-            Arc::new(grid),
-            PathStyle::default().with_stroke(Stroke::new(t.muted, 1.0).with_dash(&[1.0, 4.0], 0.0)),
-        ));
-
-        let top = rows as f32 * DASH_CELL + 28.0;
-        let samples = [
-            (
-                Stroke::new(t.primary, 2.0).with_dash(&[8.0, 4.0], 0.0),
-                "8 4",
-            ),
-            (
-                Stroke::new(t.success, 3.0)
-                    .with_cap(LineCap::Round)
-                    .with_dash(&[0.0, 7.0], 0.0),
-                "0 7, round caps",
-            ),
-            (
-                Stroke::new(t.danger, 2.0).with_dash(&[10.0, 4.0, 2.0, 4.0], 0.0),
-                "10 4 2 4",
-            ),
-        ];
-        let mut waves: Vec<RenderNode> = Vec::new();
-        let mut x = 0.0f32;
-        for (stroke, label) in samples {
-            let wave = PathData::new().move_to(Point::new(x, top + 20.0)).cubic_to(
-                Point::new(x + 40.0, top - 10.0),
-                Point::new(x + 80.0, top + 50.0),
-                Point::new(x + 140.0, top + 20.0),
-            );
-            waves.push(RenderNode::path(
-                Arc::new(wave),
-                PathStyle::default().with_stroke(stroke),
-            ));
-            waves.push(RenderNode::text(
-                label,
-                Rect {
-                    x,
-                    y: top + 50.0,
-                    width: 150.0,
-                    height: 14.0,
-                },
-                TextStyle::new(11.0, t.muted),
-            ));
-            x += 170.0;
-        }
-        let scale = (rect.width / PATHS_DESIGN_W).min(1.0);
-        kids.push(RenderNode::transform_with(
-            [scale, 0.0, 0.0, scale, 0.0, 0.0],
-            waves,
-        ));
-
-        RenderNode::group(kids)
-    }
 
     let __col_0 = {
         let __node_0 = doc_header(DocHeaderProps::props().kicker("MEDIA").title("Paths").desc("Build vector geometry with PathData — lines, quadratic and cubic Béziers, winding vs even-odd fills, stroke caps and dashes, and per-path shadows — then draw it in a Canvas.").build(), Children::default())?;

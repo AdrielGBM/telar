@@ -19,12 +19,13 @@ pub struct ThemedPanelProps {
     pub mode: &'static str,
 }
 
+#[allow(unused_imports)] use ThemedPanelContext as Context;
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn themed_panel(props: ThemedPanelProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-    #[allow(unused_imports)] use ThemedPanelContext as Context;
 
 
     let mode = props.mode;
@@ -63,7 +64,7 @@ pub fn themed_panel_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
                     let __text_0 = {
                         let theme = theme.clone();
                         Text::declaring(
-                            move || format!("Nested at the call site, drawn in {}", { theme.get().name }),
+                            move || format!("Nested at the call site, drawn in {}", theme.get().name),
                             LayoutStyle::new(),
                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                         )?

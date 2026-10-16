@@ -26,7 +26,7 @@ pub fn greeting_card(props: GreetingCardProps, children: Children) -> Result<Box
         let __node_0 = icon(IconProps::props().name(("fixture:dot", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_6504A2AF), true)).size(16.0).build(), Children::default())?;
         let __text_0 = {
             Text::declaring(
-                move || format!("{}", { t!("greeting", name = props.name) }),
+                move || format!("{}", t!("greeting", name = props.name)),
                 LayoutStyle::new(),
                 move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(::telar::use_theme_tokens().on_primary()),
             )?

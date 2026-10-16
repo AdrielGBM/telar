@@ -27,7 +27,7 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
         __children.extend(children.build_slot(Some("icon"))?);
         let __text_0 = {
             Text::declaring(
-                move || format!("{}", { props.title }),
+                move || format!("{}", props.title),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().dark) },
             )?
@@ -35,7 +35,7 @@ pub fn feature_card(props: FeatureCardProps, children: Children) -> Result<Box<d
         __children.push(box_item(__text_0));
         let __text_1 = {
             Text::declaring(
-                move || format!("{}", { props.body }),
+                move || format!("{}", props.body),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
             )?

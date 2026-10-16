@@ -310,3 +310,37 @@ fn a_file_that_declares_no_component_offers_no_tag() {
     assert!(!names.contains(&"tally.previews"), "{names:?}");
     assert!(!names.contains(&"mod"), "{names:?}");
 }
+
+/// A component call is offered what it may say about the item it returns, beside the props rust-analyzer lists.
+#[test]
+fn component_calls_offer_the_annotations_of_their_item() {
+    let labels: Vec<String> = component_instance_items()
+        .into_iter()
+        .map(|item| item.label)
+        .collect();
+    assert_eq!(labels, ["a11y_label", "a11y_lang", "a11y"]);
+}
+
+/// The classes a `@` may name include the ones the file's `[style]` imports.
+#[test]
+fn imported_classes_are_offered_after_the_files_own() {
+    let doc =
+        telar_parser::parse("[style]\nuse crate::styles::mono;\n@card\n    gap: 4\n[view]\ncol\n")
+            .unwrap();
+    let mut imports = telar_transpiler::ResolvedImports::default();
+    imports.classes.push(telar_transpiler::ImportedClass {
+        class: telar_parser::StyleClass {
+            name: "mono".into(),
+            props: Vec::new(),
+            line: 2,
+            public: true,
+        },
+        source: std::path::PathBuf::from("/pkg/src/styles.rsx"),
+        line: 2,
+    });
+    let labels: Vec<String> = style_class_items(&doc, &imports)
+        .into_iter()
+        .map(|item| item.label)
+        .collect();
+    assert_eq!(labels, ["card", "mono"]);
+}

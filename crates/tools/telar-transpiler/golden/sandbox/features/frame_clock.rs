@@ -20,7 +20,6 @@ pub fn frame_clock(props: FrameClockProps, children: Children) -> Result<Box<dyn
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let running = signal(false);
     let running_rsx_mv = running.clone();
     let time = motion::use_frame_time_while(move || running_rsx_mv.get());
@@ -77,7 +76,7 @@ pub fn frame_clock(props: FrameClockProps, children: Children) -> Result<Box<dyn
                                             let __text_0 = {
                                                 let seconds = seconds.clone();
                                                 Text::declaring(
-                                                    move || format!("{}", { seconds.get() }),
+                                                    move || format!("{}", seconds.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                                 )?
@@ -95,7 +94,7 @@ pub fn frame_clock(props: FrameClockProps, children: Children) -> Result<Box<dyn
                                         let __text_1 = {
                                             let state = state.clone();
                                             Text::declaring(
-                                                move || format!("{}", { state.get() }),
+                                                move || format!("{}", state.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                             )?

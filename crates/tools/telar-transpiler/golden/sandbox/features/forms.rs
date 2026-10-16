@@ -53,7 +53,7 @@ pub fn forms(props: FormsProps, children: Children) -> Result<Box<dyn LayoutItem
                                         let __text_0 = {
                                             let agree = agree.clone();
                                             Text::declaring(
-                                                move || format!("agree · {}", { agree.get() }),
+                                                move || format!("agree · {}", agree.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?
@@ -105,7 +105,7 @@ pub fn forms(props: FormsProps, children: Children) -> Result<Box<dyn LayoutItem
                                         let __text_1 = {
                                             let notify = notify.clone();
                                             Text::declaring(
-                                                move || format!("notify · {}", { notify.get() }),
+                                                move || format!("notify · {}", notify.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?
@@ -161,7 +161,7 @@ pub fn forms(props: FormsProps, children: Children) -> Result<Box<dyn LayoutItem
                                         let __text_2 = {
                                             let choice = choice.clone();
                                             Text::declaring(
-                                                move || format!("choice · {}", { choice.get() }),
+                                                move || format!("choice · {}", choice.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?

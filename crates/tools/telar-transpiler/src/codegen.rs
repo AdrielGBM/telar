@@ -6,10 +6,12 @@ use crate::error::TranspileError;
 use crate::lexer::{contains_ident, literal_or_comment_end};
 use crate::signal_scan::{scan_locals, scan_signals};
 use crate::source_map::{ExprSpan, ShadowBinding};
-use crate::style::generate_style_section;
+use crate::style::{class_errors, generate_classes};
+use crate::style_import::ResolvedImports;
 use crate::tag_errors::glob_import;
 use crate::theme_access::ThemeAccess;
 use crate::view::ViewGen;
+use telar_parser::StyleClass;
 use telar_project::naming::{to_pascal_case, to_snake_case};
 use telar_project::{AssetContext, PreludeEntry};
 
@@ -80,28 +82,108 @@ fn split_top_level_commas(body: &str) -> Vec<String> {
     chunks
 }
 
-/// Indices of the logic-zone lines that make up a top-level `use` statement, in source order.
-///
-/// Column 0 is the test, so a `use` inside a nested `fn` or block stays where its author put it. An unterminated statement is left alone rather than guessed at, so a malformed import fails where it was written.
-fn hoisted_use_lines(logic: &str) -> Vec<usize> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ItemKind {
+    Use,
+    Macro,
+    Other,
+}
+
+/// A top-level `[logic]` item lifted out of the component function to module level: lines `start..end`, its attributes and the comments directly above it included.
+struct HoistedItem {
+    start: usize,
+    end: usize,
+    kind: ItemKind,
+}
+
+/// The kind of item `line` declares, or `None` for a statement. Only column 0 is asked, so an item nested in a `fn` or a block stays where its author put it.
+fn item_kind(line: &str) -> Option<ItemKind> {
+    if line.starts_with("macro_rules!") {
+        return Some(ItemKind::Macro);
+    }
+    let mut rest = line;
+    if let Some(after) = rest.strip_prefix("pub") {
+        rest = match after.strip_prefix('(') {
+            Some(scoped) => &scoped[scoped.find(')')? + 1..],
+            None if after.starts_with(char::is_whitespace) => after,
+            None => return None,
+        };
+    }
+    let mut words = rest.split_whitespace().peekable();
+    loop {
+        let word = words.next()?;
+        let head = word.split(['<', '(', '{', ':', ';']).next().unwrap_or("");
+        match head {
+            "use" => return Some(ItemKind::Use),
+            "fn" | "const" | "static" | "struct" | "enum" | "impl" | "trait" | "type" | "mod"
+            | "extern" => return Some(ItemKind::Other),
+            "unsafe" | "async" => {}
+            _ => return None,
+        }
+        let next = words.peek()?;
+        if !["fn", "impl", "trait", "extern", "unsafe"]
+            .iter()
+            .any(|keyword| next.starts_with(keyword))
+        {
+            return None;
+        }
+    }
+}
+
+/// Every top-level item of the logic zone, in source order. An item that never ends stays in the function rather than being guessed at, so a malformed one fails where it was written.
+fn hoisted_items(logic: &str) -> Vec<HoistedItem> {
     let lines: Vec<&str> = logic.lines().collect();
-    let mut hoisted = Vec::new();
+    let mut items = Vec::new();
     let mut i = 0;
     while i < lines.len() {
-        if lines[i].starts_with("use ") {
-            let start = i;
-            while i < lines.len() && !lines[i].trim_end().ends_with(';') {
-                i += 1;
-            }
-            if i < lines.len() {
-                hoisted.extend(start..=i);
-            } else {
-                i = start;
-            }
+        let line = lines[i];
+        if line.trim().is_empty() || line.starts_with(char::is_whitespace) {
+            i += 1;
+            continue;
         }
-        i += 1;
+        let mut head = i;
+        while head < lines.len() && is_item_preamble(lines[head]) {
+            head = attribute_end(&lines, head);
+        }
+        let Some(kind) = lines.get(head).and_then(|line| item_kind(line)) else {
+            i = match head > i {
+                true => head,
+                false => statement_end(&lines, i),
+            };
+            continue;
+        };
+        let end = statement_end(&lines, head);
+        let (_, last) = bracket_delta_and_last_byte(lines[end - 1]);
+        if !matches!(last, Some(b';' | b'}')) {
+            i = end;
+            continue;
+        }
+        items.push(HoistedItem {
+            start: i,
+            end,
+            kind,
+        });
+        i = end;
     }
-    hoisted
+    items
+}
+
+fn is_item_preamble(line: &str) -> bool {
+    (line.starts_with("#[") || line.starts_with("//")) && !line.starts_with("//!")
+}
+
+fn attribute_end(lines: &[&str], start: usize) -> usize {
+    if !lines[start].starts_with("#[") {
+        return start + 1;
+    }
+    let mut depth = 0;
+    for (k, line) in lines.iter().enumerate().skip(start) {
+        depth += bracket_delta_and_last_byte(line).0;
+        if depth <= 0 {
+            return k + 1;
+        }
+    }
+    lines.len()
 }
 
 /// The author's `#[props(…)]` with their inline `= expr` folded in, so a prop carrying both keeps one attribute that holds its default.
@@ -185,6 +267,8 @@ pub(crate) struct TranspileInput<'a> {
     pub hot_reload: bool,
     /// The `.rsx` file's path relative to its package root, `/`-separated, which each preview entry records as where it is written. `None` when no package anchors this transpile.
     pub rsx_path: Option<&'a str>,
+    /// What the file's `[style]` imports resolved to, read from the package's other modules: see [`ResolvedImports::unresolvable`] for a transpile no package anchors.
+    pub imports: &'a ResolvedImports,
 }
 
 /// The generated Rust source for one `.rsx` file.
@@ -212,6 +296,7 @@ pub fn transpile_source(
     assets: Option<&AssetContext>,
 ) -> Result<TranspiledSource, TranspileError> {
     let document = telar_parser::parse(source)?;
+    let imports = ResolvedImports::unresolvable(&document.style);
     transpile(TranspileInput {
         document: &document,
         source,
@@ -222,6 +307,7 @@ pub fn transpile_source(
         library: false,
         hot_reload: false,
         rsx_path: None,
+        imports: &imports,
     })
 }
 
@@ -297,7 +383,19 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         ThemeAccess::Tokens => None,
         ThemeAccess::Handle => input.theme_type,
     };
-    let style_section = generate_style_section(&doc.style, theme_type, theme);
+    let imports = input.imports;
+    let imported = imports.class_list();
+    let classes: Vec<StyleClass> = doc.style.classes.iter().chain(&imported).cloned().collect();
+    let style_module = is_style_module(doc, props_span.is_some());
+    let style_section = match style_module {
+        true => doc
+            .style
+            .classes
+            .iter()
+            .map(|class| class_errors(class, theme))
+            .collect(),
+        false => generate_classes(&doc.style.classes, &imported, theme_type, theme),
+    };
 
     let mut locals = scan_locals(logic_source);
     let view_locals_bind_scheme = locals.iter().any(|name| name == "scheme");
@@ -305,7 +403,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     if view_uses_slot(&doc.view.nodes) && !locals.iter().any(|l| l == "children") {
         locals.push("children".to_string());
     }
-    let mut view_gen = ViewGen::new(&doc.style.classes, input.assets)
+    let mut view_gen = ViewGen::new(&classes, input.assets)
         .with_theme_access(theme)
         .with_locals(locals)
         .with_signals(signals.iter().map(|s| s.name.clone()).collect());
@@ -345,21 +443,79 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     // The crate root's own items, so a `[logic]` line can name `core::theme::SandboxTheme`. Deliberately not `use super::*` too, which would make a `.rsx` named after anything in the prelude ambiguous in its siblings.
     code.push(&format!("{}\n", glob_import("crate")), None);
 
-    // `Props` and each `[preview]` are emitted as siblings of the component fn, so a `use` left in the body would be out of scope for exactly the declarations most likely to name an imported type.
-    let hoisted_uses = hoisted_use_lines(logic_source);
-    if !hoisted_uses.is_empty() {
-        let lines: Vec<&str> = logic_source.lines().collect();
-        for &j in &hoisted_uses {
-            let src = Some(logic_line_src(j));
-            // Only the statement's first line takes the attribute; a `use foo::{` spanning lines would otherwise get one per continuation, inside the braced list.
-            if lines[j].starts_with("use ") {
-                code.push("#[allow(unused_imports)] ", src);
+    // `Props`, the `[style]` classes and each `[preview]` are siblings of the component fn, so an item left in its body would be out of their reach — and out of a test's.
+    let hoisted = hoisted_items(logic_source);
+    let hoisted_lines: Vec<usize> = hoisted
+        .iter()
+        .flat_map(|item| item.start..item.end)
+        .collect();
+    let logic_lines: Vec<&str> = logic_source.lines().collect();
+    let push_logic_line = |code: &mut Code, j: usize| {
+        let src = Some(logic_line_src(j));
+        let line = input
+            .hot_reload
+            .then(|| crate::signal_scan::hot_rewrite_signal_decl(logic_lines[j], &fn_name))
+            .flatten()
+            .unwrap_or_else(|| logic_lines[j].to_string());
+        code.push(&line, src);
+        code.push("\n", src);
+    };
+    for item in hoisted.iter().filter(|item| item.kind == ItemKind::Use) {
+        for (j, line) in logic_lines
+            .iter()
+            .enumerate()
+            .take(item.end)
+            .skip(item.start)
+        {
+            // Only the line the `use` keyword opens takes the attribute; a `use foo::{` spanning lines would otherwise get one per continuation, inside the braced list.
+            if item_kind(line) == Some(ItemKind::Use) {
+                code.push("#[allow(unused_imports)] ", Some(logic_line_src(j)));
             }
-            code.push(lines[j], src);
-            code.push("\n", src);
+            push_logic_line(&mut code, j);
         }
     }
+    push_import_errors(&mut code, imports);
     code.push("\n", None);
+
+    let push_items = |code: &mut Code| {
+        for item in hoisted.iter().filter(|item| item.kind != ItemKind::Use) {
+            // The function these used to sit in allowed dead code, and an item only a `[preview]` or a test names is dead in every other build.
+            let lint = match item.kind {
+                ItemKind::Macro => "#[allow(unused_macros)]\n",
+                _ => "#[allow(dead_code)]\n",
+            };
+            code.push(lint, None);
+            for j in item.start..item.end {
+                push_logic_line(code, j);
+            }
+            code.push("\n", None);
+        }
+    };
+
+    if style_module {
+        push_items(&mut code);
+        let mut j = 0;
+        while j < logic_lines.len() {
+            let line = logic_lines[j].trim_start();
+            if hoisted_lines.contains(&j) || line.is_empty() || line.starts_with("//") {
+                j += 1;
+                continue;
+            }
+            code.push(
+                "compile_error!(\"a `.rsx` with no `[view]` is a module of classes, with nothing to run a statement in: `[logic]` here holds items, such as `use` and `const`\");\n",
+                Some(logic_line_src(j)),
+            );
+            j = statement_end(&logic_lines, j);
+        }
+        code.push(&style_section, None);
+        return Ok(TranspiledSource {
+            rust_code: code.out,
+            preview_names: Vec::new(),
+            source_map: code.map,
+            expr_spans: Vec::new(),
+            shadows: Vec::new(),
+        });
+    }
 
     // At file scope, because a compound component's children name this type from other files.
     if let (Some(struct_code), Some((start, _))) = (&context_struct, context_span) {
@@ -391,6 +547,18 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
         code.push("\n", None);
     }
 
+    if context_struct.is_some() {
+        code.push(
+            &format!(
+                "#[allow(unused_imports)] use {} as Context;\n\n",
+                context_type_name(&fn_name)
+            ),
+            None,
+        );
+    }
+
+    push_items(&mut code);
+
     if !style_section.is_empty() {
         code.push(&style_section, None);
         if !style_section.ends_with('\n') {
@@ -408,28 +576,21 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
     if let Some(binding) = scheme_line {
         code.push(binding, None);
     }
-    // Injected, so it has no `.rsx` line of its own and the body's lines stay identical to their source.
-    if context_struct.is_some() {
-        code.push(
-            &format!(
-                "    #[allow(unused_imports)] use {} as Context;\n",
-                context_type_name(&fn_name)
-            ),
-            None,
-        );
-    }
-
     if !logic.is_empty() {
         let logic_lines: Vec<&str> = logic.lines().collect();
         let mut j = 0;
+        let mut after_hoisted = false;
         while j < logic_lines.len() {
             if logic_lines[j].is_empty() {
-                code.push("\n", Some(logic_line_src(j)));
+                if !after_hoisted {
+                    code.push("\n", Some(logic_line_src(j)));
+                }
                 j += 1;
                 continue;
             }
+            after_hoisted = hoisted_lines.contains(&j);
             let end = statement_end(&logic_lines, j);
-            let kept: Vec<usize> = (j..end).filter(|k| !hoisted_uses.contains(k)).collect();
+            let kept: Vec<usize> = (j..end).filter(|k| !hoisted_lines.contains(k)).collect();
             let statement = kept
                 .iter()
                 .map(|&k| {
@@ -520,6 +681,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
                 theme,
                 theme_type,
                 rsx_path: input.rsx_path,
+                classes: &classes,
             },
         );
         expr_spans.extend(mapped.expr_spans);
@@ -869,7 +1031,10 @@ pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSourc
             code.push(line, src);
             code.push("\n", src);
         }
-        let style_section = generate_style_section(&doc.style, theme_type, theme);
+        push_import_errors(&mut code, input.imports);
+        let imported = input.imports.class_list();
+        let classes: Vec<StyleClass> = doc.style.classes.iter().chain(&imported).cloned().collect();
+        let style_section = generate_classes(&doc.style.classes, &imported, theme_type, theme);
         if !style_section.is_empty() {
             code.push("\n", None);
             code.push(style_section.trim_end(), None);
@@ -886,6 +1051,7 @@ pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSourc
                 theme,
                 theme_type,
                 rsx_path: input.rsx_path,
+                classes: &classes,
             },
         );
         code.push(crate::preview::CLOSE, None);
@@ -901,7 +1067,7 @@ pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSourc
 
 /// The file a directory's `mod.rsx` compiles to: the module itself, not a component in it.
 ///
-/// `[logic]` lands at module level rather than inside a function, which is what gives a `//!` and a `#![…]` somewhere to live — a module is the one place in a `.rsx` where Rust items, not statements, are what belongs. A `[view]`, a `[preview]` or a `[style]` is refused rather than ignored: a module is not callable, so markup here has no caller and silently dropping it would be the surprise.
+/// `[logic]` lands at module level rather than inside a function, which is what gives a `//!` and a `#![…]` somewhere to live — a module is the one place in a `.rsx` where Rust items, not statements, are what belongs. A `[view]`, a `[preview]` or a class only this file could use is refused rather than ignored: a module is not callable, so markup here has no caller and silently dropping it would be the surprise. A `pub @class` is the one exception, since the modules under it `use` it.
 ///
 /// The children of the directory are not known here — a file transpiles knowing nothing but itself — so the module ends with an `include!` of the file `cargo telar transpile` writes beside it.
 pub fn transpile_module_root(
@@ -926,9 +1092,15 @@ pub(crate) fn module_root(
             "a `mod.rsx` has no view, so a `[preview]` or `[previews]` here previews nothing: move it beside the component it renders".into(),
         ));
     }
-    if !doc.style.classes.is_empty() {
+    if let Some(class) = doc.style.classes.iter().find(|class| !class.public) {
+        return Err(TranspileError::Codegen(format!(
+            "`@{0}` is reached only by a view in this file, and a `mod.rsx` has none: write it `pub @{0}` for the modules that `use` it, or move it to the component's own `.rsx`",
+            class.name
+        )));
+    }
+    if !doc.style.imports.is_empty() {
         return Err(TranspileError::Codegen(
-            "a `[style]` class is reached by the view that names it, and a `mod.rsx` has none: move it to the component's own `.rsx`".into(),
+            "a `mod.rsx` has no view to name an imported class in: `use` it in the `.rsx` whose view does".into(),
         ));
     }
 
@@ -960,6 +1132,9 @@ pub(crate) fn module_root(
         code.push(line, src);
         code.push("\n", src);
     }
+    for class in &doc.style.classes {
+        code.push(&class_errors(class, ThemeAccess::Handle), None);
+    }
     code.push(&format!("include!({children_file:?});\n"), None);
 
     Ok(TranspiledSource {
@@ -980,3 +1155,24 @@ pub(crate) fn scheme_binding(view_body: &str, shadowed: bool) -> Option<&'static
 #[cfg(test)]
 #[path = "codegen_test.rs"]
 mod tests;
+
+/// Whether `doc` is a module of classes for other `.rsx` to `use`, rather than a component: it declares classes, and no `[view]`, preview or props to call it with.
+fn is_style_module(doc: &RsxDocument, has_props: bool) -> bool {
+    doc.view.nodes.is_empty()
+        && doc.previews.is_empty()
+        && doc.previews_meta.is_none()
+        && !has_props
+        && !doc.style.classes.is_empty()
+}
+
+fn push_import_errors(code: &mut Code, imports: &ResolvedImports) {
+    for error in &imports.errors {
+        code.push(
+            &format!(
+                "compile_error!({});\n",
+                crate::view::rust_str(&error.message)
+            ),
+            Some(error.line.saturating_sub(1) as u32),
+        );
+    }
+}

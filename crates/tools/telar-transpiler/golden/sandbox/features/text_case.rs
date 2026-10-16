@@ -20,7 +20,6 @@ pub fn text_case(props: TextCaseProps, children: Children) -> Result<Box<dyn Lay
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let hovered = signal(false);
 
     let __col_0 = {

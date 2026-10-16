@@ -15,20 +15,20 @@
 #[derive(::telar::Props)]
 pub struct ReducedMotionProps {}
 
+#[allow(dead_code)]
+fn reading(value: Option<bool>) -> String {
+    match value {
+        Some(true) => "less motion".to_string(),
+        Some(false) => "full motion".to_string(),
+        None => "unknown".to_string(),
+    }
+}
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn reduced_motion(props: ReducedMotionProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
-    fn reading(value: Option<bool>) -> String {
-        match value {
-            Some(true) => "less motion".to_string(),
-            Some(false) => "full motion".to_string(),
-            None => "unknown".to_string(),
-        }
-    }
-
     let system = memo(|| reading(telar::use_system_reduced_motion()));
     let chosen = memo(|| match telar::use_reduced_motion_override() {
         None => "follow the system".to_string(),
@@ -72,7 +72,7 @@ pub fn reduced_motion(props: ReducedMotionProps, children: Children) -> Result<B
                                         let __text_0 = {
                                             let system = system.clone();
                                             Text::declaring(
-                                                move || format!("system · {}", { system.get() }),
+                                                move || format!("system · {}", system.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                             )?
@@ -81,7 +81,7 @@ pub fn reduced_motion(props: ReducedMotionProps, children: Children) -> Result<B
                                         let __text_1 = {
                                             let chosen = chosen.clone();
                                             Text::declaring(
-                                                move || format!("the app's choice · {}", { chosen.get() }),
+                                                move || format!("the app's choice · {}", chosen.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                             )?
@@ -90,7 +90,7 @@ pub fn reduced_motion(props: ReducedMotionProps, children: Children) -> Result<B
                                         let __text_2 = {
                                             let effective = effective.clone();
                                             Text::declaring(
-                                                move || format!("in effect · {}", { effective.get() }),
+                                                move || format!("in effect · {}", effective.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().primary) },
                                             )?

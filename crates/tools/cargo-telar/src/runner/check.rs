@@ -107,9 +107,20 @@ impl diagnostics::Report {
                 let Ok(document) = telar_parser::parse(&source) else {
                     continue;
                 };
+                let imported = telar_transpiler::resolve_style_imports(
+                    &rsx,
+                    &member.join("src"),
+                    &document.style,
+                    &|path| std::fs::read_to_string(path).ok(),
+                );
+                let names: Vec<&str> = imported
+                    .classes
+                    .iter()
+                    .map(|class| class.class.name.as_str())
+                    .collect();
                 self.add_semantic(
                     &rsx,
-                    telar_diagnostics::semantic_diagnostics(&document, catalog.as_ref()),
+                    telar_diagnostics::semantic_diagnostics(&document, catalog.as_ref(), &names),
                 );
             }
         }

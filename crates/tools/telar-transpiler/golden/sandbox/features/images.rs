@@ -30,7 +30,6 @@ pub fn images(props: ImagesProps, children: Children) -> Result<Box<dyn LayoutIt
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     // Bitmaps generated pixel-by-pixel at startup — see demo_images.rs. Any Arc<ImageData> works as a src.
     let gradient = Arc::new(make_gradient(128, 128));
     let checker = Arc::new(make_checker(64, 64, 8));

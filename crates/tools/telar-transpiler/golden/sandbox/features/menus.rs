@@ -82,7 +82,7 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                                         let __text_0 = {
                                             let picked = picked.clone();
                                             Text::declaring(
-                                                move || format!("Size · {}", { picked.get() }),
+                                                move || format!("Size · {}", picked.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?
@@ -150,7 +150,7 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                                         let __text_1 = {
                                             let action = action.clone();
                                             Text::declaring(
-                                                move || format!("Last action index · {}", { action.get() }),
+                                                move || format!("Last action index · {}", action.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?
@@ -359,7 +359,7 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                                         let __text_2 = {
                                             let shade_name = shade_name.clone();
                                             Text::declaring(
-                                                move || format!("Theme · {}", { shade_name.get() }),
+                                                move || format!("Theme · {}", shade_name.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?

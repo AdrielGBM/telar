@@ -20,7 +20,6 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let heavy = signal(false);
     let heavy_rsx_mv = heavy.clone();
     let weight = move || if heavy_rsx_mv.get() { 850.0f32 } else { 250.0 };
@@ -786,7 +785,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                             let __node_39 = button(ButtonProps::props().label(t!("nav.overview")).variant(ButtonVariant::Ghost).build(), Children::default())?;
                                             let __text_37 = {
                                                 Text::declaring(
-                                                    move || format!("{}", { t!("greeting", name = "Ada") }),
+                                                    move || format!("{}", t!("greeting", name = "Ada")),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                                 )?

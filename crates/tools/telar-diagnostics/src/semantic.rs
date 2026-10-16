@@ -17,13 +17,23 @@ struct Ctx<'a> {
     catalog: Option<&'a CatalogView<'a>>,
 }
 
-/// Runs the `.rsx` semantic checks (undefined style classes, unquoted captures, unknown i18n keys) over a parsed document, returning neutral diagnostics. `catalog` is `None` when the project has no translations.
+/// Runs the `.rsx` semantic checks (undefined style classes, unquoted captures, unknown i18n keys) over a parsed document, returning neutral diagnostics. `catalog` is `None` when the project has no translations; `imported` names the classes the document's `[style]` imports resolved to, which a view may name as its own.
 ///
 /// A *value* is not checked here at all: it is a Rust expression, and rustc judges it against the `.rsx` line the source map points at. The checks that remain are the ones about the markup's own vocabulary — a class nobody declared, an i18n key the catalogue does not hold.
-pub fn semantic_diagnostics(doc: &RsxDocument, catalog: Option<&CatalogView>) -> Vec<Diagnostic> {
+pub fn semantic_diagnostics<'a>(
+    doc: &'a RsxDocument,
+    catalog: Option<&'a CatalogView<'a>>,
+    imported: &[&'a str],
+) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
     let ctx = Ctx {
-        defined_classes: doc.style.classes.iter().map(|c| c.name.as_str()).collect(),
+        defined_classes: doc
+            .style
+            .classes
+            .iter()
+            .map(|c| c.name.as_str())
+            .chain(imported.iter().copied())
+            .collect(),
         catalog,
     };
 
@@ -66,7 +76,7 @@ fn check_element(el: &Element, ctx: &Ctx, reactive: bool, diagnostics: &mut Vec<
     for class in &el.classes {
         if !ctx.defined_classes.contains(class.as_str()) {
             diagnostics.push(Diagnostic::warning(
-                format!("Style class `@{class}` is not defined in [style]"),
+                format!("Style class `@{class}` is not defined in [style] nor imported there"),
                 span.clone(),
             ));
         }

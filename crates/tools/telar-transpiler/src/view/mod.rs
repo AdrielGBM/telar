@@ -227,8 +227,12 @@ pub struct ViewGen<'a> {
     signals: Vec<String>,
     /// Indentation depth (in 4-space units) for the current emission scope.
     indent: usize,
-    /// Loop-variable identifiers currently in scope, cloned per closure like signals.
+    /// What the enclosing loops, `if let`s and `match` arms bind, cloned per closure like signals: a binding there is often a borrow, and a widget closure needs `'static` captures.
     loop_variables: Vec<String>,
+    /// How many loops enclose the node being emitted. [`Self::loop_variables`] also holds what an `if let` or a `match` arm binds, which is copied into a closure the same way but built only once.
+    loop_depth: usize,
+    /// What the enclosing loops bind, a subset of [`Self::loop_variables`]: a value bound once per item, which a prop passing it on has to copy.
+    loop_bound: Vec<String>,
     /// Monotonic counter for the hoisted `__transition_N` animation handles.
     transition_count: usize,
     /// The package's baked asset artifact, which a static `svg`/`img` `src:"path"` resolves against. `None` (e.g. an in-memory transpile with no package to anchor it) makes such a `src:` yield a `compile_error!`.
@@ -247,6 +251,56 @@ pub struct ViewGen<'a> {
     theme_access: ThemeAccess,
     /// The root component call of the preview being emitted, which reads its literal attributes as args and logs its callbacks.
     preview_root: Option<PreviewRoot<'a>>,
+    reads: ViewReads,
+}
+
+/// How many snippets of the view read each `[logic]` binding, and which `props` places each snippet reads: what tells a closure that consuming a capture would take it from another reader.
+#[derive(Default)]
+pub(crate) struct ViewReads {
+    locals: HashMap<String, usize>,
+    props_places: Vec<Vec<String>>,
+}
+
+impl ViewReads {
+    fn of(nodes: &[ViewNode], locals: &[String], theme: ThemeAccess) -> Self {
+        let mut reads = Self::default();
+        for snippet in signals::subtree_snippets(nodes) {
+            let free = crate::rust::free_idents(&substitute_reads(&snippet, theme));
+            for local in locals {
+                let named = match &free {
+                    Some(free) => free.contains(local),
+                    None => contains_ident(&snippet, local),
+                };
+                if named {
+                    *reads.locals.entry(local.clone()).or_default() += 1;
+                }
+            }
+            reads.props_places.push(
+                crate::rust::field_places(&snippet, "props")
+                    .into_iter()
+                    .map(|(start, end)| crate::rust::place_text(&snippet[start..end]))
+                    .collect(),
+            );
+        }
+        reads
+    }
+
+    fn local(&self, name: &str) -> usize {
+        self.locals.get(name).copied().unwrap_or(0)
+    }
+
+    /// Snippets reading `place`, a place inside it or one it lies inside: any of them is a reader moving `place` would take from.
+    fn place(&self, place: &str) -> usize {
+        let overlaps = |other: &String| {
+            other == place
+                || other.starts_with(&format!("{place}."))
+                || place.starts_with(&format!("{other}."))
+        };
+        self.props_places
+            .iter()
+            .filter(|places| places.iter().any(overlaps))
+            .count()
+    }
 }
 
 /// A preview's root component call, by identity, and whether its literal attributes are args or `args:none` opted out.
@@ -264,6 +318,8 @@ impl<'a> ViewGen<'a> {
             signals: Vec::new(),
             indent: 1,
             loop_variables: Vec::new(),
+            loop_depth: 0,
+            loop_bound: Vec::new(),
             transition_count: 0,
             assets,
             child_sinks: Vec::new(),
@@ -273,7 +329,13 @@ impl<'a> ViewGen<'a> {
             scroll_viewport: None,
             theme_access: ThemeAccess::Handle,
             preview_root: None,
+            reads: ViewReads::default(),
         }
+    }
+
+    /// Whether a closure built once per view must copy a capture in rather than consume it: the code around it may run again, a loop builds it once per item, or another snippet still reads what it names.
+    pub(super) fn must_copy_capture(&self, readers: usize) -> bool {
+        self.in_reactive_region() || self.loop_depth > 0 || readers > 1
     }
 
     /// Whether the node being emitted sits inside a reactive branch or item closure, i.e. inside code that may build the same content again after the region has disposed it. Whether a lone `[logic]` binding named here must be cloned rather than moved: either the code around it can run again, or another call site still needs it.
@@ -447,6 +509,7 @@ impl<'a> ViewGen<'a> {
             })
             .cloned()
             .collect();
+        self.reads = ViewReads::of(nodes, &self.locals, self.theme_access);
         // Returned directly so the branch is the component root: an injected column would trap a `row align:stretch` at content height. A reactive condition keeps the fragment-swap path below.
         if let [ViewNode::IfBlock(block)] = nodes
             && !block.condition.contains('$')
@@ -626,12 +689,11 @@ impl<'a> ViewGen<'a> {
     ///
     /// The counterpart to [`Self::unknown_attr_errors`]: that one rejects a key the tag does not have, this one rejects a value the key does not take. Between them the language stops being strict about keys and silent about values — before this, `align:centre` laid out unaligned and `fit:covr` fitted the other way, both with nothing to point at.
     fn value_errors(&self, el: &Element) -> String {
-        if !crate::registry::is_builtin_tag(&el.tag) {
-            return String::new();
-        }
+        let builtin = crate::registry::is_builtin_tag(&el.tag);
         let pad = self.indent_str();
         el.attributes
             .iter()
+            .filter(|attr| builtin || crate::registry::is_component_instance_attr(&attr.key))
             .filter_map(|attr| {
                 value_error(&el.tag, &attr.key, attr.value.text(), self.theme_access)
             })
@@ -680,8 +742,29 @@ pub(crate) fn value_error(tag: &str, key: &str, value: &str, theme: ThemeAccess)
 }
 
 impl ViewGen<'_> {
+    fn unknown_class_errors(&self, el: &Element) -> String {
+        let pad = self.indent_str();
+        el.classes
+            .iter()
+            .filter(|name| !self.classes.iter().any(|class| &class.name == *name))
+            .map(|name| {
+                format!(
+                    "{pad}compile_error!({});\n",
+                    rust_str(&format!(
+                        "no class `@{name}` here: declare it in `[style]`, or `use` it there from the module that makes it `pub`"
+                    ))
+                )
+            })
+            .collect()
+    }
+
     fn emit_element(&mut self, el: &Element) -> ChildEmit {
-        let errors = format!("{}{}", self.unknown_attr_errors(el), self.value_errors(el));
+        let errors = format!(
+            "{}{}{}",
+            self.unknown_class_errors(el),
+            self.unknown_attr_errors(el),
+            self.value_errors(el)
+        );
         let emit = self.emit_element_inner(el);
         if errors.is_empty() {
             return emit;

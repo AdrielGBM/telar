@@ -57,7 +57,7 @@ pub fn indicators(props: IndicatorsProps, children: Children) -> Result<Box<dyn 
                                             let __text_0 = {
                                                 let pct = pct.clone();
                                                 Text::declaring(
-                                                    move || format!("Loading · {}%", { pct.get() }),
+                                                    move || format!("Loading · {}%", pct.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                                 )?

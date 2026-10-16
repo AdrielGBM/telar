@@ -20,7 +20,6 @@ pub fn controls(props: ControlsProps, children: Children) -> Result<Box<dyn Layo
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let presses = signal(0i32);
     let calm = signal(false);
     let bold = signal(true);
@@ -78,7 +77,7 @@ pub fn controls(props: ControlsProps, children: Children) -> Result<Box<dyn Layo
                                             let __text_1 = {
                                                 let presses = presses.clone();
                                                 Text::declaring(
-                                                    move || format!("pressed {} times: Tab to it, then Enter or Space", { presses.get() }),
+                                                    move || format!("pressed {} times: Tab to it, then Enter or Space", presses.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                 )?
@@ -136,7 +135,7 @@ pub fn controls(props: ControlsProps, children: Children) -> Result<Box<dyn Layo
                                                 let __text_2 = {
                                                     let calm_reading = calm_reading.clone();
                                                     Text::declaring(
-                                                        move || format!("≈ {}", { calm_reading.get() }),
+                                                        move || format!("≈ {}", calm_reading.get()),
                                                         LayoutStyle::new(),
                                                         { let calm = calm.clone(); let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(if calm.get() { theme.get().on_primary } else { theme.get().ink }) },
                                                     )?
@@ -147,7 +146,7 @@ pub fn controls(props: ControlsProps, children: Children) -> Result<Box<dyn Layo
                                             let __text_3 = {
                                                 let calm_reading = calm_reading.clone();
                                                 Text::declaring(
-                                                    move || format!("a reader hears “Reduce motion, switch, {}”", { calm_reading.get() }),
+                                                    move || format!("a reader hears “Reduce motion, switch, {}”", calm_reading.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                 )?
@@ -230,7 +229,7 @@ pub fn controls(props: ControlsProps, children: Children) -> Result<Box<dyn Layo
                                             let __text_6 = {
                                                 let styles = styles.clone();
                                                 Text::declaring(
-                                                    move || format!("the selection is {}", { styles.get() }),
+                                                    move || format!("the selection is {}", styles.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                 )?

@@ -5,7 +5,7 @@ use crate::position::parser_line_to_lsp_range;
 use crate::project::ProjectInfo;
 use lsp_types::{GotoDefinitionResponse, Location, Uri};
 use telar_parser::RsxDocument;
-use telar_transpiler::is_builtin_tag;
+use telar_transpiler::{ResolvedImports, is_builtin_tag};
 
 /// Where the thing under the cursor is defined, for the names `.rsx` owns itself.
 pub fn goto_definition(
@@ -15,9 +15,10 @@ pub fn goto_definition(
     line: u32,
     character: u32,
     project: Option<&ProjectInfo>,
+    imports: &ResolvedImports,
 ) -> Option<GotoDefinitionResponse> {
     match view_token_at(source, line, character)? {
-        ViewToken::Class(class) => find_class(doc, class, uri),
+        ViewToken::Class(class) => find_class(doc, class, uri, imports),
         // An attribute is declared in the registry, not in a file this can open.
         ViewToken::Attr { .. } => None,
         ViewToken::ColorValue(value) => find_color(value, project),
@@ -27,11 +28,22 @@ pub fn goto_definition(
     }
 }
 
-fn find_class(doc: &RsxDocument, name: &str, uri: &Uri) -> Option<GotoDefinitionResponse> {
-    let class = doc.style.classes.iter().find(|c| c.name == name)?;
+fn find_class(
+    doc: &RsxDocument,
+    name: &str,
+    uri: &Uri,
+    imports: &ResolvedImports,
+) -> Option<GotoDefinitionResponse> {
+    if let Some(class) = doc.style.classes.iter().find(|c| c.name == name) {
+        return Some(GotoDefinitionResponse::Scalar(Location {
+            uri: uri.clone(),
+            range: parser_line_to_lsp_range(class.line),
+        }));
+    }
+    let imported = imports.classes.iter().find(|c| c.class.name == name)?;
     Some(GotoDefinitionResponse::Scalar(Location {
-        uri: uri.clone(),
-        range: parser_line_to_lsp_range(class.line),
+        uri: crate::uri::from_path(&imported.source)?,
+        range: parser_line_to_lsp_range(imported.line),
     }))
 }
 

@@ -847,3 +847,41 @@ fn a_view_attribute_value_with_braces_stays_one_token() {
     };
     assert_eq!(el.attributes.len(), 2);
 }
+
+/// `use` in `[style]` is Rust's own spelling, with class names where Rust has items, and `pub` is what makes a class one to import.
+#[test]
+fn parses_style_imports_and_pub_classes() {
+    let doc = parse(
+        "[style]\nuse crate::styles::{mono, line as rule};\nuse super::shared::card;\nuse self::parts::*;\npub @mono: gap:2\n@local\n    gap: 4\n[view]\ncol\n",
+    )
+    .unwrap();
+    let imports = &doc.style.imports;
+    assert_eq!(imports.len(), 3);
+    assert_eq!(imports[0].module, ["crate", "styles"]);
+    assert_eq!(imports[0].line, 2);
+    let StyleImportItems::Names(names) = &imports[0].items else {
+        panic!("named");
+    };
+    assert_eq!(names[1].name, "line");
+    assert_eq!(names[1].local(), "rule");
+    assert_eq!(imports[1].module, ["super", "shared"]);
+    assert_eq!(imports[2].items, StyleImportItems::Glob);
+    assert!(doc.style.classes[0].public && doc.style.classes[0].name == "mono");
+    assert!(!doc.style.classes[1].public);
+}
+
+#[test]
+fn a_malformed_style_import_is_refused() {
+    for (src, why) in [
+        ("[style]\nuse crate::styles::mono\n", "ends with `;`"),
+        ("[style]\nuse styles::mono;\n", "`crate`, `super` or `self`"),
+        ("[style]\nuse crate::styles::{};\n", "names no class"),
+        (
+            "[style]\npub use crate::styles::mono;\n",
+            "write `pub @name`",
+        ),
+    ] {
+        let error = parse(src).expect_err(src);
+        assert!(error.message.contains(why), "{src}: {}", error.message);
+    }
+}

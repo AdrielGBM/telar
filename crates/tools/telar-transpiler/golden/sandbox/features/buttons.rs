@@ -105,7 +105,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                         let __text_0 = {
                                             let clicks = clicks.clone();
                                             Text::declaring(
-                                                move || format!("Clicks · {}", { clicks.get() }),
+                                                move || format!("Clicks · {}", clicks.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(18.0).with_color(theme.get().ink) },
                                             )?
@@ -163,7 +163,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                             let __text_1 = {
                                                 let clicks = clicks.clone();
                                                 Text::declaring(
-                                                    move || format!("Tap anywhere in this card · {}", { clicks.get() }),
+                                                    move || format!("Tap anywhere in this card · {}", clicks.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                 )?
@@ -297,7 +297,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                             let __text_6 = {
                                                 let hovering = hovering.clone();
                                                 Text::declaring(
-                                                    move || format!("hover me — hovering: {}", { hovering.get() }),
+                                                    move || format!("hover me — hovering: {}", hovering.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                 )?
@@ -309,7 +309,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                             let __text_7 = {
                                                 let keys = keys.clone();
                                                 Text::declaring(
-                                                    move || format!("keys pressed anywhere: {}", { keys.get() }),
+                                                    move || format!("keys pressed anywhere: {}", keys.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                                 )?

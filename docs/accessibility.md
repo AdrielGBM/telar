@@ -11,8 +11,20 @@ the application knows, and it says them with three attributes that any built-in 
 | `lang:` | a BCP 47 tag: `"ja"`, `"es-CL"` | The language of the box and everything under it. The nearest one wins. |
 | `a11y:hidden` | — | Assistive technology skips the box and its whole subtree. It is still drawn and still answers the pointer. |
 
-On a component tag (`button`, `chip`, …) `label` stays the component's own prop, and `lang`/`a11y` are
-not taken: a component forwards them to its own root if it wants to.
+On a component tag (`button`, `chip`, …) `label` and `lang` stay the component's own props to declare, so a
+call says the same three things about the item the component returns under the names of the methods they call:
+`a11y_label:`, `a11y_lang:` and `a11y:hidden`. Said there, they win over what the component said about that item
+itself — a button named by its text can be named for the row it acts on:
+
+```text
+button label:"Open" variant:ButtonVariant::Ghost a11y_label:"Open {name} in the canvas"
+```
+
+A quoted name or language interpolates `{…}` as text does, wherever it is written.
+
+A role is not one of them. What a box is decides how the keyboard reaches it and what pressing it does, so it is
+the component's to say from its own root — `split_pane`'s `region` takes the landmark its pane is — and not
+something a call can lay over the item it gets back.
 
 From Rust the same three are methods of `telar::Accessible`, which every widget with a layout node has:
 `.a11y_label(|| …)`, `.a11y_lang(|| …)`, `.a11y_hidden()`.

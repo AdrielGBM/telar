@@ -38,7 +38,6 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let night = signal(true);
 
     let __col_0 = {
@@ -342,7 +341,6 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __text_12 = {
-                                            let theme = theme.clone();
                                             Text::declaring(
                                                 || "Because color:$theme.primary compiles to a theme lookup, swapping the theme struct at runtime updates every widget that reads it — no manual repaint.".to_string(),
                                                 LayoutStyle::new(),
@@ -481,7 +479,7 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
                                                         let __text_17 = {
                                                             let theme = theme.clone();
                                                             Text::declaring(
-                                                                move || format!("Nested at the call site, drawn in {}", { theme.get().name }),
+                                                                move || format!("Nested at the call site, drawn in {}", theme.get().name),
                                                                 LayoutStyle::new(),
                                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                             )?
@@ -489,7 +487,7 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
                                                         __children.push(box_item(__text_17));
                                                         let __text_18 = {
                                                             Text::declaring(
-                                                                move || format!("and inside the panel's context: {}", { use_context::<ThemedPanelContext>().map(|panel| panel.mode).unwrap_or_default() }),
+                                                                move || format!("and inside the panel's context: {}", use_context::<ThemedPanelContext>().map(|panel| panel.mode).unwrap_or_default()),
                                                                 LayoutStyle::new(),
                                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                             )?

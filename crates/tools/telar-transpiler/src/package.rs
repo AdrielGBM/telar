@@ -170,6 +170,15 @@ fn generate(
     if telar_project::is_module_root(rsx_path) {
         return crate::codegen::module_root(document, telar_project::MODULE_CHILDREN_FILENAME);
     }
+    let imports = crate::style_import::resolve_style_imports(
+        rsx_path,
+        options.src_dir,
+        &document.style,
+        &|path| match path == rsx_path {
+            true => Some(source.to_string()),
+            false => std::fs::read_to_string(path).ok(),
+        },
+    );
     let package_path = package_relative_path(rsx_path, options.src_dir);
     let input = TranspileInput {
         document,
@@ -181,6 +190,7 @@ fn generate(
         library: options.library,
         hot_reload: options.flavour.is_hot(),
         rsx_path: package_path.as_deref(),
+        imports: &imports,
     };
     match telar_project::is_previews_file(rsx_path) {
         true => crate::codegen::previews_file(input),

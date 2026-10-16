@@ -14,14 +14,14 @@
 #[derive(::telar::Props)]
 pub struct CurrentPlaceProps {}
 
+#[allow(dead_code)]
+const BAR: f32 = 44.0;
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn current_place(props: CurrentPlaceProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
-    const BAR: f32 = 44.0;
-
     let view = use_scroll_viewport();
     let here = memo(move || view.as_ref().and_then(|view| view.anchor_at(BAR)));
     let here_rsx_mv = here.clone();
@@ -96,13 +96,13 @@ pub fn current_place(props: CurrentPlaceProps, children: Children) -> Result<Box
                                 let __text_3 = {
                                     let shown = shown.clone();
                                     Text::declaring(
-                                        move || format!("under the bar: {}", { shown.get() }),
+                                        move || format!("under the bar: {}", shown.get()),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                     )?
                                 };
                                 let __text_3 = __text_3.a11y_hidden();
-                                StyledContainer::new(LayoutStyle::new().flex_row().sticky().inset_top(0.0).height(BAR).width(SizeDimension::Percent(1.0)).gap(8.0).padding_horizontal(12.0).align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [0.0, 0.0, 1.0, 0.0] }), shadow: None, radius: BorderRadius::zero() } }, children![__sbox_0, __sbox_1, __sbox_2, __text_3])?.role(::telar::Role::Navigation).styled_by(move || LayoutStyle::new().flex_row().sticky().inset_top(0.0).height(BAR).width(SizeDimension::Percent(1.0)).gap(8.0).padding_horizontal(12.0).align_items(AlignItems::CENTER).bordered())
+                                StyledContainer::new(LayoutStyle::new().flex_row().sticky().inset_top(0.0).height(BAR).width(SizeDimension::Percent(1.0)).gap(8.0).padding_horizontal(12.0).align_items(AlignItems::CENTER).bordered(), { let theme = theme.clone(); move |_| RectStyle { fill: Some(Paint::Solid(theme.get().surface)), border: Some(Border { paint: Paint::Solid(theme.get().border), widths: [0.0, 0.0, 1.0, 0.0] }), shadow: None, radius: BorderRadius::zero() } }, children![__sbox_0, __sbox_1, __sbox_2, __text_3])?.role(::telar::Role::Navigation)
                             };
                             let __row_0 = __row_0.a11y_label(|| "Places");
                             let __col_2 = {
@@ -197,7 +197,7 @@ pub fn current_place(props: CurrentPlaceProps, children: Children) -> Result<Box
                                         let __text_10 = {
                                             let on_page = on_page.clone();
                                             Text::declaring(
-                                                move || format!("Under a 48px line of the primary scroll: {}", { on_page.get() }),
+                                                move || format!("Under a 48px line of the primary scroll: {}", on_page.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
                                             )?

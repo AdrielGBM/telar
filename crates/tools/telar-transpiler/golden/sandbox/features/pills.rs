@@ -106,7 +106,7 @@ pub fn pills(props: PillsProps, children: Children) -> Result<Box<dyn LayoutItem
                                         let __text_1 = {
                                             let tags = tags.clone();
                                             Text::declaring(
-                                                move || format!("chips · {}", { tags.get() }),
+                                                move || format!("chips · {}", tags.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                             )?

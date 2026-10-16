@@ -45,6 +45,23 @@ impl Store {
         self.latest_source.keys().next()
     }
 
+    /// The classes `document`, the `.rsx` at `path`, imports in its `[style]`: read from the buffer of each module the editor has open, and from disk for the rest, so a class declared a keystroke ago is found the way the next build will find it once saved.
+    pub fn style_imports(
+        &self,
+        path: &std::path::Path,
+        document: &RsxDocument,
+    ) -> telar_transpiler::ResolvedImports {
+        let Some(src_dir) = telar_project::find_package_root(path).map(|root| root.join("src"))
+        else {
+            return telar_transpiler::ResolvedImports::unresolvable(&document.style);
+        };
+        telar_transpiler::resolve_style_imports(path, &src_dir, &document.style, &|module| {
+            crate::uri::from_path(module)
+                .and_then(|uri| self.latest_source(&uri).cloned())
+                .or_else(|| std::fs::read_to_string(module).ok())
+        })
+    }
+
     pub fn reparse(&mut self, uri: Uri, source: String) -> Vec<Diagnostic> {
         self.latest_source.insert(uri.clone(), source.clone());
         match parse(&source) {

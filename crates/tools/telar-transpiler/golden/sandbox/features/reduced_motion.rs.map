@@ -17,19 +17,19 @@
 16	.
 17	.
 18	.
-19	.
-20	.
-21	.
-22	.
-23	7
-24	8
-25	9
-26	10
-27	11
-28	12
-29	13
-30	14
-31	15
+19	8
+20	9
+21	10
+22	11
+23	12
+24	13
+25	14
+26	.
+27	.
+28	.
+29	.
+30	.
+31	.
 32	16
 33	17
 34	18
@@ -221,12 +221,12 @@
 220	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1267..1273	4135	`system`
-1346..1352	4841	`chosen`
-1418..1427	5546	`effective`
-1548..1568	6154	`ButtonVariant::Ghost`
-1579..1622	6207	`|| telar::set_reduced_motion_override(None)`
-1675..1695	6401	`ButtonVariant::Ghost`
-1706..1755	6454	`|| telar::set_reduced_motion_override(Some(true))`
-1808..1828	6654	`ButtonVariant::Ghost`
-1839..1889	6707	`|| telar::set_reduced_motion_override(Some(false))`
+1267..1273	4124	`system`
+1346..1352	4826	`chosen`
+1418..1427	5527	`effective`
+1548..1568	6133	`ButtonVariant::Ghost`
+1579..1622	6186	`|| telar::set_reduced_motion_override(None)`
+1675..1695	6380	`ButtonVariant::Ghost`
+1706..1755	6433	`|| telar::set_reduced_motion_override(Some(true))`
+1808..1828	6633	`ButtonVariant::Ghost`
+1839..1889	6686	`|| telar::set_reduced_motion_override(Some(false))`

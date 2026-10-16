@@ -269,6 +269,9 @@
           "include": "#comment"
         },
         {
+          "include": "#style-import"
+        },
+        {
           "include": "#style-class-header"
         },
         {
@@ -276,10 +279,30 @@
         }
       ]
     },
-    "style-class-header": {
-      "match": "^\\s*(@[-\\w]+)",
+    "style-import": {
+      "match": "^\\s*(use)\\s+((?:crate|super|self)(?:::\\w+)*)::(.*?)(;)?\\s*$",
       "captures": {
         "1": {
+          "name": "keyword.other.use.rsx"
+        },
+        "2": {
+          "name": "entity.name.namespace.rsx"
+        },
+        "3": {
+          "name": "entity.other.attribute-name.class.rsx"
+        },
+        "4": {
+          "name": "punctuation.terminator.rsx"
+        }
+      }
+    },
+    "style-class-header": {
+      "match": "^\\s*(?:(pub)\\s+)?(@[-\\w]+)",
+      "captures": {
+        "1": {
+          "name": "storage.modifier.visibility.rsx"
+        },
+        "2": {
           "name": "entity.other.attribute-name.class.rsx"
         }
       }

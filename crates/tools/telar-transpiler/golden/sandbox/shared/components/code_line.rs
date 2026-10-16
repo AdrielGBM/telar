@@ -23,7 +23,7 @@ pub fn code_line(props: CodeLineProps, children: Children) -> Result<Box<dyn Lay
     let __sbox_0 = {
         let __text_0 = {
             Text::declaring(
-                move || format!("{}", { props.code }),
+                move || format!("{}", props.code),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().code_fg) },
             )?

@@ -28,7 +28,6 @@ pub fn backdrop(props: BackdropProps, children: Children) -> Result<Box<dyn Layo
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let frosted = signal(true);
     let frosted_rsx_mv = frosted.clone();
     let blur = move || if frosted_rsx_mv.get() { 20.0f32 } else { 0.0 };

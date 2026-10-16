@@ -17,18 +17,18 @@
 16	.
 17	.
 18	.
-19	.
-20	.
-21	.
-22	.
-23	7
-24	8
-25	9
-26	10
-27	11
-28	12
-29	13
-30	14
+19	8
+20	9
+21	10
+22	11
+23	12
+24	13
+25	.
+26	.
+27	.
+28	.
+29	.
+30	.
 31	15
 32	.
 33	18
@@ -177,13 +177,13 @@
 176	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-985..990	3316	`shown`
-1106..1165	3936	`|| telar::set_page_title(Some("Surface title".to_string()))`
-1220..1240	4148	`ButtonVariant::Ghost`
-1251..1281	4201	`|| telar::set_page_title(None)`
-1337..1357	4385	`ButtonVariant::Ghost`
-1368..1412	4438	`|| telar::window::set_title("Telar sandbox")`
-1820..1840	7613	`ButtonVariant::Ghost`
-1851..1887	7666	`|| telar::set_title_format(bar_rule)`
-1941..1961	7855	`ButtonVariant::Ghost`
-1972..2020	7908	`|| telar::set_title_format(telar::compose_title)`
+985..990	3309	`shown`
+1106..1165	3927	`|| telar::set_page_title(Some("Surface title".to_string()))`
+1220..1240	4139	`ButtonVariant::Ghost`
+1251..1281	4192	`|| telar::set_page_title(None)`
+1337..1357	4376	`ButtonVariant::Ghost`
+1368..1412	4429	`|| telar::window::set_title("Telar sandbox")`
+1820..1840	7604	`ButtonVariant::Ghost`
+1851..1887	7657	`|| telar::set_title_format(bar_rule)`
+1941..1961	7846	`ButtonVariant::Ghost`
+1972..2020	7899	`|| telar::set_title_format(telar::compose_title)`

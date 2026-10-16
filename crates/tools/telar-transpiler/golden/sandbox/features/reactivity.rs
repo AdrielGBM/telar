@@ -15,6 +15,14 @@
 #[derive(::telar::Props)]
 pub struct ReactivityProps {}
 
+#[allow(dead_code)]
+// A reactive list: `for todo in $todos key todo.id` reconciles item widgets as this Vec changes.
+#[derive(Clone)]
+struct Todo {
+    id: u32,
+    label: &'static str,
+}
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -29,12 +37,6 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
     let count_rsx_mv = count.clone();
     let level = memo(move || (count_rsx_mv.get() as f32 / 10.0).clamp(0.18, 1.0));
 
-    // A reactive list: `for todo in $todos key todo.id` reconciles item widgets as this Vec changes.
-    #[derive(Clone)]
-    struct Todo {
-        id: u32,
-        label: &'static str,
-    }
     let todos = signal(vec![
         Todo {
             id: 1,
@@ -111,7 +113,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                         let __text_0 = {
                                             let count = count.clone();
                                             Text::declaring(
-                                                move || format!("count · {}", { count.get() }),
+                                                move || format!("count · {}", count.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(22.0).with_color(theme.get().ink) },
                                             )?
@@ -120,7 +122,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                         let __text_1 = {
                                             let doubled = doubled.clone();
                                             Text::declaring(
-                                                move || format!("doubled memo · {}", { doubled.get() }),
+                                                move || format!("doubled memo · {}", doubled.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?
@@ -129,7 +131,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                         let __text_2 = {
                                             let remaining = remaining.clone();
                                             Text::declaring(
-                                                move || format!("{} left before 10", { remaining.get() }),
+                                                move || format!("{} left before 10", remaining.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
                                             )?
@@ -263,7 +265,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                                     let __text_5 = {
                                                         let todo = todo.clone();
                                                         Text::declaring(
-                                                            move || format!("{}", { todo.label }),
+                                                            move || format!("{}", todo.label),
                                                             LayoutStyle::new(),
                                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                         )?
@@ -338,7 +340,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                                         let __text_6 = {
                                                             let count = count.clone();
                                                             Text::declaring(
-                                                                move || format!("Now you see me — and the count above is {}", { count.get() }),
+                                                                move || format!("Now you see me — and the count above is {}", count.get()),
                                                                 LayoutStyle::new(),
                                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                             )?
@@ -435,7 +437,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                                     let __text_9 = {
                                                         let panel_builds = panel_builds.clone();
                                                         Text::declaring(
-                                                            move || format!("this subtree has been built {} time(s) — reopening never adds one", { panel_builds.get() }),
+                                                            move || format!("this subtree has been built {} time(s) — reopening never adds one", panel_builds.get()),
                                                             LayoutStyle::new(),
                                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().primary) },
                                                         )?
@@ -512,7 +514,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                             let name = name.clone();
                                             let email = email.clone();
                                             Text::declaring(
-                                                move || format!("Hello, {}! ({})", { name.get() }, { email.get() }),
+                                                move || format!("Hello, {}! ({})", name.get(), email.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?
@@ -563,7 +565,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                             let __text_11 = {
                                                 let box_focused = box_focused.clone();
                                                 Text::declaring(
-                                                    move || format!("Tab to me — focused: {}", { box_focused.get() }),
+                                                    move || format!("Tab to me — focused: {}", box_focused.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                                 )?
@@ -630,7 +632,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                         let __text_12 = {
                                             let pct = pct.clone();
                                             Text::declaring(
-                                                move || format!("value · {}%", { pct.get() }),
+                                                move || format!("value · {}%", pct.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?

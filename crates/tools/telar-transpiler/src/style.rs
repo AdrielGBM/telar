@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use telar_parser::{StyleClass, StyleSection};
+use telar_parser::StyleClass;
 
 use crate::registry;
 use crate::theme_access::ThemeAccess;
@@ -29,16 +29,22 @@ pub enum PropCall {
     Invalid(String),
 }
 
-/// Renders one `LayoutStyle` constructor function per class in the document's style section.
-pub fn generate_style_section(
-    section: &StyleSection,
+/// One `LayoutStyle` constructor function per class a file uses: its own, each behind the errors its properties earn, and the ones it imports, which the file declaring them already checks.
+pub fn generate_classes(
+    own: &[StyleClass],
+    imported: &[StyleClass],
     theme_type: Option<&str>,
     theme: ThemeAccess,
 ) -> String {
     let mut out = String::new();
-    for (i, class) in section.classes.iter().enumerate() {
+    let all = own.iter().map(|class| (class, true));
+    let all = all.chain(imported.iter().map(|class| (class, false)));
+    for (i, (class, checked)) in all.enumerate() {
         if i > 0 {
             out.push('\n');
+        }
+        if checked {
+            out.push_str(&class_errors(class, theme));
         }
         out.push_str(&generate_class_function(class, theme_type, theme));
         out.push('\n');
@@ -53,11 +59,7 @@ fn is_style_key(key: &str) -> bool {
         || matches!(key, "lines" | "ellipsis")
 }
 
-fn generate_class_function(
-    class: &StyleClass,
-    theme_type: Option<&str>,
-    theme: ThemeAccess,
-) -> String {
+pub fn class_errors(class: &StyleClass, theme: ThemeAccess) -> String {
     let mut out = String::new();
     // A class property has no attribute line, so the class name is what locates it. The key is checked here as well as the value: an unrecognised one is otherwise dropped, and a renamed key silently stops laying out.
     for prop in &class.props {
@@ -77,6 +79,15 @@ fn generate_class_function(
             );
         }
     }
+    out
+}
+
+fn generate_class_function(
+    class: &StyleClass,
+    theme_type: Option<&str>,
+    theme: ThemeAccess,
+) -> String {
+    let mut out = String::new();
     // A paint-only class never has its layout fn called, so the generated fn can be dead.
     out.push_str("#[allow(dead_code)]\n");
     let _ = writeln!(

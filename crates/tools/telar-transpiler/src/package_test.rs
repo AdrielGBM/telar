@@ -350,3 +350,56 @@ fn a_previews_file_emits_the_previews_of_the_component_beside_it() {
 
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A class another module makes `pub` is written onto the elements of the file that imports it, as one of its own would be; a buffer being typed resolves its imports the same way.
+#[test]
+fn an_imported_class_styles_the_importer() {
+    let root = package("style_import");
+    std::fs::create_dir_all(root.join("src/panels")).unwrap();
+    std::fs::write(
+        root.join("src/styles.rsx"),
+        "[style]\npub @mono\n    font_family: monospace\n\npub @line\n    gap: 8\n    stroke: #000\n",
+    )
+    .unwrap();
+    let row = "[style]\nuse crate::styles::{mono, line as rule};\n[view]\nrow @rule align:center\n    text @mono \"x\"\n";
+    std::fs::write(root.join("src/panels/row.rsx"), row).unwrap();
+
+    let src_dir = root.join("src");
+    let files = transpile_package(&options(&src_dir, BuildFlavour::Plain)).unwrap();
+    let code = |name: &str| {
+        files
+            .iter()
+            .find(|f| f.rel_out.ends_with(name))
+            .map(|f| f.source.rust_code.clone())
+            .unwrap()
+    };
+    let row_code = code("row.rs");
+    assert!(!row_code.contains("compile_error!"), "{row_code}");
+    assert!(
+        row_code.contains("fn style_rule() -> LayoutStyle"),
+        "{row_code}"
+    );
+    assert!(row_code.contains("style_rule().flex_row()"), "{row_code}");
+    assert!(
+        row_code.contains(".with_font_family(FontFamily::Monospace)"),
+        "{row_code}"
+    );
+    assert!(
+        !code("styles.rs").contains("pub fn styles("),
+        "a module of classes is no component"
+    );
+
+    let typed = super::transpile_buffer(
+        &root.join("src/panels/row.rsx"),
+        &row.replace("line as rule", "line as rule, missing"),
+        &options(&src_dir, BuildFlavour::Plain),
+    )
+    .unwrap();
+    assert!(
+        typed.rust_code.contains("declares no class `@missing`"),
+        "{}",
+        typed.rust_code
+    );
+
+    let _ = std::fs::remove_dir_all(&root);
+}

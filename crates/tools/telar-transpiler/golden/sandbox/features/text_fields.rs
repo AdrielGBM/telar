@@ -57,7 +57,7 @@ pub fn text_fields(props: TextFieldsProps, children: Children) -> Result<Box<dyn
                                         let __text_0 = {
                                             let name = name.clone();
                                             Text::declaring(
-                                                move || format!("Hello, {}", { name.get() }),
+                                                move || format!("Hello, {}", name.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?

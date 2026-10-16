@@ -23,10 +23,18 @@ impl ViewGen<'_> {
         let var = self.next_variable_name(&el.tag);
         let pad = self.indent_str();
         let content = el.content.as_deref().unwrap_or("");
-        let content_fn = if el.content_i18n {
-            format!("move || {}", self.i18n_lookup(content))
+        let (content_fn, content_clones) = if el.content_i18n {
+            (format!("move || {}", self.i18n_lookup(content)), Vec::new())
         } else {
-            self.interpolate_content(content, el.content_start)
+            match self.interpolation(content, el.content_start, true) {
+                super::interp::Interpolated::Formatted { format, clones, .. } => {
+                    (format!("move || {format}"), clones)
+                }
+                literal => (
+                    literal.closure(|text| format!("{}.to_string()", rust_str(text))),
+                    Vec::new(),
+                ),
+            }
         };
         let (specs, mut errors) = self.parse_transitions(el);
         let transitions: HashMap<String, String> = specs.into_iter().collect();
@@ -39,8 +47,17 @@ impl ViewGen<'_> {
 
         let layout_style = text_layout_style(&attrs, self.theme_access);
 
-        // Each `move` closure consumes its captures, so clone into block locals. Scan the raw `content`, still carrying `$`, not the substituted `content_fn`.
-        let clones = self.clone_bindings(&[content, style.as_str()], &pad, "    ");
+        // Each `move` closure consumes its captures, so clone into block locals.
+        let mut clones: String = content_clones
+            .iter()
+            .map(|clone| format!("{pad}    {clone}\n"))
+            .collect();
+        for line in self.clone_bindings(&[style.as_str()], &pad, "    ").lines() {
+            if !clones.lines().any(|existing| existing == line) {
+                clones.push_str(line);
+                clones.push('\n');
+            }
+        }
         let inner_pad = format!("{pad}    ");
         let prelude = {
             let mut p = String::new();
@@ -166,12 +183,12 @@ impl ViewGen<'_> {
 
     /// A run's string as the closure `TextRun::new` takes, with the signals it interpolates cloned in, so runs reading the same signal each own their copy.
     fn run_content(&self, content: &str, start: usize, i18n: bool) -> String {
-        let closure = if i18n {
-            format!("move || {}", self.i18n_lookup(content))
-        } else {
-            self.interpolate_content(content, start)
-        };
-        wrap_signal_clones(&[content], closure, self.theme_access)
+        match i18n {
+            true => format!("move || {}", self.i18n_lookup(content)),
+            false => self
+                .interpolation(content, start, true)
+                .closure(|text| format!("{}.to_string()", rust_str(text))),
+        }
     }
 
     /// Emits the children of a container-like element into `code` and returns the expression to pass as the constructor's children argument. `seed` names are prepended (e.g. a `section`'s heading). The `mode` (from [`ViewGen::child_mode`]) picks the shape: [`ChildMode::Slots`] builds a `Vec<ChildSlot>` (`__slots`, for `from_slots`) when a reactive fragment is present, [`ChildMode::Vec`] a `Vec<Box<dyn LayoutItem>>` (`__children`, for `new`) for static control flow, and [`ChildMode::Literal`] a `children![...]`. The caller must have wrapped child emission in the matching [`ViewGen::with_child_sink`] so any `if`/`for` bodies pushed the same shape.

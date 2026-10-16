@@ -11,7 +11,8 @@
 use std::fmt::Write;
 
 use telar_parser::{
-    ArgDecl, Attr, Element, Preview, PreviewsMeta, RsxDocument, StyleProp, Value, ViewNode,
+    ArgDecl, Attr, Element, Preview, PreviewsMeta, RsxDocument, StyleClass, StyleProp, Value,
+    ViewNode,
 };
 use telar_project::naming::{
     is_ident, preview_entries_const_name, preview_file_expr, preview_slug, to_pascal_case,
@@ -45,6 +46,7 @@ pub(crate) struct Previews<'a> {
     pub theme_type: Option<&'a str>,
     /// The `.rsx` path relative to its package root, which each entry records as where it is written.
     pub rsx_path: Option<&'a str>,
+    pub classes: &'a [StyleClass],
 }
 
 /// The opening of the block every preview item is emitted in; [`CLOSE`] ends it.
@@ -83,7 +85,7 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
 
         let explicit: Vec<String> = preview.args.iter().map(|arg| arg.name.clone()).collect();
         let root = root_component(&preview.body);
-        let mut view = ViewGen::new(&doc.style.classes, previews.assets)
+        let mut view = ViewGen::new(previews.classes, previews.assets)
             .with_theme_access(previews.theme)
             .with_locals(explicit.clone())
             .with_signals(explicit.clone());

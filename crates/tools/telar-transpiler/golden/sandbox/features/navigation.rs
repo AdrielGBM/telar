@@ -14,6 +14,43 @@
 #[derive(::telar::Props)]
 pub struct NavigationProps {}
 
+#[allow(dead_code)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Pane {
+    Overview,
+    Pricing,
+    Team,
+}
+
+#[allow(dead_code)]
+impl Pane {
+    const ALL: [Pane; 3] = [Pane::Overview, Pane::Pricing, Pane::Team];
+
+    fn slug(self) -> &'static str {
+        match self {
+            Pane::Overview => "overview",
+            Pane::Pricing => "pricing",
+            Pane::Team => "team",
+        }
+    }
+}
+
+#[allow(dead_code)]
+impl Route for Pane {
+    fn to_location(&self) -> Location {
+        Location::from_segments(["navigation", self.slug()])
+    }
+
+    fn from_location(location: &Location) -> Option<Self> {
+        match location.segments() {
+            [section, slug] if section == "navigation" => {
+                Pane::ALL.into_iter().find(|pane| pane.slug() == slug)
+            }
+            _ => None,
+        }
+    }
+}
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -21,40 +58,6 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let tab = signal(0u32);
     let open = signal(true);
-
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    enum Pane {
-        Overview,
-        Pricing,
-        Team,
-    }
-
-    impl Pane {
-        const ALL: [Pane; 3] = [Pane::Overview, Pane::Pricing, Pane::Team];
-
-        fn slug(self) -> &'static str {
-            match self {
-                Pane::Overview => "overview",
-                Pane::Pricing => "pricing",
-                Pane::Team => "team",
-            }
-        }
-    }
-
-    impl Route for Pane {
-        fn to_location(&self) -> Location {
-            Location::from_segments(["navigation", self.slug()])
-        }
-
-        fn from_location(location: &Location) -> Option<Self> {
-            match location.segments() {
-                [section, slug] if section == "navigation" => {
-                    Pane::ALL.into_iter().find(|pane| pane.slug() == slug)
-                }
-                _ => None,
-            }
-        }
-    }
 
     // Following the address makes this stack the app's history: the browser's back and forward, a `--location` argument and an Android link all land on a pane.
     let panes = Navigator::new(Pane::Overview).follow_location();
@@ -226,7 +229,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
                                         let __text_4 = {
                                             let open = open.clone();
                                             Text::declaring(
-                                                move || format!("open · {}", { open.get() }),
+                                                move || format!("open · {}", open.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                             )?
@@ -293,7 +296,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
                                             let address = address.clone();
                                             let depth = depth.clone();
                                             Text::declaring(
-                                                move || format!("{} · {} deep", { address.get() }, { depth.get() }),
+                                                move || format!("{} · {} deep", address.get(), depth.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().ink) },
                                             )?
@@ -302,7 +305,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
                                         let __text_6 = {
                                             let address = address.clone();
                                             Text::declaring(
-                                                move || format!("Open it again with --location {} on desktop or in a terminal, or reload the page on the web.", { address.get() }),
+                                                move || format!("Open it again with --location {} on desktop or in a terminal, or reload the page on the web.", address.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                             )?

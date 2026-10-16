@@ -19,7 +19,6 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let big = signal(false);
 
     // Spring-driven scale, read reactively by the declarative `box scale:$scale` below — no Canvas needed
@@ -237,7 +236,7 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
                                             let __text_0 = {
                                                 let progress = progress.clone();
                                                 Text::declaring(
-                                                    move || format!("{}%", { progress.get().round() }),
+                                                    move || format!("{}%", progress.get().round()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                 )?
@@ -300,7 +299,7 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
                                                 let __text_1 = {
                                                     let scrub = scrub.clone();
                                                     Text::declaring(
-                                                        move || format!("p = {}", { scrub.get() / 100.0 }),
+                                                        move || format!("p = {}", scrub.get() / 100.0),
                                                         LayoutStyle::new(),
                                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                     )?

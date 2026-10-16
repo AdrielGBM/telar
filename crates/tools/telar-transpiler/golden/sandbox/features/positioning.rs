@@ -15,6 +15,14 @@
 #[derive(::telar::Props)]
 pub struct PositioningProps {}
 
+#[allow(dead_code)]
+// The scrutinee of the reactive `match` below. `Hash` and `Eq` are what let an arm be keyed on its payload.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Slot {
+    Empty,
+    Filled(u8),
+}
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
@@ -27,12 +35,6 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
     let corner_rsx_mv = corner.clone();
     let badge_start = memo(move || if corner_rsx_mv.get() % 2 == 0 { 12.0 } else { 140.0 });
 
-    // The scrutinee of the reactive `match` below. `Hash` and `Eq` are what let an arm be keyed on its payload.
-    #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-    enum Slot {
-        Empty,
-        Filled(u8),
-    }
     let slot = signal(Slot::Empty);
 
     let pinned = signal(true);
@@ -687,6 +689,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                         match caption {
                                             Some(note) => {
                                                 let __text_16 = {
+                                                    let note = note.clone();
                                                     Text::declaring(
                                                         move || format!("{}", note),
                                                         LayoutStyle::new(),

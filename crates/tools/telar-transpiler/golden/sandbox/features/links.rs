@@ -19,7 +19,6 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let page = signal(1u32);
 
     let __col_0 = {
@@ -51,7 +50,7 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                                                 let __text_0 = {
                                                     let page = page.clone();
                                                     Text::declaring(
-                                                        move || format!("Open /links/{}", { page.get() }),
+                                                        move || format!("Open /links/{}", page.get()),
                                                         LayoutStyle::new(),
                                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().primary) },
                                                     )?

@@ -173,6 +173,124 @@ pub(crate) fn let_bindings(source: &str) -> Option<Vec<String>> {
     }
 }
 
+pub(crate) fn condition_bindings(condition: &str) -> Option<Vec<String>> {
+    fn collect(expr: &syn::Expr, names: &mut Vec<String>) {
+        match expr {
+            syn::Expr::Let(binding) => names.extend(
+                pattern_bindings(&binding.pat)
+                    .into_iter()
+                    .map(Ident::to_string),
+            ),
+            syn::Expr::Binary(chain) if matches!(chain.op, syn::BinOp::And(_)) => {
+                collect(&chain.left, names);
+                collect(&chain.right, names);
+            }
+            _ => {}
+        }
+    }
+    let expr: syn::Expr = Fallback::forced(|| syn::parse_str(condition)).ok()?;
+    let mut names = Vec::new();
+    collect(&expr, &mut names);
+    (!names.is_empty()).then_some(names)
+}
+
+pub(crate) fn arm_bindings(pattern: &str) -> Option<Vec<String>> {
+    let arm: syn::Arm = Fallback::forced(|| syn::parse_str(&format!("{pattern} => ()"))).ok()?;
+    let mut names: Vec<String> = pattern_bindings(&arm.pat)
+        .into_iter()
+        .map(Ident::to_string)
+        .collect();
+    names.dedup();
+    Some(names)
+}
+
+/// Whether `expr` is fixed once the program is compiled: number literals, and constants by their `SCREAMING_CASE` path, under arithmetic, negation, casts and parentheses. A value like that can never answer differently, so it needs nothing to re-read it.
+pub(crate) fn is_const_expr(expr: &str) -> bool {
+    fn fixed(expr: &syn::Expr) -> bool {
+        match expr {
+            syn::Expr::Lit(lit) => matches!(lit.lit, syn::Lit::Int(_) | syn::Lit::Float(_)),
+            syn::Expr::Path(path) => {
+                path.qself.is_none()
+                    && path.path.segments.last().is_some_and(|segment| {
+                        let name = segment.ident.to_string();
+                        segment.arguments.is_none()
+                            && name.chars().any(|c| c.is_ascii_uppercase())
+                            && name
+                                .chars()
+                                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+                    })
+            }
+            syn::Expr::Binary(binary) => {
+                matches!(
+                    binary.op,
+                    syn::BinOp::Add(_)
+                        | syn::BinOp::Sub(_)
+                        | syn::BinOp::Mul(_)
+                        | syn::BinOp::Div(_)
+                        | syn::BinOp::Rem(_)
+                ) && fixed(&binary.left)
+                    && fixed(&binary.right)
+            }
+            syn::Expr::Unary(unary) => matches!(unary.op, syn::UnOp::Neg(_)) && fixed(&unary.expr),
+            syn::Expr::Paren(inner) => fixed(&inner.expr),
+            syn::Expr::Group(inner) => fixed(&inner.expr),
+            syn::Expr::Cast(cast) => fixed(&cast.expr),
+            _ => false,
+        }
+    }
+    Fallback::forced(|| syn::parse_str::<syn::Expr>(expr))
+        .ok()
+        .is_some_and(|parsed| fixed(&parsed))
+}
+
+/// Every field place rooted at the binding `root` that `code` reads, as byte ranges: `props.entry.file` in `open(props.entry.file)`, `props.items` in `props.items.len()`. A place is what a Rust 2021 closure captures, so it is what has to be copied in for the closure to leave the rest of `root` alone. A bare `root` is no place: there is no field to take.
+pub(crate) fn field_places(code: &str, root: &str) -> Vec<(usize, usize)> {
+    let bytes = code.as_bytes();
+    let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    ident_positions(code, root)
+        .filter(|&at| {
+            let before = code[..at].trim_end();
+            !before.ends_with('.') && !before.ends_with("::")
+        })
+        .filter_map(|at| {
+            let mut end = at + root.len();
+            let mut place_end = None;
+            loop {
+                let mut dot = end;
+                while bytes.get(dot).is_some_and(u8::is_ascii_whitespace) {
+                    dot += 1;
+                }
+                if bytes.get(dot) != Some(&b'.') || bytes.get(dot + 1) == Some(&b'.') {
+                    break;
+                }
+                let mut name = dot + 1;
+                while bytes.get(name).is_some_and(u8::is_ascii_whitespace) {
+                    name += 1;
+                }
+                let name_end = name + bytes[name..].iter().take_while(|&&b| is_ident(b)).count();
+                if name_end == name {
+                    break;
+                }
+                let mut after = name_end;
+                while bytes.get(after).is_some_and(u8::is_ascii_whitespace) {
+                    after += 1;
+                }
+                if matches!(bytes.get(after), Some(b'(')) || code[after..].starts_with("::") {
+                    break;
+                }
+                end = name_end;
+                place_end = Some(end);
+            }
+            place_end.map(|end| (at, end))
+        })
+        .collect()
+}
+
+/// A place as written, with the whitespace a formatter may leave around its dots taken out, so two spellings of one place compare equal.
+pub(crate) fn place_text(code: &str) -> String {
+    code.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
 #[derive(Debug, Clone, Copy)]
 struct Read {
     moved: bool,

@@ -18,69 +18,73 @@
 #[derive(::telar::Props)]
 pub struct BackgroundProps {}
 
+#[allow(dead_code)]
+fn slow_sum(n: u64) -> u64 {
+    std::thread::sleep(Duration::from_millis(900));
+    (1..=n).sum()
+}
+
+#[allow(dead_code)]
+fn walk_project(out: Emitter<String>) {
+    let names = [
+        "reactive-core",
+        "layout-core",
+        "ui-core",
+        "ui-tree",
+        "telar-components",
+        "renderer-core",
+        "renderer-software",
+        "renderer-hardware",
+        "renderer-text",
+        "platform-core",
+        "platform-winit",
+        "platform-desktop",
+        "motion-core",
+        "theme-core",
+        "i18n-core",
+        "telar-navigate",
+        "services-core",
+        "geometry-core",
+    ];
+    for name in names {
+        // Nothing else can stop this loop: cancelling only drops the callback, so a long worker has to
+        // notice for itself. Without this check, Cancel would leave it running to the end unseen.
+        if out.is_cancelled() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(140));
+        out.emit(name.to_string());
+    }
+}
+
+#[allow(dead_code)]
+fn on_computed(total: RwSignal<String>, busy: RwSignal<bool>) -> impl FnOnce(u64) {
+    move |sum| {
+        total.set(sum.to_string());
+        busy.set(false);
+    }
+}
+
+#[allow(dead_code)]
+fn on_found(found: RwSignal<Vec<String>>) -> impl FnMut(String) {
+    move |name| found.update(|v| v.push(name))
+}
+
+#[allow(dead_code)]
+fn on_scan_end(scanning: RwSignal<bool>) -> impl FnOnce() {
+    move || scanning.set(false)
+}
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     // Everything below the line is what actually crosses to a pool thread: plain `Send` work, no signals.
     // The sleeps stand in for the blocking a real kernel does — a query, a file read, a network round trip.
 
-    fn slow_sum(n: u64) -> u64 {
-        std::thread::sleep(Duration::from_millis(900));
-        (1..=n).sum()
-    }
-
-    fn walk_project(out: Emitter<String>) {
-        let names = [
-            "reactive-core",
-            "layout-core",
-            "ui-core",
-            "ui-tree",
-            "telar-components",
-            "renderer-core",
-            "renderer-software",
-            "renderer-hardware",
-            "renderer-text",
-            "platform-core",
-            "platform-winit",
-            "platform-desktop",
-            "motion-core",
-            "theme-core",
-            "i18n-core",
-            "telar-navigate",
-            "services-core",
-            "geometry-core",
-        ];
-        for name in names {
-            // Nothing else can stop this loop: cancelling only drops the callback, so a long worker has to
-            // notice for itself. Without this check, Cancel would leave it running to the end unseen.
-            if out.is_cancelled() {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(140));
-            out.emit(name.to_string());
-        }
-    }
-
     // The completion callbacks. They live here rather than inline in `on_press` because they must *own* their
     // signals: the handler is an `Fn` and may run again, so it cannot hand its own captures away.
-
-    fn on_computed(total: RwSignal<String>, busy: RwSignal<bool>) -> impl FnOnce(u64) {
-        move |sum| {
-            total.set(sum.to_string());
-            busy.set(false);
-        }
-    }
-
-    fn on_found(found: RwSignal<Vec<String>>) -> impl FnMut(String) {
-        move |name| found.update(|v| v.push(name))
-    }
-
-    fn on_scan_end(scanning: RwSignal<bool>) -> impl FnOnce() {
-        move || scanning.set(false)
-    }
 
     // --- UI state, all of it on this thread ---
 
@@ -134,7 +138,7 @@ pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn 
                                             let __text_0 = {
                                                 let total = total.clone();
                                                 Text::declaring(
-                                                    move || format!("sum(1..2M) · {}", { total.get() }),
+                                                    move || format!("sum(1..2M) · {}", total.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(16.0).with_color(theme.get().ink) },
                                                 )?
@@ -252,7 +256,7 @@ pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn 
                                         let __text_2 = {
                                             let found = found.clone();
                                             Text::declaring(
-                                                move || format!("{} crates", { found.get().len() }),
+                                                move || format!("{} crates", found.get().len()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                             )?

@@ -15,19 +15,19 @@
 #[derive(::telar::Props)]
 pub struct SurfaceTitleProps {}
 
+#[allow(dead_code)]
+fn bar_rule(parts: &telar::TitleParts<'_>) -> String {
+    match parts.page {
+        Some(page) => format!("{page} | {}", parts.app),
+        None => parts.app.to_string(),
+    }
+}
+
 #[allow(dead_code, unused_variables, unused_mut)]
 pub fn surface_title(props: SurfaceTitleProps, children: Children) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
-    fn bar_rule(parts: &telar::TitleParts<'_>) -> String {
-        match parts.page {
-            Some(page) => format!("{page} | {}", parts.app),
-            None => parts.app.to_string(),
-        }
-    }
-
     let shown = memo(telar::use_surface_title);
 
     let __col_0 = {
@@ -57,7 +57,7 @@ pub fn surface_title(props: SurfaceTitleProps, children: Children) -> Result<Box
                                         let __text_0 = {
                                             let shown = shown.clone();
                                             Text::declaring(
-                                                move || format!("{}", { shown.get() }),
+                                                move || format!("{}", shown.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                             )?

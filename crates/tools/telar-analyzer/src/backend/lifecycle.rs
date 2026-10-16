@@ -106,7 +106,16 @@ impl Backend {
             };
             let project = file_path.as_deref().and_then(ProjectInfo::discover);
             let catalog_view = project.as_ref().and_then(ProjectInfo::catalog_view);
-            let semantic = semantic_diagnostics(&parsed.document, catalog_view.as_ref());
+            let imported = file_path
+                .as_deref()
+                .map(|path| store.style_imports(path, &parsed.document))
+                .unwrap_or_default();
+            let names: Vec<&str> = imported
+                .classes
+                .iter()
+                .map(|class| class.class.name.as_str())
+                .collect();
+            let semantic = semantic_diagnostics(&parsed.document, catalog_view.as_ref(), &names);
             // A new `.rsx` needs something on disk for the crate graph to load; the live buffer itself travels as an overlay, never through the build directory.
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             if let Some(rsx_path) = file_path.as_deref() {

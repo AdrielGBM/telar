@@ -8,19 +8,26 @@ fn make_gen<'a>() -> ViewGen<'a> {
 #[test]
 fn literal_content() {
     let g = make_gen();
-    assert_eq!(
-        g.interpolate_content("hello", 0),
-        "|| \"hello\".to_string()"
-    );
+    assert!(matches!(
+        g.interpolation("hello {{x}}", 0, true),
+        super::interp::Interpolated::Literal(text) if text == "hello {x}"
+    ));
 }
 
 #[test]
 fn signal_interpolation() {
     let g = make_gen();
+    let super::interp::Interpolated::Formatted {
+        format, reactive, ..
+    } = g.interpolation("Count: {$count}", 0, false)
+    else {
+        panic!("a hole formats");
+    };
     assert_eq!(
-        g.interpolate_content("Count: {$count}", 0),
-        "move || format!(\"Count: {}\", { /*@RSX@EXPR:9:5@*/count.get() })"
+        format,
+        r#"format!("Count: {}", /*@RSX@EXPR:9:5@*/count.get())"#
     );
+    assert!(reactive);
 }
 
 #[test]
@@ -1707,4 +1714,128 @@ fn every_tag_the_view_builds_is_told_from_a_component_call() {
     }
     assert!(is_component_tag("button"));
     assert!(is_component_tag("forms::checkbox"));
+}
+
+fn transpile_view(source: &str) -> String {
+    crate::transpile_source(source, "demo", None, None)
+        .expect("transpiles")
+        .rust_code
+}
+
+/// The block a `text` reading `needle` is built in.
+fn text_block<'c>(code: &'c str, needle: &str) -> &'c str {
+    let at = code
+        .find(needle)
+        .unwrap_or_else(|| panic!("`{needle}`:\n{code}"));
+    let start = code[..at].rfind("let __text_").expect("a text block");
+    &code[start..at + needle.len()]
+}
+
+/// A binding another snippet still reads is copied into the text's closure, so the text no longer consumes what the next reader needs; one read alone is moved, as it always was.
+#[test]
+fn text_copies_in_a_binding_another_reader_still_needs() {
+    let code = transpile_view(
+        "[logic]\nlet project = std::rc::Rc::new(|| String::from(\"telar\"));\nlet once = String::from(\"x\");\n[view]\nrow label:(project())\n    text \"{project()}\"\n    text \"{once}\"\n",
+    );
+    assert!(
+        text_block(&code, "format!(\"{}\", project())").contains("let project = project.clone();"),
+        "{code}"
+    );
+    assert!(
+        !text_block(&code, "format!(\"{}\", once)").contains("let once = once.clone();"),
+        "{code}"
+    );
+}
+
+/// `props` is copied by the place a hole reads, which is what a closure captures: a field `[logic]` moved out stays moved, and the rest is not cloned whole.
+#[test]
+fn a_props_place_two_readers_share_is_copied_by_itself() {
+    let code = transpile_view(
+        "[logic]\npub struct Props {\n    pub detail: String,\n    pub state: String,\n}\nlet state = props.state;\n[view]\ncol\n    text \"{props.detail}\"\n    text \"{props.detail.len()}\"\n",
+    );
+    assert!(
+        code.contains("let __props_detail = props.detail.clone();"),
+        "{code}"
+    );
+    assert!(
+        code.contains("move || format!(\"{}\", __props_detail)"),
+        "{code}"
+    );
+    assert!(!code.contains("let props = props.clone();"), "{code}");
+}
+
+/// What an `if let` binds is often a borrow of the value it matched, and a closure needs an owned copy of it.
+#[test]
+fn an_if_let_binding_is_copied_into_a_text() {
+    let code = transpile_view(
+        "[logic]\nlet location: Option<String> = None;\n[view]\ncol\n    if let Some(place) = &location\n        text \"{place}\"\n",
+    );
+    assert!(
+        text_block(&code, "format!(\"{}\", place)").contains("let place = place.clone();"),
+        "{code}"
+    );
+}
+
+/// A quoted prop reads as text does: a literal while it has no hole, formatted once while its holes read nothing that moves, and followed while one does.
+#[test]
+fn a_quoted_prop_interpolates() {
+    let code = transpile_view(
+        "[logic]\nlet name = String::from(\"Ada\");\nlet count = signal(1);\n[view]\ncol\n    button label:\"Plain {{braces}}\"\n    button label:\"Hi {name}\"\n    button label:\"Count {$count}\"\n",
+    );
+    assert!(code.contains(".label(\"Plain {braces}\")"), "{code}");
+    assert!(code.contains(".label(format!(\"Hi {}\", "), "{code}");
+    assert!(
+        code.contains(
+            ".label(Reactive::of({ let count = count.clone(); move || format!(\"Count {}\""
+        ),
+        "{code}"
+    );
+}
+
+/// A constant cannot change, so a layout value made of constants needs nothing to re-read it; a call can answer differently, and is followed.
+#[test]
+fn a_constant_layout_value_is_static() {
+    let code = transpile_view(
+        "[logic]\nconst GRID: f32 = 4.0;\nfn gutter() -> f32 { GRID }\n[view]\ncol gap:GRID pad:(GRID * 2.0)\n    col gap:(gutter())\n        text \"x\"\n",
+    );
+    assert_eq!(code.matches(".styled_by(").count(), 1, "{code}");
+    assert!(
+        code.contains(".styled_by(move || LayoutStyle::new().flex_column().gap(gutter()))"),
+        "{code}"
+    );
+}
+
+/// A prop read from a hook or a signal follows it as a `$` read does; a hook's handle passed on, and a plain value, are left as written.
+#[test]
+fn a_prop_reading_reactive_context_follows_it() {
+    let code = transpile_view(
+        "[logic]\nlet open = signal(false);\n[view]\ncol\n    button label:\"a\" color:(use_tokens().primary)\n    button label:\"b\" scroll:(use_primary_scroll())\n    button label:\"c\" disabled:(open.get())\n    button label:\"d\" width:(WIDTH * 2.0)\n",
+    );
+    for expected in [
+        ".color(Reactive::of(move || use_tokens().primary))",
+        ".scroll(use_primary_scroll())",
+        ".disabled(Reactive::of({ let open = open.clone(); move || open.get() }))",
+        ".width(WIDTH * 2.0)",
+    ] {
+        assert!(code.contains(expected), "`{expected}`:\n{code}");
+    }
+}
+
+/// A hole of a quoted value maps back to the text it was written as, wherever the value is: a cursor on it reaches the Rust it became.
+#[test]
+fn a_quoted_values_holes_keep_their_source_spans() {
+    let src = "[logic]\nlet name = String::from(\"Ada\");\n[view]\ncol\n    button label:\"Hi {name.len()}\" a11y_label:\"Open {name.len()}\"\n    box label:\"Box {name.len()}\"\n";
+    let out = crate::transpile_source(src, "demo", None, None).unwrap();
+    let mapped: Vec<&str> = out
+        .expr_spans
+        .iter()
+        .map(|span| &src[span.rsx_start as usize..(span.rsx_start + span.len) as usize])
+        .filter(|text| text.contains("name"))
+        .collect();
+    assert_eq!(
+        mapped,
+        ["name.len()", "name.len()", "name.len()"],
+        "{}",
+        out.rust_code
+    );
 }

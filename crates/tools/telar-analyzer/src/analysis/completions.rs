@@ -261,6 +261,10 @@ fn attribute_items(specs: &[telar_transpiler::AttrSpec]) -> Vec<CompletionItem> 
         .collect()
 }
 
+pub fn component_instance_items() -> Vec<CompletionItem> {
+    attribute_items(&telar_transpiler::component_instance_attrs())
+}
+
 /// The attribute keys a tag accepts.
 pub fn attribute_key_items(tag: &str) -> Vec<CompletionItem> {
     attribute_items(&telar_transpiler::tag_attr_specs(tag))
@@ -321,10 +325,14 @@ pub fn theme_items(project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
 }
 
 /// The `[style]` classes this document declares.
-pub fn style_class_items(doc: &RsxDocument) -> Vec<CompletionItem> {
+pub fn style_class_items(
+    doc: &RsxDocument,
+    imports: &telar_transpiler::ResolvedImports,
+) -> Vec<CompletionItem> {
     doc.style
         .classes
         .iter()
+        .chain(imports.classes.iter().map(|imported| &imported.class))
         .map(|class| CompletionItem {
             label: class.name.clone(),
             kind: Some(CompletionItemKind::CLASS),

@@ -31,6 +31,8 @@ mod split;
 #[cfg(feature = "transpile")]
 mod style;
 #[cfg(feature = "transpile")]
+mod style_import;
+#[cfg(feature = "transpile")]
 mod tag_errors;
 mod theme;
 #[cfg(feature = "transpile")]
@@ -54,13 +56,16 @@ pub use preview::PREVIEW_OPTION_KEYS;
 #[cfg(feature = "transpile")]
 pub use registry::{
     AttrSpec, ROLE_VALUES, ValueKind, attr_doc, attr_spec, builtin_tag_doc, builtin_tags,
-    color_attr_keys, color_keywords, is_builtin_tag, is_control_flow_keyword, keyword_color_rgba,
-    layout_attr_keys, role_values, role_variant, tag_attr_keys, tag_attr_specs, value_kind,
+    color_attr_keys, color_keywords, component_instance_attrs, is_builtin_tag,
+    is_control_flow_keyword, keyword_color_rgba, layout_attr_keys, role_values, role_variant,
+    tag_attr_keys, tag_attr_specs, value_kind,
 };
 #[cfg(feature = "transpile")]
 pub use signal_scan::{SignalInfo, scan_effects, scan_locals, scan_signals};
 #[cfg(feature = "transpile")]
 pub use source_map::{ExprSpan, RsxSpan, SourceMap, nth_line};
+#[cfg(feature = "transpile")]
+pub use style_import::{ImportError, ImportedClass, ResolvedImports, resolve_style_imports};
 #[cfg(feature = "transpile")]
 pub use tag_errors::{GeneratedSite, generated_site, tag_columns, tag_error_message};
 pub use theme::resolve_theme_type;

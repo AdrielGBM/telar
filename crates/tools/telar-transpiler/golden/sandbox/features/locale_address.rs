@@ -19,7 +19,6 @@ pub fn locale_address(props: LocaleAddressProps, children: Children) -> Result<B
     let __owner = telar::owner_scope();
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
-
     let active = memo(|| telar::use_locale().unwrap_or_else(|| "none".to_string()));
     let address = memo(|| {
         let locale = telar::use_locale().unwrap_or_default();
@@ -56,7 +55,7 @@ pub fn locale_address(props: LocaleAddressProps, children: Children) -> Result<B
                                     if __request.includes(None) {
                                         let __text_0 = {
                                             Text::declaring(
-                                                move || format!("{}", { t!("greeting", name = "Ada") }),
+                                                move || format!("{}", t!("greeting", name = "Ada")),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                             )?
@@ -66,7 +65,7 @@ pub fn locale_address(props: LocaleAddressProps, children: Children) -> Result<B
                                             let active = active.clone();
                                             let address = address.clone();
                                             Text::declaring(
-                                                move || format!("locale · {}   ·   address · {}", { active.get() }, { address.get() }),
+                                                move || format!("locale · {}   ·   address · {}", active.get(), address.get()),
                                                 LayoutStyle::new(),
                                                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().primary) },
                                             )?

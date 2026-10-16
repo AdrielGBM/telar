@@ -26,21 +26,21 @@ pub fn prop_row(props: PropRowProps, children: Children) -> Result<Box<dyn Layou
     let __row_0 = {
         let __text_0 = {
             Text::declaring(
-                move || format!("{}", { props.name }),
+                move || format!("{}", props.name),
                 LayoutStyle::new().width(120.0),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().ink) },
             )?
         };
         let __text_1 = {
             Text::declaring(
-                move || format!("{}", { props.values }),
+                move || format!("{}", props.values),
                 LayoutStyle::new().width(190.0),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().primary) },
             )?
         };
         let __text_2 = {
             Text::declaring(
-                move || format!("{}", { props.about }),
+                move || format!("{}", props.about),
                 LayoutStyle::new().flex_grow(1.0),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
             )?

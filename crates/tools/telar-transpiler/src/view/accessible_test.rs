@@ -107,3 +107,38 @@ fn view_progress_writes_a_boxs_passage_into_a_signal() {
         "cover when none is named:\n{code}"
     );
 }
+
+/// A component call names, tags and hides the item the component returns, under spellings that leave its own `label` and `lang` props alone.
+#[test]
+fn a_component_call_is_annotated_with_its_own_spelling() {
+    let code = transpile(
+        "button label:\"Open\" a11y_label:\"Open {$name} in the canvas\" a11y_lang:\"es\" a11y:hidden\n",
+    );
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(".label(\"Open\")"),
+        "the prop is the button's:\n{code}"
+    );
+    assert!(
+        code.contains("ButtonProps::props().label(\"Open\").build()"),
+        "not passed as a prop:\n{code}"
+    );
+    let call = code
+        .split(".a11y_label(")
+        .nth(1)
+        .expect("the returned item is named");
+    assert!(
+        call.starts_with("{ let name = name.clone(); move || format!(\"Open {} in the canvas\""),
+        "a quoted name interpolates, reading its signal:\n{code}"
+    );
+    assert!(code.contains(".a11y_lang(|| \"es\")"), "{code}");
+    assert!(code.contains(".a11y_hidden()"), "{code}");
+}
+
+/// The value check covers a component call's `a11y:` as it does a built-in's.
+#[test]
+fn a_component_calls_a11y_takes_only_the_words_it_knows() {
+    let code = transpile("button label:\"x\" a11y:invisible\n");
+    assert!(code.contains("compile_error!"), "{code}");
+    assert!(!code.contains(".a11y_hidden()"), "{code}");
+}

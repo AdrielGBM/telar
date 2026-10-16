@@ -53,7 +53,7 @@ pub fn steppers(props: SteppersProps, children: Children) -> Result<Box<dyn Layo
                                             let __text_0 = {
                                                 let qty = qty.clone();
                                                 Text::declaring(
-                                                    move || format!("qty · {}", { qty.get() }),
+                                                    move || format!("qty · {}", qty.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                                 )?
@@ -111,7 +111,7 @@ pub fn steppers(props: SteppersProps, children: Children) -> Result<Box<dyn Layo
                                             let __text_1 = {
                                                 let last_change = last_change.clone();
                                                 Text::declaring(
-                                                    move || format!("{}", { last_change.get() }),
+                                                    move || format!("{}", last_change.get()),
                                                     LayoutStyle::new(),
                                                     { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(14.0).with_color(theme.get().muted) },
                                                 )?

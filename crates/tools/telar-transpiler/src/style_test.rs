@@ -1,5 +1,5 @@
 use super::*;
-use telar_parser::StyleProp;
+use telar_parser::{StyleProp, StyleSection};
 
 fn call(key: &str, value: &str) -> Option<String> {
     match layout_prop_call(key, value, ThemeAccess::Handle) {
@@ -281,9 +281,11 @@ fn a_class_property_reports_its_own_bad_value() {
                 value: "centre".into(),
             }],
             line: 1,
+            public: false,
         }],
+        ..Default::default()
     };
-    let out = generate_style_section(&section, None, ThemeAccess::Handle);
+    let out = generate_classes(&section.classes, &[], None, ThemeAccess::Handle);
     assert!(
         out.contains("compile_error!"),
         "a bad class property must fail the build: {out}"
@@ -302,9 +304,11 @@ fn a_class_property_with_an_unknown_key_is_rejected() {
                 value: "col".into(),
             }],
             line: 1,
+            public: false,
         }],
+        ..Default::default()
     };
-    let out = generate_style_section(&section, None, ThemeAccess::Handle);
+    let out = generate_classes(&section.classes, &[], None, ThemeAccess::Handle);
     assert!(out.contains("`direction` is not a style property"), "{out}");
 }
 
@@ -319,11 +323,14 @@ fn a_paint_property_in_a_class_is_not_mistaken_for_an_unknown_key() {
                 value: "#fff".into(),
             }],
             line: 1,
+            public: false,
         }],
+        ..Default::default()
     };
     assert!(
-        !generate_style_section(&section, None, ThemeAccess::Handle).contains("compile_error!"),
+        !generate_classes(&section.classes, &[], None, ThemeAccess::Handle)
+            .contains("compile_error!"),
         "a paint property belongs in a class: {}",
-        generate_style_section(&section, None, ThemeAccess::Handle)
+        generate_classes(&section.classes, &[], None, ThemeAccess::Handle)
     );
 }

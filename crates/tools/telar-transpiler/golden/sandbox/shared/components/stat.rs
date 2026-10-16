@@ -23,14 +23,14 @@ pub fn stat(props: StatProps, children: Children) -> Result<Box<dyn LayoutItem>,
     let __sbox_0 = {
         let __text_0 = {
             Text::declaring(
-                move || format!("{}", { props.value }),
+                move || format!("{}", props.value),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(28.0).with_color(theme.get().primary) },
             )?
         };
         let __text_1 = {
             Text::declaring(
-                move || format!("{}", { props.label }),
+                move || format!("{}", props.label),
                 LayoutStyle::new(),
                 { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
             )?
