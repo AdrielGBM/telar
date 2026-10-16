@@ -149,8 +149,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect(by_role(Role::MenuItem).containing("New file"))?;
             canvas.click(by_role(Role::MenuItem).containing("Open"))?;
             canvas.expect_absent(by_role(Role::MenuItem))?;
-            canvas.expect_expanded(file, false)?;
-            canvas.expect_action("on_select", 1)
+            canvas.expect_expanded(file.clone(), false)?;
+            canvas.expect_action("on_select", 1)?;
+            canvas.click(file)?;
+            canvas.expect(by_role(Role::MenuItem).containing("New file"))
         }),
         preview!(menu: MenuProps, "Submenus", |p| {
             let chosen = p.signal("theme", 0usize);
@@ -178,12 +180,15 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.press(Key::Named(NamedKey::Enter))?;
             canvas.expect_absent(by_role(Role::MenuItemRadio))?;
             canvas.expect_focused(view.clone())?;
-            canvas.click(view)?;
+            canvas.click(view.clone())?;
             canvas.hover(theme.clone())?;
-            canvas.expect_expanded(theme, true)?;
+            canvas.expect_expanded(theme.clone(), true)?;
             canvas.expect_toggled(by_role(Role::MenuItemRadio).containing("Dark"), true)?;
             canvas.click(by_role(Role::MenuItemRadio).containing("Light"))?;
-            canvas.expect_absent(by_role(Role::MenuItemRadio))
+            canvas.expect_absent(by_role(Role::MenuItemRadio))?;
+            canvas.click(view)?;
+            canvas.hover(theme)?;
+            canvas.expect_toggled(by_role(Role::MenuItemRadio).containing("Light"), true)
         }),
         preview!(menu: MenuProps, "Switches", |p| {
             let chosen = p.signal("theme", 0usize);

@@ -1,12 +1,43 @@
 //! A snapshot's result as a test run reports it, beside the full result in the snapshot report.
 
-use crate::preview::snapshot::{FileStatus, SnapshotResult, SnapshotStatus};
+use crate::preview::snapshot::{FileStatus, Moment, SnapshotResult, SnapshotStatus};
 
 use super::report::{CheckStatus, SnapshotCheck};
 use super::shown;
 
-/// The result as a test run reports it: passed or failed, and what was found, in words.
-pub(super) fn describe(result: &SnapshotResult) -> SnapshotCheck {
+/// The snapshots of one canvas as a test run reports them: passed when every one did, and what was found, in words, each after the moment it is of when there is more than one.
+pub(super) fn describe<'a>(results: impl IntoIterator<Item = &'a SnapshotResult>) -> SnapshotCheck {
+    let checks: Vec<(Moment, SnapshotCheck)> = results
+        .into_iter()
+        .map(|result| (result.moment, describe_one(result)))
+        .collect();
+    let status = match checks
+        .iter()
+        .any(|(_, check)| check.status == CheckStatus::Failed)
+    {
+        true => CheckStatus::Failed,
+        false => CheckStatus::Passed,
+    };
+    let detail = match checks.as_slice() {
+        [] => None,
+        [(_, check)] => check.detail.clone(),
+        several => Some(
+            several
+                .iter()
+                .filter_map(|(moment, check)| {
+                    check
+                        .detail
+                        .as_ref()
+                        .map(|detail| format!("{}: {detail}", moment.as_str()))
+                })
+                .collect::<Vec<_>>()
+                .join("; "),
+        ),
+    };
+    SnapshotCheck { status, detail }
+}
+
+fn describe_one(result: &SnapshotResult) -> SnapshotCheck {
     let (status, detail) = match result.status {
         SnapshotStatus::Matched => (CheckStatus::Passed, String::from("matched")),
         SnapshotStatus::Updated => (CheckStatus::Passed, String::from("written")),

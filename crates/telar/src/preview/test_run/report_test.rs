@@ -116,7 +116,7 @@ fn the_written_report_still_reads_as_a_snapshot_report() {
 #[test]
 fn accepting_a_drift_writes_both_goldens_and_passes_its_cell() {
     use crate::preview::snapshot::{
-        DrawCheck, FileStatus, PngCheck, SnapshotError, SnapshotMode, SnapshotPaths,
+        DrawCheck, FileStatus, Moment, PngCheck, SnapshotError, SnapshotMode, SnapshotPaths,
         SnapshotReport, SnapshotResult, SnapshotStatus, SnapshotSummary, Tolerance,
     };
 
@@ -136,7 +136,9 @@ fn accepting_a_drift_writes_both_goldens_and_passes_its_cell() {
     let drifted = SnapshotResult {
         id: id.to_string(),
         preview: String::from("demo--card--a"),
+        subject: id.to_string(),
         cell: vec![(String::from("mode"), String::from("dark"))],
+        moment: Moment::End,
         status: SnapshotStatus::Changed,
         png: Some(PngCheck {
             status: FileStatus::Changed,

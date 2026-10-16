@@ -159,7 +159,11 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_expanded(by_role(Role::MenuItem).containing("Share"), false)?;
             canvas.press(Key::Named(NamedKey::Escape))?;
             canvas.expect_absent(by_role(Role::MenuItem))?;
-            canvas.expect_focused(document)
+            canvas.expect_focused(document)?;
+            canvas.press(Key::Named(NamedKey::ContextMenu))?;
+            canvas.press(Key::Named(NamedKey::End))?;
+            canvas.press(Key::Named(NamedKey::ArrowRight))?;
+            canvas.expect_expanded(by_role(Role::MenuItem).containing("Share"), true)
         }),
     ]
 }

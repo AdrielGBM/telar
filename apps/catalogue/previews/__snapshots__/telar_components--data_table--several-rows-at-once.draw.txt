@@ -46,7 +46,7 @@ element group
                           end
                         end
                         element row
-                          rect 0,64 420x32 fill=#00000014 radius=6
+                          rect 0,64 420x32 radius=6
                           element gridcell
                             rect 0,64 211x32 radius=6
                             element group
@@ -79,7 +79,7 @@ element group
                           end
                         end
                         element row
-                          rect 0,96 420x32 radius=6
+                          rect 0,96 420x32 fill=#00000014 radius=6
                           element gridcell
                             rect 0,96 211x32 radius=6
                             element group
@@ -112,7 +112,7 @@ element group
                           end
                         end
                         element row
-                          rect 0,128 420x32 radius=6
+                          rect 0,128 420x32 fill=#00000014 radius=6
                           element gridcell
                             rect 0,128 211x32 radius=6
                             element group

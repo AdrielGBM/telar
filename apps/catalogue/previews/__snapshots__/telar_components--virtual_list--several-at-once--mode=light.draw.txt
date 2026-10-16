@@ -42,7 +42,7 @@ element group
                         end
                       end
                       element option
-                        rect 0,64 280x32 fill=#00000014 radius=6
+                        rect 0,64 280x32 radius=6
                         element group
                           clip 8,64 241x32
                             matrix 1,0,0,1,8,64
@@ -57,7 +57,7 @@ element group
                         end
                       end
                       element option
-                        rect 0,96 280x32 radius=6
+                        rect 0,96 280x32 fill=#00000014 radius=6
                         element group
                           clip 8,96 241x32
                             matrix 1,0,0,1,8,96
@@ -72,7 +72,7 @@ element group
                         end
                       end
                       element option
-                        rect 0,128 280x32 radius=6
+                        rect 0,128 280x32 fill=#00000014 radius=6
                         element group
                           clip 8,128 241x32
                             matrix 1,0,0,1,8,128
@@ -102,7 +102,7 @@ element group
                         end
                       end
                       element option
-                        rect 0,192 280x32 fill=#00000014 radius=6
+                        rect 0,192 280x32 radius=6
                         element group
                           clip 8,192 241x32
                             matrix 1,0,0,1,8,192

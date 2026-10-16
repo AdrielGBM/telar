@@ -6,7 +6,7 @@ element group
       element group
         element group
           element button
-            rect 16,16 182x28 radius=10
+            rect 16,16 182x28 fill=#ffffff1a radius=10
             element group
               clip 28,-1000000 54x2000000
                 matrix 1,0,0,1,28,16
@@ -21,10 +21,82 @@ element group
             end
           end
           element group
+          end
+        end
+      end
+    end
+  end
+end
+element group
+  rect 0,0 800x600
+  element group
+    matrix 1,0,0,1,16,52
+      rect 0,0 182x109 fill=#1c1f29ff border=1 border-color=#3d4252ff radius=12
+      element menu
+        clip 4,4 174x101
+          matrix 1,0,0,1,4,4
             element group
+              element menuitem
+                rect 0,0 174x32 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,0
+                    text 0,7 92x16.8 "Theme" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,108,0
+                    text 0,7 44.2x15.12 "System" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,160,10
+                    path M0,0 L6,6 L0,12 stroke=1.5 stroke-color=#99a1b8ff
+                  end
+                end
+              end
+              element group
+                rect 0,34 174x1 fill=#3d4252ff
+              end
+              element menuitemcheckbox
+                rect 0,37 174x32 fill=#ffffff0d radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,37
+                    text 0,7 122x16.8 "Reduce motion" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+                element group
+                  rect 138,45 28x16 fill=#ffffff29 radius=8
+                  element group
+                    rect 140,47 12x12 fill=#ebedf5ff radius=6
+                  end
+                end
+              end
+              element menuitemcheckbox
+                rect 0,69 174x32 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,69
+                    text 0,7 122x16.8 "High contrast" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+                element group
+                  rect 138,77 28x16 fill=#7394ffff radius=8
+                  element group
+                    matrix 1,0,0,1,12,0
+                      rect 140,79 12x12 fill=#0d0f1fff radius=6
+                    end
+                  end
+                end
+              end
             end
           end
         end
+        rect 4,4 174x101
       end
     end
   end

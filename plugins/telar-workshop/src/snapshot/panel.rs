@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use telar::preview::snapshot::{FileStatus, SnapshotResult, SnapshotStatus};
+use telar::preview::snapshot::{FileStatus, Moment, SnapshotResult, SnapshotStatus};
 use telar::{
     AlignItems, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
     LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, Role, Text, box_item, children,
@@ -20,10 +20,11 @@ use super::subject;
 use crate::state::WorkshopState;
 use crate::strings::{
     self, NOTHING_SELECTED, SNAPSHOT_ACCEPT, SNAPSHOT_ACCEPT_FAILED, SNAPSHOT_COMPARE,
-    SNAPSHOT_DRAW_CHANGED, SNAPSHOT_DRAW_DIFF, SNAPSHOT_DRIFT, SNAPSHOT_FAILED, SNAPSHOT_MATCHES,
-    SNAPSHOT_NO_GOLDEN, SNAPSHOT_NO_REPORT, SNAPSHOT_NO_REPORT_HINT, SNAPSHOT_NOT_TAKEN,
-    SNAPSHOT_OVERLAY, SNAPSHOT_PIXELS, SNAPSHOT_RELOAD, SNAPSHOT_RESIZED, SNAPSHOT_SIDE_BY_SIDE,
-    SNAPSHOT_SWIPE, SNAPSHOT_UNREADABLE, SNAPSHOT_WRITTEN,
+    SNAPSHOT_DRAW_CHANGED, SNAPSHOT_DRAW_DIFF, SNAPSHOT_DRIFT, SNAPSHOT_END, SNAPSHOT_FAILED,
+    SNAPSHOT_MATCHES, SNAPSHOT_MOMENT, SNAPSHOT_NO_GOLDEN, SNAPSHOT_NO_REPORT,
+    SNAPSHOT_NO_REPORT_HINT, SNAPSHOT_NOT_TAKEN, SNAPSHOT_OVERLAY, SNAPSHOT_PIXELS,
+    SNAPSHOT_RELOAD, SNAPSHOT_RESIZED, SNAPSHOT_SIDE_BY_SIDE, SNAPSHOT_START, SNAPSHOT_SWIPE,
+    SNAPSHOT_UNREADABLE, SNAPSHOT_WRITTEN,
 };
 
 const MESSAGE_MAX_WIDTH: f32 = WORKBENCH_GRID * 90.0;
@@ -35,8 +36,14 @@ enum Shown {
     NoReport,
     Unreadable(String),
     NotTaken,
-    NotCaptured(String),
-    Found(Box<SnapshotResult>),
+    Found(Box<Reviewed>),
+}
+
+/// The snapshot of the canvas under review at the moment chosen, and every moment the run snapshotted it at.
+#[derive(Clone, Debug)]
+struct Reviewed {
+    result: SnapshotResult,
+    moments: Vec<Moment>,
 }
 
 fn shown(state: &WorkshopState) -> Shown {
@@ -47,13 +54,22 @@ fn shown(state: &WorkshopState) -> Shown {
     match review.loaded() {
         Loaded::Absent => Shown::NoReport,
         Loaded::Unreadable(error) => Shown::Unreadable(error),
-        Loaded::Read(_) => match review.result(&id) {
-            None => Shown::NotTaken,
-            Some(result) if result.status == SnapshotStatus::Failed => {
-                Shown::NotCaptured(result.error.unwrap_or_default())
+        Loaded::Read(_) => {
+            let mut results = review.results(&id);
+            let moments: Vec<Moment> = results.iter().map(|result| result.moment).collect();
+            let chosen = review.moment().get();
+            let at = results
+                .iter()
+                .position(|result| result.moment == chosen)
+                .unwrap_or(results.len().saturating_sub(1));
+            match results.is_empty() {
+                true => Shown::NotTaken,
+                false => Shown::Found(Box::new(Reviewed {
+                    result: results.swap_remove(at),
+                    moments,
+                })),
             }
-            Some(result) => Shown::Found(Box::new(result)),
-        },
+        }
     }
 }
 
@@ -70,8 +86,14 @@ pub(crate) fn panel(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
             Shown::NoReport => message(SNAPSHOT_NO_REPORT, Some(SNAPSHOT_NO_REPORT_HINT), None),
             Shown::Unreadable(error) => message(SNAPSHOT_UNREADABLE, None, Some(error)),
             Shown::NotTaken => message(SNAPSHOT_NOT_TAKEN, None, None),
-            Shown::NotCaptured(error) => message(SNAPSHOT_FAILED, None, Some(error)),
-            Shown::Found(result) => reviewed(&review, *result),
+            Shown::Found(reviewed) => match (reviewed.result.status, reviewed.moments.len()) {
+                (SnapshotStatus::Failed, 1) => message(
+                    SNAPSHOT_FAILED,
+                    None,
+                    Some(reviewed.result.error.unwrap_or_default()),
+                ),
+                _ => self::reviewed(&review, *reviewed),
+            },
         },
     )?;
     Ok(box_item(body))
@@ -144,10 +166,14 @@ pub(crate) fn drift_badge(
 
 fn reviewed(
     review: &SnapshotReview,
-    result: SnapshotResult,
+    reviewed: Reviewed,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let Reviewed { result, moments } = reviewed;
     let pictures = Pictures::of(&result);
     let mut header = vec![title(&result.id)?, summary(&result)?, spacer()?];
+    if moments.len() > 1 {
+        header.push(moment_switch(review, &moments)?);
+    }
     if pictures.comparable() {
         header.push(mode_switch(review)?);
     }
@@ -162,25 +188,52 @@ fn reviewed(
             .gap(WORKBENCH_GRID * 1.5),
         header,
     )?;
-    let (mode, opacity, swipe) = (review.mode(), review.opacity(), review.swipe());
-    let shown = ReactiveList::with_style(
-        fill(),
-        move || vec![mode.get()],
-        |mode: &CompareMode| *mode,
-        move |mode| compared(&pictures, mode, opacity, swipe),
-    )?;
-    let mut content = children![shown];
-    if let Some(diff) = draw_diff(&result)? {
-        content.push(diff);
+    let mut column = vec![box_item(header), failure(review)?];
+    if result.status != SnapshotStatus::Failed {
+        let (mode, opacity, swipe) = (review.mode(), review.opacity(), review.swipe());
+        let shown = ReactiveList::with_style(
+            fill(),
+            move || vec![mode.get()],
+            |mode: &CompareMode| *mode,
+            move |mode| compared(&pictures, mode, opacity, swipe),
+        )?;
+        let mut content = children![shown];
+        if let Some(diff) = draw_diff(&result)? {
+            content.push(diff);
+        }
+        let content = Container::new(fill().flex_row().gap(WORKBENCH_GRID * 1.5), content)?;
+        column.push(box_item(content));
     }
-    let content = Container::new(fill().flex_row().gap(WORKBENCH_GRID * 1.5), content)?;
     let column = Container::new(
         workbench_fill()
             .gap(WORKBENCH_GRID)
             .padding_all(WORKBENCH_GRID * 1.5),
-        vec![box_item(header), failure(review)?, box_item(content)],
+        column,
     )?;
     Ok(box_item(column))
+}
+
+/// Picks which moment of its play the panel reviews of a canvas snapshotted at more than one.
+fn moment_switch(
+    review: &SnapshotReview,
+    moments: &[Moment],
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let tabs = moments
+        .iter()
+        .map(|&moment| {
+            let label = match moment {
+                Moment::Start => SNAPSHOT_START,
+                Moment::End => SNAPSHOT_END,
+            };
+            Tab::new(moment, strings::reactive(label))
+        })
+        .collect();
+    tab_list(
+        review.moment(),
+        tabs,
+        Color::TRANSPARENT.into(),
+        Some(strings::reactive(SNAPSHOT_MOMENT)),
+    )
 }
 
 fn title(id: &str) -> Result<Box<dyn LayoutItem>, LayoutError> {

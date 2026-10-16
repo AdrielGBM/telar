@@ -7,12 +7,14 @@
 use std::path::{Path, PathBuf};
 
 use telar::preview::snapshot::{
-    FileStatus, SnapshotError, SnapshotMode, SnapshotPaths, SnapshotReport, SnapshotStatus,
-    Snapshots, Tolerance,
+    FileStatus, Moment, SnapshotError, SnapshotKey, SnapshotMode, SnapshotPaths, SnapshotReport,
+    SnapshotStatus, Snapshots, Tolerance,
 };
-use telar::preview::{Axis, Matrices, Matrix, PreviewCtx, PreviewEntry};
+use telar::preview::{
+    Axis, Matrices, Matrix, Play, PlayResult, PreviewCtx, PreviewEntry, SnapshotAt, by_role,
+};
 use telar::{
-    AppConfig, Color, Direction, FontAsset, LayoutError, LayoutItem, LayoutStyle, RectStyle,
+    AppConfig, Color, Direction, FontAsset, LayoutError, LayoutItem, LayoutStyle, RectStyle, Role,
     StyledContainer, Text, TextStyle, box_item,
 };
 
@@ -123,7 +125,10 @@ fn a_snapshot_matches_the_goldens_an_update_wrote() {
     );
     let json = read(&paths.report());
     assert!(json.contains("\"status\": \"matched\""), "{json}");
-    assert!(json.contains("\"version\": 1"), "{json}");
+    assert!(
+        json.contains(&format!("\"version\": {}", SnapshotReport::VERSION)),
+        "{json}"
+    );
 }
 
 #[test]
@@ -298,6 +303,95 @@ fn each_matrix_cell_is_a_snapshot_of_its_own() {
         read(&paths.golden_draw(ids[2])).starts_with("frame 160x80 dir=rtl"),
         "the cell draws right to left"
     );
+}
+
+fn counter(p: &PreviewCtx) -> Built {
+    let presses = p.signal("presses", 0u32);
+    let label = Text::new(
+        move || format!("Pressed {}", presses.get()),
+        LayoutStyle::new(),
+        || TextStyle::new(14.0, Color::WHITE),
+    )?;
+    Ok(box_item(
+        StyledContainer::new(
+            LayoutStyle::new().padding_all(8.0),
+            |_| RectStyle::filled(Color::from_rgb_u8(0x22, 0x55, 0xaa), 4.0),
+            vec![box_item(label)],
+        )?
+        .control(Role::Button)
+        .on_press(move || presses.update(|count| *count += 1)),
+    ))
+}
+
+fn pressed(canvas: &mut Play) -> PlayResult {
+    canvas.click(by_role(Role::Button).named("Pressed 0"))
+}
+
+fn lost(canvas: &mut Play) -> PlayResult {
+    canvas.click(by_role(Role::Button).named("Pressed 9"))
+}
+
+fn played(play: fn(&mut Play) -> PlayResult) -> PreviewEntry {
+    PreviewEntry::new(ID, "badge", "default", counter)
+        .viewport(160.0, 80.0)
+        .play(play)
+}
+
+#[test]
+fn a_played_preview_is_snapshotted_as_its_play_leaves_it() {
+    let dirs = Dirs::new("played");
+    let paths = dirs.paths();
+    let report = run(&dirs, SnapshotMode::Update, &played(pressed));
+    let ids: Vec<&str> = report.snapshots.iter().map(|r| r.id.as_str()).collect();
+    assert_eq!(ids, [ID]);
+    assert_eq!(report.snapshots[0].moment, Moment::End);
+    assert_eq!(report.snapshots[0].subject, ID);
+    let draw = read(&paths.golden_draw(ID));
+    assert!(draw.contains("\"Pressed 1\""), "{draw}");
+}
+
+#[test]
+fn a_preview_kept_at_both_moments_snapshots_its_start_beside_its_end() {
+    let dirs = Dirs::new("both");
+    let paths = dirs.paths();
+    let entry = played(pressed).snapshot(SnapshotAt::Both);
+    let report = run(&dirs, SnapshotMode::Update, &entry);
+    let taken: Vec<(&str, Moment)> = report
+        .snapshots
+        .iter()
+        .map(|r| (r.id.as_str(), r.moment))
+        .collect();
+    let start = format!("{ID}{}", SnapshotKey::START_SUFFIX);
+    assert_eq!(taken, [(start.as_str(), Moment::Start), (ID, Moment::End)]);
+    assert!(report.snapshots.iter().all(|r| r.subject == ID));
+    assert!(read(&paths.golden_draw(&start)).contains("\"Pressed 0\""));
+    assert!(read(&paths.golden_draw(ID)).contains("\"Pressed 1\""));
+
+    let opened = run(
+        &dirs,
+        SnapshotMode::Update,
+        &played(pressed).snapshot(SnapshotAt::Start),
+    );
+    assert_eq!(opened.snapshots[0].id, ID);
+    assert_eq!(opened.snapshots[0].moment, Moment::Start);
+    assert!(read(&paths.golden_draw(ID)).contains("\"Pressed 0\""));
+}
+
+#[test]
+fn a_play_that_stops_early_leaves_no_end_to_snapshot_and_writes_no_golden() {
+    let dirs = Dirs::new("stopped");
+    let paths = dirs.paths();
+    let entry = played(lost).snapshot(SnapshotAt::Both);
+    let report = run(&dirs, SnapshotMode::Update, &entry);
+    let start = &report.snapshots[0];
+    assert_eq!(start.status, SnapshotStatus::Updated, "{start:?}");
+    let end = &report.snapshots[1];
+    assert_eq!(end.status, SnapshotStatus::Failed);
+    let error = end.error.as_deref().unwrap_or_default();
+    assert!(error.contains("the play stopped before its end"), "{error}");
+    assert!(error.contains("Pressed 9"), "{error}");
+    assert!(!paths.golden_png(ID).exists());
+    assert!(!report.passed());
 }
 
 #[test]

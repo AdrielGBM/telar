@@ -8,9 +8,9 @@ element group
           element combobox
             rect 309,286 182x28 fill=#ffffffff border=1 border-color=#4261edff radius=10
             element group
-              clip 321,-1000000 54x2000000
+              clip 321,-1000000 66x2000000
                 matrix 1,0,0,1,321,286
-                  text 0,5 54x16.8 "Option 1" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  text 0,5 66x16.8 "Option 40" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                 end
               end
             end

@@ -6,7 +6,7 @@ element group
       element group
         element group
           element button
-            rect 16,16 354x32 radius=10
+            rect 16,16 354x32 fill=#ffffff0d radius=10
             element group
               matrix 1,0,0,1,28,16
                 text 0,7 105.41x16.8 "Shipping details" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en

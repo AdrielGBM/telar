@@ -5,10 +5,10 @@ element group
     element group
       element group
         element button
-          rect 335,286 130x28 fill=#4261edff radius=10
+          rect 335,286 130x28 fill=#3852caff border=2 border-color=#4261edff radius=10
           element group
             matrix 1,0,0,1,347,286
-              text 0,5 106.16x16.8 "Pressed 0 times" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+              text 0,5 106x16.8 "Pressed 2 times" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
             end
           end
         end

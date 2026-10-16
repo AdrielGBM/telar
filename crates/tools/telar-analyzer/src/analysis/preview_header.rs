@@ -70,6 +70,10 @@ fn describe(key: &str) -> Option<(&'static str, &'static str)> {
             "A flag beside `surface:`: plays the root's enter transition.",
             "animate",
         ),
+        "snapshot" => (
+            "Which moments of the preview's play its snapshots keep: `end`, as the play leaves the canvas (the default), `start`, as it opens, or `both`.",
+            "snapshot:",
+        ),
         "args" => (
             "`args:none` keeps the root's literal attributes fixed rather than turning each into an arg.",
             "args:",

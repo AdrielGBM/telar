@@ -7,27 +7,27 @@ element group
         element group
           element group
             element group
-              clip 16,16 240x160
+              clip 16,16 160x176
                 element group
-                  rect 16,16 240x160 fill=#f5f7fcff border=1 border-color=#dbdeedff
+                  rect 16,16 160x176 fill=#f5f7fcff border=1 border-color=#dbdeedff
                   element group
                     matrix 1,0,0,1,28,28
-                      text 0,0 216x16.8 "Panel" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                      text 0,0 136x16.8 "Panel" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                     end
                   end
                 end
               end
             end
             element separator
-              rect 256,16 8x160
+              rect 176,16 8x176
             end
           end
           element group
             element separator
-              rect 16,176 240x8
+              rect 16,192 160x8
             end
             element group
-              rect 256,176 8x8 fill=#dbdeedff
+              rect 176,192 8x8 fill=#dbdeedff
             end
           end
         end

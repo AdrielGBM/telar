@@ -11,13 +11,14 @@ element group
             end
           end
           element group
-            rect 250,281 300x61 fill=#12141cff border=1 border-color=#3d4252ff radius=10
+            rect 250,281 300x61 fill=#12141cff border=2 border-color=#7394ffff radius=10
             element scrollarea
               clip 262,287 276x51
                 matrix 1,0,0,1,262,287
                   element group
                     matrix 1,0,0,1,0,0
-                      text 0,0 276x51 "Ring twice and leave the parcel with the neighbour at number twelve if nobody answers; the side gate is open until six." size=14 family=sans-serif weight=400 color=#ebedf5ff
+                      text 0,0 276x51 "Ring twice and leave the parcel with the neighbour at number twelve if nobody answers; the side gate is open until six.!" size=14 family=sans-serif weight=400 color=#ebedf5ff
+                      rect 263.5,33.6 1.5x16.8 fill=#ebedf5ff
                     end
                   end
                 end

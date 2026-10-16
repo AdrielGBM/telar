@@ -6,7 +6,7 @@ element group
       element group
         element group
           element link
-            rect 351,263 98x17 radius=6
+            rect 351,263 98x17 border=2 border-color=#4261edff radius=6
             element group
               matrix 1,0,0,1,351,263
                 text 0,0 98.53x16.8 "Getting started" size=14 family=sans-serif weight=400 color=#4261edff wrap=none underline=font underline-offset=font lang=en

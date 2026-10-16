@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use serde::{Deserialize, Serialize};
-use telar::preview::snapshot::{SnapshotReport, SnapshotResult, SnapshotStatus};
+use telar::preview::snapshot::{Moment, SnapshotReport, SnapshotResult, SnapshotStatus};
 use telar::preview::test_run::TestReport;
 use telar::{RwSignal, batch, hot_signal, signal};
 
@@ -43,6 +43,7 @@ pub(crate) struct SnapshotReview {
     mode: RwSignal<CompareMode>,
     opacity: RwSignal<f32>,
     swipe: RwSignal<f32>,
+    moment: RwSignal<Moment>,
 }
 
 impl SnapshotReview {
@@ -56,6 +57,7 @@ impl SnapshotReview {
             mode: hot_signal(keys::SNAPSHOT_MODE, CompareMode::default()),
             opacity: signal(0.5),
             swipe: signal(0.5),
+            moment: signal(Moment::End),
         }
     }
 
@@ -73,25 +75,35 @@ impl SnapshotReview {
         self.loaded.get()
     }
 
-    /// What the run found of the snapshot `id`, a preview's or a matrix cell's. Tracked.
-    pub(crate) fn result(&self, id: &str) -> Option<SnapshotResult> {
+    /// What the run found of each snapshot of `subject`, a preview's or a matrix cell's canvas, in the order they were taken: one, or the start and the end of its play. Tracked.
+    pub(crate) fn results(&self, subject: &str) -> Vec<SnapshotResult> {
         self.loaded.with(|loaded| match loaded {
             Loaded::Read(report) => report
                 .snapshots
                 .snapshots
                 .iter()
-                .find(|result| result.id == id)
-                .cloned(),
-            Loaded::Absent | Loaded::Unreadable(_) => None,
+                .filter(|result| result.subject == subject)
+                .cloned()
+                .collect(),
+            Loaded::Absent | Loaded::Unreadable(_) => Vec::new(),
         })
     }
 
-    /// Tracked.
-    pub(crate) fn status(&self, id: &str) -> Option<SnapshotStatus> {
-        self.result(id).map(|result| result.status)
+    /// How the snapshots of `subject` stand: the first that failed the run, else the first taken. Tracked.
+    pub(crate) fn status(&self, subject: &str) -> Option<SnapshotStatus> {
+        let statuses: Vec<SnapshotStatus> = self
+            .results(subject)
+            .iter()
+            .map(|result| result.status)
+            .collect();
+        statuses
+            .iter()
+            .find(|status| status.is_failure())
+            .or(statuses.first())
+            .copied()
     }
 
-    /// How many snapshots of the preview `id`, of it as it opens and of each cell of its matrix, failed the run: drifted, missing a golden or not taken. Tracked.
+    /// How many snapshots of the preview `id`, of its canvas and of each cell of its matrix, failed the run: drifted, missing a golden or not taken. Tracked.
     pub(crate) fn drifted(&self, preview: &str) -> usize {
         self.loaded.with(|loaded| match loaded {
             Loaded::Read(report) => report
@@ -137,6 +149,11 @@ impl SnapshotReview {
     /// How opaque the picture captured is over its golden in [`CompareMode::Overlay`], 0–1.
     pub(crate) fn opacity(&self) -> RwSignal<f32> {
         self.opacity
+    }
+
+    /// Which moment of its play the panel reviews of a canvas snapshotted at both.
+    pub(crate) fn moment(&self) -> RwSignal<Moment> {
+        self.moment
     }
 
     /// Where the line between the golden and the picture captured sits across the picture in [`CompareMode::Swipe`], 0–1.

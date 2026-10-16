@@ -4,10 +4,10 @@ use std::path::{Path, PathBuf};
 
 use crate::AppConfig;
 use crate::preview::snapshot::{
-    SnapshotError, SnapshotMode, SnapshotPaths, SnapshotReport, SnapshotSummary, Snapshots,
-    Tolerance,
+    SnapshotError, SnapshotKey, SnapshotMode, SnapshotPaths, SnapshotReport, SnapshotSummary,
+    Snapshots, Tolerance,
 };
-use crate::preview::{Frame, MatrixCell, PlayError, PreviewEntry};
+use crate::preview::{Frame, PlayError};
 
 use super::options::{SnapshotSetting, TestOptions};
 use super::report::{SnapshotCheck, TestReport, TestRun};
@@ -38,19 +38,19 @@ pub(super) fn start(config: &AppConfig, options: &TestOptions) -> Result<Snapsho
 impl SnapshotRun {
     pub(super) fn check(
         &mut self,
-        entry: &PreviewEntry,
-        cell: Option<&MatrixCell>,
+        keys: &[SnapshotKey],
         opened: &Frame,
+        ended: Result<&Frame, &PlayError>,
     ) -> SnapshotCheck {
-        describe(self.0.check_frame(entry, cell, opened))
+        describe(self.0.check_moments(keys, opened, ended))
     }
 
-    /// Records that the snapshot of `entry`, or of its `cell`, could not be taken because the preview did not build.
-    pub(super) fn unbuilt(&mut self, entry: &PreviewEntry, cell: Option<&MatrixCell>, error: &str) {
-        let id = cell.map_or(entry.id, |cell| &cell.id);
+    /// Records that the snapshots `keys` name could not be taken because the preview did not build.
+    pub(super) fn unbuilt(&mut self, keys: &[SnapshotKey], error: &str) {
         let error = SnapshotError::Mount(PlayError::new(error));
-        self.0
-            .record_failure(id, entry.id, MatrixCell::owned_coordinates(cell), &error);
+        for key in keys {
+            self.0.record_failure(key, &error);
+        }
     }
 }
 

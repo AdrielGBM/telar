@@ -3,11 +3,17 @@ use std::path::PathBuf;
 use super::*;
 use crate::preview::snapshot::{DrawCheck, PngCheck};
 
+fn one(result: &SnapshotResult) -> SnapshotCheck {
+    describe([result])
+}
+
 fn result(status: SnapshotStatus, png: FileStatus, draw: FileStatus) -> SnapshotResult {
     SnapshotResult {
         id: String::from("demo--card--a"),
         preview: String::from("demo--card--a"),
+        subject: String::from("demo--card--a"),
         cell: Vec::new(),
+        moment: Moment::End,
         status,
         png: Some(PngCheck {
             status: png,
@@ -31,14 +37,14 @@ fn result(status: SnapshotStatus, png: FileStatus, draw: FileStatus) -> Snapshot
 
 #[test]
 fn a_match_and_an_update_pass() {
-    let matched = describe(&result(
+    let matched = one(&result(
         SnapshotStatus::Matched,
         FileStatus::Matched,
         FileStatus::Matched,
     ));
     assert_eq!(matched.status, CheckStatus::Passed);
     assert_eq!(matched.detail.as_deref(), Some("matched"));
-    let written = describe(&result(
+    let written = one(&result(
         SnapshotStatus::Updated,
         FileStatus::Written,
         FileStatus::Written,
@@ -48,7 +54,7 @@ fn a_match_and_an_update_pass() {
 
 #[test]
 fn a_missing_golden_fails_naming_the_file_and_how_to_write_it() {
-    let missing = describe(&result(
+    let missing = one(&result(
         SnapshotStatus::Missing,
         FileStatus::Matched,
         FileStatus::Missing,
@@ -65,7 +71,7 @@ fn a_missing_golden_fails_naming_the_file_and_how_to_write_it() {
 
 #[test]
 fn a_drift_fails_with_what_moved_and_where_the_diffs_are() {
-    let changed = describe(&result(
+    let changed = one(&result(
         SnapshotStatus::Changed,
         FileStatus::Changed,
         FileStatus::Changed,
@@ -87,7 +93,7 @@ fn a_resized_picture_says_both_sizes() {
         FileStatus::Matched,
     );
     resized.png.as_mut().unwrap().golden_size = Some([200, 80]);
-    let detail = describe(&resized).detail.unwrap();
+    let detail = one(&resized).detail.unwrap();
     assert!(detail.contains("160x80 and its golden 200x80"), "{detail}");
     assert!(!detail.contains("draw text"), "{detail}");
 }
@@ -100,10 +106,31 @@ fn a_snapshot_that_could_not_be_taken_fails_with_its_error() {
         FileStatus::Missing,
     );
     failed.error = Some(String::from("panicked while capturing the snapshot"));
-    let check = describe(&failed);
+    let check = one(&failed);
     assert_eq!(check.status, CheckStatus::Failed);
     assert_eq!(
         check.detail.as_deref(),
         Some("panicked while capturing the snapshot")
     );
+}
+
+#[test]
+fn a_canvas_kept_at_both_moments_fails_when_either_does_and_names_each() {
+    let mut start = result(
+        SnapshotStatus::Matched,
+        FileStatus::Matched,
+        FileStatus::Matched,
+    );
+    start.id = String::from("demo--card--a--start");
+    start.moment = Moment::Start;
+    let end = result(
+        SnapshotStatus::Changed,
+        FileStatus::Matched,
+        FileStatus::Changed,
+    );
+    let check = describe([&start, &end]);
+    assert_eq!(check.status, CheckStatus::Failed);
+    let detail = check.detail.unwrap();
+    assert!(detail.starts_with("start: matched; end: "), "{detail}");
+    assert!(detail.contains("the draw text changed"), "{detail}");
 }

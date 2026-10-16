@@ -1,4 +1,4 @@
-//! The Snapshot panel: what the workspace's last `cargo telar test` found of the selected preview's snapshot, or of the focused matrix cell's, against its golden — side by side, one over the other or swiped between, with the line diff of its draw text — and accepting a drift, which writes both goldens the way `cargo telar test --update-snapshots` does.
+//! The Snapshot panel: what the workspace's last `cargo telar test` found of the selected preview's snapshot, or of the focused matrix cell's, at the end of its play or at either end where it keeps both, against its golden — side by side, one over the other or swiped between, with the line diff of its draw text — and accepting a drift, which writes both goldens the way `cargo telar test --update-snapshots` does.
 //!
 //! A preview with a snapshot the run failed carries a badge in the sidebar, and the panel's tab counts the selected preview's.
 
@@ -11,7 +11,7 @@ pub(crate) use review::SnapshotReview;
 
 use crate::state::{ViewMode, WorkshopState};
 
-/// The id of the snapshot under review: the focused matrix cell's while the Matrix view shows one of the selected preview's cells, else the selected preview's own. Tracked.
+/// The id of the canvas whose snapshots are under review: the focused matrix cell's while the Matrix view shows one of the selected preview's cells, else the selected preview's own. Tracked.
 pub(crate) fn subject(state: &WorkshopState) -> Option<String> {
     let entry = state.selected()?;
     let focused = match state.view().get() {

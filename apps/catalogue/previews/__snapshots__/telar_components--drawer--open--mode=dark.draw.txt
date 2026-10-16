@@ -6,7 +6,7 @@ element group
       element group
         element group
           element button
-            rect 333,286 134x28 fill=#7394ffff radius=10
+            rect 333,286 134x28 fill=#627ed9ff radius=10
             element group
               matrix 1,0,0,1,345,286
                 text 0,5 110.95x16.8 "Open the drawer" size=14 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en

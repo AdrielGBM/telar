@@ -7,11 +7,9 @@ element group
         element switch
           rect 336,286 128x28
           element group
-            rect 336,290 36x20 fill=#4261edff radius=10
+            rect 336,290 36x20 fill=#00000024 radius=10
             element group
-              matrix 1,0,0,1,16,0
-                rect 338,292 16x16 fill=#ffffffff radius=8
-              end
+              rect 338,292 16x16 fill=#171a2eff radius=8
             end
           end
           element group

@@ -5,7 +5,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use crate::AppConfig;
 use crate::preview::a11y::Severity;
 use crate::preview::host::duplicate_ids;
-use crate::preview::{Matrices, MatrixCell, Play, PlayStep, PreviewEntry};
+use crate::preview::snapshot::SnapshotKey;
+use crate::preview::{Matrices, MatrixCell, Play, PlayError, PlayStep, PreviewEntry};
 
 use super::snapshots::{self, SnapshotRun};
 use super::{
@@ -198,7 +199,7 @@ fn unexpandable(entry: &PreviewEntry, error: String) -> CellReport {
     report.settle()
 }
 
-/// Builds and lays out `entry`, in `cell` when there is one, then runs its play, checks the canvas the play left, and compares the canvas as it opened with its snapshot.
+/// Builds and lays out `entry`, in `cell` when there is one, then runs its play, checks the canvas the play left, and compares the canvas at each moment its snapshots keep, as it opened and as the play left it.
 fn check(
     entry: &PreviewEntry,
     cell: Option<&MatrixCell>,
@@ -207,11 +208,12 @@ fn check(
 ) -> CellReport {
     let id = cell.map_or_else(|| entry.id.to_string(), |cell| cell.id.clone());
     let mut report = CellReport::new(id, MatrixCell::owned_coordinates(cell));
+    let keys = SnapshotKey::of(entry, cell);
     let mut play = match guarded(|| mount(entry, cell)).and_then(|mounted| mounted) {
         Ok(play) => play,
         Err(error) => {
             if let Some(snapshots) = snapshots {
-                snapshots.unbuilt(entry, cell, &error);
+                snapshots.unbuilt(&keys, &error);
                 report.snapshot.detail = Some(String::from("not taken: the preview did not build"));
             }
             report.build = BuildCheck {
@@ -231,13 +233,18 @@ fn check(
     report.play = run_play(&mut play);
     report.a11y = check_a11y(&play, a11y);
     if let Some(snapshots) = snapshots {
-        report.snapshot =
-            guarded(|| snapshots.check(entry, cell, &opened)).unwrap_or_else(|error| {
-                SnapshotCheck {
-                    status: CheckStatus::Failed,
-                    detail: Some(error),
-                }
-            });
+        let stopped = match (report.play.status, &report.play.error) {
+            (CheckStatus::Failed, Some(error)) => Some(PlayError::new(error.clone())),
+            _ => None,
+        };
+        report.snapshot = guarded(|| {
+            let ended = play.frame();
+            snapshots.check(&keys, &opened, stopped.as_ref().map_or(Ok(&ended), Err))
+        })
+        .unwrap_or_else(|error| SnapshotCheck {
+            status: CheckStatus::Failed,
+            detail: Some(error),
+        });
     }
     let _ = guarded(move || drop(play));
     report.settle()

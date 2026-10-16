@@ -8,6 +8,7 @@ use crate::{
 
 use super::a11y::Rule;
 use super::host::Args;
+use super::snapshot::SnapshotAt;
 use super::{ActionLog, ArgSpec, Globals, Matrix, PlayFn, PreviewArg, PropsSchema};
 
 /// What a preview's build fn is handed: the canvas it is built for, which it reads its args from, logs its callbacks' calls to and takes its environment from.
@@ -261,6 +262,8 @@ pub struct PreviewEntry {
     pub build: BuildFn,
     pub decorator: Option<Decorator>,
     pub play: Option<PlayFn>,
+    /// Which moments of the play its snapshots keep: the canvas as the play leaves it, unless set otherwise.
+    pub snapshot: SnapshotAt,
     /// The accessibility rules the preview knowingly breaks, which its checks leave out.
     pub a11y_ignore: &'static [Rule],
     /// The props of the component under preview, for its docs and controls.
@@ -293,6 +296,7 @@ impl PreviewEntry {
             build,
             decorator: None,
             play: None,
+            snapshot: SnapshotAt::End,
             a11y_ignore: &[],
             props: None,
         }
@@ -394,6 +398,11 @@ impl PreviewEntry {
             play: Some(play),
             ..self
         }
+    }
+
+    /// Which moments of the play the snapshots keep: `.snapshot(SnapshotAt::Both)` for a preview whose canvas as it opens is worth keeping beside the one its play leaves. A preview with no play is snapshotted as it opens whatever this says.
+    pub const fn snapshot(self, snapshot: SnapshotAt) -> Self {
+        Self { snapshot, ..self }
     }
 
     /// Leaves `rules` out of the preview's accessibility checks, replacing any it left out before: `.a11y_ignore(&[Rule::TargetSize])` for a preview that shows a dense layout on purpose.

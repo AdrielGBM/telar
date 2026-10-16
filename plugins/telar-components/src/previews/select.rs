@@ -53,7 +53,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_text("Large")?;
             canvas.click(by_role(Role::Option).named("Large"))?;
             canvas.expect_expanded(by_role(Role::ComboBox).named("Large"), false)?;
-            canvas.expect_action("on_select", 1)
+            canvas.expect_action("on_select", 1)?;
+            canvas.click(by_role(Role::ComboBox).named("Large"))?;
+            canvas.expect_toggled(by_role(Role::Option).named("Large"), true)
         }),
         preview!(select: SelectProps, "Bound selection", |p| {
             let selected = p.signal("selected", 1u32);

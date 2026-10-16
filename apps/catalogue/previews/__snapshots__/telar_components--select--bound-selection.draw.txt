@@ -6,11 +6,11 @@ element group
       element group
         element group
           element combobox
-            rect 309,286 182x28 fill=#ffffffff border=1 border-color=#4261edff radius=10
+            rect 309,286 182x28 fill=#ffffffff border=2 border-color=#4261edff radius=10
             element group
-              clip 321,-1000000 53x2000000
+              clip 321,-1000000 38x2000000
                 matrix 1,0,0,1,321,286
-                  text 0,5 53.33x16.8 "Medium" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                  text 0,5 38x16.8 "Large" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                 end
               end
             end

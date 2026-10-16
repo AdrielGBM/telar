@@ -67,7 +67,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_absent(by_role(Role::Option).containing("Save"))?;
             canvas.press(Key::Named(NamedKey::Enter))?;
             canvas.expect_absent(by_role(Role::Dialog))?;
-            canvas.expect_action("on_run", 1)
+            canvas.expect_action("on_run", 1)?;
+            canvas.click(by_role(Role::Button).named("Open the palette"))?;
+            canvas.type_text(by_role(Role::TextInput), "zoom")?;
+            canvas.expect(by_role(Role::Option).containing("Zoom out"))
         }),
     ]
 }

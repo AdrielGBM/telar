@@ -70,7 +70,11 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.expect_no_text("A new version is available.")?;
             canvas.expect_text("Your changes are saved.")?;
             canvas.click(by_role(Role::Button).named("Dismiss"))?;
-            canvas.expect_no_text("Your changes are saved.")
+            canvas.expect_no_text("Your changes are saved.")?;
+            canvas.click(by_role(Role::Button).named("Info"))?;
+            canvas.click(by_role(Role::Button).named("Error"))?;
+            canvas.expect_text("A new version is available.")?;
+            canvas.expect_text("The file could not be written.")
         }),
     ]
 }

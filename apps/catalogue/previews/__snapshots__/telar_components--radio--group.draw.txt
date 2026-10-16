@@ -22,9 +22,9 @@ element group
           element radio
             rect 361,286 78x28
             element group
-              rect 361,292 16x16 fill=#ffffffff border=1.5 border-color=#4261edff radius=8
+              rect 361,292 16x16 fill=#ffffffff border=1.5 border-color=#dbdeedff radius=8
               element group
-                rect 365,296 8x8 fill=#4261edff radius=4
+                rect 365,296 8x8 fill=#00000000 radius=4
               end
             end
             element group
@@ -36,9 +36,9 @@ element group
           element radio
             rect 361,316 78x28
             element group
-              rect 361,322 16x16 fill=#ffffffff border=1.5 border-color=#dbdeedff radius=8
+              rect 361,322 16x16 fill=#ffffffff border=1.5 border-color=#4261edff radius=8
               element group
-                rect 365,326 8x8 fill=#00000000 radius=4
+                rect 365,326 8x8 fill=#4261edff radius=4
               end
             end
             element group

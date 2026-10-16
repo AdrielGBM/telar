@@ -6,7 +6,7 @@ element group
       element group
         element group
           element button
-            rect 363,282 74x28 fill=#4261edff radius=10
+            rect 363,282 74x28 fill=#3852caff radius=10
             element group
               matrix 1,0,0,1,375,282
                 text 0,5 50.38x16.8 "Reopen" size=14 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en

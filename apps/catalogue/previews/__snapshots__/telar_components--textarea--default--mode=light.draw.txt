@@ -12,13 +12,14 @@ element group
               end
             end
             element group
-              rect 250,273 300x62 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+              rect 250,273 300x62 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
               element scrollarea
                 clip 262,279 276x50
                   matrix 1,0,0,1,262,279
                     element group
                       matrix 1,0,0,1,0,0
-                        text 0,0 276x50 "Anything we should know?" size=14 family=sans-serif weight=400 color=#171a2eb3
+                        text 0,0 276x50 "Ring twice\nLeave it by the door" size=14 family=sans-serif weight=400 color=#171a2eff
+                        rect 131.17,16.8 1.5x16.8 fill=#171a2eff
                       end
                     end
                   end
@@ -28,8 +29,8 @@ element group
           end
           element group
             element group
-              matrix 1,0,0,1,512,336
-                text 0,0 38.11x14.28 "0 / 120" size=11.9 family=sans-serif weight=400 color=#171a2eb3 lang=en
+              matrix 1,0,0,1,507,336
+                text 0,0 43x14.28 "31 / 120" size=11.9 family=sans-serif weight=400 color=#171a2eb3 lang=en
               end
             end
           end

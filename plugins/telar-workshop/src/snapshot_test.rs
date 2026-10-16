@@ -25,6 +25,8 @@ const HEIGHT: u32 = 1400;
 const DRIFTED: &str = "review--badge--drifted";
 const MATCHED: &str = "review--badge--matched";
 const UNTESTED: &str = "review--badge--untested";
+const PLAYED: &str = "review--badge--played";
+const PLAYED_START: &str = "review--badge--played--start";
 const CAPTURED_DRAW: &str = "frame 8x8\nrect 0,0 8x8 fill=#2255aaff\n";
 const GOLDEN_DRAW: &str = "frame 8x8\nrect 0,0 8x8 fill=#aa5522ff\n";
 
@@ -41,6 +43,7 @@ fn entries() -> Vec<PreviewEntry> {
         PreviewEntry::new(DRIFTED, "badge", "Primary", plain).title("Review/Badge"),
         PreviewEntry::new(MATCHED, "badge", "Secondary", plain).title("Review/Badge"),
         PreviewEntry::new(UNTESTED, "badge", "Tertiary", plain).title("Review/Badge"),
+        PreviewEntry::new(PLAYED, "badge", "Played", plain).title("Review/Badge"),
     ]
 }
 
@@ -111,9 +114,15 @@ impl Run {
     }
 
     fn report_json(&self) -> String {
+        self.report_json_with(Vec::new())
+    }
+
+    /// The report of the run [`write`](Self::write) leaves, with `more` snapshots of other previews after its own.
+    fn report_json_with(&self, more: Vec<serde_json::Value>) -> String {
         let path = |path: PathBuf| path.display().to_string();
         let drifted = serde_json::json!({
-            "id": DRIFTED, "preview": DRIFTED, "cell": [], "status": "changed",
+            "id": DRIFTED, "preview": DRIFTED, "subject": DRIFTED, "cell": [], "moment": "start",
+            "status": "changed",
             "png": {
                 "status": "changed",
                 "golden": path(self.golden(DRIFTED, ".png")),
@@ -131,7 +140,8 @@ impl Run {
             "error": null
         });
         let matched = serde_json::json!({
-            "id": MATCHED, "preview": MATCHED, "cell": [], "status": "matched",
+            "id": MATCHED, "preview": MATCHED, "subject": MATCHED, "cell": [], "moment": "start",
+            "status": "matched",
             "png": {
                 "status": "matched",
                 "golden": path(self.golden(MATCHED, ".png")),
@@ -163,6 +173,7 @@ impl Run {
         run.summary.checked = 2;
         run.summary.passed = 1;
         run.summary.failed = 1;
+        let snapshots = [vec![drifted, matched], more].concat();
         serde_json::json!({
             "version": SnapshotReport::VERSION,
             "mode": "compare",
@@ -170,7 +181,7 @@ impl Run {
             "out": path(self.out()),
             "tolerance": { "channel": 2, "max_pixels": 0 },
             "summary": { "total": 2, "matched": 1, "updated": 0, "failed": 1 },
-            "snapshots": [drifted, matched],
+            "snapshots": snapshots,
             "test": run,
         })
         .to_string()
@@ -459,4 +470,64 @@ fn a_draw_diff_marks_what_was_removed_and_added() {
             ("+new", TokenKind::String),
         ]
     );
+}
+
+#[test]
+fn a_canvas_snapshotted_at_both_ends_of_its_play_reviews_either() {
+    let run = Run::new("moments");
+    run.write();
+    std::fs::write(
+        run.golden(PLAYED_START, ".png"),
+        png([0xaa, 0x55, 0x22, 0xff]),
+    )
+    .unwrap();
+    std::fs::write(run.golden(PLAYED_START, ".draw.txt"), GOLDEN_DRAW).unwrap();
+    let path = |path: PathBuf| path.display().to_string();
+    let start = serde_json::json!({
+        "id": PLAYED_START, "preview": PLAYED, "subject": PLAYED, "cell": [], "moment": "start",
+        "status": "matched",
+        "png": {
+            "status": "matched",
+            "golden": path(run.golden(PLAYED_START, ".png")),
+            "actual": null, "diff": null,
+            "size": [8, 8], "golden_size": [8, 8],
+            "differing_pixels": 0, "max_channel_delta": 0
+        },
+        "draw": {
+            "status": "matched",
+            "golden": path(run.golden(PLAYED_START, ".draw.txt")),
+            "actual": null, "diff": null
+        },
+        "error": null
+    });
+    let end = serde_json::json!({
+        "id": PLAYED, "preview": PLAYED, "subject": PLAYED, "cell": [], "moment": "end",
+        "status": "failed", "png": null, "draw": null,
+        "error": "not taken: the play stopped before its end: found no button \"Open\""
+    });
+    std::fs::write(run.report(), run.report_json_with(vec![start, end])).unwrap();
+    let review = SnapshotReview::reading(Some(run.report()));
+    assert_eq!(review.status(PLAYED), Some(SnapshotStatus::Failed));
+    assert_eq!(review.drifted(PLAYED), 1);
+
+    let mut workshop = Workshop::open(PLAYED, &run.report());
+    assert!(
+        workshop.has(Role::Tab, "End of play"),
+        "{:?}",
+        workshop.access()
+    );
+    assert!(
+        workshop
+            .texts()
+            .iter()
+            .any(|text| text.contains("the play stopped before its end")),
+        "the end is reviewed first: {:?}",
+        workshop.texts()
+    );
+    assert_eq!(workshop.pictures(), 0, "an end not taken has no picture");
+
+    workshop.click(Role::Tab, "Start of play");
+    assert!(workshop.draws(PLAYED_START), "{:?}", workshop.texts());
+    assert!(workshop.draws("Snapshot matches"));
+    assert_eq!(workshop.pictures(), 1, "the golden of the start");
 }

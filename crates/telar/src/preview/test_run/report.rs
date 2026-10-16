@@ -229,7 +229,7 @@ impl A11yFinding {
     }
 }
 
-/// The preview's snapshot, taken as its canvas opened. The full result, with the paths of its goldens and diffs, is in the snapshot report beside this one.
+/// The snapshots of the preview or the cell: of its canvas as its play left it, as it opened, or both, as the preview asks. The full result of each, with the paths of its goldens and diffs, is in the snapshot report beside this one.
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SnapshotCheck {
@@ -242,7 +242,7 @@ pub struct SnapshotCheck {
 ///
 /// ```json
 /// {
-///   "version": 1, "mode": "compare", "goldens": "…", "out": "…", "tolerance": { … }, "summary": { … }, "snapshots": [ … ],
+///   "version": 2, "mode": "compare", "goldens": "…", "out": "…", "tolerance": { … }, "summary": { … }, "snapshots": [ … ],
 ///   "test": {
 ///     "filter": null, "a11y": "warn", "snapshots": "compare",
 ///     "summary": { "previews": 1, "checked": 2, "passed": 1, "failed": 1, "warned": 0 },
@@ -288,13 +288,19 @@ impl TestReport {
 
     /// [`SnapshotReport::accept`], with the cell the snapshot `id` is of reported as a run that wrote its goldens reports it, and the run counted again.
     pub fn accept(&mut self, id: &str) -> Result<(), SnapshotError> {
-        let check = describe(self.snapshots.accept(id)?);
+        let subject = self.snapshots.accept(id)?.subject.clone();
+        let check = describe(
+            self.snapshots
+                .snapshots
+                .iter()
+                .filter(|result| result.subject == subject),
+        );
         let cells = self
             .test
             .previews
             .iter_mut()
             .flat_map(|preview| preview.cells.iter_mut())
-            .filter(|cell| cell.id == id);
+            .filter(|cell| cell.id == subject);
         for cell in cells {
             cell.snapshot = check.clone();
             *cell = std::mem::take(cell).settle();

@@ -12,7 +12,7 @@ element group
           end
           element group
             element slider
-              rect 288,180 224x139 fill=#004fffff radius=10
+              rect 288,180 224x139 fill=#00ff85ff radius=10
               element group
                 rect 288,180 224x139 fill=linear(288,180>512,180;#ffffffff@0;#ffffff00@1) radius=10
               end
@@ -20,8 +20,8 @@ element group
                 rect 288,180 224x139 fill=linear(288,180>288,319;#00000000@0;#000000ff@1) radius=10
               end
               element group
-                matrix 1,0,0,1,179.48,3.12
-                  rect 288,180 16x16 fill=#2663ebff border=1.5 border-color=#ebedf5ff radius=8
+                matrix 1,0,0,1,129.85,22.58
+                  rect 288,180 16x16 fill=#4dc78cff border=1.5 border-color=#0d0f1fff radius=8
                 end
               end
             end
@@ -67,7 +67,7 @@ element group
                   end
                 end
                 element group
-                  rect 288,335 32x32 fill=#2663ebff border=1 border-color=#3d4252ff radius=10
+                  rect 288,335 32x32 fill=#4dc78cff border=1 border-color=#3d4252ff radius=10
                 end
               end
               element group
@@ -78,8 +78,8 @@ element group
                       rect 328,333 184x12 fill=linear(328,333>512,333;#ff0000ff@0;#ffff00ff@0.17;#00ff00ff@0.33;#00ffffff@0.5;#0000ffff@0.67;#ff00ffff@0.83;#ff0000ff@1) border=1 border-color=#3d4252ff radius=6
                     end
                     element group
-                      matrix 1,0,0,1,103.27,-2
-                        rect 328,333 16x16 border=1.5 border-color=#ebedf5ff radius=8
+                      matrix 1,0,0,1,70.58,-2
+                        rect 328,333 16x16 border=1.5 border-color=#0d0f1fff radius=8
                       end
                     end
                   end
@@ -164,11 +164,11 @@ element group
                       end
                     end
                     element group
-                      rect 328,357 184x12 fill=linear(328,357>512,357;#2663eb00@0;#2663ebff@1) border=1 border-color=#3d4252ff radius=6
+                      rect 328,357 184x12 fill=linear(328,357>512,357;#4dc78c00@0;#4dc78cff@1) border=1 border-color=#3d4252ff radius=6
                     end
                     element group
                       matrix 1,0,0,1,168,-2
-                        rect 328,357 16x16 border=1.5 border-color=#ebedf5ff radius=8
+                        rect 328,357 16x16 border=1.5 border-color=#0d0f1fff radius=8
                       end
                     end
                   end
@@ -179,7 +179,7 @@ element group
               rect 288,383 224x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
               element group
                 matrix 1,0,0,1,300,383
-                  text 0,4 200x20 "#2663eb" size=14 family=sans-serif weight=400 color=#ebedf5ff
+                  text 0,4 200x20 "#4dc78c" size=14 family=sans-serif weight=400 color=#ebedf5ff
                 end
               end
             end
@@ -199,7 +199,7 @@ element group
               element radio
                 rect 336,419 24x24
                 element group
-                  rect 336,419 20x20 fill=#4dc78cff border=1 border-color=#3d4252ff radius=10
+                  rect 336,419 20x20 fill=#4dc78cff border=1.5 border-color=#ebedf5ff radius=10
                 end
               end
               element radio

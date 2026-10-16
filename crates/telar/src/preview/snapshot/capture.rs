@@ -5,20 +5,16 @@ use std::fmt::Write as _;
 use crate::Direction;
 
 use super::super::frame::pixels;
-use super::super::{Frame, MatrixCell, Play, PreviewEntry};
-use super::SnapshotError;
+use super::super::{Frame, MatrixCell, Play, PlayError, PreviewEntry};
 use super::compare::Image;
+use super::{SnapshotError, SnapshotKey};
 
-/// One preview, or one cell of its matrix, as a snapshot keeps it: a picture and the draw commands behind it as text.
+/// One preview, or one cell of its matrix, at one moment of its play, as a snapshot keeps it: a picture and the draw commands behind it as text.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct Snapshot {
-    /// What both golden files are named by: the preview's id, or the cell's.
-    pub id: String,
-    /// The id of the preview this is of.
-    pub preview: String,
-    /// The cell's axis and value pairs, in axis order; empty for the preview itself.
-    pub cell: Vec<(String, String)>,
+    /// What it is of, and what both golden files are named by.
+    pub key: SnapshotKey,
     /// The picture, encoded as a PNG.
     pub png: Vec<u8>,
     /// The frame as [`renderer_record::draw_text`] writes it, under a `frame` line naming its size, direction, language and background.
@@ -27,40 +23,28 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    /// `frame` drawn at one pixel per logical pixel on the CPU rasterizer, over its background or over nothing, and written as text.
+    /// `frame` drawn at one pixel per logical pixel on the CPU rasterizer, over its background or over nothing, and written as text, as the snapshot `key` names.
     ///
     /// Text sets in whatever faces the process has loaded: [`Snapshots`](super::Snapshots) is what makes those the declared ones alone before anything is captured.
-    pub fn of_frame(id: impl Into<String>, frame: &Frame) -> Result<Self, SnapshotError> {
-        let id = id.into();
+    pub fn of_frame(key: SnapshotKey, frame: &Frame) -> Result<Self, SnapshotError> {
         let png = frame.to_png().map_err(SnapshotError::Render)?;
         // Read back from the PNG rather than the rasterizer, so the picture compared is the one a golden written from it would hold.
         let image = Image::decode(&png).map_err(SnapshotError::Render)?;
         Ok(Self {
-            preview: id.clone(),
-            id,
-            cell: Vec::new(),
+            key,
             png,
             draw: draw_text(frame),
             image,
         })
     }
-
-    /// The same snapshot, recorded as `preview`'s, in the matrix cell `cell` names.
-    pub fn of_preview(self, preview: impl Into<String>, cell: Vec<(String, String)>) -> Self {
-        Self {
-            preview: preview.into(),
-            cell,
-            ..self
-        }
-    }
 }
 
-/// Mounts `entry` as a workshop canvas would, in `cell` when there is one, and snapshots the canvas as it opens: settled, before any play.
-pub(super) fn capture(
+/// Mounts `entry` as a workshop canvas would, in `cell` when there is one, and runs its play: the canvas as it opened, settled, and as the play left it, or why the play stopped before its end.
+pub(super) fn open_and_play(
     entry: &PreviewEntry,
     cell: Option<&MatrixCell>,
-) -> Result<Snapshot, SnapshotError> {
-    let play = match cell {
+) -> Result<(Frame, Result<Frame, PlayError>), SnapshotError> {
+    let mut play = match cell {
         None => Play::mount(entry),
         Some(cell) => {
             let ctx = cell
@@ -70,9 +54,9 @@ pub(super) fn capture(
         }
     }
     .map_err(SnapshotError::Mount)?;
-    let frame = play.frame();
-    let id = cell.map_or(entry.id, |cell| &cell.id);
-    Ok(Snapshot::of_frame(id, &frame)?.of_preview(entry.id, MatrixCell::owned_coordinates(cell)))
+    let opened = play.frame();
+    let ended = play.run().map(|()| play.frame());
+    Ok((opened, ended))
 }
 
 fn draw_text(frame: &Frame) -> String {

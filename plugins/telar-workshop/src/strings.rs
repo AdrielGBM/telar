@@ -138,8 +138,10 @@ pub(crate) const SNAPSHOT_DRAW_CHANGED: &str = "snapshot_draw_changed";
 pub(crate) const SNAPSHOT_DRAW_DIFF: &str = "snapshot_draw_diff";
 pub(crate) const SNAPSHOT_DRIFT: &str = "snapshot_drift";
 pub(crate) const SNAPSHOT_DRIFTED: &str = "snapshot_drifted";
+pub(crate) const SNAPSHOT_END: &str = "snapshot_end";
 pub(crate) const SNAPSHOT_FAILED: &str = "snapshot_failed";
 pub(crate) const SNAPSHOT_MATCHES: &str = "snapshot_matches";
+pub(crate) const SNAPSHOT_MOMENT: &str = "snapshot_moment";
 pub(crate) const SNAPSHOT_NO_GOLDEN: &str = "snapshot_no_golden";
 pub(crate) const SNAPSHOT_NO_REPORT: &str = "snapshot_no_report";
 pub(crate) const SNAPSHOT_NO_REPORT_HINT: &str = "snapshot_no_report_hint";
@@ -150,6 +152,7 @@ pub(crate) const SNAPSHOT_PIXELS: &str = "snapshot_pixels";
 pub(crate) const SNAPSHOT_RELOAD: &str = "snapshot_reload";
 pub(crate) const SNAPSHOT_RESIZED: &str = "snapshot_resized";
 pub(crate) const SNAPSHOT_SIDE_BY_SIDE: &str = "snapshot_side_by_side";
+pub(crate) const SNAPSHOT_START: &str = "snapshot_start";
 pub(crate) const SNAPSHOT_SWIPE: &str = "snapshot_swipe";
 pub(crate) const SNAPSHOT_SWIPE_POSITION: &str = "snapshot_swipe_position";
 pub(crate) const SNAPSHOT_UNREADABLE: &str = "snapshot_unreadable";
@@ -351,10 +354,12 @@ static CATALOG: Catalog = Catalog {
         english!(SNAPSHOT_DRAW_DIFF, "Draw text diff"),
         english!(SNAPSHOT_DRIFT, "Drifted"),
         english!(SNAPSHOT_DRIFTED, "Snapshot drifted"),
+        english!(SNAPSHOT_END, "End of play"),
         english!(SNAPSHOT_FAILED, "The snapshot could not be taken: ", {
             arg
         }),
         english!(SNAPSHOT_MATCHES, "Snapshot matches"),
+        english!(SNAPSHOT_MOMENT, "Snapshot moment"),
         english!(SNAPSHOT_NO_GOLDEN, "No golden yet"),
         english!(SNAPSHOT_NO_REPORT, "No test report yet"),
         english!(
@@ -383,6 +388,7 @@ static CATALOG: Catalog = Catalog {
             { golden }
         ),
         english!(SNAPSHOT_SIDE_BY_SIDE, "Side by side"),
+        english!(SNAPSHOT_START, "Start of play"),
         english!(SNAPSHOT_SWIPE, "Swipe"),
         english!(
             SNAPSHOT_SWIPE_POSITION,

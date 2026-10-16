@@ -13,7 +13,7 @@ element group
                   rect 324,249 71x29 fill=#12141cff border=1 border-color=#3d4252ff radius=10
                   element group
                     matrix 1,0,0,1,336,255
-                      text 0,0 47.33x16.8 "Design" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                      text 0,0 47.33x16.8 "Review" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                     end
                   end
                 end
@@ -24,7 +24,7 @@ element group
                   rect 324,286 71x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
                   element group
                     matrix 1,0,0,1,336,292
-                      text 0,0 47.33x16.8 "Review" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                      text 0,0 47.33x16.8 "Design" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                     end
                   end
                 end

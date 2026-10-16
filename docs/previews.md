@@ -64,6 +64,7 @@ own line, which lists the keys it takes.
 | `decorator` | a Rust path | A fn wrapping the preview's root, for a provider or a frame every variant needs |
 | `fixture` | a Rust path | A fn called before the preview is built, to seed state |
 | `surface`, `animate` | `360x240`, a bare flag | Mount the preview as a window of that size, playing its enter transition with `animate`, instead of as a tree |
+| `snapshot` | `end`, `start`, `both` | Which moments of the play its snapshots keep: as the play leaves the canvas (the default), as it opens, or both; see [Snapshots](#snapshots) |
 | `args` | `none` | Keep the root's literal attributes fixed; see [Args](#args-and-controls) |
 
 The editor completes these keys and explains each on hover.
@@ -119,7 +120,7 @@ telar::__previews! {
 - **`|p| body`** builds the tree and returns what a component call returns, `Result<impl LayoutItem, LayoutError>`.
   It is compiled as a fn, so it cannot capture anything.
 - **Setters** follow the `.rsx` header options: `title`, `docs`, `layout`, `viewport`, `bg`, `mode`, `locale`,
-  `dir`, `tags`, `decorate`, `surface`, `matrix` and `play`, plus `a11y_ignore` (see
+  `dir`, `tags`, `decorate`, `surface`, `matrix`, `play` and `snapshot`, plus `a11y_ignore` (see
   [Accessibility checks](#accessibility-checks)).
 
 A crate that writes previews in Rust and also has `.rsx` previews lists both from one `telar_all_previews`, with the
@@ -265,6 +266,24 @@ A snapshot is two files per preview and per matrix cell, kept under the package'
 Text is set only in the fonts the package declares under `[[telar.fonts]]`, so the files are the same on every
 machine; declare a font for a project that snapshots text. Commit both files.
 
+A preview with a [play](#play) is snapshotted as its play leaves the canvas, which is what the workshop shows once
+the play has run: the menu it opened is in the picture, drawn over the page as it is on screen. A preview with no play
+is snapshotted as it opens. End a play on the state worth keeping: a play that closes the menu it tested opens it
+again last. `snapshot:` in the header, or `.snapshot(SnapshotAt::…)` in Rust, picks other moments:
+
+```rsx
+[preview "Open" snapshot:both]
+```
+
+| Value | Keeps |
+| --- | --- |
+| `end` | The canvas as the play leaves it, as `<id>`: the default |
+| `start` | The canvas as it opens, before the play, as `<id>` |
+| `both` | The end as `<id>`, and the start beside it as `<id>--start` |
+
+A play that fails leaves no end to snapshot: the end fails as not taken, and `--update-snapshots` writes no golden of
+it.
+
 `cargo telar test` compares and never writes over a golden. What does not match is written to
 `target/telar-snapshots/`: the picture and text captured, a diff picture and a line diff. A preview with no golden
 fails like one that drifted, until the goldens are written:
@@ -275,9 +294,9 @@ cargo telar test --update-snapshots
 
 In the workshop, the **Snapshot** panel shows what the last `cargo telar test` found for the selected preview, or for
 the focused matrix cell: the golden and the picture captured side by side, one over the other or swiped, and the line
-diff of the draw text. **Accept** writes both files, as `--update-snapshots` does, and a preview with a failing
-snapshot carries a badge in the sidebar. The panel reads `target/telar-snapshots/report.json`, so run
-`cargo telar test` first.
+diff of the draw text; for a preview snapshotted at both ends of its play, the end, with a switch to its start.
+**Accept** writes both files, as `--update-snapshots` does, and a preview with a failing snapshot carries a badge in
+the sidebar. The panel reads `target/telar-snapshots/report.json`, so run `cargo telar test` first.
 
 The tolerance defaults to two steps of a channel and no differing pixel, because the same rasterizer and fonts draw
 the same picture. Loosen it in `telar.toml`:

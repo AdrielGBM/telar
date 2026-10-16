@@ -34,7 +34,7 @@ element group
               element group
                 rect 277,20 28x28
                 element button
-                  rect 277,20 28x28 radius=10
+                  rect 277,20 28x28 fill=#0000000a radius=10
                   element group
                     rect 283,26 16x16
                     element group
@@ -47,12 +47,30 @@ element group
                 end
               end
               element group
-                element group
-                end
               end
             end
           end
         end
+      end
+    end
+  end
+end
+matrix 1,0,0,1,277,52
+  element group
+    rect 0,0 68x22 fill=#171a2eff radius=12
+    element group
+      element group
+        matrix 1,0,0,1,8,4
+          text 0,0 40.23x14.28 "Copied" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+        end
+      end
+      element group
+        element group
+        end
+      end
+    end
+    element group
+      element group
       end
     end
   end

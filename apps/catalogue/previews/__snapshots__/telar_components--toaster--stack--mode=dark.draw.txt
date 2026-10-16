@@ -15,7 +15,7 @@ element group
               end
             end
             element button
-              rect 400,270 57x28 fill=#7394ffff radius=10
+              rect 400,270 57x28 fill=#627ed9ff radius=10
               element group
                 matrix 1,0,0,1,412,270
                   text 0,5 33x16.8 "Error" size=14 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
@@ -32,29 +32,58 @@ element group
 end
 element group
   element status
-    rect 420,524 364x60
+    rect 420,476 364x108
     element group
       element group
-        rect 420,524 364x60 fill=#1c1f29ff border=1 border-color=#3d4252ff radius=12
+        rect 420,476 364x40 fill=#1c1f29ff border=1 border-color=#3d4252ff radius=12
         element group
-          rect 432,536 2x36 fill=#4dc78cff radius=1
+          rect 432,488 2x16 fill=#6badfaff radius=1
         end
         element group
           element group
-            matrix 1,0,0,1,442,536
-              text 0,0 305x16.8 "Saved" size=14 family=sans-serif weight=600 color=#ebedf5ff lang=en
-            end
-          end
-          element group
-            matrix 1,0,0,1,442,555
-              text 0,0 305x16.8 "Your changes are saved." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+            matrix 1,0,0,1,442,488
+              text 0,0 305x16.8 "A new version is available." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
             end
           end
         end
         element button
-          rect 755,536 17x17 radius=6
+          rect 755,488 17x16 radius=6
           element group
-            matrix 1,0,0,1,759,536
+            matrix 1,0,0,1,759,488
+              text 0,0 9.19x16.8 "✕" size=14 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+            end
+          end
+        end
+      end
+      element group
+        rect 420,525 364x60 fill=#1c1f29ff border=1 border-color=#3d4252ff radius=12
+        element group
+          rect 432,537 2x36 fill=#f06b70ff radius=1
+        end
+        element group
+          element group
+            matrix 1,0,0,1,442,537
+              text 0,0 253x16.8 "Save failed" size=14 family=sans-serif weight=600 color=#ebedf5ff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,442,556
+              text 0,0 253x16.8 "The file could not be written." size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+            end
+          end
+        end
+        element button
+          rect 703,537 44x17 radius=6
+          element group
+            matrix 1,0,0,1,707,537
+              text 0,0 36.2x16.8 "Retry" size=14 family=sans-serif weight=600 color=#7394ffff wrap=none lang=en
+            end
+          end
+        end
+        element button
+          rect 755,537 17x17 radius=6
+          element group
+            matrix 1,0,0,1,759,537
               text 0,0 9.19x16.8 "✕" size=14 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
             end
           end

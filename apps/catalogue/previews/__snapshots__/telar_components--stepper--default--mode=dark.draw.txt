@@ -6,22 +6,22 @@ element group
       element group
         element group
           element button
-            rect 360,286 28x28 fill=#7394ffff radius=10
+            rect 361,286 28x28 fill=#627ed9ff radius=10
             element group
-              matrix 1,0,0,1,369,286
+              matrix 1,0,0,1,370,286
                 text 0,5 9.27x16.8 "−" size=14 family=sans-serif weight=400 color=#0d0f1fff lang=en
               end
             end
           end
           element group
-            matrix 1,0,0,1,396,286
-              text 0,5 8.55x16.8 "2" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+            matrix 1,0,0,1,397,286
+              text 0,5 6x16.8 "1" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
             end
           end
           element button
-            rect 413,286 28x28 fill=#7394ffff radius=10
+            rect 411,286 28x28 fill=#7394ffff radius=10
             element group
-              matrix 1,0,0,1,422,286
+              matrix 1,0,0,1,420,286
                 text 0,5 9.27x16.8 "+" size=14 family=sans-serif weight=400 color=#0d0f1fff lang=en
               end
             end

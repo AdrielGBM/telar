@@ -4,13 +4,13 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use super::{SnapshotError, SnapshotMode, SnapshotPaths, Tolerance};
+use super::{Moment, SnapshotError, SnapshotMode, SnapshotPaths, Tolerance};
 
 /// The `report.json` a run writes beside its diffs. [`SnapshotReport::VERSION`] moves whenever a field changes meaning or goes away, so a reader can refuse a report it does not understand.
 ///
 /// ```json
 /// {
-///   "version": 1,
+///   "version": 2,
 ///   "mode": "compare",
 ///   "goldens": "/repo/apps/catalogue/previews/__snapshots__",
 ///   "out": "/repo/target/telar-snapshots",
@@ -20,7 +20,9 @@ use super::{SnapshotError, SnapshotMode, SnapshotPaths, Tolerance};
 ///     {
 ///       "id": "catalogue--button--primary--mode=dark",
 ///       "preview": "catalogue--button--primary",
+///       "subject": "catalogue--button--primary--mode=dark",
 ///       "cell": [["mode", "dark"]],
+///       "moment": "end",
 ///       "status": "changed",
 ///       "png": {
 ///         "status": "changed",
@@ -59,7 +61,7 @@ pub struct SnapshotReport {
 }
 
 impl SnapshotReport {
-    pub const VERSION: u32 = 1;
+    pub const VERSION: u32 = 2;
 
     /// The file name a run gives its report, inside [`out`](Self::out).
     pub const FILE_NAME: &'static str = telar_project::protocol::TEST_REPORT_FILE;
@@ -131,8 +133,12 @@ pub struct SnapshotResult {
     pub id: String,
     /// The id of the preview the snapshot is of.
     pub preview: String,
+    /// The id of the preview or of its matrix cell: the canvas a test run reports the snapshot under.
+    pub subject: String,
     /// The matrix cell's axis and value pairs, in axis order; empty for the preview itself.
     pub cell: Vec<(String, String)>,
+    /// Whether the snapshot is of the canvas as it opened or as its play left it.
+    pub moment: Moment,
     pub status: SnapshotStatus,
     /// `None` when nothing was captured to compare.
     pub png: Option<PngCheck>,
@@ -142,6 +148,22 @@ pub struct SnapshotResult {
 }
 
 impl SnapshotResult {
+    /// The snapshot `key` names, at `status`, with nothing captured or compared yet.
+    #[cfg(feature = "preview-snapshots")]
+    pub(crate) fn of(key: &super::SnapshotKey, status: SnapshotStatus) -> Self {
+        Self {
+            id: key.id.clone(),
+            preview: key.preview.clone(),
+            subject: key.subject.clone(),
+            cell: key.cell.clone(),
+            moment: key.moment,
+            status,
+            png: None,
+            draw: None,
+            error: None,
+        }
+    }
+
     /// Whether [`SnapshotReport::accept`] can make what was captured the goldens: the snapshot is changed or missing, and the run wrote both of its captured files.
     pub fn acceptable(&self) -> bool {
         matches!(

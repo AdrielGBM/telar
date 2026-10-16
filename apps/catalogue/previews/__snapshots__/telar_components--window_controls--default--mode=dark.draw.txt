@@ -43,7 +43,7 @@ element group
             element group
               rect 413,288 26x24
               element button
-                rect 413,288 26x24
+                rect 413,288 26x24 fill=#ffffff0d
                 element group
                   matrix 1,0,0,1,421,295
                     path M0,0 L10,10 M10,0 L0,10 stroke=1.5 stroke-color=#ebedf5ff
@@ -52,11 +52,29 @@ element group
               end
             end
             element group
-              element group
-              end
             end
           end
         end
+      end
+    end
+  end
+end
+matrix 1,0,0,1,413,316
+  element group
+    rect 0,0 60x22 fill=#ebedf5ff radius=12
+    element group
+      element group
+        matrix 1,0,0,1,8,4
+          text 0,0 32x14.28 "Close" size=11.9 family=sans-serif weight=400 color=#1c1f29ff wrap=none lang=en
+        end
+      end
+      element group
+        element group
+        end
+      end
+    end
+    element group
+      element group
       end
     end
   end

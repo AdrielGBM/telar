@@ -80,6 +80,11 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
     for (index, preview) in doc.previews.iter().enumerate() {
         let header = format!("[preview {:?}]", preview.name);
         let (own, mut errors) = Options::parse(&preview.options, &header);
+        if own.snapshot.is_some() && !has_play(preview) {
+            errors.push(format!(
+                "{header} `snapshot:` picks the moments of a play its snapshots keep, and the preview has no [play]"
+            ));
+        }
         let options = own.over(&meta);
         errors.extend(options.errors(&header));
 
@@ -584,6 +589,7 @@ struct Options {
     matrix: Option<Matrix>,
     decorator: Option<String>,
     fixture: Option<String>,
+    snapshot: Option<&'static str>,
     surface: Option<(f32, f32)>,
     animate: bool,
     /// `false` when the header says `args:none`.
@@ -613,6 +619,7 @@ pub const PREVIEW_OPTION_KEYS: &[&str] = &[
     "fixture",
     "surface",
     "animate",
+    "snapshot",
     "args",
 ];
 
@@ -707,6 +714,18 @@ impl Options {
             "matrix" => self.matrix = Some(Matrix::parse(value)?),
             "decorator" => self.decorator = Some(text.to_string()),
             "fixture" => self.fixture = Some(text.to_string()),
+            "snapshot" => {
+                self.snapshot = Some(match text {
+                    "start" => "Start",
+                    "end" => "End",
+                    "both" => "Both",
+                    _ => {
+                        return Err(format!(
+                            "`snapshot:{text}` is not a moment of a play: write start, end or both"
+                        ));
+                    }
+                })
+            }
             "surface" => {
                 let size = text.split_once(['x', 'X']).and_then(|(w, h)| {
                     Some((w.trim().parse::<f32>().ok()?, h.trim().parse::<f32>().ok()?))
@@ -753,6 +772,7 @@ impl Options {
             matrix: self.matrix.clone().or_else(|| base.matrix.clone()),
             decorator: self.decorator.clone().or_else(|| base.decorator.clone()),
             fixture: self.fixture.clone().or_else(|| base.fixture.clone()),
+            snapshot: self.snapshot.or(base.snapshot),
             surface,
             animate,
             implicit_args: match self.args_written {
@@ -809,6 +829,11 @@ impl Options {
         if let Some(matrix) = &self.matrix {
             push(format!("matrix({})", matrix.expr()));
         }
+        if let Some(snapshot) = self.snapshot {
+            push(format!(
+                "snapshot(::telar::preview::SnapshotAt::{snapshot})"
+            ));
+        }
     }
 }
 
@@ -825,6 +850,7 @@ fn example(key: &str) -> &'static str {
         "decorator" => "decorator:frames::card",
         "fixture" => "fixture:seed_state",
         "surface" => "surface:360x240",
+        "snapshot" => "snapshot:both",
         _ => "args:none",
     }
 }

@@ -71,6 +71,7 @@ pub use matrix::{
 pub use play::{CaughtFailures, Play, PlayError, PlayFn, PlayResult, PlayStep};
 pub use props::{HasPropsSchema, PropDefault, PropField, PropsSchema};
 pub use query::{Query, by_role, by_text};
+pub use snapshot::SnapshotAt;
 pub use telar_macros::PreviewArg;
 pub use value::{ArgValue, ArgValueParseError};
 

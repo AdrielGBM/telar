@@ -3,7 +3,8 @@
 use std::path::PathBuf;
 
 use crate::AppConfig;
-use crate::preview::{Frame, MatrixCell, PreviewEntry};
+use crate::preview::snapshot::SnapshotKey;
+use crate::preview::{Frame, PlayError};
 
 use super::options::TestOptions;
 use super::report::{SnapshotCheck, TestRun};
@@ -19,14 +20,14 @@ pub(super) fn start(_: &AppConfig, _: &TestOptions) -> Result<SnapshotRun, Strin
 impl SnapshotRun {
     pub(super) fn check(
         &mut self,
-        _: &PreviewEntry,
-        _: Option<&MatrixCell>,
+        _: &[SnapshotKey],
         _: &Frame,
+        _: Result<&Frame, &PlayError>,
     ) -> SnapshotCheck {
         match *self {}
     }
 
-    pub(super) fn unbuilt(&mut self, _: &PreviewEntry, _: Option<&MatrixCell>, _: &str) {
+    pub(super) fn unbuilt(&mut self, _: &[SnapshotKey], _: &str) {
         match *self {}
     }
 }

@@ -6,13 +6,14 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 
 use crate::AppConfig;
-use crate::preview::{Frame, Matrices, MatrixCell, PreviewEntry};
+use crate::preview::{Frame, Matrices, MatrixCell, PlayError, PreviewEntry};
 
 use super::capture::{self, Snapshot};
 use super::compare::{self, Image, line_diff};
 use super::{
-    DrawCheck, FileStatus, PngCheck, SnapshotError, SnapshotMode, SnapshotPaths, SnapshotReport,
-    SnapshotResult, SnapshotStatus, SnapshotSummary, Tolerance, file_stem, write,
+    DrawCheck, FileStatus, Moment, PngCheck, SnapshotError, SnapshotKey, SnapshotMode,
+    SnapshotPaths, SnapshotReport, SnapshotResult, SnapshotStatus, SnapshotSummary, Tolerance,
+    file_stem, write,
 };
 
 /// One snapshot run: every preview and matrix cell checked against its goldens, then a report.
@@ -69,70 +70,62 @@ impl Snapshots {
         &self.results
     }
 
-    /// Snapshots `entry` as it opens, then each cell of its matrix, and checks each against its goldens. A preview or cell that cannot be mounted or drawn is a failed result, a matrix that cannot be expanded is one failed result named `<preview-id>--matrix`, and the run goes on.
+    /// Snapshots `entry`, then each cell of its matrix, at each moment it keeps, and checks each against its goldens. A preview or cell that cannot be mounted or drawn is a failed result, a matrix that cannot be expanded is one failed result named `<preview-id>--matrix`, and the run goes on.
     pub fn check_entry(&mut self, entry: &PreviewEntry, matrices: &Matrices) -> &[SnapshotResult] {
         let start = self.results.len();
-        self.check_captured(entry.id, entry.id, Vec::new(), || {
-            capture::capture(entry, None)
-        });
+        self.check_canvas(entry, None);
         if let Some(matrix) = entry.matrix {
             match matrix.cells(entry, matrices) {
                 Ok(cells) => {
                     for cell in &cells {
-                        let coordinates = MatrixCell::owned_coordinates(Some(cell));
-                        self.check_captured(&cell.id, entry.id, coordinates, || {
-                            capture::capture(entry, Some(cell))
-                        });
+                        self.check_canvas(entry, Some(cell));
                     }
                 }
                 Err(error) => {
-                    let id = format!("{}--matrix", entry.id);
-                    let error = SnapshotError::Cell(error.to_string());
-                    self.record_failure(&id, entry.id, Vec::new(), &error);
+                    let key = SnapshotKey {
+                        preview: entry.id.to_string(),
+                        ..SnapshotKey::named(format!("{}--matrix", entry.id))
+                    };
+                    self.record_failure(&key, &SnapshotError::Cell(error.to_string()));
                 }
             }
         }
         &self.results[start..]
     }
 
-    /// Checks `frame` against the goldens of `entry`, or of its matrix `cell`: what a run that already mounted the canvas, as it opened, snapshots it with instead of mounting it again.
-    pub fn check_frame(
+    /// Checks each snapshot `keys` names against its goldens: the start against `opened`, the canvas as it opened, and the end against `ended`, the canvas as the play left it, or records why the play left none. What a run that already mounted the canvas and ran its play snapshots it with, instead of mounting it again.
+    pub fn check_moments(
         &mut self,
-        entry: &PreviewEntry,
-        cell: Option<&MatrixCell>,
-        frame: &Frame,
-    ) -> &SnapshotResult {
-        let id = cell.map_or(entry.id, |cell| &cell.id);
-        let coordinates = MatrixCell::owned_coordinates(cell);
-        match Snapshot::of_frame(id, frame) {
-            Ok(snapshot) => self.check(&snapshot.of_preview(entry.id, coordinates)),
-            Err(error) => self.record_failure(id, entry.id, coordinates, &error),
+        keys: &[SnapshotKey],
+        opened: &Frame,
+        ended: Result<&Frame, &PlayError>,
+    ) -> &[SnapshotResult] {
+        let start = self.results.len();
+        for key in keys {
+            let frame = match key.moment {
+                Moment::Start => Ok(opened),
+                Moment::End => ended.map_err(|error| SnapshotError::Play(error.clone())),
+            };
+            match frame.and_then(|frame| Snapshot::of_frame(key.clone(), frame)) {
+                Ok(snapshot) => self.check(&snapshot),
+                Err(error) => self.record_failure(key, &error),
+            };
         }
+        &self.results[start..]
     }
 
     /// Checks `snapshot` against its goldens: compares it, or in an update run writes them where it does not match.
     pub fn check(&mut self, snapshot: &Snapshot) -> &SnapshotResult {
-        let result = match self.claim_stem(&snapshot.id) {
+        let result = match self.claim_stem(&snapshot.key.id) {
             Ok(()) => self.compare(snapshot),
-            Err(error) => failed(
-                &snapshot.id,
-                &snapshot.preview,
-                snapshot.cell.clone(),
-                &error,
-            ),
+            Err(error) => failed(&snapshot.key, &error),
         };
         self.push(result)
     }
 
-    /// Records that the snapshot `id` of `preview` could not be captured.
-    pub fn record_failure(
-        &mut self,
-        id: &str,
-        preview: &str,
-        cell: Vec<(String, String)>,
-        error: &SnapshotError,
-    ) -> &SnapshotResult {
-        self.push(failed(id, preview, cell, error))
+    /// Records that the snapshot `key` names could not be captured.
+    pub fn record_failure(&mut self, key: &SnapshotKey, error: &SnapshotError) -> &SnapshotResult {
+        self.push(failed(key, error))
     }
 
     /// The report of every snapshot checked, without writing it: for a caller that writes it inside a report of its own.
@@ -158,23 +151,20 @@ impl Snapshots {
         Ok(report)
     }
 
-    fn check_captured(
-        &mut self,
-        id: &str,
-        preview: &str,
-        cell: Vec<(String, String)>,
-        capture: impl FnOnce() -> Result<Snapshot, SnapshotError>,
-    ) {
-        match catch_unwind(AssertUnwindSafe(capture)) {
-            Ok(Ok(snapshot)) => {
-                self.check(&snapshot);
+    fn check_canvas(&mut self, entry: &PreviewEntry, cell: Option<&MatrixCell>) {
+        let keys = SnapshotKey::of(entry, cell);
+        match catch_unwind(AssertUnwindSafe(|| capture::open_and_play(entry, cell))) {
+            Ok(Ok((opened, ended))) => {
+                self.check_moments(&keys, &opened, ended.as_ref());
             }
-            Ok(Err(error)) => {
-                self.record_failure(id, preview, cell, &error);
-            }
-            Err(_) => {
-                self.record_failure(id, preview, cell, &SnapshotError::Panicked);
-            }
+            Ok(Err(error)) => self.record_failures(&keys, &error),
+            Err(_) => self.record_failures(&keys, &SnapshotError::Panicked),
+        }
+    }
+
+    fn record_failures(&mut self, keys: &[SnapshotKey], error: &SnapshotError) {
+        for key in keys {
+            self.record_failure(key, error);
         }
     }
 
@@ -199,8 +189,8 @@ impl Snapshots {
     }
 
     fn compare(&self, snapshot: &Snapshot) -> SnapshotResult {
-        let outcome = self.paths.forget_findings(&snapshot.id).and_then(|()| {
-            let goldens = Goldens::read(&self.paths, &snapshot.id)?;
+        let outcome = self.paths.forget_findings(&snapshot.key.id).and_then(|()| {
+            let goldens = Goldens::read(&self.paths, &snapshot.key.id)?;
             let found = Found::of(snapshot, &goldens, self.tolerance);
             match (self.mode, found.matches()) {
                 (_, true) => Ok(self.matched(snapshot, &goldens, &found)),
@@ -208,14 +198,7 @@ impl Snapshots {
                 (SnapshotMode::Update, false) => self.update(snapshot, &goldens, &found),
             }
         });
-        outcome.unwrap_or_else(|error| {
-            failed(
-                &snapshot.id,
-                &snapshot.preview,
-                snapshot.cell.clone(),
-                &error,
-            )
-        })
+        outcome.unwrap_or_else(|error| failed(&snapshot.key, &error))
     }
 
     fn matched(&self, snapshot: &Snapshot, goldens: &Goldens, found: &Found) -> SnapshotResult {
@@ -234,7 +217,7 @@ impl Snapshots {
             SnapshotStatus::Changed
         };
         let mut result = self.result(snapshot, status, goldens, found);
-        let id = &snapshot.id;
+        let id = &snapshot.key.id;
         let actual_png = self.paths.out_file(id, ".png");
         let actual_draw = self.paths.out_file(id, ".draw.txt");
         write(&actual_png, &snapshot.png)?;
@@ -280,7 +263,7 @@ impl Snapshots {
     ) -> Result<SnapshotResult, SnapshotError> {
         let mut result = self.result(snapshot, SnapshotStatus::Updated, goldens, found);
         self.paths
-            .write_goldens(&snapshot.id, &snapshot.png, &snapshot.draw)?;
+            .write_goldens(&snapshot.key.id, &snapshot.png, &snapshot.draw)?;
         result.mark_written();
         Ok(result)
     }
@@ -295,7 +278,7 @@ impl Snapshots {
         let image = &snapshot.image;
         let png = PngCheck {
             status: found.png,
-            golden: self.paths.golden_png(&snapshot.id),
+            golden: self.paths.golden_png(&snapshot.key.id),
             actual: None,
             diff: None,
             size: [image.width, image.height],
@@ -308,18 +291,14 @@ impl Snapshots {
         };
         let draw = DrawCheck {
             status: found.draw,
-            golden: self.paths.golden_draw(&snapshot.id),
+            golden: self.paths.golden_draw(&snapshot.key.id),
             actual: None,
             diff: None,
         };
         SnapshotResult {
-            id: snapshot.id.clone(),
-            preview: snapshot.preview.clone(),
-            cell: snapshot.cell.clone(),
-            status,
             png: Some(png),
             draw: Some(draw),
-            error: None,
+            ..SnapshotResult::of(&snapshot.key, status)
         }
     }
 }
@@ -394,19 +373,9 @@ fn read_optional(path: &Path) -> Result<Option<Vec<u8>>, SnapshotError> {
     }
 }
 
-fn failed(
-    id: &str,
-    preview: &str,
-    cell: Vec<(String, String)>,
-    error: &SnapshotError,
-) -> SnapshotResult {
+fn failed(key: &SnapshotKey, error: &SnapshotError) -> SnapshotResult {
     SnapshotResult {
-        id: id.to_string(),
-        preview: preview.to_string(),
-        cell,
-        status: SnapshotStatus::Failed,
-        png: None,
-        draw: None,
         error: Some(error.to_string()),
+        ..SnapshotResult::of(key, SnapshotStatus::Failed)
     }
 }

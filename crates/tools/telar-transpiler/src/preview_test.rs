@@ -274,7 +274,7 @@ fn an_unknown_option_is_refused_on_the_header_that_wrote_it() {
     let previews = "[previews \"Forms\" colour:red]\nProse.\n\n[preview \"Default\" widht:360 layout:sideways layout:centered]\ncheckbox\n";
     let out = transpiled(previews);
     let code = &out.rust_code;
-    let meta = "[previews] has no option `colour`: a preview header takes layout, viewport, bg, mode, locale, dir, tags, matrix, decorator, fixture, surface, animate, args";
+    let meta = "[previews] has no option `colour`: a preview header takes layout, viewport, bg, mode, locale, dir, tags, matrix, decorator, fixture, surface, animate, snapshot, args";
     assert!(code.contains(meta), "{code}");
     assert_eq!(
         rsx_line_of(&out, meta),
@@ -301,6 +301,11 @@ fn an_option_value_the_transpiler_cannot_read_is_refused() {
         ("args:all", "`args:all` is not an option"),
         ("animate:yes", "`animate` is a flag"),
         ("animate", "`animate` plays a surface's enter transition"),
+        (
+            "snapshot:middle",
+            "`snapshot:middle` is not a moment of a play",
+        ),
+        ("snapshot:both", "`snapshot:` picks the moments of a play"),
     ] {
         let code = code(&format!("[preview \"Default\" {option}]\ncheckbox\n"));
         assert!(code.contains(error), "{option}: {error}\n{code}");
@@ -387,6 +392,19 @@ fn a_play_zone_becomes_a_fn_the_entry_runs() {
         !code.contains("checkbox_play_1") && code.matches(".play(").count() == 1,
         "a preview with no play zone gets none:\n{code}"
     );
+}
+
+#[test]
+fn a_played_preview_names_the_moments_its_snapshots_keep() {
+    let code = code(
+        "[preview \"One\" snapshot:both]\ncheckbox\n\n[play]\ncanvas.click(by_text(\"A\"))?;\n\n[preview \"Two\"]\ncheckbox\n\n[play]\ncanvas.click(by_text(\"A\"))?;\n",
+    );
+    assert!(
+        code.contains(".snapshot(::telar::preview::SnapshotAt::Both)"),
+        "{code}"
+    );
+    assert_eq!(code.matches(".snapshot(").count(), 1, "{code}");
+    assert!(!code.contains("compile_error!"), "{code}");
 }
 
 #[test]

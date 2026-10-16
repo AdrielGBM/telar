@@ -388,7 +388,7 @@ pub fn preview_option_items(kind: HeaderKind) -> Vec<CompletionItem> {
     items
 }
 
-/// The values an option takes that can be listed: a layout, a direction, `none` for `args:`, and the matrices a preview may name.
+/// The values an option takes that can be listed: a layout, a direction, the moments a play's snapshots keep, `none` for `args:`, and the matrices a preview may name.
 pub fn preview_option_value_items(key: &str, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
     match key {
         "layout" => word_items(&[
@@ -404,6 +404,14 @@ pub fn preview_option_value_items(key: &str, project: Option<&ProjectInfo>) -> V
             "none",
             "Keeps the root's literal attributes fixed rather than turning each into an arg.",
         )]),
+        "snapshot" => word_items(&[
+            ("end", "The canvas as the play leaves it: the default."),
+            ("start", "The canvas as it opens, before the play."),
+            (
+                "both",
+                "The end under the preview's own id, and the start under `<id>--start`.",
+            ),
+        ]),
         "matrix" => matrix_items(project),
         _ => Vec::new(),
     }

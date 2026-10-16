@@ -11,14 +11,14 @@ element group
             end
           end
           element slider
-            rect 288,308 224x8 fill=#616680ff radius=4
+            rect 288,308 224x8 fill=#616680ff border=2 border-color=#4261edff radius=4
             element group
-              matrix 0.4,0,0,1,172.8,0
+              matrix 0.3,0,0,1,201.6,0
                 rect 288,308 224x8 fill=#4261edff radius=4
               end
             end
             element group
-              matrix 1,0,0,1,83.2,-4
+              matrix 1,0,0,1,62.4,-4
                 rect 288,308 16x16 fill=#4261edff border=1.5 border-color=#ffffffff radius=8
               end
             end

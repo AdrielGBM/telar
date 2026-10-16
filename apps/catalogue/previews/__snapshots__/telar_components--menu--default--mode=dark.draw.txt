@@ -6,7 +6,7 @@ element group
       element group
         element group
           element button
-            rect 309,286 182x28 radius=10
+            rect 309,286 182x28 fill=#ffffff1a radius=10
             element group
               clip 321,-1000000 23x2000000
                 matrix 1,0,0,1,321,286
@@ -21,10 +21,68 @@ element group
             end
           end
           element group
+          end
+        end
+      end
+    end
+  end
+end
+element group
+  rect 0,0 800x600
+  element group
+    matrix 1,0,0,1,309,322
+      rect 0,0 182x109 fill=#1c1f29ff border=1 border-color=#3d4252ff radius=12
+      element menu
+        clip 4,4 174x101
+          matrix 1,0,0,1,4,4
             element group
+              element menuitem
+                rect 0,0 174x32 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,0
+                    text 0,7 111x16.8 "New file" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,127,0
+                    text 0,7 39.16x15.12 "Ctrl+N" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
+                  end
+                end
+              end
+              element menuitem
+                rect 0,32 174x32 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,32
+                    text 0,7 111x16.8 "Open…" size=14 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                  end
+                end
+                element group
+                  matrix 1,0,0,1,127,32
+                    text 0,7 39.3x15.12 "Ctrl+O" size=12.6 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
+                  end
+                end
+              end
+              element group
+                rect 0,66 174x1 fill=#3d4252ff
+              end
+              element menuitem
+                rect 0,69 174x32 radius=6
+                element group
+                end
+                element group
+                  matrix 1,0,0,1,8,69
+                    text 0,7 158x16.8 "Close" size=14 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
+                  end
+                end
+              end
             end
           end
         end
+        rect 4,4 174x101
       end
     end
   end

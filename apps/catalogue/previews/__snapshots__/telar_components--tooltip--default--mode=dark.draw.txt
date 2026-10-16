@@ -8,7 +8,7 @@ element group
           element group
             rect 356,286 88x28
             element button
-              rect 356,286 88x28 fill=#7394ffff radius=10
+              rect 356,286 88x28 fill=#627ed9ff radius=10
               element group
                 matrix 1,0,0,1,368,286
                   text 0,5 64x16.8 "Hover me" size=14 family=sans-serif weight=400 color=#0d0f1fff wrap=none lang=en
@@ -17,9 +17,33 @@ element group
             end
           end
           element group
-            element group
-            end
           end
+        end
+      end
+    end
+  end
+end
+matrix 1,0,0,1,356,318
+  element group
+    rect 0,0 128x37 fill=#ebedf5ff radius=12
+    element group
+      element group
+        matrix 1,0,0,1,8,4
+          text 0,0 28x14.28 "Save" size=11.9 family=sans-serif weight=400 color=#1c1f29ff wrap=none lang=en
+        end
+      end
+      element group
+        element group
+          matrix 1,0,0,1,88,5
+            text 0,0 32.08x12.85 "Ctrl+S" size=10.71 family=sans-serif weight=400 color=#646671ff wrap=none lang=en
+          end
+        end
+      end
+    end
+    element group
+      element group
+        matrix 1,0,0,1,8,18
+          text 0,0 112x15.05 "Writes the file to disk." size=10.95 family=sans-serif weight=400 color=#565862ff line-height=1.38 lang=en
         end
       end
     end
