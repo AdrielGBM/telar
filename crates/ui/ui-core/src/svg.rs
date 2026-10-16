@@ -298,7 +298,7 @@ mod tests {
             .unwrap(),
         );
         let pick_two = signal(false);
-        let (pick, a, b) = (pick_two.clone(), one.clone(), two.clone());
+        let (pick, a, b) = (pick_two, one.clone(), two.clone());
         let svg = Svg::new(
             LayoutStyle::new().width(20.0).height(20.0),
             move || Arc::clone(if pick.get() { &b } else { &a }),
