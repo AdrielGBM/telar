@@ -1,6 +1,9 @@
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 
 use telar::testing::{centre, lay_out, named, press, release, route};
+
+use crate::selection::SelectionMode;
 use telar::{AccessNode, ComponentList, Event, Rect, relayout_if_dirty};
 
 use super::*;
@@ -357,4 +360,410 @@ fn each_row_built_says_its_index_among_all_the_rows() {
         mounted.key(NamedKey::PageDown);
     }
     assert_eq!(indexes(&mounted).last(), Some(&Some(501)));
+}
+
+struct Grid {
+    tree: ComponentList,
+}
+
+impl Grid {
+    fn mount(props: DataTableProps, children: Children) -> Self {
+        crate::test_support::fresh_layout_runtime();
+        ui_core::reset_keyboard();
+        telar::focus::clear();
+        telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
+        let item = data_table(props, children).unwrap();
+        lay_out(item.layout_node(), 400.0, 300.0);
+        let mut grid = Self {
+            tree: ComponentList::new(item),
+        };
+        grid.settle();
+        grid
+    }
+
+    fn settle(&mut self) {
+        relayout_if_dirty();
+        let _ = self.tree.commands();
+        relayout_if_dirty();
+        let _ = self.tree.commands();
+    }
+
+    fn send(&mut self, event: Event) {
+        route(&mut self.tree, &event);
+        self.settle();
+    }
+
+    fn holding(&mut self, modifiers: telar::ModifiersState, act: impl FnOnce(&mut Self)) {
+        self.send(Event::ModifiersChanged { modifiers });
+        act(self);
+        self.send(Event::ModifiersChanged {
+            modifiers: Default::default(),
+        });
+    }
+
+    fn key(&mut self, key: Key, modifiers: telar::ModifiersState) {
+        self.holding(modifiers, |grid| {
+            grid.send(telar::testing::key_with(key, modifiers))
+        });
+    }
+
+    fn read(&self) -> Vec<AccessNode> {
+        ui_core::accessibility::snapshot(&self.tree.commands())
+    }
+
+    fn find(&self, role: Role, name: &str) -> AccessNode {
+        self.read()
+            .into_iter()
+            .find(|node| node.role == role && node.name == name)
+            .unwrap_or_else(|| panic!("a {role:?} named `{name}`"))
+    }
+
+    fn names(&self, role: Role) -> Vec<String> {
+        self.read()
+            .into_iter()
+            .filter(|node| node.role == role)
+            .map(|node| node.name)
+            .collect()
+    }
+
+    fn width_of(&self, header: &str) -> f32 {
+        self.find(Role::ColumnHeader, header).rect.width
+    }
+
+    fn click(&mut self, role: Role, name: &str) {
+        let (x, y) = centre(self.find(role, name).rect);
+        self.send(press(x, y));
+        self.send(release(x, y));
+    }
+
+    fn drag(&mut self, splitter: &str, by: f64) {
+        let (x, y) = centre(self.find(Role::Splitter, splitter).rect);
+        for event in [
+            press(x, y),
+            telar::testing::moved(x + by, y),
+            release(x + by, y),
+        ] {
+            self.send(event);
+        }
+    }
+
+    fn focus(&mut self, role: Role) {
+        let id = telar::focus::exposed()
+            .into_iter()
+            .find(|exposed| exposed.role == role)
+            .unwrap_or_else(|| panic!("a {role:?}"))
+            .id;
+        telar::focus::request(id);
+        self.settle();
+    }
+
+    fn focused(&self) -> Option<AccessNode> {
+        self.read().into_iter().find(|node| node.focused)
+    }
+
+    fn chosen_rows(&self) -> Vec<bool> {
+        self.read()
+            .into_iter()
+            .filter(|node| node.role == Role::Row)
+            .map(|node| node.toggled == Some(true))
+            .collect()
+    }
+}
+
+fn shift() -> telar::ModifiersState {
+    telar::ModifiersState {
+        is_shift: true,
+        ..Default::default()
+    }
+}
+
+fn ctrl() -> telar::ModifiersState {
+    telar::ModifiersState {
+        is_ctrl: true,
+        ..Default::default()
+    }
+}
+
+fn plain() -> telar::ModifiersState {
+    telar::ModifiersState::default()
+}
+
+fn resizable_columns() -> Vec<Column> {
+    vec![
+        Column::new("name", "Name")
+            .flex(2.0)
+            .sortable(true)
+            .resizable(true)
+            .min_width(100.0),
+        Column::new("size", "Size")
+            .fixed(80.0)
+            .align(CellAlign::End)
+            .resizable(true),
+        Column::new("kind", "Kind"),
+    ]
+}
+
+fn resizable(widths: RwSignal<ColumnWidths>) -> Grid {
+    Grid::mount(
+        DataTableProps::props()
+            .columns(resizable_columns())
+            .rows(files())
+            .widths(widths)
+            .label("Files")
+            .build(),
+        Children::default(),
+    )
+}
+
+/// A resizable column's header holds a splitter named for the column and reading its width and narrowest, and the header is still named by its column alone.
+#[test]
+fn a_resizable_column_s_header_holds_a_splitter_that_reads_its_width() {
+    let grid = resizable(signal(ColumnWidths::new()));
+    assert_eq!(
+        grid.names(Role::Splitter),
+        ["Resize Name column", "Resize Size column"],
+        "a column that is not resizable has none"
+    );
+    assert_eq!(grid.names(Role::ColumnHeader), ["Name", "Size", "Kind"]);
+    let size = grid.find(Role::Splitter, "Resize Size column");
+    let value = size.value.expect("a splitter reads a value");
+    assert_eq!((value.now, value.min), (80.0, MIN_COLUMN_WIDTH as f64));
+    assert_eq!(size.orientation, Some(telar::Orientation::Vertical));
+    let name = grid.find(Role::Splitter, "Resize Name column");
+    assert_eq!(name.value.map(|value| value.min), Some(100.0));
+    assert_eq!(
+        name.value.map(|value| value.now as f32),
+        Some(grid.width_of("Name"))
+    );
+}
+
+/// A drag on a header's edge resizes its column and every cell under it, a flexible column it takes hold of stands fixed after, and the flexible columns left share what is left.
+#[test]
+fn dragging_a_header_s_edge_resizes_its_column_and_the_cells_under_it() {
+    let widths = signal(ColumnWidths::new());
+    let mut grid = resizable(widths);
+    let (name, kind) = (grid.width_of("Name"), grid.width_of("Kind"));
+    grid.drag("Resize Size column", 40.0);
+    assert_eq!(grid.width_of("Size"), 120.0);
+    assert_eq!(grid.find(Role::GridCell, "12").rect.width, 120.0);
+    assert_eq!(widths.get().get("size").copied(), Some(120.0));
+    assert!(
+        (grid.width_of("Name") + grid.width_of("Kind") - (name + kind - 40.0)).abs() < 1.0,
+        "the flexible columns give up the room"
+    );
+
+    let before = grid.width_of("Name");
+    grid.drag("Resize Name column", -30.0);
+    assert_eq!(grid.width_of("Name"), before - 30.0);
+    assert_eq!(widths.get().get("name").copied(), Some(before - 30.0));
+    assert!(
+        (grid.width_of("Kind")
+            - (400.0 - ScrollbarStyle::default().width - 120.0 - (before - 30.0)))
+            .abs()
+            < 1.0
+    );
+    grid.drag("Resize Name column", -500.0);
+    assert_eq!(grid.width_of("Name"), 100.0, "never under its narrowest");
+}
+
+#[test]
+fn escape_puts_a_drag_back_and_a_flexible_column_flexes_again() {
+    let widths = signal(ColumnWidths::new());
+    let mut grid = resizable(widths);
+    let name = grid.width_of("Name");
+    let (x, y) = centre(grid.find(Role::Splitter, "Resize Name column").rect);
+    grid.send(press(x, y));
+    grid.send(telar::testing::moved(x - 40.0, y));
+    assert_eq!(grid.width_of("Name"), name - 40.0);
+    grid.send(named(NamedKey::Escape));
+    assert_eq!(grid.width_of("Name"), name);
+    assert!(widths.get().is_empty(), "{:?}", widths.get());
+}
+
+/// Each splitter is a Tab stop after the table's own, stepped by the arrows, and Home takes its column to its narrowest.
+#[test]
+fn a_focused_splitter_is_stepped_by_the_keys() {
+    let widths = signal(ColumnWidths::new());
+    let mut grid = resizable(widths);
+    grid.focus(Role::Grid);
+    telar::focus::focus_next();
+    grid.settle();
+    assert_eq!(
+        grid.focused().map(|node| node.name).as_deref(),
+        Some("Resize Name column")
+    );
+    let name = grid.width_of("Name");
+    grid.key(Key::Named(NamedKey::ArrowRight), plain());
+    assert_eq!(grid.width_of("Name"), name + 16.0);
+    grid.key(Key::Named(NamedKey::Home), plain());
+    assert_eq!(grid.width_of("Name"), 100.0);
+    grid.key(Key::Named(NamedKey::ArrowLeft), plain());
+    assert_eq!(widths.get().get("name").copied(), Some(100.0));
+    telar::focus::focus_next();
+    grid.settle();
+    assert_eq!(
+        grid.focused().map(|node| node.name).as_deref(),
+        Some("Resize Size column")
+    );
+}
+
+#[test]
+fn bound_widths_lay_the_columns_out_and_hear_every_resize() {
+    let widths = signal(ColumnWidths::from([(Arc::from("size"), 150.0)]));
+    let mut grid = resizable(widths);
+    assert_eq!(grid.width_of("Size"), 150.0);
+    widths.set(ColumnWidths::from([(Arc::from("size"), 20.0)]));
+    grid.settle();
+    assert_eq!(
+        grid.width_of("Size"),
+        MIN_COLUMN_WIDTH,
+        "a bound width under the narrowest stands at the narrowest"
+    );
+}
+
+struct Chosen {
+    grid: Grid,
+    rows: RwSignal<BTreeSet<Arc<str>>>,
+    heard: Rc<RefCell<Vec<String>>>,
+}
+
+fn several() -> Chosen {
+    let rows = signal(BTreeSet::new());
+    let heard = Rc::new(RefCell::new(Vec::new()));
+    let (changes, picks) = (heard.clone(), heard.clone());
+    let grid = Grid::mount(
+        DataTableProps::props()
+            .columns(columns())
+            .rows(files())
+            .selection_mode(SelectionMode::Multiple)
+            .selected_rows(rows)
+            .on_selection_change(Rc::new(move |rows: &BTreeSet<Arc<str>>| {
+                changes.borrow_mut().push(format!("change {}", rows.len()))
+            }))
+            .on_select(Rc::new(move |row: &TableRow| {
+                picks.borrow_mut().push(format!("select {}", row.id))
+            }))
+            .label("Files")
+            .build(),
+        Children::default(),
+    );
+    Chosen { grid, rows, heard }
+}
+
+impl Chosen {
+    fn chosen(&self) -> Vec<String> {
+        self.rows.get().iter().map(|id| id.to_string()).collect()
+    }
+}
+
+#[test]
+fn a_table_of_several_choices_is_multiselectable_and_each_row_says_if_it_is_chosen() {
+    let mut table = several();
+    let grid = table.grid.find(Role::Grid, "Files");
+    assert!(grid.multiselectable);
+    table.grid.click(Role::GridCell, "beta.txt");
+    table
+        .grid
+        .holding(ctrl(), |grid| grid.click(Role::GridCell, "Image"));
+    assert_eq!(table.chosen(), ["b", "c"]);
+    assert_eq!(table.grid.chosen_rows(), [true, false, true]);
+    assert_eq!(
+        *table.heard.borrow(),
+        ["change 1", "select b", "change 2"],
+        "a plain press chooses its row on its own; a Ctrl press only adds"
+    );
+    table
+        .grid
+        .holding(shift(), |grid| grid.click(Role::GridCell, "Alpha.rs"));
+    assert_eq!(
+        table.chosen(),
+        ["a", "c"],
+        "Shift runs from the row pressed last to this one"
+    );
+    let single = Mounted::new(files(), 300.0);
+    assert!(!single.of_role(Role::Grid)[0].multiselectable);
+}
+
+#[test]
+fn space_toggles_shift_with_the_arrows_extends_and_ctrl_a_takes_every_row() {
+    let mut table = several();
+    table.grid.focus(Role::Grid);
+    table.grid.key(Key::Named(NamedKey::Space), plain());
+    assert_eq!(table.chosen(), ["b"]);
+    table.grid.key(Key::Named(NamedKey::ArrowDown), shift());
+    table.grid.key(Key::Named(NamedKey::ArrowDown), shift());
+    assert_eq!(table.chosen(), ["a", "b", "c"]);
+    table.grid.key(Key::Named(NamedKey::ArrowUp), shift());
+    assert_eq!(table.chosen(), ["a", "b"]);
+    table.grid.key(Key::Named(NamedKey::ArrowRight), plain());
+    table.grid.key(Key::Named(NamedKey::Space), plain());
+    assert_eq!(table.chosen(), ["b"], "Space took the cursor's row away");
+    table.grid.key(Key::Char('a'), ctrl());
+    assert_eq!(table.chosen(), ["a", "b", "c"]);
+    table.grid.key(Key::Char('a'), ctrl());
+    assert!(table.chosen().is_empty(), "and none once all are");
+    table.grid.key(Key::Named(NamedKey::Enter), plain());
+    assert_eq!(table.chosen(), ["a"], "Enter chooses the row on its own");
+    table.grid.key(Key::Named(NamedKey::Home), ctrl());
+    table.grid.key(Key::Named(NamedKey::Space), plain());
+    assert_eq!(
+        table.grid.find(Role::ColumnHeader, "Name").sort,
+        Some(SortDirection::Ascending),
+        "Space on a header still sorts"
+    );
+    assert_eq!(table.chosen(), ["a"]);
+}
+
+#[test]
+fn an_empty_table_keeps_its_header_and_says_so_under_it_until_rows_arrive() {
+    let rows = signal(Vec::<TableRow>::new());
+    let mut grid = Grid::mount(
+        DataTableProps::props()
+            .columns(columns())
+            .rows(Reactive::of(move || rows.get()))
+            .label("Files")
+            .build(),
+        Children::default(),
+    );
+    assert_eq!(grid.names(Role::ColumnHeader), ["Name", "Size", "Kind"]);
+    let header = grid.find(Role::ColumnHeader, "Name").rect;
+    let message = grid.find(Role::Label, "Nothing to show");
+    assert!(
+        message.rect.y >= header.y + header.height,
+        "under the header"
+    );
+    grid.focus(Role::Grid);
+    grid.key(Key::Named(NamedKey::ArrowDown), plain());
+    grid.key(Key::Named(NamedKey::Space), plain());
+    rows.set(files());
+    grid.settle();
+    assert!(
+        grid.names(Role::Label).is_empty(),
+        "{:?}",
+        grid.names(Role::Label)
+    );
+    assert_eq!(grid.names(Role::Row).len(), 3);
+}
+
+#[test]
+fn an_empty_table_shows_its_own_words_or_its_children() {
+    let grid = Grid::mount(
+        DataTableProps::props()
+            .columns(columns())
+            .empty_label("No files yet")
+            .build(),
+        Children::default(),
+    );
+    assert_eq!(grid.names(Role::Label), ["No files yet"]);
+    let grid = Grid::mount(
+        DataTableProps::props().columns(columns()).build(),
+        Children::new(|| {
+            let mut slots = telar::Slots::new();
+            let text =
+                Text::declaring(|| "Drop files here".to_string(), LayoutStyle::new(), |t| t)?;
+            slots.push(None, box_item(text));
+            Ok(slots)
+        }),
+    );
+    assert_eq!(grid.names(Role::Label), ["Drop files here"]);
 }

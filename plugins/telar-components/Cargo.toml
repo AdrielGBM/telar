@@ -43,7 +43,8 @@ overlays = []
 ## else, which is the whole reason it is nameable: a terminal or a document has no chrome to draw.
 chrome = []
 
-## Reorderable lists, accordions, steppers, and the long lists and data tables that build only the rows on screen.
+## Reorderable lists, accordions, steppers, the long lists and data tables that build only the rows on screen, and
+## the resize handle a table's columns are resized by.
 advanced = []
 
 ## The pieces a tool's own window is built from: split panes, resizable boxes, trees, toolbars, icon buttons, a colour picker and a code view.

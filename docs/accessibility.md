@@ -179,6 +179,32 @@ row of a table. A target says only the numbers the row's role takes (`Role::posi
 Any other role says none of them. `tree_view` says it for its rows, `virtual_list` for its options and `data_table`
 for its rows, its header row first.
 
+## Lists that take several rows
+
+A `virtual_list` or a `data_table` given `selection_mode: SelectionMode::Multiple` takes any number of rows and says
+so, from Rust `StyledContainer::multiselectable()` or `LayoutScrollArea::multiselectable()` on the list box, grid or
+tree. Every option or row still says whether it is chosen with `toggled`, the ones left out included.
+
+| Target | A control that takes several rows |
+| --- | --- |
+| Browser, document (`web-dom`) | `aria-multiselectable="true"` on the `listbox` or `grid`, beside `aria-selected` on each `option` or `row`. |
+| Desktop | AccessKit `multiselectable`. |
+| Terminal | `, multiselectable` after the role (`Recipients, listbox, multiselectable`). |
+
+A press or Enter chooses a row on its own; Ctrl with a press (Command on a Mac) or Space adds the row or takes it
+away; Shift with a press, an arrow, Home, End, Page Up, Page Down or Space chooses the run from the row last
+pressed, toggled or walked to without Shift; Ctrl+A (Command+A) chooses every row, or none once all are.
+
+A list or a table with no rows says so in a `status` beside the list box or the grid rather than inside it, which
+holds nothing but its rows: its `empty_label`, or the children it was given, else the localized "Nothing to show".
+The status is there all along, so a reader hears the message as the last row goes; the list keeps a row's height,
+the table its header, so the control still has a box to hold focus in.
+
+A `data_table` column that is `resizable` holds a splitter on its header's inline-end edge, the catalogue's
+`resize_handle`, named for the column ("Resize Name column") and reading its width and its narrowest: a Tab stop
+after the table's own, stepped with the arrow keys and taken to its narrowest with Home. The header is named by its
+column alone, so a document does not read the splitter's name into it.
+
 ## Regions that scroll
 
 A scroll area whose content overflows and holds nothing the keyboard can stop on (a dialog's long text, a log,

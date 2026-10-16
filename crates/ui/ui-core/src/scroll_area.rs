@@ -1144,6 +1144,14 @@ impl LayoutScrollArea {
         self
     }
 
+    /// Declares that this control, a list box, a grid or a tree, lets more than one of its items be chosen at once. See [`StyledContainer::multiselectable`](crate::StyledContainer::multiselectable).
+    pub fn multiselectable(self) -> Self {
+        if let (Some(_), Some(id)) = (&self.host, self.focus) {
+            focus::set_multiselectable(id);
+        }
+        self
+    }
+
     pub fn clamp_scroll(&mut self) {
         self.core.clamp_scroll(self.leaf.rect.get());
     }

@@ -2594,3 +2594,23 @@ fn a_column_header_says_which_way_its_column_sorts_the_rows() {
     assert_eq!(exposed[0].role, focus::Role::ColumnHeader);
     assert_eq!(exposed[0].sort, Some(focus::SortDirection::Ascending));
 }
+
+/// A list box that lets several of its options be chosen says so to the element and to the reader alike; one that did not say so does not.
+#[test]
+fn a_control_that_lets_several_items_be_chosen_says_so() {
+    focus::clear();
+    let mut several = laid_out_box()
+        .control(focus::Role::ListBox)
+        .multiselectable();
+    settle(&mut several);
+    assert!(semantics_of(&several).multiselectable);
+    let exposed = focus::exposed();
+    assert_eq!(exposed.len(), 1);
+    assert!(exposed[0].multiselectable);
+
+    focus::clear();
+    let mut one = laid_out_box().control(focus::Role::ListBox);
+    settle(&mut one);
+    assert!(!semantics_of(&one).multiselectable);
+    assert!(!focus::exposed()[0].multiselectable);
+}

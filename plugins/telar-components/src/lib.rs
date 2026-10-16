@@ -4,7 +4,7 @@
 //!
 //! - `overlays`: menus, context menus, modals, drawers, tooltips, the command palette and the key caps its rows show, toasts, and the scrim behind them.
 //! - `chrome`: the window frame a desktop application draws itself, and the window controls and title-bar behaviour it is built from, for a title bar of the application's own.
-//! - `advanced`: reorderable lists, accordions, steppers, and the virtual lists and data tables that build only the rows on screen.
+//! - `advanced`: reorderable lists, accordions, steppers, the virtual lists and data tables that build only the rows on screen, and the `resize_handle` a table's columns are resized by.
 //! - `workbench`: split panes, resizable boxes, trees, toolbars, icon buttons, a colour picker and a code view, with the `icons` and `overlays` they build on.
 //! - `async-assets`: lets an [`image`] follow an `AssetLoader`, whose load state converts into what the image shows.
 //!
@@ -70,9 +70,9 @@ mod radio;
 mod reorder_zones;
 #[cfg(feature = "advanced")]
 mod reorderable;
-#[cfg(feature = "workbench")]
+#[cfg(any(feature = "advanced", feature = "workbench"))]
 mod resizable;
-#[cfg(any(feature = "chrome", feature = "workbench"))]
+#[cfg(any(feature = "chrome", feature = "advanced", feature = "workbench"))]
 mod resize;
 #[cfg(any(feature = "advanced", feature = "overlays", feature = "workbench"))]
 mod rows;
@@ -82,6 +82,8 @@ mod scrub_field;
 mod search_field;
 mod section;
 mod select;
+#[cfg(feature = "advanced")]
+mod selection;
 mod shared;
 mod slider;
 mod spinner;
@@ -135,8 +137,8 @@ pub use command_palette::{
 };
 #[cfg(feature = "advanced")]
 pub use data_table::{
-    CellAlign, CellBuilder, Column, ColumnWidth, Comparator, DataTableProps, DataTableTokens,
-    SortHandler, TableRow, TableRowHandler, TableSort, data_table,
+    CellAlign, CellBuilder, Column, ColumnWidth, ColumnWidths, Comparator, DataTableProps,
+    DataTableTokens, SortHandler, TableRow, TableRowHandler, TableSort, data_table,
 };
 #[cfg(feature = "overlays")]
 pub use drawer::{DrawerProps, DrawerTokens, drawer};
@@ -168,14 +170,15 @@ pub use reorder_zones::{ReorderGroup, ReorderZoneProps, Slot, apply_zone_move};
 #[cfg(feature = "advanced")]
 pub use reorderable::{ItemBuilder, ReorderableProps, reorderable};
 #[cfg(feature = "workbench")]
-pub use resizable::{
-    ResizableProps, ResizableTokens, ResizeEdge, ResizeEdges, ResizeGrowth, ResizeHandleProps,
-    resizable, resize_handle,
-};
+pub use resizable::{ResizableProps, ResizeEdges, resizable};
+#[cfg(any(feature = "advanced", feature = "workbench"))]
+pub use resizable::{ResizableTokens, ResizeEdge, ResizeGrowth, ResizeHandleProps, resize_handle};
 pub use scrub_field::{Format, Parse, ScrubFieldProps, ScrubFieldTokens, scrub_field};
 pub use search_field::{SearchFieldProps, SearchHandler, search_field};
 pub use section::{SectionProps, section};
 pub use select::{SelectProps, SelectTokens, select};
+#[cfg(feature = "advanced")]
+pub use selection::{SelectionHandler, SelectionMode};
 pub use shared::DOUBLE_CLICK;
 pub use slider::{SliderProps, SliderTokens, slider};
 pub use spinner::{SpinnerProps, SpinnerTokens, spinner};

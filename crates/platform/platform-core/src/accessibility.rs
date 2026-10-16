@@ -50,6 +50,8 @@ pub struct AccessNode {
     pub keyboard_shortcut: Option<String>,
     /// Which way the rows of a grid are sorted by the column a header names. `None` on every other node.
     pub sort: Option<SortDirection>,
+    /// Whether a list box, a grid or a tree lets more than one of its items be chosen at once.
+    pub multiselectable: bool,
     /// Whether a dialog is inside a modal layer that is up, so a reader keeps to it as the keyboard does.
     pub modal: bool,
 }
@@ -89,6 +91,9 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
         if let Some(sort) = node.sort {
             out.push_str(", sorted ");
             out.push_str(sort.as_str());
+        }
+        if node.multiselectable {
+            out.push_str(", multiselectable");
         }
         if node.current.is_some() {
             out.push_str(", current");

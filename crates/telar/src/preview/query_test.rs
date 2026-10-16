@@ -22,6 +22,7 @@ fn node(role: Role, name: &str) -> AccessNode {
         has_popup: None,
         keyboard_shortcut: None,
         sort: None,
+        multiselectable: false,
         modal: false,
     }
 }

@@ -3,18 +3,22 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, Children, Clip, ClippedItem, Color, Container, Cursor, Direction, Key, LayoutError,
-    LayoutItem, LayoutStyle, NamedKey, NumericValue, Orientation, Props, Reactive, RectStyle,
-    RwSignal, ShapeStyle, Size, StyledContainer, SurfaceAmendment, Transaction, amend_surface,
-    box_item, current_direction, focus::Role, signal, step_factor, track_layout,
+    Accessible, Children, Color, Cursor, Direction, Key, LayoutError, LayoutItem, LayoutStyle,
+    NamedKey, NumericValue, Orientation, Props, Reactive, RectStyle, ShapeStyle, Size,
+    StyledContainer, SurfaceAmendment, Transaction, amend_surface, box_item, current_direction,
+    focus::Role, signal, step_factor, track_layout,
 };
+#[cfg(feature = "workbench")]
+use telar::{Clip, ClippedItem, Container, RwSignal};
 
-use crate::edit::{Stroke, write_through};
-use crate::resize::Latch;
+use crate::edit::Stroke;
+#[cfg(feature = "workbench")]
+use crate::edit::write_through;
+use crate::resize::{DRAG_THRESHOLD, Latch};
 use crate::shared;
-use crate::split_pane::DRAG_THRESHOLD;
 use crate::strings;
 
+#[cfg(feature = "workbench")]
 const DEFAULT_SIZE: Size = Size::new(240.0, 160.0);
 const DEFAULT_STEP: f32 = 16.0;
 
@@ -112,6 +116,7 @@ impl ResizeEdge {
     }
 }
 
+#[cfg(feature = "workbench")]
 /// Which handles a [`resizable`] draws.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, telar::PreviewArg)]
 pub enum ResizeEdges {
@@ -124,6 +129,7 @@ pub enum ResizeEdges {
     All,
 }
 
+#[cfg(feature = "workbench")]
 impl ResizeEdges {
     fn has_end(self) -> bool {
         self != Self::Bottom
@@ -149,6 +155,7 @@ impl ResizeGrowth {
     }
 }
 
+#[cfg(feature = "workbench")]
 /// Content in a box of the size the user gives it, with handles to give it one: dragged, or stepped with the arrow keys, Home and End once an edge handle has focus. Children: the content, laid out in a column of that size that clips what overflows it. Every drag is a [`Transaction`] on the size, so Escape puts it back, and every key step is one of its own.
 #[derive(Props)]
 pub struct ResizableProps {
@@ -314,6 +321,7 @@ struct Look {
     style: Option<SurfaceAmendment>,
 }
 
+#[cfg(feature = "workbench")]
 pub fn resizable(
     props: ResizableProps,
     children: Children,
@@ -585,6 +593,6 @@ fn outward() -> f32 {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "workbench"))]
 #[path = "resizable_test.rs"]
 mod tests;

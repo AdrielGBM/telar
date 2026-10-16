@@ -426,6 +426,8 @@ pub struct Semantics {
     pub keyboard_shortcut: Option<Arc<str>>,
     /// Which way the rows of a grid are sorted by the column a [`ColumnHeader`](Role::ColumnHeader) names. `None` on the header of every column they are not sorted by, and on every other role.
     pub sort: Option<SortDirection>,
+    /// Whether a list box, a grid or a tree lets more than one of its items be chosen at once, so a reader says so and expects every item to say whether it is chosen. `false` for every other box.
+    pub multiselectable: bool,
     /// Set on the box a modal layer is made of. `None` on every other box, those inside it included.
     pub modal: Option<Modal>,
 }

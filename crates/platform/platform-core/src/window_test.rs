@@ -41,6 +41,7 @@ impl EventHandler<TestWindow> for TestHandler {
             has_popup: None,
             keyboard_shortcut: None,
             sort: None,
+            multiselectable: false,
             modal: false,
         }]
     }

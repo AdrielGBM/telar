@@ -734,6 +734,14 @@ impl StyledContainer {
         self
     }
 
+    /// Declares that this control, a list box, a grid or a tree, lets more than one of its items be chosen at once, which each says with [`toggled`](Self::toggled). See [`focus::set_multiselectable`].
+    pub fn multiselectable(self) -> Self {
+        if let Some(id) = self.focusable.id {
+            focus::set_multiselectable(id);
+        }
+        self
+    }
+
     /// Declares that this control keeps focus while a cursor walks the [`presented`](Self::presented) controls inside it, and how to read which one the cursor is on: the row of a tree, the item of a toolbar. A reader announces that one as the arrows reach it; `None` names none.
     pub fn active_descendant(self, read: impl Fn() -> Option<FocusId> + 'static) -> Self {
         if let Some(id) = self.focusable.id {

@@ -567,9 +567,17 @@ async fn a_focused_toolbar_points_a_reader_at_its_cursor_item() {
 fn the_splitter_has_a_name() {
     focus::clear();
     let host = render();
-    let splitter = host
-        .query_selector(r#"[role="separator"]"#)
-        .expect("a valid selector")
+    let separators = host
+        .query_selector_all(r#"[role="separator"]"#)
+        .expect("a valid selector");
+    let splitter = (0..separators.length())
+        .filter_map(|i| separators.item(i)?.dyn_into::<web_sys::Element>().ok())
+        .find(|separator| {
+            separator
+                .closest(r#"[role="columnheader"]"#)
+                .expect("a valid selector")
+                .is_none()
+        })
         .expect("the splitter is in the document");
     assert_eq!(
         splitter.get_attribute("aria-label").as_deref(),
@@ -1216,12 +1224,12 @@ fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     Ok(vec![box_item(links), box_item(pictures), notes, search])
 }
 
-/// A list to choose from and a sortable table, each with more rows than the box it fills shows, as a real one has: both build only the rows on screen and say where each sits among them all.
+/// A list to choose several from and a sortable table with resizable columns, each with more rows than the box it fills shows, as a real one has: both build only the rows on screen and say where each sits among them all. And a table with no rows, which says so.
 #[cfg(feature = "advanced")]
 fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     use telar_components::{
-        CellAlign, Column, DataTableProps, ListRow, TableRow, VirtualListProps, data_table,
-        virtual_list,
+        CellAlign, Column, DataTableProps, ListRow, SelectionMode, TableRow, VirtualListProps,
+        data_table, virtual_list,
     };
     let rows: Vec<ListRow> = (0..40)
         .map(|i| ListRow::new(format!("c{i}"), format!("Contact {i}")).disabled(i == 3))
@@ -1229,7 +1237,10 @@ fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     let list = virtual_list(
         VirtualListProps::props()
             .items(rows)
-            .selected(telar::signal(Some("c1".into())))
+            .selection_mode(SelectionMode::Multiple)
+            .selected_rows(telar::signal(std::collections::BTreeSet::from([
+                "c1".into()
+            ])))
             .label("Contacts")
             .build(),
         Children::default(),
@@ -1245,15 +1256,23 @@ fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     let table = data_table(
         DataTableProps::props()
             .columns(vec![
-                Column::new("name", "Name").sortable(true),
+                Column::new("name", "Name").sortable(true).resizable(true),
                 Column::new("size", "Size")
                     .fixed(80.0)
                     .align(CellAlign::End)
-                    .sortable(true),
+                    .sortable(true)
+                    .resizable(true),
             ])
             .rows(files)
             .selected(telar::signal(Some("f2".into())))
             .label("Files")
+            .build(),
+        Children::default(),
+    )?;
+    let downloads = data_table(
+        DataTableProps::props()
+            .columns(vec![Column::new("name", "Name")])
+            .label("Downloads")
             .build(),
         Children::default(),
     )?;
@@ -1265,6 +1284,10 @@ fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
         box_item(Container::new(
             LayoutStyle::new().flex_column().height(200.0),
             vec![table],
+        )?),
+        box_item(Container::new(
+            LayoutStyle::new().flex_column().height(96.0),
+            vec![downloads],
         )?),
     ])
 }
@@ -1366,6 +1389,19 @@ async fn a_focused_virtual_list_points_a_reader_at_its_cursor_option() {
     key(telar::NamedKey::ArrowDown);
     let host = render();
     let contacts = element_of(list.node);
+    assert_eq!(
+        contacts.get_attribute("aria-multiselectable").as_deref(),
+        Some("true"),
+        "the list takes several rows"
+    );
+    let chosen = contacts
+        .query_selector(r#"[role="option"][aria-posinset="2"]"#)
+        .expect("a valid selector")
+        .expect("the chosen option is built");
+    assert_eq!(
+        chosen.get_attribute("aria-selected").as_deref(),
+        Some("true")
+    );
     let id = contacts
         .get_attribute("aria-activedescendant")
         .expect("the focused list points at its cursor");
@@ -1413,6 +1449,11 @@ async fn a_focused_data_table_points_a_reader_at_its_cursor_cell() {
         .expect("a valid selector")
         .expect("a row sits in a grid");
     assert_eq!(grid.get_attribute("aria-rowcount").as_deref(), Some("41"));
+    assert_eq!(
+        grid.get_attribute("aria-multiselectable"),
+        None,
+        "a table of one choice does not say it takes several"
+    );
     let header = grid
         .query_selector(r#"[role="row"]"#)
         .expect("a valid selector")
@@ -1442,4 +1483,80 @@ async fn a_focused_data_table_points_a_reader_at_its_cursor_cell() {
     );
     assert_clean(&host, "with the table focused and sorted").await;
     focus::clear();
+}
+
+/// Each resizable column's header holds a named separator that reads the column's width and its narrowest, and the header is named by its column alone.
+#[cfg(feature = "advanced")]
+#[wasm_bindgen_test]
+async fn a_data_table_s_resizable_columns_hold_named_separators() {
+    focus::clear();
+    let host = render();
+    let separator = host
+        .query_selector(
+            r#"[role="columnheader"] [role="separator"][aria-label="Resize Size column"]"#,
+        )
+        .expect("a valid selector")
+        .expect("the size column's header holds its separator");
+    assert_eq!(
+        separator.get_attribute("aria-orientation").as_deref(),
+        Some("vertical")
+    );
+    assert_eq!(
+        separator.get_attribute("aria-valuenow").as_deref(),
+        Some("80")
+    );
+    assert_eq!(
+        separator.get_attribute("aria-valuemin").as_deref(),
+        Some("48")
+    );
+    assert_eq!(separator.get_attribute("aria-valuemax"), None);
+    assert_eq!(separator.get_attribute("tabindex").as_deref(), Some("0"));
+    let header = separator
+        .closest(r#"[role="columnheader"]"#)
+        .expect("a valid selector")
+        .expect("inside its header");
+    assert_eq!(header.get_attribute("aria-label").as_deref(), Some("Size"));
+    focus::request(
+        focus::exposed()
+            .into_iter()
+            .find(|exposed| exposed.role == Role::Splitter)
+            .expect("a separator to focus")
+            .id,
+    );
+    let host = render();
+    assert_clean(&host, "with a column's separator focused").await;
+    focus::clear();
+}
+
+/// A table with no rows keeps its grid and its header, and says so in a status beside the grid rather than inside it.
+#[cfg(feature = "advanced")]
+#[wasm_bindgen_test]
+async fn an_empty_data_table_says_so_in_a_status_beside_its_grid() {
+    focus::clear();
+    let host = render();
+    let grid = host
+        .query_selector(r#"[role="grid"][aria-label="Downloads"]"#)
+        .expect("a valid selector")
+        .expect("the empty table's grid is in the document");
+    assert_eq!(grid.get_attribute("aria-rowcount").as_deref(), Some("1"));
+    let statuses = host
+        .query_selector_all(r#"[role="status"]"#)
+        .expect("a valid selector");
+    let status = (0..statuses.length())
+        .filter_map(|i| statuses.item(i)?.dyn_into::<web_sys::Element>().ok())
+        .find(|status| {
+            status
+                .text_content()
+                .unwrap_or_default()
+                .contains("Nothing to show")
+        })
+        .expect("the empty table says so in a status");
+    assert!(
+        status
+            .closest(r#"[role="grid"]"#)
+            .expect("a valid selector")
+            .is_none(),
+        "the message is no part of the grid"
+    );
+    assert_clean(&host, "with an empty table").await;
 }

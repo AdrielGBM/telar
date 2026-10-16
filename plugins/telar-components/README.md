@@ -16,8 +16,8 @@ indicators are in every build. Name the groups you draw beyond them:
   show, and toasts
 - `chrome`: the window frame a desktop application draws itself, and the window controls and title-bar
   behaviour it is built from, for a title bar of the application's own
-- `advanced`: reorderable lists, accordions, steppers, and the virtual lists and data tables that build only
-  the rows on screen
+- `advanced`: reorderable lists, accordions, steppers, the virtual lists and data tables that build only the
+  rows on screen, and the `resize_handle` a table's columns are resized by
 - `workbench`: split panes, resizable boxes, trees, toolbars, icon buttons, a colour picker and a code view,
   with the `icons` and `overlays` they build on
 - `async-assets`: lets an `image` follow an `AssetLoader`, whose load state converts into what the image shows

@@ -461,6 +461,7 @@ fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
         has_popup: None,
         keyboard_shortcut: None,
         sort: None,
+        multiselectable: false,
         modal: false,
     }]);
     dev.on_violations(&[telar::AccessViolation::new(

@@ -913,6 +913,7 @@ struct Outline {
     shortcut: Option<Rc<dyn Fn() -> String>>,
     position: Option<SetPosition>,
     sort: Option<Rc<dyn Fn() -> Option<SortDirection>>>,
+    multiselectable: bool,
 }
 
 /// Declares that `id` has rows under it, and how to read whether it shows them now.
@@ -963,6 +964,15 @@ pub fn set_sort(id: FocusId, read: impl Fn() -> Option<SortDirection> + 'static)
     });
 }
 
+/// Declares that `id`, a list box, a grid or a tree, lets more than one of its items be chosen at once.
+pub fn set_multiselectable(id: FocusId) {
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.outline.multiselectable = true;
+        }
+    });
+}
+
 /// Declares that `container` keeps focus while a cursor walks the controls inside it, and how to read which one the cursor is on now: the row of a tree, the item of a toolbar. `None` while there is no cursor, or its control is not built.
 ///
 /// What lets a reader announce the item the arrows moved to, which it otherwise never hears of: focus itself never moves.
@@ -1008,6 +1018,8 @@ pub struct Exposed {
     pub position: Option<SetPosition>,
     /// Which way a column header says the rows are sorted by its column; `None` for every other control.
     pub sort: Option<SortDirection>,
+    /// Whether a list box, a grid or a tree lets more than one of its items be chosen at once.
+    pub multiselectable: bool,
 }
 
 /// The focusables a screen reader should be told about, in the order they registered; a scroll area only while it is a stop of its own.
@@ -1096,6 +1108,7 @@ pub fn exposed() -> Vec<Exposed> {
                     .map(Into::into),
                 position: outline.position,
                 sort: outline.sort.as_ref().and_then(|read| read()),
+                multiselectable: outline.multiselectable,
             })
         })
         .collect()
@@ -1202,6 +1215,7 @@ pub(crate) fn describe(
     semantics.keyboard_shortcut = keyboard_shortcut_state(id).map(Into::into);
     semantics.position = position_state(id);
     semantics.sort = sort_state(id);
+    semantics.multiselectable = multiselectable_state(id);
     semantics.active_descendant = active_descendant_state(id).and_then(node_of).map(u64::from);
     semantics.controls = controls_state(id).and_then(node_of).map(u64::from);
     semantics.focusable = Some(focusable_of(id, semantics.role, declared));
@@ -1383,6 +1397,11 @@ pub fn position_state(id: FocusId) -> Option<SetPosition> {
 pub fn sort_state(id: FocusId) -> Option<SortDirection> {
     let read = with_focus(|s| s.entry(id).and_then(|e| e.outline.sort.clone()))?;
     read()
+}
+
+/// Whether `id` said it lets more than one of its items be chosen at once.
+pub fn multiselectable_state(id: FocusId) -> bool {
+    with_focus(|s| s.entry(id).is_some_and(|e| e.outline.multiselectable))
 }
 
 /// The control the cursor of `container` rests on, read now; `None` when it declared no cursor, or names a control no longer registered. Read inside `view()` for the same reason as [`toggled_state`].

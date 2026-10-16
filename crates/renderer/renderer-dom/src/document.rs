@@ -210,6 +210,8 @@ pub(crate) struct Described {
     pub row_count: Option<u32>,
     /// Which way the rows are sorted by the column a header names.
     pub sort: Option<SortDirection>,
+    /// Whether a list box, a grid or a tree lets more than one of its items be chosen at once.
+    pub multiselectable: bool,
     /// The box that its cursor rests on, as the element says it. Written as nothing itself: it is resolved into [`active_descendant`](Self::active_descendant) once that box turns up inside this one, or inside the box it controls.
     pub descendant_box: Option<u64>,
     /// The `id` of the element this one's cursor rests on, once that element is in the frame.
@@ -284,6 +286,7 @@ impl Described {
             ),
             ("aria-keyshortcuts", self.keyboard_shortcut.clone()),
             ("aria-sort", self.sort.map(|sort| sort.as_str().to_string())),
+            ("aria-multiselectable", flag(self.multiselectable)),
             ("aria-controls", self.controls.clone()),
             ("aria-activedescendant", self.active_descendant.clone()),
             ("aria-valuenow", self.value.map(|v| v.now.to_string())),
@@ -1496,6 +1499,7 @@ fn describe(element: &Element, tag: &'static str) -> Described {
             .and_then(|position| Some((semantics.role.positioning()?, position))),
         row_count: None,
         sort: semantics.sort,
+        multiselectable: semantics.multiselectable,
         descendant_box: semantics.active_descendant,
         active_descendant: None,
         is_active_descendant: false,

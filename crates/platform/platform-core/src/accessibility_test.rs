@@ -23,6 +23,7 @@ fn node(role: Role, name: &str) -> AccessNode {
         has_popup: None,
         keyboard_shortcut: None,
         sort: None,
+        multiselectable: false,
         modal: false,
     }
 }
@@ -182,5 +183,20 @@ fn a_control_with_a_shortcut_says_it() {
     assert_eq!(
         transcript(&[undo, node(Role::MenuItem, "Close")]),
         "Undo, menuitem, shortcut Control+Z\nClose, menuitem"
+    );
+}
+
+/// A list that lets several of its options be chosen says so after its role, and its options say which are chosen.
+#[test]
+fn a_list_of_several_choices_says_so() {
+    let mut list = node(Role::ListBox, "Recipients");
+    list.multiselectable = true;
+    let mut ada = node(Role::Option, "Ada");
+    ada.toggled = Some(true);
+    let mut alan = node(Role::Option, "Alan");
+    alan.toggled = Some(false);
+    assert_eq!(
+        transcript(&[list, ada, alan, node(Role::ListBox, "Sender")]),
+        "Recipients, listbox, multiselectable\nAda, option, selected\nAlan, option\nSender, listbox"
     );
 }

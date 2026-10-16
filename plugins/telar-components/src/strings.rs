@@ -23,10 +23,12 @@ pub(crate) const INCREASE: &str = "increase";
 pub(crate) const MAXIMIZE: &str = "maximize";
 pub(crate) const MINIMIZE: &str = "minimize";
 pub(crate) const NO_RESULTS: &str = "no_results";
+pub(crate) const NOTHING_TO_SHOW: &str = "nothing_to_show";
 pub(crate) const NOTIFICATIONS: &str = "notifications";
 pub(crate) const OPACITY: &str = "opacity";
 pub(crate) const REMOVE: &str = "remove";
 pub(crate) const RESIZE: &str = "resize";
+pub(crate) const RESIZE_COLUMN: &str = "resize_column";
 pub(crate) const RESIZE_HEIGHT: &str = "resize_height";
 pub(crate) const RESIZE_WIDTH: &str = "resize_width";
 pub(crate) const RESTORE: &str = "restore";
@@ -236,6 +238,14 @@ static CATALOG: Catalog = Catalog {
             ],
         },
         Entry {
+            key: NOTHING_TO_SHOW,
+            messages: &[
+                ("ar", Message::Plain("لا يوجد شيء لعرضه")),
+                ("en", Message::Plain("Nothing to show")),
+                ("es", Message::Plain("No hay nada que mostrar")),
+            ],
+        },
+        Entry {
             key: NOTIFICATIONS,
             messages: &[
                 ("ar", Message::Plain("الإشعارات")),
@@ -274,6 +284,30 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("تغيير الحجم")),
                 ("en", Message::Plain("Resize")),
                 ("es", Message::Plain("Redimensionar")),
+            ],
+        },
+        Entry {
+            key: RESIZE_COLUMN,
+            messages: &[
+                (
+                    "ar",
+                    Message::Format(&[Part::Lit("تغيير عرض العمود "), Part::Arg("label")]),
+                ),
+                (
+                    "en",
+                    Message::Format(&[
+                        Part::Lit("Resize "),
+                        Part::Arg("label"),
+                        Part::Lit(" column"),
+                    ]),
+                ),
+                (
+                    "es",
+                    Message::Format(&[
+                        Part::Lit("Cambiar el ancho de la columna "),
+                        Part::Arg("label"),
+                    ]),
+                ),
             ],
         },
         Entry {

@@ -4,6 +4,9 @@ use std::cell::Cell;
 
 use telar::{Point, Rect, Size, drag_start};
 
+#[cfg(any(feature = "advanced", feature = "workbench"))]
+pub(crate) const DRAG_THRESHOLD: f32 = 3.0;
+
 #[derive(Clone, Copy)]
 pub(crate) struct Grab {
     pub(crate) from: Size,

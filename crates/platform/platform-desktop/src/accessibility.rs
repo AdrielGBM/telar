@@ -127,6 +127,9 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
                 Positioning::GridRow => ak.set_row_index(place.position.saturating_sub(1) as usize),
             }
         }
+        if node.multiselectable {
+            ak.set_multiselectable();
+        }
         if node.modal {
             ak.set_modal();
         }

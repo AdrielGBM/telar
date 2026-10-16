@@ -25,3 +25,16 @@ fn a_message_with_a_placeholder_is_filled_in_each_locale() {
     }
     telar::set_locale("en");
 }
+
+#[test]
+fn a_column_s_splitter_is_named_for_its_column_in_each_locale() {
+    for (locale, expected) in [
+        ("en", "Resize Size column"),
+        ("es", "Cambiar el ancho de la columna Size"),
+        ("ar", "تغيير عرض العمود Size"),
+    ] {
+        telar::set_locale(locale);
+        assert_eq!(text_with(RESIZE_COLUMN, &[("label", "Size")]), expected);
+    }
+    telar::set_locale("en");
+}

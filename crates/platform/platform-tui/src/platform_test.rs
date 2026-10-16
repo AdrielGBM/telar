@@ -39,6 +39,7 @@ fn label(name: &str) -> AccessNode {
         has_popup: None,
         keyboard_shortcut: None,
         sort: None,
+        multiselectable: false,
         modal: false,
     }
 }

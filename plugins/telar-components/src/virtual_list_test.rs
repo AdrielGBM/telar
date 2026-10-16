@@ -1,5 +1,7 @@
+use std::collections::BTreeSet;
 use telar::testing::{key_with, lay_out, named, press, release, route};
-use telar::{AccessNode, ComponentList, DrawCommand, Event, relayout_if_dirty};
+
+use telar::{AccessNode, ComponentList, DrawCommand, Event, Slots, relayout_if_dirty};
 
 use super::*;
 
@@ -256,4 +258,288 @@ fn each_option_built_says_its_place_among_all_the_rows() {
     mounted.key(NamedKey::End);
     let last = places(&mounted);
     assert_eq!(last.last(), Some(&("Row 199".to_string(), at(200))));
+}
+
+struct Several {
+    tree: ComponentList,
+    chosen: RwSignal<BTreeSet<Arc<str>>>,
+    heard: Rc<RefCell<Vec<String>>>,
+}
+
+impl Several {
+    fn new(items: Vec<ListRow>) -> Self {
+        crate::test_support::fresh_layout_runtime();
+        ui_core::reset_keyboard();
+        telar::focus::clear();
+        telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
+        let chosen = signal(BTreeSet::new());
+        let heard = Rc::new(RefCell::new(Vec::new()));
+        let (changes, picks) = (heard.clone(), heard.clone());
+        let item = virtual_list(
+            VirtualListProps::props()
+                .items(items)
+                .selection_mode(SelectionMode::Multiple)
+                .selected_rows(chosen)
+                .on_selection_change(Rc::new(move |rows: &BTreeSet<Arc<str>>| {
+                    changes.borrow_mut().push(format!("change {}", rows.len()))
+                }))
+                .on_select(Rc::new(move |row: &ListRow| {
+                    picks.borrow_mut().push(format!("select {}", row.id))
+                }))
+                .label("Fruit")
+                .build(),
+            Children::default(),
+        )
+        .unwrap();
+        lay_out(item.layout_node(), 240.0, 300.0);
+        let tree = ComponentList::new(item);
+        let _ = tree.commands();
+        Self {
+            tree,
+            chosen,
+            heard,
+        }
+    }
+
+    fn send(&mut self, event: Event) {
+        route(&mut self.tree, &event);
+        relayout_if_dirty();
+        let _ = self.tree.commands();
+    }
+
+    fn holding(&mut self, modifiers: telar::ModifiersState, act: impl FnOnce(&mut Self)) {
+        self.send(Event::ModifiersChanged { modifiers });
+        act(self);
+        self.send(Event::ModifiersChanged {
+            modifiers: Default::default(),
+        });
+    }
+
+    fn click(&mut self, name: &str) {
+        let rect = ui_core::accessibility::snapshot(&self.tree.commands())
+            .into_iter()
+            .find(|node| node.role == Role::Option && node.name == name)
+            .unwrap_or_else(|| panic!("{name}"))
+            .rect;
+        let (x, y) = telar::testing::centre(rect);
+        self.send(press(x, y));
+        self.send(release(x, y));
+    }
+
+    fn key(&mut self, key: Key, modifiers: telar::ModifiersState) {
+        self.holding(modifiers, |list| list.send(key_with(key, modifiers)));
+    }
+
+    fn chosen(&self) -> Vec<String> {
+        self.chosen.get().iter().map(|id| id.to_string()).collect()
+    }
+
+    fn options(&self) -> Vec<(String, Option<bool>)> {
+        ui_core::accessibility::snapshot(&self.tree.commands())
+            .into_iter()
+            .filter(|node| node.role == Role::Option)
+            .map(|node| (node.name, node.toggled))
+            .collect()
+    }
+}
+
+fn shift() -> telar::ModifiersState {
+    telar::ModifiersState {
+        is_shift: true,
+        ..Default::default()
+    }
+}
+
+fn ctrl() -> telar::ModifiersState {
+    telar::ModifiersState {
+        is_ctrl: true,
+        ..Default::default()
+    }
+}
+
+fn plain() -> telar::ModifiersState {
+    telar::ModifiersState::default()
+}
+
+/// A list that takes several rows says so, and every option says whether it is one of them, the ones left out included.
+#[test]
+fn a_list_of_several_choices_is_multiselectable_and_each_option_says_if_it_is_chosen() {
+    let mut list = Several::new(fruit());
+    let read = ui_core::accessibility::snapshot(&list.tree.commands());
+    let listbox = read
+        .iter()
+        .find(|node| node.role == Role::ListBox)
+        .expect("a list box");
+    assert!(listbox.multiselectable);
+    list.click("Apple 3");
+    list.holding(ctrl(), |list| list.click("Cherry"));
+    assert_eq!(list.chosen(), ["apple", "cherry"]);
+    assert_eq!(
+        list.options(),
+        [
+            ("Apple 3".to_string(), Some(true)),
+            ("Banana".to_string(), Some(false)),
+            ("Blueberry".to_string(), Some(false)),
+            ("Cherry".to_string(), Some(true)),
+        ]
+    );
+    assert_eq!(
+        *list.heard.borrow(),
+        ["change 1", "select apple", "change 2"],
+        "a plain press chooses its row on its own; a Ctrl press only adds"
+    );
+    list.holding(ctrl(), |list| list.click("Apple 3"));
+    assert_eq!(list.chosen(), ["cherry"], "and takes away again");
+}
+
+#[test]
+fn a_shift_press_chooses_the_run_from_the_last_row_pressed_passing_over_disabled_rows() {
+    let mut list = Several::new(fruit());
+    list.click("Apple 3");
+    list.holding(shift(), |list| list.click("Cherry"));
+    assert_eq!(list.chosen(), ["apple", "blueberry", "cherry"]);
+    list.click("Blueberry");
+    assert_eq!(list.chosen(), ["blueberry"], "a plain press starts over");
+}
+
+#[test]
+fn space_toggles_shift_with_the_arrows_extends_and_ctrl_a_takes_every_row() {
+    let mut list = Several::new(fruit());
+    let id = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::ListBox)
+        .expect("a list box")
+        .id;
+    telar::focus::request(id);
+    relayout_if_dirty();
+    list.key(Key::Named(NamedKey::Space), plain());
+    assert_eq!(list.chosen(), ["apple"]);
+    list.key(Key::Named(NamedKey::ArrowDown), shift());
+    list.key(Key::Named(NamedKey::ArrowDown), shift());
+    assert_eq!(list.chosen(), ["apple", "blueberry", "cherry"]);
+    list.key(Key::Named(NamedKey::ArrowUp), shift());
+    assert_eq!(list.chosen(), ["apple", "blueberry"]);
+    list.key(Key::Named(NamedKey::Space), plain());
+    assert_eq!(list.chosen(), ["apple"], "Space took the cursor's row away");
+    list.key(Key::Named(NamedKey::Enter), plain());
+    assert_eq!(
+        list.chosen(),
+        ["blueberry"],
+        "Enter chooses the row on its own"
+    );
+    list.key(Key::Char('a'), ctrl());
+    assert_eq!(
+        list.chosen(),
+        ["apple", "blueberry", "cherry"],
+        "every row that can be chosen"
+    );
+    list.key(Key::Char('a'), ctrl());
+    assert!(list.chosen().is_empty(), "and none once all are");
+}
+
+#[test]
+fn a_list_of_one_choice_is_not_multiselectable_and_ignores_the_modifiers() {
+    let mut mounted = Mounted::new(fruit(), 300.0);
+    let nodes = mounted.read();
+    let listbox = nodes
+        .iter()
+        .find(|node| node.role == Role::ListBox)
+        .expect("a list box");
+    assert!(!listbox.multiselectable);
+    let rect = |name: &str, mounted: &Mounted| {
+        mounted
+            .read()
+            .into_iter()
+            .find(|node| node.role == Role::Option && node.name == name)
+            .unwrap_or_else(|| panic!("{name}"))
+            .rect
+    };
+    let (x, y) = telar::testing::centre(rect("Apple 3", &mounted));
+    mounted.send(press(x, y));
+    mounted.send(release(x, y));
+    mounted.send(Event::ModifiersChanged { modifiers: ctrl() });
+    let (x, y) = telar::testing::centre(rect("Cherry", &mounted));
+    mounted.send(press(x, y));
+    mounted.send(release(x, y));
+    mounted.send(Event::ModifiersChanged { modifiers: plain() });
+    assert_eq!(mounted.selected().as_deref(), Some("cherry"));
+    assert_eq!(*mounted.picked.borrow(), ["apple", "cherry"]);
+}
+
+fn statuses(tree: &ComponentList) -> Vec<String> {
+    eprintln!(
+        "{:#?}",
+        ui_core::accessibility::snapshot(&tree.commands())
+            .iter()
+            .map(|n| (n.role, n.name.clone()))
+            .collect::<Vec<_>>()
+    );
+    ui_core::accessibility::snapshot(&tree.commands())
+        .into_iter()
+        .filter(|node| node.role == Role::Status || node.role == Role::Label)
+        .map(|node| node.name)
+        .collect()
+}
+
+/// A list with no rows says so as a status, in the words it was given or the catalogue's own, and stops saying it once rows arrive.
+#[test]
+fn an_empty_list_says_so_until_its_rows_arrive() {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let items = signal(Vec::<ListRow>::new());
+    let item = virtual_list(
+        VirtualListProps::props()
+            .items(Reactive::of(move || items.get()))
+            .label("Fruit")
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    lay_out(item.layout_node(), 240.0, 200.0);
+    let mut tree = ComponentList::new(item);
+    let _ = tree.commands();
+    assert_eq!(statuses(&tree), ["Nothing to show"]);
+    let list = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::ListBox)
+        .expect("the list is still there to focus");
+    telar::focus::request(list.id);
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    items.set(fruit());
+    relayout_if_dirty();
+    let _ = tree.commands();
+    assert!(statuses(&tree).is_empty(), "{:?}", statuses(&tree));
+    items.set(Vec::new());
+    relayout_if_dirty();
+    assert_eq!(statuses(&tree), ["Nothing to show"]);
+}
+
+#[test]
+fn an_empty_list_shows_its_own_words_or_its_children() {
+    crate::test_support::fresh_layout_runtime();
+    let words = virtual_list(
+        VirtualListProps::props()
+            .empty_label("No fruit yet")
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    lay_out(words.layout_node(), 240.0, 200.0);
+    let words = ComponentList::new(words);
+    assert_eq!(statuses(&words), ["No fruit yet"]);
+
+    crate::test_support::fresh_layout_runtime();
+    let built = virtual_list(
+        VirtualListProps::props().empty_label("Unused").build(),
+        Children::new(|| {
+            let mut slots = Slots::new();
+            let text = Text::declaring(|| "Add a fruit".to_string(), LayoutStyle::new(), |t| t)?;
+            slots.push(None, box_item(text));
+            Ok(slots)
+        }),
+    )
+    .unwrap();
+    lay_out(built.layout_node(), 240.0, 200.0);
+    let built = ComponentList::new(built);
+    assert_eq!(statuses(&built), ["Add a fruit"]);
 }

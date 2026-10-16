@@ -1005,6 +1005,7 @@ fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
         has_popup: None,
         keyboard_shortcut: None,
         sort: None,
+        multiselectable: false,
         modal: false,
     };
     let nested = |surface| NestedSurface {

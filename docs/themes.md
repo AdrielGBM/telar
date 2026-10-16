@@ -172,7 +172,7 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 | `ModalTokens` | `radius` → `radius_dialog`; `pad` → `gap_xl`; `min_width` → `measure(24)`; `max_width` → `measure(32)` |
 | `ProgressTokens` | `radius` → a pill; `width` → `measure(16)`; `height` → `gap_md` |
 | `RadioTokens` | `size` → `icon_size`; `border_width` → `border_width_strong` |
-| `ResizableTokens` | a `resizable`'s and a `resize_handle`'s handles: `thickness` → `spacing`; `grip` (the corner at rest) → `border`; `active` (under the pointer or dragged) → the accent |
+| `ResizableTokens` | a `resizable`'s and a `resize_handle`'s handles, a `data_table`'s column splitters among them: `thickness` → `spacing`; `grip` (the corner at rest) → `border`; `active` (under the pointer or dragged) → the accent |
 | `ScrubFieldTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x` |
 | `SelectTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(13)`; `offset` → `popup_offset` |
 | `SliderTokens` | `width` → `measure(16)`; `track` → `spacing`; `thumb` → `icon_size`; `ring` → `border_width_strong` |

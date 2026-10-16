@@ -23,6 +23,7 @@ fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
         has_popup: None,
         keyboard_shortcut: None,
         sort: None,
+        multiselectable: false,
         modal: false,
     }
 }
@@ -871,6 +872,21 @@ fn a_grid_says_its_rows_its_cells_and_how_it_is_sorted() {
     );
     assert_eq!(update.nodes[2].1.sort_direction(), None);
     assert_eq!(update.nodes[3].1.is_selected(), Some(true));
+}
+
+/// A list box that lets several of its options be chosen says so, and one that lets one be chosen does not.
+#[test]
+fn a_list_of_several_choices_publishes_that_it_is_multiselectable() {
+    let nodes = [
+        AccessNode {
+            multiselectable: true,
+            ..node(Some(1), Role::ListBox, "Recipients")
+        },
+        node(Some(2), Role::ListBox, "Sender"),
+    ];
+    let update = tree_update(&nodes, "Mail", None);
+    assert!(update.nodes[0].1.is_multiselectable());
+    assert!(!update.nodes[1].1.is_multiselectable());
 }
 
 /// An option or a menu's row says its place and no level, a grid's row its index among the grid's rows, and a role that is no item of a set neither.

@@ -343,6 +343,16 @@ fn a_grid_s_rows_and_cells_are_chosen_and_its_headers_say_the_sort() {
 }
 
 #[test]
+fn a_box_lets_several_of_its_items_be_chosen_only_when_it_says_so() {
+    assert!(!Semantics::default().multiselectable);
+    let list = Semantics {
+        multiselectable: true,
+        ..Semantics::of(Role::ListBox)
+    };
+    assert_ne!(list, Semantics::of(Role::ListBox));
+}
+
+#[test]
 fn an_item_says_only_the_numbers_its_role_takes() {
     assert_eq!(Role::TreeItem.positioning(), Some(Positioning::Nested));
     assert_eq!(Role::ListItem.positioning(), Some(Positioning::Nested));

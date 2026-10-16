@@ -13,10 +13,10 @@ use telar::{
 use web_time::Instant;
 
 use crate::edit::write_through;
+use crate::resize::DRAG_THRESHOLD;
 use crate::shared::{self, DOUBLE_CLICK};
 use crate::strings;
 
-pub(crate) const DRAG_THRESHOLD: f32 = 3.0;
 const DEFAULT_SIZE: f32 = 240.0;
 const DEFAULT_STEP: f32 = 16.0;
 

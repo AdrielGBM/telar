@@ -220,6 +220,7 @@ fn every_attribute_is_named_in_the_order_it_is_written() {
             "aria-current",
             "aria-keyshortcuts",
             "aria-sort",
+            "aria-multiselectable",
             "aria-controls",
             "aria-activedescendant",
             "aria-valuenow",
@@ -755,6 +756,26 @@ fn a_grid_writes_its_roles_and_the_header_it_is_sorted_by() {
         Some("gridcell")
     );
     assert_eq!(tag_of(&Role::Grid), "div");
+}
+
+/// A list box that lets several of its options be chosen writes `aria-multiselectable`, and one that lets one be chosen writes nothing in its place.
+#[test]
+fn a_list_of_several_choices_writes_that_it_is_multiselectable() {
+    let written = |multiselectable: bool| {
+        let semantics = Semantics {
+            multiselectable,
+            ..Semantics::of(Role::ListBox)
+        };
+        let frame = describe_frame(
+            &[open(1, semantics), DrawCommand::PopElement],
+            None,
+            &mut Fixed,
+            false,
+        );
+        attribute(only_box(&frame), "aria-multiselectable")
+    };
+    assert_eq!(written(true).as_deref(), Some("true"));
+    assert_eq!(written(false), None);
 }
 
 fn attribute(node: &BoxNode, name: &str) -> Option<String> {

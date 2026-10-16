@@ -1,0 +1,86 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            element group
+              element grid
+                clip 190,140 420x32
+                  matrix 1,0,0,1,190,140
+                    element group
+                      element group
+                      end
+                      element row
+                        rect 0,0 420x32 fill=#ffffffff border=0,0,1,0 border-color=#dbdeedff
+                        element columnheader
+                          rect 0,0 211x32 radius=6
+                          element group
+                            clip 8,0 40x32
+                              matrix 1,0,0,1,8,0
+                                text 0,7 40x16.8 "Name" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                              end
+                            end
+                          end
+                          element group
+                          end
+                          element group
+                            element separator
+                              rect 203,0 8x32
+                            end
+                          end
+                        end
+                        element columnheader
+                          rect 211,0 113x32 radius=6
+                          element group
+                            clip 219,0 31x32
+                              matrix 1,0,0,1,219,0
+                                text 0,7 31x16.8 "Kind" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                              end
+                            end
+                          end
+                          element group
+                          end
+                        end
+                        element columnheader
+                          rect 324,0 88x32 radius=6
+                          element group
+                            clip 375,0 29x32
+                              matrix 1,0,0,1,375,0
+                                text 0,7 29x16.8 "Size" size=14 family=sans-serif weight=600 color=#171a2eff wrap=none lang=en
+                              end
+                            end
+                          end
+                          element group
+                          end
+                          element group
+                            element separator
+                              rect 404,0 8x32
+                            end
+                          end
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+            element status
+              element group
+                element group
+                  element group
+                    matrix 1,0,0,1,352,308
+                      text 0,0 96x16.8 "No files match" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
