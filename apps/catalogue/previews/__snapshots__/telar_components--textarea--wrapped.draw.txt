@@ -1,0 +1,31 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            matrix 1,0,0,1,250,258
+              text 0,1 300x14.28 "Delivery notes" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
+            end
+          end
+          element group
+            rect 250,281 300x61 fill=#f5f7fcff border=1 border-color=#dbdeedff radius=10
+            element scrollarea
+              clip 262,287 276x51
+                matrix 1,0,0,1,262,287
+                  element group
+                    matrix 1,0,0,1,0,0
+                      text 0,0 276x51 "Ring twice and leave the parcel with the neighbour at number twelve if nobody answers; the side gate is open until six." size=14 family=sans-serif weight=400 color=#171a2eff
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

@@ -4,7 +4,7 @@ use super::TextShaper;
 use super::cache::{ShapingCacheKey, hash_text, text_style_bits};
 use super::{
     effective_line_height, from_cosmic_color, glyph_index_at, in_layout_units, make_buffer,
-    make_cased_buffer, physical_glyph, resolve_coverage, shape_buffer,
+    make_cased_buffer, physical_glyph, resolve_coverage, shape_buffer, visual_line_starts,
 };
 use cosmic_text::{CacheKey, SwashContent, Wrap};
 use geometry_core::{Color, Rect};
@@ -376,6 +376,44 @@ impl TextShaper {
         );
         glyph_index_at(&buffer, effective_line_height(style), at)
             .map(|shown| cased.source_index(shown))
+    }
+
+    /// Where each visual line of `text` laid out at `max_width` begins, in the bytes it was written in: the breaks [`measure_text`](Self::measure_text) and the drawing make, before any clamp.
+    pub fn line_starts(
+        &mut self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<usize> {
+        self.sync_fonts();
+        if text.is_empty() {
+            return vec![0];
+        }
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: max_width,
+            height: 100000.0,
+        };
+        let cased = renderer_core::case_text(text, spans, style);
+        let buffer = shape_buffer(
+            &mut self.font_system,
+            &mut self.family_availability,
+            &cased.text,
+            cased.spans.as_deref(),
+            rect,
+            style,
+        );
+        let mut starts: Vec<usize> = visual_line_starts(&buffer)
+            .into_iter()
+            .map(|shown| cased.source_index(shown))
+            .collect();
+        if starts.first() != Some(&0) {
+            starts.insert(0, 0);
+        }
+        starts.dedup();
+        starts
     }
 
     pub fn measure_min_content(

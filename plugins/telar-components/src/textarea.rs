@@ -3,8 +3,8 @@
 use telar::{
     Accessible, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
     LayoutScrollArea, LayoutStyle, NodeId, Props, Reactive, RwSignal, StyledContainer,
-    SurfaceAmendment, Text, TextArea, amend_surface, box_item, children, signal, style_follows,
-    use_theme_tokens,
+    SurfaceAmendment, Text, TextArea, TextWrap, amend_surface, box_item, children, signal,
+    style_follows, use_theme_tokens,
 };
 
 use crate::shared;
@@ -16,7 +16,7 @@ const ROWS: u32 = 3;
 
 /// Several lines of text typed into a framed box, with an optional caption above it and an optional count of what was typed under it.
 ///
-/// Drawn in a text field's frame and sized by [`TextFieldTokens`](crate::TextFieldTokens), so the two stand together in a form. It is `rows` lines tall, grows with what is typed up to `max_rows`, and scrolls past that, keeping the line being typed on in view. Lines break only where Enter breaks them: a longer one scrolls sideways.
+/// Drawn in a text field's frame and sized by [`TextFieldTokens`](crate::TextFieldTokens), so the two stand together in a form. It is `rows` lines tall, grows with the rows what is typed takes up to `max_rows`, and scrolls past that, keeping the row being typed on in view. A line longer than the box wraps onto the next row, between words and inside a word too long for one, as an HTML `<textarea>` does; `text_wrap: TextWrap::NoWrap` breaks lines only where Enter does and scrolls a longer one sideways instead.
 #[derive(Props)]
 pub struct TextareaProps {
     /// `None` (the default) makes the area uncontrolled: it owns an internal `signal(String::new())`. `Some` binds it to a caller-owned signal.
@@ -37,6 +37,9 @@ pub struct TextareaProps {
     /// How many lines tall it grows to as lines are typed before it scrolls. `0` (the default) keeps it at `rows`.
     #[props(default)]
     pub max_rows: u32,
+    /// Whether a line longer than the box wraps onto the next row ([`TextWrap::Wrap`], the default) or stays whole and scrolls sideways.
+    #[props(default)]
+    pub text_wrap: TextWrap,
     /// Shows how many characters were typed, under the box. Off by default.
     #[props(default)]
     pub counter: bool,
@@ -63,6 +66,7 @@ pub fn textarea(
         width,
         rows,
         max_rows,
+        text_wrap,
         counter,
         max_length,
         color,
@@ -81,6 +85,7 @@ pub fn textarea(
         }
     })?
     .placeholder(placeholder.get())
+    .text_wrap(text_wrap)
     .a11y_label({
         let label = label.clone();
         move || match label.get() {

@@ -52,7 +52,7 @@ pub use image_fill::{ImageFill, ImageSlice, SlicePiece};
 pub use metrics::{
     TextMetrics, fitted_font_size, invalidate_text_metrics, line_height, measure_ink_bounds,
     measure_min_content, measure_text, set_default_text_metrics, set_text_metrics, text_index_at,
-    text_metrics_generation,
+    text_line_starts, text_metrics_generation,
 };
 pub use path::{PathData, PathVerb};
 pub use preprocess::{ScaleScratch, blur_padding, blur_sigma, expand_fill_layers};

@@ -178,3 +178,38 @@ fn without_a_counter_nothing_is_counted() {
     let mounted = Mounted::new(TextareaProps::props());
     assert!(!telar::testing::find_text(&mounted.tree, "0"));
 }
+
+const LONG_LINE: &str =
+    "a line long enough to need several rows in a box as narrow as a text field";
+
+#[test]
+fn a_long_line_wraps_onto_rows_and_the_box_grows_with_them() {
+    let mut mounted = Mounted::new(TextareaProps::props().rows(1).max_rows(6));
+    let rest = mounted.frame_height();
+    let width = mounted.area().rect.width;
+    mounted.click_area();
+    mounted.type_text(LONG_LINE);
+    let grown = mounted.frame_height();
+    let rows = ((grown - rest) / line()).round() + 1.0;
+    assert!(rows >= 2.0, "{rest} → {grown}");
+    assert!(
+        (grown - rest - (rows - 1.0) * line()).abs() < 1.0,
+        "the box grows a whole row at a time: {rest} → {grown}"
+    );
+    assert_eq!(mounted.area().rect.width, width, "and never wider");
+    assert_eq!(mounted.value.get(), LONG_LINE, "a wrap is no newline");
+}
+
+#[test]
+fn an_area_that_does_not_wrap_keeps_a_long_line_on_one_row() {
+    let mut mounted = Mounted::new(
+        TextareaProps::props()
+            .rows(1)
+            .max_rows(6)
+            .text_wrap(TextWrap::NoWrap),
+    );
+    let rest = mounted.frame_height();
+    mounted.click_area();
+    mounted.type_text(LONG_LINE);
+    assert!((mounted.frame_height() - rest).abs() < 1.0);
+}

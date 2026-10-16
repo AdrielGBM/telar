@@ -79,6 +79,7 @@ pub use text_metrics::{
     SINGLE_LINE_LEADING, line_box, single_line_box, use_text_metrics_generation,
 };
 mod virtual_list;
+mod visual_lines;
 mod window_root;
 
 pub use anchor_line::use_anchor_at;

@@ -39,6 +39,19 @@ pub trait TextMetrics: Send + Sync + 'static {
         None
     }
 
+    /// Where each line of `text` laid out at `max_width` begins, as [`measure`](Self::measure) breaks it and before any clamp: byte offsets in ascending order, the first `0`. What an editor that wraps places its caret by, so a measurer that wraps must answer with the breaks it makes; the default breaks only at `\n`, which is right for one that never wraps.
+    fn line_starts(
+        &self,
+        text: &str,
+        _spans: Option<&[Span]>,
+        _max_width: f32,
+        _style: &TextStyle,
+    ) -> Vec<usize> {
+        std::iter::once(0)
+            .chain(text.match_indices('\n').map(|(at, _)| at + 1))
+            .collect()
+    }
+
     /// The font size at which `text`, on one line, is `width` wide and no taller than `max_height`, with `style_at` giving the text's style at a size. `None` where the line's extent does not grow with its size: an empty string, or a terminal's cells.
     ///
     /// Measured at two sizes and solved rather than measured at one and scaled, because a line's width is linear in its size plus whatever does not scale with it: tracking or a span declared in pixels.
@@ -131,6 +144,16 @@ pub fn text_index_at(
     at: (f32, f32),
 ) -> Option<usize> {
     metrics().index_at(text, spans, max_width, style, at)
+}
+
+/// Where each line of `text` laid out at `max_width` begins. See [`TextMetrics::line_starts`].
+pub fn text_line_starts(
+    text: &str,
+    spans: Option<&[Span]>,
+    max_width: f32,
+    style: &TextStyle,
+) -> Vec<usize> {
+    metrics().line_starts(text, spans, max_width, style)
 }
 
 /// The size that sets `text`'s line to `width`, no taller than `max_height`. See [`TextMetrics::fitted_size`].

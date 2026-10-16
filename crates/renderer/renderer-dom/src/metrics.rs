@@ -294,6 +294,25 @@ impl TextMetrics for CanvasTextMetrics {
         ink(&case_text(text, None, style).text, max_width, style)
     }
 
+    fn line_starts(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<usize> {
+        let cased = case_text(text, spans, style);
+        let mut starts: Vec<usize> =
+            crate::wrap::line_starts(&cased.text, column(max_width, style), |run| {
+                width_of(run, style)
+            })
+            .into_iter()
+            .map(|shown| cased.source_index(shown))
+            .collect();
+        starts.dedup();
+        starts
+    }
+
     /// Asked with a size and nothing else, which is the default face at that size.
     fn line_height(&self, font_size: f32) -> f32 {
         natural(&TextStyle::new(font_size, renderer_core::Color::BLACK))

@@ -138,3 +138,13 @@ fn a_line_whose_extent_does_not_grow_cannot_be_fitted() {
         None
     );
 }
+
+#[test]
+fn a_measurer_that_never_wraps_starts_a_line_only_after_a_newline() {
+    let style = TextStyle::new(14.0, crate::Color::BLACK);
+    assert_eq!(
+        Fixed(10.0).line_starts("ab cd\n\nef", None, 1.0, &style),
+        vec![0, 6, 7]
+    );
+    assert_eq!(Fixed(10.0).line_starts("", None, 1.0, &style), vec![0]);
+}

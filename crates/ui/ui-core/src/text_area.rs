@@ -1,14 +1,16 @@
-//! [`TextArea`]: the multi-line editor — caret, selection, and a height measured from its line count.
+//! [`TextArea`]: the multi-line editor — caret, selection, and a height measured from the rows it is drawn in.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 
 use geometry_core::Rect;
-use layout_core::{LayoutError, LayoutStyle, NodeId};
-use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton};
+use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
+use platform_core::{
+    Event, Key, KeyboardConvention, ModifiersState, NamedKey, PointerButton, keyboard_convention,
+};
 use reactive_core::{Effect, RwSignal, effect, signal};
-use renderer_core::{RectStyle, ShapeStyle, TextStyle};
+use renderer_core::{RectStyle, ShapeStyle, TextStyle, TextWrap};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::caret::Blink;
@@ -18,34 +20,163 @@ use crate::impl_leaf_widget;
 use crate::input_region::InputHandle;
 use crate::layout_leaf::LayoutLeaf;
 use crate::surface_context::HomeSurface;
+use crate::visual_lines::{Affinity, VisualLines};
 
 /// Width of the caret, in logical px.
 const CARET_WIDTH: f32 = 1.5;
-/// A width so large the shaper never soft-wraps: only an explicit `\n` breaks a line (code-editor behavior), which keeps caret/line math exact — a line's visual row is its logical row.
+/// Where an area that does not wrap draws its text: wide enough that a line never meets the edge, so it overflows and an ancestor clips it.
 const NO_WRAP_WIDTH: f32 = 1.0e6;
 /// Inserted by the Tab key (soft tabs).
 const TAB_INSERT: &str = "    ";
 
-/// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input). A base primitive: unstyled (wrap it in a `box` for a border/background), keyboard-driven, no soft-wrap (only `\n` breaks lines, so long lines overflow horizontally). It requests focus on tap, positions the caret at the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining lines, arrows in all four directions, Home/End, Tab), and draws a caret. Its measured height grows with the line count, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor. Selection (`Shift`+arrows, `Mod+A`, shift-click) with copy, cut and paste on the primary modifier, Command on a Mac and Ctrl elsewhere, newlines and all. IME is not yet supported.
+/// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input). A base primitive: unstyled (wrap it in a `box` for a border/background) and keyboard-driven. It requests focus on tap, positions the caret at the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining lines, arrows in all four directions, Home/End, Tab), and draws a caret.
+///
+/// By default only `\n` breaks a line and a long one overflows sideways, which is what a code editor and a line-number gutter beside it expect. [`text_wrap`](Self::text_wrap) with [`TextWrap::Wrap`] breaks lines at the area's width instead, between words and inside a word too long for a row, as a paragraph and an HTML `<textarea>` do; the caret then moves by the rows on screen. Its measured height grows with the rows it is drawn in, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor. Selection (`Shift`+arrows, `Mod+A`, shift-click) with copy, cut and paste on the primary modifier, Command on a Mac and Ctrl elsewhere, newlines and all. IME is not yet supported.
 pub struct TextArea {
     value: RwSignal<String>,
     home: HomeSurface,
     // Reactive so a bare caret move re-renders even when the text is unchanged.
     caret: RwSignal<usize>,
+    affinity: RwSignal<Affinity>,
     // Either side of the caret: a selection extended leftwards has its anchor after it.
     anchor: RwSignal<Option<usize>>,
+    // Kept across consecutive Up/Down presses, so passing through a short row does not pull the caret to its end for good.
+    goal_x: Option<f32>,
     style: Rc<dyn Fn() -> TextStyle>,
+    rows: Rc<Rows>,
     id: FocusId,
     leaf: LayoutLeaf,
-    placeholder: String,
-    // Reads what the measure reads — the line count and the style — and dirties the leaf only when one of them moves its height, so a new line, a programmatic load and a restyle (a size, a family) all reach the layout while a keystroke within a line costs none.
     _remeasure: Effect,
     blink: Blink,
-    // Keeps the blink running while the area holds the keyboard, and stops it when it does not.
     _blinking: Effect,
-    // Keeps the caret in view of the scroll the area sits in while the area holds the keyboard: a reveal of the whole area cannot, once it is taller than the view.
+    // A reveal of the whole area cannot keep the caret in view once the area is taller than the view.
     _follow_caret: Effect,
     _input: InputHandle,
+}
+
+/// What the measure, the effects and the view share about the rows the area is drawn in.
+struct Rows {
+    wrap: Cell<TextWrap>,
+    placeholder: RefCell<String>,
+    cached: RefCell<Option<Laid>>,
+    // What the area was last measured from: its row count, the width that count was taken at, and the style.
+    measured: RefCell<Option<(usize, Option<f32>, TextStyle)>>,
+}
+
+/// The rows of one text at one width, kept until the text, the width, the style or the fonts move.
+struct Laid {
+    text: String,
+    width: f32,
+    style: TextStyle,
+    generation: u64,
+    lines: Rc<VisualLines>,
+}
+
+impl Rows {
+    fn wrap_width(&self, width: f32) -> Option<f32> {
+        (self.wrap.get() == TextWrap::Wrap && width > 0.0).then_some(width)
+    }
+
+    fn lines(&self, text: &str, style: &TextStyle, width: Option<f32>) -> Rc<VisualLines> {
+        let Some(width) = width else {
+            return Rc::new(VisualLines::of(text, style, None));
+        };
+        let generation = renderer_core::text_metrics_generation();
+        if let Some(laid) = self.cached.borrow().as_ref()
+            && laid.text == text
+            && laid.width == width
+            && laid.generation == generation
+            && laid.style.same_extent(style)
+        {
+            return Rc::clone(&laid.lines);
+        }
+        let lines = Rc::new(VisualLines::of(text, style, Some(width)));
+        *self.cached.borrow_mut() = Some(Laid {
+            text: text.to_string(),
+            width,
+            style: style.clone(),
+            generation,
+            lines: Rc::clone(&lines),
+        });
+        lines
+    }
+
+    /// How many rows tall what is drawn is: the text, or the placeholder standing in for it.
+    fn shown_rows(&self, text: &str, style: &TextStyle, width: Option<f32>) -> usize {
+        if text.is_empty() {
+            let placeholder = self.placeholder.borrow();
+            VisualLines::of(&placeholder, style, width).len()
+        } else {
+            self.lines(text, style, width).len()
+        }
+    }
+
+    /// Forgets the last measurement, so the next change to the text measures again whatever it holds.
+    fn changed(&self, node: NodeId) {
+        *self.measured.borrow_mut() = None;
+        mark_dirty(node).ok();
+    }
+}
+
+/// One text laid out in rows, with the style its prefixes are measured in.
+struct Placed<'a> {
+    text: &'a str,
+    lines: Rc<VisualLines>,
+    flat: TextStyle,
+    // The width rows wrap at, `None` when they do not.
+    width: Option<f32>,
+}
+
+impl Placed<'_> {
+    fn row_of(&self, at: usize, affinity: Affinity) -> usize {
+        self.lines.row_of(at, affinity)
+    }
+
+    /// Pixel x of byte `at` on `row`: the advance of the row up to it, held inside the box a wrapped row is drawn in, which the space a row broke on hangs past.
+    fn x_at(&self, row: usize, at: usize) -> f32 {
+        let start = self.lines.row(row).start.min(at);
+        let x = crate::text_metrics::measure_text(
+            &self.text[start..at.min(self.text.len())],
+            None,
+            NO_WRAP_WIDTH,
+            &self.flat,
+        )
+        .0;
+        match self.width {
+            Some(width) => x.min((width - CARET_WIDTH).max(0.0)),
+            None => x,
+        }
+    }
+
+    fn caret_x(&self, at: usize, affinity: Affinity) -> f32 {
+        self.x_at(self.row_of(at, affinity), at)
+    }
+
+    /// The offset on `row` whose caret is nearest `x`, and the affinity that keeps it there: the end of a wrapped row is also the start of the next.
+    fn offset_at(&self, row: usize, x: f32) -> (usize, Affinity) {
+        let range = self.lines.row(row);
+        let line = &self.text[range.clone()];
+        let mut best = range.start;
+        let mut best_dx = f32::MAX;
+        let mut idx = 0;
+        loop {
+            let dx = (self.x_at(row, range.start + idx) - x).abs();
+            if dx < best_dx {
+                best_dx = dx;
+                best = range.start + idx;
+            }
+            if idx >= line.len() {
+                break;
+            }
+            idx = next_boundary(line, idx);
+        }
+        let affinity = if best == range.end && self.lines.wraps_after(row) {
+            Affinity::Upstream
+        } else {
+            Affinity::Downstream
+        };
+        (best, affinity)
+    }
 }
 
 impl TextArea {
@@ -85,18 +216,39 @@ impl TextArea {
         // The measure closure reads the style and exists before the node does, so an inheriting style finds its node through this cell.
         let node_cell = Rc::new(Cell::new(None));
         let declared = style(Rc::clone(&node_cell));
-        // Its caret and selection index the value, and a case that changed a letter's length would put them between the wrong letters.
-        let style: Rc<dyn Fn() -> TextStyle> =
-            Rc::new(move || declared().with_text_case(renderer_core::TextCase::AsWritten));
-        // Width is left to the parent, so a long line overflows to the right rather than widening the layout.
-        let measure_style = Rc::clone(&style);
-        let measure = Box::new(move |_: layout_core::MeasureInput| {
-            let line_h = crate::text_metrics::line_box(&(measure_style)());
-            (0.0, value.with(|t| line_count(t)) as f32 * line_h)
+        let rows = Rc::new(Rows {
+            wrap: Cell::new(TextWrap::NoWrap),
+            placeholder: RefCell::new(String::new()),
+            cached: RefCell::new(None),
+            measured: RefCell::new(None),
         });
+        // A case that changed a letter's length would put the caret and the selection, which index the value, between the wrong letters.
+        let style: Rc<dyn Fn() -> TextStyle> = {
+            let rows = Rc::clone(&rows);
+            Rc::new(move || {
+                declared()
+                    .with_text_case(renderer_core::TextCase::AsWritten)
+                    .with_text_wrap(rows.wrap.get())
+            })
+        };
+        // Width is left to the parent: a line that does not wrap overflows rather than widening the layout, and one that wraps does so at whatever width the parent gives.
+        let measure = {
+            let style = Rc::clone(&style);
+            let rows = Rc::clone(&rows);
+            Box::new(move |input: layout_core::MeasureInput| {
+                let style = style();
+                let width = match input.width {
+                    AvailableSpace::Definite(width) => rows.wrap_width(width),
+                    _ => None,
+                };
+                let shown = value.with(|text| rows.shown_rows(text, &style, width));
+                (0.0, shown as f32 * crate::text_metrics::line_box(&style))
+            })
+        };
         let (node, rect) = new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         node_cell.set(Some(node));
         let caret = signal(value.with(|s| s.len()));
+        let affinity = signal(Affinity::Downstream);
         let id = focus::next_id();
         focus::register_with_role(
             id,
@@ -104,24 +256,31 @@ impl TextArea {
             node,
             focus::Role::MultilineTextInput,
         );
+        // Dirties the leaf only when the rows or the style move its height, so a new row, a programmatic load and a restyle reach the layout while a keystroke within a row costs none. The width is read without subscribing: a new width is a layout already measuring again.
         let remeasure = {
             let style = Rc::clone(&style);
-            let measured = RefCell::new(None::<(usize, TextStyle)>);
+            let rows = Rc::clone(&rows);
             effect(move || {
-                let next = (value.with(|t| line_count(t)), style());
-                let unchanged = measured
-                    .borrow()
-                    .as_ref()
-                    .is_some_and(|(lines, style)| *lines == next.0 && style.same_extent(&next.1));
+                let style = style();
+                let width = rows.wrap_width(laid_width(node, rect.peek()));
+                let shown = value.with(|text| rows.shown_rows(text, &style, width));
+                let unchanged =
+                    rows.measured
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|(count, at, measured)| {
+                            *count == shown && *at == width && measured.same_extent(&style)
+                        });
                 if unchanged {
                     return;
                 }
-                *measured.borrow_mut() = Some(next);
+                *rows.measured.borrow_mut() = Some((shown, width, style));
                 mark_dirty(node).ok();
             })
         };
         let follow_caret = {
             let style = Rc::clone(&style);
+            let rows = Rc::clone(&rows);
             effect(move || {
                 if !focus::is_focused(id) {
                     return;
@@ -133,15 +292,16 @@ impl TextArea {
                 let area = rect.get();
                 let style = style();
                 let line_h = crate::text_metrics::line_box(&style);
-                let at = caret.get();
-                let (x, line) = value.with(|text| {
+                let (at, affinity) = (caret.get(), affinity.get());
+                let (x, row) = value.with(|text| {
+                    let placed = place(&rows, text, &style, laid_width(node, area));
                     let at = char_boundary_at_or_before(text, at);
-                    (caret_x(text, at, &style), line_index(text, at))
+                    (placed.caret_x(at, affinity), placed.row_of(at, affinity))
                 });
                 viewport.reveal_rect(
                     Rect {
                         x: area.x + x,
-                        y: area.y + line as f32 * line_h,
+                        y: area.y + row as f32 * line_h,
                         width: CARET_WIDTH,
                         height: line_h,
                     },
@@ -157,11 +317,13 @@ impl TextArea {
             value,
             home: HomeSurface::here(),
             caret,
+            affinity,
             anchor: signal(None),
+            goal_x: None,
             style,
+            rows,
             id,
             leaf: LayoutLeaf { node, rect },
-            placeholder: String::new(),
             _remeasure: remeasure,
             blink,
             _blinking: effect(move || watching.follow(focus::is_focused(id))),
@@ -170,9 +332,17 @@ impl TextArea {
         })
     }
 
-    /// A muted hint shown while the value is empty.
-    pub fn placeholder(mut self, p: impl Into<String>) -> Self {
-        self.placeholder = p.into();
+    /// A muted hint shown while the value is empty, wrapped as the text would be.
+    pub fn placeholder(self, p: impl Into<String>) -> Self {
+        *self.rows.placeholder.borrow_mut() = p.into();
+        self.rows.changed(self.leaf.node);
+        self
+    }
+
+    /// Whether lines break at the area's width ([`TextWrap::Wrap`]) or only where a `\n` breaks them ([`TextWrap::NoWrap`], the default), whatever the style around the area says.
+    pub fn text_wrap(self, wrap: TextWrap) -> Self {
+        self.rows.wrap.set(wrap);
+        self.rows.changed(self.leaf.node);
         self
     }
 
@@ -196,8 +366,14 @@ impl TextArea {
         self.id
     }
 
-    fn line_height(&self) -> f32 {
-        crate::text_metrics::line_box(&(self.style)())
+    /// `text` in the rows this area draws it in, at the width it was laid out at.
+    fn placed<'a>(&self, text: &'a str, style: &TextStyle) -> Placed<'a> {
+        place(
+            &self.rows,
+            text,
+            style,
+            laid_width(self.leaf.node, self.leaf.rect.get()),
+        )
     }
 
     /// The current caret byte offset, clamped to the text and snapped to a char boundary.
@@ -225,11 +401,15 @@ impl TextArea {
     }
 
     /// Applies a key while focused, editing the bound signal and/or moving the caret. Returns whether the key was consumed.
+    ///
+    /// Home and End, and Command with the horizontal arrows on a Mac, go to the ends of the row on screen; the primary modifier with Home or End, and Command with the vertical arrows on a Mac, go to the ends of the text.
     fn edit(&mut self, key: &Key, mods: &ModifiersState, style: &TextStyle) -> EventResult {
         // Before the key is even read; see `Input::edit`.
         self.blink.wake();
+        let goal_x = self.goal_x.take();
         let mut text = self.value.get();
         let mut caret = self.caret_at(&text);
+        let mut affinity = Affinity::Downstream;
         let mut changed = false;
         // Resolved after the match so each arm can still read the selection it is replacing.
         let anchor = if mods.is_shift {
@@ -237,10 +417,12 @@ impl TextArea {
         } else {
             None
         };
+        let command = keyboard_convention() == KeyboardConvention::Mac && mods.is_meta;
         match key {
             Key::Char('a') | Key::Char('A') if mods.is_primary() => {
                 self.anchor.set(Some(0));
                 self.caret.set(text.len());
+                self.affinity.set(Affinity::Downstream);
                 return EventResult::Handled;
             }
             Key::Char('c') | Key::Char('C') if mods.is_primary() => {
@@ -322,29 +504,26 @@ impl TextArea {
                 }
                 changed = true;
             }
+            Key::Named(NamedKey::Home) if mods.is_primary() => caret = 0,
+            Key::Named(NamedKey::End) if mods.is_primary() => caret = text.len(),
+            Key::Named(NamedKey::ArrowUp) if command => caret = 0,
+            Key::Named(NamedKey::ArrowDown) if command => caret = text.len(),
+            Key::Named(NamedKey::ArrowLeft) if command => {
+                caret = self.row_start(&text, caret, style)
+            }
+            Key::Named(NamedKey::Home) => caret = self.row_start(&text, caret, style),
+            Key::Named(NamedKey::ArrowRight) if command => {
+                (caret, affinity) = self.row_end(&text, caret, style);
+            }
+            Key::Named(NamedKey::End) => (caret, affinity) = self.row_end(&text, caret, style),
             Key::Named(NamedKey::ArrowLeft) => caret = prev_boundary(&text, caret),
             Key::Named(NamedKey::ArrowRight) => caret = next_boundary(&text, caret),
             Key::Named(NamedKey::ArrowUp) => {
-                let line = line_index(&text, caret);
-                if line > 0 {
-                    let x = caret_x(&text, caret, style);
-                    caret = offset_at_line_x(&text, style, line - 1, x);
-                } else {
-                    caret = 0;
-                }
+                (caret, affinity) = self.step_row(&text, caret, style, goal_x, -1);
             }
             Key::Named(NamedKey::ArrowDown) => {
-                let line = line_index(&text, caret);
-                let last = text.matches('\n').count();
-                if line < last {
-                    let x = caret_x(&text, caret, style);
-                    caret = offset_at_line_x(&text, style, line + 1, x);
-                } else {
-                    caret = text.len();
-                }
+                (caret, affinity) = self.step_row(&text, caret, style, goal_x, 1);
             }
-            Key::Named(NamedKey::Home) => caret = line_bounds(&text, caret).0,
-            Key::Named(NamedKey::End) => caret = line_bounds(&text, caret).1,
             Key::Named(NamedKey::Escape) => {
                 focus::release(self.id);
                 return EventResult::Handled;
@@ -355,10 +534,71 @@ impl TextArea {
             self.value.set(text);
         }
         self.caret.set(caret);
+        self.affinity.set(affinity);
         // An anchor that caught up with the caret is no selection at all.
         self.anchor.set(anchor.filter(|a| *a != caret));
         EventResult::Handled
     }
+
+    fn row_start(&self, text: &str, caret: usize, style: &TextStyle) -> usize {
+        let placed = self.placed(text, style);
+        placed
+            .lines
+            .row(placed.row_of(caret, self.affinity.get()))
+            .start
+    }
+
+    /// The end of the caret's row, and the affinity that keeps the caret on it rather than at the start of the row it wraps into.
+    fn row_end(&self, text: &str, caret: usize, style: &TextStyle) -> (usize, Affinity) {
+        let placed = self.placed(text, style);
+        let row = placed.row_of(caret, self.affinity.get());
+        let affinity = if placed.lines.wraps_after(row) {
+            Affinity::Upstream
+        } else {
+            Affinity::Downstream
+        };
+        (placed.lines.row(row).end, affinity)
+    }
+
+    /// The caret one row up (`-1`) or down (`1`) at the x the run of vertical moves began at, or the start or end of the text past the first or last row.
+    fn step_row(
+        &mut self,
+        text: &str,
+        caret: usize,
+        style: &TextStyle,
+        goal_x: Option<f32>,
+        by: isize,
+    ) -> (usize, Affinity) {
+        let placed = self.placed(text, style);
+        let affinity = self.affinity.get();
+        let row = placed.row_of(caret, affinity);
+        let x = goal_x.unwrap_or_else(|| placed.caret_x(caret, affinity));
+        self.goal_x = Some(x);
+        match row.checked_add_signed(by) {
+            Some(next) if next < placed.lines.len() => placed.offset_at(next, x),
+            Some(_) => (text.len(), Affinity::Downstream),
+            None => (0, Affinity::Downstream),
+        }
+    }
+}
+
+/// `text` laid out in `rows` at `width`, the width the area was laid out at.
+fn place<'a>(rows: &Rows, text: &'a str, style: &TextStyle, width: f32) -> Placed<'a> {
+    let width = rows.wrap_width(width);
+    Placed {
+        text,
+        lines: rows.lines(text, style, width),
+        flat: style.clone().with_text_wrap(TextWrap::NoWrap),
+        width,
+    }
+}
+
+/// The width the area's rows wrap at: as wide as layout made it before rounding took any off, since that is the width it was measured at and a row measured to fit must not break again when drawn.
+fn laid_width(node: NodeId, rect: Rect) -> f32 {
+    if rect.width <= 0.0 {
+        return rect.width;
+    }
+    layout_reactive::unrounded_width(node).map_or(rect.width, |unrounded| rect.width.max(unrounded))
 }
 
 impl Component for TextArea {
@@ -366,75 +606,73 @@ impl Component for TextArea {
         let r = self.leaf.rect.get();
         let text = self.value.get();
         let style = (self.style)();
-        let line_h = self.line_height();
-        // A width the shaper never soft-wraps at, so only `\n` breaks a line; long lines overflow and are clipped by an ancestor.
+        let line_h = crate::text_metrics::line_box(&style);
+        let placed = self.placed(&text, &style);
         let full = Rect {
             x: 0.0,
             y: 0.0,
-            width: NO_WRAP_WIDTH,
+            width: placed.width.unwrap_or(NO_WRAP_WIDTH),
             height: r.height.max(line_h),
         };
-        let text_node = if text.is_empty() && !self.placeholder.is_empty() {
+        let placeholder = self.rows.placeholder.borrow();
+        let text_node = if text.is_empty() && !placeholder.is_empty() {
             let mut ph_style = style.clone();
             ph_style.color = style.color.faded(crate::input::PLACEHOLDER_OPACITY);
-            RenderNode::text(self.placeholder.clone(), full, ph_style)
+            RenderNode::text(placeholder.clone(), full, ph_style)
         } else {
             RenderNode::text(Arc::<str>::from(text.as_str()), full, style.clone())
         };
 
-        if focus::is_focused(self.id) {
-            let caret = self.caret_at(&text);
-            let line = line_index(&text, caret);
-            // One rect per line the selection spans. A selection that wraps is not one box — drawing it as one would paint over the margin the text does not occupy.
-            let highlight = self.selection(&text).map(|(from, to)| {
-                let (first, last) = (line_index(&text, from), line_index(&text, to));
-                let mut bands = Vec::with_capacity(last - first + 1);
-                for line in first..=last {
-                    let (start, end) = nth_line_bounds(&text, line);
-                    let x0 = if line == first {
-                        caret_x(&text, from, &style)
-                    } else {
-                        caret_x(&text, start, &style)
-                    };
-                    let x1 = if line == last {
-                        caret_x(&text, to, &style)
-                    } else {
-                        // A sliver on an empty line keeps the selection continuous rather than a gap the eye reads as its end.
-                        caret_x(&text, end, &style).max(x0 + line_h * 0.35)
-                    };
-                    let fill = style.color.faded(0.25);
-                    bands.push(RenderNode::rect(
-                        Rect {
-                            x: x0,
-                            y: line as f32 * line_h,
-                            width: (x1 - x0).max(1.0),
-                            height: line_h,
-                        },
-                        RectStyle::default().with_fill(fill),
-                    ));
-                }
-                RenderNode::group(bands)
-            });
-            let x = caret_x(&text, caret, &style);
-            let caret_rect = Rect {
-                x,
-                y: line as f32 * line_h,
-                width: CARET_WIDTH,
-                height: line_h,
-            };
-            // Read here and nowhere else, so this is what subscribes the area's view to the blink.
-            let lit = style.color.faded(self.blink.opacity());
-            let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit));
-            let layers = match highlight {
-                Some(highlight) => vec![highlight, text_node, caret_node],
-                None => vec![text_node, caret_node],
-            };
-            self.leaf
-                .at_layout_position_as(|| self.semantics(), RenderNode::group(layers))
-        } else {
-            self.leaf
-                .at_layout_position_as(|| self.semantics(), text_node)
+        if !focus::is_focused(self.id) {
+            return self
+                .leaf
+                .at_layout_position_as(|| self.semantics(), text_node);
         }
+        let caret = self.caret_at(&text);
+        let affinity = self.affinity.get();
+        // One rect per row the selection spans: a selection that wraps is not one box, and drawing it as one would paint over the margin the text does not occupy.
+        let highlight = self.selection(&text).map(|(from, to)| {
+            let first = placed.row_of(from, Affinity::Downstream);
+            let last = placed.row_of(to, Affinity::Upstream);
+            let fill = style.color.faded(0.25);
+            let bands = (first..=last).map(|row| {
+                let range = placed.lines.row(row);
+                let x0 = placed.x_at(row, if row == first { from } else { range.start });
+                let x1 = if row == last {
+                    placed.x_at(row, to)
+                } else if placed.lines.wraps_after(row) {
+                    placed.x_at(row, range.end)
+                } else {
+                    // A sliver on an empty line keeps the selection continuous rather than a gap the eye reads as its end.
+                    placed.x_at(row, range.end).max(x0 + line_h * 0.35)
+                };
+                RenderNode::rect(
+                    Rect {
+                        x: x0,
+                        y: row as f32 * line_h,
+                        width: (x1 - x0).max(1.0),
+                        height: line_h,
+                    },
+                    RectStyle::default().with_fill(fill),
+                )
+            });
+            RenderNode::group(bands)
+        });
+        let caret_rect = Rect {
+            x: placed.caret_x(caret, affinity),
+            y: placed.row_of(caret, affinity) as f32 * line_h,
+            width: CARET_WIDTH,
+            height: line_h,
+        };
+        // Read here and nowhere else, so this is what subscribes the area's view to the blink.
+        let lit = style.color.faded(self.blink.opacity());
+        let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit));
+        let layers = match highlight {
+            Some(highlight) => vec![highlight, text_node, caret_node],
+            None => vec![text_node, caret_node],
+        };
+        self.leaf
+            .at_layout_position_as(|| self.semantics(), RenderNode::group(layers))
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
@@ -446,29 +684,30 @@ impl Component for TextArea {
                 button: PointerButton::Primary,
                 ..
             } => {
-                if rect.contains(*x as f32, *y as f32) {
-                    focus::request_from_pointer(self.id);
-                    let style = (self.style)();
-                    let line_h = crate::text_metrics::line_box(&style);
-                    // Read the text out before setting the caret: a `set` inside a `with` closure would re-borrow the runtime.
-                    let text = self.value.get();
-                    let local_y = (*y as f32 - rect.y).max(0.0);
-                    let local_x = (*x as f32 - rect.x).max(0.0);
-                    let last = text.matches('\n').count();
-                    let line = ((local_y / line_h).floor() as usize).min(last);
-                    let at = offset_at_line_x(&text, &style, line, local_x);
-                    // Extends from where the selection already starts, the only pointer gesture available until a drag can be tracked.
-                    if crate::keyboard::modifiers().is_shift {
-                        let from = self.anchor.get().unwrap_or_else(|| self.caret.get());
-                        self.anchor.set(Some(from));
-                    } else {
-                        self.anchor.set(None);
-                    }
-                    self.caret.set(at);
-                    EventResult::Handled
-                } else {
-                    EventResult::Ignored
+                if !rect.contains(*x as f32, *y as f32) {
+                    return EventResult::Ignored;
                 }
+                focus::request_from_pointer(self.id);
+                self.goal_x = None;
+                let style = (self.style)();
+                let line_h = crate::text_metrics::line_box(&style);
+                // Read the text out before setting the caret: a `set` inside a `with` closure would re-borrow the runtime.
+                let text = self.value.get();
+                let placed = self.placed(&text, &style);
+                let local_y = (*y as f32 - rect.y).max(0.0);
+                let local_x = (*x as f32 - rect.x).max(0.0);
+                let row = ((local_y / line_h).floor() as usize).min(placed.lines.len() - 1);
+                let (at, affinity) = placed.offset_at(row, local_x);
+                // Extends from where the selection already starts, the only pointer gesture available until a drag can be tracked.
+                if crate::keyboard::modifiers().is_shift {
+                    let from = self.anchor.get().unwrap_or_else(|| self.caret.get());
+                    self.anchor.set(Some(from));
+                } else {
+                    self.anchor.set(None);
+                }
+                self.caret.set(at);
+                self.affinity.set(affinity);
+                EventResult::Handled
             }
             Event::KeyPressed { key, modifiers, .. } if focus::is_key_target(self.id) => {
                 let style = (self.style)();
@@ -492,76 +731,6 @@ impl Drop for TextArea {
 }
 
 impl_leaf_widget!(TextArea);
-
-fn line_count(text: &str) -> usize {
-    text.matches('\n').count() + 1
-}
-
-/// Byte range `[start, end)` of the line containing `caret` (bounded by the surrounding `\n`s or the text ends).
-fn line_bounds(text: &str, caret: usize) -> (usize, usize) {
-    let caret = caret.min(text.len());
-    let start = text[..caret].rfind('\n').map(|i| i + 1).unwrap_or(0);
-    let end = text[caret..]
-        .find('\n')
-        .map(|i| caret + i)
-        .unwrap_or(text.len());
-    (start, end)
-}
-
-/// Zero-based visual/logical line of `caret` (they are the same with no soft-wrap).
-fn line_index(text: &str, caret: usize) -> usize {
-    text[..caret.min(text.len())].matches('\n').count()
-}
-
-/// Byte range `[start, end)` of the `n`th line (clamped to the last line).
-fn nth_line_bounds(text: &str, n: usize) -> (usize, usize) {
-    let mut start = 0;
-    for _ in 0..n {
-        match text[start..].find('\n') {
-            Some(i) => start += i + 1,
-            None => return (text.len(), text.len()),
-        }
-    }
-    let end = text[start..]
-        .find('\n')
-        .map(|i| start + i)
-        .unwrap_or(text.len());
-    (start, end)
-}
-
-/// Pixel x of the caret within its line (the advance of the line's prefix up to `caret`).
-fn caret_x(text: &str, caret: usize, style: &TextStyle) -> f32 {
-    let (start, _) = line_bounds(text, caret);
-    crate::text_metrics::measure_text(
-        &text[start..caret.min(text.len())],
-        None,
-        NO_WRAP_WIDTH,
-        style,
-    )
-    .0
-}
-
-/// The byte offset within line `n` whose caret x is closest to `x` — used for click-to-position and vertical arrow moves (keeping the column).
-fn offset_at_line_x(text: &str, style: &TextStyle, n: usize, x: f32) -> usize {
-    let (start, end) = nth_line_bounds(text, n);
-    let line = &text[start..end];
-    let mut best = start;
-    let mut best_dx = f32::MAX;
-    let mut idx = 0;
-    loop {
-        let w = crate::text_metrics::measure_text(&line[..idx], None, NO_WRAP_WIDTH, style).0;
-        let dx = (w - x).abs();
-        if dx < best_dx {
-            best_dx = dx;
-            best = start + idx;
-        }
-        if idx >= line.len() {
-            break;
-        }
-        idx = next_boundary(line, idx);
-    }
-    best
-}
 
 /// Byte offset `i` clamped to `s` and moved back onto a char boundary, for an offset kept while the text changed under it.
 fn char_boundary_at_or_before(s: &str, i: usize) -> usize {

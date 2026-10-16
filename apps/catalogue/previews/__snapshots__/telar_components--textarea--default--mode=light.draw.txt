@@ -18,7 +18,7 @@ element group
                   matrix 1,0,0,1,262,279
                     element group
                       matrix 1,0,0,1,0,0
-                        text 0,0 1000000x50 "Anything we should know?" size=14 family=sans-serif weight=400 color=#171a2eb3
+                        text 0,0 276x50 "Anything we should know?" size=14 family=sans-serif weight=400 color=#171a2eb3
                       end
                     end
                   end

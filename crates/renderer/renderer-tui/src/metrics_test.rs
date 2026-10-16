@@ -81,3 +81,30 @@ fn a_paragraph_that_draws_nothing_has_no_ink() {
     assert_eq!(metrics().ink_bounds("", 1000.0, &style()), (0.0, 0.0));
     assert_eq!(metrics().ink_bounds("\n\n", 1000.0, &style()), (0.0, 0.0));
 }
+
+#[test]
+fn line_starts_are_where_the_painter_breaks_each_line() {
+    let text = "the quick brown fox";
+    assert_eq!(
+        metrics().line_starts(text, None, 10.0 * 8.0, &style()),
+        vec![0, 10]
+    );
+    assert_eq!(
+        metrics().line_starts("abcdefgh", None, 3.0 * 8.0, &style()),
+        vec![0, 3, 6]
+    );
+    assert_eq!(
+        metrics().line_starts("ab\ncd", None, 1.0e6, &style()),
+        vec![0, 3]
+    );
+}
+
+#[test]
+fn line_starts_ignore_the_clamp() {
+    let mut s = style();
+    s.clamp = Clamp::lines(1, true);
+    assert_eq!(
+        metrics().line_starts("the quick brown fox", None, 10.0 * 8.0, &s),
+        vec![0, 10]
+    );
+}

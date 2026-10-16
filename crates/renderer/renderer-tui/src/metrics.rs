@@ -153,6 +153,29 @@ impl TextMetrics for CellMetrics {
         }
         None
     }
+
+    /// The painter's own wrap, without the clamp: where each line it would draw begins.
+    fn line_starts(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<usize> {
+        let cased = case_text(text, spans, style);
+        let config = WrapConfig {
+            max_lines: None,
+            ..self.config(max_width, style)
+        };
+        let mut lines = Vec::new();
+        wrap(&cased.text, &config, &mut lines);
+        let mut starts: Vec<usize> = lines
+            .iter()
+            .map(|line| cased.source_index(line.range.start))
+            .collect();
+        starts.dedup();
+        starts
+    }
 }
 
 #[cfg(test)]

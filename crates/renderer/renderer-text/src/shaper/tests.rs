@@ -1004,3 +1004,46 @@ fn a_measured_line_is_as_wide_as_the_run_drawn_from_it() {
         );
     }
 }
+
+#[test]
+fn a_paragraph_reports_the_lines_it_wraps_into_where_each_begins() {
+    let mut shaper = TextShaper::new();
+    let style = plain(16.0);
+    let (pair, _) = shaper.measure_text("abc abc", None, 1000.0, &style);
+    assert!(pair > 0.0, "nothing measures here");
+    let text = "abc abc abc abc abc";
+    let starts = shaper.line_starts(text, None, pair + 1.0, &style);
+    assert_eq!(
+        starts,
+        vec![0, 8, 16],
+        "a space at a break ends the line before it"
+    );
+    let (_, height) = shaper.measure_text(text, None, pair + 1.0, &style);
+    assert_eq!(
+        (height / effective_line_height(&style)).round() as usize,
+        starts.len(),
+        "as many lines as the measure stacks"
+    );
+}
+
+#[test]
+fn a_word_wider_than_the_line_breaks_inside_itself_on_a_char_boundary() {
+    let mut shaper = TextShaper::new();
+    let style = plain(16.0);
+    let text = "ééééééééééééééééééééé";
+    let (whole, _) = shaper.measure_text(text, None, 1000.0, &style);
+    let starts = shaper.line_starts(text, None, whole / 3.0, &style);
+    assert!(starts.len() >= 3, "{starts:?}");
+    assert!(starts.iter().all(|at| text.is_char_boundary(*at)));
+}
+
+#[test]
+fn only_a_newline_breaks_a_line_that_does_not_wrap() {
+    let mut shaper = TextShaper::new();
+    let style = plain(16.0).with_text_wrap(TextWrap::NoWrap);
+    assert_eq!(
+        shaper.line_starts("abc abc abc\nabc", None, 10.0, &style),
+        vec![0, 12]
+    );
+    assert_eq!(shaper.line_starts("", None, 10.0, &style), vec![0]);
+}

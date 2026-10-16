@@ -56,6 +56,18 @@ pub fn each_line<'a>(
     }
 }
 
+/// The byte offset in `text` each line [`each_line`] hands out begins at.
+pub fn line_starts(text: &str, max_width: f32, width_of: impl Fn(&str) -> f32) -> Vec<usize> {
+    let mut starts = Vec::new();
+    each_line(text, max_width, width_of, |line| {
+        starts.push(line.as_ptr() as usize - text.as_ptr() as usize);
+    });
+    if starts.is_empty() {
+        starts.push(0);
+    }
+    starts
+}
+
 /// The widest run `text` has between spaces: the narrowest column [`greedy`] wraps it into without breaking inside a word.
 pub fn widest_word(text: &str, width_of: impl Fn(&str) -> f32) -> f32 {
     text.split_whitespace().map(width_of).fold(0.0, f32::max)

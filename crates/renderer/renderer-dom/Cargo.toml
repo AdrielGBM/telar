@@ -127,3 +127,7 @@ path = "src/frame_tab_test.rs"
 [[test]]
 name = "text_placement"
 path = "src/text_placement_test.rs"
+
+[[test]]
+name = "text_area_wrap"
+path = "src/text_area_wrap_test.rs"

@@ -144,7 +144,7 @@ fn enter_inserts_newline_and_typing_continues_on_new_line() {
     area.on_event(&key(Key::Named(NamedKey::Enter)));
     area.on_event(&key(Key::Char('c')));
     assert_eq!(value.get(), "ab\nc");
-    assert_eq!(line_index(&value.get(), area.caret.get()), 1);
+    assert_eq!(row(&area), 1);
 }
 
 #[test]
@@ -157,11 +157,11 @@ fn backspace_at_line_start_joins_lines() {
 
 #[test]
 fn arrow_up_down_moves_between_lines() {
-    let (mut area, value) = focused("aaaa\nbb");
+    let (mut area, _value) = focused("aaaa\nbb");
     area.on_event(&key(Key::Named(NamedKey::ArrowUp)));
-    assert_eq!(line_index(&value.get(), area.caret.get()), 0);
+    assert_eq!(row(&area), 0);
     area.on_event(&key(Key::Named(NamedKey::ArrowDown)));
-    assert_eq!(line_index(&value.get(), area.caret.get()), 1);
+    assert_eq!(row(&area), 1);
 }
 
 #[test]
@@ -364,6 +364,373 @@ fn the_caret_stays_in_view_of_the_scroll_the_area_sits_in() {
         viewport.peek_offset().1,
         0.0,
         "walking the caret up to the first line brings the view up with it"
+    );
+    focus::clear();
+}
+
+fn row(area: &TextArea) -> usize {
+    let text = area.value.get();
+    let style = (area.style)();
+    area.placed(&text, &style)
+        .row_of(area.caret.get(), area.affinity.get())
+}
+
+const PARAGRAPH: &str =
+    "the quick brown fox jumps over the lazy dog and then keeps on running far away";
+
+fn line_h() -> f32 {
+    crate::text_metrics::line_box(&TextStyle::new(14.0, Color::BLACK))
+}
+
+/// An area that wraps at `width`, laid out in a column that wide and focused.
+struct Wrapping {
+    area: TextArea,
+    value: RwSignal<String>,
+    root: layout_core::NodeId,
+}
+
+impl Wrapping {
+    fn new(initial: &str, width: f32) -> Self {
+        Self::with(
+            TextArea::new(signal(initial.to_string()), LayoutStyle::new(), || {
+                TextStyle::new(14.0, Color::BLACK)
+            }),
+            width,
+        )
+    }
+
+    fn with(area: Result<TextArea, LayoutError>, width: f32) -> Self {
+        let area = area.unwrap().text_wrap(TextWrap::Wrap);
+        let value = area.value;
+        let root = new_container(column(width), &[area.layout_node()]).unwrap();
+        let wrapping = Self { area, value, root };
+        wrapping.lay_out(width);
+        focus::request(wrapping.area.id);
+        wrapping
+    }
+
+    fn lay_out(&self, width: f32) {
+        crate::context::set_layout_style(self.root, column(width)).unwrap();
+        relayout_if_dirty();
+        compute_layout(
+            self.root,
+            AvailableSpace::Definite(width),
+            AvailableSpace::Definite(800.0),
+        )
+        .unwrap();
+    }
+
+    fn lines(&self) -> Rc<VisualLines> {
+        let text = self.value.get();
+        let style = (self.area.style)();
+        self.area.placed(&text, &style).lines
+    }
+
+    fn height(&self) -> f32 {
+        relayout_if_dirty();
+        self.area.leaf.rect.get().height
+    }
+
+    fn press(&mut self, k: Key) {
+        self.area.on_event(&key(k));
+    }
+
+    fn click(&mut self, x: f32, y: f32) {
+        let r = self.area.leaf.rect.get();
+        self.area.on_event(&Event::PointerPressed {
+            x: (r.x + x) as f64,
+            y: (r.y + y) as f64,
+            button: PointerButton::Primary,
+            source: platform_core::PointerSource::Mouse,
+        });
+    }
+}
+
+fn column(width: f32) -> LayoutStyle {
+    LayoutStyle::new().flex_column().width(width).height(800.0)
+}
+
+/// Every rect and text the area draws, in its own coordinates.
+fn drawn(area: &TextArea) -> (Vec<Rect>, Vec<Rect>) {
+    fn walk(node: &RenderNode, rects: &mut Vec<Rect>, texts: &mut Vec<Rect>) {
+        match node {
+            RenderNode::Primitive(renderer_core::DrawCommand::Rect { rect, .. }) => {
+                rects.push(*rect)
+            }
+            RenderNode::Primitive(renderer_core::DrawCommand::Text { rect, .. }) => {
+                texts.push(*rect)
+            }
+            RenderNode::Group { children }
+            | RenderNode::Element { children, .. }
+            | RenderNode::Transform { children, .. }
+            | RenderNode::Clip { children, .. }
+            | RenderNode::Layer { children, .. } => {
+                for child in children.iter() {
+                    walk(child, rects, texts);
+                }
+            }
+            _ => {}
+        }
+    }
+    let (mut rects, mut texts) = (Vec::new(), Vec::new());
+    walk(&area.view(), &mut rects, &mut texts);
+    (rects, texts)
+}
+
+fn caret_rect(area: &TextArea) -> Rect {
+    drawn(area)
+        .0
+        .into_iter()
+        .find(|rect| rect.width == CARET_WIDTH)
+        .expect("a focused area draws its caret")
+}
+
+#[test]
+fn an_area_that_does_not_wrap_keeps_a_long_line_on_one_row() {
+    let (area, value) = focused(PARAGRAPH);
+    let text = value.get();
+    let style = (area.style)();
+    assert_eq!(area.placed(&text, &style).lines.len(), 1);
+    assert!((area.leaf.rect.get().height - line_h()).abs() < 0.5);
+    assert_eq!(drawn(&area).1[0].width, NO_WRAP_WIDTH);
+}
+
+#[test]
+fn a_wrapping_area_is_as_tall_as_the_rows_it_wraps_into_and_draws_them_at_its_width() {
+    let wrapping = Wrapping::new(PARAGRAPH, 160.0);
+    let rows = wrapping.lines().len();
+    assert!(rows >= 3, "{rows} rows");
+    assert!(
+        (wrapping.height() - rows as f32 * line_h()).abs() < 0.5,
+        "{} for {rows} rows",
+        wrapping.height()
+    );
+    assert_eq!(drawn(&wrapping.area).1[0].width, 160.0);
+}
+
+#[test]
+fn typing_past_the_edge_grows_the_area_a_row_and_taking_it_back_shrinks_it() {
+    let mut wrapping = Wrapping::new("abc", 160.0);
+    let one = wrapping.height();
+    assert!((one - line_h()).abs() < 0.5);
+    let mut typed = 0;
+    while wrapping.lines().len() < 2 {
+        wrapping.press(Key::Named(NamedKey::Space));
+        for c in "abc".chars() {
+            wrapping.press(Key::Char(c));
+        }
+        typed += 4;
+        assert!(typed < 200, "nothing wrapped");
+    }
+    assert!((wrapping.height() - 2.0 * line_h()).abs() < 0.5);
+    for _ in 0..4 {
+        wrapping.press(Key::Named(NamedKey::Backspace));
+    }
+    assert_eq!(wrapping.lines().len(), 1);
+    assert!((wrapping.height() - line_h()).abs() < 0.5);
+}
+
+#[test]
+fn a_narrower_area_wraps_into_more_rows_and_is_measured_again_when_typed_into() {
+    let mut wrapping = Wrapping::new(PARAGRAPH, 400.0);
+    let wide = wrapping.lines().len();
+    wrapping.lay_out(160.0);
+    let narrow = wrapping.lines().len();
+    assert!(narrow > wide, "{wide} rows at 400, {narrow} at 160");
+    assert!((wrapping.height() - narrow as f32 * line_h()).abs() < 0.5);
+    wrapping.press(Key::Char('!'));
+    let rows = wrapping.lines().len();
+    assert!((wrapping.height() - rows as f32 * line_h()).abs() < 0.5);
+}
+
+#[test]
+fn a_placeholder_wraps_and_the_area_is_as_tall_as_it_is_drawn() {
+    let area = TextArea::new(signal(String::new()), LayoutStyle::new(), || {
+        TextStyle::new(14.0, Color::BLACK)
+    })
+    .map(|area| area.placeholder(PARAGRAPH));
+    let wrapping = Wrapping::with(area, 160.0);
+    let style = (wrapping.area.style)();
+    let rows = VisualLines::of(PARAGRAPH, &style, Some(160.0)).len();
+    assert!(rows >= 3);
+    assert!((wrapping.height() - rows as f32 * line_h()).abs() < 0.5);
+}
+
+#[test]
+fn down_and_up_keep_the_caret_s_x_across_wrapped_rows() {
+    let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
+    wrapping.area.caret.set(6);
+    let x = caret_rect(&wrapping.area).x;
+    wrapping.press(Key::Named(NamedKey::ArrowDown));
+    assert_eq!(row(&wrapping.area), 1);
+    let below = caret_rect(&wrapping.area);
+    assert_eq!(below.y, line_h());
+    assert!((below.x - x).abs() < 8.0, "{x} above, {} below", below.x);
+    wrapping.press(Key::Named(NamedKey::ArrowDown));
+    assert_eq!(row(&wrapping.area), 2);
+    wrapping.press(Key::Named(NamedKey::ArrowUp));
+    wrapping.press(Key::Named(NamedKey::ArrowUp));
+    assert_eq!(wrapping.area.caret.get(), 6, "back where it started");
+}
+
+/// The column a run of vertical moves began in is the one it goes on in: a short line on the way takes the caret to its end and does not keep it there.
+#[test]
+fn a_short_row_on_the_way_does_not_pull_the_caret_in_for_good() {
+    let (mut area, _value) = focused("abcdefgh\nab\nabcdefgh");
+    area.caret.set(6);
+    area.on_event(&key(Key::Named(NamedKey::ArrowDown)));
+    assert_eq!(area.caret.get(), 11);
+    area.on_event(&key(Key::Named(NamedKey::ArrowDown)));
+    assert_eq!(area.caret.get(), 18);
+    area.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
+    area.on_event(&key(Key::Named(NamedKey::ArrowUp)));
+    assert_eq!(
+        area.caret.get(),
+        11,
+        "a horizontal move starts a new column"
+    );
+}
+
+#[test]
+fn home_and_end_go_to_the_ends_of_the_row_on_screen() {
+    let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
+    let lines = wrapping.lines();
+    wrapping.area.caret.set(2);
+    wrapping.press(Key::Named(NamedKey::End));
+    assert_eq!(wrapping.area.caret.get(), lines.row(0).end);
+    let end = caret_rect(&wrapping.area);
+    assert_eq!(
+        end.y, 0.0,
+        "the end of a wrapped row is drawn on it, not on the next"
+    );
+    assert!(end.x > 100.0, "{}", end.x);
+    wrapping.press(Key::Named(NamedKey::Home));
+    assert_eq!(wrapping.area.caret.get(), 0);
+    wrapping.press(Key::Named(NamedKey::ArrowDown));
+    wrapping.press(Key::Named(NamedKey::Home));
+    assert_eq!(wrapping.area.caret.get(), lines.row(1).start);
+    assert_eq!(caret_rect(&wrapping.area).y, line_h());
+    wrapping.press(Key::Named(NamedKey::End));
+    assert_eq!(wrapping.area.caret.get(), lines.row(1).end);
+    assert_eq!(caret_rect(&wrapping.area).y, line_h());
+}
+
+#[test]
+fn typing_at_the_end_of_a_wrapped_row_moves_the_caret_on_with_the_letter() {
+    let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
+    let end = wrapping.lines().row(0).end;
+    wrapping.press(Key::Named(NamedKey::Home));
+    wrapping.area.caret.set(0);
+    wrapping.press(Key::Named(NamedKey::End));
+    wrapping.press(Key::Char('x'));
+    assert_eq!(&wrapping.value.get()[end..=end], "x");
+    assert_eq!(wrapping.area.caret.get(), end + 1);
+    assert_eq!(wrapping.area.affinity.get(), Affinity::Downstream);
+}
+
+#[test]
+fn the_primary_modifier_with_home_and_end_goes_to_the_ends_of_the_text() {
+    use platform_core::{KeyboardConvention, set_keyboard_convention};
+    set_keyboard_convention(KeyboardConvention::Pc);
+    let (mut area, value) = focused("one\ntwo\nthree");
+    area.caret.set(5);
+    let ctrl = ModifiersState {
+        is_ctrl: true,
+        ..ModifiersState::default()
+    };
+    let style = (area.style)();
+    area.edit(&Key::Named(NamedKey::Home), &ctrl, &style);
+    assert_eq!(area.caret.get(), 0);
+    area.edit(&Key::Named(NamedKey::End), &ctrl, &style);
+    assert_eq!(area.caret.get(), value.get().len());
+    set_keyboard_convention(KeyboardConvention::native());
+}
+
+#[test]
+fn on_a_mac_command_with_the_arrows_goes_to_the_ends_of_the_row_and_of_the_text() {
+    use platform_core::{KeyboardConvention, set_keyboard_convention};
+    set_keyboard_convention(KeyboardConvention::Mac);
+    let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
+    let lines = wrapping.lines();
+    let command = ModifiersState {
+        is_meta: true,
+        ..ModifiersState::default()
+    };
+    let style = (wrapping.area.style)();
+    let start = lines.row(1).start;
+    wrapping.area.caret.set(start + 2);
+    let mut press = |k: NamedKey| {
+        wrapping.area.edit(&Key::Named(k), &command, &style);
+        wrapping.area.caret.get()
+    };
+    assert_eq!(press(NamedKey::ArrowRight), lines.row(1).end);
+    assert_eq!(press(NamedKey::ArrowLeft), start);
+    assert_eq!(press(NamedKey::ArrowDown), PARAGRAPH.len());
+    assert_eq!(press(NamedKey::ArrowUp), 0);
+    set_keyboard_convention(KeyboardConvention::native());
+}
+
+#[test]
+fn a_press_past_the_end_of_a_wrapped_row_lands_at_its_end_and_one_at_a_row_s_start_on_it() {
+    let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
+    let lines = wrapping.lines();
+    wrapping.click(159.0, line_h() * 0.5);
+    assert_eq!(wrapping.area.caret.get(), lines.row(0).end);
+    assert_eq!(caret_rect(&wrapping.area).y, 0.0);
+    wrapping.click(0.5, line_h() * 1.5);
+    assert_eq!(wrapping.area.caret.get(), lines.row(1).start);
+    assert_eq!(caret_rect(&wrapping.area).y, line_h());
+}
+
+#[test]
+fn a_selection_across_wrapped_rows_paints_one_band_on_each() {
+    let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
+    let rows = wrapping.lines().len();
+    wrapping.area.on_event(&chord(Key::Char('a')));
+    let bands: Vec<Rect> = drawn(&wrapping.area)
+        .0
+        .into_iter()
+        .filter(|rect| rect.width != CARET_WIDTH)
+        .collect();
+    assert_eq!(bands.len(), rows);
+    for (row, band) in bands.iter().enumerate() {
+        assert_eq!(band.y, row as f32 * line_h());
+        assert!(band.x + band.width <= 160.0, "{band:?} stays in the box");
+    }
+}
+
+#[test]
+fn the_caret_on_a_wrapped_row_stays_in_view_of_the_scroll_the_area_sits_in() {
+    reset_layout_runtime();
+    let style = || TextStyle::new(14.0, Color::BLACK);
+    let value = signal(PARAGRAPH.repeat(3));
+    let made: Rc<RefCell<Option<(FocusId, crate::ScrollViewport)>>> = Rc::default();
+    let sink = Rc::clone(&made);
+    let height = line_h() * 2.0;
+    let mut scroll = crate::LayoutScrollArea::new_with(
+        LayoutStyle::new().width(160.0).height(height),
+        move |viewport| {
+            let area = TextArea::new(value, LayoutStyle::new(), style)?.text_wrap(TextWrap::Wrap);
+            *sink.borrow_mut() = Some((area.focus_id(), viewport));
+            Ok(Box::new(area) as Box<dyn LayoutItem>)
+        },
+    )
+    .unwrap();
+    compute_layout(
+        scroll.layout_node(),
+        AvailableSpace::Definite(160.0),
+        AvailableSpace::Definite(height),
+    )
+    .unwrap();
+    let (id, viewport) = made.borrow().clone().expect("the builder ran");
+    focus::request(id);
+    scroll.on_event(&chord(Key::Named(NamedKey::End)));
+    relayout_if_dirty();
+    reactive_core::batch(|| {});
+    let offset = viewport.peek_offset().1;
+    assert!(
+        offset > line_h() * 4.0,
+        "the view follows the caret down the rows: {offset}"
     );
     focus::clear();
 }

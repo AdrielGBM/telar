@@ -78,3 +78,33 @@ fn each_line_is_handed_over_without_the_space_it_broke_on() {
     each_line("ab cd ef\n\ngh", 50.0, monospace, |line| lines.push(line));
     assert_eq!(lines, ["ab cd", "ef", "", "gh"]);
 }
+
+#[test]
+fn line_starts_are_where_each_line_begins_past_the_space_it_broke_on() {
+    assert_eq!(
+        line_starts("ab cd ef\n\ngh", 50.0, monospace),
+        vec![0, 6, 9, 10]
+    );
+    assert_eq!(line_starts("ab   cd", 20.0, monospace), vec![0, 5]);
+    assert_eq!(line_starts("ñññññ", 20.0, monospace), vec![0, 4, 8]);
+    assert_eq!(line_starts("", 20.0, monospace), vec![0]);
+}
+
+/// The rows an editor places its caret on are the lines the measure counted, or the caret walks off a box sized for a different number.
+#[test]
+fn there_is_a_line_start_for_every_line_the_measure_counts() {
+    for (text, width) in [
+        ("ab cd ef\n\ngh", 50.0),
+        ("ab   cd", 20.0),
+        ("ñññññ", 20.0),
+        ("the quick brown fox jumps", 70.0),
+        ("abcd ", 40.0),
+        ("one\ntwo\n", 100.0),
+    ] {
+        assert_eq!(
+            line_starts(text, width, monospace).len(),
+            greedy(text, width, monospace).1,
+            "{text:?} at {width}"
+        );
+    }
+}

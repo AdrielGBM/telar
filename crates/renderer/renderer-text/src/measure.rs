@@ -74,6 +74,16 @@ impl renderer_core::TextMetrics for ShaperMetrics {
     ) -> Option<usize> {
         with_shaper(|shaper| shaper.index_at(text, spans, max_width, style, at))
     }
+
+    fn line_starts(
+        &self,
+        text: &str,
+        spans: Option<&[Span]>,
+        max_width: f32,
+        style: &TextStyle,
+    ) -> Vec<usize> {
+        with_shaper(|shaper| shaper.line_starts(text, spans, max_width, style))
+    }
 }
 
 /// Measures the logical (width, height) of `text` wrapped to `max_width` for `style` — weight/italic change glyph advances and `max_lines`/`ellipsis` clamp the extent, so measure and draw must agree by using the same style. Intended for layout-time text sizing on the UI thread so a text node reserves the height its lines actually need.

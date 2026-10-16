@@ -43,6 +43,12 @@ pub(crate) fn measure_in(
 /// Wide enough that nothing wraps, and finite, since a measurer turns the width into whole pixels or cells.
 const MAX_CONTENT_WIDTH: f32 = 1.0e6;
 
+pub(crate) fn line_starts(text: &str, max_width: f32, style: &TextStyle) -> Vec<usize> {
+    #[cfg(test)]
+    ensure_installed();
+    renderer_core::text_line_starts(text, None, max_width, style)
+}
+
 pub(crate) fn measure_ink_bounds(text: &str, max_width: f32, style: &TextStyle) -> (f32, f32) {
     #[cfg(test)]
     ensure_installed();
