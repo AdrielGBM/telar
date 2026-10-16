@@ -136,6 +136,12 @@ content the live viewport (what a `virtual` loop reads), `new_kept(key, style, b
 `.arrival_margin(|| insets)` is `arrival_margin:`. Several children go in as one `Container::column`, as a view
 wraps them.
 
+A `virtual row_height:` loop is `VirtualList::new(style, viewport, row_height, overscan, source, key, build)?`, every
+row the same height. Rows that differ have no `.rsx` spelling yet: in Rust, make a `VirtualRows::new(viewport,
+estimate)` handle and build `VirtualList::measured(style, rows.clone(), overscan_px, source, key, build)?`. Unbuilt
+rows stand at the estimate, built ones are measured after layout, the first row on screen holds still while estimates
+are corrected, and `rows.reveal(index, margin)` brings a row into view whether or not it is built.
+
 ### `@class` and `SurfaceStyle`
 
 `@class` on a component call restyles the component's **principal surface**, the one a caller means when they

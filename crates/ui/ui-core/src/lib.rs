@@ -24,6 +24,7 @@ mod error_boundary;
 mod fixed_layer;
 mod fling;
 pub mod focus;
+mod height_index;
 mod image;
 mod inherit;
 mod input;
@@ -107,6 +108,7 @@ pub use dismiss::{
 pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use error_boundary::{BuildFailure, ErrorBoundary};
 pub use fixed_layer::FixedLayer;
+pub use height_index::HeightIndex;
 pub use image::Image;
 pub use inherit::{Inherited, context, declare, inherited_text_style, undeclare};
 pub use input::{Caret, Input, Underline};
@@ -169,7 +171,7 @@ pub use theme_provider::{
 };
 pub use transform_origin::{TransformOrigin, box_transform_about};
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};
-pub use virtual_list::{VirtualList, visible_window};
+pub use virtual_list::{VirtualList, VirtualRows, visible_window};
 pub use window_root::WindowRoot;
 
 /// Routes an event to the overlay layer before the widget tree sees it, resolving a live drag first, then Escape/Enter against the dismiss stack, ahead of `ui_tree`'s own pointer routing.
