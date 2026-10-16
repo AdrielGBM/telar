@@ -1,4 +1,4 @@
-//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped and none of the memory a build held; and that a face a guest adds while it runs reaches the host that draws it; and that a guest shows its shortcuts for the keyboard its host matches. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
+//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped and none of the memory a build held; and that a face a guest adds while it runs reaches the host that draws it and outlives the guest; and that a guest shows its shortcuts for the keyboard its host matches. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -8,8 +8,8 @@ use std::sync::{Mutex, PoisonError};
 
 use telar::hot::load_hot_app;
 use telar::{
-    AppCtx, AppRuntime, Chord, Event, EventResult, KeyboardConvention, PointerButton,
-    PointerSource, Size, set_keyboard_convention,
+    AppCtx, AppRuntime, Chord, Color, Event, EventResult, KeyboardConvention, PointerButton,
+    PointerSource, Size, TextStyle, set_keyboard_convention,
 };
 
 /// One at a time: both count what the process has mapped and what sits in the build directory.
@@ -124,14 +124,14 @@ fn reloading_a_hot_guest_again_and_again_keeps_one_mapped() {
     );
 }
 
-/// What each build held, its reactive runtime and the registries its tree filled among it, is freed as it is unloaded rather than left in the memory the host keeps: a session is a long run of reloads, and what one leaks every one does.
+/// What each build held, its reactive runtime, the registries its tree filled and the baked assets its markup read among it, is freed as it is unloaded rather than left in the memory the host keeps: a session is a long run of reloads, and what one leaks every one does. Its two small baked SVGs alone kept about 3 KiB a reload while they were `LazyLock`s, which this bound refuses.
 #[test]
 #[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 fn reloading_a_hot_guest_again_and_again_frees_what_each_build_held() {
     const WARM_UP: usize = 3;
-    const RELOADS: usize = 12;
-    const TOLERANCE_PER_RELOAD: usize = 16 * 1024;
+    const RELOADS: usize = 36;
+    const TOLERANCE_PER_RELOAD: usize = 4 * 1024;
     let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     let library = build_fixture();
     for _ in 0..WARM_UP {
@@ -149,7 +149,7 @@ fn reloading_a_hot_guest_again_and_again_frees_what_each_build_held() {
     );
 }
 
-/// The host draws what the guest lays out, so a face the app adds while it runs must land in the host's database and not only in the guest's copy of it, or the host draws that text in a face it does not have.
+/// The host draws what the guest lays out, so a face the app adds while it runs must land in the host's database and not only in the guest's copy of it, or the host draws that text in a face it does not have; and it must outlive the build that added it, whose image, where an embedded face's bytes are, is unmapped as the next one takes over.
 #[test]
 #[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
 fn a_face_a_hot_guest_adds_while_it_runs_reaches_the_host() {
@@ -173,6 +173,14 @@ fn a_face_a_hot_guest_adds_while_it_runs_reaches_the_host() {
         "the host can draw in it"
     );
     drop(tree);
+    drop(app);
+    telar::install_default_text_metrics();
+    let arriving = TextStyle::new(14.0, Color::BLACK).with_font_family("Arriving Face");
+    let (width, _) = telar::measure_text("Arrived", None, f32::INFINITY, &arriving);
+    assert!(
+        width > 0.0,
+        "the host still sets text in it once the guest is unloaded"
+    );
 }
 
 /// The guest's copy of the convention answers for the system it was compiled on until the host hands over its own, which is what a terminal host on a Mac needs: it matches Ctrl, and a guest left alone would show ⌘.

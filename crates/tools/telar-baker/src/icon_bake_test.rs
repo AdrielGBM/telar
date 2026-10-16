@@ -69,7 +69,7 @@ fn only_the_icons_the_view_names_are_baked() {
         !source.contains(&static_name_for_path("demo:gear")),
         "{source}"
     );
-    assert!(source.contains("LazyLock<Arc<SvgData>>"), "{source}");
+    assert!(source.contains(": Arc<SvgData> = Arc::new("), "{source}");
 
     let record = read_icon_record(&root).unwrap();
     assert_eq!(

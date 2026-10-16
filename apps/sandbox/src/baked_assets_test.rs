@@ -19,13 +19,14 @@ const BADGE_SOURCE: &str = include_str!("../assets/badge.svg");
 
 #[test]
 fn the_baked_svg_draws_what_the_dynamic_one_draws() {
+    let baked = BADGE_SVG.get();
     let dynamic = SvgData::from_str(BADGE_SOURCE).expect("the fixture parses");
 
     for (w, h) in [(24.0, 24.0), (48.0, 24.0), (24.0, 48.0)] {
         for tint in [None, Some(Color::rgba(1.0, 0.0, 0.0, 1.0))] {
             for fit in [ObjectFit::Contain, ObjectFit::Cover, ObjectFit::Fill] {
                 assert_eq!(
-                    *BADGE_SVG.commands_for(w, h, tint, None, fit),
+                    *baked.commands_for(w, h, tint, None, fit),
                     *dynamic.commands_for(w, h, tint, None, fit),
                     "baked != dynamic at ({w}x{h}) tint={tint:?} fit={fit:?}"
                 );
@@ -36,7 +37,7 @@ fn the_baked_svg_draws_what_the_dynamic_one_draws() {
 
 #[test]
 fn the_baked_svg_keeps_the_documents_own_size() {
-    let (w, h) = BADGE_SVG.intrinsic_size();
+    let (w, h) = BADGE_SVG.get().intrinsic_size();
     let (dw, dh) = SvgData::from_str(BADGE_SOURCE).unwrap().intrinsic_size();
     assert!((w - dw).abs() < 1e-3 && (h - dh).abs() < 1e-3, "{w}x{h}");
 }
@@ -49,5 +50,6 @@ fn the_baked_image_carries_the_files_dimensions() {
     let width = u32::from_be_bytes(png[16..20].try_into().unwrap());
     let height = u32::from_be_bytes(png[20..24].try_into().unwrap());
 
-    assert_eq!((DOT_PNG.width, DOT_PNG.height), (width, height));
+    let baked = DOT_PNG.get();
+    assert_eq!((baked.width, baked.height), (width, height));
 }

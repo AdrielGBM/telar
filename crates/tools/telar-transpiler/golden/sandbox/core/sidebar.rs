@@ -21,7 +21,7 @@ pub fn sidebar(props: SidebarProps, children: Children) -> Result<Box<dyn Layout
     let __col_0 = {
         let __col_1 = {
             let __row_0 = {
-                let __node_0 = icon(IconProps::props().name(("lucide:triangle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_1FFBD581), true)).size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
+                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
                 let __text_0 = {
                     Text::declaring(
                         || "rsx".to_string(),

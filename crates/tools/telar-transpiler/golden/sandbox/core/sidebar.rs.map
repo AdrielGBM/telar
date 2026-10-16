@@ -74,7 +74,7 @@
 73	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-608..629	2810	`|| set_mode("modern")`
-700..721	3056	`|| set_mode("pastel")`
-794..817	3304	`|| set_mode("midnight")`
-849..859	3693	`theme_name`
+608..629	2790	`|| set_mode("modern")`
+700..721	3036	`|| set_mode("pastel")`
+794..817	3284	`|| set_mode("midnight")`
+849..859	3673	`theme_name`

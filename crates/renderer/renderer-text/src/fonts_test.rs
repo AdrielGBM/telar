@@ -242,3 +242,44 @@ fn a_second_copy_given_the_sources_resolves_every_family_as_the_first_does() {
         "the same sources again load nothing and replace nothing"
     );
 }
+
+#[test]
+fn a_face_a_library_hands_over_by_its_static_bytes_is_held_in_a_copy_of_the_hosts() {
+    let arriving: &'static [u8] = b"bytes in the library's image";
+    let [face] = held_by_host(vec![FontAsset::embedded(arriving).named("Arrived")], &[])
+        .try_into()
+        .expect("one face in, one out");
+    let FontSource::Shared(copy) = &face.source else {
+        panic!("the library's own bytes are kept");
+    };
+    assert_eq!(&**copy, arriving);
+    assert!(
+        !std::ptr::eq(&**copy, arriving),
+        "a copy, not the library's bytes"
+    );
+    assert_eq!(face.family.as_deref(), Some("Arrived"));
+}
+
+#[test]
+fn a_face_the_host_holds_already_is_handed_back_as_the_host_holds_it() {
+    let arrived: Arc<[u8]> = Arc::from(&b"a face that arrived with an earlier build"[..]);
+    let held = [
+        FontAsset::embedded(TEST_FACE),
+        FontAsset::bytes(Arc::clone(&arrived)),
+    ];
+    let faces = held_by_host(
+        vec![
+            FontAsset::embedded(TEST_FACE.to_vec().leak()),
+            FontAsset::embedded(arrived.to_vec().leak()),
+        ],
+        &held,
+    );
+    assert!(
+        matches!(faces[0].source, FontSource::Static(bytes) if std::ptr::eq(bytes, TEST_FACE)),
+        "a face the host embeds is read from the host's own bytes"
+    );
+    assert!(
+        matches!(&faces[1].source, FontSource::Shared(bytes) if Arc::ptr_eq(bytes, &arrived)),
+        "a face an earlier build handed over is read from the copy the host kept of it"
+    );
+}

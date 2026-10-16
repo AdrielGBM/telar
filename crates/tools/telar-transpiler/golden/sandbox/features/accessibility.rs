@@ -246,7 +246,7 @@ pub fn accessibility(props: AccessibilityProps, children: Children) -> Result<Bo
                                     if __request.includes(None) {
                                         let __row_2 = {
                                             let __sbox_0 = {
-                                                let __node_12 = icon(IconProps::props().name(("lucide:smile", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_4AF7F703), true)).size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
+                                                let __node_12 = icon(IconProps::props().name(("lucide:smile", crate::__rsx_assets::ASSET_4AF7F703.get(), true)).size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
                                                 StyledContainer::new(LayoutStyle::new().flex_column().padding_all(12.0), { let theme = theme.clone(); move |_| RectStyle::default().with_fill(theme.get().surface_alt).with_radius(BorderRadius::all(8.0)) }, children![__node_12])?.on_press({ let mood = mood.clone(); move || mood.set(if mood.get() == "calm" { "busy".into() } else { "calm".into() }) })
                                             };
                                             let __sbox_0 = __sbox_0.a11y_label({ let mood = mood.clone(); move || ::std::string::ToString::to_string(&(format!("Mood: {}", mood.get()))) });

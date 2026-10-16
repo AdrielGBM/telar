@@ -285,7 +285,7 @@ pub fn images(props: ImagesProps, children: Children) -> Result<Box<dyn LayoutIt
                                             let __img_6 = {
                                                 Image::new(
                                                     LayoutStyle::new().width(64.0).height(64.0),
-                                                    move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_A2C18B25),
+                                                    move || crate::__rsx_assets::ASSET_A2C18B25.get(),
                                                     move || Raster::Smooth,
                                                     move || ObjectFit::Contain,
                                                 )?.with_priority()
@@ -294,7 +294,7 @@ pub fn images(props: ImagesProps, children: Children) -> Result<Box<dyn LayoutIt
                                             let __img_7 = {
                                                 Image::new(
                                                     LayoutStyle::new().width(96.0).height(96.0),
-                                                    move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_A2C18B25),
+                                                    move || crate::__rsx_assets::ASSET_A2C18B25.get(),
                                                     move || Raster::Pixel,
                                                     move || ObjectFit::Contain,
                                                 )?

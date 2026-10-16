@@ -23,17 +23,22 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 /// Bumped whenever `.telar/assets.rs`'s generated source changes shape in a way older `telar`/`telar-macros`
-/// can't read (e.g. the `static`'s wrapper type, or how an entry's initializer is called). This is
-/// mandatory, not discretionary: [`check_artifact`] treats any mismatch here as fatal on its own, without
-/// even looking at `telar_version`, because a shape it can't parse makes that second comparison moot.
-/// Compared against an index's own [`AssetIndex::format`] by [`check_artifact`].
-pub const ASSET_ARTIFACT_FORMAT: u32 = 5;
+/// can't read (e.g. the `static`'s wrapper type, or how an entry's initializer is called), as (at 6) every
+/// `static` becoming a `released_static!` read with `get`, so a host that unloads a hot-reloaded guest frees
+/// what it baked. This is mandatory, not discretionary: [`check_artifact`] treats any mismatch here as fatal
+/// on its own, without even looking at `telar_version`, because a shape it can't parse makes that second
+/// comparison moot. Compared against an index's own [`AssetIndex::format`] by [`check_artifact`].
+pub const ASSET_ARTIFACT_FORMAT: u32 = 6;
 
 /// The module every baked `static` is wired under once a macro declares `#[path = "…/assets.rs"] pub mod
 /// __rsx_assets;`, mirroring [`crate::I18N_MODULE`]. Unused by this module itself — the generated source
 /// has no `mod` wrapper of its own, exactly like `__i18n.rs` — but recorded here so the name is decided
 /// once, before more than one task starts assuming a spelling for it.
 pub const ASSETS_MODULE: &str = "__rsx_assets";
+
+const STATIC_OPENING: &str = "telar::released_static! { pub static ";
+const INIT_OPENING: &str = " = Arc::new(";
+const STATIC_CLOSING: &str = "); }";
 
 /// File name of the generated index, joined onto a package's `.telar/` directory.
 pub const ASSETS_INDEX_FILENAME: &str = "assets.json";
@@ -99,7 +104,7 @@ pub struct BakedAsset {
     /// The source file's bytes, hashed for [`AssetEntry::hash`] and otherwise unused.
     pub content: Vec<u8>,
     /// Rust source for the baked value's initializer, e.g. `SvgData::from_baked_vector(&[..])` — the
-    /// baker's output. Wrapped here in `Arc::new(..)` behind a `LazyLock`.
+    /// baker's output. Wrapped here in `Arc::new(..)` behind a `released_static!`.
     pub init_expr: String,
     /// Whether the artwork takes the colour it is drawn in rather than keeping its own: an icon of a monochrome set, or one drawn in `currentColor`. The transpiler hands it to a component-named kind's prop with the data; a path asset leaves it `false`, since its tag is told its tint where it is written.
     pub monochrome: bool,
@@ -183,7 +188,7 @@ pub fn generate_assets(
             ));
         }
         body.push_str(&format!(
-            "pub static {static_name}: LazyLock<Arc<{}>> = LazyLock::new(|| Arc::new({}));\n",
+            "{STATIC_OPENING}{static_name}: Arc<{}>{INIT_OPENING}{}{STATIC_CLOSING}\n",
             kind.data_ty, asset.init_expr
         ));
         entries.push(AssetEntry {
@@ -197,7 +202,7 @@ pub fn generate_assets(
 
     // A glob, and the same one every transpiled component file opens with: an `init_expr` names whatever types its baker chose (`VectorCommand`, `PathData`, `Point`, …), which is not derivable from the asset kind.
     let mut source = String::from(
-        "#![allow(clippy::all)]\n#[allow(unused_imports)] use telar::*;\n#[allow(unused_imports)] use std::sync::{Arc, LazyLock};\n\n",
+        "#![allow(clippy::all)]\n#[allow(unused_imports)] use telar::*;\n#[allow(unused_imports)] use std::sync::Arc;\n\n",
     );
     source.push_str(&body);
 
@@ -214,11 +219,14 @@ pub fn generate_assets(
 
 /// The initializer [`generate_assets`] wrote for `static_name` in `source`, the generated module: what a bake reuses for an asset whose content is unchanged, and what a macro naming one baked asset inlines. It parses the exact single-line shape written above, which is what bumping [`ASSET_ARTIFACT_FORMAT`] guards.
 pub fn baked_init_expr(source: &str, static_name: &str) -> Option<String> {
-    let marker = format!("pub static {static_name}: ");
-    let line = source.lines().find(|line| line.starts_with(&marker))?;
-    let start = line.find("Arc::new(")? + "Arc::new(".len();
-    let end = line.rfind("));")?;
-    (start <= end).then(|| line[start..end].to_string())
+    source.lines().find_map(|line| {
+        let (_, init) = line
+            .strip_prefix(STATIC_OPENING)?
+            .strip_prefix(static_name)?
+            .strip_prefix(": Arc<")?
+            .split_once(INIT_OPENING)?;
+        init.strip_suffix(STATIC_CLOSING).map(str::to_string)
+    })
 }
 
 /// Reads `<telar_dir>/assets.json`. `Ok(None)` when the file doesn't exist — a project that bakes nothing,

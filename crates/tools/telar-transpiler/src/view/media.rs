@@ -181,14 +181,14 @@ impl ViewGen<'_> {
         }
     }
 
-    /// The `data_fn` for a static `src:"rel"`: a clone of the `static` the baked artifact declares for it. Nothing is read or decoded here — an asset the artifact cannot answer for becomes a `compile_error!` naming the command that bakes it, and that call's `!`-typed result unifies with the widget's `Fn() -> Arc<Data>` bound, so no secondary type errors leak from it.
+    /// The `data_fn` for a static `src:"rel"`: what the `static` the baked artifact declares for it holds, read with `get`. Nothing is read or decoded here — an asset the artifact cannot answer for becomes a `compile_error!` naming the command that bakes it, and that call's `!`-typed result unifies with the widget's `Fn() -> Arc<Data>` bound, so no secondary type errors leak from it.
     fn static_asset_data_fn(&self, rel: &str, kind: &'static AssetKind) -> String {
         let resolved = match self.assets {
             Some(assets) => assets.resolve(kind, rel),
             None => Err(AssetContext::detached_message(kind, rel)),
         };
         match resolved {
-            Ok(path) => format!("move || std::sync::Arc::clone(&{path})"),
+            Ok(path) => format!("move || {path}.get()"),
             Err(msg) => format!("move || compile_error!({})", rust_str(&msg)),
         }
     }

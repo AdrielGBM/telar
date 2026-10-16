@@ -250,7 +250,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(12.0).with_color(theme.get().muted) },
                                                         )?
                                                     };
-                                                    let __node_9 = icon(IconProps::props().name(("lucide:arrow-right", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_6866DA5D), true)).size(12.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().muted })).build(), Children::default())?;
+                                                    let __node_9 = icon(IconProps::props().name(("lucide:arrow-right", crate::__rsx_assets::ASSET_6866DA5D.get(), true)).size(12.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().muted })).build(), Children::default())?;
                                                     let __text_2 = {
                                                         Text::declaring(
                                                             || "raster".to_string(),
@@ -300,7 +300,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                             let __svg_10 = {
                                                 Svg::new(
                                                     LayoutStyle::new().width(40.0).height(40.0),
-                                                    move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_327B2D38),
+                                                    move || crate::__rsx_assets::ASSET_327B2D38.get(),
                                                     || None,
                                                     move || ObjectFit::Contain,
                                                 )?
@@ -308,7 +308,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                             let __svg_11 = {
                                                 Svg::new(
                                                     LayoutStyle::new().width(72.0).height(72.0),
-                                                    move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_327B2D38),
+                                                    move || crate::__rsx_assets::ASSET_327B2D38.get(),
                                                     || None,
                                                     move || ObjectFit::Contain,
                                                 )?
@@ -316,7 +316,7 @@ pub fn svg(props: SvgProps, children: Children) -> Result<Box<dyn LayoutItem>, L
                                             let __svg_12 = {
                                                 Svg::new(
                                                     LayoutStyle::new().width(120.0).height(56.0),
-                                                    move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_327B2D38),
+                                                    move || crate::__rsx_assets::ASSET_327B2D38.get(),
                                                     || None,
                                                     move || ObjectFit::Cover,
                                                 )?

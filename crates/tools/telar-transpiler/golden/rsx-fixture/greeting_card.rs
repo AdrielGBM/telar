@@ -18,12 +18,12 @@ pub fn greeting_card(props: GreetingCardProps, children: Children) -> Result<Box
         let __svg_0 = {
             Svg::new(
                 LayoutStyle::new().width(24.0).height(24.0),
-                move || std::sync::Arc::clone(&crate::__rsx_assets::ASSET_7B792050),
+                move || crate::__rsx_assets::ASSET_7B792050.get(),
                 || None,
                 move || ObjectFit::Contain,
             )?
         };
-        let __node_0 = icon(IconProps::props().name(("fixture:dot", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_6504A2AF), true)).size(16.0).build(), Children::default())?;
+        let __node_0 = icon(IconProps::props().name(("fixture:dot", crate::__rsx_assets::ASSET_6504A2AF.get(), true)).size(16.0).build(), Children::default())?;
         let __text_0 = {
             Text::declaring(
                 move || format!("{}", t!("greeting", name = props.name)),

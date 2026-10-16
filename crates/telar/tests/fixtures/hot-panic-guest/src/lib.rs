@@ -1,6 +1,6 @@
 //! A hot-reload guest whose press handler panics, exporting what `app!` exports under `telar/hot-reload`: the `hot_panic` test in `telar` loads it into a host with its own copy of std.
 //!
-//! Its tree is a themed panel around a line of text that counts the moves it was handed, a button and an icon nothing baked, so mounting, painting and moving over it reach what an app's would: the reactive runtime, layout, the theme, the text measurer, the input registries, and the slots of the plugins an app draws with. A secondary press adds a face, as a font fetched while an app runs is.
+//! Its tree is a themed panel around a line of text that counts the moves it was handed, a button, an icon nothing baked and a card written in `.rsx` that draws what its library baked, so mounting, painting and moving over it reach what an app's would: the reactive runtime, layout, the theme, the text measurer, the input registries, the slots of the plugins an app draws with, and the baked assets its markup reads. A secondary press adds a face, as a font fetched while an app runs is.
 
 use telar::{
     App, AppCtx, Children, Chord, Component, Event, EventResult, FontAsset, LayoutItem,
@@ -9,6 +9,7 @@ use telar::{
 };
 use telar_components::{ButtonProps, button};
 use telar_icons::{IconProps, icon};
+use telar_rsx_fixture::{GreetingCardProps, greeting_card};
 
 const ARRIVING_FACE: &[u8] =
     include_bytes!("../../../../../renderer/renderer-text/test-fonts/TelarTest.ttf");
@@ -37,10 +38,15 @@ impl PanicsOnPress {
             Children::default(),
         )
         .expect("the icon builds");
+        let card = greeting_card(
+            GreetingCardProps::props().name("Ada").build(),
+            Children::default(),
+        )
+        .expect("the card builds");
         let panel = StyledContainer::new(
             LayoutStyle::new().padding_all(8.0),
             |_| RectStyle::filled(use_theme_tokens().surface_alt(), 4.0),
-            vec![box_item(label), save, missing],
+            vec![box_item(label), save, missing, card],
         )
         .expect("the panel builds");
         Self {

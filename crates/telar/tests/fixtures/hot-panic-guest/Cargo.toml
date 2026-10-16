@@ -14,6 +14,8 @@ telar-components = { version = "0.2.2", path = "../../../../../plugins/telar-com
 telar-icons = { version = "0.2.2", path = "../../../../../plugins/telar-icons" }
 # The seam a face that arrives while the app runs goes through, as `telar-dynamic`'s font decoder does.
 telar-renderer-text = { version = "0.2.2", path = "../../../../renderer/renderer-text" }
+# A `.rsx` library whose card draws an SVG and an icon it baked into `.telar/assets.rs`, as an app's markup does.
+telar-rsx-fixture = { version = "0.2.2", path = "../../../../../plugins/telar-rsx-fixture" }
 
 # Its own workspace root, so it is never a member of the repository's: the `hot_panic` test builds it on demand.
 [workspace]

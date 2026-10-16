@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use super::BuildFlavour;
 use crate::PreludeEntry;
 
-/// Bumped whenever the generated Rust changes shape in a way an older `telar-macros` cannot wire — a different output path convention, a preview const that is named differently, (at 2) previews being emitted only for the flavours that ask, (at 3) a `*.previews.rsx` emitting its previews in a module of its own, or (at 4) every flavour emitting its previews, which retired the flavours that alone did. Any mismatch sends the reader back to transpiling for itself, which is always correct and only slower.
-pub const BUILD_ARTIFACT_FORMAT: u32 = 4;
+/// Bumped whenever the generated Rust changes shape in a way an older `telar-macros` cannot wire — a different output path convention, a preview const that is named differently, (at 2) previews being emitted only for the flavours that ask, (at 3) a `*.previews.rsx` emitting its previews in a module of its own, (at 4) every flavour emitting its previews, which retired the flavours that alone did, or (at 5) a baked asset being read with `get` from the `released_static!` its module declares since asset format 6. Any mismatch is refused with the command that rewrites it, as an artifact that no longer answers for its sources is.
+pub const BUILD_ARTIFACT_FORMAT: u32 = 5;
 
 /// One `.rsx` the artifact was written from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

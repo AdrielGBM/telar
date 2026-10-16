@@ -101,7 +101,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
         let __sbox_0 = {
             let __row_0 = {
                 let __row_1 = {
-                    let __node_0 = icon(IconProps::props().name(("lucide:triangle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_1FFBD581), true)).size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().dark })).build(), Children::default())?;
+                    let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().dark })).build(), Children::default())?;
                     let __text_0 = {
                         Text::declaring(
                             || "rsx".to_string(),
@@ -305,7 +305,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 if __request.includes(Some("icon")) {
-                                    let __node_5 = icon(IconProps::props().name(("lucide:zap", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_4802B2F8), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                                    let __node_5 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
                                     __slots.push(Some("icon"), box_item(__node_5));
                                 }
                                 __slots.extend_default(__children);
@@ -324,7 +324,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 if __request.includes(Some("icon")) {
-                                    let __node_7 = icon(IconProps::props().name(("lucide:puzzle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_85A554E9), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                                    let __node_7 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
                                     __slots.push(Some("icon"), box_item(__node_7));
                                 }
                                 __slots.extend_default(__children);
@@ -343,7 +343,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 if __request.includes(Some("icon")) {
-                                    let __node_9 = icon(IconProps::props().name(("lucide:palette", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_E0D46014), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                                    let __node_9 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
                                     __slots.push(Some("icon"), box_item(__node_9));
                                 }
                                 __slots.extend_default(__children);
@@ -362,7 +362,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                                 let mut __slots = Slots::new();
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 if __request.includes(Some("icon")) {
-                                    let __node_11 = icon(IconProps::props().name(("lucide:smartphone", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_15E9407E), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                                    let __node_11 = icon(IconProps::props().name(("lucide:smartphone", crate::__rsx_assets::ASSET_15E9407E.get(), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
                                     __slots.push(Some("icon"), box_item(__node_11));
                                 }
                                 __slots.extend_default(__children);
@@ -496,7 +496,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
                             )?
                         };
                         let __row_9 = {
-                            let __node_12 = icon(IconProps::props().name(("lucide:arrow-right", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_6866DA5D), true)).size(16.0).color(PRIMARY).build(), Children::default())?;
+                            let __node_12 = icon(IconProps::props().name(("lucide:arrow-right", crate::__rsx_assets::ASSET_6866DA5D.get(), true)).size(16.0).color(PRIMARY).build(), Children::default())?;
                             let __text_25 = {
                                 Text::declaring(
                                     || "signal, memo, effect".to_string(),
@@ -551,7 +551,7 @@ pub fn home(props: HomeProps, children: Children) -> Result<Box<dyn LayoutItem>,
             let __row_11 = {
                 let __col_16 = {
                     let __row_12 = {
-                        let __node_14 = icon(IconProps::props().name(("lucide:triangle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_1FFBD581), true)).size(18.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().on_primary })).build(), Children::default())?;
+                        let __node_14 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(18.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().on_primary })).build(), Children::default())?;
                         let __text_29 = {
                             Text::declaring(
                                 || "rsx".to_string(),

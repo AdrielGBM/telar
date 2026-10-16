@@ -2079,13 +2079,13 @@ fn quoted_svg_src_references_the_baked_artifact() {
 
     let name = static_name_for_path("icon.svg");
     assert!(
-        code.contains(&format!(
-            "move || std::sync::Arc::clone(&crate::__rsx_assets::{name})"
-        )),
-        "data_fn should clone the artifact's static:\n{code}"
+        code.contains(&format!("move || crate::__rsx_assets::{name}.get()")),
+        "data_fn should read the artifact's static:\n{code}"
     );
     assert!(
-        !code.contains("from_baked_vector") && !code.contains("LazyLock"),
+        !code.contains("from_baked_vector")
+            && !code.contains("LazyLock")
+            && !code.contains("released_static"),
         "the transpiler must decode nothing and hoist no static of its own:\n{code}"
     );
     assert!(
@@ -3184,7 +3184,7 @@ fn a_baked_icon_id_becomes_the_artifacts_pair() {
     let name = static_name_for_path("mdi:home");
     assert!(
         code.contains(&format!(
-            "IconProps::props().name((\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{name}), false)).size(20.0).build()"
+            "IconProps::props().name((\"mdi:home\", crate::__rsx_assets::{name}.get(), false)).size(20.0).build()"
         )),
         "{code}"
     );
@@ -3200,9 +3200,7 @@ fn a_literal_icon_id_given_to_a_component_that_carries_icons_is_baked() {
         "[logic]\nlet which = signal(String::new());\n\n[view]\ncol\n    icon_button icon:\"mdi:home\" label:\"Home\"\n    icon_button icon:$which label:\"Which\"\n    icon_button icon:icon!(\"mdi:home\") label:\"Macro\"\n\n[preview \"Home\"]\nicon_button icon:\"mdi:home\" label:\"Home\"\n",
     );
     let name = static_name_for_path("mdi:home");
-    let pair = format!(
-        ".icon((\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{name}), false))"
-    );
+    let pair = format!(".icon((\"mdi:home\", crate::__rsx_assets::{name}.get(), false))");
     assert_eq!(code.matches(&pair).count(), 2, "{code}");
     assert!(code.contains(".icon(which.clone())"), "{code}");
     assert!(code.contains(".icon(icon!(\"mdi:home\"))"), "{code}");
@@ -3263,7 +3261,7 @@ fn a_bare_icon_name_is_read_in_the_default_set_and_baked() {
     let name = static_name_for_path("mdi:home");
     assert!(
         code.contains(&format!(
-            ".name((\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{name}), false))"
+            ".name((\"mdi:home\", crate::__rsx_assets::{name}.get(), false))"
         )),
         "{code}"
     );

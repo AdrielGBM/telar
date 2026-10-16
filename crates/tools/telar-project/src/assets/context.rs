@@ -177,7 +177,7 @@ impl AssetContext {
         })
     }
 
-    /// The value a baked id becomes, `("set:name", Arc::clone(&crate::__rsx_assets::ASSET_…), monochrome)` — the triple a component-named kind's prop accepts — or the message explaining why it cannot be one. `written` is read the way the bake keyed it, so a bare icon name finds the icon of the default set.
+    /// The value a baked id becomes, `("set:name", crate::__rsx_assets::ASSET_….get(), monochrome)` — the triple a component-named kind's prop accepts — or the message explaining why it cannot be one. `written` is read the way the bake keyed it, so a bare icon name finds the icon of the default set.
     ///
     /// Unlike a path, there is no file here to re-hash: the id is either in the artifact or it is not, and whether its source changed is the bake's question, which runs before every build route.
     pub fn resolve_id(&self, kind: &AssetKind, written: &str) -> Result<String, String> {
@@ -198,7 +198,7 @@ impl AssetContext {
             })
             .map_err(|message| format!("rsx: {message}"))?;
         Ok(format!(
-            "({id:?}, ::std::sync::Arc::clone(&crate::{ASSETS_MODULE}::{}), {})",
+            "({id:?}, crate::{ASSETS_MODULE}::{}.get(), {})",
             entry.static_name, entry.monochrome
         ))
     }

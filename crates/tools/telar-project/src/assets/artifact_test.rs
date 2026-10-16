@@ -66,9 +66,9 @@ fn generates_one_static_per_asset_with_the_right_wrapper_type() {
     let name = static_name_for_path("icons/badge.svg");
 
     assert!(
-        generated
-            .source
-            .contains(&format!("pub static {name}: LazyLock<Arc<SvgData>>")),
+        generated.source.contains(&format!(
+            "telar::released_static! {{ pub static {name}: Arc<SvgData> = Arc::new("
+        )),
         "{}",
         generated.source
     );

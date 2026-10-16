@@ -169,6 +169,8 @@ fn mirror(sources: Option<FontSources>) -> Arc<Fonts> {
 /// This copy's font database, as the [`FontHost`] a library it loads defers to.
 ///
 /// Each call catches a panic before it can leave: the library calling it links its own copy of std, and an unwind reaching its frames aborts the process.
+///
+/// A face the library hands over as `include_bytes!` gave it is copied before it is loaded: those bytes are in the library's image, which its host unmaps when it unloads it, and the database keeps every face for as long as the process runs.
 pub struct Served;
 
 impl FontHost for Served {
@@ -177,11 +179,17 @@ impl FontHost for Served {
     }
 
     fn install(&self, config: FontConfig) -> Option<FontSources> {
-        shielded(|| install(config).sources())
+        shielded(|| {
+            install(FontConfig {
+                faces: held_by_host(config.faces, &installed_faces()),
+                ..config
+            })
+            .sources()
+        })
     }
 
     fn add_faces(&self, faces: Vec<FontAsset>) -> Option<FontSources> {
-        shielded(|| add_faces(faces).sources())
+        shielded(|| add_faces(held_by_host(faces, &installed_faces())).sources())
     }
 
     fn install_only(
@@ -189,7 +197,40 @@ impl FontHost for Served {
         faces: Vec<FontAsset>,
         families: Vec<String>,
     ) -> Option<Result<FontSources, ExclusiveFontsError>> {
-        shielded(|| install_only(faces, families).map(|fonts| fonts.sources()))
+        shielded(|| {
+            install_only(held_by_host(faces, &installed_faces()), families)
+                .map(|fonts| fonts.sources())
+        })
+    }
+}
+
+fn installed_faces() -> Vec<FontAsset> {
+    installed_sources().map_or_else(Vec::new, |sources| sources.faces)
+}
+
+/// `faces` with every static one's bytes swapped for the copy `held` already has of them, or for a copy of their own, so a face loaded once is still recognised when a reloaded library hands it over again.
+fn held_by_host(faces: Vec<FontAsset>, held: &[FontAsset]) -> Vec<FontAsset> {
+    faces
+        .into_iter()
+        .map(|mut face| {
+            if let FontSource::Static(bytes) = face.source {
+                face.source = held
+                    .iter()
+                    .map(|held| &held.source)
+                    .find(|source| holds_bytes(source, bytes))
+                    .cloned()
+                    .unwrap_or_else(|| FontSource::Shared(Arc::from(bytes)));
+            }
+            face
+        })
+        .collect()
+}
+
+fn holds_bytes(source: &FontSource, bytes: &[u8]) -> bool {
+    match source {
+        FontSource::Static(held) => *held == bytes,
+        FontSource::Shared(held) => **held == *bytes,
+        FontSource::File(_) => false,
     }
 }
 

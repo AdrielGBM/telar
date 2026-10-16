@@ -87,7 +87,7 @@ fn a_baked_id_becomes_the_pair_its_prop_accepts() {
     assert_eq!(
         pair,
         format!(
-            "(\"mdi:home\", ::std::sync::Arc::clone(&crate::__rsx_assets::{}), false)",
+            "(\"mdi:home\", crate::__rsx_assets::{}.get(), false)",
             crate::static_name_for_path("mdi:home")
         )
     );

@@ -21,7 +21,7 @@ pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn Layo
     let __col_0 = {
         let __col_1 = {
             let __row_0 = {
-                let __node_0 = icon(IconProps::props().name(("lucide:triangle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_1FFBD581), true)).size(30.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
+                let __node_0 = icon(IconProps::props().name(("lucide:triangle", crate::__rsx_assets::ASSET_1FFBD581.get(), true)).size(30.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().ink })).build(), Children::default())?;
                 let __text_0 = {
                     Text::declaring(
                         || "rsx — native UI for Rust".to_string(),
@@ -57,7 +57,7 @@ pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn Layo
                         let mut __slots = Slots::new();
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                         if __request.includes(Some("icon")) {
-                            let __node_8 = icon(IconProps::props().name(("lucide:puzzle", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_85A554E9), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                            let __node_8 = icon(IconProps::props().name(("lucide:puzzle", crate::__rsx_assets::ASSET_85A554E9.get(), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
                             __slots.push(Some("icon"), box_item(__node_8));
                         }
                         __slots.extend_default(__children);
@@ -76,7 +76,7 @@ pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn Layo
                         let mut __slots = Slots::new();
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                         if __request.includes(Some("icon")) {
-                            let __node_10 = icon(IconProps::props().name(("lucide:palette", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_E0D46014), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                            let __node_10 = icon(IconProps::props().name(("lucide:palette", crate::__rsx_assets::ASSET_E0D46014.get(), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
                             __slots.push(Some("icon"), box_item(__node_10));
                         }
                         __slots.extend_default(__children);
@@ -95,7 +95,7 @@ pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn Layo
                         let mut __slots = Slots::new();
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                         if __request.includes(Some("icon")) {
-                            let __node_12 = icon(IconProps::props().name(("lucide:zap", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_4802B2F8), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                            let __node_12 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
                             __slots.push(Some("icon"), box_item(__node_12));
                         }
                         __slots.extend_default(__children);
@@ -114,7 +114,7 @@ pub fn overview(props: OverviewProps, children: Children) -> Result<Box<dyn Layo
                         let mut __slots = Slots::new();
                         let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                         if __request.includes(Some("icon")) {
-                            let __node_14 = icon(IconProps::props().name(("lucide:layout-grid", ::std::sync::Arc::clone(&crate::__rsx_assets::ASSET_624744E2), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
+                            let __node_14 = icon(IconProps::props().name(("lucide:layout-grid", crate::__rsx_assets::ASSET_624744E2.get(), true)).size(28.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).build(), Children::default())?;
                             __slots.push(Some("icon"), box_item(__node_14));
                         }
                         __slots.extend_default(__children);
