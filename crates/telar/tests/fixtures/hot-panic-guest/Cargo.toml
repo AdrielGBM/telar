@@ -8,8 +8,10 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-# `shaper` because the host test binary has it, and `HostServices` crosses the boundary with a field only `shaper` builds carry: a guest without it is refused as a layout mismatch.
+# `shaper` because the host test binary has it, and the boundary fingerprints it: a guest without it would ignore the font database `HostServices` hands it, so it is refused as a layout mismatch.
 telar = { path = "../../..", default-features = false, features = ["dev", "shaper"] }
+# The seam a face that arrives while the app runs goes through, as `telar-dynamic`'s font decoder does.
+telar-renderer-text = { version = "0.2.2", path = "../../../../renderer/renderer-text" }
 
 # Its own workspace root, so it is never a member of the repository's: the `hot_panic` test builds it on demand.
 [workspace]

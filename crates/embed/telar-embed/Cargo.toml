@@ -30,6 +30,11 @@ guest = []
 ## which is why it is not in `default` — an application that only *is* a guest never loads one.
 host = ["guest", "platform-core/dylib", "dep:libloading"]
 
+## For a guest that shapes its own text, as one built on `telar` with `shaper` does: the host hands the guest its font
+## database to defer to, so the guest measures in the faces the host draws its frames in, and a face the guest adds
+## while it runs is added to the host's first. Host and guest must agree on it, which the layout fingerprint checks.
+shaper = ["dep:renderer-text"]
+
 ## Renders this feature list into the crate documentation. docs.rs only; never enable it yourself.
 document-features = ["dep:document-features"]
 
@@ -46,6 +51,7 @@ ui-tree = { workspace = true }
 
 document-features = { workspace = true, optional = true }
 web-time = { workspace = true }
+renderer-text = { workspace = true, optional = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

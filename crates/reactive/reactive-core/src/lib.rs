@@ -3,7 +3,6 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod effect;
-mod leaked_cell;
 mod memo;
 mod reactive;
 pub use reactive_local::{reentry, thread_exit};

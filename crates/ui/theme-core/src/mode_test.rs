@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use super::*;
 use preferences_core::{SystemPreferences, set_system_preferences};
 

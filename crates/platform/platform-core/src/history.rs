@@ -6,7 +6,6 @@
 //!
 //! A location's locale names the language a page is shown in, not a page either. An app that binds one ([`bind_location_locale`]) has its whole history written in a single locale: the one its address was opened at, or the one the app switched to since. The follower never sees it.
 
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{HistoryStep, HistoryUpdate, Location, WindowCommand, push_window_command};
@@ -104,7 +103,7 @@ impl Hub {
 }
 
 reactive_local::dropless_thread_local! {
-    static HUB: &'static RefCell<Hub> = Box::leak(Box::default());
+    static HUB: released Hub = Hub::default();
 }
 
 fn with_hub<R>(f: impl FnOnce(&mut Hub) -> R) -> R {

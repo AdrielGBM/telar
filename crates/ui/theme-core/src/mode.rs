@@ -4,9 +4,8 @@
 //!
 //! The id is the thread's unless the active surface carries one of its own ([`set_surface_mode`]), which is how a canvas shows a dark variant beside the light chrome around it: the mode-following token defaults read the surface's mode, and a mode registered with its theme lends that theme to the surface.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::collections::HashMap;
-use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 use preferences_core::ColorScheme;
@@ -26,8 +25,7 @@ reactive_core::surface_scoped! {
 
 reactive_core::dropless_thread_local! {
     // A list rather than a map so the modes keep the order they were registered in.
-    static MODES: ManuallyDrop<RefCell<Vec<(String, ApplyMode)>>> =
-        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static MODES: released Vec<(String, ApplyMode)> = const { Vec::new() };
     // A signal so a surface showing a mode re-resolves its theme when that mode is registered anew.
     static MODE_THEMES: RwSignal<HashMap<String, Installed>> = detached(|| signal(HashMap::new()));
     // A signal so a surface already showing a mode re-resolves its mode-following tokens when the mode declares its scheme.
@@ -173,8 +171,7 @@ pub fn active_mode() -> Option<String> {
 
 reactive_core::dropless_thread_local! {
     // The (light, dark) mode-id pair, so is_dark can tell which registered mode is the dark one without the app hardcoding it. None until set_light_dark is called.
-    static SCHEME_PAIR: ManuallyDrop<RefCell<Option<(String, String)>>> =
-        const { ManuallyDrop::new(RefCell::new(None)) };
+    static SCHEME_PAIR: released Option<(String, String)> = const { None };
 }
 
 /// Designates which two registered modes form the light/dark pair, so [`is_dark`] can tell which one is currently active. Called by [`follow_system`]; both ids should also be registered via [`register_mode`]. Does not itself change the active mode.

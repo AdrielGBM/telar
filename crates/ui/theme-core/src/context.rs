@@ -3,7 +3,6 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 use geometry_core::Color;
@@ -339,7 +338,7 @@ impl ScopedTheme {
     pub fn tokens(&self) -> Rc<dyn ThemeTokens> {
         match self.resolved() {
             Some(installed) => installed.tokens,
-            None => DEFAULT_TOKENS.with(|tokens| Rc::clone(tokens)),
+            None => default_tokens(),
         }
     }
 
@@ -430,7 +429,7 @@ pub fn use_theme<T: Clone + 'static>() -> T {
 pub fn use_theme_tokens() -> Rc<dyn ThemeTokens> {
     match in_force() {
         Some(installed) => installed.tokens,
-        None => DEFAULT_TOKENS.with(|tokens| Rc::clone(tokens)),
+        None => default_tokens(),
     }
 }
 
@@ -447,7 +446,17 @@ struct DefaultTokens;
 impl ThemeTokens for DefaultTokens {}
 
 reactive_core::dropless_thread_local! {
-    static DEFAULT_TOKENS: ManuallyDrop<Rc<dyn ThemeTokens>> = ManuallyDrop::new(Rc::new(DefaultTokens));
+    static DEFAULT_TOKENS: released Option<Rc<dyn ThemeTokens>> = const { None };
+}
+
+fn default_tokens() -> Rc<dyn ThemeTokens> {
+    DEFAULT_TOKENS.with(|tokens| {
+        Rc::clone(
+            tokens
+                .borrow_mut()
+                .get_or_insert_with(|| Rc::new(DefaultTokens)),
+        )
+    })
 }
 
 #[cfg(test)]

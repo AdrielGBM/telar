@@ -30,3 +30,8 @@ criterion = { workspace = true }
 [[bench]]
 name = "colr_text"
 harness = false
+
+# A process of its own: deferring to a host is a property of the whole copy of the crate, which would reach every other test's fonts.
+[[test]]
+name = "font_host"
+path = "src/font_host_test.rs"

@@ -1,7 +1,5 @@
 //! [`RenderNode`]: what a `view()` returns, before it is flattened into draw commands.
 
-use std::cell::RefCell;
-use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -10,8 +8,7 @@ use renderer_core::{
 };
 
 reactive_core::dropless_thread_local! {
-    static NODE_VEC_POOL: ManuallyDrop<RefCell<Vec<Vec<RenderNode>>>> =
-        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static NODE_VEC_POOL: released Vec<Vec<RenderNode>> = const { Vec::new() };
 }
 
 /// A pooled `Vec<RenderNode>`, returned to the pool when it drops.

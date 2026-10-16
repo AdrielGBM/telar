@@ -240,9 +240,9 @@ pub fn loaded() -> GuestResult<()> {
     guest_call(reactive_local::thread_exit::leave_to_host)
 }
 
-/// What a host calls last on a guest, right before it unloads the library: frees what this copy kept for the calling thread, which would otherwise wait for a thread exit that comes after the library is gone.
+/// What a host calls last on a guest, right before it unloads the library: frees what this copy kept for the calling thread, its reactive runtime and every registry among it, which would otherwise wait for a thread exit that comes after the library is gone, and what its statics hold, which nothing would ever free. Its worker threads are joined first, so no code of the library runs once it is unmapped.
 pub fn unloading() -> GuestResult<()> {
-    guest_call(reactive_local::thread_exit::release_thread)
+    guest_call(reactive_local::thread_exit::release_guest)
 }
 
 /// The host's record of one loaded guest: whether it has panicked, what the panic said, and whether anybody has been told.

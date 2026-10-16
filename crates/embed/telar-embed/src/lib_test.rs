@@ -689,3 +689,31 @@ fn the_exported_table_installs_the_convention_it_is_handed() {
     unsafe { (_rsx_embed_vtable.set_keyboard_convention)(handed) }.expect("no panic");
     assert_eq!(platform_core::keyboard_convention(), handed);
 }
+
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+thread_local! {
+    static FONTS_HANDED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+unsafe fn record_fonts(host: Option<Arc<dyn renderer_core::FontHost>>) -> GuestResult<()> {
+    FONTS_HANDED.set(Some(host.is_some()));
+    Ok(())
+}
+
+/// A table this process serves itself already sets text in the one font database there is: handed it, its shaper would defer to itself.
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+#[test]
+fn a_guest_of_this_process_is_handed_no_font_database_to_defer_to() {
+    let embed = LoadedEmbed::start(
+        EmbedVTable {
+            defer_fonts: record_fonts,
+            .._rsx_embed_vtable
+        },
+        &[],
+        None,
+    )
+    .expect("the guest loads");
+    assert_eq!(FONTS_HANDED.get(), Some(false));
+    drop(embed);
+}

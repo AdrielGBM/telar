@@ -3,7 +3,7 @@
 //! Task work is expected to *block* — a query, a file read, a network call — so a fixed-size pool is the wrong shape: it deadlocks the moment as many tasks as there are workers sit waiting on I/O, and nothing can free one. This pool is elastic instead: a job goes to an idle thread if there is one, grows a new thread if there is not, and a thread that has been idle for [`KEEP_ALIVE`] retires. So the steady state for bursty small work is thread reuse, while blocking work still always makes progress.
 
 use std::collections::VecDeque;
-use std::sync::{Condvar, Mutex, MutexGuard};
+use std::sync::{Condvar, Mutex, MutexGuard, Once};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -44,6 +44,8 @@ fn lock() -> MutexGuard<'static, State> {
 }
 
 pub(in crate::task) fn submit(job: Job) {
+    static JOINED_ON_UNLOAD: Once = Once::new();
+    JOINED_ON_UNLOAD.call_once(|| crate::thread_exit::on_unload(shutdown_and_join));
     let mut state = lock();
     state.workers.retain(|handle| !handle.is_finished());
     state.queue.push_back(job);
@@ -65,6 +67,12 @@ pub(in crate::task) fn submit(job: Job) {
 }
 
 fn worker() {
+    run_jobs();
+    // By the thread itself, before it ends: app state is never freed from a thread-exit destructor, and a guest's thread registers none, so what its jobs left would otherwise outlive the library its host unloads after joining it.
+    crate::thread_exit::release_thread();
+}
+
+fn run_jobs() {
     let mut state = lock();
     loop {
         if let Some(job) = state.queue.pop_front() {
@@ -90,7 +98,7 @@ fn worker() {
     }
 }
 
-/// Stops every worker and waits for them, so no pooled thread is left parked in — or running — code that is about to be unmapped. Called before a hot-reload dylib is closed.
+/// Stops every worker and waits for them, so no pooled thread is left parked in — or running — code that is about to be unmapped. Called before a hot-reload dylib is closed, and by the host of a guest as it unloads it, through `thread_exit::on_unload`.
 ///
 /// A job already running finishes first, and that is the point: its code lives in the dylib, so unloading underneath it is exactly the crash this prevents. The cost is that a reload waits for in-flight background work, and a task that blocks forever blocks the reload with it.
 pub(in crate::task) fn shutdown_and_join() {

@@ -48,6 +48,7 @@ fn each_line_of_the_channel_is_the_event_its_prefix_names() {
 thread_local! {
     static HANDED: std::cell::Cell<Option<platform_core::KeyboardConvention>> = const { std::cell::Cell::new(None) };
     static HANDED_BEFORE_BUILD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static FONTS_HANDED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
 }
 
 struct Blank;
@@ -68,6 +69,7 @@ impl ui_tree::Component for BlankView {
 
 fn hand_over(services: HostServices) -> GuestResult<()> {
     HANDED.set(Some(services.keyboard_convention));
+    FONTS_HANDED.set(Some(services.fonts.is_some()));
     Ok(())
 }
 
@@ -94,6 +96,11 @@ fn a_build_is_handed_the_host_keyboard_convention_before_it_is_made() {
     };
     let app = HotApp::start(exports, build_blank, None);
     assert_eq!(HANDED.get(), Some(host));
+    assert_eq!(
+        FONTS_HANDED.get(),
+        Some(false),
+        "exports this process serves itself already set text in its one font database, which handed over would defer to itself"
+    );
     assert!(
         HANDED_BEFORE_BUILD.get(),
         "the app's setup already shows shortcuts the host's way"
@@ -105,7 +112,7 @@ fn a_build_is_handed_the_host_keyboard_convention_before_it_is_made() {
 fn installing_the_host_services_installs_its_keyboard_convention() {
     let host = foreign_convention();
     platform_core::set_keyboard_convention(host);
-    let services = HostServices::installed();
+    let services = HostServices::installed().in_this_process();
     platform_core::set_keyboard_convention(platform_core::KeyboardConvention::native());
     services.install();
     assert_eq!(platform_core::keyboard_convention(), host);

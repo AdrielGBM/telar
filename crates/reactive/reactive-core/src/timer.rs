@@ -12,7 +12,6 @@ use std::time::Duration;
 use rustc_hash::FxHashMap;
 use web_time::Instant;
 
-use crate::leaked_cell::LeakedCell;
 use crate::runtime::{SurfaceHandle, current_surface};
 
 type TimerId = u64;
@@ -52,7 +51,7 @@ impl TimerRegistry {
 }
 
 crate::dropless_thread_local! {
-    static TIMERS: LeakedCell<TimerRegistry> = LeakedCell::new();
+    static TIMERS: released TimerRegistry = TimerRegistry::default();
 }
 
 /// A scheduled [`run_after`]. Dropping it cancels the callback, so a timer lives exactly as long as whatever holds it.

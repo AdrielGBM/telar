@@ -18,12 +18,13 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 use web_time::Instant;
 
 use geometry_core::{Rect, Size, Transform};
 use platform_core::{Event, KeyboardConvention, SystemPreferences, WindowCommand};
-use renderer_core::{Color, DrawCommand};
+use renderer_core::{Color, DrawCommand, FontHost};
 use ui_core::{EventResult, NodeId, SurfaceCanvas, composite_surface};
 use ui_tree::{Component, RenderNode};
 
@@ -343,10 +344,23 @@ pub fn __embed_set_keyboard_convention(convention: KeyboardConvention) -> GuestR
     guest_call(|| platform_core::set_keyboard_convention(convention))
 }
 
-/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers. 7 is for every entry handing back a [`GuestResult`] instead of unwinding. 8 is for the table carrying the layout fingerprint. 9 is for `loaded` and `unloading`, which a host that unloads the guest calls first and last. 10 is for `set_keyboard_convention`, which the host calls before it creates an instance.
-pub const TELAR_EMBED_ABI: u32 = 10;
+/// Has the guest's copy of the shaper defer to the host's font database, so the guest measures its text in the faces the host draws it in, and a face it adds goes to the host's first. `None` for a host without a shaper, or for a table this process serves itself, which already shares the one database.
+#[doc(hidden)]
+pub fn __embed_defer_fonts(host: Option<Arc<dyn FontHost>>) -> GuestResult<()> {
+    guest_call(move || {
+        #[cfg(feature = "shaper")]
+        if let Some(host) = host {
+            renderer_text::fonts::defer_to(host);
+        }
+        #[cfg(not(feature = "shaper"))]
+        drop(host);
+    })
+}
 
-/// The fingerprint of the layout of what crosses by value, which a guest reports in its table beside the version: a host and a guest built with different features or dependencies disagree about the shape of an event or a draw command without the table having changed at all.
+/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers. 7 is for every entry handing back a [`GuestResult`] instead of unwinding. 8 is for the table carrying the layout fingerprint. 9 is for `loaded` and `unloading`, which a host that unloads the guest calls first and last. 10 is for `set_keyboard_convention`, which the host calls before it creates an instance. 11 is for `defer_fonts`, which the host calls before it creates an instance too, and for `unloading` freeing the guest's reactive runtime and every slot and static that holds heap data.
+pub const TELAR_EMBED_ABI: u32 = 11;
+
+/// The fingerprint of the layout of what crosses by value, which a guest reports in its table beside the version: a host and a guest built with different features or dependencies disagree about the shape of an event or a draw command without the table having changed at all. `shaper` is in it because a guest without it would drop the font database a host with it hands over, and measure its text in faces other than the ones the host draws it in.
 pub const EMBED_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
     EmbedVTable,
     AppCtx<'static>,
@@ -359,6 +373,7 @@ pub const EMBED_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
     WindowCommand,
     Duration,
     Instant;
+    "shaper" => cfg!(feature = "shaper"),
 );
 
 /// Everything the host calls on a guest, as one exported symbol.
@@ -398,6 +413,7 @@ pub struct EmbedVTable {
     pub loaded: unsafe extern "Rust" fn() -> GuestResult<()>,
     pub unloading: unsafe extern "Rust" fn() -> GuestResult<()>,
     pub set_keyboard_convention: unsafe extern "Rust" fn(KeyboardConvention) -> GuestResult<()>,
+    pub defer_fonts: unsafe extern "Rust" fn(Option<Arc<dyn FontHost>>) -> GuestResult<()>,
 }
 
 /// Exports a guest cdylib's one FFI symbol, the `_rsx_embed_vtable`. `$factory` is any `Fn(&[String]) -> Box<dyn EmbeddedApp>` — invoked once per instance with the launch args.
@@ -446,6 +462,7 @@ macro_rules! embed {
                 loaded: $crate::__embed_loaded,
                 unloading: $crate::__embed_unloading,
                 set_keyboard_convention: $crate::__embed_set_keyboard_convention,
+                defer_fonts: $crate::__embed_defer_fonts,
             }
         };
     };
@@ -527,7 +544,7 @@ mod host {
     }
 
     impl LoadedEmbed {
-        /// Hands the guest the host's keyboard convention, creates one instance through `vtable` and seeds it with the host's system preferences.
+        /// Hands the guest the host's keyboard convention and, from a library, the host's font database, creates one instance through `vtable` and seeds it with the host's system preferences.
         pub(crate) fn start(
             vtable: EmbedVTable,
             args: &[String],
@@ -537,6 +554,8 @@ mod host {
                 unsafe { (vtable.loaded)() }?;
             }
             unsafe { (vtable.set_keyboard_convention)(platform_core::keyboard_convention()) }?;
+            let fonts = lib.as_ref().and_then(|_| served_fonts());
+            unsafe { (vtable.defer_fonts)(fonts) }?;
             let inst = unsafe { (vtable.create)(args) }?;
             let embed = Self {
                 inst,
@@ -673,6 +692,16 @@ mod host {
                     .map(|(due, wait)| (due, reactive_core::run_after(wait, || {})));
             }
         }
+    }
+
+    #[cfg(feature = "shaper")]
+    fn served_fonts() -> Option<Arc<dyn FontHost>> {
+        Some(Arc::new(renderer_text::fonts::Served))
+    }
+
+    #[cfg(not(feature = "shaper"))]
+    fn served_fonts() -> Option<Arc<dyn FontHost>> {
+        None
     }
 
     impl Drop for LoadedEmbed {

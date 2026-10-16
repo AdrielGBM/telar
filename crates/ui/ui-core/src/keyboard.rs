@@ -9,8 +9,6 @@
 
 use platform_core::{Chord, Event, Key, ModifiersState};
 use rustc_hash::FxHashSet;
-use std::cell::RefCell;
-use std::mem::ManuallyDrop;
 
 #[derive(Default)]
 struct Keyboard {
@@ -21,7 +19,7 @@ struct Keyboard {
 }
 
 reactive_core::dropless_thread_local! {
-    static KEYBOARD: ManuallyDrop<RefCell<Keyboard>> = ManuallyDrop::new(RefCell::new(Keyboard::default()));
+    static KEYBOARD: released Keyboard = Keyboard::default();
 }
 
 /// Records what `event` says about the keyboard. The runner calls this for every event before dispatch.

@@ -1,8 +1,6 @@
 //! The per-thread registry of live animations, and the single `tick` the runner drives them all from.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::mem::ManuallyDrop;
 use std::rc::Weak;
 use web_time::Instant;
 
@@ -54,7 +52,7 @@ impl Registry {
 
 // The map leaks per reload, which is fine on a dev-only path.
 reactive_core::dropless_thread_local! {
-    static REGISTRY: ManuallyDrop<RefCell<Registry>> = ManuallyDrop::new(RefCell::new(Registry::new()));
+    static REGISTRY: released Registry = Registry::new();
 }
 
 /// An identity for one registration, so re-registering the same thing replaces rather than duplicates it.

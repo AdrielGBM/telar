@@ -1,7 +1,6 @@
 //! The drag gesture: arming on a press, reporting each move, and deciding who owns the stroke.
 
-use std::cell::{Cell, RefCell};
-use std::mem::ManuallyDrop;
+use std::cell::Cell;
 use std::rc::Rc;
 
 use geometry_core::Rect;
@@ -31,7 +30,7 @@ reactive_core::dropless_thread_local! {
     static ACTIVE: Cell<Option<(DragStart, f32)>> = const { Cell::new(None) };
     /// Whether the press being dispatched right now has already armed a drag somewhere below. See [`claimed`].
     static CLAIMED: Cell<bool> = const { Cell::new(false) };
-    static LIVE: ManuallyDrop<RefCell<Vec<Live>>> = const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static LIVE: released Vec<Live> = const { Vec::new() };
     static NEXT_LIVE: Cell<u64> = const { Cell::new(0) };
 }
 

@@ -6,10 +6,10 @@ use std::sync::Arc;
 use platform_core::guest::{BoundaryLayout, shield};
 use services_core::{Clipboard, FileDialog, FileDialogs, UriOpener};
 
-/// The shape of the exports a host can drive. A library reporting another one was built against a telar whose exports this host would misread, so it is refused rather than called. 2 is for `_rsx_hot_layout`, 3 for `_rsx_hot_loaded` and `_rsx_hot_unloading`, 4 for the keyboard convention `HostServices` hands over.
-pub const GUEST_ABI: u32 = 4;
+/// The shape of the exports a host can drive. A library reporting another one was built against a telar whose exports this host would misread, so it is refused rather than called. 2 is for `_rsx_hot_layout`, 3 for `_rsx_hot_loaded` and `_rsx_hot_unloading`, 4 for the keyboard convention `HostServices` hands over, 5 for `HostServices` handing over the host's font database to defer to rather than what it was loaded from, and for `_rsx_hot_unloading` freeing the reactive runtime and every slot and static that holds heap data.
+pub const GUEST_ABI: u32 = 5;
 
-/// The fingerprint of what crosses by value, and of the features that shape it. `HostServices` carries a field only a `shaper` build has, which is the case it exists for: a host and a dylib that differ there would otherwise read the struct as the wrong shape.
+/// The fingerprint of what crosses by value, and of the features that shape it. A dylib built without `shaper` would drop the font database `HostServices` hands it and measure its text in something other than the faces its `shaper` host draws it in, so the two must agree there too.
 pub const GUEST_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
     super::HostServices,
     platform_core::AccessAudit,

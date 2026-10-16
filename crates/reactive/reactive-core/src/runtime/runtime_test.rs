@@ -28,3 +28,46 @@ fn a_reentrant_runtime_borrow_names_both_call_sites() {
         "both sites are named, and both are in this file:\n{message}"
     );
 }
+
+struct DropFlag(std::rc::Rc<Cell<bool>>);
+
+impl Drop for DropFlag {
+    fn drop(&mut self) {
+        self.0.set(true);
+    }
+}
+
+/// What a hot-reloaded build's host does before it unloads it: every signal, effect and owner the thread made goes, with what each held, and the thread can carry on in a fresh runtime.
+#[test]
+fn releasing_a_thread_frees_its_runtime_and_a_later_use_starts_a_fresh_one() {
+    std::thread::spawn(|| {
+        let dropped = std::rc::Rc::new(Cell::new(false));
+        let flag = DropFlag(dropped.clone());
+        let source = crate::signal(0);
+        let scope = crate::root_scope();
+        crate::effect(move || {
+            let _held = &flag;
+            source.get();
+        });
+        drop(scope);
+        assert!(live_signal_count() > 0 && live_effect_count() > 0 && live_owner_count() > 0);
+
+        crate::thread_exit::release_thread();
+        assert!(dropped.get(), "what the effect held is dropped");
+        assert_eq!(
+            (live_signal_count(), live_effect_count(), live_owner_count()),
+            (0, 0, 0)
+        );
+
+        let fresh = crate::signal(1);
+        assert_eq!(fresh.get(), 1);
+        crate::thread_exit::release_thread();
+        assert_eq!(
+            live_signal_count(),
+            0,
+            "the fresh runtime is released in turn"
+        );
+    })
+    .join()
+    .unwrap();
+}

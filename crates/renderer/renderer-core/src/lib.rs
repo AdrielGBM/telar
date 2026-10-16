@@ -43,7 +43,8 @@ pub use element::{
 };
 pub use error::RendererError;
 pub use font_config::{
-    FontAsset, FontAxis, FontConfig, FontSource, FontSources, FontWeight, GenericFamilies,
+    ExclusiveFontsError, FontAsset, FontAxis, FontConfig, FontHost, FontSource, FontSources,
+    FontWeight, GenericFamilies,
 };
 pub use geometry_core::{BorderRadius, Color, Insets};
 pub use hash::{hash_draw_commands, hash_draw_commands_into, hash_pod_slice};

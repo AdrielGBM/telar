@@ -1,7 +1,5 @@
 //! The layout runtime the widget tree drives: node rects as signals, dirty roots, and the overlay host.
 
-use std::cell::RefCell;
-use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 use geometry_core::Rect;
@@ -66,12 +64,9 @@ type AfterLayout = Box<dyn FnOnce()>;
 
 reactive_core::dropless_thread_local! {
     /// Every open recording, innermost last.
-    static RECORDINGS: ManuallyDrop<RefCell<Vec<Recording>>> =
-        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
-    static AFTER_LAYOUT: ManuallyDrop<RefCell<Vec<AfterLayout>>> =
-        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
-    static MEASURE_AGAIN: ManuallyDrop<RefCell<Vec<NodeId>>> =
-        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static RECORDINGS: released Vec<Recording> = const { Vec::new() };
+    static AFTER_LAYOUT: released Vec<AfterLayout> = const { Vec::new() };
+    static MEASURE_AGAIN: released Vec<NodeId> = const { Vec::new() };
 }
 
 /// The surface is part of a recording's claim because node ids are per-surface: a write during a build can flush an effect on another surface, and the ids that effect mints name nodes in a tree this recording cannot free.

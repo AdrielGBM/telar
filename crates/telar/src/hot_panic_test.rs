@@ -1,4 +1,4 @@
-//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped; and that a guest shows its shortcuts for the keyboard its host matches. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
+//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped and none of the memory a build held; and that a face a guest adds while it runs reaches the host that draws it; and that a guest shows its shortcuts for the keyboard its host matches. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -124,6 +124,57 @@ fn reloading_a_hot_guest_again_and_again_keeps_one_mapped() {
     );
 }
 
+/// What each build held, its reactive runtime and the registries its tree filled among it, is freed as it is unloaded rather than left in the memory the host keeps: a session is a long run of reloads, and what one leaks every one does.
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn reloading_a_hot_guest_again_and_again_frees_what_each_build_held() {
+    const WARM_UP: usize = 3;
+    const RELOADS: usize = 12;
+    const TOLERANCE_PER_RELOAD: usize = 16 * 1024;
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    for _ in 0..WARM_UP {
+        run_a_session(&library);
+    }
+    let before = heap_in_use();
+    for _ in 0..RELOADS {
+        run_a_session(&library);
+    }
+    let grown = heap_in_use().saturating_sub(before);
+    assert!(
+        grown / RELOADS < TOLERANCE_PER_RELOAD,
+        "{RELOADS} reloads left {grown} bytes behind, {} per reload",
+        grown / RELOADS
+    );
+}
+
+/// The host draws what the guest lays out, so a face the app adds while it runs must land in the host's database and not only in the guest's copy of it, or the host draws that text in a face it does not have.
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+fn a_face_a_hot_guest_adds_while_it_runs_reaches_the_host() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    load_the_host_fonts();
+    assert!(
+        !telar::font_family_available("Arriving Face"),
+        "precondition: the host has not loaded it"
+    );
+    let mut app = load_hot_app(&library).expect("the guest loads");
+    let mut tree = app.mount();
+    assert_eq!(
+        tree.on_event(&secondary_press()),
+        EventResult::Handled,
+        "precondition: the guest adds the face"
+    );
+    assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+    assert!(
+        telar::font_family_available("Arriving Face"),
+        "the host can draw in it"
+    );
+    drop(tree);
+}
+
 /// The guest's copy of the convention answers for the system it was compiled on until the host hands over its own, which is what a terminal host on a Mac needs: it matches Ctrl, and a guest left alone would show ⌘.
 #[test]
 #[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
@@ -177,6 +228,29 @@ fn load_the_host_fonts() {
     telar::font_families();
 }
 
+/// The bytes the process has allocated and not freed, in every arena: the guest's copy of std allocates from the same `malloc` as the host's.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn heap_in_use() -> usize {
+    #[repr(C)]
+    struct Mallinfo2 {
+        arena: usize,
+        ordblks: usize,
+        smblks: usize,
+        hblks: usize,
+        hblkhd: usize,
+        usmblks: usize,
+        fsmblks: usize,
+        uordblks: usize,
+        fordblks: usize,
+        keepcost: usize,
+    }
+    unsafe extern "C" {
+        fn mallinfo2() -> Mallinfo2;
+    }
+    let info = unsafe { mallinfo2() };
+    info.uordblks + info.hblkhd
+}
+
 #[cfg(target_os = "linux")]
 fn mapped_guests() -> usize {
     let maps = std::fs::read_to_string("/proc/self/maps").expect("read the process maps");
@@ -208,6 +282,15 @@ fn press() -> Event {
         x: 10.0,
         y: 10.0,
         button: PointerButton::Primary,
+        source: PointerSource::Mouse,
+    }
+}
+
+fn secondary_press() -> Event {
+    Event::PointerPressed {
+        x: 10.0,
+        y: 10.0,
+        button: PointerButton::Secondary,
         source: PointerSource::Mouse,
     }
 }

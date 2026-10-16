@@ -185,3 +185,33 @@ fn the_pool_reuses_an_idle_thread() {
         "the second task should have reused the idle worker"
     );
 }
+
+struct DropFlag(Rc<std::cell::Cell<bool>>);
+
+impl Drop for DropFlag {
+    fn drop(&mut self) {
+        self.0.set(true);
+    }
+}
+
+/// A task's callback is code of the build that spawned it, so releasing the thread before that build is unloaded drops it, and a value its worker posts afterwards has nothing to run.
+#[test]
+fn releasing_a_thread_drops_the_callbacks_of_its_pending_tasks() {
+    let _serial = serial();
+    std::thread::spawn(|| {
+        let dropped = Rc::new(std::cell::Cell::new(false));
+        let flag = DropFlag(dropped.clone());
+        let task = spawn_task(
+            || std::thread::sleep(Duration::from_millis(20)),
+            move |()| drop(flag),
+        );
+        assert!(task.is_pending());
+        crate::thread_exit::release_thread();
+        assert!(dropped.get());
+        assert!(!task.is_pending());
+        std::thread::sleep(Duration::from_millis(40));
+        drain_tasks();
+    })
+    .join()
+    .unwrap();
+}

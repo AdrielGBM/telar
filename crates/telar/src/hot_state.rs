@@ -1,8 +1,6 @@
 //! Hot-reload state preservation: a dylib-local registry of serializable signals. The host asks the outgoing dylib for a JSON snapshot (via `_rsx_hot_snapshot`), hands it to the incoming dylib (via `_rsx_hot_restore`), and `hot_signal` consumes the restored values as components remount. A prerendered page carries the same snapshot, and the browser that takes it over restores it the same way.
 
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::mem::ManuallyDrop;
 
 use reactive_core::RwSignal;
 use serde::Serialize;
@@ -15,11 +13,9 @@ type HotReader = Box<dyn Fn() -> Option<String>>;
 // The maps leak per reload, which is fine on a dev-only path.
 reactive_core::dropless_thread_local! {
     #[cfg(any(feature = "dev", feature = "prerender"))]
-    static REGISTRY: ManuallyDrop<RefCell<HashMap<String, HotReader>>> =
-        ManuallyDrop::new(RefCell::new(HashMap::new()));
+    static REGISTRY: released HashMap<String, HotReader> = HashMap::new();
     // Carried over from the previous dylib or the prerendered page being taken over, consumed by `hot_signal` on mount.
-    static PENDING: ManuallyDrop<RefCell<HashMap<String, String>>> =
-        ManuallyDrop::new(RefCell::new(HashMap::new()));
+    static PENDING: released HashMap<String, String> = HashMap::new();
 }
 
 /// As [`reactive_core::signal`], but keyed: the value is captured in the hot-reload snapshot and restored across dylib swaps in `cargo telar dev`. If two live instances share a key, the last one mounted wins the snapshot and both restore to the same value.

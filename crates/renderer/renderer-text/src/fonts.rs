@@ -2,11 +2,14 @@
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock, RwLock, RwLockWriteGuard};
 
 use cosmic_text::{FontSystem, fontdb};
-use renderer_core::{FontAsset, FontConfig, FontSource, FontSources, FontStyle, GenericFamilies};
+pub use renderer_core::ExclusiveFontsError;
+use renderer_core::{
+    FontAsset, FontConfig, FontHost, FontSource, FontSources, FontStyle, GenericFamilies,
+};
 
 use crate::measure::ShaperMetrics;
 
@@ -118,6 +121,84 @@ pub fn font_families() -> Vec<String> {
 
 static INSTALLED: RwLock<Option<Arc<Fonts>>> = RwLock::new(None);
 
+static HOST: RwLock<Option<Arc<dyn FontHost>>> = RwLock::new(None);
+
+static RELEASED_ON_UNLOAD: AtomicBool = AtomicBool::new(false);
+
+/// The installed database, for writing. A copy loaded as a guest frees it when its host unloads it, since nothing frees a static.
+fn installed_slot() -> RwLockWriteGuard<'static, Option<Arc<Fonts>>> {
+    release_on_unload();
+    INSTALLED.write().expect("font database lock")
+}
+
+fn release_on_unload() {
+    if !RELEASED_ON_UNLOAD.swap(true, Ordering::AcqRel) {
+        reactive_local::thread_exit::on_unload(release_database);
+    }
+}
+
+fn release_database() {
+    RELEASED_ON_UNLOAD.store(false, Ordering::Release);
+    let fonts = INSTALLED.write().expect("font database lock").take();
+    let host = HOST.write().expect("font host lock").take();
+    drop(fonts);
+    drop(host);
+}
+
+fn host() -> Option<Arc<dyn FontHost>> {
+    HOST.read().expect("font host lock").clone()
+}
+
+/// Makes `host` the database this copy of the crate defers to, and loads what it holds.
+///
+/// For a library whose text another copy of the shaper draws: a hot-reloaded app's, an embedded one's. From then on every face this copy is asked to add, by [`install`], [`add_faces`], [`install_face`] or [`install_only`], is added to `host`'s database instead, and this copy loads what `host` then holds, so the faces text is measured in here are the ones it is drawn in there. Asked for faces before anything installed any, it has `host` load its own rather than loading the platform's itself.
+///
+/// `host` is another copy's database, never this one's own [`Served`]: a copy deferring to itself would call itself back without end. Code this process serves itself already sets text in the one database, and is handed none.
+pub fn defer_to(host: Arc<dyn FontHost>) -> Option<Arc<Fonts>> {
+    release_on_unload();
+    let sources = host.sources();
+    *HOST.write().expect("font host lock") = Some(host);
+    sources.map(install_sources)
+}
+
+/// What `host` answered with, loaded here, or what is here already when it could not answer.
+fn mirror(sources: Option<FontSources>) -> Arc<Fonts> {
+    sources.map_or_else(installed, install_sources)
+}
+
+/// This copy's font database, as the [`FontHost`] a library it loads defers to.
+///
+/// Each call catches a panic before it can leave: the library calling it links its own copy of std, and an unwind reaching its frames aborts the process.
+pub struct Served;
+
+impl FontHost for Served {
+    fn sources(&self) -> Option<FontSources> {
+        shielded(installed_sources).flatten()
+    }
+
+    fn install(&self, config: FontConfig) -> Option<FontSources> {
+        shielded(|| install(config).sources())
+    }
+
+    fn add_faces(&self, faces: Vec<FontAsset>) -> Option<FontSources> {
+        shielded(|| add_faces(faces).sources())
+    }
+
+    fn install_only(
+        &self,
+        faces: Vec<FontAsset>,
+        families: Vec<String>,
+    ) -> Option<Result<FontSources, ExclusiveFontsError>> {
+        shielded(|| install_only(faces, families).map(|fonts| fonts.sources()))
+    }
+}
+
+fn shielded<T>(call: impl FnOnce() -> T) -> Option<T> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(call))
+        .inspect_err(|_| tracing::error!("the font database panicked while a guest was calling it"))
+        .ok()
+}
+
 static FACES_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Moves every time a face is added to a database a shaper may already have been built from. A shaper compares it against the one it was built at, which is one atomic load where asking for the installed fonts is a lock.
@@ -131,6 +212,9 @@ pub(crate) fn faces_generation() -> u64 {
 pub fn install(config: FontConfig) -> Arc<Fonts> {
     // Configuring the fonts a raster surface measures in says which measurer you want, so it is installed here rather than left to every runtime to remember. It yields to a frontend that installed its own.
     renderer_core::set_default_text_metrics(ShaperMetrics);
+    if let Some(host) = host() {
+        return mirror(host.install(config));
+    }
     let FontConfig {
         faces,
         system_fonts_dir,
@@ -147,6 +231,9 @@ pub fn install(config: FontConfig) -> Arc<Fonts> {
 ///
 /// The seam a face that *arrives* needs — fetched by a page, downloaded, picked by the user — as opposed to one a surface is configured with. Every shaper takes it on its next use, a `Stack` naming its family re-resolves, and layout measures its text again once.
 pub fn add_faces(faces: Vec<FontAsset>) -> Arc<Fonts> {
+    if let Some(host) = host() {
+        return mirror(host.add_faces(faces));
+    }
     add(
         FaceSources {
             faces,
@@ -170,11 +257,7 @@ pub fn installed_sources() -> Option<FontSources> {
 /// A hot-reloaded library links a copy of its own, whose database starts empty. Loading one itself, it lacks the application's faces and resolves the generic families as a bare platform scan does rather than as the host's configuration did, so it lays text out in a face other than the one the host draws it in. Additive like [`install`]: what is already loaded stays.
 pub fn install_sources(sources: FontSources) -> Arc<Fonts> {
     renderer_core::set_default_text_metrics(ShaperMetrics);
-    install_sources_into(
-        &mut INSTALLED.write().expect("font database lock"),
-        &FACES_GENERATION,
-        sources,
-    )
+    install_sources_into(&mut installed_slot(), &FACES_GENERATION, sources)
 }
 
 fn install_sources_into(
@@ -226,12 +309,13 @@ pub fn install_only(
     families: Vec<String>,
 ) -> Result<Arc<Fonts>, ExclusiveFontsError> {
     renderer_core::set_default_text_metrics(ShaperMetrics);
-    install_only_into(
-        &mut INSTALLED.write().expect("font database lock"),
-        &FACES_GENERATION,
-        faces,
-        families,
-    )
+    if let Some(host) = host() {
+        return match host.install_only(faces, families) {
+            Some(only) => only.map(install_sources),
+            None => Err(ExclusiveFontsError::OtherFacesLoaded),
+        };
+    }
+    install_only_into(&mut installed_slot(), &FACES_GENERATION, faces, families)
 }
 
 fn install_only_into(
@@ -275,35 +359,8 @@ fn install_only_into(
     ))
 }
 
-/// Why [`install_only`] could not make the faces it was given the only ones.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExclusiveFontsError {
-    /// It was given no face, or none it could read.
-    NoFaces,
-    /// The process already loaded a face it was not given.
-    OtherFacesLoaded,
-}
-
-impl std::fmt::Display for ExclusiveFontsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::NoFaces => "no font face to set text in: declare one",
-            Self::OtherFacesLoaded => {
-                "this process already loaded fonts beyond the declared ones, so text would not set in those alone"
-            }
-        })
-    }
-}
-
-impl std::error::Error for ExclusiveFontsError {}
-
 fn add(wanted: FaceSources, families: Option<Vec<String>>) -> Arc<Fonts> {
-    add_into(
-        &mut INSTALLED.write().expect("font database lock"),
-        &FACES_GENERATION,
-        wanted,
-        families,
-    )
+    add_into(&mut installed_slot(), &FACES_GENERATION, wanted, families)
 }
 
 fn add_into(
@@ -364,14 +421,17 @@ fn add_into(
     )
 }
 
-/// The faces in force, loading the platform's own the first time nothing has installed any.
+/// The faces in force, loading the platform's own the first time nothing has installed any, or having the host this copy defers to load its own.
 ///
 /// Asked on every measurement, so the common answer is one lock read: a shaper that finds the same `Arc` it was built from is still shaping in the right faces, and one that does not rebuilds itself.
 pub fn installed() -> Arc<Fonts> {
     if let Some(fonts) = INSTALLED.read().expect("font database lock").as_ref() {
         return fonts.clone();
     }
-    let mut slot = INSTALLED.write().expect("font database lock");
+    if let Some(sources) = host().and_then(|host| host.install(FontConfig::default())) {
+        return install_sources(sources);
+    }
+    let mut slot = installed_slot();
     if let Some(fonts) = slot.as_ref() {
         return fonts.clone();
     }

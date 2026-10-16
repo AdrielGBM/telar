@@ -132,29 +132,43 @@ impl Runtime {
     }
 }
 
-// The runtime is a heap Box behind a raw pointer. `*mut T` has no `Drop`, so neither does this, and `thread_local!` registers no TLS destructor — which is what makes dlclosing a hot-reload dylib safe.
+// The runtime is a heap Box behind a raw pointer. `*mut T` has no `Drop`, so neither does this, and `thread_local!` registers no TLS destructor — which is what makes dlclosing a hot-reload dylib safe. Null until the thread first reaches it, and again once it is reset or released, so a destructor that reaches it during either gets a fresh one.
 struct RuntimeCell {
     ptr: Cell<*mut RefCell<Runtime>>,
     /// Where the last borrow to succeed was taken, so a collision can name what it collided with rather than only itself. See [`crate::reentry`]. `Option<&'static Location>` has no `Drop`, so this keeps the cell free of a TLS destructor.
     last_borrow: Cell<Option<&'static Location<'static>>>,
+    /// Whether a release is registered, which frees whichever runtime the cell holds when it runs: one made after a reset needs no second, and one a release found borrowed gets another.
+    release_pending: Cell<bool>,
 }
 
 impl RuntimeCell {
     #[track_caller]
     fn borrow_mut(&self) -> RefMut<'_, Runtime> {
-        self.enter(unsafe { (*self.ptr.get()).try_borrow_mut() }.ok())
+        self.enter(unsafe { (*self.runtime()).try_borrow_mut() }.ok())
     }
 
     #[track_caller]
     fn borrow(&self) -> Ref<'_, Runtime> {
-        self.enter(unsafe { (*self.ptr.get()).try_borrow() }.ok())
+        self.enter(unsafe { (*self.runtime()).try_borrow() }.ok())
     }
 
-    /// Swaps in a fresh runtime and hands back the old pointer for the caller to drop. The recorded borrow site goes with it: it names a call into a runtime that no longer exists.
+    fn runtime(&self) -> *mut RefCell<Runtime> {
+        if !self.release_pending.replace(true) {
+            crate::thread_exit::on_release_last(release_runtime);
+        }
+        let ptr = self.ptr.get();
+        if !ptr.is_null() {
+            return ptr;
+        }
+        let fresh = Box::into_raw(Box::new(RefCell::new(Runtime::new())));
+        self.ptr.set(fresh);
+        fresh
+    }
+
+    /// Empties the cell and hands back the old pointer for the caller to drop; whatever reaches the runtime after this, the old one's drop glue included, gets a fresh one. The recorded borrow site goes with it: it names a call into a runtime that no longer exists.
     fn take_ptr(&self) -> *mut RefCell<Runtime> {
         self.last_borrow.set(None);
-        self.ptr
-            .replace(Box::into_raw(Box::new(RefCell::new(Runtime::new()))))
+        self.ptr.replace(std::ptr::null_mut())
     }
 
     #[track_caller]
@@ -171,10 +185,25 @@ impl RuntimeCell {
 }
 
 crate::dropless_thread_local! {
-    static RUNTIME: RuntimeCell = RuntimeCell {
-        ptr: Cell::new(Box::into_raw(Box::new(RefCell::new(Runtime::new())))),
-        last_borrow: const { Cell::new(None) },
+    static RUNTIME: RuntimeCell = const {
+        RuntimeCell {
+            ptr: Cell::new(std::ptr::null_mut()),
+            last_borrow: Cell::new(None),
+            release_pending: Cell::new(false),
+        }
     };
+}
+
+/// Frees this thread's runtime, every owner, signal and effect in it, unless it is borrowed: a borrow cannot be outlived.
+fn release_runtime() {
+    let borrowed = RUNTIME.with(|cell| {
+        cell.release_pending.set(false);
+        let ptr = cell.ptr.get();
+        !ptr.is_null() && unsafe { (*ptr).try_borrow_mut() }.is_err()
+    });
+    if !borrowed {
+        reset_runtime();
+    }
 }
 
 /// Holds the installed flush callback; dropping it removes the callback.

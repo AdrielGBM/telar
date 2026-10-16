@@ -4,9 +4,8 @@
 //!
 //! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and `enter` is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::collections::HashMap;
-use std::mem::ManuallyDrop;
 use std::rc::{Rc, Weak};
 
 use i18n_core::{LocaleContext, LocaleGuard};
@@ -254,8 +253,7 @@ impl Drop for RestoreSurface {
 
 reactive_core::dropless_thread_local! {
     // Weak, not Rc: an Rc would keep every surface alive forever and its unregistering `Drop` would never run.
-    static SURFACES: ManuallyDrop<RefCell<HashMap<SurfaceHandle, Weak<Surface>>>> =
-        ManuallyDrop::new(RefCell::new(HashMap::new()));
+    static SURFACES: released HashMap<SurfaceHandle, Weak<Surface>> = HashMap::new();
     // Handle 0 is `SurfaceHandle::NONE`, the ambient world, so real surfaces start at 1.
     static NEXT_HANDLE: Cell<u64> = const { Cell::new(1) };
     static HOOK_INSTALLED: Cell<bool> = const { Cell::new(false) };

@@ -207,3 +207,28 @@ fn cancelling_a_surface_cancels_only_its_timers() {
     pass(DELAY);
     assert_eq!((mine.get(), theirs.get()), (0, 1));
 }
+
+struct DropFlag(Rc<Cell<bool>>);
+
+impl Drop for DropFlag {
+    fn drop(&mut self) {
+        self.0.set(true);
+    }
+}
+
+/// A pending timer's callback is code of the build that scheduled it, so releasing the thread before that build is unloaded drops it, whoever still holds the handle.
+#[test]
+fn releasing_a_thread_drops_the_callbacks_of_its_pending_timers() {
+    std::thread::spawn(|| {
+        let dropped = Rc::new(Cell::new(false));
+        let flag = DropFlag(dropped.clone());
+        let timer = run_after(DELAY, move || drop(flag));
+        assert!(timer.is_pending());
+        crate::thread_exit::release_thread();
+        assert!(dropped.get());
+        assert!(!timer.is_pending());
+        assert_eq!(until_next_timer(), None);
+    })
+    .join()
+    .unwrap();
+}

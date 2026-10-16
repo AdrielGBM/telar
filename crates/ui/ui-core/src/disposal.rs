@@ -6,8 +6,7 @@
 //!
 //! So disposal waits for the dispatch to unwind. The invariant is not about lists or events: **nothing is freed while something is executing inside it.**
 
-use std::cell::{Cell, RefCell};
-use std::mem::ManuallyDrop;
+use std::cell::Cell;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 use layout_core::NodeId;
@@ -17,8 +16,7 @@ use crate::context::remove_node;
 
 reactive_core::dropless_thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
-    static RETIRED: ManuallyDrop<RefCell<Vec<Retired>>> =
-        const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+    static RETIRED: released Vec<Retired> = const { Vec::new() };
 }
 
 struct Retired {

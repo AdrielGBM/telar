@@ -2,8 +2,6 @@
 //!
 //! In the facade for the same reason as `system_locale`: `i18n-core` stays on `reactive-core` alone, and `platform-core` knows nothing of translations.
 
-use std::cell::RefCell;
-use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 use crate::user_preferences::LOCALE_KEY;
@@ -12,7 +10,7 @@ type Followed = Option<(reactive_core::OwnerId, Rc<Binding>)>;
 
 reactive_core::dropless_thread_local! {
     // An `Effect` handle is inert, so the effect gets a scope of its own that a re-call disposes; otherwise two bindings would race to write the address.
-    static FOLLOW: ManuallyDrop<RefCell<Followed>> = const { ManuallyDrop::new(RefCell::new(None)) };
+    static FOLLOW: released Followed = const { None };
 }
 
 /// Makes the locale part of where the user is: every location the app's address holds names one of `available`, and the active locale and that one follow each other.

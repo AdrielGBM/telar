@@ -1,8 +1,6 @@
 //! [`PreviewArg`]: the types a control can edit, and how each one crosses to and from an [`ArgValue`].
 
-use std::cell::RefCell;
 use std::collections::HashSet;
-use std::mem::ManuallyDrop;
 
 use reactive_core::{Reactive, RwSignal, signal};
 
@@ -130,8 +128,7 @@ impl PreviewArg for &'static str {
 }
 
 reactive_core::dropless_thread_local! {
-    static LEAKED: ManuallyDrop<RefCell<HashSet<&'static str>>> =
-        ManuallyDrop::new(RefCell::new(HashSet::new()));
+    static LEAKED: released HashSet<&'static str> = HashSet::new();
 }
 
 fn leaked(text: &str) -> &'static str {

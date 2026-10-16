@@ -72,7 +72,11 @@ impl HotApp {
             guest.call(|| unsafe { (exports.loaded)() });
         }
         // Before the app is made, so whatever its setup or its first build reaches for is already there.
-        guest.call(|| unsafe { (exports.install_services)(HostServices::installed()) });
+        let services = match lib {
+            Some(_) => HostServices::installed(),
+            None => HostServices::installed().in_this_process(),
+        };
+        guest.call(|| unsafe { (exports.install_services)(services) });
         let app = guest.call(|| unsafe { create() });
         Self {
             app,
@@ -405,7 +409,7 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
 
 /// The platform services the host installed, handed to each library it loads: the library's copies of their stores start empty, so without them a reloaded app copies to no clipboard, opens no link, shows no file dialog, lays its text out in faces other than the ones the host draws it in, and shows and matches its shortcuts for the keyboard it was compiled for rather than the one the host's platform reports.
 ///
-/// The host's backends serve both sides, so a selection the clipboard owns outlives every library swapped in under it. In a build that shapes its own text the fonts are handed over too, as what they were loaded from, since a font database is not something two copies of the shaper can share.
+/// The host's backends serve both sides, so a selection the clipboard owns outlives every library swapped in under it. In a build that shapes its own text the host's font database is handed over too, for the library's copy of the shaper to defer to: two copies of the shaper cannot share one database, so the library loads what the host's was loaded from, and a face the app adds while it runs is added to the host's, which draws its text, before the library loads it as well.
 #[cfg(feature = "dev")]
 #[doc(hidden)]
 pub struct HostServices {
@@ -413,8 +417,7 @@ pub struct HostServices {
     uri_opener: Option<std::sync::Arc<dyn services_core::UriOpener>>,
     file_dialogs: Option<std::sync::Arc<dyn services_core::FileDialogs>>,
     keyboard_convention: platform_core::KeyboardConvention,
-    #[cfg(feature = "shaper")]
-    fonts: Option<renderer_core::FontSources>,
+    fonts: Option<std::sync::Arc<dyn renderer_core::FontHost>>,
 }
 
 #[cfg(feature = "dev")]
@@ -435,28 +438,54 @@ impl HostServices {
                     as std::sync::Arc<dyn services_core::FileDialogs>
             }),
             keyboard_convention: platform_core::keyboard_convention(),
-            #[cfg(feature = "shaper")]
-            fonts: renderer_text::fonts::installed_sources(),
+            fonts: served_fonts(),
+        }
+    }
+
+    /// These services for exports that are this process's own, which already set text in its one font database: handed it, they would defer it to itself.
+    fn in_this_process(self) -> Self {
+        Self {
+            fonts: None,
+            ..self
         }
     }
 
     /// Installs each service on this side, as the host had it.
     pub fn install(self) {
-        platform_core::set_keyboard_convention(self.keyboard_convention);
+        let Self {
+            clipboard,
+            uri_opener,
+            file_dialogs,
+            keyboard_convention,
+            fonts,
+        } = self;
+        platform_core::set_keyboard_convention(keyboard_convention);
         #[cfg(feature = "shaper")]
-        if let Some(fonts) = self.fonts {
-            renderer_text::fonts::install_sources(fonts);
+        if let Some(fonts) = fonts {
+            renderer_text::fonts::defer_to(fonts);
         }
-        if let Some(clipboard) = self.clipboard {
+        #[cfg(not(feature = "shaper"))]
+        drop(fonts);
+        if let Some(clipboard) = clipboard {
             services_core::set_clipboard(clipboard);
         }
-        if let Some(opener) = self.uri_opener {
+        if let Some(opener) = uri_opener {
             services_core::set_uri_opener(opener);
         }
-        if let Some(dialogs) = self.file_dialogs {
+        if let Some(dialogs) = file_dialogs {
             services_core::set_file_dialogs(dialogs);
         }
     }
+}
+
+#[cfg(all(feature = "dev", feature = "shaper"))]
+fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
+    Some(std::sync::Arc::new(renderer_text::fonts::Served))
+}
+
+#[cfg(all(feature = "dev", not(feature = "shaper")))]
+fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
+    None
 }
 
 #[cfg(feature = "dev")]

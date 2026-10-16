@@ -2,15 +2,14 @@
 ///
 /// On glibc a thread-local whose type has a destructor pins the library that registered it until its thread exits, so one a hot-reloaded or embedded app reaches keeps that whole build mapped, code and statics, after its host has unloaded it. Every crate an app links declares its thread-locals with this macro instead, which the `every_thread_local_an_app_links_is_dropless` test holds the workspace to.
 ///
-/// What a slot holds that needs freeing goes in a [`ManuallyDrop`](std::mem::ManuallyDrop) or behind a raw pointer, and when it is worth freeing, its release is handed to [`on_thread_exit`](crate::thread_exit::on_thread_exit).
+/// A slot holding the app's state is declared `released`: it is a [`Released`](crate::thread_exit::Released), a `RefCell` that hands its own release to [`on_release`](crate::thread_exit::on_release) the first time it is reached, so what it holds is freed when its thread is released, as a host releases a guest's before unloading it. Anything else that needs freeing goes in a [`ManuallyDrop`](std::mem::ManuallyDrop) or behind a raw pointer, its release handed to [`thread_exit`](crate::thread_exit) by hand.
 ///
 /// ```
-/// use std::cell::{Cell, RefCell};
-/// use std::mem::ManuallyDrop;
+/// use std::cell::Cell;
 ///
 /// telar_reactive_local::dropless_thread_local! {
 ///     static DEPTH: Cell<usize> = const { Cell::new(0) };
-///     static NAMES: ManuallyDrop<RefCell<Vec<String>>> = const { ManuallyDrop::new(RefCell::new(Vec::new())) };
+///     static NAMES: released Vec<String> = const { Vec::new() };
 /// }
 /// # DEPTH.with(|depth| depth.set(1));
 /// # NAMES.with(|names| names.borrow_mut().push("kept".to_owned()));
@@ -24,6 +23,18 @@
 #[macro_export]
 macro_rules! dropless_thread_local {
     () => {};
+    ($(#[$attr:meta])* $vis:vis static $name:ident: released $t:ty = const $init:block $(; $($rest:tt)*)?) => {
+        ::std::thread_local!($(#[$attr])* $vis static $name: $crate::thread_exit::Released<$t> = const {
+            $crate::thread_exit::Released::new($init, || $init, || $name.with($crate::thread_exit::Released::release))
+        });
+        $($crate::dropless_thread_local!($($rest)*);)?
+    };
+    ($(#[$attr:meta])* $vis:vis static $name:ident: released $t:ty = $init:expr $(; $($rest:tt)*)?) => {
+        ::std::thread_local!($(#[$attr])* $vis static $name: $crate::thread_exit::Released<$t> =
+            $crate::thread_exit::Released::new($init, || $init, || $name.with($crate::thread_exit::Released::release))
+        );
+        $($crate::dropless_thread_local!($($rest)*);)?
+    };
     ($(#[$attr:meta])* $vis:vis static $name:ident: $t:ty = const $init:block $(; $($rest:tt)*)?) => {
         ::std::thread_local!($(#[$attr])* $vis static $name: $t = const {
             $crate::__refuse_destructor!($name: $t);

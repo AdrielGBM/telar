@@ -2,7 +2,7 @@
 //!
 //! A per-surface "world" (the layout tree, the overlay registry, focus, ...) is a thread-local singleton. Under M3 several surfaces share one UI thread, so each such world must be swappable: the runner activates a surface's instance around that surface's build/event/frame, and the reactive flush re-enters the instance that owns each effect. This macro generates that swap once — the live instance sits behind a `Cell<*mut RefCell<T>>` (like the reactive runtime's own cell), a private accessor derefs it, and a `Context`/`Guard` pair allocates and activates per-surface instances.
 //!
-//! The cell holds raw pointers, as [`dropless_thread_local!`](crate::dropless_thread_local) requires, so the ambient instance is leaked; per-surface instances are freed when their `Context` drops.
+//! The cell holds raw pointers, as [`dropless_thread_local!`](crate::dropless_thread_local) requires. The ambient instance is made the first time the slot is reached and freed through [`thread_exit`](crate::thread_exit), so a guest's is gone once its host unloads it; per-surface instances are freed when their `Context` drops.
 //!
 //! Both instances build their contents inside [`detached`](crate::detached), because a slot initialises on first access and that access is somebody's build. Without it a surface's world is adopted by whichever reactive owner happened to be running — see that module.
 
@@ -24,15 +24,8 @@ macro_rules! surface_local {
         context $ctx:ident, $guard:ident;
     ) => {
         $crate::dropless_thread_local! {
-            static $slot: ::std::cell::Cell<$crate::SurfaceSlot<$ty>> = {
-                let ambient = ::std::boxed::Box::into_raw(::std::boxed::Box::new(
-                    ::std::cell::RefCell::new($crate::detached(|| $init)),
-                ));
-                ::std::cell::Cell::new($crate::SurfaceSlot {
-                    live: ambient,
-                    ambient,
-                    last_borrow: ::std::option::Option::None,
-                })
+            static $slot: ::std::cell::Cell<$crate::SurfaceSlot<$ty>> = const {
+                ::std::cell::Cell::new($crate::SurfaceSlot::EMPTY)
             };
         }
 
@@ -40,18 +33,18 @@ macro_rules! surface_local {
         #[allow(dead_code)]
         #[track_caller]
         fn $with<R>(f: impl ::std::ops::FnOnce(&mut $ty) -> R) -> R {
-            // SAFETY: the pointer always addresses a live, heap-allocated `RefCell` — the leaked ambient instance or a per-surface box that outlives every guard pointing the slot at it. The borrow is released before the closure returns, so swaps never race a borrow.
+            // SAFETY: the pointer always addresses a live, heap-allocated `RefCell` — the ambient instance, which is only freed while nothing holds or enters it, or a per-surface box that outlives every guard pointing the slot at it. The borrow is released before the closure returns, so swaps never race a borrow.
             $slot.with(|cell| {
-                let slot = cell.get();
-                let borrowed = unsafe { (*slot.live).try_borrow_mut() };
+                let live = $crate::SurfaceSlot::live(cell, || $crate::detached(|| $init), || $slot.with($crate::SurfaceSlot::release));
+                let borrowed = unsafe { (*live).try_borrow_mut() };
                 match borrowed {
                     ::std::result::Result::Ok(mut guard) => {
-                        cell.set(slot.borrowed_at(::std::panic::Location::caller()));
+                        cell.set(cell.get().borrowed_at(::std::panic::Location::caller()));
                         f(&mut *guard)
                     }
                     ::std::result::Result::Err(_) => $crate::reentry::borrow_collision(
                         ::std::stringify!($slot),
-                        slot.last_borrow,
+                        cell.get().last_borrow,
                         ::std::panic::Location::caller(),
                     ),
                 }
@@ -63,16 +56,16 @@ macro_rules! surface_local {
         fn $with_ref<R>(f: impl ::std::ops::FnOnce(&$ty) -> R) -> R {
             // SAFETY: see `$with`.
             $slot.with(|cell| {
-                let slot = cell.get();
-                let borrowed = unsafe { (*slot.live).try_borrow() };
+                let live = $crate::SurfaceSlot::live(cell, || $crate::detached(|| $init), || $slot.with($crate::SurfaceSlot::release));
+                let borrowed = unsafe { (*live).try_borrow() };
                 match borrowed {
                     ::std::result::Result::Ok(guard) => {
-                        cell.set(slot.borrowed_at(::std::panic::Location::caller()));
+                        cell.set(cell.get().borrowed_at(::std::panic::Location::caller()));
                         f(&*guard)
                     }
                     ::std::result::Result::Err(_) => $crate::reentry::borrow_collision(
                         ::std::stringify!($slot),
-                        slot.last_borrow,
+                        cell.get().last_borrow,
                         ::std::panic::Location::caller(),
                     ),
                 }
@@ -103,12 +96,7 @@ macro_rules! surface_local {
             #[must_use = "the surface context is only active while this guard is alive"]
             pub fn enter(&self) -> $guard {
                 $guard {
-                    prev: $slot.with(|cell| {
-                        let mut slot = cell.get();
-                        let prev = ::std::mem::replace(&mut slot.live, self.ptr);
-                        cell.set(slot);
-                        prev
-                    }),
+                    prev: $slot.with(|cell| $crate::SurfaceSlot::enter(cell, self.ptr)),
                 }
             }
 
@@ -119,10 +107,8 @@ macro_rules! surface_local {
             pub fn enter_ambient() -> $guard {
                 $guard {
                     prev: $slot.with(|cell| {
-                        let mut slot = cell.get();
-                        let prev = ::std::mem::replace(&mut slot.live, slot.ambient);
-                        cell.set(slot);
-                        prev
+                        let ambient = $crate::SurfaceSlot::ambient(cell, || $crate::detached(|| $init), || $slot.with($crate::SurfaceSlot::release));
+                        $crate::SurfaceSlot::enter(cell, ambient)
                     }),
                 }
             }
@@ -149,11 +135,7 @@ macro_rules! surface_local {
 
         impl ::std::ops::Drop for $guard {
             fn drop(&mut self) {
-                $slot.with(|cell| {
-                    let mut slot = cell.get();
-                    slot.live = self.prev;
-                    cell.set(slot);
-                });
+                $slot.with(|cell| $crate::SurfaceSlot::leave(cell, self.prev));
             }
         }
     };
@@ -166,17 +148,121 @@ macro_rules! surface_local {
 /// `#[doc(hidden)]` — public only because macro expansion lands in the calling crate, which has to be able to name it. Nothing outside the macro should construct one: the fields are raw pointers the expansion dereferences under a SAFETY note that only holds for the ones it makes itself.
 #[doc(hidden)]
 pub struct SurfaceSlot<T> {
+    /// Null until the slot is first reached, and again once the ambient instance it pointed at is released.
     pub live: *mut std::cell::RefCell<T>,
     pub ambient: *mut std::cell::RefCell<T>,
+    /// How many guards are alive, each holding a pointer it restores: while any is, the ambient instance may be one of them and is not released.
+    pub entered: usize,
+    /// Whether the ambient instance outlived the release registered for it, held when it ran, so the next access registers another.
+    pub kept: bool,
     /// Where the last borrow of this slot to succeed was taken, so a collision names what it collided with rather than only itself. See [`crate::reentry`].
     pub last_borrow: Option<&'static std::panic::Location<'static>>,
 }
 
 impl<T> SurfaceSlot<T> {
     #[doc(hidden)]
+    pub const EMPTY: Self = Self {
+        live: std::ptr::null_mut(),
+        ambient: std::ptr::null_mut(),
+        entered: 0,
+        kept: false,
+        last_borrow: None,
+    };
+
+    #[doc(hidden)]
     pub fn borrowed_at(mut self, at: &'static std::panic::Location<'static>) -> Self {
         self.last_borrow = Some(at);
         self
+    }
+
+    /// The ambient instance, made by `init` the first time it is asked for, with `release` handed to [`on_release`](crate::thread_exit::on_release) to free it.
+    #[doc(hidden)]
+    pub fn ambient(
+        cell: &std::cell::Cell<Self>,
+        init: impl FnOnce() -> T,
+        release: fn(),
+    ) -> *mut std::cell::RefCell<T> {
+        Self::register_kept(cell, release);
+        let existing = cell.get().ambient;
+        if !existing.is_null() {
+            return existing;
+        }
+        let ambient = Box::into_raw(Box::new(std::cell::RefCell::new(init())));
+        let mut slot = cell.get();
+        slot.ambient = ambient;
+        cell.set(slot);
+        crate::thread_exit::on_release(release);
+        ambient
+    }
+
+    /// The live instance: the one a guard entered, or the ambient one, made first if nothing has.
+    #[doc(hidden)]
+    pub fn live(
+        cell: &std::cell::Cell<Self>,
+        init: impl FnOnce() -> T,
+        release: fn(),
+    ) -> *mut std::cell::RefCell<T> {
+        Self::register_kept(cell, release);
+        let live = cell.get().live;
+        if !live.is_null() {
+            return live;
+        }
+        let ambient = Self::ambient(cell, init, release);
+        let mut slot = cell.get();
+        slot.live = ambient;
+        cell.set(slot);
+        ambient
+    }
+
+    fn register_kept(cell: &std::cell::Cell<Self>, release: fn()) {
+        let mut slot = cell.get();
+        if slot.kept {
+            slot.kept = false;
+            cell.set(slot);
+            crate::thread_exit::on_release(release);
+        }
+    }
+
+    /// Makes `instance` live and hands back what was, for the guard to restore.
+    #[doc(hidden)]
+    pub fn enter(
+        cell: &std::cell::Cell<Self>,
+        instance: *mut std::cell::RefCell<T>,
+    ) -> *mut std::cell::RefCell<T> {
+        let mut slot = cell.get();
+        let prev = std::mem::replace(&mut slot.live, instance);
+        slot.entered += 1;
+        cell.set(slot);
+        prev
+    }
+
+    #[doc(hidden)]
+    pub fn leave(cell: &std::cell::Cell<Self>, prev: *mut std::cell::RefCell<T>) {
+        let mut slot = cell.get();
+        slot.live = prev;
+        slot.entered -= 1;
+        cell.set(slot);
+    }
+
+    /// Frees the ambient instance, leaving the slot to make a fresh one should it be reached again. One a guard or a borrow still holds is kept, and released once it is reached again and its thread released after that.
+    #[doc(hidden)]
+    pub fn release(cell: &std::cell::Cell<Self>) {
+        let mut slot = cell.get();
+        let ambient = slot.ambient;
+        if ambient.is_null() {
+            return;
+        }
+        if slot.entered > 0 || unsafe { (*ambient).try_borrow_mut() }.is_err() {
+            slot.kept = true;
+            cell.set(slot);
+            return;
+        }
+        slot.live = std::ptr::null_mut();
+        slot.ambient = std::ptr::null_mut();
+        slot.last_borrow = None;
+        cell.set(slot);
+        // SAFETY: no guard or borrow holds it, and the slot no longer points at it, so this was the last pointer to the box `ambient` made.
+        drop(unsafe { Box::from_raw(ambient) });
     }
 }
 
@@ -197,6 +283,66 @@ mod tests {
         slot PROBE: u32 = 0;
         access with_probe, with_probe_ref;
         context ProbeContext, ProbeGuard;
+    }
+
+    static WORLDS_DROPPED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+    struct World;
+
+    impl Drop for World {
+        fn drop(&mut self) {
+            WORLDS_DROPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
+    crate::surface_local! {
+        slot WORLD: World = World;
+        access with_world, with_world_ref;
+        context WorldContext, WorldGuard;
+    }
+
+    fn worlds_dropped() -> u32 {
+        WORLDS_DROPPED.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// The ambient world is made the first time it is reached and freed when its thread is released, and reaching it again makes a fresh one that is freed in turn: a guest's host releases its thread before unloading it, and nothing of a build may stay behind.
+    #[test]
+    fn the_ambient_world_is_freed_when_its_thread_is_released_and_made_again_when_reached() {
+        std::thread::spawn(|| {
+            let before = worlds_dropped();
+            with_world_ref(|_| ());
+            crate::thread_exit::release_thread();
+            assert_eq!(worlds_dropped(), before + 1);
+            with_world(|_| ());
+            crate::thread_exit::release_thread();
+            assert_eq!(worlds_dropped(), before + 2);
+        })
+        .join()
+        .unwrap();
+    }
+
+    /// A guard holds a pointer it restores, which may be the ambient world: freeing it then would leave the slot pointing at freed memory once the guard drops.
+    #[test]
+    fn the_ambient_world_is_kept_while_a_guard_is_entered_and_released_after() {
+        std::thread::spawn(|| {
+            let before = worlds_dropped();
+            let surface = WorldContext::new();
+            let entered = surface.enter();
+            let _ambient = WorldContext::enter_ambient();
+            with_world_ref(|_| ());
+            crate::thread_exit::release_thread();
+            assert_eq!(worlds_dropped(), before);
+            drop(_ambient);
+            drop(entered);
+            drop(surface);
+            assert_eq!(
+                worlds_dropped(),
+                before + 1,
+                "the surface's own world went with its context"
+            );
+        })
+        .join()
+        .unwrap();
     }
 
     /// The shape every `surface_local!` world has hit at least once, and the reason six of them carry a hand-written "copy out, drop the borrow, write after" dance: a closure holding the slot reaches back into it. The panic now points at the two lines instead of at the `RefCell` that noticed.

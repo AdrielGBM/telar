@@ -5851,6 +5851,7 @@ dependencies = [
  "telar-preferences-core",
  "telar-reactive-core",
  "telar-renderer-core",
+ "telar-renderer-text",
  "telar-ui-core",
  "telar-ui-tree",
  "web-time",

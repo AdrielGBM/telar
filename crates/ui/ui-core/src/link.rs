@@ -1,7 +1,6 @@
 //! Following a [`Destination`]: a route is pushed onto the app's history, an anchor is added to the history and revealed where it is, and an external URI is handed to the system.
 
-use std::cell::{Cell, RefCell};
-use std::mem::ManuallyDrop;
+use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -16,14 +15,12 @@ type Reveal = Rc<dyn Fn() -> bool>;
 type ReadDestination = Rc<dyn Fn() -> Option<Destination>>;
 pub(crate) type ReadRun = Rc<dyn Fn(usize) -> Option<Destination>>;
 
-type Registry<K, V> = ManuallyDrop<RefCell<FxHashMap<K, V>>>;
-
 reactive_core::dropless_thread_local! {
-    static ANCHORS: Registry<Arc<str>, Reveal> = ManuallyDrop::default();
+    static ANCHORS: released FxHashMap<Arc<str>, Reveal> = FxHashMap::default();
     // Keyed by surface too: every surface mints node ids from its own counter, so a node id alone names a different box in each.
-    static LINKS: Registry<(SurfaceHandle, NodeId), (u64, ReadDestination)> = ManuallyDrop::default();
-    static RUNS: Registry<(SurfaceHandle, NodeId), (u64, ReadRun)> = ManuallyDrop::default();
-    static PENDING: ManuallyDrop<RefCell<Option<Arc<str>>>> = const { ManuallyDrop::new(RefCell::new(None)) };
+    static LINKS: released FxHashMap<(SurfaceHandle, NodeId), (u64, ReadDestination)> = FxHashMap::default();
+    static RUNS: released FxHashMap<(SurfaceHandle, NodeId), (u64, ReadRun)> = FxHashMap::default();
+    static PENDING: released Option<Arc<str>> = const { None };
     static REVEALER_INSTALLED: Cell<bool> = const { Cell::new(false) };
     static NEXT_TOKEN: Cell<u64> = const { Cell::new(1) };
 }

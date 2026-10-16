@@ -168,6 +168,49 @@ impl FontAxis {
     }
 }
 
+/// The font database a copy of the shaper defers to when another copy draws the text it lays out: the host's, for a hot-reloaded or embedded library that links a shaper of its own.
+///
+/// Two copies of the shaper cannot share one database, so the library keeps a copy of the host's, loaded from what it was loaded from. Every face it adds goes through here rather than into its copy alone, where the host, which draws the frames, would never see it: the host loads it, and the library loads what the host then holds. Each method answers with what the host holds after it, or `None` when the host could not answer, which leaves both as they were.
+pub trait FontHost: Send + Sync {
+    /// What the host's faces were loaded from, or `None` while it has loaded none.
+    fn sources(&self) -> Option<FontSources>;
+
+    /// Adds the faces `config` names, as installing a shaper configured with it does.
+    fn install(&self, config: FontConfig) -> Option<FontSources>;
+
+    /// Adds faces that arrived while the app runs, keeping the family the default face is routed to.
+    fn add_faces(&self, faces: Vec<FontAsset>) -> Option<FontSources>;
+
+    /// Makes `faces` the only faces text sets in, routing the default face to the first of `families` that resolves.
+    fn install_only(
+        &self,
+        faces: Vec<FontAsset>,
+        families: Vec<String>,
+    ) -> Option<Result<FontSources, ExclusiveFontsError>>;
+}
+
+/// Why a shaper could not make the faces it was given the only ones.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExclusiveFontsError {
+    /// It was given no face, or none it could read.
+    NoFaces,
+    /// The process already loaded a face it was not given.
+    OtherFacesLoaded,
+}
+
+impl std::fmt::Display for ExclusiveFontsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NoFaces => "no font face to set text in: declare one",
+            Self::OtherFacesLoaded => {
+                "this process already loaded fonts beyond the declared ones, so text would not set in those alone"
+            }
+        })
+    }
+}
+
+impl std::error::Error for ExclusiveFontsError {}
+
 #[cfg(test)]
 #[path = "font_config_test.rs"]
 mod tests;

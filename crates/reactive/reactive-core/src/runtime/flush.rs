@@ -170,7 +170,7 @@ pub(crate) fn flush_when_settled() {
 pub fn reset_runtime() {
     RUNTIME.with(|cell| {
         let old_ptr = cell.take_ptr();
-        // Install a fresh runtime BEFORE dropping the old one. Any re-entrant RUNTIME access during the old runtime's drop glue (drop_signal, etc.) will see the new empty runtime and return early — no borrow conflict, no double-free.
+        // Emptied BEFORE the old one drops: a re-entrant RUNTIME access from its drop glue (drop_signal, etc.) gets a fresh, empty runtime and returns early — no borrow conflict, no double-free.
         if !old_ptr.is_null() {
             unsafe { drop(Box::from_raw(old_ptr)) };
         }

@@ -3,8 +3,6 @@
 //! The placement type is the backend's own. Telar carried a `SurfacePlacement` vocabulary of its own for a while, and it bought nothing: the producer and the implementor were two crates of the *same* application, so both ends paid a translation hop into and out of a framework type whose majority of fields the framework never read. What is framework-shaped here is the indirection — a thread-local host, keyed by the placement type — not the description of where a panel sits.
 
 use std::any::{Any, TypeId};
-use std::cell::RefCell;
-use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 use std::collections::HashMap;
@@ -67,8 +65,7 @@ impl Drop for SurfaceToken {
 
 reactive_core::dropless_thread_local! {
     // Keyed by the placement type because the trait is generic and so not object-safe on its own. The stored value is a `Box<dyn SurfaceHost<P>>` erased once more into `dyn Any`, which is a concrete `'static` type per `P` and so downcasts back exactly.
-    static SURFACE_HOSTS: ManuallyDrop<RefCell<HashMap<TypeId, Box<dyn Any>>>> =
-        ManuallyDrop::new(RefCell::new(HashMap::new()));
+    static SURFACE_HOSTS: released HashMap<TypeId, Box<dyn Any>> = HashMap::new();
 }
 
 /// Installs `host` as the backend for placements of type `P`. A later call for the same `P` replaces it.

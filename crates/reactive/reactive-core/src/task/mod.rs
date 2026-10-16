@@ -15,7 +15,6 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use rustc_hash::FxHashMap;
 
-use crate::leaked_cell::LeakedCell;
 use crate::runtime::{SurfaceHandle, current_surface};
 
 type TaskId = u64;
@@ -26,7 +25,18 @@ static TASK_WAKER: RwLock<Option<Waker>> = RwLock::new(None);
 
 /// Installs the process-global "wake the UI loop" used after a task posts a value, and when a [`run_after`](crate::run_after) is scheduled to come due before anything the loop was waiting for. The runner passes the same wake an app gets from `AppCtx::redraw_waker`.
 pub fn set_task_waker(wake: impl Fn() + Send + Sync + 'static) {
-    *TASK_WAKER.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(wake));
+    let previous = TASK_WAKER
+        .write()
+        .unwrap_or_else(|e| e.into_inner())
+        .replace(Arc::new(wake));
+    if previous.is_none() {
+        crate::thread_exit::on_unload(release_task_waker);
+    }
+}
+
+fn release_task_waker() {
+    let waker = TASK_WAKER.write().unwrap_or_else(|e| e.into_inner()).take();
+    drop(waker);
 }
 
 pub(crate) fn wake_loop() {
@@ -81,7 +91,7 @@ struct TaskRegistry {
 }
 
 crate::dropless_thread_local! {
-    static TASKS: LeakedCell<TaskRegistry> = LeakedCell::new();
+    static TASKS: released TaskRegistry = TaskRegistry::default();
 }
 
 /// The worker's end of a task. Posting `End` from `Drop` is what releases the callback on *both* exits — a normal return and an unwind — so work that panics abandons its task instead of leaving it pending forever.

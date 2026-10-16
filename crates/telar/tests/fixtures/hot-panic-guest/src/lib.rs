@@ -1,12 +1,15 @@
 //! A hot-reload guest whose press handler panics, exporting what `app!` exports under `telar/hot-reload`: the `hot_panic` test in `telar` loads it into a host with its own copy of std.
 //!
-//! Its tree is a themed panel around a line of text that counts the moves it was handed, so mounting, painting and moving over it reach what an app's would: the reactive runtime, layout, the theme, the text measurer and the input registries.
+//! Its tree is a themed panel around a line of text that counts the moves it was handed, so mounting, painting and moving over it reach what an app's would: the reactive runtime, layout, the theme, the text measurer and the input registries. A secondary press adds a face, as a font fetched while an app runs is.
 
 use telar::{
-    App, AppCtx, Chord, Component, Event, EventResult, LayoutItem, LayoutStyle, RectStyle,
-    RenderNode, RwSignal, StyledContainer, Text, TextStyle, WindowConfig, box_item, signal,
-    use_theme_tokens,
+    App, AppCtx, Chord, Component, Event, EventResult, FontAsset, LayoutItem, LayoutStyle,
+    PointerButton, RectStyle, RenderNode, RwSignal, StyledContainer, Text, TextStyle, WindowConfig,
+    box_item, signal, use_theme_tokens,
 };
+
+const ARRIVING_FACE: &[u8] =
+    include_bytes!("../../../../../renderer/renderer-text/test-fonts/TelarTest.ttf");
 
 struct PanicsOnPress {
     content: Box<dyn LayoutItem>,
@@ -42,6 +45,15 @@ impl Component for PanicsOnPress {
 
     fn on_event(&mut self, event: &Event) -> EventResult {
         match event {
+            Event::PointerPressed {
+                button: PointerButton::Secondary,
+                ..
+            } => {
+                telar_renderer_text::fonts::add_faces(vec![
+                    FontAsset::embedded(ARRIVING_FACE).named("Arriving Face"),
+                ]);
+                EventResult::Handled
+            }
             Event::PointerPressed { .. } => {
                 panic!("RUNTIME is already borrowed by the press handler");
             }
