@@ -163,6 +163,68 @@ impl<T> Deref for Released<T> {
     }
 }
 
+/// The static `released_static!` declares for `static NAME: T = init;`: built on first use, as a `LazyLock` is, and handed out by clone, so a copy loaded as a guest can free what it holds when its host unloads it, through [`on_unload`]. An ordinary copy keeps it for as long as the process runs.
+pub struct ReleasedStatic<T> {
+    value: Mutex<Option<T>>,
+    init: fn() -> T,
+    release_slot: fn(),
+}
+
+impl<T: Clone> ReleasedStatic<T> {
+    #[doc(hidden)]
+    pub const fn new(init: fn() -> T, release_slot: fn()) -> Self {
+        Self {
+            value: Mutex::new(None),
+            init,
+            release_slot,
+        }
+    }
+
+    /// What the static holds, built the first time it is asked for, or the first time since its host released it.
+    pub fn get(&self) -> T {
+        let mut value = self.value.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(held) = value.as_ref() {
+            return held.clone();
+        }
+        let built = (self.init)();
+        *value = Some(built.clone());
+        drop(value);
+        on_unload(self.release_slot);
+        built
+    }
+
+    /// Empties the static and drops what it held, outside the lock so its destructor may reach the static again.
+    #[doc(hidden)]
+    pub fn release(&self) {
+        let held = self
+            .value
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        drop(held);
+    }
+}
+
+/// Declares statics a hot-reloaded or embedded app's host frees when it unloads the app, each a [`ReleasedStatic`] read with `get`: for a cache the process would otherwise keep in a `LazyLock`, which nothing frees, so every build a host unloads leaves what its copy built behind.
+///
+/// ```
+/// use std::sync::Arc;
+///
+/// telar_reactive_local::released_static! {
+///     static GREETING: Arc<str> = Arc::from("hello");
+/// }
+/// assert_eq!(&*GREETING.get(), "hello");
+/// ```
+#[macro_export]
+macro_rules! released_static {
+    () => {};
+    ($(#[$attr:meta])* $vis:vis static $name:ident: $t:ty = $init:expr $(; $($rest:tt)*)?) => {
+        $(#[$attr])* $vis static $name: $crate::thread_exit::ReleasedStatic<$t> =
+            $crate::thread_exit::ReleasedStatic::new(|| $init, || $name.release());
+        $($crate::released_static!($($rest)*);)?
+    };
+}
+
 #[cfg(test)]
 #[path = "thread_exit_test.rs"]
 mod tests;

@@ -10,12 +10,13 @@ macro_rules! children {
 
 /// Caches an `Arc<str>` per call site so a string literal allocates at most once instead of once per frame.
 ///
-/// A static rather than a thread-local: one with a destructor, expanded into a hot-reloaded app, would keep that build mapped after the host unloads it.
+/// A released static rather than a thread-local, which with a destructor would keep a hot-reloaded build mapped after its host unloads it, or a `LazyLock`, whose string that host would never free.
 #[macro_export]
 macro_rules! static_rc_str {
     ($s:literal) => {{
-        static V: ::std::sync::LazyLock<::std::sync::Arc<str>> =
-            ::std::sync::LazyLock::new(|| ::std::sync::Arc::from($s as &str));
-        ::std::sync::Arc::clone(&*V)
+        $crate::released_static! {
+            static V: ::std::sync::Arc<str> = ::std::sync::Arc::from($s as &str);
+        }
+        V.get()
     }};
 }

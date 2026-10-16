@@ -19,7 +19,9 @@ mod timer;
 pub use effect::{Effect, effect};
 pub use memo::{Memo, memo};
 pub use reactive::Reactive;
-pub use reactive_local::{SurfaceSlot, detached, dropless_thread_local, surface_local};
+pub use reactive_local::{
+    SurfaceSlot, detached, dropless_thread_local, released_static, surface_local,
+};
 pub use runtime::{
     FlushNotifyHandle, OwnerGuard, OwnerId, PanicCatch, PanicPayload, SurfaceEnterGuard,
     SurfaceHandle, after_settle, batch, begin_batch, context_provided_here, current_owner,

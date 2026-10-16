@@ -2,21 +2,16 @@
 //!
 //! Taffy still runs on this target — its rects are what hit-testing, scrolling and anchored overlays read, and what a parity test compares the browser's own layout against. For those numbers to mean anything, the measurer has to agree with whatever will actually render the text, so it asks a 2D canvas rather than shaping glyphs from a font file the page would then not use.
 
-use std::cell::RefCell;
-use std::mem::ManuallyDrop;
-
 use renderer_core::{Span, TextMetrics, TextStyle, TextWrap, case_text};
 use wasm_bindgen::JsCast;
 
 // Here rather than in the measurer, so the measurer stays a unit struct and satisfies the `Send + Sync` its runtime slot is declared with — which on a single-threaded target means nothing, but has to be true for it to be installed at all.
 reactive_local::dropless_thread_local! {
-    static CONTEXT: ManuallyDrop<RefCell<Option<web_sys::CanvasRenderingContext2d>>> = const { ManuallyDrop::new(RefCell::new(None)) };
+    static CONTEXT: released Option<web_sys::CanvasRenderingContext2d> = const { None };
     /// A face's line box, which is a property of the face and the size and of nothing a paragraph does.
-    static LINE_BOXES: ManuallyDrop<RefCell<rustc_hash::FxHashMap<String, f32>>> =
-        ManuallyDrop::new(RefCell::new(rustc_hash::FxHashMap::default()));
+    static LINE_BOXES: released rustc_hash::FxHashMap<String, f32> = rustc_hash::FxHashMap::default();
     /// Widths measured with a laid-out probe, by the style's CSS and the text: see [`needs_probe`].
-    static PROBED: ManuallyDrop<RefCell<rustc_hash::FxHashMap<(String, String), f32>>> =
-        ManuallyDrop::new(RefCell::new(rustc_hash::FxHashMap::default()));
+    static PROBED: released rustc_hash::FxHashMap<(String, String), f32> = rustc_hash::FxHashMap::default();
 }
 
 fn with_context<R>(f: impl FnOnce(&web_sys::CanvasRenderingContext2d) -> R) -> Option<R> {

@@ -1,7 +1,8 @@
 use super::tests::make_scroll_area;
 use super::*;
 use platform_core::ScrollDelta;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use web_time::Instant;
 
 fn glided(y: f32) -> Event {
     Event::Scrolled {

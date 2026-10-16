@@ -2,7 +2,7 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use telar::{
     Accessible, Children, Color, LayoutError, LayoutItem, LayoutStyle, NodeId, ObjectFit, Props,
@@ -70,7 +70,7 @@ pub fn icon(props: IconProps, _children: Children) -> Result<Box<dyn LayoutItem>
         LayoutStyle::new()
             .width(SizeDimension::Percent(1.0))
             .height(SizeDimension::Percent(1.0)),
-        move || glyph().map_or_else(|| Arc::clone(&EMPTY), |glyph| glyph.svg),
+        move || glyph().map_or_else(|| EMPTY.get(), |glyph| glyph.svg),
         tint,
         || ObjectFit::Contain,
     )?;
@@ -98,9 +98,10 @@ fn square(side: f32) -> LayoutStyle {
     LayoutStyle::new().width(side).height(side).flex_shrink(0.0)
 }
 
-/// What an icon with nothing to draw yet draws: nothing, in a box of any size.
-static EMPTY: LazyLock<Arc<SvgData>> =
-    LazyLock::new(|| Arc::new(SvgData::from_baked_vector((1.0, 1.0), Vec::new())));
+telar::released_static! {
+    /// What an icon with nothing to draw yet draws: nothing, in a box of any size.
+    static EMPTY: Arc<SvgData> = Arc::new(SvgData::from_baked_vector((1.0, 1.0), Vec::new()));
+}
 
 /// The artwork for `name`, as it reads now.
 fn glyph(name: IconName) -> Rc<dyn Fn() -> Option<Glyph>> {

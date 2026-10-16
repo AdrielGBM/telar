@@ -20,12 +20,10 @@ pub(crate) fn resolve(id: &str) -> Option<Glyph> {
 
 /// Logs `message` the first time `id` is the subject of one, so a frame that redraws a missing icon sixty times a second says it once.
 fn warn_once(id: &str, message: impl FnOnce() -> String) {
-    use std::cell::RefCell;
     use std::collections::HashSet;
-    use std::mem::ManuallyDrop;
 
     telar::dropless_thread_local! {
-        static WARNED: ManuallyDrop<RefCell<HashSet<String>>> = ManuallyDrop::new(RefCell::new(HashSet::new()));
+        static WARNED: released HashSet<String> = HashSet::new();
     }
     let first = WARNED.with(|warned| warned.borrow_mut().insert(id.to_string()));
     if first {
@@ -38,8 +36,6 @@ pub use installed::RuntimeIcons;
 
 #[cfg(feature = "runtime")]
 mod installed {
-    use std::cell::RefCell;
-    use std::mem::ManuallyDrop;
     use std::sync::Arc;
 
     use icons_core::{IconError, IconId, IconSource};
@@ -62,8 +58,7 @@ mod installed {
 
     telar::dropless_thread_local! {
         // The loader owns the signals it handed out, which live on this thread.
-        static INSTALLED: ManuallyDrop<RefCell<Option<Installed>>> =
-            const { ManuallyDrop::new(RefCell::new(None)) };
+        static INSTALLED: released Option<Installed> = const { None };
     }
 
     /// Where the ids an application did not bake are resolved while it runs: a transport the icons arrive through, by default a memory cache that spares a second request within the run, and the set a bare name is read in.

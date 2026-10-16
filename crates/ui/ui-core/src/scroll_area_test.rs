@@ -375,7 +375,7 @@ pub(crate) fn make_scroll_area() -> ScrollArea {
 
 /// A wheel turn in the middle of the 400×300 viewport every fixture here uses.
 fn settle() {
-    let start = std::time::Instant::now();
+    let start = web_time::Instant::now();
     for frame in 1..=40 {
         motion_core::tick(start + std::time::Duration::from_millis(16 * frame));
     }
@@ -700,7 +700,7 @@ fn a_surface_that_cannot_show_the_gap_takes_the_notch_whole() {
 fn a_press_catches_a_notch_still_being_covered() {
     let mut sa = make_scroll_area();
     sa.on_event(&wheel_over(ScrollDelta::Lines { x: 0.0, y: -3.0 }));
-    let start = std::time::Instant::now();
+    let start = web_time::Instant::now();
     motion_core::tick(start);
     motion_core::tick(start + std::time::Duration::from_millis(16));
     let caught = sa.core.scroll_y.get();

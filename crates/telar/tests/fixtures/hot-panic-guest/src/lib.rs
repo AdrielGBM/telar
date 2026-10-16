@@ -1,12 +1,14 @@
 //! A hot-reload guest whose press handler panics, exporting what `app!` exports under `telar/hot-reload`: the `hot_panic` test in `telar` loads it into a host with its own copy of std.
 //!
-//! Its tree is a themed panel around a line of text that counts the moves it was handed, so mounting, painting and moving over it reach what an app's would: the reactive runtime, layout, the theme, the text measurer and the input registries. A secondary press adds a face, as a font fetched while an app runs is.
+//! Its tree is a themed panel around a line of text that counts the moves it was handed, a button and an icon nothing baked, so mounting, painting and moving over it reach what an app's would: the reactive runtime, layout, the theme, the text measurer, the input registries, and the slots of the plugins an app draws with. A secondary press adds a face, as a font fetched while an app runs is.
 
 use telar::{
-    App, AppCtx, Chord, Component, Event, EventResult, FontAsset, LayoutItem, LayoutStyle,
-    PointerButton, RectStyle, RenderNode, RwSignal, StyledContainer, Text, TextStyle, WindowConfig,
-    box_item, signal, use_theme_tokens,
+    App, AppCtx, Children, Chord, Component, Event, EventResult, FontAsset, LayoutItem,
+    LayoutStyle, PointerButton, RectStyle, RenderNode, RwSignal, StyledContainer, Text, TextStyle,
+    WindowConfig, box_item, signal, use_theme_tokens,
 };
+use telar_components::{ButtonProps, button};
+use telar_icons::{IconProps, icon};
 
 const ARRIVING_FACE: &[u8] =
     include_bytes!("../../../../../renderer/renderer-text/test-fonts/TelarTest.ttf");
@@ -25,10 +27,20 @@ impl PanicsOnPress {
             || TextStyle::new(14.0, use_theme_tokens().ink()),
         )
         .expect("the label builds");
+        let save = button(
+            ButtonProps::props().label("Save").build(),
+            Children::default(),
+        )
+        .expect("the button builds");
+        let missing = icon(
+            IconProps::props().name("fixture:unbaked").build(),
+            Children::default(),
+        )
+        .expect("the icon builds");
         let panel = StyledContainer::new(
             LayoutStyle::new().padding_all(8.0),
             |_| RectStyle::filled(use_theme_tokens().surface_alt(), 4.0),
-            vec![box_item(label)],
+            vec![box_item(label), save, missing],
         )
         .expect("the panel builds");
         Self {

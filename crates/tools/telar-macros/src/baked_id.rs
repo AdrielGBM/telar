@@ -103,14 +103,15 @@ fn expand_in(input: BakedIdInput, manifest_dir: &Path) -> syn::Result<TokenStrea
     Ok(quote! {
         {
             #tracked
-            #[allow(clippy::all)]
-            static __TELAR_BAKED: ::std::sync::LazyLock<::std::sync::Arc<#telar::#data_ty>> =
-                ::std::sync::LazyLock::new(|| {
+            #telar::released_static! {
+                #[allow(clippy::all)]
+                static __TELAR_BAKED: ::std::sync::Arc<#telar::#data_ty> = {
                     #[allow(unused_imports)]
                     use #telar::*;
                     ::std::sync::Arc::new(#init)
-                });
-            (#baked, ::std::sync::Arc::clone(&*__TELAR_BAKED), #monochrome)
+                };
+            }
+            (#baked, __TELAR_BAKED.get(), #monochrome)
         }
     })
 }

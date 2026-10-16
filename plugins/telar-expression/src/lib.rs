@@ -26,8 +26,6 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-use std::sync::LazyLock;
-
 mod bind;
 mod code;
 mod compile;
@@ -58,8 +56,10 @@ pub use value::{MAX_TEXT_BYTES, Value, format_number};
 ///
 /// Strict, which is the point of it for a launcher evaluating every keystroke: `2 + 3 firefox`, `sqrt` without brackets, `1/0` and anything that is not a number are errors, so text that is really an application's name is never mistaken for a sum.
 pub fn calculate(source: &str) -> Result<f64, Error> {
-    static STANDARD: LazyLock<Registry> = LazyLock::new(Registry::standard);
-    let compiled = compile(source, &Closed, &STANDARD)
+    reactive_core::released_static! {
+        static STANDARD: std::sync::Arc<Registry> = std::sync::Arc::new(Registry::standard());
+    }
+    let compiled = compile(source, &Closed, &STANDARD.get())
         .map_err(Errors::into_first)?
         .require(&Type::Number)?;
     match compiled.evaluate(&Closed)? {

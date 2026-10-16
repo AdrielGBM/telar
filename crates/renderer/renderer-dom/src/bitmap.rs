@@ -2,8 +2,6 @@
 //!
 //! Encoded through a detached canvas rather than a PNG encoder of Telar's own: the browser already has one, it runs at native speed, and the result is a string the document caches by itself. Encoding is the expensive part, so it happens once per distinct picture — which [`ImageData`] makes easy by addressing itself by content, so a widget that rebuilds the same bitmap every frame asks for the same entry.
 
-use std::cell::RefCell;
-use std::mem::ManuallyDrop;
 use std::rc::Rc;
 
 use renderer_core::ImageData;
@@ -14,7 +12,7 @@ use wasm_bindgen::{Clamped, JsCast};
 const LIMIT: usize = 64;
 
 reactive_local::dropless_thread_local! {
-    static CACHE: ManuallyDrop<RefCell<FxHashMap<u64, Rc<str>>>> = ManuallyDrop::new(RefCell::new(FxHashMap::default()));
+    static CACHE: released FxHashMap<u64, Rc<str>> = FxHashMap::default();
 }
 
 /// The `href` this picture is drawn from, a linked one's address, or `None` for one this backend cannot read — a texture the application owns and fills on the GPU has no pixels on this side to encode.

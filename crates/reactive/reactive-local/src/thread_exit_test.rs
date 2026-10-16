@@ -146,6 +146,18 @@ fn a_copy_not_left_to_its_host_keeps_its_statics() {
     assert_eq!(RAN.load(Ordering::Relaxed), 0);
 }
 
+#[test]
+fn a_released_static_is_built_once_and_kept_by_a_copy_not_left_to_its_host() {
+    static BUILT: AtomicU32 = AtomicU32::new(0);
+    crate::released_static! {
+        static CACHED: std::sync::Arc<u32> = std::sync::Arc::new(BUILT.fetch_add(1, Ordering::Relaxed));
+    }
+    let first = CACHED.get();
+    release_guest();
+    assert!(std::sync::Arc::ptr_eq(&first, &CACHED.get()));
+    assert_eq!(BUILT.load(Ordering::Relaxed), 1);
+}
+
 thread_local! {
     static ORDER: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
 }

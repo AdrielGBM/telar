@@ -38,7 +38,11 @@ fn a_baked_id_inlines_its_data_and_names_its_tint() {
     assert!(expanded.contains(":: telar :: SvgData"), "{expanded}");
     assert!(expanded.contains("use :: telar :: *"), "{expanded}");
     assert!(
-        expanded.contains("(\"mdi:home\" , :: std :: sync :: Arc :: clone"),
+        expanded.contains(":: telar :: released_static !"),
+        "freed when a host unloads the build: {expanded}"
+    );
+    assert!(
+        expanded.contains("(\"mdi:home\" , __TELAR_BAKED . get ()"),
         "{expanded}"
     );
     assert!(expanded.contains(", true)"), "{expanded}");

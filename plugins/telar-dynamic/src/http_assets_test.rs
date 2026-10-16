@@ -2,6 +2,8 @@
 //!
 //! The unit tests cover the cache-name rule and the URL template in isolation. What this proves is the part that only shows up wired together — that a read returns `Loading` without blocking, that the transport's answer reaches the signal through `drain_tasks` on this thread, and that the second run resolves from disk with no request reaching the server at all. A transport that only ever spun would pass every unit test in the crate.
 
+#![cfg(not(target_arch = "wasm32"))]
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::PathBuf;
