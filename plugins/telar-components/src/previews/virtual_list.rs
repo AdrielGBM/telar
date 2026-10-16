@@ -29,10 +29,7 @@ fn contacts() -> Vec<ListRow> {
 }
 
 fn framed(list: Box<dyn telar::LayoutItem>) -> Result<Container, LayoutError> {
-    Container::new(
-        LayoutStyle::column().width(280.0).height(320.0),
-        vec![list],
-    )
+    Container::new(LayoutStyle::column().width(280.0).height(320.0), vec![list])
 }
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {

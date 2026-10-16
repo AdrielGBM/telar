@@ -54,7 +54,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .matrix(Matrix::Named("themes"))
         .play(|canvas| {
             canvas.expect_text(WRAPPED)?;
-            canvas.type_text(by_role(Role::MultilineTextInput).named("Delivery notes"), "")?;
+            canvas.type_text(
+                by_role(Role::MultilineTextInput).named("Delivery notes"),
+                "",
+            )?;
             for _ in 0..6 {
                 canvas.press(Key::Named(NamedKey::ArrowDown))?;
             }
