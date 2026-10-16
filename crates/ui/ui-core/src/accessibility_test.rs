@@ -1097,3 +1097,69 @@ fn a_modal_layer_that_is_up_keeps_a_reader_inside_it() {
     assert!(read_on_its_own(&nodes, "Background notes"));
     assert!(nodes.iter().all(|n| n.role != Role::Dialog && !n.modal));
 }
+
+/// An item scrolled out of view is drawn where its text may land on another control; it is named by the text it draws, wherever that is.
+#[test]
+fn a_control_is_named_by_its_text_wherever_scrolling_put_it() {
+    reset_layout_runtime();
+    focus::clear();
+    let clip = |rect| DrawCommand::PushClip {
+        rect,
+        radius: renderer_core::BorderRadius::zero(),
+    };
+    let control = |role, width, height| {
+        StyledContainer::new(
+            LayoutStyle::new().width(width).height(height),
+            |_r| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .control(role)
+        .on_press(|| {})
+    };
+    let item = control(Role::Option, 120.0, 30.0);
+    let hidden_item = control(Role::Option, 120.0, 30.0);
+    let trigger = control(Role::Button, 60.0, 20.0);
+    let (item_node, hidden_node, trigger_node) = (
+        item.layout_node(),
+        hidden_item.layout_node(),
+        trigger.layout_node(),
+    );
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(item), box_item(hidden_item), box_item(trigger)],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(200.0),
+    )
+    .unwrap();
+
+    let trigger_box = crate::input_region::visible_rect(trigger_node).unwrap();
+    let nodes = snapshot(&[
+        open(item_node, rect(0.0, 0.0, 120.0, 30.0)),
+        text_at(
+            "Beside the trigger",
+            rect(trigger_box.x + 5.0, trigger_box.y + 2.0, 40.0, 16.0),
+        ),
+        DrawCommand::PopElement,
+        clip(rect(0.0, 0.0, 0.0, 0.0)),
+        open(hidden_node, rect(0.0, 30.0, 120.0, 30.0)),
+        text_at("Folded away", rect(0.0, 30.0, 60.0, 16.0)),
+        DrawCommand::PopElement,
+        DrawCommand::PopClip,
+        open(trigger_node, trigger_box),
+        text_at(
+            "Open",
+            rect(trigger_box.x + 5.0, trigger_box.y + 2.0, 30.0, 16.0),
+        ),
+        DrawCommand::PopElement,
+    ]);
+    assert_eq!(
+        names_of(&nodes, Role::Option),
+        ["Beside the trigger", "Folded away"]
+    );
+    assert_eq!(names_of(&nodes, Role::Button), ["Open"]);
+}

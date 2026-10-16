@@ -84,7 +84,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.click(by_role(Role::ComboBox).named("Option 1"))?;
             canvas.press(Key::Named(NamedKey::End))?;
             canvas.click(by_role(Role::Option).named("Option 40"))?;
-            canvas.expect_expanded(by_role(Role::ComboBox).named("Option 40"), false)
+            canvas.expect_expanded(by_role(Role::ComboBox).named("Option 40"), false)?;
+            canvas.click(by_role(Role::ComboBox).named("Option 40"))?;
+            canvas.expect_toggled(by_role(Role::Option).named("Option 40"), true)
         }),
     ]
 }

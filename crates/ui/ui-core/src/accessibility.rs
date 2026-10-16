@@ -134,6 +134,7 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 }),
                 drawn_at: Some(named.opened_at),
                 drawn_in: Some(named.node),
+                control: None,
             })
         })
         .chain(reading.text.iter().cloned())
@@ -142,15 +143,24 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
     for piece in pieces {
         let owner = match &piece.named_box {
             Some(NamedBox { wraps: Some(i), .. }) => Some(*i),
-            // The smallest control containing it, so a button inside a card is named by its own label.
-            _ => controls
-                .iter()
-                .enumerate()
-                .filter(|(_, (_, bounds))| contains(*bounds, piece.rect))
-                .filter(|(_, (control, _))| !piece.groups(control.node))
-                .filter(|(_, (control, _))| !piece.lies_under(control.node, &reading))
-                .min_by(|(_, (_, a)), (_, (_, b))| area(*a).total_cmp(&area(*b)))
-                .map(|(i, _)| i),
+            // The control it is drawn inside, or failing that the smallest one whose box contains it, so a button inside a card is named by its own label.
+            _ => piece
+                .control
+                .and_then(|node| {
+                    controls
+                        .iter()
+                        .position(|(control, _)| control.node == node)
+                })
+                .or_else(|| {
+                    controls
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, (_, bounds))| contains(*bounds, piece.rect))
+                        .filter(|(_, (control, _))| !piece.groups(control.node))
+                        .filter(|(_, (control, _))| !piece.lies_under(control.node, &reading))
+                        .min_by(|(_, (_, a)), (_, (_, b))| area(*a).total_cmp(&area(*b)))
+                        .map(|(i, _)| i)
+                }),
         };
         match owner {
             // A control the application named is called that, whatever it draws.
@@ -203,6 +213,8 @@ struct Piece {
     drawn_at: Option<usize>,
     /// The innermost box a run of text was drawn in, or the named box itself.
     drawn_in: Option<NodeId>,
+    /// The innermost control a run of text was drawn inside, which names it whatever scrolling or clipping has done to where it shows.
+    control: Option<NodeId>,
 }
 
 #[derive(Clone)]
@@ -385,7 +397,7 @@ struct Open {
     scope: Scope,
     /// The innermost named box, by its place in [`Reading::named`].
     named: Option<usize>,
-    in_control: bool,
+    control: Option<NodeId>,
     node: Option<NodeId>,
 }
 
@@ -428,9 +440,10 @@ impl Reading {
             let Open {
                 scope,
                 named,
-                in_control,
+                control,
                 node: innermost,
             } = open.last().cloned().unwrap_or_default();
+            let in_control = control.is_some();
             match command {
                 DrawCommand::PushClip { rect, .. } => {
                     let placed = renderer_core::transform_clip_rect(matrix, *rect);
@@ -477,7 +490,11 @@ impl Reading {
                     open.push(Open {
                         scope: inner,
                         named,
-                        in_control: in_control || controls.contains(&node),
+                        control: if controls.contains(&node) {
+                            Some(node)
+                        } else {
+                            control
+                        },
                         node: Some(node),
                     });
                 }
@@ -513,7 +530,7 @@ impl Reading {
                     if !in_control {
                         reading.drew_beside_controls(named);
                     }
-                    if clipped_away.last().copied().unwrap_or(false) {
+                    if !in_control && clipped_away.last().copied().unwrap_or(false) {
                         return;
                     }
                     reading.text.push(Piece {
@@ -525,6 +542,7 @@ impl Reading {
                         named_box: None,
                         drawn_at: Some(at),
                         drawn_in: innermost,
+                        control,
                     });
                     for span in spans.iter().flat_map(|spans| spans.iter()) {
                         let (Some(link), Some(words)) = (
@@ -542,6 +560,7 @@ impl Reading {
                             named_box: None,
                             drawn_at: Some(at),
                             drawn_in: innermost,
+                            control,
                         });
                     }
                 }
