@@ -8,13 +8,13 @@ use std::sync::Arc;
 use telar::{
     Accessible, AlignItems, Children, Clip, ClippedItem, Color, Container, Direction,
     JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey,
-    Props, Reactive, RectStyle, RwSignal, ScrollViewport, StyledContainer, Text, TextWrap,
-    VirtualList, box_item, current_direction,
+    Props, Reactive, RectStyle, RwSignal, StyledContainer, Text, TextWrap, box_item,
+    current_direction,
     focus::{self, FocusId, Role, SetPosition},
     memo, signal,
 };
 
-use crate::rows::{BuiltRows, RowState, cursor_row_paint, reveal_band};
+use crate::rows::{BuiltRows, RowPlaces, RowState, cursor_row_paint};
 use crate::shared;
 use crate::type_ahead::TypeAhead;
 
@@ -102,9 +102,9 @@ impl TreeNode {
     }
 }
 
-/// A tree of rows given as data, walked with the arrow keys, Home, End and type-ahead, and bound to a selection and a set of open branches.
+/// A tree of rows given as data, walked with the arrow keys, Home, End, Page Up, Page Down and type-ahead, and bound to a selection and a set of open branches.
 ///
-/// It fills the height its parent gives it and scrolls within it, building only the rows on screen, so a tree of thousands of nodes costs what a screenful does.
+/// It fills the height its parent gives it and scrolls within it, building only the rows on screen, so a tree of thousands of nodes costs what a screenful does. Every row stands at [`TreeViewTokens::row_height`], unless [`wrap`](Self::wrap) lets rows grow: then each is measured once built, and stands at the row height until then.
 #[derive(Props)]
 pub struct TreeViewProps {
     #[props(into, default)]
@@ -124,6 +124,9 @@ pub struct TreeViewProps {
     /// Builds what a row shows after its badge: a status dot, an action.
     #[props(some, default)]
     pub trailing: Option<TrailingBuilder>,
+    /// Whether a long label runs onto more lines instead of being cut off where its row ends, the row growing to hold it. Off (the default), every row is one row height tall, and nothing is measured.
+    #[props(default)]
+    pub wrap: bool,
     /// What a reader calls the tree.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
@@ -150,6 +153,7 @@ pub fn tree_view(
         on_select,
         select_branches,
         trailing,
+        wrap,
         label,
         color,
     } = props;
@@ -171,8 +175,7 @@ pub fn tree_view(
             search: RefCell::default(),
             on_select,
             select_branches,
-            viewport,
-            row_height,
+            places: RowPlaces::new(viewport, row_height, wrap),
             focus: Cell::new(None),
             built: BuiltRows::new(),
         });
@@ -181,10 +184,7 @@ pub fn tree_view(
             let tree = tree.clone();
             move || tree.flat.with(|flat| flat.0.as_ref().clone())
         };
-        let rows = VirtualList::new(
-            LayoutStyle::column(),
-            tree.viewport.clone(),
-            row_height,
+        let rows = tree.places.clone().list(
             OVERSCAN,
             source,
             |row: &Rc<Row>| {
@@ -284,8 +284,7 @@ struct Tree {
     search: RefCell<TypeAhead>,
     on_select: Option<SelectHandler>,
     select_branches: bool,
-    viewport: ScrollViewport,
-    row_height: f32,
+    places: RowPlaces,
     focus: Cell<Option<FocusId>>,
     built: BuiltRows<Arc<str>>,
 }
@@ -343,11 +342,7 @@ impl Tree {
     }
 
     fn reveal(&self, index: usize) {
-        reveal_band(
-            &self.viewport,
-            index as f32 * self.row_height,
-            self.row_height,
-        );
+        self.places.reveal(index);
     }
 
     /// What a click, Enter or Space does to the row at `index`: selects it, or opens or shuts it when it is a branch the tree does not select.
@@ -446,6 +441,11 @@ impl Tree {
             }
             Key::Named(NamedKey::Home) => self.move_to(&rows, 0),
             Key::Named(NamedKey::End) => self.move_to(&rows, last),
+            Key::Named(paging @ (NamedKey::PageDown | NamedKey::PageUp)) => {
+                let forward = *paging == NamedKey::PageDown;
+                let to = self.places.page(Some(at.unwrap_or(0)), rows.len(), forward);
+                self.move_to(&rows, to.unwrap_or(0));
+            }
             Key::Named(named) if *named == opens => {
                 let i = at.unwrap_or(0);
                 let row = &rows[i];
@@ -496,13 +496,14 @@ fn build_row(
     let id = row.node.id.clone();
     let mut content: Vec<Box<dyn LayoutItem>> = vec![caret(tree, &row)?];
     let label = row.node.label.clone();
+    let wrap = tree.places.text_wrap();
     let text = Text::declaring(
         move || label.to_string(),
         LayoutStyle::new()
             .flex_grow(1.0)
             .flex_shrink(1.0)
             .min_width(0.0),
-        |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap),
+        move |t| shared::control_text(t, 1.0).with_text_wrap(wrap),
     )?;
     content.push(box_item(ClippedItem::new(box_item(text), Clip::both())));
     if let Some(badge) = row.node.badge.clone() {
@@ -532,7 +533,7 @@ fn build_row(
             tree.take_focus();
         }
     };
-    let built = StyledContainer::new(row_box(level, tree.row_height), paint(false), content)?
+    let built = StyledContainer::new(row_box(level, &tree.places), paint(false), content)?
         .hover_style(paint(true))
         .presented(Role::TreeItem)
         .toggled(selected)
@@ -554,7 +555,7 @@ fn build_row(
 fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let column = LayoutStyle::row()
         .width(shared::icon_size())
-        .height(tree.row_height)
+        .height(tree.places.line_height())
         .flex_shrink(0.0)
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER);
@@ -583,15 +584,16 @@ fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError>
     Ok(box_item(caret))
 }
 
-fn row_box(level: u32, height: f32) -> LayoutStyle {
+fn row_box(level: u32, places: &RowPlaces) -> LayoutStyle {
     let tokens = TreeViewTokens::current();
-    LayoutStyle::row()
-        .align_items(AlignItems::CENTER)
-        .height(height)
-        .flex_shrink(0.0)
-        .padding_start(tokens.pad_x() + level.saturating_sub(1) as f32 * tokens.indent())
-        .padding_end(tokens.pad_x())
-        .gap(shared::gap_sm())
+    places.sized(
+        LayoutStyle::row()
+            .align_items(AlignItems::CENTER)
+            .flex_shrink(0.0)
+            .padding_start(tokens.pad_x() + level.saturating_sub(1) as f32 * tokens.indent())
+            .padding_end(tokens.pad_x())
+            .gap(shared::gap_sm()),
+    )
 }
 
 /// The selection and the pointer wash the row, at the theme's strengths and in the tree's colour when it was given one; the keyboard cursor rings it while the tree shows focus, so the two read apart when they are on different rows.

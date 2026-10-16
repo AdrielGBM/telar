@@ -9,15 +9,15 @@ use std::sync::Arc;
 use telar::{
     Accessible, AlignItems, Border, Children, Clip, ClippedItem, Color, Container, JustifyContent,
     Key, KeyNav, KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
-    NamedKey, Props, Reactive, Rect, RectStyle, RwSignal, ScrollViewport, ScrollbarStyle,
-    ShapeStyle, Size, SortDirection, StyledContainer, Text, TextWrap, VirtualList, box_item,
-    children, current_direction,
+    NamedKey, Props, Reactive, Rect, RectStyle, RwSignal, ScrollbarStyle, ShapeStyle, Size,
+    SortDirection, StyledContainer, Text, TextAlign, TextWrap, box_item, children,
+    current_direction,
     focus::{self, FocusId, Role, SetPosition},
     key_nav_apply_grid, memo, signal, track_layout,
 };
 
 use crate::resizable::{ResizeEdge, ResizeHandleProps, resize_handle};
-use crate::rows::{BuiltRows, RowState, cursor_row_paint, with_empty_state};
+use crate::rows::{BuiltRows, RowPlaces, RowState, counted, cursor_row_paint, with_empty_state};
 use crate::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
 use crate::{shared, strings};
 
@@ -138,6 +138,8 @@ pub struct Column {
     pub resizable: bool,
     /// The narrowest a resize leaves it, in logical px. 48 unless set.
     pub min_width: f32,
+    /// Whether its cells may run onto more lines than one: its text wraps at the column's width instead of being cut off where the cell ends, and a cell it [builds](Self::cell) is given the height it asks for, the row growing to hold its tallest cell. A table with such a column measures each row as it is built; one without stands every row at [`DataTableTokens::row_height`].
+    pub wrap: bool,
     /// Builds each cell's content in place of the row's text for this column.
     pub cell: Option<CellBuilder>,
     /// Orders two rows by this column, ascending, in place of comparing their text: numbers as numbers, anything else as words.
@@ -154,6 +156,7 @@ impl Column {
             sortable: false,
             resizable: false,
             min_width: MIN_COLUMN_WIDTH,
+            wrap: false,
             cell: None,
             compare: None,
         }
@@ -189,6 +192,11 @@ impl Column {
         self
     }
 
+    pub fn wrap(mut self, wrap: bool) -> Self {
+        self.wrap = wrap;
+        self
+    }
+
     pub fn cell(
         mut self,
         build: impl Fn(&TableRow) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
@@ -218,7 +226,7 @@ pub type TableRowHandler = Rc<dyn Fn(&TableRow)>;
 
 /// Rows of data under a header of columns, read by a screen reader as a grid.
 ///
-/// It fills the height its parent gives it and scrolls within it, header held at the top, building only the rows on screen, so a table of thousands of rows costs what a screenful does. Every row stands at [`DataTableTokens::row_height`].
+/// It fills the height its parent gives it and scrolls within it, header held at the top, building only the rows on screen, so a table of thousands of rows costs what a screenful does. Every row stands at [`DataTableTokens::row_height`], unless a column [wraps](Column::wrap): then each row is measured once built, as tall as its tallest cell, and stands at the row height until then.
 ///
 /// The keyboard walks a cursor from cell to cell — the arrows, Home and End along a row, Ctrl with them to the table's corners, Page Up and Page Down — and a reader hears the cell it is on. Enter, Space or a press on a row's cell chooses the row; on a sortable column's header they sort the rows by it, and again the other way. In [`SelectionMode::Multiple`] the grid says it takes several rows, each row says whether it is one of them, and Shift, Ctrl (Command on a Mac) and Space choose them as [`SelectionMode::Multiple`] says.
 ///
@@ -305,6 +313,7 @@ pub fn data_table(
         })
     };
     let row_height = DataTableTokens::current().row_height();
+    let wraps = columns.iter().any(|column| column.wrap);
 
     let mut made: Option<Rc<Table>> = None;
     let scroll = LayoutScrollArea::new_with(LayoutStyle::new().flex_grow(1.0), |viewport| {
@@ -317,7 +326,7 @@ pub fn data_table(
             selection,
             on_select,
             cursor: signal(None),
-            viewport,
+            places: RowPlaces::new(viewport, row_height, wraps).under_header(row_height),
             row_height,
             focus: Cell::new(None),
             built: BuiltRows::new(),
@@ -327,18 +336,15 @@ pub fn data_table(
         let header = header_row(&table)?;
         let source = {
             let table = table.clone();
-            move || placed(&table.rows())
+            move || counted(&table.rows())
         };
         let body = {
             let table = table.clone();
-            VirtualList::new(
-                LayoutStyle::column(),
-                table.viewport.clone(),
-                row_height,
+            table.places.clone().list(
                 OVERSCAN,
                 source,
-                |item: &(TableRow, SetPosition)| item.clone(),
-                move |_, (row, place)| body_row(&table, row, place),
+                |item: &(TableRow, usize)| item.clone(),
+                move |index, (row, count)| body_row(&table, row, line_place(index + 1, count)),
             )?
         };
         let content = Container::new(LayoutStyle::column(), children![header, body])?;
@@ -382,14 +388,6 @@ fn line_place(line: usize, rows: usize) -> SetPosition {
         position: line as u32 + 1,
         size: rows as u32 + 1,
     }
-}
-
-/// Each row with its place among the grid's, which a reader cannot count from the rows that are built.
-fn placed(rows: &[TableRow]) -> Vec<(TableRow, SetPosition)> {
-    rows.iter()
-        .enumerate()
-        .map(|(i, row)| (row.clone(), line_place(i + 1, rows.len())))
-        .collect()
 }
 
 /// The ids of the rows in the order shown: what a range and Ctrl+A choose among.
@@ -456,8 +454,8 @@ struct Table {
     on_select: Option<TableRowHandler>,
     /// Deliberately not the selection: walking the table chooses nothing.
     cursor: RwSignal<Option<At>>,
-    viewport: ScrollViewport,
-    /// The header's height too.
+    places: RowPlaces,
+    /// The header's height, and the least a row stands at.
     row_height: f32,
     focus: Cell<Option<FocusId>>,
     built: BuiltRows<At>,
@@ -569,33 +567,31 @@ impl Table {
 
     /// Scrolls the least distance that brings the cursor's cell into view, below the header that stays over the rows: down by the row's place, which is known whether or not it is built, and across by the cell's, once it is.
     fn reveal(&self, line: usize, at: &At) {
-        if self.viewport.rect().peek().height <= 0.0 {
+        if let Some(index) = line.checked_sub(1) {
+            self.places.reveal(index);
+        }
+        let viewport = self.places.viewport();
+        if viewport.rect().peek().height <= 0.0 {
             return;
         }
-        let (x, y) = self.viewport.peek_offset();
-        let across = self
+        let Some(cell) = self
             .built
             .get(at)
             .and_then(focus::node_of)
             .and_then(track_layout)
-            .map(|cell| cell.peek());
-        let (left, width) = across.map_or((x, 0.0), |cell| (cell.x, cell.width));
-        let band = match line {
-            0 => Rect::new(left, y, width, 0.0),
-            line => Rect::new(
-                left,
-                (line - 1) as f32 * self.row_height,
-                width,
-                self.row_height * 2.0,
-            ),
+        else {
+            return;
         };
-        self.viewport.reveal_rect(band, 0.0);
+        let cell = cell.peek();
+        let (_, y) = viewport.peek_offset();
+        viewport.reveal_rect(Rect::new(cell.x, y, cell.width, 0.0), 0.0);
     }
 
-    /// How many rows one Page Up or Page Down moves: as many as the view shows whole under the header.
-    fn page(&self) -> usize {
-        let height = self.viewport.rect().peek().height - self.row_height;
-        ((height / self.row_height).floor() as usize).max(1)
+    /// The line Page Down (`forward`) or Page Up takes the cursor to from `line`: on by as many rows as the view shows whole under the header.
+    fn paged(&self, line: usize, rows: usize, forward: bool) -> usize {
+        self.places
+            .page(line.checked_sub(1), rows, forward)
+            .map_or(0, |index| index + 1)
     }
 
     /// Does what `gesture` asks of the row at `index`, and tells [`on_select`](DataTableProps::on_select) of a row chosen on its own.
@@ -687,8 +683,8 @@ impl Table {
             Key::Named(NamedKey::End) if corner => (lines - 1, width - 1),
             Key::Named(NamedKey::Home) => (line, 0),
             Key::Named(NamedKey::End) => (line, width - 1),
-            Key::Named(NamedKey::PageDown) => ((line + self.page()).min(lines - 1), column),
-            Key::Named(NamedKey::PageUp) => (line.saturating_sub(self.page()), column),
+            Key::Named(NamedKey::PageDown) => (self.paged(line, rows.len(), true), column),
+            Key::Named(NamedKey::PageUp) => (self.paged(line, rows.len(), false), column),
             key => match KeyNav::default()
                 .grid()
                 .reading(current_direction())
@@ -712,8 +708,8 @@ impl Table {
     }
 }
 
-/// A cell's box in the column at `index`: its width, where its content sits across it, and the space from its edges.
-fn cell_box(table: &Table, index: usize) -> LayoutStyle {
+/// A cell's box in the column at `index`, in the header or in a row: its width, its height, where its content sits across it, and the space from its edges.
+fn cell_box(table: &Table, index: usize, header: bool) -> LayoutStyle {
     let style = LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(match table.columns[index].align {
@@ -721,22 +717,27 @@ fn cell_box(table: &Table, index: usize) -> LayoutStyle {
             CellAlign::Center => JustifyContent::CENTER,
             CellAlign::End => JustifyContent::END,
         })
-        .height(table.row_height)
         .min_width(0.0)
         .padding_horizontal(DataTableTokens::current().pad_x());
+    let style = match header {
+        true => style.height(table.row_height),
+        false => table.places.sized(style),
+    };
     match table.width_of(index) {
         ColumnWidth::Fixed(width) => style.width(width).flex_shrink(0.0),
         ColumnWidth::Flex(share) => style.flex_grow(share).flex_shrink(1.0).flex_basis(0.0),
     }
 }
 
-/// A row's box, the header's included. Its cells stop short of the lane the scroll area draws its vertical bar in, on the right in either direction, so the bar never covers the last column or takes the press meant for its splitter, and the row's wash still runs under it.
-fn line_box(height: f32) -> LayoutStyle {
-    LayoutStyle::row()
-        .align_items(AlignItems::CENTER)
-        .height(height)
+/// A row's box, the header's included: `height` tall, or for `None` as tall as its tallest cell with every cell stretched to it. Its cells stop short of the lane the scroll area draws its vertical bar in, on the right in either direction, so the bar never covers the last column or takes the press meant for its splitter, and the row's wash still runs under it.
+fn line_box(height: Option<f32>) -> LayoutStyle {
+    let style = LayoutStyle::row()
         .flex_shrink(0.0)
-        .padding_right(ScrollbarStyle::default().width)
+        .padding_right(ScrollbarStyle::default().width);
+    match height {
+        Some(height) => style.align_items(AlignItems::CENTER).height(height),
+        None => style.align_items(AlignItems::STRETCH),
+    }
 }
 
 /// `text` on one line, cut off where its cell ends.
@@ -752,13 +753,35 @@ fn cell_text(
     Ok(box_item(ClippedItem::new(box_item(text), Clip::both())))
 }
 
+/// `text` on as many lines as its cell's width needs, each set across it as `align` says.
+fn wrapped_text(text: Arc<str>, align: CellAlign) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let align = match align {
+        CellAlign::Start => TextAlign::Start,
+        CellAlign::Center => TextAlign::Center,
+        CellAlign::End => TextAlign::End,
+    };
+    let text = Text::declaring(
+        move || text.to_string(),
+        LayoutStyle::new()
+            .flex_grow(1.0)
+            .flex_shrink(1.0)
+            .min_width(0.0),
+        move |t| {
+            shared::control_text(t, 1.0)
+                .with_text_wrap(TextWrap::Wrap)
+                .with_text_align(align)
+        },
+    )?;
+    Ok(box_item(text))
+}
+
 /// The header: one cell naming each column, held at the top of the view while the rows scroll under it, on an opaque surface they cannot show through.
 fn header_row(table: &Rc<Table>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let cells = (0..table.width())
         .map(|index| header_cell(table, index))
         .collect::<Result<Vec<_>, _>>()?;
     let height = table.row_height;
-    let row_box = move || line_box(height).sticky().inset_top(0.0);
+    let row_box = move || line_box(Some(height)).sticky().inset_top(0.0);
     let header = StyledContainer::new(
         row_box(),
         |_r| {
@@ -902,8 +925,8 @@ fn presented_cell(
     content: Vec<Box<dyn LayoutItem>>,
 ) -> Result<StyledContainer, LayoutError> {
     let shape = {
-        let table = table.clone();
-        move || cell_box(&table, index)
+        let (table, header) = (table.clone(), at.row.is_none());
+        move || cell_box(&table, index, header)
     };
     let paint = {
         let (table, at) = (table.clone(), at.clone());
@@ -942,11 +965,11 @@ fn body_row(
         .iter()
         .enumerate()
         .map(|(index, column)| {
+            let text = row.cells.get(index).cloned().unwrap_or_default();
             let content = match &column.cell {
                 Some(build) => build(&row)?,
-                None => cell_text(row.cells.get(index).cloned().unwrap_or_default(), |t| {
-                    shared::control_text(t, 1.0)
-                })?,
+                None if column.wrap => wrapped_text(text, column.align)?,
+                None => cell_text(text, |t| shared::control_text(t, 1.0))?,
             };
             let at = At {
                 row: Some(row.id.clone()),
@@ -974,7 +997,7 @@ fn body_row(
         let (table, id) = (table.clone(), id.clone());
         move || table.selection.is_selected(&id)
     };
-    let height = table.row_height;
+    let height = (!table.places.is_measured()).then_some(table.row_height);
     let row_box = move || line_box(height);
     let built = StyledContainer::new(row_box(), paint(false), cells)?
         .styled_by(row_box)

@@ -547,6 +547,12 @@ impl LayoutEngine {
         Ok(self.tree.unrounded_layout(node).size.width)
     }
 
+    /// The height `node` was laid out at before its edges were rounded to whole pixels: where each box of a column stacked on the last ends depends on where it starts, so the rounded heights of the same box differ by a pixel from one place to the next.
+    pub fn unrounded_height(&self, node: NodeId) -> Result<f32, LayoutError> {
+        self.alive(node)?;
+        Ok(self.tree.unrounded_layout(node).size.height)
+    }
+
     /// The padding, margin, border and gap layout resolved for `node`, as of the last [`compute_layout`](Self::compute_layout).
     ///
     /// Read from what taffy computed rather than from the declared style, so a logical edge is already on its physical side, a percentage is already pixels, and a leading margin placed by the parent is included. A percentage gap is taken against the box's content area, as CSS does.

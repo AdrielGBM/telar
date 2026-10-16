@@ -66,7 +66,7 @@ enum Slot<Item> {
 pub struct VirtualList;
 
 impl VirtualList {
-    /// A list whose every row is `row_height` tall, building the rows on screen and `overscan` more on each side.
+    /// A list whose every row is `row_height` tall, building the rows on screen and `overscan` more on each side: until the viewport is laid out, the rows a surface's height of it would show, and every row only where the surface's size is not known either.
     ///
     /// `viewport` is the enclosing scroll area's live window (see [`crate::LayoutScrollArea::new_with`]). `build` constructs one row and receives its index alongside the item, since a virtualised row often wants to know where it sits.
     // `VirtualList` is only a name for this constructor, which builds a `ReactiveList`; `VirtualList::new` is public API and what the transpiler emits for a `virtual` loop.
@@ -94,7 +94,7 @@ impl VirtualList {
             let count = items.len();
             let (first, last) = visible_window(
                 offset_y.get(),
-                rect.get().height,
+                laid_out_or_surface(rect.get().height),
                 row_height,
                 count,
                 overscan,
@@ -142,7 +142,7 @@ impl VirtualList {
     ///
     /// Items are cloned out of the list the source last returned as their rows are built, which is why `Item` must be [`MeasuredItem`] (any `Clone` type) here and not in [`new`](Self::new): the source runs only when what it reads changes, not on every scroll.
     ///
-    /// Until the viewport is laid out it builds a surface's height of rows rather than every row: nothing taller than the surface can be on screen at once, and building and measuring a hundred thousand rows to learn that would cost what virtualising saves. Only where the surface's size is not known either does it build them all, as [`new`](Self::new) does.
+    /// Until the viewport is laid out it builds a surface's height of rows rather than every row, as [`new`](Self::new) does, and only where the surface's size is not known either does it build them all.
     pub fn measured<Item, Key, S, K, B>(
         container_style: LayoutStyle,
         rows: VirtualRows,
@@ -177,10 +177,7 @@ impl VirtualList {
             move || {
                 rows.revision.get();
                 let offset = offset_y.get();
-                let viewport_height = match rect.get().height {
-                    laid_out if laid_out > 0.0 => laid_out,
-                    _ => surface_size().height,
-                };
+                let viewport_height = laid_out_or_surface(rect.get().height);
                 let heights = rows.heights.borrow();
                 let keys = rows.keys.borrow();
                 let items = items.borrow();
@@ -231,6 +228,14 @@ pub trait MeasuredItem: Clone + 'static {}
 
 impl<Item: Clone + 'static> MeasuredItem for Item {}
 
+/// The height of a viewport laid out at `height`, or the surface's until it is: nothing taller than the surface can be on screen at once, and building a hundred thousand rows on the first frame to learn which of them are would cost what virtualising saves.
+fn laid_out_or_surface(height: f32) -> f32 {
+    match height {
+        laid_out if laid_out > 0.0 => laid_out,
+        _ => surface_size().height,
+    }
+}
+
 /// A gap keys on its height so a scroll that changes it rebuilds the spacer.
 fn gap_key(before: bool, height: f32) -> String {
     format!("gap:{before}:{height}")
@@ -264,6 +269,7 @@ pub struct VirtualRows(Rc<Rows>);
 struct Rows {
     viewport: ScrollViewport,
     estimate: f32,
+    header: Cell<f32>,
     heights: RefCell<HeightIndex>,
     keys: RefCell<Vec<u64>>,
     measured: RefCell<HashMap<u64, f32>>,
@@ -282,6 +288,7 @@ impl VirtualRows {
         Self(Rc::new(Rows {
             viewport,
             estimate: estimate.max(0.0),
+            header: Cell::new(0.0),
             heights: RefCell::default(),
             keys: RefCell::default(),
             measured: RefCell::default(),
@@ -289,6 +296,12 @@ impl VirtualRows {
             pending: Cell::new(None),
             settling: Cell::new(false),
         }))
+    }
+
+    /// Rows that stand under a header `height` px tall at the top of the scroll's content, held at the top of the view while they scroll under it: a table's column headings. Where a row stands counts the header, and the rows on screen and a row brought into view are the ones it leaves uncovered.
+    pub fn under_header(self, height: f32) -> Self {
+        self.0.header.set(height.max(0.0));
+        self
     }
 
     /// How many rows the list has.
@@ -303,7 +316,7 @@ impl VirtualRows {
 
     /// Where row `index` starts in the scroll's content.
     pub fn offset_of(&self, index: usize) -> f32 {
-        self.0.heights.borrow().offset_of(index)
+        self.0.header.get() + self.0.heights.borrow().offset_of(index)
     }
 
     /// How tall row `index` is: measured once it has been built, the estimate before.
@@ -311,12 +324,12 @@ impl VirtualRows {
         self.0.heights.borrow().height(index)
     }
 
-    /// The row standing at `offset` in the scroll's content.
+    /// The row standing at `offset` in the scroll's content, the first row for an offset in the header.
     pub fn row_at(&self, offset: f32) -> usize {
-        self.0.heights.borrow().row_at(offset)
+        self.0.heights.borrow().row_at(offset - self.0.header.get())
     }
 
-    /// The height of every row together: the content the scroll scrolls.
+    /// The height of every row together: the content the scroll scrolls, less the header.
     pub fn total_height(&self) -> f32 {
         self.0.heights.borrow().total()
     }
@@ -380,7 +393,8 @@ impl Rows {
         effect(move || {
             let placed = rect.get();
             if placed.width > 0.0 || placed.height > 0.0 {
-                rows.record(at, key, placed.height);
+                let height = layout_reactive::unrounded_height(node).unwrap_or(placed.height);
+                rows.record(at, key, height);
             }
         });
     }
@@ -434,7 +448,7 @@ impl Rows {
         };
         let (x, _) = self.viewport.peek_offset();
         self.viewport
-            .reveal_rect(Rect::new(x, top, 0.0, height), margin);
+            .reveal_rect(Rect::new(x, top, 0.0, height + self.header.get()), margin);
     }
 }
 

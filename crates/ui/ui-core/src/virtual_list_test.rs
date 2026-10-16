@@ -42,6 +42,7 @@ mod measured {
 
     use super::super::*;
     use crate::canvas::Canvas;
+    use crate::container::Container;
     use crate::context::{
         compute_layout, relayout_if_dirty, reset_layout_runtime, set_surface_size, track_layout,
     };
@@ -68,6 +69,10 @@ mod measured {
 
     impl Mounted {
         fn new(items: Vec<Item>, estimate: f32, overscan: f32) -> Self {
+            Self::under_header(items, estimate, overscan, 0.0)
+        }
+
+        fn under_header(items: Vec<Item>, estimate: f32, overscan: f32, header: f32) -> Self {
             reset_layout_runtime();
             set_surface_size(geometry_core::Size::new(WIDTH, VIEW));
             let items = signal(items);
@@ -79,7 +84,8 @@ mod measured {
                 LayoutScrollArea::new_with(
                     LayoutStyle::new().width(WIDTH).height(VIEW),
                     |viewport| {
-                        let rows = VirtualRows::new(viewport.clone(), estimate);
+                        let rows =
+                            VirtualRows::new(viewport.clone(), estimate).under_header(header);
                         handed = Some((viewport, rows.clone()));
                         let list = VirtualList::measured(
                             LayoutStyle::new().flex_column(),
@@ -104,7 +110,21 @@ mod measured {
                                 Ok(box_item(row))
                             },
                         )?;
-                        Ok(box_item(list))
+                        if header == 0.0 {
+                            return Ok(box_item(list));
+                        }
+                        let heading = Canvas::new(
+                            LayoutStyle::new()
+                                .height(header)
+                                .flex_shrink(0.0)
+                                .sticky()
+                                .inset_top(0.0),
+                            |_| RenderNode::Empty,
+                        )?;
+                        Ok(box_item(Container::new(
+                            LayoutStyle::new().flex_column(),
+                            vec![box_item(heading), box_item(list)],
+                        )?))
                     },
                 )
                 .unwrap()
@@ -300,6 +320,35 @@ mod measured {
     }
 
     #[test]
+    fn rows_under_a_held_header_stand_below_it_and_are_revealed_clear_of_it() {
+        const HEADER: f32 = 30.0;
+        let heights = (0..2000).map(|at| if at == 700 { 150.0 } else { 20.0 });
+        let list = Mounted::under_header(numbered(heights), 20.0, 40.0, HEADER);
+        assert_eq!(list.rows.offset_of(0), HEADER);
+        assert_eq!(list.laid_out(0).y, HEADER);
+        assert_eq!(list.laid_out(3).y, list.rows.offset_of(3));
+        assert_eq!(list.rows.row_at(10.0), 0, "an offset in the header");
+        assert_eq!(list.rows.row_at(HEADER + 45.0), 2);
+
+        list.rows.reveal(700, 0.0);
+        list.settle();
+        let row = list.laid_out(700);
+        assert_eq!(
+            list.on_screen(700) + row.height,
+            VIEW,
+            "brought in from above, it stops at the bottom edge"
+        );
+
+        list.rows.reveal(3, 0.0);
+        list.settle();
+        assert_eq!(
+            list.on_screen(3),
+            HEADER,
+            "brought in from below, it stops just under the header rather than behind it"
+        );
+    }
+
+    #[test]
     fn measurements_follow_their_keys_when_the_rows_change() {
         let heights = (0..100).map(|at| 10.0 + at as f32);
         let list = Mounted::new(numbered(heights), 30.0, 0.0);
@@ -413,6 +462,61 @@ mod fixed {
         assert_eq!(
             content.height, 20_000.0,
             "the spacers keep the content every row tall"
+        );
+    }
+}
+
+mod first_frame {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use layout_core::LayoutStyle;
+    use ui_tree::RenderNode;
+
+    use super::super::*;
+    use crate::canvas::Canvas;
+    use crate::context::{reset_layout_runtime, set_surface_size};
+    use crate::layout_item::box_item;
+    use crate::scroll_area::LayoutScrollArea;
+
+    fn built_before_layout(surface: geometry_core::Size) -> usize {
+        reset_layout_runtime();
+        set_surface_size(surface);
+        let built = Rc::new(Cell::new(0));
+        let counted = Rc::clone(&built);
+        let _scroll = LayoutScrollArea::new_with(LayoutStyle::new().width(200.0), |viewport| {
+            let list = VirtualList::new(
+                LayoutStyle::new().flex_column(),
+                viewport,
+                20.0,
+                2,
+                || (0..100_000).collect::<Vec<usize>>(),
+                |item: &usize| *item,
+                move |_, _| {
+                    counted.set(counted.get() + 1);
+                    Ok(box_item(Canvas::new(
+                        LayoutStyle::new().height(20.0),
+                        |_| RenderNode::Empty,
+                    )?))
+                },
+            )?;
+            Ok(box_item(list))
+        })
+        .unwrap();
+        built.get()
+    }
+
+    #[test]
+    fn a_fixed_list_not_yet_laid_out_builds_a_surface_s_height_of_rows() {
+        assert_eq!(
+            built_before_layout(geometry_core::Size::new(200.0, 100.0)),
+            8,
+            "visible_window(0, 100, 20, 100000, 2), not a hundred thousand rows"
+        );
+        assert_eq!(
+            built_before_layout(geometry_core::Size::new(0.0, 0.0)),
+            100_000,
+            "with no surface to go by, every row"
         );
     }
 }

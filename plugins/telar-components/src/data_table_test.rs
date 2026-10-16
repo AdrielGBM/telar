@@ -51,6 +51,18 @@ impl Mounted {
     }
 
     fn build(rows: Vec<TableRow>, height: f32, sort_rows: bool) -> Self {
+        Self::mount(rows, height, sort_rows, columns())
+    }
+
+    fn wrapping(rows: Vec<TableRow>, height: f32) -> Self {
+        let mut columns = columns();
+        columns[0] = columns[0].clone().wrap(true);
+        let mut mounted = Self::mount(rows, height, true, columns);
+        mounted.settle();
+        mounted
+    }
+
+    fn mount(rows: Vec<TableRow>, height: f32, sort_rows: bool, columns: Vec<Column>) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::focus::clear();
         let sort = signal(None);
@@ -59,7 +71,7 @@ impl Mounted {
         let (sorted, chosen) = (log.clone(), log.clone());
         let item = data_table(
             DataTableProps::props()
-                .columns(columns())
+                .columns(columns)
                 .rows(rows)
                 .sort(sort)
                 .sort_rows(sort_rows)
@@ -766,4 +778,276 @@ fn an_empty_table_shows_its_own_words_or_its_children() {
         }),
     );
     assert_eq!(grid.names(Role::Label), ["Drop files here"]);
+}
+
+fn wordy(count: usize) -> Vec<TableRow> {
+    (0..count)
+        .map(|i| {
+            let name = match i % 3 {
+                0 => format!("Row {i:03}"),
+                _ => format!("Row {i:03} has a name long enough to run onto more lines than one"),
+            };
+            TableRow::new(format!("r{i}"), [name, i.to_string(), "x".into()])
+        })
+        .collect()
+}
+
+fn long(count: usize) -> Vec<TableRow> {
+    (0..count)
+        .map(|i| {
+            TableRow::new(
+                format!("r{i}"),
+                [
+                    format!("Row {i:03} has a name long enough to wrap"),
+                    i.to_string(),
+                    "x".into(),
+                ],
+            )
+        })
+        .collect()
+}
+
+fn assert_wholly_in(top: f32, bottom: f32, cell: Rect, what: &str) {
+    assert!(
+        cell.y >= top - 0.5 && cell.y + cell.height <= bottom + 0.5,
+        "{what}: the cell at {}..{} is not wholly in the view between {top} and {bottom}",
+        cell.y,
+        cell.y + cell.height,
+    );
+}
+
+impl Mounted {
+    fn settled(&mut self) {
+        for _ in 0..4 {
+            self.settle();
+        }
+    }
+
+    fn key_settled(&mut self, key: NamedKey) {
+        self.key(key);
+        self.settled();
+    }
+
+    /// The cell the cursor is on, found by the grid's active descendant since cells of a column can share a name.
+    fn cursor_cell(&self) -> AccessNode {
+        let nodes = self.read();
+        let grid = nodes
+            .iter()
+            .find(|node| node.role == Role::Grid)
+            .expect("a grid");
+        let id = grid.active_descendant.expect("the cursor's cell is built");
+        nodes
+            .into_iter()
+            .find(|node| node.id == Some(id))
+            .expect("the active descendant is in the snapshot")
+    }
+
+    /// Where the rows show: under the header, down to the grid's bottom edge.
+    fn rows_view(&self) -> (f32, f32) {
+        let grid = self.of_role(Role::Grid).remove(0).rect;
+        let header = self.header("Name").rect;
+        (header.y + header.height, grid.y + grid.height)
+    }
+
+    fn assert_cursor_in_view(&self, what: &str) {
+        let (top, bottom) = self.rows_view();
+        assert_wholly_in(top, bottom, self.cursor_cell().rect, what);
+    }
+}
+
+#[test]
+fn a_wrapping_column_grows_its_row_to_hold_its_lines_and_the_header_keeps_its_height() {
+    let mounted = Mounted::wrapping(wordy(12), 400.0);
+    let row_height = DataTableTokens::current().row_height();
+    assert_eq!(mounted.header("Name").rect.height, row_height);
+    let rows = mounted.of_role(Role::Row);
+    let cells = mounted.of_role(Role::GridCell);
+    let body: Vec<_> = rows
+        .iter()
+        .filter(|row| row.position.map(|place| place.position) != Some(1))
+        .collect();
+    assert_eq!(
+        body[0].rect.height, row_height,
+        "a row whose cells fit one line"
+    );
+    assert!(
+        body[1].rect.height > row_height * 1.5,
+        "a row with a wrapped cell is taller: {}",
+        body[1].rect.height
+    );
+    let second: Vec<_> = cells.iter().skip(3).take(3).collect();
+    assert!(
+        second
+            .iter()
+            .all(|cell| (cell.rect.height - body[1].rect.height).abs() < 0.5),
+        "every cell of the row stands as tall as it: {second:?}"
+    );
+    for pair in body.windows(2) {
+        let (above, below) = (pair[0].rect, pair[1].rect);
+        assert!(
+            (above.y + above.height - below.y).abs() < 0.5,
+            "each row starts where the one above it ends"
+        );
+    }
+}
+
+#[test]
+fn a_wrapping_table_brings_the_cursor_s_cell_wholly_into_view_below_its_header() {
+    let mut mounted = Mounted::wrapping(wordy(200), 240.0);
+    let grid = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::Grid)
+        .expect("a grid");
+    telar::focus::request(grid.id);
+    mounted.settled();
+    for step in 0..30 {
+        mounted.key_settled(NamedKey::ArrowDown);
+        mounted.assert_cursor_in_view(&format!("down {step}"));
+    }
+    let ctrl = telar::ModifiersState {
+        is_ctrl: true,
+        ..Default::default()
+    };
+    mounted.send(Event::ModifiersChanged { modifiers: ctrl });
+    mounted.send(telar::testing::key_with(Key::Named(NamedKey::End), ctrl));
+    mounted.send(Event::ModifiersChanged {
+        modifiers: Default::default(),
+    });
+    mounted.settled();
+    mounted.key_settled(NamedKey::Home);
+    assert_eq!(mounted.cursor_cell().name, wordy(200)[199].cell(0));
+    mounted.assert_cursor_in_view("the last row");
+    let (_, bottom) = mounted.rows_view();
+    let last = mounted.cursor_cell().rect;
+    assert!(
+        (last.y + last.height - bottom).abs() < 0.5,
+        "brought in from above, it stops at the bottom edge"
+    );
+    for step in 0..12 {
+        mounted.key_settled(NamedKey::ArrowUp);
+        mounted.assert_cursor_in_view(&format!("up {step}"));
+    }
+    mounted.key_settled(NamedKey::PageUp);
+    mounted.assert_cursor_in_view("a page up");
+    let (top, _) = mounted.rows_view();
+    assert!(
+        (mounted.cursor_cell().rect.y - top).abs() < 0.5,
+        "brought in from below, it stops just under the header, not behind it"
+    );
+}
+
+#[test]
+fn page_down_and_up_move_a_wrapping_table_by_the_rows_its_view_shows_whole() {
+    let mut mounted = Mounted::wrapping(long(100), 240.0);
+    let grid = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::Grid)
+        .expect("a grid");
+    telar::focus::request(grid.id);
+    mounted.settled();
+    let tall = mounted.cursor_cell().rect.height;
+    assert!(
+        tall > DataTableTokens::current().row_height(),
+        "the rows wrap"
+    );
+    let (top, bottom) = mounted.rows_view();
+    let page = ((bottom - top) / tall).floor() as usize;
+    let at = |i: usize| long(100)[i].cell(0).to_string();
+    mounted.key_settled(NamedKey::PageDown);
+    assert_eq!(mounted.cursor_cell().name, at(page));
+    mounted.assert_cursor_in_view("a page down");
+    mounted.key_settled(NamedKey::PageDown);
+    assert_eq!(mounted.cursor_cell().name, at(page * 2));
+    mounted.key_settled(NamedKey::PageUp);
+    assert_eq!(mounted.cursor_cell().name, at(page));
+    mounted.assert_cursor_in_view("a page back up");
+    mounted.key_settled(NamedKey::PageUp);
+    mounted.key_settled(NamedKey::PageUp);
+    assert_eq!(
+        mounted.cursor_cell().name,
+        "Name",
+        "a page up from the first page reaches the header"
+    );
+}
+
+#[test]
+fn a_wrapping_table_s_rows_say_their_index_among_all_the_rows() {
+    let mut mounted = Mounted::wrapping(wordy(300), 240.0);
+    let grid = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::Grid)
+        .expect("a grid");
+    telar::focus::request(grid.id);
+    mounted.settled();
+    for _ in 0..150 {
+        mounted.key(NamedKey::PageDown);
+    }
+    mounted.settled();
+    let places: Vec<Option<SetPosition>> = mounted
+        .of_role(Role::Row)
+        .into_iter()
+        .map(|row| row.position)
+        .collect();
+    assert!(places.len() < 300, "only a screenful is built");
+    assert_eq!(
+        places
+            .iter()
+            .max_by_key(|place| place.map(|place| place.position)),
+        Some(&Some(SetPosition {
+            level: 1,
+            position: 301,
+            size: 301,
+        }))
+    );
+}
+
+#[test]
+fn narrowing_a_wrapping_column_runs_its_cells_onto_more_lines() {
+    let widths = signal(ColumnWidths::new());
+    let mut columns = resizable_columns();
+    columns[0] = columns[0].clone().wrap(true);
+    let mut grid = Grid::mount(
+        DataTableProps::props()
+            .columns(columns)
+            .rows(long(20))
+            .widths(widths)
+            .selection_mode(SelectionMode::Multiple)
+            .label("Files")
+            .build(),
+        Children::default(),
+    );
+    for _ in 0..4 {
+        grid.settle();
+    }
+    let first = |grid: &Grid| {
+        grid.read()
+            .into_iter()
+            .filter(|node| node.role == Role::Row)
+            .nth(1)
+            .expect("a row under the header")
+            .rect
+            .height
+    };
+    let before = first(&grid);
+    widths.set(ColumnWidths::from([(Arc::from("name"), 100.0)]));
+    for _ in 0..4 {
+        grid.settle();
+    }
+    assert!(
+        first(&grid) > before,
+        "{} is no taller than {before}",
+        first(&grid)
+    );
+    grid.focus(Role::Grid);
+    grid.key(Key::Named(NamedKey::Space), plain());
+    grid.key(Key::Named(NamedKey::PageDown), shift());
+    let chosen = grid
+        .read()
+        .into_iter()
+        .filter(|node| node.role == Role::Row && node.toggled == Some(true))
+        .count();
+    assert!(
+        chosen > 1,
+        "Shift with Page Down chose a page of rows: {chosen}"
+    );
 }

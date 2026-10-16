@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use telar::testing::{key_with, lay_out, named, press, release, route};
-use telar::{ComponentList, DrawCommand, Event, relayout_if_dirty};
+use telar::{ComponentList, DrawCommand, Event, Rect, relayout_if_dirty};
 
 use super::*;
 
@@ -44,6 +44,16 @@ impl Mounted {
     }
 
     fn build(items: Vec<TreeNode>, height: f32, select_branches: bool) -> Self {
+        Self::mount(items, height, select_branches, false)
+    }
+
+    fn wrapping(items: Vec<TreeNode>, height: f32) -> Self {
+        let mut mounted = Self::mount(items, height, true, true);
+        mounted.settle();
+        mounted
+    }
+
+    fn mount(items: Vec<TreeNode>, height: f32, select_branches: bool, wrap: bool) -> Self {
         crate::test_support::fresh_layout_runtime();
         ui_core::reset_keyboard();
         focus::clear();
@@ -61,6 +71,7 @@ impl Mounted {
                 }))
                 .label("Components")
                 .select_branches(select_branches)
+                .wrap(wrap)
                 .build(),
             Children::default(),
         )
@@ -90,6 +101,13 @@ impl Mounted {
 
     fn key(&mut self, key: NamedKey) {
         self.send(named(key));
+    }
+
+    fn settle(&mut self) {
+        for _ in 0..8 {
+            relayout_if_dirty();
+            let _ = self.tree.commands();
+        }
     }
 
     fn keys(&mut self, keys: &[NamedKey]) {
@@ -604,4 +622,179 @@ fn a_tree_s_rows_are_as_tall_as_every_other_list_s() {
         "{rows:?}"
     );
     drop(tree);
+}
+
+fn wordy(count: usize) -> Vec<TreeNode> {
+    (0..count)
+        .map(|i| {
+            let label = match i % 3 {
+                0 => format!("Node {i:03}"),
+                _ => format!("Node {i:03} has a name long enough to run onto more lines than one"),
+            };
+            TreeNode::new(format!("n{i}"), label)
+        })
+        .collect()
+}
+
+fn long(count: usize) -> Vec<TreeNode> {
+    (0..count)
+        .map(|i| {
+            TreeNode::new(
+                format!("n{i}"),
+                format!("Node {i:03} has a name long enough to run onto a second line"),
+            )
+        })
+        .collect()
+}
+
+/// The tree's view and the rows built in it, by name, in window space.
+fn laid_rows(tree: &Mounted) -> (Rect, Vec<(String, Rect)>) {
+    let nodes = ui_core::accessibility::snapshot(&tree.tree.commands());
+    let view = nodes
+        .iter()
+        .find(|node| node.role == Role::Tree)
+        .expect("a tree")
+        .rect;
+    let rows = nodes
+        .into_iter()
+        .filter(|node| node.role == Role::TreeItem)
+        .map(|node| (node.name, node.rect))
+        .collect();
+    (view, rows)
+}
+
+fn cursor_rect(tree: &Mounted) -> Rect {
+    let name = pointed(tree).expect("the cursor's row is built");
+    let (_, rows) = laid_rows(tree);
+    rows.into_iter()
+        .find(|(row, _)| *row == name)
+        .map(|(_, rect)| rect)
+        .unwrap_or_else(|| panic!("`{name}` is drawn"))
+}
+
+fn assert_wholly_in(view: Rect, row: Rect, what: &str) {
+    assert!(
+        row.y >= view.y - 0.5 && row.y + row.height <= view.y + view.height + 0.5,
+        "{what}: the row at {}..{} is not wholly in the view at {}..{}",
+        row.y,
+        row.y + row.height,
+        view.y,
+        view.y + view.height
+    );
+}
+
+#[test]
+fn a_wrapping_tree_grows_a_row_to_hold_its_label_and_leaves_a_short_one_a_row_tall() {
+    let tree = Mounted::wrapping(wordy(12), 400.0);
+    let (_, rows) = laid_rows(&tree);
+    let height = |name: &str| {
+        rows.iter()
+            .find(|(row, _)| row.starts_with(name))
+            .map(|(_, rect)| rect.height)
+            .unwrap_or_else(|| panic!("`{name}` is drawn among {rows:?}"))
+    };
+    assert_eq!(height("Node 000"), row_height(), "a one-line row");
+    assert!(
+        height("Node 001") > row_height() * 1.5,
+        "a wrapped row is taller: {}",
+        height("Node 001")
+    );
+    let ordered: Vec<f32> = rows.iter().map(|(_, rect)| rect.y).collect();
+    assert!(
+        ordered.windows(2).all(|pair| pair[0] < pair[1]),
+        "the rows stack: {ordered:?}"
+    );
+    for pair in rows.windows(2) {
+        let (above, below) = (pair[0].1, pair[1].1);
+        assert!(
+            (above.y + above.height - below.y).abs() < 0.5,
+            "each row starts where the one above it ends: {pair:?}"
+        );
+    }
+}
+
+#[test]
+fn a_wrapping_tree_brings_the_cursor_s_row_wholly_into_view_however_tall() {
+    let mut tree = Mounted::wrapping(wordy(200), 200.0);
+    focus_newest_tree();
+    tree.settle();
+    for step in 0..30 {
+        tree.key(NamedKey::ArrowDown);
+        tree.settle();
+        let (view, _) = laid_rows(&tree);
+        assert_wholly_in(view, cursor_rect(&tree), &format!("down {step}"));
+    }
+    tree.key(NamedKey::End);
+    tree.settle();
+    assert_eq!(
+        pointed(&tree).as_deref(),
+        Some(wordy(200)[199].label.as_ref())
+    );
+    let (view, _) = laid_rows(&tree);
+    let last = cursor_rect(&tree);
+    assert_wholly_in(view, last, "the last row");
+    assert!(
+        (last.y + last.height - (view.y + view.height)).abs() < 0.5,
+        "brought in from above, it stops at the bottom edge"
+    );
+    for step in 0..10 {
+        tree.key(NamedKey::ArrowUp);
+        tree.settle();
+        let (view, _) = laid_rows(&tree);
+        assert_wholly_in(view, cursor_rect(&tree), &format!("up {step}"));
+    }
+    tree.key(NamedKey::Home);
+    tree.settle();
+    let (view, _) = laid_rows(&tree);
+    assert!(
+        (cursor_rect(&tree).y - view.y).abs() < 0.5,
+        "the first row at the top"
+    );
+}
+
+#[test]
+fn page_down_and_up_move_a_wrapping_tree_by_the_rows_its_view_shows_whole() {
+    let mut tree = Mounted::wrapping(long(100), 200.0);
+    focus_newest_tree();
+    tree.settle();
+    tree.key(NamedKey::Home);
+    tree.settle();
+    let (view, rows) = laid_rows(&tree);
+    let tall = rows[0].1.height;
+    assert!(tall > row_height(), "the rows wrap: {tall}");
+    let page = (view.height / tall).floor() as usize;
+    tree.key(NamedKey::PageDown);
+    tree.settle();
+    let at = |i: usize| long(100)[i].label.to_string();
+    assert_eq!(pointed(&tree), Some(at(page)));
+    assert_wholly_in(view, cursor_rect(&tree), "a page down");
+    tree.key(NamedKey::PageDown);
+    tree.settle();
+    assert_eq!(pointed(&tree), Some(at(page * 2)));
+    assert_wholly_in(view, cursor_rect(&tree), "two pages down");
+    tree.key(NamedKey::PageUp);
+    tree.settle();
+    assert_eq!(pointed(&tree), Some(at(page)));
+    assert_wholly_in(view, cursor_rect(&tree), "a page back up");
+}
+
+#[test]
+fn a_wrapping_tree_s_rows_say_where_they_sit() {
+    let mut tree = Mounted::wrapping(long(100), 200.0);
+    focus_newest_tree();
+    tree.key(NamedKey::End);
+    tree.settle();
+    let last = focus::exposed()
+        .into_iter()
+        .filter(|exposed| exposed.role == Role::TreeItem)
+        .filter_map(|exposed| exposed.position)
+        .max_by_key(|place| place.position);
+    assert_eq!(
+        last,
+        Some(SetPosition {
+            level: 1,
+            position: 100,
+            size: 100,
+        })
+    );
 }

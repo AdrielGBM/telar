@@ -144,7 +144,9 @@ stores the handle in a `signal(None::<VirtualRows>)` so the view can call `rows.
 `view_progress:$p` writes into a signal. Unbuilt rows stand at the estimate, built ones are measured after layout, and
 the first row on screen holds still while estimates are corrected. The items must be `Clone`, since rows are built from
 clones of what the source returned; a type that is not is refused with a message naming `Clone`. Give the
-rows their spacing inside the row rather than as a `gap`, so that measuring counts it.
+rows their spacing inside the row rather than as a `gap`, so that measuring counts it. Rows under a header held at
+the top of the scroll, a table's column headings, are `VirtualRows::new(viewport, estimate).under_header(height)`:
+their places count the header, and a row brought into view stops below it rather than behind it.
 
 ### `@class` and `SurfaceStyle`
 

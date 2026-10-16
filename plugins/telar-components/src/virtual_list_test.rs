@@ -28,6 +28,16 @@ struct Mounted {
 
 impl Mounted {
     fn new(items: Vec<ListRow>, height: f32) -> Self {
+        Self::mount(items, height, false)
+    }
+
+    fn wrapping(items: Vec<ListRow>, height: f32) -> Self {
+        let mounted = Self::mount(items, height, true);
+        mounted.settle();
+        mounted
+    }
+
+    fn mount(items: Vec<ListRow>, height: f32, wrap: bool) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::focus::clear();
         let selected = signal(None);
@@ -41,6 +51,7 @@ impl Mounted {
                     sink.borrow_mut().push(row.id.to_string())
                 }))
                 .label("Fruit")
+                .wrap(wrap)
                 .build(),
             Children::default(),
         )
@@ -75,6 +86,13 @@ impl Mounted {
 
     fn key(&mut self, key: NamedKey) {
         self.send(named(key));
+    }
+
+    fn settle(&self) {
+        for _ in 0..8 {
+            relayout_if_dirty();
+            let _ = self.tree.commands();
+        }
     }
 
     fn read(&self) -> Vec<AccessNode> {
@@ -268,6 +286,10 @@ struct Several {
 
 impl Several {
     fn new(items: Vec<ListRow>) -> Self {
+        Self::mount(items, false)
+    }
+
+    fn mount(items: Vec<ListRow>, wrap: bool) -> Self {
         crate::test_support::fresh_layout_runtime();
         ui_core::reset_keyboard();
         telar::focus::clear();
@@ -287,6 +309,7 @@ impl Several {
                     picks.borrow_mut().push(format!("select {}", row.id))
                 }))
                 .label("Fruit")
+                .wrap(wrap)
                 .build(),
             Children::default(),
         )
@@ -542,4 +565,259 @@ fn an_empty_list_shows_its_own_words_or_its_children() {
     lay_out(built.layout_node(), 240.0, 200.0);
     let built = ComponentList::new(built);
     assert_eq!(statuses(&built), ["Add a fruit"]);
+}
+
+fn wordy(count: usize) -> Vec<ListRow> {
+    (0..count)
+        .map(|i| {
+            let label = match i % 3 {
+                0 => format!("Row {i:03}"),
+                _ => format!("Row {i:03} has a label long enough to run onto more lines than one"),
+            };
+            ListRow::new(format!("row-{i}"), label)
+        })
+        .collect()
+}
+
+fn long(count: usize) -> Vec<ListRow> {
+    (0..count)
+        .map(|i| {
+            ListRow::new(
+                format!("row-{i}"),
+                format!("Row {i:03} has a label long enough to run onto a second line"),
+            )
+        })
+        .collect()
+}
+
+/// The list's view and the options built in it, by name, in window space.
+fn laid_options(tree: &ComponentList) -> (telar::Rect, Vec<(String, telar::Rect)>) {
+    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let view = nodes
+        .iter()
+        .find(|node| node.role == Role::ListBox)
+        .expect("a list box")
+        .rect;
+    let options = nodes
+        .into_iter()
+        .filter(|node| node.role == Role::Option)
+        .map(|node| (node.name, node.rect))
+        .collect();
+    (view, options)
+}
+
+impl Mounted {
+    fn cursor_rect(&self) -> telar::Rect {
+        let name = self.pointed().expect("the cursor's row is built");
+        let (_, options) = laid_options(&self.tree);
+        options
+            .into_iter()
+            .find(|(option, _)| *option == name)
+            .map(|(_, rect)| rect)
+            .unwrap_or_else(|| panic!("`{name}` is drawn"))
+    }
+
+    fn view(&self) -> telar::Rect {
+        laid_options(&self.tree).0
+    }
+}
+
+fn assert_wholly_in(view: telar::Rect, row: telar::Rect, what: &str) {
+    assert!(
+        row.y >= view.y - 0.5 && row.y + row.height <= view.y + view.height + 0.5,
+        "{what}: the row at {}..{} is not wholly in the view at {}..{}",
+        row.y,
+        row.y + row.height,
+        view.y,
+        view.y + view.height
+    );
+}
+
+#[test]
+fn a_wrapping_list_grows_a_row_to_hold_its_label_and_leaves_a_short_one_a_row_tall() {
+    let mounted = Mounted::wrapping(wordy(12), 400.0);
+    let (_, options) = laid_options(&mounted.tree);
+    let height = |name: &str| {
+        options
+            .iter()
+            .find(|(option, _)| option.starts_with(name))
+            .map(|(_, rect)| rect.height)
+            .unwrap_or_else(|| panic!("`{name}` is drawn among {options:?}"))
+    };
+    let row_height = ListTokens::current().row_height();
+    assert_eq!(height("Row 000"), row_height, "a one-line row");
+    assert!(
+        height("Row 001") > row_height * 1.5,
+        "a wrapped row is taller"
+    );
+    for pair in options.windows(2) {
+        let (above, below) = (pair[0].1, pair[1].1);
+        assert!(
+            (above.y + above.height - below.y).abs() < 0.5,
+            "each row starts where the one above it ends: {pair:?}"
+        );
+    }
+}
+
+#[test]
+fn a_row_builder_s_lines_are_given_the_height_they_ask_for_in_a_wrapping_list() {
+    crate::test_support::fresh_layout_runtime();
+    let item = virtual_list(
+        VirtualListProps::props()
+            .items(fruit())
+            .wrap(true)
+            .row(Rc::new(|row: &ListRow| {
+                let (name, detail) = (row.label.clone(), format!("{} in stock", row.id));
+                let lines = vec![
+                    box_item(Text::declaring(
+                        move || name.to_string(),
+                        LayoutStyle::new(),
+                        |t| t,
+                    )?),
+                    box_item(Text::declaring(
+                        move || detail.clone(),
+                        LayoutStyle::new(),
+                        |t| t,
+                    )?),
+                ];
+                Ok(box_item(telar::Container::new(
+                    LayoutStyle::column(),
+                    lines,
+                )?))
+            }))
+            .build(),
+        Children::default(),
+    )
+    .unwrap();
+    lay_out(item.layout_node(), 240.0, 300.0);
+    let tree = ComponentList::new(item);
+    for _ in 0..8 {
+        relayout_if_dirty();
+        let _ = tree.commands();
+    }
+    let (_, options) = laid_options(&tree);
+    assert_eq!(options.len(), 4);
+    let row_height = ListTokens::current().row_height();
+    assert!(
+        options.iter().all(|(_, rect)| rect.height > row_height),
+        "two lines and the space round them: {options:?}"
+    );
+}
+
+#[test]
+fn a_wrapping_list_brings_the_cursor_s_row_wholly_into_view_however_tall() {
+    let mut mounted = Mounted::wrapping(wordy(200), 200.0);
+    let list = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::ListBox)
+        .expect("a list box");
+    telar::focus::request(list.id);
+    mounted.settle();
+    for step in 0..30 {
+        mounted.key(NamedKey::ArrowDown);
+        mounted.settle();
+        assert_wholly_in(
+            mounted.view(),
+            mounted.cursor_rect(),
+            &format!("down {step}"),
+        );
+    }
+    mounted.key(NamedKey::End);
+    mounted.settle();
+    assert_eq!(
+        mounted.pointed().as_deref(),
+        Some(wordy(200)[199].label.as_ref())
+    );
+    let (view, last) = (mounted.view(), mounted.cursor_rect());
+    assert_wholly_in(view, last, "the last row");
+    assert!(
+        (last.y + last.height - (view.y + view.height)).abs() < 0.5,
+        "brought in from above, it stops at the bottom edge"
+    );
+    for step in 0..10 {
+        mounted.key(NamedKey::ArrowUp);
+        mounted.settle();
+        assert_wholly_in(mounted.view(), mounted.cursor_rect(), &format!("up {step}"));
+    }
+    mounted.key(NamedKey::Home);
+    mounted.settle();
+    assert!((mounted.cursor_rect().y - mounted.view().y).abs() < 0.5);
+}
+
+#[test]
+fn page_down_and_up_move_a_wrapping_list_by_the_rows_its_view_shows_whole() {
+    let mut mounted = Mounted::wrapping(long(100), 200.0);
+    let list = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::ListBox)
+        .expect("a list box");
+    telar::focus::request(list.id);
+    mounted.settle();
+    mounted.key(NamedKey::Home);
+    mounted.settle();
+    let tall = mounted.cursor_rect().height;
+    assert!(tall > ListTokens::current().row_height(), "the rows wrap");
+    let page = (mounted.view().height / tall).floor() as usize;
+    let at = |i: usize| long(100)[i].label.to_string();
+    mounted.key(NamedKey::PageDown);
+    mounted.settle();
+    assert_eq!(mounted.pointed(), Some(at(page)));
+    assert_wholly_in(mounted.view(), mounted.cursor_rect(), "a page down");
+    mounted.key(NamedKey::PageDown);
+    mounted.settle();
+    assert_eq!(mounted.pointed(), Some(at(page * 2)));
+    mounted.key(NamedKey::PageUp);
+    mounted.settle();
+    assert_eq!(mounted.pointed(), Some(at(page)));
+    assert_wholly_in(mounted.view(), mounted.cursor_rect(), "a page back up");
+}
+
+#[test]
+fn a_wrapping_list_s_options_say_their_place_among_all_the_rows() {
+    let mut mounted = Mounted::wrapping(wordy(200), 120.0);
+    let list = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::ListBox)
+        .expect("a list box");
+    telar::focus::request(list.id);
+    mounted.key(NamedKey::End);
+    mounted.settle();
+    let places: Vec<Option<SetPosition>> = mounted
+        .read()
+        .into_iter()
+        .filter(|node| node.role == Role::Option)
+        .map(|node| node.position)
+        .collect();
+    assert!(places.len() < 200, "only a screenful is built");
+    assert_eq!(
+        places.last(),
+        Some(&Some(SetPosition {
+            level: 1,
+            position: 200,
+            size: 200,
+        }))
+    );
+}
+
+#[test]
+fn shift_with_page_down_chooses_a_page_of_wrapped_rows() {
+    let mut list = Several::mount(long(50), true);
+    let id = telar::focus::exposed()
+        .into_iter()
+        .find(|exposed| exposed.role == Role::ListBox)
+        .expect("a list box")
+        .id;
+    telar::focus::request(id);
+    for _ in 0..8 {
+        relayout_if_dirty();
+        let _ = list.tree.commands();
+    }
+    list.key(Key::Named(NamedKey::Space), plain());
+    assert_eq!(list.chosen(), ["row-0"]);
+    list.key(Key::Named(NamedKey::PageDown), shift());
+    let chosen = list.chosen().len();
+    assert!(
+        chosen > 1 && chosen < 50,
+        "the anchor's row through the page's: {chosen} chosen"
+    );
 }

@@ -8,13 +8,13 @@ use std::sync::Arc;
 use telar::{
     Accessible, AlignItems, Children, Clip, ClippedItem, Color, Key, KeyNav, KeyNavMove,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey, Props, Reactive,
-    RectStyle, RwSignal, ScrollViewport, StyledContainer, Text, TextWrap, VirtualList, box_item,
+    RectStyle, RwSignal, StyledContainer, Text, TextWrap, box_item,
     focus::{self, FocusId, Role, SetPosition},
     key_nav_apply, memo, signal,
 };
 
 use crate::list::ListTokens;
-use crate::rows::{BuiltRows, RowState, cursor_row_paint, reveal_band, with_empty_state};
+use crate::rows::{BuiltRows, RowPlaces, RowState, counted, cursor_row_paint, with_empty_state};
 use crate::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
 use crate::shared;
 use crate::type_ahead::TypeAhead;
@@ -62,7 +62,7 @@ pub type RowBuilder = Rc<dyn Fn(&ListRow) -> Result<Box<dyn LayoutItem>, LayoutE
 
 /// A list of any length to choose rows from, read by a screen reader as a list box.
 ///
-/// It fills the height its parent gives it and scrolls within it, building only the rows on screen, so ten thousand rows cost what a screenful does. Every row stands at [`ListTokens::row_height`], which is what lets it place the rows it has not built.
+/// It fills the height its parent gives it and scrolls within it, building only the rows on screen, so ten thousand rows cost what a screenful does. Every row stands at [`ListTokens::row_height`], which is what lets it place the rows it has not built, unless [`wrap`](Self::wrap) lets rows grow: then each is measured once built, and stands at the row height until then.
 ///
 /// The keyboard walks a cursor over the rows — the arrows, Home and End, Page Up and Page Down, and type-ahead on the rows' labels — and Enter, Space or a press chooses the row it is on. A reader hears the row the cursor is on as it moves. In [`SelectionMode::Multiple`] the list says it takes several rows, each row says whether it is one of them, and Shift, Ctrl (Command on a Mac) and Space choose them as [`SelectionMode::Multiple`] says.
 ///
@@ -89,6 +89,9 @@ pub struct VirtualListProps {
     /// Builds what a row shows, in place of its label and detail. The row itself — its height, its wash and what a reader hears it as — stays the list's.
     #[props(some, default)]
     pub row: Option<RowBuilder>,
+    /// Whether a row may run onto more lines than one: its label wraps at the row's width instead of being cut off where the row ends, and what [`row`](Self::row) builds is given the height it asks for, the row growing to hold it. Off (the default), every row is one row height tall, and nothing is measured.
+    #[props(default)]
+    pub wrap: bool,
     /// What a reader calls the list.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
@@ -113,6 +116,7 @@ pub fn virtual_list(
         on_select,
         on_selection_change,
         row,
+        wrap,
         label,
         empty_label,
         color,
@@ -129,24 +133,22 @@ pub fn virtual_list(
             selection,
             search: RefCell::default(),
             on_select,
-            viewport,
-            row_height,
+            places: RowPlaces::new(viewport, row_height, wrap),
             focus: Cell::new(None),
             built: BuiltRows::new(),
         });
         made = Some(list.clone());
         let source = {
             let list = list.clone();
-            move || placed(&list.rows())
+            move || counted(&list.rows())
         };
-        let built = VirtualList::new(
-            LayoutStyle::column(),
-            list.viewport.clone(),
-            row_height,
+        let built = list.places.clone().list(
             OVERSCAN,
             source,
-            |item: &(ListRow, SetPosition)| item.clone(),
-            move |_, (item, place)| build_row(&list, item, place, row.as_ref(), &color),
+            |item: &(ListRow, usize)| item.clone(),
+            move |index, (item, count)| {
+                build_row(&list, item, place(index, count), row.as_ref(), &color)
+            },
         )?;
         Ok(box_item(built))
     })?;
@@ -198,8 +200,7 @@ struct List {
     selection: RowSelection,
     search: RefCell<TypeAhead>,
     on_select: Option<RowHandler>,
-    viewport: ScrollViewport,
-    row_height: f32,
+    places: RowPlaces,
     focus: Cell<Option<FocusId>>,
     built: BuiltRows<Arc<str>>,
 }
@@ -252,11 +253,7 @@ impl List {
 
     fn move_to(&self, rows: &[ListRow], index: usize) {
         self.cursor.set(Some(rows[index].id.clone()));
-        reveal_band(
-            &self.viewport,
-            index as f32 * self.row_height,
-            self.row_height,
-        );
+        self.places.reveal(index);
     }
 
     /// Moves the cursor from `from` to `index`, choosing every row between the anchor and it when `ranging`, and making it the anchor otherwise.
@@ -303,12 +300,6 @@ impl List {
         }
     }
 
-    /// How many rows one Page Up or Page Down moves: as many as the view shows whole.
-    fn page(&self) -> usize {
-        let height = self.viewport.rect().peek().height;
-        ((height / self.row_height).floor() as usize).max(1)
-    }
-
     fn seek(&self, c: char, rows: &[ListRow], at: Option<usize>) {
         let needle = self.search.borrow_mut().extend(c);
         let found = needle.find(at, rows.len(), |i| {
@@ -328,12 +319,8 @@ impl List {
         let modifiers = telar::modifiers();
         let multiple = self.selection.is_multiple();
         let paged = |forward: bool| {
-            let from = at.unwrap_or(0);
-            let to = match forward {
-                true => (from + self.page()).min(rows.len() - 1),
-                false => from.saturating_sub(self.page()),
-            };
-            nearest_reachable(&rows, to, forward)
+            let to = self.places.page(Some(at.unwrap_or(0)), rows.len(), forward);
+            nearest_reachable(&rows, to.unwrap_or(0), forward)
         };
         let target = match key {
             Key::Char('a' | 'A') if multiple && modifiers.is_primary() => {
@@ -386,20 +373,13 @@ fn choosable(rows: &[ListRow]) -> Vec<Arc<str>> {
         .collect()
 }
 
-/// Each row with its place among them all, which a reader cannot count from the rows that are built.
-fn placed(rows: &[ListRow]) -> Vec<(ListRow, SetPosition)> {
-    let size = rows.len() as u32;
-    rows.iter()
-        .enumerate()
-        .map(|(i, row)| {
-            let place = SetPosition {
-                level: 1,
-                position: i as u32 + 1,
-                size,
-            };
-            (row.clone(), place)
-        })
-        .collect()
+/// The place of the row at `index` among all `count` rows, which a reader cannot count from the rows that are built.
+fn place(index: usize, count: usize) -> SetPosition {
+    SetPosition {
+        level: 1,
+        position: index as u32 + 1,
+        size: count as u32,
+    }
 }
 
 /// Where `movement` takes the cursor from `at`, passing over rows it may not stop on; `None` when there are none it may.
@@ -443,7 +423,7 @@ fn build_row(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let content = match content {
         Some(build) => vec![build(&row)?],
-        None => default_content(&row)?,
+        None => default_content(&row, list.places.text_wrap())?,
     };
     let id = row.id.clone();
     let disabled = row.disabled;
@@ -469,14 +449,15 @@ fn build_row(
         let (list, id) = (list.clone(), id.clone());
         move || list.press(&id)
     };
-    let height = list.row_height;
+    let places = list.places.clone();
     let row_box = move || {
-        LayoutStyle::row()
-            .align_items(AlignItems::CENTER)
-            .height(height)
-            .flex_shrink(0.0)
-            .padding_horizontal(ListTokens::current().pad_x())
-            .gap(shared::gap_md())
+        places.sized(
+            LayoutStyle::row()
+                .align_items(AlignItems::CENTER)
+                .flex_shrink(0.0)
+                .padding_horizontal(ListTokens::current().pad_x())
+                .gap(shared::gap_md()),
+        )
     };
     let built = StyledContainer::new(row_box(), paint(false), content)?
         .styled_by(row_box)
@@ -492,8 +473,8 @@ fn build_row(
     Ok(box_item(built))
 }
 
-/// A row's label, taking the room the row has, and its detail after it, quiet.
-fn default_content(row: &ListRow) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+/// A row's label, taking the room the row has and broken as `wrap` says, and its detail after it, quiet.
+fn default_content(row: &ListRow, wrap: TextWrap) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     let label = row.label.clone();
     let disabled = row.disabled;
     let text = Text::declaring(
@@ -503,7 +484,7 @@ fn default_content(row: &ListRow) -> Result<Vec<Box<dyn LayoutItem>>, LayoutErro
             .flex_shrink(1.0)
             .min_width(0.0),
         move |t| {
-            let text = shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap);
+            let text = shared::control_text(t, 1.0).with_text_wrap(wrap);
             if disabled {
                 text.with_color(shared::muted())
             } else {

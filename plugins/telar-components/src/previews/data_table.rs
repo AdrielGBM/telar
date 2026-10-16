@@ -48,6 +48,46 @@ fn files() -> Vec<TableRow> {
         .collect()
 }
 
+fn task_columns() -> Vec<Column> {
+    vec![
+        Column::new("task", "Task")
+            .flex(3.0)
+            .wrap(true)
+            .sortable(true),
+        Column::new("owner", "Owner").sortable(true),
+        Column::new("due", "Due").fixed(64.0).align(CellAlign::End),
+    ]
+}
+
+fn tasks() -> Vec<TableRow> {
+    const TASKS: [(&str, &str, &str); 6] = [
+        ("Ship the release notes", "Ada", "Mon"),
+        (
+            "Rewrite the onboarding guide so each step says what it is for before what to type",
+            "Grace",
+            "Tue",
+        ),
+        ("Fix the flaky test", "Alan", "Wed"),
+        (
+            "Check keyboard paging in the tree, the table and the list against rows of different heights",
+            "Barbara",
+            "Thu",
+        ),
+        ("Order more coffee", "Ken", "Fri"),
+        (
+            "Move the nightly build to the new runners, keeping the old ones for a week",
+            "Edsger",
+            "Mon",
+        ),
+    ];
+    (0..60)
+        .map(|i| {
+            let (task, owner, due) = TASKS[i % TASKS.len()];
+            TableRow::new(format!("task-{i}"), [task, owner, due])
+        })
+        .collect()
+}
+
 fn framed(table: Box<dyn LayoutItem>) -> Result<Container, LayoutError> {
     Container::new(
         LayoutStyle::column().width(420.0).height(320.0),
@@ -127,6 +167,34 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.press(Key::Named(NamedKey::Space))?;
             canvas.expect_action("on_selection_change", 4)?;
             canvas.expect_action("on_select", 1)
+        }),
+        preview!(data_table: DataTableProps, "Wrapped cells", |p| {
+            let table = data_table(
+                DataTableProps::props()
+                    .columns(task_columns())
+                    .rows(tasks())
+                    .label(p.arg("label", "Tasks"))
+                    .color(p.arg("color", Color::TRANSPARENT))
+                    .build(),
+                Children::default(),
+            )?;
+            Ok::<_, LayoutError>(framed(table)?)
+        })
+        .title("Display/Data table")
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes"))
+        .tags(&["stateful"])
+        .play(|canvas| {
+            canvas.expect(
+                by_role(Role::GridCell)
+                    .named("Ship the release notes")
+                    .nth(0),
+            )?;
+            canvas.click(by_role(Role::GridCell).named("Fix the flaky test").nth(0))?;
+            canvas.expect_action("on_select", 1)?;
+            canvas.press(Key::Named(NamedKey::ArrowDown))?;
+            canvas.press(Key::Named(NamedKey::Enter))?;
+            canvas.expect_action("on_select", 2)
         }),
         preview!(data_table: DataTableProps, "Empty", |p| {
             let table = data_table(

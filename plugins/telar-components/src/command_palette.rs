@@ -7,16 +7,16 @@ use std::sync::Arc;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Clip, ClippedItem, Color, Container,
     Declared, JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
-    ModifiersState, NamedKey, Props, Reactive, ReactiveList, RectStyle, RwSignal, ScrollViewport,
-    ShapeStyle, Span, StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap, VirtualList,
-    amend_surface, box_item, children, effect,
+    ModifiersState, NamedKey, Props, Reactive, ReactiveList, RectStyle, RwSignal, ShapeStyle, Span,
+    StyledContainer, SurfaceAmendment, SurfaceStyle, Text, TextWrap, amend_surface, box_item,
+    children, effect,
     focus::{FocusId, Role},
     memo, signal,
 };
 
 use crate::fuzzy::fuzzy_match;
 use crate::list::{ListTokens, row_paint, tinted};
-use crate::rows::{BuiltRows, reveal_band};
+use crate::rows::{BuiltRows, RowPlaces};
 use crate::scrim;
 use crate::shared::{self, shown_chord};
 use crate::strings;
@@ -337,12 +337,11 @@ struct Palette {
     results: Memo<Results>,
     /// The command the keyboard is on, by id. `None`, or an id no longer listed, means the first one it can stop on.
     cursor: RwSignal<Option<Arc<str>>>,
-    viewport: ScrollViewport,
+    /// Every row, a heading's too, at one height while the palette is open: nothing in a row runs onto a second line, so there is nothing to measure.
+    places: RowPlaces,
     built: BuiltRows<Arc<str>>,
     run: Rc<dyn Fn(&Command)>,
     color: Reactive<Color>,
-    /// Fixed while the palette is open: the list is virtual, and places rows it has not built by it.
-    row_height: f32,
 }
 
 impl Palette {
@@ -394,16 +393,8 @@ impl Palette {
         });
         if let Some((i, id)) = found {
             self.cursor.set(Some(id));
-            self.reveal(i);
+            self.places.reveal(i);
         }
-    }
-
-    fn reveal(&self, index: usize) {
-        reveal_band(
-            &self.viewport,
-            index as f32 * self.row_height,
-            self.row_height,
-        );
     }
 
     fn run_cursor(&self) {
@@ -479,21 +470,17 @@ fn build_open_palette(
             let palette = Rc::new(Palette {
                 results,
                 cursor,
-                viewport,
+                places: RowPlaces::fixed(viewport, row_height),
                 built: BuiltRows::new(),
                 run,
                 color,
-                row_height,
             });
             made = Some(palette.clone());
             let source = {
                 let palette = palette.clone();
                 move || palette.entries().as_ref().clone()
             };
-            let rows = VirtualList::new(
-                LayoutStyle::column(),
-                palette.viewport.clone(),
-                row_height,
+            let rows = palette.places.clone().list(
                 OVERSCAN,
                 source,
                 |entry: &Rc<Entry>| (**entry).clone(),
@@ -525,8 +512,9 @@ fn build_open_palette(
                 return;
             }
             palette.cursor.set(None);
-            let (x, _) = palette.viewport.peek_offset();
-            palette.viewport.scroll_to(x, 0.0);
+            let viewport = palette.places.viewport();
+            let (x, _) = viewport.peek_offset();
+            viewport.scroll_to(x, 0.0);
         });
     }
     if let Some(open) = open {
@@ -647,12 +635,12 @@ fn empty_state(
 
 fn build_entry(palette: &Rc<Palette>, entry: &Entry) -> Result<Box<dyn LayoutItem>, LayoutError> {
     match entry {
-        Entry::Heading(group) => heading(group.clone(), palette.row_height),
+        Entry::Heading(group) => heading(group.clone(), &palette.places),
         Entry::Item { command, marks } => build_row(palette, command, marks),
     }
 }
 
-fn heading(group: Arc<str>, row_height: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn heading(group: Arc<str>, places: &RowPlaces) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let heading = crate::list::group(
         crate::list::GroupProps::props()
             .label(Reactive::of(move || group.to_string()))
@@ -660,10 +648,11 @@ fn heading(group: Arc<str>, row_height: f32) -> Result<Box<dyn LayoutItem>, Layo
         Children::default(),
     )?;
     let slot = Container::new(
-        LayoutStyle::column()
-            .height(row_height)
-            .flex_shrink(0.0)
-            .justify_content(JustifyContent::END),
+        places.sized(
+            LayoutStyle::column()
+                .flex_shrink(0.0)
+                .justify_content(JustifyContent::END),
+        ),
         vec![heading],
     )?;
     Ok(box_item(slot))
@@ -740,15 +729,16 @@ fn build_row(
             }
         }
     };
-    let row_height = palette.row_height;
+    let places = palette.places.clone();
     let row_box = move || {
-        LayoutStyle::row()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::SPACE_BETWEEN)
-            .height(row_height)
-            .flex_shrink(0.0)
-            .padding_horizontal(ListTokens::current().pad_x())
-            .gap(shared::gap_md())
+        places.sized(
+            LayoutStyle::row()
+                .align_items(AlignItems::CENTER)
+                .justify_content(JustifyContent::SPACE_BETWEEN)
+                .flex_shrink(0.0)
+                .padding_horizontal(ListTokens::current().pad_x())
+                .gap(shared::gap_md()),
+        )
     };
     let selected = {
         let (palette, id) = (palette.clone(), id.clone());

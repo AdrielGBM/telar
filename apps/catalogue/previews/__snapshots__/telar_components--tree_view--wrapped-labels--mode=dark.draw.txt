@@ -1,0 +1,102 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#1c1f29ff
+  element group
+    element group
+      element group
+        element group
+          element tree
+            clip 270,140 260x320
+              matrix 1,0,0,1,270,140
+                element group
+                  element treeitem
+                    rect 0,0 260x32 radius=6
+                    element group
+                      element group
+                        matrix 1,0,0,1,13,10
+                          path M0,0 L6,6 L0,12 stroke=1.5 stroke-color=#ebedf5b3
+                        end
+                      end
+                    end
+                    element group
+                      clip 28,4 224x24
+                        matrix 1,0,0,1,28,4
+                          text 0,3 224x16.8 "Getting started" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                        end
+                      end
+                    end
+                  end
+                  element treeitem
+                    rect 0,32 260x32 radius=6
+                    element group
+                      element group
+                        matrix 1,0,0,1,10,45
+                          path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#ebedf5b3
+                        end
+                      end
+                    end
+                    element group
+                      clip 28,36 224x24
+                        matrix 1,0,0,1,28,36
+                          text 0,3 224x16.8 "Views" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                        end
+                      end
+                    end
+                  end
+                  element treeitem
+                    rect 0,64 260x32 fill=#ffffff1a radius=6
+                    element group
+                    end
+                    element group
+                      clip 44,68 208x24
+                        matrix 1,0,0,1,44,68
+                          text 0,3 208x16.8 "Writing a view in .rsx" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                        end
+                      end
+                    end
+                  end
+                  element treeitem
+                    rect 0,96 260x58 radius=6
+                    element group
+                    end
+                    element group
+                      clip 44,100 208x50
+                        matrix 1,0,0,1,44,100
+                          text 0,0 208x50.4 "Long lists, and why a virtual one builds only the rows that are on screen" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                        end
+                      end
+                    end
+                  end
+                  element treeitem
+                    rect 0,154 260x59 radius=6
+                    element group
+                    end
+                    element group
+                      clip 28,158 224x51
+                        matrix 1,0,0,1,28,158
+                          text 0,0 224x50.4 "Themes, tokens and the control size every component scales with" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                        end
+                      end
+                    end
+                  end
+                  element treeitem
+                    rect 0,213 260x32 radius=6
+                    element group
+                    end
+                    element group
+                      clip 28,217 224x24
+                        matrix 1,0,0,1,28,217
+                          text 0,3 224x16.8 "FAQ" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                        end
+                      end
+                    end
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
