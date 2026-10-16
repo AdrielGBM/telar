@@ -172,7 +172,7 @@ pub use theme_provider::{
 };
 pub use transform_origin::{TransformOrigin, box_transform_about};
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};
-pub use virtual_list::{VirtualList, VirtualRows, visible_window};
+pub use virtual_list::{MeasuredItem, VirtualList, VirtualRows, visible_window};
 pub use window_root::WindowRoot;
 
 /// Routes an event to the overlay layer before the widget tree sees it, resolving a live drag first, then Escape/Enter against the dismiss stack, ahead of `ui_tree`'s own pointer routing.

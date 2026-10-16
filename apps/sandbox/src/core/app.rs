@@ -287,6 +287,12 @@ const SECTIONS: &[SectionDef] = sections![
         "scroll_timeline.rsx"
     ),
     (
+        "Virtual lists",
+        crate::features::virtual_lists::virtual_lists,
+        crate::features::virtual_lists::VirtualListsProps,
+        "virtual_lists.rsx"
+    ),
+    (
         "Background work",
         crate::features::background::background,
         crate::features::background::BackgroundProps,

@@ -96,13 +96,18 @@ pub(super) fn emit_node(node: &ViewNode, depth: usize, out: &mut String) {
             {
                 out.push_str(&format!(" gap:{gap}"));
             }
-            if let Some(height) = block
-                .virtual_row_height
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            {
-                out.push_str(&format!(" virtual row_height:{height}"));
+            if let Some(clause) = &block.virtual_clause {
+                out.push_str(" virtual");
+                for (name, value) in [
+                    ("row_height", &clause.row_height),
+                    ("estimated_height", &clause.estimated_height),
+                    ("overscan", &clause.overscan),
+                    ("rows", &clause.rows),
+                ] {
+                    if let Some(value) = value.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                        out.push_str(&format!(" {name}:{value}"));
+                    }
+                }
             }
             out.push('\n');
             for child in &block.body {

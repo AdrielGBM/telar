@@ -856,6 +856,53 @@ fn a_virtual_loop_outside_a_scroll_is_refused() {
     );
 }
 
+/// Rows that differ in height cannot be placed by division, so the loop makes the handle that knows where unbuilt rows stand and builds the list over it.
+#[test]
+fn a_measured_virtual_loop_builds_over_a_rows_handle() {
+    let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\nlet handle = signal(None::<VirtualRows>);\n[view]\nscroll height:400\n    for row in $rows key row.id virtual estimated_height:48 overscan:120 rows:$handle\n        text \"{row.name}\"\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains("VirtualRows::new(__viewport.clone(), (48) as f32)"),
+        "the handle is made from the viewport and the estimate:\n{code}"
+    );
+    assert!(
+        code.contains("VirtualList::measured(") && !code.contains("VirtualList::new("),
+        "the list is the measured one:\n{code}"
+    );
+    assert!(
+        code.contains("(120) as f32,"),
+        "with the overscan in px:\n{code}"
+    );
+    assert!(
+        code.contains("handle.set(Some("),
+        "and the handle is given to the signal:\n{code}"
+    );
+}
+
+#[test]
+fn a_measured_virtual_loop_overscans_two_estimates_by_default() {
+    let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\nscroll height:400\n    for row in $rows virtual estimated_height:48\n        text \"{row.name}\"\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(
+        code.contains("(48) as f32 * 2.0,"),
+        "two estimated rows on each side:\n{code}"
+    );
+}
+
+#[test]
+fn a_measured_virtual_loop_outside_a_scroll_is_refused() {
+    let src = "[logic]\nlet rows = signal(Vec::<Row>::new());\n[view]\ncol\n    for row in $rows virtual estimated_height:48\n        text \"x\"\n";
+    let code = transpile_source(src, "demo", None, None).unwrap().rust_code;
+    assert!(code.contains("needs an enclosing `scroll`"), "{code}");
+}
+
+#[test]
+fn both_virtual_heights_are_a_parse_error() {
+    let src = "[logic]\n[view]\nscroll\n    for row in $rows virtual row_height:32 estimated_height:48\n        text \"x\"\n";
+    let err = transpile_source(src, "demo", None, None).unwrap_err();
+    assert!(format!("{err}").contains("alternatives"), "{err}");
+}
+
 /// A reactive branch with several children was wrapped in a hard-coded `flex_column`, so a tab strip written as `row > if $ws > icon icon icon` stacked its icons and overflowed the 30px row it lived in. The cell now runs the way its host does.
 #[test]
 fn a_reactive_branch_cell_inherits_its_host_axis() {

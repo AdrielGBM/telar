@@ -270,11 +270,22 @@ pub struct ForBlock {
     pub iterable: String,
     pub key_expr: Option<String>,
     pub gap_expr: Option<String>,
-    /// The `row_height:<expr>` of a `virtual` loop: build only the rows the enclosing scroll viewport shows, instead of every row up front. Opt-in and explicit, because virtualising needs a fixed row height and an enclosing `scroll` — neither is something to infer from a loop that did not ask.
-    pub virtual_row_height: Option<String>,
+    /// The `virtual` clause: build only the rows the enclosing scroll viewport shows, instead of every row up front. Opt-in and explicit, because virtualising needs an enclosing `scroll` and a statement of how tall the rows are — neither is something to infer from a loop that did not ask.
+    pub virtual_clause: Option<VirtualClause>,
     pub body: Vec<ViewNode>,
     /// 1-based `.rsx` line of the `for` header, used to map generated code back to source.
     pub line: usize,
+}
+
+/// What a `virtual` loop says about its rows. Exactly one of `row_height` (every row the same height, the fast path) and `estimated_height` (rows of different heights, measured as they are built) is set; `overscan` and `rows` belong to the second.
+#[derive(Debug, Clone, Default)]
+pub struct VirtualClause {
+    pub row_height: Option<String>,
+    pub estimated_height: Option<String>,
+    /// How many px beyond each edge of the viewport to build, for `estimated_height:`.
+    pub overscan: Option<String>,
+    /// The `$signal` of `Option<VirtualRows>` the loop stores its row handle in, for `estimated_height:`.
+    pub rows: Option<String>,
 }
 
 /// `expr` with one wrapping paren pair removed, or unchanged when the pair is not a wrapper.

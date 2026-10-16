@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 
-use telar_parser::{ForBlock, IfBlock, MatchBlock, ViewNode};
+use telar_parser::{ForBlock, IfBlock, MatchBlock, ViewNode, VirtualClause};
 
 use super::signals::{
     ScopedSnippet, captured_in_scope, clone_block_multiline, pattern_idents, rust_str,
@@ -269,13 +269,8 @@ impl ViewGen<'_> {
     pub(super) fn emit_for(&mut self, block: &ForBlock) -> ChildEmit {
         // A `$`-prefixed source builds a keyed, reconciling `ReactiveList` instead of a construction loop.
         if block.iterable.trim_start().starts_with('$') {
-            if let Some(height) = block
-                .virtual_row_height
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-            {
-                return self.emit_virtual_for(block, height);
+            if let Some(clause) = &block.virtual_clause {
+                return self.emit_virtual_for(block, clause);
             }
             return self.emit_reactive_for(block);
         }
@@ -303,7 +298,7 @@ impl ViewGen<'_> {
                 "a `gap:` on a `for` spaces *reconciled* items, so it needs a `$`-prefixed iterable — put the gap on the enclosing container instead",
             ),
             (
-                block.virtual_row_height.as_ref().map(|_| "virtual"),
+                block.virtual_clause.as_ref().map(|_| "virtual"),
                 "`virtual` builds only the rows a viewport shows as it scrolls, which a loop that runs once has nothing to do with — add a `$` to the iterable",
             ),
         ] {
@@ -408,8 +403,8 @@ impl ViewGen<'_> {
 
     /// A `virtual` loop: only the rows the enclosing scroll shows get built, instead of every row up front.
     ///
-    /// Always boxed — a `VirtualList` owns the container its rows scroll inside, so it cannot be a transparent fragment. The row height is fixed by construction: measuring rows that have not been built is the circular problem virtualisation exists to solve, and `VirtualList` says as much in its own doc.
-    fn emit_virtual_for(&mut self, block: &ForBlock, row_height: &str) -> ChildEmit {
+    /// Always boxed — a `VirtualList` owns the container its rows scroll inside, so it cannot be a transparent fragment. `row_height:` is the fixed-height `VirtualList::new`; `estimated_height:` is `VirtualList::measured` over a `VirtualRows` made here, which `rows:$handle` also stores in a signal for the view to `reveal` with.
+    fn emit_virtual_for(&mut self, block: &ForBlock, clause: &VirtualClause) -> ChildEmit {
         let pad = self.indent_str();
         let Some(viewport) = self.scroll_viewport.clone() else {
             return ChildEmit::Dynamic {
@@ -443,12 +438,42 @@ impl ViewGen<'_> {
             self.emit_item_closure(block, &format!("__index: usize, {pattern}"), &pad);
 
         let mut code = String::new();
-        let _ = writeln!(code, "{pad}let {var} = VirtualList::new(");
-        let _ = writeln!(code, "{pad}    LayoutStyle::new().flex_column(),");
-        let _ = writeln!(code, "{pad}    {viewport}.clone(),");
-        let _ = writeln!(code, "{pad}    ({row_height}) as f32,");
-        // Rows built beyond the viewport on each side, so a fast scroll shows no blank band.
-        let _ = writeln!(code, "{pad}    2,");
+        match (&clause.row_height, &clause.estimated_height) {
+            (Some(row_height), _) => {
+                let _ = writeln!(code, "{pad}let {var} = VirtualList::new(");
+                let _ = writeln!(code, "{pad}    LayoutStyle::new().flex_column(),");
+                let _ = writeln!(code, "{pad}    {viewport}.clone(),");
+                let _ = writeln!(code, "{pad}    ({row_height}) as f32,");
+                let _ = writeln!(code, "{pad}    2,");
+            }
+            (None, Some(estimate)) => {
+                let rows = self.next_variable_name("rows");
+                let _ = writeln!(
+                    code,
+                    "{pad}let {rows} = VirtualRows::new({viewport}.clone(), ({estimate}) as f32);"
+                );
+                if let Some(handle) = &clause.rows {
+                    let handle = handle.trim_start_matches('$');
+                    let _ = writeln!(code, "{pad}{handle}.set(Some({rows}.clone()));");
+                }
+                let overscan = clause.overscan.as_ref().map_or_else(
+                    || format!("({estimate}) as f32 * 2.0"),
+                    |px| format!("({px}) as f32"),
+                );
+                let _ = writeln!(code, "{pad}let {var} = VirtualList::measured(");
+                let _ = writeln!(code, "{pad}    LayoutStyle::new().flex_column(),");
+                let _ = writeln!(code, "{pad}    {rows},");
+                let _ = writeln!(code, "{pad}    {overscan},");
+            }
+            (None, None) => {
+                return ChildEmit::Dynamic {
+                    code: format!(
+                        "{pad}compile_error!({});",
+                        rust_str("a `virtual` loop needs `row_height:` or `estimated_height:`")
+                    ),
+                };
+            }
+        }
         let _ = writeln!(code, "{pad}    {source},");
         let _ = writeln!(code, "{pad}    |{pattern}| {key_expr},");
         let _ = writeln!(code, "{item_builder},");

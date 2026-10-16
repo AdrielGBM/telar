@@ -146,10 +146,8 @@ impl Parser {
         self.pos += 1;
 
         // Split on the first standalone ` in `, then peel off the optional trailing clauses.
-        let header = split_for_in(&rest).ok_or_else(|| ParseError {
-            message: format!(
-                "expected `for <pattern> in <expr> [key <expr>] [gap:<expr>] [virtual row_height:<expr>]`, got `for {rest}`"
-            ),
+        let header = split_for_in(&rest).map_err(|message| ParseError {
+            message,
             line: number,
         })?;
 
@@ -160,7 +158,7 @@ impl Parser {
             iterable: header.iterable,
             key_expr: header.key_expr,
             gap_expr: header.gap_expr,
-            virtual_row_height: header.virtual_row_height,
+            virtual_clause: header.virtual_clause,
             body,
             line: number,
         }))
@@ -281,30 +279,32 @@ impl Parser {
     }
 }
 
-/// Splits a `for` header into `(pattern, iterable, key_expr, gap_expr)`: on the first ` in ` keyword, then an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional ` key <expr>` clause (identity for reconciliation; without it a reactive list reconciles by position). `gap` is always the last token on the line, so it's peeled off before the `key` search.
-fn split_for_in(rest: &str) -> Option<ForHeader> {
+const FOR_USAGE: &str = "expected `for <pattern> in <expr> [key <expr>] [gap:<expr>] [virtual row_height:<expr> | virtual estimated_height:<expr> [overscan:<px>] [rows:$handle]]`";
+
+/// Splits a `for` header into `(pattern, iterable, key_expr, gap_expr, virtual clause)`: on the first ` in ` keyword, then an optional trailing `virtual …` clause, then an optional trailing ` gap:<expr>` clause (item spacing, reactive-list only), then an optional ` key <expr>` clause (identity for reconciliation; without it a reactive list reconciles by position). `gap` is the last token once `virtual` is gone, so it's peeled off before the `key` search.
+fn split_for_in(rest: &str) -> Result<ForHeader, String> {
+    let malformed = || format!("{FOR_USAGE}, got `for {rest}`");
     let tokens: Vec<&str> = rest.split_whitespace().collect();
-    let in_idx = tokens.iter().position(|&t| t == "in")?;
+    let in_idx = tokens
+        .iter()
+        .position(|&t| t == "in")
+        .ok_or_else(malformed)?;
     if in_idx == 0 || in_idx + 1 >= tokens.len() {
-        return None;
+        return Err(malformed());
     }
     let pattern = tokens[..in_idx].join(" ");
     let mut after_in: Vec<&str> = tokens[in_idx + 1..].to_vec();
 
-    // Peeled off first: both its tokens sit at the end, and leaving them in would put `virtual` inside the iterable expression.
-    let virtual_row_height = match after_in
+    let virtual_clause = match after_in
         .iter()
         .position(|&t| t == "virtual")
         .filter(|at| *at > 0)
     {
         Some(at) => {
-            let height = after_in
-                .get(at + 1)
-                .and_then(|t| split_once_colon(t))
-                .filter(|(name, _)| *name == "row_height")
-                .map(|(_, value)| value.to_string());
+            let clause = parse_virtual_clause(&after_in[at + 1..])
+                .map_err(|why| format!("`virtual` clause: {why}; {FOR_USAGE}, got `for {rest}`"))?;
             after_in.truncate(at);
-            Some(height?)
+            Some(clause)
         }
         None => None,
     };
@@ -327,13 +327,42 @@ fn split_for_in(rest: &str) -> Option<ForHeader> {
         }
         _ => (after_in.join(" "), None),
     };
-    Some(ForHeader {
+    Ok(ForHeader {
         pattern,
         iterable,
         key_expr,
         gap_expr,
-        virtual_row_height,
+        virtual_clause,
     })
+}
+
+/// The `name:value` tokens after `virtual`. Fixed-height rows say `row_height:`; rows that differ say `estimated_height:`, and only those have an `overscan:` in px and a `rows:` handle to give — a fixed list works out its window by division and has neither to offer.
+fn parse_virtual_clause(tokens: &[&str]) -> Result<VirtualClause, String> {
+    let mut clause = VirtualClause::default();
+    for token in tokens {
+        let (name, value) = split_once_colon(token)
+            .filter(|(_, value)| !value.is_empty())
+            .ok_or_else(|| format!("`{token}` is not a `name:value` option"))?;
+        let slot = match name {
+            "row_height" => &mut clause.row_height,
+            "estimated_height" => &mut clause.estimated_height,
+            "overscan" => &mut clause.overscan,
+            "rows" => &mut clause.rows,
+            other => return Err(format!("unknown option `{other}:`")),
+        };
+        if slot.replace(value.to_string()).is_some() {
+            return Err(format!("`{name}:` is given twice"));
+        }
+    }
+    match (&clause.row_height, &clause.estimated_height) {
+        (None, None) => Err("it needs `row_height:` (every row the same height) or `estimated_height:` (rows of different heights)".into()),
+        (Some(_), Some(_)) => Err("`row_height:` and `estimated_height:` are alternatives: rows are either all one height or measured".into()),
+        (Some(_), None) if clause.overscan.is_some() || clause.rows.is_some() => Err("`overscan:` and `rows:` belong to `estimated_height:`; a `row_height:` list keeps two spare rows on each side and has no handle".into()),
+        _ => match clause.rows.as_deref() {
+            Some(rows) if !rows.starts_with('$') => Err(format!("`rows:{rows}` must name a signal of `Option<VirtualRows>`, written `rows:$name`")),
+            _ => Ok(clause),
+        },
+    }
 }
 
 /// The parsed pieces of a `for` header line.
@@ -342,7 +371,7 @@ struct ForHeader {
     iterable: String,
     key_expr: Option<String>,
     gap_expr: Option<String>,
-    virtual_row_height: Option<String>,
+    virtual_clause: Option<VirtualClause>,
 }
 
 /// Splits `<scrutinee> [as <name>] [key <expr>]` into its three parts. `key` is peeled first so an `as` inside the key expression cannot be mistaken for the binding.

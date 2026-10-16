@@ -140,7 +140,7 @@ impl VirtualList {
     ///
     /// A row's height is its laid-out box, margins excluded, and it is remembered by the row's key, so a row that leaves the window and comes back, or moves when the list is filtered, keeps the height it was measured at. A row whose content changes height after it was built is measured again.
     ///
-    /// Items are cloned out of the list the source last returned as their rows are built, which is why `Item: Clone` here and not in [`new`](Self::new): the source runs only when what it reads changes, not on every scroll.
+    /// Items are cloned out of the list the source last returned as their rows are built, which is why `Item` must be [`MeasuredItem`] (any `Clone` type) here and not in [`new`](Self::new): the source runs only when what it reads changes, not on every scroll.
     ///
     /// Until the viewport is laid out it builds a surface's height of rows rather than every row: nothing taller than the surface can be on screen at once, and building and measuring a hundred thousand rows to learn that would cost what virtualising saves. Only where the surface's size is not known either does it build them all, as [`new`](Self::new) does.
     pub fn measured<Item, Key, S, K, B>(
@@ -153,7 +153,7 @@ impl VirtualList {
     ) -> Result<ReactiveList, LayoutError>
     where
         Key: Hash + 'static,
-        Item: Clone + 'static,
+        Item: MeasuredItem,
         S: Fn() -> Vec<Item> + 'static,
         K: Fn(&Item) -> Key + 'static,
         B: Fn(usize, Item) -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
@@ -221,6 +221,15 @@ impl VirtualList {
         })
     }
 }
+
+/// What [`VirtualList::measured`] asks of its items: they are cloned out of the list the source last returned as their rows are built. A trait of its own so that a type without `Clone` is told what the list needed it for.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot be the item of a measured `virtual` list: its rows are built from clones of the items, so it must implement `Clone`",
+    label = "add `#[derive(Clone)]` to this type, or iterate a `Clone` projection of it"
+)]
+pub trait MeasuredItem: Clone + 'static {}
+
+impl<Item: Clone + 'static> MeasuredItem for Item {}
 
 /// A gap keys on its height so a scroll that changes it rebuilds the spacer.
 fn gap_key(before: bool, height: f32) -> String {

@@ -389,6 +389,62 @@ fn parses_reactive_for_with_gap_but_no_key() {
     assert_eq!(for_block.gap_expr.as_deref(), Some("8"));
 }
 
+fn virtual_clause(header: &str) -> Result<VirtualClause, String> {
+    let src = format!("[view]\nscroll\n    for row in $rows {header}\n        text \"a\"\n");
+    let doc = parse(&src).map_err(|e| e.message)?;
+    let ViewNode::Element(scroll) = &doc.view.nodes[0] else {
+        panic!();
+    };
+    let ViewNode::ForBlock(block) = &scroll.children[0] else {
+        panic!("expected for block");
+    };
+    Ok(block.virtual_clause.clone().expect("a virtual clause"))
+}
+
+#[test]
+fn parses_a_fixed_height_virtual_clause() {
+    let clause = virtual_clause("key row.id virtual row_height:32").unwrap();
+    assert_eq!(clause.row_height.as_deref(), Some("32"));
+    assert_eq!(clause.estimated_height, None);
+}
+
+#[test]
+fn parses_a_measured_virtual_clause_with_its_options() {
+    let clause = virtual_clause("virtual estimated_height:48 overscan:200 rows:$handle").unwrap();
+    assert_eq!(clause.estimated_height.as_deref(), Some("48"));
+    assert_eq!(clause.overscan.as_deref(), Some("200"));
+    assert_eq!(clause.rows.as_deref(), Some("$handle"));
+    assert_eq!(clause.row_height, None);
+}
+
+#[test]
+fn a_virtual_clause_must_pick_one_height() {
+    let both = virtual_clause("virtual row_height:32 estimated_height:48").unwrap_err();
+    assert!(both.contains("alternatives"), "{both}");
+    let neither = virtual_clause("virtual overscan:10").unwrap_err();
+    assert!(neither.contains("needs `row_height:`"), "{neither}");
+}
+
+#[test]
+fn measured_only_options_are_refused_on_a_fixed_virtual_clause() {
+    let err = virtual_clause("virtual row_height:32 overscan:10").unwrap_err();
+    assert!(err.contains("belong to `estimated_height:`"), "{err}");
+}
+
+#[test]
+fn a_virtual_rows_handle_must_be_a_signal() {
+    let err = virtual_clause("virtual estimated_height:48 rows:handle").unwrap_err();
+    assert!(err.contains("rows:$name"), "{err}");
+}
+
+#[test]
+fn an_unknown_or_repeated_virtual_option_is_refused() {
+    let unknown = virtual_clause("virtual row_height:32 height:5").unwrap_err();
+    assert!(unknown.contains("unknown option `height:`"), "{unknown}");
+    let twice = virtual_clause("virtual estimated_height:1 estimated_height:2").unwrap_err();
+    assert!(twice.contains("given twice"), "{twice}");
+}
+
 #[test]
 fn parses_let_statement_in_view() {
     let src = "[logic]\n[view]\ncol\n    let bar_w = (w - 16.0) / 2.0\n    text \"x\"\n";

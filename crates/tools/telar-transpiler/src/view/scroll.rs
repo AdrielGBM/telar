@@ -129,9 +129,7 @@ fn arrival_side(suffix: &str) -> Option<crate::edges::EdgeTarget> {
 fn wants_viewport(nodes: &[telar_parser::ViewNode]) -> bool {
     use telar_parser::ViewNode;
     nodes.iter().any(|node| match node {
-        ViewNode::ForBlock(block) => {
-            block.virtual_row_height.is_some() || wants_viewport(&block.body)
-        }
+        ViewNode::ForBlock(block) => block.virtual_clause.is_some() || wants_viewport(&block.body),
         ViewNode::IfBlock(block) => {
             wants_viewport(&block.then_branch)
                 || block.else_branch.as_deref().is_some_and(wants_viewport)
