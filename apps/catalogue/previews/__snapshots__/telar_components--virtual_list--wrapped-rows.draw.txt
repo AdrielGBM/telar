@@ -147,7 +147,7 @@ element group
                         end
                       end
                       element group
-                        rect 0,480 280x15808
+                        rect 0,480 280x25023
                       end
                     end
                   end

@@ -66,6 +66,33 @@ impl HeightIndex {
         delta
     }
 
+    /// Replaces the `remove` rows starting at `at` with rows of the heights in `insert`, the rows after them shifting to fit. Both are clamped to the end.
+    ///
+    /// Only the sums from `at` onward are worked out again, and a replacement of as many rows as it removes touches just those rows, so an edit near the end of a long list costs a fraction of building the index over.
+    pub fn splice(&mut self, at: usize, remove: usize, insert: impl IntoIterator<Item = f32>) {
+        let at = at.min(self.len());
+        let end = at.saturating_add(remove).min(self.len());
+        let insert: Vec<f32> = insert.into_iter().map(|h| h.max(0.0)).collect();
+        let levels = (usize::BITS - self.len().leading_zeros()) as usize;
+        if insert.len() == end - at && insert.len() * levels < self.len() - at {
+            for (offset, height) in insert.into_iter().enumerate() {
+                self.set(at + offset, height);
+            }
+            return;
+        }
+        self.heights.splice(at..end, insert);
+        self.tree.resize(self.heights.len() + 1, 0.0);
+        for node in at + 1..self.tree.len() {
+            let mut sum = f64::from(self.heights[node - 1]);
+            let mut child = 1;
+            while child < lowest_bit(node) {
+                sum += self.tree[node - child];
+                child <<= 1;
+            }
+            self.tree[node] = sum;
+        }
+    }
+
     /// Where row `index` starts: the combined height of every row before it. `index == len()` is the end of the last row; anything past it is clamped there.
     pub fn offset_of(&self, index: usize) -> f32 {
         self.prefix(index) as f32

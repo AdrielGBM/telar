@@ -143,8 +143,10 @@ alternatives. Either way the items must be `Clone`: the list keeps what the sour
 from a clone of its item, so the source runs again only when what it reads changes, not on every scroll; a type that
 is not is refused with a message naming `Clone`. `overscan:<px>` is how far beyond each edge to build (two estimated
 rows by default), and `rows:$handle` stores the handle in a `signal(None::<VirtualRows>)` so the view can call
-`rows.reveal(index, margin)`, the way `view_progress:$p` writes into a signal. Unbuilt rows stand at the estimate,
-built ones are measured after layout, and the first row on screen holds still while estimates are corrected. Give the
+`rows.reveal(index, margin)`, the way `view_progress:$p` writes into a signal. Unbuilt rows stand at the estimate
+until some are measured and at the mean of those from then on (to the pixel), built ones are measured after layout, and
+the first row on screen holds still while estimates are corrected. When the source changes by a few inserted, removed
+or moved rows, only those rows are looked up and the height index is spliced; a change to most rows rebuilds it. Give the
 rows their spacing inside the row rather than as a `gap`, so that measuring counts it. Rows under a header held at
 the top of the scroll, a table's column headings, are `VirtualRows::new(viewport, estimate).under_header(height)`:
 their places count the header, and a row brought into view stops below it rather than behind it.

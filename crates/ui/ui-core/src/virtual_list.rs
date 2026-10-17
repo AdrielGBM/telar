@@ -5,7 +5,7 @@ use layout_core::{LayoutError, LayoutStyle, NodeId};
 use reactive_core::{RwSignal, after_settle, batch, effect, signal};
 use renderer_core::RectStyle;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::rc::Rc;
 
@@ -43,6 +43,9 @@ pub fn visible_window(
     (first.min(count), last)
 }
 
+/// How far, as a fraction of the current estimate, the mean of the measured rows has to move before the unbuilt rows are re-estimated.
+const ESTIMATE_TOLERANCE: f32 = 0.01;
+
 /// One row of a virtualised list, or the space standing in for the rows that were not built.
 enum Slot<Item> {
     /// The run of skipped rows above or below the window, as a single box of their combined height. Keeping the scrollable content the full height is what makes the scrollbar and the wheel behave as if every row were there — which, as far as the user is concerned, they are.
@@ -60,7 +63,7 @@ enum Slot<Item> {
 /// Two constructors, for two kinds of row:
 ///
 /// - [`new`](Self::new) — **fixed row height**, the fast path. Every row must be `row_height` tall, and the window is worked out by division, with nothing to measure or remember. It is what a `.rsx` `virtual row_height:` loop builds, and the right choice whenever the rows are uniform.
-/// - [`measured`](Self::measured) — **variable row height**. Rows that have never been built stand at an estimate, each built row is measured once layout has placed it, and the measurement replaces the estimate in a [`HeightIndex`], so finding the rows on screen stays `O(log n)` however long the list. While the estimates are corrected the first row on screen holds still: the scroll offset moves by however much the rows above it turned out taller or shorter than guessed. Bringing a row into view goes through the list's [`VirtualRows`] handle, which knows where unbuilt rows stand.
+/// - [`measured`](Self::measured) — **variable row height**. Rows that have never been built stand at an estimate, which starts as the caller's and from then on is the mean height of the rows measured so far, so the scrollbar settles on the list's real length instead of drifting by the same error for every row. Each built row is measured once layout has placed it, and the measurement replaces the estimate in a [`HeightIndex`], so finding the rows on screen stays `O(log n)` however long the list. While the estimates are corrected, by a measurement or by the estimate itself moving, the first row on screen holds still: the scroll offset moves by however much the rows above it turned out taller or shorter than guessed. Bringing a row into view goes through the list's [`VirtualRows`] handle, which knows where unbuilt rows stand.
 ///
 /// `source` still returns every item, but runs only when what it reads changes: either constructor keeps the list it last returned, and a scroll or a moved cursor cuts the new window from that, cloning just the rows it builds — which is why the items must be [`VirtualItem`], any `Clone` type. Producing a `Vec` of plain data is cheap next to what this defers: constructing widgets, decoding images, laying out text.
 pub struct VirtualList;
@@ -265,39 +268,45 @@ fn spacer(height: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 /// The rows of a [`VirtualList::measured`] list as far as their heights go: where each one stands, built or not, and how to bring one into view.
 ///
-/// A clone is the same handle. Reads answer what is known now — measured heights for rows that have been built, the estimate for the rest — without subscribing, so they are safe to call from the effect that follows a selection; the positions they give move as rows are measured.
+/// A clone is the same handle. Reads answer what is known now — measured heights for rows that have been built, the running estimate for the rest — without subscribing, so they are safe to call from the effect that follows a selection; the positions they give move as rows are measured.
 #[derive(Clone)]
 pub struct VirtualRows(Rc<Rows>);
 
 struct Rows {
     viewport: ScrollViewport,
-    estimate: f32,
+    seed: f32,
+    estimate: Cell<f32>,
     header: Cell<f32>,
     heights: RefCell<HeightIndex>,
     keys: RefCell<Vec<u64>>,
     measured: RefCell<HashMap<u64, f32>>,
+    measured_total: Cell<f64>,
     /// Bumped whenever a height changes, so the window is worked out again.
     revision: RwSignal<u64>,
     /// A row asked to be brought into view before it had been measured, and the margin it asked for.
     pending: Cell<Option<(usize, f32)>>,
     settling: Cell<bool>,
+    estimating: Cell<bool>,
 }
 
 impl VirtualRows {
     /// Rows scrolled by `viewport`, the enclosing scroll area's live window (see [`crate::LayoutScrollArea::new_with`]), each standing `estimate` px tall until it is built and measured.
     ///
-    /// The closer the estimate is to a typical row, the less the scrollbar moves as rows are measured; the first row on screen holds still either way.
+    /// `estimate` is where the unbuilt rows start: once rows have been measured they stand at the mean of those instead, so the closer it is to a typical row, the less the scrollbar moves while the first screenfuls are measured. The first row on screen holds still either way.
     pub fn new(viewport: ScrollViewport, estimate: f32) -> Self {
         Self(Rc::new(Rows {
             viewport,
-            estimate: estimate.max(0.0),
+            seed: estimate.max(0.0),
+            estimate: Cell::new(estimate.max(0.0)),
             header: Cell::new(0.0),
             heights: RefCell::default(),
             keys: RefCell::default(),
             measured: RefCell::default(),
+            measured_total: Cell::new(0.0),
             revision: signal(0),
             pending: Cell::new(None),
             settling: Cell::new(false),
+            estimating: Cell::new(false),
         }))
     }
 
@@ -322,7 +331,7 @@ impl VirtualRows {
         self.0.header.get() + self.0.heights.borrow().offset_of(index)
     }
 
-    /// How tall row `index` is: measured once it has been built, the estimate before.
+    /// How tall row `index` is: measured once it has been built, the current estimate before.
     pub fn height_of(&self, index: usize) -> f32 {
         self.0.heights.borrow().height(index)
     }
@@ -366,24 +375,78 @@ impl Rows {
             .is_some_and(|key| self.measured.borrow().contains_key(key))
     }
 
-    /// Takes the keys of the rows the source now returns, keeping the measurements of the keys still among them. The items arriving after them are what works the window out again.
+    /// Takes the keys of the rows the source now returns, keeping the measurements of the keys still among them. When the change is an edit around a few rows, only those rows are looked up and the index is spliced; when most rows changed, it is built over again. The items arriving after them are what works the window out again.
     fn adopt(&self, keys: Vec<u64>) {
-        let heights = {
-            let mut measured = self.measured.borrow_mut();
-            let mut kept = HashMap::with_capacity(measured.len().min(keys.len()));
-            let heights = HeightIndex::new(keys.iter().map(|key| match measured.get(key) {
-                Some(&height) => {
-                    kept.insert(*key, height);
-                    height
-                }
-                None => self.estimate,
-            }));
-            *measured = kept;
-            heights
+        let spliced = {
+            let old = self.keys.borrow();
+            self.splice_changes(&old, &keys)
         };
-        *self.heights.borrow_mut() = heights;
+        if !spliced {
+            self.rebuild(&keys);
+        }
         *self.keys.borrow_mut() = keys;
         self.pending.set(None);
+    }
+
+    fn splice_changes(&self, old: &[u64], new: &[u64]) -> bool {
+        let shared = old.len().min(new.len());
+        let prefix = old.iter().zip(new).take_while(|(a, b)| a == b).count();
+        let suffix = old[prefix..]
+            .iter()
+            .rev()
+            .zip(new[prefix..].iter().rev())
+            .take(shared - prefix)
+            .take_while(|(a, b)| a == b)
+            .count();
+        let removed = &old[prefix..old.len() - suffix];
+        let added = &new[prefix..new.len() - suffix];
+        if removed.len().max(added.len()) * 2 > old.len().max(new.len()) {
+            return false;
+        }
+        let estimate = self.estimate.get();
+        let mut measured = self.measured.borrow_mut();
+        let still_there: HashSet<u64> = added.iter().copied().collect();
+        for key in removed.iter().filter(|key| !still_there.contains(key)) {
+            if let Some(height) = measured.remove(key) {
+                self.measured_total
+                    .set(self.measured_total.get() - f64::from(height));
+            }
+        }
+        let heights = added
+            .iter()
+            .map(|key| measured.get(key).copied().unwrap_or(estimate));
+        self.heights
+            .borrow_mut()
+            .splice(prefix, removed.len(), heights);
+        true
+    }
+
+    fn rebuild(&self, keys: &[u64]) {
+        let mut measured = self.measured.borrow_mut();
+        let mut kept = HashMap::with_capacity(measured.len().min(keys.len()));
+        let mut total = 0.0f64;
+        for key in keys {
+            if let Some(&height) = measured.get(key)
+                && kept.insert(*key, height).is_none()
+            {
+                total += f64::from(height);
+            }
+        }
+        *measured = kept;
+        self.measured_total.set(total);
+        let estimate = self.mean_height(measured.len()).round();
+        self.estimate.set(estimate);
+        *self.heights.borrow_mut() = HeightIndex::new(
+            keys.iter()
+                .map(|key| measured.get(key).copied().unwrap_or(estimate)),
+        );
+    }
+
+    fn mean_height(&self, count: usize) -> f32 {
+        match count {
+            0 => self.seed,
+            _ => (self.measured_total.get() / count as f64) as f32,
+        }
     }
 
     /// Measures the row built for `key` at `at` whenever layout places it.
@@ -405,7 +468,10 @@ impl Rows {
         if self.keys.borrow().get(at) != Some(&key) {
             return;
         }
-        self.measured.borrow_mut().insert(key, height);
+        let previous = self.measured.borrow_mut().insert(key, height);
+        self.measured_total.set(
+            self.measured_total.get() + f64::from(height) - f64::from(previous.unwrap_or(0.0)),
+        );
         let (x, y) = self.viewport.peek_offset();
         let (delta, anchor) = {
             let mut heights = self.heights.borrow_mut();
@@ -421,6 +487,55 @@ impl Rows {
             });
         }
         self.follow_pending();
+        self.follow_estimate();
+    }
+
+    /// Re-estimates the unbuilt rows once the measurements landing now have all been taken, so a screenful of rows measured together moves the scrollbar once rather than once each.
+    fn follow_estimate(self: &Rc<Self>) {
+        if self.estimating.replace(true) {
+            return;
+        }
+        let rows = Rc::clone(self);
+        after_settle(move || {
+            rows.estimating.set(false);
+            rows.retarget();
+        });
+    }
+
+    /// Stands every unmeasured row at the mean of the measured ones to the whole pixel, which is where layout puts a gap so the index and the layout keep agreeing, moving the offset by however far that moved the rows above the first one on screen, so that row stays put. A mean that has moved less than [`ESTIMATE_TOLERANCE`] (and a pixel) from the estimate is left, which is what keeps measuring the rows this brings on screen from nudging the estimate back and forth.
+    fn retarget(&self) {
+        let mean = self.mean_height(self.measured.borrow().len());
+        let current = self.estimate.get();
+        if (mean - current).abs() < (current * ESTIMATE_TOLERANCE).max(1.0) {
+            return;
+        }
+        let target = mean.round();
+        self.estimate.set(target);
+        let (x, y) = self.viewport.peek_offset();
+        let (anchor, before) = {
+            let heights = self.heights.borrow();
+            let anchor = heights.row_at(y);
+            (anchor, heights.offset_of(anchor))
+        };
+        let after = {
+            let measured = self.measured.borrow();
+            let keys = self.keys.borrow();
+            let mut heights = self.heights.borrow_mut();
+            *heights = HeightIndex::new(
+                keys.iter()
+                    .map(|key| measured.get(key).copied().unwrap_or(target)),
+            );
+            heights.offset_of(anchor)
+        };
+        batch(|| {
+            if after != before {
+                self.viewport.scroll_to(x, y + after - before);
+            }
+            self.revision.update(|n| *n = n.wrapping_add(1));
+        });
+        if let Some((index, margin)) = self.pending.get() {
+            self.bring_into_view(index, margin);
+        }
     }
 
     /// Brings a pending row into view again once the measurements landing now have all reached it.
@@ -448,7 +563,12 @@ impl Rows {
             let heights = self.heights.borrow();
             (heights.offset_of(index), heights.height(index))
         };
-        let (x, _) = self.viewport.peek_offset();
+        let (x, y) = self.viewport.peek_offset();
+        if let Some(furthest) = self.viewport.max_offset_y()
+            && y > furthest
+        {
+            self.viewport.scroll_to(x, furthest);
+        }
         self.viewport
             .reveal_rect(Rect::new(x, top, 0.0, height + self.header.get()), margin);
     }

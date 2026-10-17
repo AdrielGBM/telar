@@ -68,6 +68,10 @@ mod measured {
         heights.into_iter().enumerate().collect()
     }
 
+    fn taller_after(rows: usize, first: f32, rest: f32) -> impl Iterator<Item = f32> {
+        (0..1000).map(move |at| if at < rows { first } else { rest })
+    }
+
     impl Mounted {
         fn new(items: Vec<Item>, estimate: f32, overscan: f32) -> Self {
             Self::under_header(items, estimate, overscan, 0.0)
@@ -221,8 +225,8 @@ mod measured {
         assert_eq!(list.rows.height_of(5), 60.0);
         assert_eq!(
             list.rows.height_of(500),
-            30.0,
-            "an unbuilt row stands at the estimate"
+            37.0,
+            "an unbuilt row stands at the mean of the seven measured, rounded to the pixel"
         );
         for at in list.built() {
             assert_eq!(
@@ -252,9 +256,9 @@ mod measured {
 
     #[test]
     fn the_first_row_on_screen_holds_still_while_the_rows_above_it_are_measured() {
-        let list = Mounted::new(numbered(std::iter::repeat_n(40.0, 1000)), 20.0, 100.0);
+        let list = Mounted::new(numbered(taller_after(10, 20.0, 40.0)), 20.0, 100.0);
         assert_eq!(list.offset(), 0.0);
-        assert_eq!(list.rows.height_of(0), 40.0);
+        assert_eq!(list.rows.height_of(0), 20.0);
 
         list.scroll_to(1_010.0);
         let anchor = list.rows.row_at(1_010.0);
@@ -280,7 +284,7 @@ mod measured {
 
     #[test]
     fn a_row_shorter_than_its_estimate_above_the_view_pulls_the_offset_back() {
-        let list = Mounted::new(numbered(std::iter::repeat_n(10.0, 1000)), 30.0, 60.0);
+        let list = Mounted::new(numbered(taller_after(10, 30.0, 10.0)), 30.0, 60.0);
         list.scroll_to(3_000.0);
         let anchor = list.rows.row_at(3_000.0);
         let shown_at = list.rows.offset_of(anchor) - 3_000.0;
@@ -396,6 +400,136 @@ mod measured {
     }
 
     #[test]
+    fn unbuilt_rows_stand_at_the_mean_of_the_measured_ones_and_stay_there() {
+        let list = Mounted::new(numbered(std::iter::repeat_n(40.0, 1000)), 20.0, 0.0);
+        assert_eq!(
+            list.rows.height_of(900),
+            40.0,
+            "the seed gave way to the mean"
+        );
+        assert_eq!(list.rows.total_height(), 40_000.0);
+
+        for step in 1..=30 {
+            list.scroll_to(step as f32 * 400.0);
+            list.settle();
+            assert_eq!(list.rows.height_of(999), 40.0, "step {step}");
+        }
+    }
+
+    #[test]
+    fn the_estimate_settles_on_the_mean_of_rows_that_differ() {
+        let heights = (0..2000).map(|at| (16 + at % 5 * 8) as f32);
+        let list = Mounted::new(numbered(heights), 100.0, 50.0);
+        let mut estimates = Vec::new();
+        for step in 1..=40 {
+            list.scroll_to(step as f32 * 150.0);
+            list.settle();
+            estimates.push(list.rows.height_of(1999));
+        }
+        let last = *estimates.last().unwrap();
+        assert!((last - 32.0).abs() <= 3.0, "settled at {last}");
+        let changes = estimates
+            .windows(2)
+            .filter(|pair| pair[0] != pair[1])
+            .count();
+        assert!(changes <= 12, "{changes} changes: {estimates:?}");
+    }
+
+    #[test]
+    fn a_new_estimate_moves_the_offset_so_the_first_row_on_screen_stays_put() {
+        let list = Mounted::new(numbered(taller_after(10, 20.0, 40.0)), 20.0, 0.0);
+        list.scroll_to(1_010.0);
+        let anchor = list.rows.row_at(1_010.0);
+        let shown_at = list.rows.offset_of(anchor) - 1_010.0;
+        list.settle();
+
+        assert!(
+            list.rows.height_of(999) > 20.0,
+            "the estimate moved off its seed"
+        );
+        assert!(list.offset() > 1_010.0);
+        assert_eq!(list.on_screen(anchor), shown_at);
+        assert_eq!(list.rows.row_at(list.offset()), anchor);
+    }
+
+    #[test]
+    fn a_row_revealed_while_the_estimate_moves_still_ends_in_view() {
+        let heights = (0..2000).map(|at| if at < 8 { 20.0 } else { 60.0 });
+        let list = Mounted::new(numbered(heights), 20.0, 40.0);
+        list.rows.reveal(1500, 0.0);
+        list.settle();
+        let row = list.laid_out(1500);
+        assert_eq!(list.on_screen(1500) + row.height, VIEW);
+    }
+
+    #[test]
+    fn the_last_row_revealed_after_guessing_too_tall_ends_at_the_bottom_edge() {
+        let list = Mounted::new(numbered(std::iter::repeat_n(20.0, 500)), 100.0, 40.0);
+        list.rows.reveal(499, 0.0);
+        list.settle();
+        let row = list.laid_out(499);
+        assert_eq!(list.on_screen(499) + row.height, VIEW);
+    }
+
+    #[test]
+    fn editing_a_few_rows_keeps_the_others_measurements_and_positions() {
+        let heights = (0..400).map(|at| 10.0 + (at % 7) as f32);
+        let list = Mounted::new(numbered(heights), 30.0, 0.0);
+        let before: Vec<f32> = (0..5).map(|at| list.rows.height_of(at)).collect();
+
+        list.items.update(|items| items.insert(2, (10_000, 77.0)));
+        list.settle();
+        assert_eq!(list.rows.len(), 401);
+        assert_eq!(
+            list.rows.height_of(2),
+            77.0,
+            "the new row was built and measured"
+        );
+        assert_eq!(list.rows.height_of(3), before[2]);
+        assert_eq!(list.rows.height_of(4), before[3]);
+        assert_eq!(list.rows.offset_of(3), before[0] + before[1] + 77.0);
+
+        list.items.update(|items| {
+            items.remove(2);
+            items.remove(0);
+        });
+        list.settle();
+        assert_eq!(list.rows.len(), 399);
+        assert_eq!(list.rows.height_of(0), before[1]);
+        assert_eq!(list.rows.height_of(1), before[2]);
+        assert_eq!(list.rows.offset_of(2), before[1] + before[2]);
+        assert!(list.rows.is_measured(1));
+    }
+
+    #[test]
+    fn a_thousand_single_row_edits_in_a_hundred_thousand_rows_stay_quick() {
+        let heights = (0..100_000).map(|at| (16 + at % 5 * 8) as f32);
+        let list = Mounted::new(numbered(heights), 24.0, 50.0);
+        let mut keys: Vec<u64> = (0..100_000).map(|at| hash_key(&at)).collect();
+        let started = std::time::Instant::now();
+        for step in 0..1_000usize {
+            let at = (step * 104_729) % keys.len();
+            if step % 2 == 0 {
+                keys.insert(at, hash_key(&(1_000_000 + step)));
+            } else {
+                keys.remove(at);
+            }
+            list.rows.0.adopt(keys.clone());
+        }
+        let elapsed = started.elapsed();
+        assert_eq!(list.rows.len(), keys.len());
+        assert!(
+            elapsed < std::time::Duration::from_secs(3),
+            "a thousand edits took {elapsed:?}"
+        );
+        let heights = list.rows.0.heights.borrow();
+        let mut top = 0.0f32;
+        for at in (0..keys.len()).step_by(997) {
+            assert!(heights.offset_of(at) >= top);
+            top = heights.offset_of(at);
+        }
+    }
+    #[test]
     fn a_hundred_thousand_rows_build_a_screenful() {
         let heights = (0..100_000).map(|at| (16 + at % 5 * 8) as f32);
         let list = Mounted::new(numbered(heights), 24.0, 50.0);
@@ -409,7 +543,7 @@ mod measured {
         let anchor = list.rows.row_at(list.offset());
         assert!(built.contains(&anchor));
         assert!(
-            anchor > 40_000,
+            anchor > 30_000,
             "the view is deep in the list, at row {anchor}"
         );
     }

@@ -770,6 +770,16 @@ impl ScrollViewport {
         Some(target)
     }
 
+    /// The furthest down the view can be scrolled, from the content as last laid out, or `None` before the content and the viewport have been.
+    ///
+    /// An offset set while the content was taller, such as one aimed at the end of a list whose unbuilt rows were guessed too tall, is past this until something clamps it.
+    pub fn max_offset_y(&self) -> Option<f32> {
+        let content = self.content.get()?.peek();
+        let viewport = self.rect.peek();
+        (content.height > 0.0 && viewport.height > 0.0)
+            .then(|| (content.height - viewport.height).max(0.0))
+    }
+
     /// Where this viewport is scrolled to right now, without subscribing.
     pub fn peek_offset(&self) -> (f32, f32) {
         (self.set_x.peek(), self.set_y.peek())

@@ -323,7 +323,7 @@ element group
                           end
                         end
                         element group
-                          rect 0,484 420x1653
+                          rect 0,484 420x2193
                         end
                       end
                       element row
@@ -366,7 +366,7 @@ element group
                     end
                   end
                 end
-                rect 602,140 6x47.92 fill=#a8adc2ff radius=3
+                rect 602,140 6x38.25 fill=#a8adc2ff radius=3
               end
             end
             element status
