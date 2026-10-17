@@ -1571,3 +1571,40 @@ fn a_field_inside_the_frame_composes_where_the_window_shows_it() {
     window.send(Event::Ime(platform_core::Ime::Commit("c".into())));
     assert_eq!(value.get(), "abc", "and the commit reaches it");
 }
+
+#[test]
+fn focus_moved_inside_by_the_app_brings_the_frame_the_keys() {
+    reset_layout_runtime();
+    let [before, after, first, second] = [(); 4].map(|_| signal(false));
+    let canvas =
+        Rc::new(SurfaceCanvas::new(Size::new(1.0, 1.0), row_of(vec![first, second])).unwrap());
+    let window = Window::new(
+        SurfaceFrame::filling(
+            Rc::clone(&canvas),
+            LayoutStyle::new().width(FRAME.width).height(FRAME.height),
+        )
+        .unwrap(),
+        focusable(Color::BLACK, before),
+        focusable(Color::WHITE, after),
+        || {},
+    );
+    window.click(35.0, 55.0);
+    window.send(key(NamedKey::Tab, false));
+    window.send(key(NamedKey::Tab, false));
+    assert!(before.get(), "the keyboard is out in the window");
+
+    {
+        let _inside = canvas.enter();
+        focus::focus_next();
+    }
+    assert!(first.get());
+    assert!(
+        !before.get(),
+        "the window's stop gives the keyboard up to the frame"
+    );
+    window.send(key(NamedKey::Tab, false));
+    assert!(
+        second.get(),
+        "so the keys that follow reach the box that shows the focus"
+    );
+}

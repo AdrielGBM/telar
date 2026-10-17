@@ -106,7 +106,8 @@ impl SurfaceFrame {
         });
 
         let scope = owner_scope();
-        follow_outer_focus(id, surface);
+        follow_outer_focus(id, surface.clone());
+        follow_inner_focus(id, surface);
         if sizing == Sizing::Sized {
             follow_canvas_size(&canvas, leaf.node, style);
         }
@@ -351,6 +352,23 @@ fn follow_outer_focus(id: FocusId, surface: Weak<Surface>) {
             focus::clear();
         } else if by_keyboard && focus::current().is_none() {
             step(backwards);
+        }
+    });
+}
+
+/// Brings the frame the outer focus whenever focus moves onto a box inside while it does not hold it, however it moved there — a play step, a field focusing itself — so the box that shows the focus is the one the keys reach.
+fn follow_inner_focus(id: FocusId, surface: Weak<Surface>) {
+    effect(move || {
+        let Some(surface) = surface.upgrade() else {
+            return;
+        };
+        let held_inside = {
+            let _inside = surface.enter();
+            focus::current().is_some()
+        };
+        // `request` reads the outer focus without subscribing, so losing it out here never takes it back.
+        if held_inside {
+            focus::request(id);
         }
     });
 }
