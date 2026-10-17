@@ -61,6 +61,7 @@ fn walk() -> Vec<SegmentNodeInfo> {
 fn access_node(name: &str, role: Role, rect: Rect) -> AccessNode {
     AccessNode {
         id: Some(1),
+        parent: None,
         role,
         name: name.to_owned(),
         rect,
@@ -421,4 +422,34 @@ fn a_ring_is_what_the_outer_box_covers_outside_the_inner() {
             Rect::new(7.0, 1.0, 3.0, 6.0),
         ]
     );
+}
+
+/// The reader's rows nest as the reader nests the nodes, each under the row of the node it sits in, and keep naming the node by its place in the audit.
+#[test]
+fn the_reader_rows_nest_as_a_reader_steps_through_them() {
+    let at = Rect::new(0.0, 0.0, 10.0, 10.0);
+    let inside = |parent: usize, node: AccessNode| AccessNode {
+        parent: Some(parent),
+        ..node
+    };
+    let audit = AccessAudit {
+        nodes: vec![
+            access_node("Files", Role::Grid, at),
+            inside(0, access_node("", Role::Row, at)),
+            inside(1, access_node("Name", Role::ColumnHeader, at)),
+            access_node("Save", Role::Button, at),
+        ],
+        violations: Vec::new(),
+    };
+    let rows = accessibility::audit_rows(&audit);
+    let reader = rows
+        .iter()
+        .find(|row| &*row.id == READER_ROW)
+        .expect("the reader's branch");
+    let ids = |rows: &[telar_components::TreeNode]| -> Vec<String> {
+        rows.iter().map(|row| row.id.to_string()).collect()
+    };
+    assert_eq!(ids(&reader.children), ["reader/0", "reader/3"]);
+    assert_eq!(ids(&reader.children[0].children), ["reader/1"]);
+    assert_eq!(ids(&reader.children[0].children[0].children), ["reader/2"]);
 }

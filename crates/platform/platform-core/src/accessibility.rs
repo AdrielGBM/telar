@@ -11,10 +11,14 @@ pub use semantics_core::{
 };
 
 /// One thing a screen reader can land on.
+///
+/// A snapshot is a list of these that is also a tree: each node names the one it sits in by [`parent`](Self::parent), and comes after it and before that one's next sibling. Read in order, the list is the reading order a reader walks; read by its parents, it is the nesting a reader steps into — a grid's rows and their cells, a list box's options, a dialog's content.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AccessNode {
     /// A stable identity within this window for as long as the widget lives. `None` for text that is not a control, which nothing needs to address.
     pub id: Option<u64>,
+    /// The node this one sits in, by its place in the same snapshot, which is always before this one. `None` for a node the window holds directly.
+    pub parent: Option<usize>,
     pub role: Role,
     pub name: String,
     /// Window-absolute, which is the space every platform accessibility layer works in.
@@ -56,13 +60,42 @@ pub struct AccessNode {
     pub modal: bool,
 }
 
-/// The snapshot as a reader would speak it, one line per node in reading order: what a terminal, a log or a test can carry where there is no accessibility API to hand the nodes to.
+/// The nodes `parent` holds directly, by their places in `nodes`, in reading order: the window's own for `None`.
+pub fn children_of(
+    nodes: &[AccessNode],
+    parent: Option<usize>,
+) -> impl Iterator<Item = usize> + '_ {
+    nodes
+        .iter()
+        .enumerate()
+        .filter(move |(_, node)| node.parent == parent)
+        .map(|(index, _)| index)
+}
+
+/// How many nodes each node of `nodes` sits inside: `0` for one the window holds directly.
+pub fn depths(nodes: &[AccessNode]) -> Vec<usize> {
+    let mut depths: Vec<usize> = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        let depth = node
+            .parent
+            .and_then(|parent| depths.get(parent))
+            .map_or(0, |above| above + 1);
+        depths.push(depth);
+    }
+    depths
+}
+
+/// The snapshot as a reader would speak it, one line per node in reading order, each indented two spaces for every node it sits inside: what a terminal, a log or a test can carry where there is no accessibility API to hand the nodes to.
 pub fn transcript(nodes: &[AccessNode]) -> String {
     let focus = spoken_focus(nodes);
+    let depths = depths(nodes);
     let mut out = String::new();
     for (index, node) in nodes.iter().enumerate() {
-        if !out.is_empty() {
+        if index > 0 {
             out.push('\n');
+        }
+        for _ in 0..depths[index] {
+            out.push_str("  ");
         }
         out.push_str(&node.name);
         if node.role != Role::Label {

@@ -57,7 +57,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             sample::expect_names(
                 canvas,
                 &by_role(Role::ListItem),
-                &["Review", "Build", "Design", "Test", "Ship"],
+                &["Review", "Design", "Build", "Test", "Ship"],
             )
         }),
     ]

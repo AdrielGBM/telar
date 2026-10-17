@@ -173,18 +173,19 @@ row of a table. A target says only the numbers the row's role takes (`Role::posi
 | Role | Browser, document (`web-dom`) | Desktop | Terminal reading |
 | --- | --- | --- | --- |
 | `treeitem`, `listitem` | `aria-level`, `aria-posinset`, `aria-setsize` | AccessKit level and position in set, from zero | `level 2, 3 of 7` |
-| `option`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `radio`, `tab`, `article` | `aria-posinset`, `aria-setsize` | Position in set | `3 of 7` |
-| `row` | `aria-rowindex`, and the `grid` it is in `aria-rowcount`: the row's `size`, its header row included | Row index | `1 of 501` |
+| `option`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `radio`, `tab`, `article` | `aria-posinset`, `aria-setsize` | Position in set, and the set's size on the node holding it | `3 of 7` |
+| `row` | `aria-rowindex`, and the `grid` it is in `aria-rowcount`: the row's `size`, its header row included | Row index, and the grid it is in its row count | `1 of 501` |
 
 Any other role says none of them. `tree_view` says it for its rows, `virtual_list` for its options and `data_table`
 for its rows, its header row first.
 
 A box that says where it sits is a node of the desktop tree and the terminal's reading even when it is no control
 and has no name, such as a table's header row: its place is something only it can tell a reader, so it is read as
-its role and its place (`row, 1 of 501`), with an empty name. The controls and the text inside it keep their own
-names and none of their words becomes its name. Only a place its role takes earns that: an unnamed box with no
-place, or with a place its role does not take (`Group`), says nothing a reader would hear and is left out, so a
-list of plain `listitem` wrappers does not fill the tree with empty items. On a raster frame the place travels on
+its role and its place (`row, 1 of 501`), with an empty name. The controls and the text inside it are read inside
+it and keep their own names; none of their words becomes its name. Only a place its role takes earns that: an
+unnamed box with no place, or with a place its role does not take (`Group`), says nothing a reader would hear and
+is left out, so a list of plain `listitem` wrappers does not fill the tree with empty items (a structure such as
+a `list` or a `grid` is the exception: see [The desktop tree](#the-desktop-tree)). On a raster frame the place travels on
 the box's element beside its role, as the snapshot reads both along the frame's nesting.
 
 ## Lists that take several rows
@@ -285,7 +286,9 @@ locale's (`use_locale()`), and each target says it in its own idiom:
 A terminal screen reader reads the cells, and cells carry neither a name the application gave nor what it
 hid. Set `TELAR_TUI_READING` to a file path (or `TuiPlatformConfig::reading`) and the terminal frontend
 keeps that file as a reading of the screen, rewritten whenever it changes: one line per thing on screen,
-in reading order, named the way a screen reader would name it (`Close, button`, `Telar logo, image`).
+in reading order, named the way a screen reader would name it (`Close, button`, `Telar logo, image`), and
+indented two spaces for every node it sits in, so a grid's rows read under the grid and a row's cells under the row
+(see [The desktop tree](#the-desktop-tree)).
 Following it from a second terminal gives a reader what the cells cannot. Off by default, so a frame costs
 nothing when nobody reads it.
 
@@ -344,12 +347,28 @@ nix develop -c nix shell nixpkgs#firefox nixpkgs#geckodriver -c sh -c \
 
 Where the keyboard is shown on each target is in [keyboard.md](keyboard.md#what-shows-where-the-keyboard-is).
 
-The desktop tree is still flat and carries no structure: the snapshot is built from the controls and the text a
-frame draws, and a raster frame does not say which box is a heading or a landmark, so the fixture's heading
-reaches a desktop reader as a label. The document has the `<h1>`.
+## The desktop tree
 
-A grid is flat on the desktop too: its rows, header row included, are siblings of their cells under the window
-rather than their parents, and the grid does not publish a row count, so a reader's table commands have no
-structure to walk. The nodes are in reading order, by where they show — of two at the same corner the larger
-first, so a row reads before its first cell — which puts the rows built above a scrolled view, and those scrolled
-under a header held at the top, ahead of that header row. The document reads its rows in the order they are built.
+The desktop tree has the structure a reader steps into. The snapshot (`ui_core::accessibility::snapshot`) is a
+tree listed in reading order: each `AccessNode` names the node it sits in by `parent`, and comes after it and
+before that node's next sibling, so reading the list in order is reading the tree depth first. A node sits in the
+nearest box around it, along the frame's element nesting, that is a node itself: a control, a box the application
+named, a box that says where it sits, or a box given no name whose role is a structure — a `tablist`, `tabpanel`,
+`menu`, `listbox`, `tree`, `grid`, `row`, `toolbar`, `list`, `dialog`, `status`, `log`, `article` or a landmark
+(`banner`, `navigation`, `main`, `complementary`, `contentinfo`, `search`) — as long as it holds a node; holding
+none, it is left out. The boxes between them, plain groups and scroll areas, are not nodes. A box named as a group
+reads as a label beside what it groups rather than around it, and a heading given no name still reaches a desktop
+reader as the label of its text; the document has the `<h1>`. A surface nested in the frame joins the tree inside
+the node it is drawn in.
+
+AccessKit gets the same tree: every node is a child of the one it sits in, and the window holds the rest. A grid
+holds its rows and each row its cells; the grid says its row count — from the `size` its rows say, so a reader
+hears every row of a table that builds a screenful — and its column count, each row its index, and each cell its
+column and its row's index. A set whose items agree on its size, such as the options of a list box, says it on the
+list, where AccessKit reads it; a tree whose rows sit at several levels leaves each row's level and place to say it.
+A control keeps its focus id as its node id wherever it sits, so focus and the row a tree's cursor rests on stay the
+same nodes between updates.
+
+Siblings are in reading order, by where they show — of two at the same corner the larger first — except that a box
+held at the edge of a scrolled view (`sticky`) is read where the flow puts it rather than where it shows. A table's
+header row is read before the rows built above the view and the rows scrolled under it, as the document reads it.

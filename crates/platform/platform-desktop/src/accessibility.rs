@@ -1,6 +1,6 @@
 //! The bridge from Telar's accessibility tree to the platform's.
 //!
-//! Telar describes its window as a flat list of [`AccessNode`]s — what each control is, what it says, where it sits — and this turns that into the tree AccessKit hands to a screen reader, and turns the requests coming back into ordinary input.
+//! Telar describes its window as a tree of [`AccessNode`]s listed in reading order — what each control is, what it says, where it sits, and what it sits in — and this turns that into the tree AccessKit hands to a screen reader, and turns the requests coming back into ordinary input.
 //!
 //! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
 
@@ -16,9 +16,9 @@ use platform_core::{
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
 const ROOT: NodeId = NodeId(0);
 
-/// Turns Telar's flat description of the window into the tree AccessKit publishes.
+/// Turns Telar's description of the window into the tree AccessKit publishes.
 ///
-/// Flat under one root rather than mirroring the widget hierarchy, and deliberately: the nesting a screen reader wants is the nesting of *meaning* — a control, the text explaining it — not the nesting of boxes a layout happened to need. Reading order carries that, and the nodes arrive in it.
+/// The nesting is the snapshot's own — the nesting of *meaning*, a grid around its rows and a row around its cells, a list box around its options, a dialog around what it asks — not the nesting of every box a layout happened to need, and each node's children are in the reading order the snapshot lists them in. What a reader counts off a container is said on it: a grid's rows and columns, a set's size where every item in it says the same one.
 pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>) -> TreeUpdate {
     let mut root = Node::new(AkRole::Window);
     root.set_label(title.to_string());
@@ -26,16 +26,29 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         root.set_language(lang);
     }
 
+    // Positional ids for the labels, which nothing addresses; a control keeps its focus id, so the same button stays the same node across frames and a reader is not told it appeared anew.
+    let ids: Vec<NodeId> = nodes
+        .iter()
+        .enumerate()
+        .map(|(index, node)| match node.id {
+            Some(focus_id) => control_id(focus_id),
+            None => NodeId(index as u64 + 1),
+        })
+        .collect();
+    let mut children: Vec<Vec<usize>> = vec![Vec::new(); nodes.len()];
+    let mut top = Vec::new();
+    for (index, node) in nodes.iter().enumerate() {
+        match node.parent.filter(|&parent| parent < index) {
+            Some(parent) => children[parent].push(index),
+            None => top.push(index),
+        }
+    }
+
     let mut updates: Vec<(NodeId, Node)> = Vec::with_capacity(nodes.len() + 1);
-    let mut children = Vec::with_capacity(nodes.len());
     let mut focus = ROOT;
 
     for (index, node) in nodes.iter().enumerate() {
-        // Positional ids for the labels, which nothing addresses; a control keeps its focus id, so the same button stays the same node across frames and a reader is not told it appeared anew.
-        let id = match node.id {
-            Some(focus_id) => control_id(focus_id),
-            None => NodeId(index as u64 + 1),
-        };
+        let id = ids[index];
         let mut ak = Node::new(role_of(node.role));
         ak.set_label(node.name.clone());
         ak.set_bounds(AkRect {
@@ -111,7 +124,7 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         {
             ak.set_controls(vec![control_id(target)]);
         }
-        // AccessKit counts from zero, and reads a set's size off a container this flat tree does not have, so only the level and the place are said.
+        // AccessKit counts from zero.
         if let Some((kind, place)) = node
             .position
             .and_then(|place| Some((node.role.positioning()?, place)))
@@ -133,11 +146,15 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         if node.modal {
             ak.set_modal();
         }
-        children.push(id);
+        let held = &children[index];
+        say_what_it_holds(&mut ak, nodes, &children, index);
+        if !held.is_empty() {
+            ak.set_children(held.iter().map(|&child| ids[child]).collect::<Vec<_>>());
+        }
         updates.push((id, ak));
     }
 
-    root.set_children(children);
+    root.set_children(top.iter().map(|&index| ids[index]).collect::<Vec<_>>());
     updates.push((ROOT, root));
     TreeUpdate {
         nodes: updates,
@@ -147,6 +164,92 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
     }
 }
 
+/// What a reader counts off the node at `index` from the nodes the tree's `children` say each holds: a grid's rows and columns, a row's place and its cells' columns, a set's size.
+///
+/// The counts come from what the items say of themselves where they say it, since a virtualised grid or list builds only the items on screen; the rows and cells built are counted only where nothing says more.
+fn say_what_it_holds(ak: &mut Node, nodes: &[AccessNode], children: &[Vec<usize>], index: usize) {
+    let node = &nodes[index];
+    let held = &children[index];
+    match node.role {
+        Role::Grid => {
+            let rows = || {
+                held.iter()
+                    .copied()
+                    .filter(|&child| nodes[child].role == Role::Row)
+            };
+            let said = rows()
+                .filter_map(|row| nodes[row].position)
+                .map(|place| place.size as usize)
+                .max();
+            ak.set_row_count(said.unwrap_or(rows().count()));
+            let columns = rows()
+                .map(|row| cells_of(nodes, children, row).count())
+                .max()
+                .unwrap_or(0);
+            ak.set_column_count(columns);
+        }
+        Role::Row if node.position.is_none() => {
+            if let Some(row) = row_index(nodes, children, index) {
+                ak.set_row_index(row);
+            }
+        }
+        Role::GridCell | Role::ColumnHeader => {
+            if let Some(row) = node.parent {
+                if let Some(column) = cells_of(nodes, children, row).position(|cell| cell == index)
+                {
+                    ak.set_column_index(column);
+                }
+                if let Some(row) = row_index(nodes, children, row) {
+                    ak.set_row_index(row);
+                }
+            }
+        }
+        _ => {}
+    }
+    let mut sizes = held.iter().filter_map(|&child| {
+        let item = &nodes[child];
+        match item.role.positioning()? {
+            Positioning::InSet | Positioning::Nested => {
+                item.position.map(|place| (place.level, place.size))
+            }
+            Positioning::GridRow => None,
+        }
+    });
+    if let Some(first) = sizes.next()
+        && sizes.all(|other| other == first)
+    {
+        ak.set_size_of_set(first.1 as usize);
+    }
+}
+
+/// The cells of the row at `row`, in reading order, by their places in `nodes`.
+fn cells_of<'a>(
+    nodes: &'a [AccessNode],
+    children: &'a [Vec<usize>],
+    row: usize,
+) -> impl Iterator<Item = usize> + 'a {
+    children[row]
+        .iter()
+        .copied()
+        .filter(|&cell| matches!(nodes[cell].role, Role::GridCell | Role::ColumnHeader))
+}
+
+/// Where the row at `row` sits among its grid's rows, counted from zero: the place it says, or failing that its place among the rows built.
+fn row_index(nodes: &[AccessNode], children: &[Vec<usize>], row: usize) -> Option<usize> {
+    let node = &nodes[row];
+    if node.role != Role::Row {
+        return None;
+    }
+    if let Some(place) = node.position {
+        return Some(place.position.saturating_sub(1) as usize);
+    }
+    let grid = node.parent.filter(|&grid| nodes[grid].role == Role::Grid)?;
+    children[grid]
+        .iter()
+        .copied()
+        .filter(|&sibling| nodes[sibling].role == Role::Row)
+        .position(|sibling| sibling == row)
+}
 /// The node a control goes by, kept apart from the positional ids of labels.
 fn control_id(focus_id: u64) -> NodeId {
     NodeId(focus_id.wrapping_add(1 << 32))

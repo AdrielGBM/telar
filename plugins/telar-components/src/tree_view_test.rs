@@ -798,3 +798,34 @@ fn a_wrapping_tree_s_rows_say_where_they_sit() {
         })
     );
 }
+
+/// A reader steps into the tree to find its rows, every one shown held by the tree itself, in the order they show, each saying its level.
+#[test]
+fn the_tree_holds_every_row_it_shows() {
+    let tree = Mounted::new(catalogue(), 400.0);
+    tree.expanded.set(["inputs".into()].into_iter().collect());
+    relayout_if_dirty();
+    let nodes = ui_core::accessibility::snapshot(&tree.tree.commands());
+    let at = nodes
+        .iter()
+        .position(|node| node.role == Role::Tree)
+        .expect("the tree is read as a tree");
+    let rows: Vec<(&str, Option<u32>)> = nodes
+        .iter()
+        .filter(|node| node.parent == Some(at))
+        .map(|node| {
+            assert_eq!(node.role, Role::TreeItem, "{node:?}");
+            (node.name.as_str(), node.position.map(|place| place.level))
+        })
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("Inputs", Some(1)),
+            ("Button", Some(2)),
+            ("Checkbox new", Some(2)),
+            ("Layout", Some(1)),
+            ("About", Some(1)),
+        ]
+    );
+}

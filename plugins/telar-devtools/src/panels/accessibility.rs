@@ -1,4 +1,4 @@
-//! The accessibility panel: what the checks found, and what a reader is told, in reading order.
+//! The accessibility panel: what the checks found, and what a reader is told, as the tree a reader steps through.
 
 use telar::{
     AccessAudit, AccessNode, AccessSeverity, AlignItems, Children, Container, LayoutError,
@@ -79,7 +79,7 @@ fn summary(audit: &AccessAudit) -> String {
     )
 }
 
-/// The panel's rows: the violations under one branch and the reader's nodes under another, each named by its place, which [`chosen_rect`] reads back.
+/// The panel's rows: the violations under one branch and the reader's nodes under another, nested as the reader nests them, each named by its place, which [`chosen_rect`] reads back.
 pub(crate) fn audit_rows(audit: &AccessAudit) -> Vec<TreeNode> {
     let violations = audit
         .violations
@@ -92,9 +92,7 @@ pub(crate) fn audit_rows(audit: &AccessAudit) -> Vec<TreeNode> {
                 violation.rule.id()
             ))
         });
-    let nodes = audit.nodes.iter().enumerate().map(|(index, node)| {
-        TreeNode::new(node_row(index), name_of(node)).with_badge(badge_of(node))
-    });
+    let nodes = reader_rows(&audit.nodes);
     vec![
         TreeNode::new(VIOLATIONS_ROW, strings::text(PROBLEMS))
             .with_badge(audit.violations.len().to_string())
@@ -103,6 +101,25 @@ pub(crate) fn audit_rows(audit: &AccessAudit) -> Vec<TreeNode> {
             .with_badge(audit.nodes.len().to_string())
             .with_children(nodes),
     ]
+}
+
+/// The reader's nodes as the tree a reader steps through, each row under the row of the node it sits in.
+fn reader_rows(nodes: &[AccessNode]) -> Vec<TreeNode> {
+    let mut held: Vec<Vec<TreeNode>> = nodes.iter().map(|_| Vec::new()).collect();
+    let mut top = Vec::new();
+    for (index, node) in nodes.iter().enumerate().rev() {
+        let mut inside = std::mem::take(&mut held[index]);
+        inside.reverse();
+        let row = TreeNode::new(node_row(index), name_of(node))
+            .with_badge(badge_of(node))
+            .with_children(inside);
+        match node.parent.filter(|&parent| parent < index) {
+            Some(parent) => held[parent].push(row),
+            None => top.push(row),
+        }
+    }
+    top.reverse();
+    top
 }
 
 fn violation_row(index: usize) -> String {

@@ -41,29 +41,45 @@ pub fn is_read(command: &DrawCommand) -> bool {
     )
 }
 
-/// Everything the platform's accessibility layer needs to describe the window, in reading order.
+/// Everything the platform's accessibility layer needs to describe the window: a tree, listed in reading order, as [`AccessNode`] says.
 ///
 /// `commands` is the frame the renderer is about to draw — the same list, so what is announced and what is painted are the same picture by construction rather than by agreement.
 ///
-/// A surface drawn inside this one's frame ([`DrawCommand::PushSurface`]) is read in its own world, where its boxes' ids mean its boxes, and its nodes are placed where the frame shows them: see [`NestedSurface::place`].
+/// A surface drawn inside this one's frame ([`DrawCommand::PushSurface`]) is read in its own world, where its boxes' ids mean its boxes, and its nodes are placed where the frame shows them, inside the node it is drawn in: see [`NestedSurface::place`] and [`graft`].
 pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
-    let mut nodes = surface_snapshot(commands);
-    for nested in nested_surfaces(commands) {
-        let Some(_entered) = nested.enter() else {
-            continue;
-        };
-        nodes.extend(
-            snapshot(&commands[nested.commands.clone()])
-                .into_iter()
-                .map(|node| nested.place(node)),
-        );
-    }
-    sort_in_reading_order(&mut nodes);
-    nodes
+    let SurfaceTree { nodes, nested } = surface_tree(commands);
+    let grafts = nested
+        .into_iter()
+        .filter_map(|(surface, parent)| {
+            let _entered = surface.enter()?;
+            let inner = snapshot(&commands[surface.commands.clone()]);
+            Some((
+                parent,
+                inner.into_iter().map(|node| surface.place(node)).collect(),
+            ))
+        })
+        .collect();
+    graft(nodes, grafts)
 }
 
 /// What a reader is told about the surface entered now, which drew `commands`, leaving out every surface nested in its frame: [`snapshot`] for one surface, as a check that reads each surface in its own world wants it.
 pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
+    surface_tree(commands).nodes
+}
+
+/// One surface as a reader meets it, with the places the surfaces nested in its frame take in it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SurfaceTree {
+    /// The [`surface_snapshot`].
+    pub nodes: Vec<AccessNode>,
+    /// The surfaces drawn directly inside the frame, in draw order, each with the node of [`nodes`](Self::nodes) it is drawn inside: `None` for one the window holds directly.
+    pub nested: Vec<(NestedSurface, Option<usize>)>,
+}
+
+/// [`surface_snapshot`], and where in it each surface nested in the frame sits, for a caller reading those in their own worlds and joining them to it with [`graft`].
+///
+/// A node sits in the nearest box around it, by the frame's own element nesting, that is a node itself: a control, a box the application named, one that says where it sits, or one whose role is a structure a reader steps into, such as a tab list or a dialog. Such a box given no name is a node only while it holds one.
+pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
     let exposed = focus::exposed();
     let control_nodes: FxHashSet<NodeId> = exposed.iter().map(|e| e.node).collect();
     let reading = Reading::of(commands, &control_nodes);
@@ -77,15 +93,16 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
     let modal = |role: Role, node: NodeId| role == Role::Dialog && layers.holds(node);
 
     let mut named_controls = vec![false; controls.len()];
-    let mut nodes: Vec<AccessNode> = controls
+    let mut found: Vec<Found> = controls
         .iter()
         .enumerate()
         .map(|(i, (e, rect))| {
             let label = reading.label_of(e.node);
             named_controls[i] = label.is_some();
             let link = reading.links.get(&e.node);
-            AccessNode {
+            let node = AccessNode {
                 id: Some(e.id),
+                parent: None,
                 role: e.role,
                 name: label.map(str::to_string).unwrap_or_default(),
                 rect: hit_rect(e.node).unwrap_or(*rect),
@@ -108,7 +125,8 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 controls: focus::controls_state(e.id)
                     .filter(|item| controls.iter().any(|(c, _)| c.id == *item)),
                 modal: modal(e.role, e.node),
-            }
+            };
+            Found::holding(node, e.node, &reading)
         })
         .collect();
 
@@ -168,41 +186,69 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
         match owner {
             // A control the application named is called that, whatever it draws.
             Some(i) if named_controls[i] && piece.url.is_none() => {}
-            Some(i) if piece.url.is_none() => append(&mut nodes[i].name, &piece.text),
+            Some(i) if piece.url.is_none() => append(&mut found[i].node.name, &piece.text),
             // Text belonging to no control is still content: a heading, a caption, the paragraph a dialog asks about. A link run is its own node wherever it sits.
-            _ => nodes.push(AccessNode {
-                lang: piece.lang.as_deref().map(str::to_string),
-                url: piece.url,
-                position: piece.position,
-                modal: piece.drawn_in.is_some_and(|node| modal(piece.role, node)),
-                ..unaddressed(piece.role, piece.text, piece.rect)
-            }),
+            _ => {
+                let node = AccessNode {
+                    lang: piece.lang.as_deref().map(str::to_string),
+                    url: piece.url,
+                    position: piece.position,
+                    modal: piece.drawn_in.is_some_and(|node| modal(piece.role, node)),
+                    ..unaddressed(piece.role, piece.text, piece.rect)
+                };
+                found.push(match piece.named_box {
+                    Some(named) if holds_what_is_inside(node.role) => {
+                        Found::holding(node, named.node, &reading)
+                    }
+                    _ => Found::inside(node, piece.drawn_in, &reading),
+                });
+            }
         }
     }
 
-    nodes.extend(
+    found.extend(
         reading
             .placed
             .iter()
             .filter(|placed| !layers.behind(placed.node))
             .filter_map(|placed| {
                 let rect = visible_rect(placed.node).filter(|rect| area(*rect) > 0.0)?;
-                Some(AccessNode {
+                let node = AccessNode {
                     position: Some(placed.position),
                     ..unaddressed(placed.role, String::new(), rect)
-                })
+                };
+                Some(Found::holding(node, placed.node, &reading))
             }),
     );
 
-    sort_in_reading_order(&mut nodes);
-    nodes.retain(|n| n.id.is_some() || !n.name.is_empty() || n.position.is_some());
-    nodes
+    found.extend(
+        reading
+            .structures
+            .iter()
+            .filter(|structure| !layers.behind(structure.node))
+            .filter_map(|structure| {
+                let rect = visible_rect(structure.node).filter(|rect| area(*rect) > 0.0)?;
+                let node = AccessNode {
+                    modal: modal(structure.role, structure.node),
+                    ..unaddressed(structure.role, String::new(), rect)
+                };
+                Some(Found::holding(node, structure.node, &reading))
+            }),
+    );
+
+    let surfaces = nested_surfaces(commands);
+    let (nodes, anchors) = arrange(found, &reading, &reading.surfaces_in);
+    SurfaceTree {
+        nodes,
+        nested: surfaces.into_iter().zip(anchors).collect(),
+    }
 }
 
 /// A node nothing addresses and that carries no state, as text, a named box and a placed box begin before saying what sets each apart.
 fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
     AccessNode {
         id: None,
+        parent: None,
         role,
         name,
         rect,
@@ -223,6 +269,240 @@ fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
         sort: None,
         multiselectable: false,
         modal: false,
+    }
+}
+
+/// Whether a node read for a box holds the nodes read inside that box. Text, and a picture, are read as what they say; a box named as a group reads as its name, a caption beside what it groups.
+fn holds_what_is_inside(role: Role) -> bool {
+    !matches!(role, Role::Label | Role::Drawing)
+}
+
+/// Whether a box given no name is still a node for the nodes inside it, as the element a document makes of it is: a tab list around its tabs, a dialog around what it asks, a landmark around its region. A plain group is scaffolding, a heading reads as its text, and a section or a form with no name is no landmark.
+fn holds_structure(role: Role) -> bool {
+    matches!(
+        role,
+        Role::TabList
+            | Role::TabPanel
+            | Role::Menu
+            | Role::ListBox
+            | Role::Tree
+            | Role::Grid
+            | Role::Row
+            | Role::Toolbar
+            | Role::List
+            | Role::Dialog
+            | Role::Status
+            | Role::Log
+            | Role::Banner
+            | Role::Navigation
+            | Role::Main
+            | Role::Complementary
+            | Role::ContentInfo
+            | Role::Article
+            | Role::Search
+    )
+}
+
+/// A node on its way into the tree: the box it was read for, if it holds what is inside that box, where in the frame's nesting it sits, and where it falls in reading order.
+struct Found {
+    node: AccessNode,
+    holds: Option<NodeId>,
+    /// The innermost box around it: for a node read for a box, the box's parent; for text, the box it is drawn in.
+    within: Option<NodeId>,
+    /// Its rect where the flow puts it, which a box stuck to the edge of a scrolled view is read by among its siblings: the header row of a grid is read before the rows scrolled under it.
+    key: Rect,
+}
+
+impl Found {
+    fn holding(node: AccessNode, at: NodeId, reading: &Reading) -> Self {
+        Self {
+            key: reading.in_flow(node.rect, Some(at)),
+            within: reading.parent_of(at),
+            holds: Some(at),
+            node,
+        }
+    }
+
+    fn inside(node: AccessNode, at: Option<NodeId>, reading: &Reading) -> Self {
+        Self {
+            key: reading.in_flow(node.rect, at),
+            within: at,
+            holds: None,
+            node,
+        }
+    }
+
+    /// Whether a reader is told about it for what it says itself, rather than only for the nodes it holds.
+    fn speaks(&self) -> bool {
+        self.node.id.is_some() || !self.node.name.is_empty() || self.node.position.is_some()
+    }
+}
+
+/// Joins `found` into a tree and lists it in reading order: each node in the nearest node around it, siblings by where they fall, and a node that says nothing itself kept only while it holds one that does. Also places each of `anchors`, a box of the frame, in the nearest node around it.
+fn arrange(
+    found: Vec<Found>,
+    reading: &Reading,
+    anchors: &[Option<NodeId>],
+) -> (Vec<AccessNode>, Vec<Option<usize>>) {
+    let mut holders: FxHashMap<NodeId, usize> = FxHashMap::default();
+    for (i, f) in found.iter().enumerate() {
+        if let Some(node) = f.holds {
+            holders.entry(node).or_insert(i);
+        }
+    }
+    let enclosing = |mut at: Option<NodeId>| {
+        while let Some(node) = at {
+            if let Some(&holder) = holders.get(&node) {
+                return Some(holder);
+            }
+            at = reading.parent_of(node);
+        }
+        None
+    };
+    let parents: Vec<Option<usize>> = found.iter().map(|f| enclosing(f.within)).collect();
+
+    let mut kept: Vec<bool> = found.iter().map(Found::speaks).collect();
+    for i in 0..found.len() {
+        if !kept[i] {
+            continue;
+        }
+        let mut at = parents[i];
+        while let Some(above) = at {
+            if kept[above] {
+                break;
+            }
+            kept[above] = true;
+            at = parents[above];
+        }
+    }
+    let kept_around = |mut at: Option<usize>| {
+        while let Some(i) = at {
+            if kept[i] {
+                return Some(i);
+            }
+            at = parents[i];
+        }
+        None
+    };
+
+    let mut roots = Vec::new();
+    let mut children: Vec<Vec<usize>> = vec![Vec::new(); found.len()];
+    for i in (0..found.len()).filter(|&i| kept[i]) {
+        match kept_around(parents[i]) {
+            Some(parent) => children[parent].push(i),
+            None => roots.push(i),
+        }
+    }
+    let by_key = |a: &usize, b: &usize| reading_order(found[*a].key, found[*b].key);
+    roots.sort_by(by_key);
+    for siblings in &mut children {
+        siblings.sort_by(by_key);
+    }
+
+    let anchors = anchors
+        .iter()
+        .map(|anchor| kept_around(enclosing(*anchor)))
+        .collect::<Vec<_>>();
+    let (nodes, placed) = flatten(
+        found.into_iter().map(|f| f.node).collect(),
+        &roots,
+        &children,
+    );
+    let anchors = anchors
+        .into_iter()
+        .map(|anchor| anchor.and_then(|i| placed[i]))
+        .collect();
+    (nodes, anchors)
+}
+
+/// Lists the tree `roots` and `children` make of `nodes` depth first, each node's [`parent`](AccessNode::parent) set to its parent's place in the list, and returns it with the place each of `nodes` took: `None` for one the tree does not reach.
+fn flatten(
+    nodes: Vec<AccessNode>,
+    roots: &[usize],
+    children: &[Vec<usize>],
+) -> (Vec<AccessNode>, Vec<Option<usize>>) {
+    let mut placed: Vec<Option<usize>> = vec![None; nodes.len()];
+    let mut nodes: Vec<Option<AccessNode>> = nodes.into_iter().map(Some).collect();
+    let mut listed = Vec::with_capacity(nodes.len());
+    let mut pending: Vec<(usize, Option<usize>)> =
+        roots.iter().rev().map(|&root| (root, None)).collect();
+    while let Some((at, parent)) = pending.pop() {
+        let Some(mut node) = nodes[at].take() else {
+            continue;
+        };
+        node.parent = parent;
+        placed[at] = Some(listed.len());
+        pending.extend(
+            children[at]
+                .iter()
+                .rev()
+                .map(|&child| (child, Some(listed.len()))),
+        );
+        listed.push(node);
+    }
+    (listed, placed)
+}
+
+/// Joins to `nodes`, a snapshot, the snapshots in `grafts`, each under the node of `nodes` it names or at the top for `None`: how [`snapshot`] joins the surfaces nested in a frame to the frame's own tree.
+///
+/// The nodes already in `nodes` keep their order; a grafted snapshot's top nodes are read among the siblings they join by where they fall.
+pub fn graft(
+    nodes: Vec<AccessNode>,
+    grafts: Vec<(Option<usize>, Vec<AccessNode>)>,
+) -> Vec<AccessNode> {
+    if grafts.iter().all(|(_, inner)| inner.is_empty()) {
+        return nodes;
+    }
+    let mut all = nodes;
+    let mut roots = Vec::new();
+    let mut children: Vec<Vec<usize>> = vec![Vec::new(); all.len()];
+    for (i, node) in all.iter().enumerate() {
+        match node.parent.filter(|&parent| parent < i) {
+            Some(parent) => children[parent].push(i),
+            None => roots.push(i),
+        }
+    }
+    let outer = all.len();
+    for (parent, inner) in grafts {
+        let offset = all.len();
+        let mut tops = Vec::new();
+        for (k, node) in inner.into_iter().enumerate() {
+            children.push(Vec::new());
+            match node.parent.filter(|&above| above < k) {
+                Some(above) => children[offset + above].push(offset + k),
+                None => tops.push(offset + k),
+            }
+            all.push(node);
+        }
+        let siblings = match parent.filter(|&parent| parent < outer) {
+            Some(parent) => &mut children[parent],
+            None => &mut roots,
+        };
+        *siblings = merge(std::mem::take(siblings), tops, |a, b| {
+            reading_order(all[a].rect, all[b].rect)
+        });
+    }
+    flatten(all, &roots, &children).0
+}
+
+/// `a` and `b`, each already in order, as one list in order: of two that compare equal, `a`'s first.
+fn merge(
+    a: Vec<usize>,
+    b: Vec<usize>,
+    order: impl Fn(usize, usize) -> std::cmp::Ordering,
+) -> Vec<usize> {
+    let mut merged = Vec::with_capacity(a.len() + b.len());
+    let (mut a, mut b) = (a.into_iter().peekable(), b.into_iter().peekable());
+    loop {
+        let next = match (a.peek(), b.peek()) {
+            (Some(&x), Some(&y)) if order(y, x).is_lt() => b.next(),
+            (Some(_), _) => a.next(),
+            (None, _) => b.next(),
+        };
+        match next {
+            Some(i) => merged.push(i),
+            None => return merged,
+        }
     }
 }
 
@@ -311,11 +591,17 @@ struct Named {
     drew_beside_controls: bool,
 }
 
-/// A box given no name that says where it sits among items a reader cannot count, such as the header row of a grid whose rows are not all built. Its place is what it has to say, so it is a node of its own; the controls and the text inside it are read as they would be without it, and none of them becomes its name.
+/// A box given no name that says where it sits among items a reader cannot count, such as the header row of a grid whose rows are not all built. Its place is what it has to say, so it is a node of its own; the controls and the text inside it are read inside it as they would be without it, and none of them becomes its name.
 struct Placed {
     node: NodeId,
     role: Role,
     position: SetPosition,
+}
+
+/// A box given no name whose role is a structure a reader steps into: see [`holds_structure`].
+struct Structure {
+    node: NodeId,
+    role: Role,
 }
 
 impl Named {
@@ -438,6 +724,8 @@ struct Open {
     named: Option<usize>,
     control: Option<NodeId>,
     node: Option<NodeId>,
+    /// How far the element and the boxes around it are moved from their places in the flow by sticking, on screen.
+    shift: (f32, f32),
 }
 
 /// One frame, as a reader meets it: the annotations resolved along its element nesting, with everything under a hidden box already gone.
@@ -446,12 +734,19 @@ struct Reading {
     scopes: FxHashMap<NodeId, Scope>,
     named: Vec<Named>,
     placed: Vec<Placed>,
+    structures: Vec<Structure>,
     text: Vec<Piece>,
     artwork: Vec<SeenArt>,
     /// Where in the frame each control's box began.
     controls_opened: FxHashMap<NodeId, usize>,
     /// Where each link box goes, and what it is the current one of when it is marked so.
     links: FxHashMap<NodeId, (platform_core::Destination, Option<CurrentKind>)>,
+    /// The element each element is drawn inside, where it is drawn inside one.
+    parents: FxHashMap<NodeId, NodeId>,
+    /// How far sticking moves each element that it moves, on screen, with the boxes around it: see [`Reading::in_flow`].
+    shifts: FxHashMap<NodeId, (f32, f32)>,
+    /// The innermost element around each surface drawn directly inside the frame, in draw order.
+    surfaces_in: Vec<Option<NodeId>>,
 }
 
 impl Reading {
@@ -467,6 +762,11 @@ impl Reading {
             // A nested surface's boxes are numbered in its own world, where they are read; here their ids would name this surface's boxes.
             match command {
                 DrawCommand::PushSurface { .. } => {
+                    if nested == 0 {
+                        reading
+                            .surfaces_in
+                            .push(open.last().and_then(|open| open.node));
+                    }
                     nested += 1;
                     return;
                 }
@@ -482,6 +782,7 @@ impl Reading {
                 named,
                 control,
                 node: innermost,
+                shift: outer_shift,
             } = open.last().cloned().unwrap_or_default();
             let in_control = control.is_some();
             match command {
@@ -514,16 +815,30 @@ impl Reading {
                         .semantics
                         .position
                         .filter(|_| role.positioning().is_some());
-                    if let Some(position) = position
-                        && annotation.label.is_none()
-                        && !inner.hidden
-                        && !controls.contains(&node)
-                    {
-                        reading.placed.push(Placed {
-                            node,
-                            role,
-                            position,
-                        });
+                    if annotation.label.is_none() && !inner.hidden && !controls.contains(&node) {
+                        match position {
+                            Some(position) => reading.placed.push(Placed {
+                                node,
+                                role,
+                                position,
+                            }),
+                            None if holds_structure(role) => {
+                                reading.structures.push(Structure { node, role })
+                            }
+                            None => {}
+                        }
+                    }
+                    if let Some(parent) = innermost {
+                        reading.parents.entry(node).or_insert(parent);
+                    }
+                    let (dx, dy) = layout_reactive::sticky_displacement(node);
+                    let [a, b, c, d, ..] = matrix;
+                    let shift = (
+                        outer_shift.0 + a * dx + c * dy,
+                        outer_shift.1 + b * dx + d * dy,
+                    );
+                    if shift != (0.0, 0.0) {
+                        reading.shifts.insert(node, shift);
                     }
                     let named = match annotation.label {
                         Some(label) if !inner.hidden => {
@@ -553,6 +868,7 @@ impl Reading {
                             control
                         },
                         node: Some(node),
+                        shift,
                     });
                 }
                 DrawCommand::PopElement => {
@@ -653,6 +969,18 @@ impl Reading {
             .find(|named| named.node == node)
             .map(|named| &*named.label)
     }
+
+    fn parent_of(&self, node: NodeId) -> Option<NodeId> {
+        self.parents.get(&node).copied()
+    }
+
+    /// `rect`, of something drawn in the element `at`, where it would show if no box around it stuck: where it falls among the boxes beside it in the flow.
+    fn in_flow(&self, rect: Rect, at: Option<NodeId>) -> Rect {
+        let (dx, dy) = at
+            .and_then(|node| self.shifts.get(&node).copied())
+            .unwrap_or_default();
+        Rect::new(rect.x - dx, rect.y - dy, rect.width, rect.height)
+    }
 }
 
 /// Whether `inner`'s centre lies in `outer`. The centre and not the whole rect: a label clipped by its own control — a long menu item, a cell in a narrow column — still belongs to it.
@@ -672,17 +1000,13 @@ fn append(name: &mut String, piece: &str) {
     name.push_str(piece.trim());
 }
 
-/// Reading order rather than tab order: a label sits between the controls it explains. Tab order stays the focus registry's answer.
+/// Reading order rather than tab order, among the nodes one node holds: a label sits between the controls it explains. Tab order stays the focus registry's answer.
 ///
-/// Of two nodes that begin at the same corner the larger is read first, as the one the other sits in: a grid before its header row, and the row before its first cell.
-pub fn sort_in_reading_order(nodes: &mut [AccessNode]) {
-    nodes.sort_by(|a, b| {
-        a.rect
-            .y
-            .total_cmp(&b.rect.y)
-            .then(a.rect.x.total_cmp(&b.rect.x))
-            .then(area(b.rect).total_cmp(&area(a.rect)))
-    });
+/// Of two nodes that begin at the same corner the larger is read first, as the one the other is drawn over.
+fn reading_order(a: Rect, b: Rect) -> std::cmp::Ordering {
+    a.y.total_cmp(&b.y)
+        .then(a.x.total_cmp(&b.x))
+        .then(area(b).total_cmp(&area(a)))
 }
 
 /// A surface drawn inside another's frame, as the [`DrawCommand::PushSurface`] marker around it names it: the commands it drew and where the frame around it shows them.

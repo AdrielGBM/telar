@@ -489,18 +489,16 @@ fn a_list_of_one_choice_is_not_multiselectable_and_ignores_the_modifiers() {
     assert_eq!(*mounted.picked.borrow(), ["apple", "cherry"]);
 }
 
+/// The words read inside a status.
 fn statuses(tree: &ComponentList) -> Vec<String> {
-    eprintln!(
-        "{:#?}",
-        ui_core::accessibility::snapshot(&tree.commands())
-            .iter()
-            .map(|n| (n.role, n.name.clone()))
-            .collect::<Vec<_>>()
-    );
-    ui_core::accessibility::snapshot(&tree.commands())
-        .into_iter()
-        .filter(|node| node.role == Role::Status || node.role == Role::Label)
-        .map(|node| node.name)
+    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    nodes
+        .iter()
+        .filter(|node| {
+            node.parent
+                .is_some_and(|parent| nodes[parent].role == Role::Status)
+        })
+        .map(|node| node.name.clone())
         .collect()
 }
 
@@ -820,4 +818,24 @@ fn shift_with_page_down_chooses_a_page_of_wrapped_rows() {
         chosen > 1 && chosen < 50,
         "the anchor's row through the page's: {chosen} chosen"
     );
+}
+
+/// A reader steps into the list box to find its options, each with the words it draws, in the order they show.
+#[test]
+fn the_list_box_holds_its_options() {
+    let mounted = Mounted::new(fruit(), 400.0);
+    let nodes = ui_core::accessibility::snapshot(&mounted.tree.commands());
+    let list = nodes
+        .iter()
+        .position(|node| node.role == Role::ListBox)
+        .expect("the list is read as a list box");
+    let options: Vec<&str> = nodes
+        .iter()
+        .filter(|node| node.parent == Some(list))
+        .map(|node| {
+            assert_eq!(node.role, Role::Option, "{node:?}");
+            node.name.as_str()
+        })
+        .collect();
+    assert_eq!(options, ["Apple 3", "Banana", "Blueberry", "Cherry"]);
 }

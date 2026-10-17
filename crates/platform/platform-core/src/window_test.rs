@@ -23,6 +23,7 @@ impl EventHandler<TestWindow> for TestHandler {
     fn accessibility(&self) -> Vec<crate::AccessNode> {
         vec![crate::AccessNode {
             id: Some(1),
+            parent: None,
             role: crate::Role::Button,
             name: "test button".to_string(),
             rect: Rect::default(),

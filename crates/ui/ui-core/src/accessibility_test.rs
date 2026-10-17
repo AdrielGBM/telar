@@ -987,6 +987,7 @@ fn text_clipped_to_nothing_is_not_announced() {
 fn an_id_a_nested_surface_was_placed_under_names_its_control_there() {
     let node = AccessNode {
         id: Some(3),
+        parent: None,
         role: Role::Button,
         name: "Inside".to_string(),
         rect: rect(0.0, 0.0, 10.0, 10.0),
@@ -1287,4 +1288,412 @@ fn a_named_box_keeps_its_place() {
     assert_eq!(nodes[0].name, "Chapter four");
     assert_eq!(nodes[0].role, Role::ListItem);
     assert_eq!(nodes[0].position, Some(placed(4, 9)));
+}
+
+/// What the node at `parent` holds, or the window for `None`, by role and name in reading order.
+fn held(nodes: &[AccessNode], parent: Option<usize>) -> Vec<(Role, &str)> {
+    platform_core::accessibility::children_of(nodes, parent)
+        .map(|child| (nodes[child].role, nodes[child].name.as_str()))
+        .collect()
+}
+
+fn at(nodes: &[AccessNode], role: Role, name: &str) -> usize {
+    nodes
+        .iter()
+        .position(|node| node.role == role && node.name == name)
+        .unwrap_or_else(|| panic!("a {role:?} named {name:?} among {nodes:#?}"))
+}
+
+fn words(text: &'static str) -> Text {
+    Text::new(
+        move || text.to_string(),
+        LayoutStyle::new().width(60.0).height(16.0),
+        || TextStyle::new(12.0, renderer_core::Color::BLACK),
+    )
+    .unwrap()
+}
+
+fn presented(role: Role, children: Vec<Box<dyn LayoutItem>>) -> StyledContainer {
+    StyledContainer::new(
+        LayoutStyle::new().flex_row(),
+        |_r| RectStyle::default(),
+        children,
+    )
+    .unwrap()
+    .presented(role)
+}
+
+/// Every node comes after the one it sits in, and the window's own come in reading order: what lets a flat reader walk the list and a tree reader walk the parents, and see the same thing.
+fn assert_listed_as_a_tree(nodes: &[AccessNode]) {
+    for (index, node) in nodes.iter().enumerate() {
+        if let Some(parent) = node.parent {
+            assert!(parent < index, "{index} sits in {parent}, listed after it");
+            let between = &nodes[parent + 1..index];
+            assert!(
+                between.iter().all(|other| {
+                    std::iter::successors(other.parent, |&above| nodes[above].parent)
+                        .any(|above| above == parent)
+                }),
+                "everything between {parent} and {index} sits in {parent}"
+            );
+        }
+    }
+}
+
+/// A reader steps into a grid by its rows and into a row by its cells: each cell is held by the row it is built in, and each row by the grid, whatever the boxes between them.
+#[test]
+fn a_grid_holds_its_rows_and_each_row_its_cells() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let cell = |text| presented(Role::GridCell, vec![box_item(words(text))]);
+    let header =
+        header_row(vec![header_cell("N"), header_cell("S")]).positioned_by(|| placed(1, 3));
+    let body = |first, second, place| {
+        presented(
+            Role::Row,
+            vec![box_item(cell(first)), box_item(cell(second))],
+        )
+        .positioned(placed(place, 3))
+    };
+    let rows = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(body("a", "1", 2)), box_item(body("b", "2", 3))],
+    )
+    .unwrap();
+    let grid = StyledContainer::new(
+        LayoutStyle::new().flex_column(),
+        |_r| RectStyle::default(),
+        vec![box_item(header), box_item(rows)],
+    )
+    .unwrap()
+    .control(Role::Grid)
+    .a11y_label(|| "Files");
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(words("Above")), box_item(grid)],
+    )
+    .unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_listed_as_a_tree(&nodes);
+    assert_eq!(
+        held(&nodes, None),
+        [(Role::Label, "Above"), (Role::Grid, "Files")]
+    );
+    let grid = at(&nodes, Role::Grid, "Files");
+    let rows: Vec<usize> = platform_core::accessibility::children_of(&nodes, Some(grid)).collect();
+    let places: Vec<Option<u32>> = rows
+        .iter()
+        .map(|&row| nodes[row].position.map(|place| place.position))
+        .collect();
+    assert_eq!(places, [Some(1), Some(2), Some(3)]);
+    assert!(rows.iter().all(|&row| nodes[row].role == Role::Row));
+    assert_eq!(
+        held(&nodes, Some(rows[0])),
+        [(Role::ColumnHeader, "N"), (Role::ColumnHeader, "S")]
+    );
+    assert_eq!(
+        held(&nodes, Some(rows[2])),
+        [(Role::GridCell, "b"), (Role::GridCell, "2")]
+    );
+    assert_eq!(
+        platform_core::accessibility::transcript(&nodes),
+        "Above\nFiles, grid\n  row, 1 of 3\n    N, columnheader\n    S, columnheader\n  row, 2 of 3\n    a, gridcell\n    1, gridcell\n  row, 3 of 3\n    b, gridcell\n    2, gridcell",
+        "the transcript indents each node under the one it sits in"
+    );
+}
+
+/// A list box holds its options, and the label beside it stays beside it.
+#[test]
+fn a_list_box_holds_its_options() {
+    reset_layout_runtime();
+    focus::clear();
+    let options = ["Apple", "Pear"]
+        .into_iter()
+        .enumerate()
+        .map(|(i, fruit)| {
+            box_item(
+                presented(Role::Option, vec![box_item(words(fruit))]).positioned(SetPosition {
+                    level: 1,
+                    position: i as u32 + 1,
+                    size: 2,
+                }),
+            )
+        })
+        .collect();
+    let list = StyledContainer::new(
+        LayoutStyle::new().flex_column(),
+        |_r| RectStyle::default(),
+        options,
+    )
+    .unwrap()
+    .control(Role::ListBox);
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(words("Fruit")), box_item(list)],
+    )
+    .unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_listed_as_a_tree(&nodes);
+    assert_eq!(
+        held(&nodes, None),
+        [(Role::Label, "Fruit"), (Role::ListBox, "")]
+    );
+    let list = at(&nodes, Role::ListBox, "");
+    assert_eq!(
+        held(&nodes, Some(list)),
+        [(Role::Option, "Apple"), (Role::Option, "Pear")]
+    );
+}
+
+/// A tree whose rows are built inside the rows they hang from, each branch's children in a group of its own, reads the same way: a row holds the rows under it, and the group boxes between them, which say nothing, are not nodes.
+#[test]
+fn a_tree_row_holds_the_rows_nested_under_it() {
+    reset_layout_runtime();
+    focus::clear();
+    let row = |name, children: Vec<Box<dyn LayoutItem>>| {
+        let mut content: Vec<Box<dyn LayoutItem>> = vec![box_item(words(name))];
+        if !children.is_empty() {
+            let group = Container::new(LayoutStyle::new().flex_column(), children)
+                .unwrap()
+                .role(Role::Group);
+            content.push(box_item(group));
+        }
+        StyledContainer::new(
+            LayoutStyle::new().flex_column(),
+            |_r| RectStyle::default(),
+            content,
+        )
+        .unwrap()
+        .presented(Role::TreeItem)
+    };
+    let primary = row("Primary", vec![]);
+    let button = row("Button", vec![box_item(primary)]);
+    let inputs = row("Inputs", vec![box_item(button)]);
+    let about = row("About", vec![]);
+    let tree = StyledContainer::new(
+        LayoutStyle::new().flex_column(),
+        |_r| RectStyle::default(),
+        vec![box_item(inputs), box_item(about)],
+    )
+    .unwrap()
+    .control(Role::Tree);
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(tree)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_listed_as_a_tree(&nodes);
+    let tree = at(&nodes, Role::Tree, "");
+    assert_eq!(
+        held(&nodes, Some(tree)),
+        [(Role::TreeItem, "Inputs"), (Role::TreeItem, "About")]
+    );
+    let inputs = at(&nodes, Role::TreeItem, "Inputs");
+    assert_eq!(held(&nodes, Some(inputs)), [(Role::TreeItem, "Button")]);
+    let button = at(&nodes, Role::TreeItem, "Button");
+    assert_eq!(held(&nodes, Some(button)), [(Role::TreeItem, "Primary")]);
+}
+
+/// A dialog holds what it asks and the controls that answer it; text the application only drew there is the dialog's content, not a sibling of it.
+#[test]
+fn a_dialog_holds_its_content() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let ok = StyledContainer::new(
+        LayoutStyle::new().width(60.0).height(24.0),
+        |_r| RectStyle::default(),
+        vec![box_item(words("OK"))],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {});
+    let dialog = StyledContainer::new(
+        LayoutStyle::new().flex_column(),
+        |_r| RectStyle::default(),
+        vec![box_item(words("Delete it?")), box_item(ok)],
+    )
+    .unwrap()
+    .role(Role::Dialog)
+    .a11y_label(|| "Confirm");
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(dialog), box_item(words("Below"))],
+    )
+    .unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_listed_as_a_tree(&nodes);
+    assert_eq!(
+        held(&nodes, None),
+        [(Role::Dialog, "Confirm"), (Role::Label, "Below")]
+    );
+    let dialog = at(&nodes, Role::Dialog, "Confirm");
+    assert_eq!(
+        held(&nodes, Some(dialog)),
+        [(Role::Label, "Delete it?"), (Role::Button, "OK")]
+    );
+}
+
+/// A box with a structural role and no name is still the node a reader steps into, as long as it holds something: a tab list around its tabs. Holding nothing, it is not read at all.
+#[test]
+fn an_unnamed_tab_list_holds_its_tabs_and_an_empty_one_is_not_read() {
+    reset_layout_runtime();
+    focus::clear();
+    let tabs = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![
+            box_item(drawn_tab("General")),
+            box_item(drawn_tab("Advanced")),
+        ],
+    )
+    .unwrap()
+    .role(Role::TabList);
+    let empty = Container::new(LayoutStyle::new().width(40.0).height(20.0), vec![])
+        .unwrap()
+        .role(Role::TabList);
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(tabs), box_item(empty)],
+    )
+    .unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_listed_as_a_tree(&nodes);
+    assert_eq!(held(&nodes, None), [(Role::TabList, "")]);
+    assert_eq!(
+        held(&nodes, Some(0)),
+        [(Role::Tab, "General"), (Role::Tab, "Advanced")]
+    );
+}
+
+/// A box named as a group reads as its name, a caption beside what it groups, so what is inside it is read beside it rather than inside a label.
+#[test]
+fn a_named_group_is_read_beside_what_it_holds() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let pair = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![
+            box_item(drawn_tab("General")),
+            box_item(drawn_tab("Advanced")),
+        ],
+    )
+    .unwrap()
+    .a11y_label(|| "Sections");
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(pair)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_eq!(
+        held(&nodes, None),
+        [
+            (Role::Label, "Sections"),
+            (Role::Tab, "General"),
+            (Role::Tab, "Advanced"),
+        ]
+    );
+}
+
+/// A menu opened in a modal layer holds its items, and the page under the layer is not read.
+#[test]
+fn a_menu_in_a_modal_layer_holds_its_items() {
+    use crate::{Overlay, WindowRoot, relayout_if_dirty};
+
+    reset_layout_runtime();
+    focus::clear();
+    let opener = StyledContainer::new(
+        LayoutStyle::new().width(120.0).height(30.0),
+        |_r| RectStyle::default(),
+        vec![box_item(words("Edit"))],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {});
+    let opener_node = opener.layout_node();
+    let item = |name| {
+        StyledContainer::new(
+            LayoutStyle::new().width(120.0).height(24.0),
+            |_r| RectStyle::default(),
+            vec![box_item(words(name))],
+        )
+        .unwrap()
+        .control(Role::MenuItem)
+        .on_press(|| {})
+    };
+    let menu = StyledContainer::new(
+        LayoutStyle::new().flex_column(),
+        |_r| RectStyle::default(),
+        vec![box_item(item("Cut")), box_item(item("Copy"))],
+    )
+    .unwrap()
+    .control(Role::Menu);
+    let layer = Overlay::toggleable(LayoutStyle::new(), vec![box_item(menu)], || true)
+        .unwrap()
+        .owned_by(opener_node);
+    let page = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(words("Notes")), box_item(opener), box_item(layer)],
+    )
+    .unwrap();
+    crate::set_surface_size(geometry_core::Size::new(400.0, 300.0));
+    let mut tree = ui_tree::ComponentList::new(WindowRoot::wrapping(Box::new(page)).unwrap());
+    tree.on_event(&Event::WindowResized {
+        width: 400,
+        height: 300,
+    });
+    relayout_if_dirty();
+
+    let nodes = snapshot(&tree.commands());
+    assert_listed_as_a_tree(&nodes);
+    assert!(!read_on_its_own(&nodes, "Notes"), "{nodes:#?}");
+    let menu = at(&nodes, Role::Menu, "");
+    assert_eq!(
+        held(&nodes, Some(menu)),
+        [(Role::MenuItem, "Cut"), (Role::MenuItem, "Copy")]
+    );
+}
+
+fn bare(role: Role, name: &str, at: Rect, parent: Option<usize>) -> AccessNode {
+    AccessNode {
+        parent,
+        ..unaddressed(role, name.to_string(), at)
+    }
+}
+
+/// A surface's snapshot joins the frame's under the node it is drawn in, its top nodes read among that node's own by where they fall, and every node keeps what it holds.
+#[test]
+fn a_grafted_snapshot_joins_the_node_it_is_drawn_in() {
+    let frame = vec![
+        bare(Role::Main, "Page", rect(0.0, 0.0, 400.0, 400.0), None),
+        bare(Role::Label, "Top", rect(0.0, 0.0, 100.0, 20.0), Some(0)),
+        bare(
+            Role::Label,
+            "Bottom",
+            rect(0.0, 300.0, 100.0, 20.0),
+            Some(0),
+        ),
+        bare(Role::Label, "Footer", rect(0.0, 500.0, 100.0, 20.0), None),
+    ];
+    let canvas = vec![
+        bare(Role::List, "Inner", rect(0.0, 100.0, 100.0, 100.0), None),
+        bare(Role::Label, "Item", rect(0.0, 100.0, 100.0, 20.0), Some(0)),
+    ];
+    let nodes = graft(frame, vec![(Some(0), canvas)]);
+    assert_listed_as_a_tree(&nodes);
+    assert_eq!(
+        held(&nodes, Some(0)),
+        [
+            (Role::Label, "Top"),
+            (Role::List, "Inner"),
+            (Role::Label, "Bottom"),
+        ]
+    );
+    let inner = at(&nodes, Role::List, "Inner");
+    assert_eq!(held(&nodes, Some(inner)), [(Role::Label, "Item")]);
+    assert_eq!(
+        held(&nodes, None),
+        [(Role::Main, "Page"), (Role::Label, "Footer")]
+    );
 }

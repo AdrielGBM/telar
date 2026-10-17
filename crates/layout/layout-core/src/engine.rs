@@ -645,13 +645,13 @@ impl LayoutEngine {
         Ok(visit)
     }
 
-    /// Places the subtree `anchor` names for a new `view`, as [`walk_in_view`](Self::walk_in_view) would have. Only valid while the layout it came from is: a relayout can move what stands above the anchor.
+    /// Places the subtree `anchor` names for a new `view`, as [`walk_in_view`](Self::walk_in_view) would have, and returns how far it displaced each sticky node in it. Only valid while the layout it came from is: a relayout can move what stands above the anchor.
     pub fn walk_anchor<F>(
         &self,
         anchor: &StickyAnchor,
         view: geometry_core::Rect,
         f: &mut F,
-    ) -> Result<(), LayoutError>
+    ) -> Result<Vec<Displaced>, LayoutError>
     where
         F: FnMut(NodeId, geometry_core::Rect) -> bool,
     {
@@ -663,7 +663,9 @@ impl LayoutEngine {
             hidden: false,
             inside_sticky: false,
         };
-        self.visit(first, Some(view), f, &mut Walked::default())
+        let mut walked = Walked::default();
+        self.visit(first, Some(view), f, &mut walked)?;
+        Ok(walked.displaced)
     }
 
     fn visit<F>(
@@ -717,6 +719,10 @@ impl LayoutEngine {
                     container,
                     view,
                 );
+                walked.displaced.push(Displaced {
+                    node: visit.node,
+                    by: (dx, dy),
+                });
                 x += dx;
                 y += dy;
             }
@@ -785,6 +791,16 @@ pub struct Walked {
     pub anchors: Vec<StickyAnchor>,
     /// The content of every shown scroll container, each to be walked as a root of its own.
     pub scroll_contents: Vec<NodeId>,
+    /// Every sticky node met, with how far it was moved from where layout put it.
+    pub displaced: Vec<Displaced>,
+}
+
+/// How far a walk moved a sticky node from its place in the flow: what takes a box stuck to the edge of a view back to where it sits among its siblings.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Displaced {
+    pub node: NodeId,
+    /// `(dx, dy)`, in the tree's own coordinates.
+    pub by: (f32, f32),
 }
 
 /// A sticky node no other sticky node contains, with what a walk had worked out above it: enough to place its subtree again for another view.

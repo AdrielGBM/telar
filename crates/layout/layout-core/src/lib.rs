@@ -14,7 +14,7 @@ mod track;
 
 pub use css::Css;
 pub use direction::Direction;
-pub use engine::{LayoutEngine, MeasureFn, MeasureInput, NodeId, StickyAnchor, Walked};
+pub use engine::{Displaced, LayoutEngine, MeasureFn, MeasureInput, NodeId, StickyAnchor, Walked};
 pub use error::LayoutError;
 pub use style::{AlignItems, AvailableSpace, JustifyContent, LayoutStyle, Margin, SizeDimension};
 pub use track::TemplateTrack;

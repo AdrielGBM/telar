@@ -5,6 +5,7 @@ use super::*;
 fn node(id: Option<u64>, role: Role, name: &str) -> AccessNode {
     AccessNode {
         id,
+        parent: None,
         role,
         name: name.to_string(),
         rect: Rect::new(0.0, 0.0, 10.0, 10.0),
@@ -948,4 +949,145 @@ fn a_header_row_with_no_name_is_a_row_with_its_index() {
     assert_eq!(row.row_index(), Some(0));
     assert!(!row.supports_action(Action::Focus) && !row.supports_action(Action::Click));
     assert_eq!(update.nodes[2].1.role(), AkRole::ColumnHeader);
+}
+
+fn inside(parent: usize, node: AccessNode) -> AccessNode {
+    AccessNode {
+        parent: Some(parent),
+        ..node
+    }
+}
+
+fn row_at(id: u64, position: u32, size: u32) -> AccessNode {
+    AccessNode {
+        position: Some(platform_core::SetPosition {
+            level: 1,
+            position,
+            size,
+        }),
+        ..node(Some(id), Role::Row, "")
+    }
+}
+
+fn update_of(update: &TreeUpdate, id: NodeId) -> &Node {
+    &update
+        .nodes
+        .iter()
+        .find(|(at, _)| *at == id)
+        .unwrap_or_else(|| panic!("{id:?} is in the update"))
+        .1
+}
+
+/// The window holds only the nodes nothing else holds, and every other node is a child of the one it sits in, in the order the snapshot reads them.
+#[test]
+fn each_node_is_a_child_of_the_one_it_sits_in() {
+    let nodes = [
+        node(None, Role::Label, "Above"),
+        node(Some(1), Role::Grid, "Files"),
+        inside(1, row_at(2, 1, 3)),
+        inside(2, node(Some(3), Role::ColumnHeader, "Name")),
+        inside(2, node(Some(4), Role::ColumnHeader, "Size")),
+        inside(1, row_at(5, 2, 3)),
+        inside(5, node(Some(6), Role::GridCell, "notes.txt")),
+        inside(5, node(Some(7), Role::GridCell, "4 KB")),
+    ];
+    let update = tree_update(&nodes, "Explorer", None);
+    let window = update_of(&update, ROOT);
+    assert_eq!(window.children(), [NodeId(1), control_id(1)]);
+    assert_eq!(
+        update_of(&update, control_id(1)).children(),
+        [control_id(2), control_id(5)]
+    );
+    assert_eq!(
+        update_of(&update, control_id(2)).children(),
+        [control_id(3), control_id(4)]
+    );
+    assert_eq!(
+        update_of(&update, control_id(5)).children(),
+        [control_id(6), control_id(7)]
+    );
+    assert!(update_of(&update, control_id(6)).children().is_empty());
+}
+
+/// A grid says how many rows it has from what its rows say, though only some are built, and how many columns from its widest row; each cell says its column and its row's place.
+#[test]
+fn a_grid_says_its_counts_and_each_cell_its_place() {
+    let nodes = [
+        node(Some(1), Role::Grid, "Files"),
+        inside(0, row_at(2, 1, 501)),
+        inside(1, node(Some(3), Role::ColumnHeader, "Name")),
+        inside(1, node(Some(4), Role::ColumnHeader, "Size")),
+        inside(0, row_at(5, 40, 501)),
+        inside(4, node(Some(6), Role::GridCell, "notes.txt")),
+        inside(4, node(Some(7), Role::GridCell, "4 KB")),
+    ];
+    let update = tree_update(&nodes, "Explorer", None);
+    let grid = update_of(&update, control_id(1));
+    assert_eq!(grid.row_count(), Some(501));
+    assert_eq!(grid.column_count(), Some(2));
+    assert_eq!(update_of(&update, control_id(5)).row_index(), Some(39));
+    let size = update_of(&update, control_id(7));
+    assert_eq!(size.column_index(), Some(1));
+    assert_eq!(size.row_index(), Some(39));
+    assert_eq!(update_of(&update, control_id(3)).column_index(), Some(0));
+    assert_eq!(update_of(&update, control_id(3)).row_index(), Some(0));
+}
+
+/// A grid whose rows say no place counts the rows it holds, and each row's place is its place among them.
+#[test]
+fn a_grid_of_rows_that_say_no_place_counts_them() {
+    let nodes = [
+        node(Some(1), Role::Grid, "Scores"),
+        inside(0, node(Some(2), Role::Row, "")),
+        inside(1, node(Some(3), Role::GridCell, "Ada")),
+        inside(0, node(Some(4), Role::Row, "")),
+        inside(3, node(Some(5), Role::GridCell, "Alan")),
+    ];
+    let update = tree_update(&nodes, "Scores", None);
+    assert_eq!(update_of(&update, control_id(1)).row_count(), Some(2));
+    assert_eq!(update_of(&update, control_id(4)).row_index(), Some(1));
+    assert_eq!(update_of(&update, control_id(5)).row_index(), Some(1));
+}
+
+/// A list box says how many options it has from what its options say, which a virtualised list builds only some of; a tree whose rows sit at different levels in sets of different sizes leaves each row's set to its level.
+#[test]
+fn a_set_says_its_size_where_its_items_agree_on_it() {
+    let item = |id: u64, role: Role, level: u32, position: u32, size: u32| AccessNode {
+        position: Some(platform_core::SetPosition {
+            level,
+            position,
+            size,
+        }),
+        ..node(Some(id), role, "Item")
+    };
+    let nodes = [
+        node(Some(1), Role::ListBox, "Fruit"),
+        inside(0, item(2, Role::Option, 1, 7, 300)),
+        inside(0, item(3, Role::Option, 1, 8, 300)),
+        node(Some(4), Role::Tree, "Files"),
+        inside(3, item(5, Role::TreeItem, 1, 1, 2)),
+        inside(3, item(6, Role::TreeItem, 2, 1, 5)),
+    ];
+    let update = tree_update(&nodes, "Window", None);
+    assert_eq!(update_of(&update, control_id(1)).size_of_set(), Some(300));
+    assert_eq!(update_of(&update, control_id(4)).size_of_set(), None);
+    assert_eq!(update_of(&update, control_id(3)).position_in_set(), Some(7));
+}
+
+/// A node grafted from a nested tree keeps the focus id it is addressed by, wherever it now sits, and its active descendant still names it.
+#[test]
+fn a_nested_node_keeps_its_id_and_its_active_descendant() {
+    let nodes = [
+        AccessNode {
+            focused: true,
+            active_descendant: Some(3),
+            ..node(Some(1), Role::Tree, "Files")
+        },
+        inside(0, node(Some(3), Role::TreeItem, "src")),
+    ];
+    let update = tree_update(&nodes, "Window", None);
+    assert_eq!(update.focus, control_id(1));
+    let tree = update_of(&update, control_id(1));
+    assert_eq!(tree.active_descendant(), Some(control_id(3)));
+    assert_eq!(tree.children(), [control_id(3)]);
 }

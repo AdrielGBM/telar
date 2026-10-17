@@ -5,6 +5,7 @@ use super::*;
 fn node(role: Role, name: &str) -> AccessNode {
     AccessNode {
         id: None,
+        parent: None,
         role,
         name: name.to_string(),
         rect: Rect::default(),
@@ -223,4 +224,28 @@ fn an_item_says_where_it_sits() {
         transcript(&[header, src, ada, save]),
         "row, 1 of 501\nsrc, treeitem, level 2, 3 of 4\nAda, option, 1 of 2\nSave, button"
     );
+}
+
+/// A node is written under the node it sits in, two spaces further in for every level, so a flat reading keeps the nesting a reader steps through.
+#[test]
+fn a_transcript_indents_each_node_under_the_one_it_sits_in() {
+    let inside = |parent: usize, node: AccessNode| AccessNode {
+        parent: Some(parent),
+        ..node
+    };
+    let nodes = [
+        node(Role::Dialog, "Confirm"),
+        inside(0, node(Role::Label, "Delete it?")),
+        inside(0, node(Role::List, "")),
+        inside(2, node(Role::ListItem, "notes.txt")),
+        inside(0, node(Role::Button, "OK")),
+        node(Role::Label, "After"),
+    ];
+    assert_eq!(
+        transcript(&nodes),
+        "Confirm, dialog\n  Delete it?\n  list\n    notes.txt, listitem\n  OK, button\nAfter"
+    );
+    assert_eq!(depths(&nodes), [0, 1, 1, 2, 1, 0]);
+    assert_eq!(children_of(&nodes, Some(0)).collect::<Vec<_>>(), [1, 2, 4]);
+    assert_eq!(children_of(&nodes, None).collect::<Vec<_>>(), [0, 5]);
 }

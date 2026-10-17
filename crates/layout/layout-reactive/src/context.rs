@@ -4,7 +4,8 @@ use std::rc::Rc;
 
 use geometry_core::Rect;
 use layout_core::{
-    AvailableSpace, LayoutEngine, LayoutError, LayoutStyle, MeasureFn, NodeId, StickyAnchor,
+    AvailableSpace, Displaced, LayoutEngine, LayoutError, LayoutStyle, MeasureFn, NodeId,
+    StickyAnchor,
 };
 use reactive_core::{OwnerId, RwSignal, SurfaceHandle, batch, signal};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -622,6 +623,17 @@ pub fn is_sticky(node: NodeId) -> bool {
     with_runtime(|rt| rt.engine.is_sticky(node))
 }
 
+/// How far `node` is moved from its place in the flow by sticking to the edge of the view it is seen through, as `(dx, dy)` in its tree's own coordinates: `(0.0, 0.0)` for a box that does not stick. A box stuck to the top of a scrolled list sits among the rows by where this takes it back to, not by where it shows.
+pub fn sticky_displacement(node: NodeId) -> (f32, f32) {
+    with_runtime(|rt| {
+        rt.engine
+            .is_sticky(node)
+            .then(|| rt.sticky_displacements.get(&node).copied())
+            .flatten()
+            .unwrap_or_default()
+    })
+}
+
 /// Whether `node` is a flex row (main axis horizontal). A transparent `for … gap:N` fragment reads its host container's axis to know which edge the per-item gap margin sits on.
 pub fn container_is_row(node: NodeId) -> bool {
     with_runtime(|rt| rt.engine.is_row(node))
@@ -785,6 +797,8 @@ struct LayoutRuntime {
     sticky_views: FxHashMap<NodeId, Rect>,
     /// The outermost sticky nodes each root's last walk met, so a new view places only their subtrees again.
     sticky_anchors: FxHashMap<NodeId, Vec<StickyAnchor>>,
+    /// How far the last walk moved each sticky node from its place in the flow. See [`sticky_displacement`].
+    sticky_displacements: FxHashMap<NodeId, (f32, f32)>,
     /// The roots laid out against the surface. See [`lay_out_against_surface`].
     surface_roots: FxHashSet<NodeId>,
     /// The roots each node frees along with itself. See [`free_with`].
@@ -819,6 +833,7 @@ impl LayoutRuntime {
             measured_at: 0,
             sticky_views: FxHashMap::default(),
             sticky_anchors: FxHashMap::default(),
+            sticky_displacements: FxHashMap::default(),
             surface_roots: FxHashSet::default(),
             held_roots: FxHashMap::default(),
             relayout_hooks: Vec::new(),
@@ -963,6 +978,7 @@ impl LayoutRuntime {
             });
             let placed = placed.finish();
             let walked = walked?;
+            self.note_displaced(&walked.displaced);
             if walked.anchors.is_empty() {
                 self.sticky_anchors.remove(&at);
             } else {
@@ -1005,14 +1021,24 @@ impl LayoutRuntime {
             return Vec::new();
         };
         let mut placed = Placed::new(&self.registry, root);
+        let mut displaced = Vec::new();
         for anchor in anchors {
             // An anchor whose node has gone since the walk that found it has nothing left to place.
-            let _ = self
+            if let Ok(moved) = self
                 .engine
-                .walk_anchor(anchor, view, &mut |node, rect| placed.visit(node, rect));
+                .walk_anchor(anchor, view, &mut |node, rect| placed.visit(node, rect))
+            {
+                displaced.extend(moved);
+            }
         }
         let placed = placed.finish();
+        self.note_displaced(&displaced);
         self.settle(placed)
+    }
+
+    fn note_displaced(&mut self, displaced: &[Displaced]) {
+        self.sticky_displacements
+            .extend(displaced.iter().map(|moved| (moved.node, moved.by)));
     }
 
     /// The signal writes a walk calls for, recording the window-absolute positions it found on the way.
@@ -1083,6 +1109,7 @@ impl LayoutRuntime {
             self.parent_reads.remove(&at);
             self.sticky_views.remove(&at);
             self.sticky_anchors.remove(&at);
+            self.sticky_displacements.remove(&at);
             self.surface_roots.remove(&at);
         }
         self.overlay_host.forget(&freed);

@@ -5,6 +5,7 @@ use super::*;
 
 struct Content {
     root: NodeId,
+    bar_node: NodeId,
     bar: RwSignal<Rect>,
     label: RwSignal<Rect>,
     tail: RwSignal<Rect>,
@@ -29,6 +30,7 @@ fn content() -> Content {
     .unwrap();
     Content {
         root,
+        bar_node,
         bar,
         label,
         tail,
@@ -180,4 +182,32 @@ fn a_freed_node_forgets_who_read_its_css() {
     let _ = declared_css(bar_node);
     remove_node(root);
     with_runtime_ref(|rt| assert!(rt.css_reads.is_empty()));
+}
+
+#[test]
+fn a_stuck_box_says_how_far_it_was_moved_from_its_place_in_the_flow() {
+    let page = content();
+    lay_out(page.root);
+    assert_eq!(
+        sticky_displacement(page.bar_node),
+        (0.0, 0.0),
+        "where the flow puts it"
+    );
+
+    set_sticky_view(page.root, Rect::new(0.0, 250.0, 300.0, 200.0));
+    assert_eq!(sticky_displacement(page.bar_node), (0.0, 150.0));
+    lay_out(page.root);
+    assert_eq!(
+        sticky_displacement(page.bar_node),
+        (0.0, 150.0),
+        "a relayout under the same view moves it as far"
+    );
+
+    set_layout_style(page.bar_node, LayoutStyle::new().height(40.0)).unwrap();
+    lay_out(page.root);
+    assert_eq!(
+        sticky_displacement(page.bar_node),
+        (0.0, 0.0),
+        "a box that no longer sticks is where the flow puts it"
+    );
 }

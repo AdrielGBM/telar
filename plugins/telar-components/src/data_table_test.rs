@@ -1084,6 +1084,25 @@ fn the_header_row_is_still_read_once_the_rows_have_scrolled_under_it() {
         });
     assert_eq!(nodes[header].id, None, "the header row is no control");
     assert_eq!(nodes[header].position.map(|place| place.size), Some(501));
+    let grid = nodes[header]
+        .parent
+        .expect("the header row sits in the grid");
+    assert_eq!(nodes[grid].role, Role::Grid);
+    let rows: Vec<usize> = (0..nodes.len())
+        .filter(|&row| nodes[row].parent == Some(grid) && nodes[row].role == Role::Row)
+        .collect();
+    assert!(
+        rows.len() > 1,
+        "the rows built under it are in the grid too"
+    );
+    assert_eq!(
+        rows[0],
+        header,
+        "the header row is read first, before the rows scrolled up under it: {:?}",
+        rows.iter()
+            .map(|&row| nodes[row].position)
+            .collect::<Vec<_>>()
+    );
     let after: Vec<(Role, &str)> = nodes[header + 1..header + 4]
         .iter()
         .map(|node| (node.role, node.name.as_str()))
@@ -1096,5 +1115,62 @@ fn the_header_row_is_still_read_once_the_rows_have_scrolled_under_it() {
             (Role::ColumnHeader, "Kind"),
         ],
         "the headers it holds are read after it, by their own names"
+    );
+}
+
+/// A reader steps into a table as a grid of rows, each holding its cells: the header row first with the column headers, then every row built with the cells across it.
+#[test]
+fn a_table_reads_as_a_grid_of_rows_that_hold_their_cells() {
+    let mounted = Mounted::focused(many(3), 240.0);
+    let nodes = mounted.read();
+    let grid = nodes
+        .iter()
+        .position(|node| node.role == Role::Grid)
+        .expect("the table is read as a grid");
+    let held = |parent: usize| -> Vec<usize> {
+        (0..nodes.len())
+            .filter(|&child| nodes[child].parent == Some(parent))
+            .collect()
+    };
+    let rows = held(grid);
+    let places: Vec<(Role, Option<u32>)> = rows
+        .iter()
+        .map(|&row| {
+            (
+                nodes[row].role,
+                nodes[row].position.map(|place| place.position),
+            )
+        })
+        .collect();
+    assert_eq!(
+        places,
+        [
+            (Role::Row, Some(1)),
+            (Role::Row, Some(2)),
+            (Role::Row, Some(3)),
+            (Role::Row, Some(4)),
+        ]
+    );
+    let cells = |row: usize| -> Vec<(Role, &str)> {
+        held(row)
+            .into_iter()
+            .map(|cell| (nodes[cell].role, nodes[cell].name.as_str()))
+            .collect()
+    };
+    assert_eq!(
+        cells(rows[0]),
+        [
+            (Role::ColumnHeader, "Name"),
+            (Role::ColumnHeader, "Size"),
+            (Role::ColumnHeader, "Kind"),
+        ]
+    );
+    assert_eq!(
+        cells(rows[2]),
+        [
+            (Role::GridCell, "Row 1"),
+            (Role::GridCell, "1"),
+            (Role::GridCell, "x"),
+        ]
     );
 }

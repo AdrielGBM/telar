@@ -231,3 +231,31 @@ fn the_engine_says_which_boxes_stick_and_follows_a_restyle() {
         "a box that stops sticking says so"
     );
 }
+
+#[test]
+fn a_walk_says_how_far_it_moved_each_sticky_node() {
+    let page = page(LayoutStyle::new().sticky().inset_top(0.0));
+    let walked = page
+        .engine
+        .walk_in_view(page.root, scrolled(400.0), &mut |_, _| true)
+        .unwrap();
+    assert_eq!(
+        walked.displaced,
+        [Displaced {
+            node: page.bar,
+            by: (0.0, 400.0 - 120.0),
+        }]
+    );
+    let moved = page
+        .engine
+        .walk_anchor(&walked.anchors[0], scrolled(500.0), &mut |_, _| true)
+        .unwrap();
+    assert_eq!(
+        moved,
+        [Displaced {
+            node: page.bar,
+            by: (0.0, 500.0 - 120.0),
+        }],
+        "and so does placing its subtree again for a new view"
+    );
+}

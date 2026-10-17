@@ -25,8 +25,8 @@ pub use context::{
     on_relayout, overlay_viewport, parent, record_nodes, relayout_if_dirty, remeasure_since,
     remove_node, reset_layout_runtime, set_children, set_container_row, set_display,
     set_layout_style, set_leading_margin, set_min_height, set_overlay_host, set_scroll_content,
-    set_sticky_view, track_display_none, track_layout, track_parent, unrounded_height,
-    unrounded_width,
+    set_sticky_view, sticky_displacement, track_display_none, track_layout, track_parent,
+    unrounded_height, unrounded_width,
 };
 pub use layout_core::{
     AlignItems, AvailableSpace, Css, Direction, JustifyContent, LayoutError, LayoutStyle,

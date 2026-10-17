@@ -21,6 +21,7 @@ impl EventHandler<TuiWindow> for Screen {
 fn label(name: &str) -> AccessNode {
     AccessNode {
         id: None,
+        parent: None,
         role: Role::Label,
         name: name.to_string(),
         rect: Rect::default(),
@@ -57,6 +58,35 @@ fn the_reading_is_rewritten_when_the_screen_changes() {
     screen.0.borrow_mut().push(label("mundo"));
     reading.follow(&screen);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "Hola\nmundo");
+    let _ = std::fs::remove_file(&path);
+}
+
+/// The reading keeps the screen's nesting: what a node holds is written under it, indented, so a list's items read as the list's.
+#[test]
+fn the_reading_indents_what_a_node_holds() {
+    let path =
+        std::env::temp_dir().join(format!("telar-nested-reading-{}.txt", std::process::id()));
+    let list = AccessNode {
+        role: Role::List,
+        ..label("")
+    };
+    let item = |name| AccessNode {
+        parent: Some(1),
+        ..label(name)
+    };
+    let screen = Screen(RefCell::new(vec![
+        label("Fruit"),
+        list,
+        item("Apple"),
+        item("Pear"),
+    ]));
+    let mut reading = Reading::new(Some(path.clone()));
+
+    reading.follow(&screen);
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "Fruit\nlist\n  Apple\n  Pear"
+    );
     let _ = std::fs::remove_file(&path);
 }
 

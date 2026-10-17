@@ -4,6 +4,7 @@ use crate::Rect;
 fn node(role: Role, name: &str) -> AccessNode {
     AccessNode {
         id: Some(1),
+        parent: None,
         role,
         name: name.to_string(),
         rect: Rect::new(0.0, 0.0, 10.0, 10.0),
