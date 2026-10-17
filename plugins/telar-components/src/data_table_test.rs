@@ -183,7 +183,11 @@ fn a_table_is_a_named_grid_of_rows_under_its_column_headers() {
     assert_eq!(grid.len(), 1);
     assert_eq!(grid[0].name, "Files");
     assert_eq!(mounted.names(Role::ColumnHeader), ["Name", "Size", "Kind"]);
-    assert_eq!(mounted.of_role(Role::Row).len(), 3, "a row per row of data");
+    assert_eq!(
+        mounted.of_role(Role::Row).len(),
+        4,
+        "the header row, then a row per row of data"
+    );
     assert_eq!(
         mounted.first_column(),
         ["beta.txt", "Alpha.rs", "gamma.png"],
@@ -268,7 +272,11 @@ fn the_arrows_walk_a_cursor_from_cell_to_cell_and_enter_chooses_its_row() {
         .into_iter()
         .map(|row| row.toggled == Some(true))
         .collect();
-    assert_eq!(chosen, [false, true, false], "the chosen row says so");
+    assert_eq!(
+        chosen,
+        [false, false, true, false],
+        "the chosen row says so, under a header row that is never chosen"
+    );
 }
 
 #[test]
@@ -364,9 +372,9 @@ fn each_row_built_says_its_index_among_all_the_rows() {
         .collect();
     assert!(sizes.iter().all(|size| *size == Some(501)), "{sizes:?}");
     assert_eq!(
-        indexes(&mounted)[0],
-        Some(2),
-        "the first row is under the header"
+        indexes(&mounted)[..2],
+        [Some(1), Some(2)],
+        "the header row first, and the first row under it"
     );
     for _ in 0..100 {
         mounted.key(NamedKey::PageDown);
@@ -678,7 +686,7 @@ fn a_table_of_several_choices_is_multiselectable_and_each_row_says_if_it_is_chos
         .grid
         .holding(ctrl(), |grid| grid.click(Role::GridCell, "Image"));
     assert_eq!(table.chosen(), ["b", "c"]);
-    assert_eq!(table.grid.chosen_rows(), [true, false, true]);
+    assert_eq!(table.grid.chosen_rows(), [false, true, false, true]);
     assert_eq!(
         *table.heard.borrow(),
         ["change 1", "select b", "change 2"],
@@ -754,7 +762,7 @@ fn an_empty_table_keeps_its_header_and_says_so_under_it_until_rows_arrive() {
         "{:?}",
         grid.names(Role::Label)
     );
-    assert_eq!(grid.names(Role::Row).len(), 3);
+    assert_eq!(grid.names(Role::Row).len(), 4);
 }
 
 #[test]
@@ -1049,5 +1057,44 @@ fn narrowing_a_wrapping_column_runs_its_cells_onto_more_lines() {
     assert!(
         chosen > 1,
         "Shift with Page Down chose a page of rows: {chosen}"
+    );
+}
+
+#[test]
+fn the_header_row_is_still_read_once_the_rows_have_scrolled_under_it() {
+    let mut mounted = Mounted::focused(many(500), 240.0);
+    for _ in 0..5 {
+        mounted.key(NamedKey::PageDown);
+    }
+    let nodes = mounted.read();
+    let header = nodes
+        .iter()
+        .position(|node| {
+            node.role == Role::Row && node.position.is_some_and(|place| place.position == 1)
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "the header row is read: {:?}",
+                mounted
+                    .of_role(Role::Row)
+                    .iter()
+                    .map(|row| row.position)
+                    .collect::<Vec<_>>()
+            )
+        });
+    assert_eq!(nodes[header].id, None, "the header row is no control");
+    assert_eq!(nodes[header].position.map(|place| place.size), Some(501));
+    let after: Vec<(Role, &str)> = nodes[header + 1..header + 4]
+        .iter()
+        .map(|node| (node.role, node.name.as_str()))
+        .collect();
+    assert_eq!(
+        after,
+        [
+            (Role::ColumnHeader, "Name"),
+            (Role::ColumnHeader, "Size"),
+            (Role::ColumnHeader, "Kind"),
+        ],
+        "the headers it holds are read after it, by their own names"
     );
 }

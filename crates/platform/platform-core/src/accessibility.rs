@@ -70,8 +70,17 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
                 Role::Drawing => "image",
                 role => role.as_str(),
             };
-            out.push_str(", ");
+            if !node.name.is_empty() {
+                out.push_str(", ");
+            }
             out.push_str(role);
+        }
+        if let Some(place) = node
+            .position
+            .and_then(|place| Some(place_words(node.role.positioning()?, place)))
+        {
+            out.push_str(", ");
+            out.push_str(&place);
         }
         if let Some(state) = node.toggled.and_then(|on| toggle_words(node.role, on)) {
             out.push_str(", ");
@@ -115,6 +124,19 @@ fn spoken_focus(nodes: &[AccessNode]) -> Option<usize> {
         .active_descendant
         .and_then(|id| nodes.iter().position(|node| node.id == Some(id)));
     Some(cursor.unwrap_or(held))
+}
+
+/// Where an item sits, in the numbers its role takes: a reader says the place a virtualised list or grid knows and the screen does not show.
+fn place_words(kind: Positioning, place: SetPosition) -> String {
+    match kind {
+        Positioning::Nested => format!(
+            "level {}, {} of {}",
+            place.level, place.position, place.size
+        ),
+        Positioning::InSet | Positioning::GridRow => {
+            format!("{} of {}", place.position, place.size)
+        }
+    }
 }
 
 /// The words a reader says for a role's on/off state, or `None` where it says nothing: an unselected tab is every tab but one, and announcing each of them is noise.

@@ -1236,9 +1236,10 @@ impl StyledContainer {
                 }
                 None => crate::element::identity(self.node),
             },
-            _ => crate::element::for_target(
+            _ => crate::element::for_placed_target(
                 self.node,
                 crate::element::role_of(self.role, self.press.is_set()),
+                || self.position.as_ref().map(|read| read()),
                 || self.element(),
             ),
         }

@@ -170,14 +170,22 @@ says where it sits among them all: from Rust `StyledContainer::positioned(SetPos
 counted from one, or `positioned_by(|| …)` for a box that is no control and whose place changes, such as the header
 row of a table. A target says only the numbers the row's role takes (`Role::positioning`):
 
-| Role | Browser, document (`web-dom`) | Desktop |
-| --- | --- | --- |
-| `treeitem`, `listitem` | `aria-level`, `aria-posinset`, `aria-setsize` | AccessKit level and position in set, from zero |
-| `option`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `radio`, `tab`, `article` | `aria-posinset`, `aria-setsize` | Position in set |
-| `row` | `aria-rowindex`, and the `grid` it is in `aria-rowcount`: the row's `size`, its header row included | Row index |
+| Role | Browser, document (`web-dom`) | Desktop | Terminal reading |
+| --- | --- | --- | --- |
+| `treeitem`, `listitem` | `aria-level`, `aria-posinset`, `aria-setsize` | AccessKit level and position in set, from zero | `level 2, 3 of 7` |
+| `option`, `menuitem`, `menuitemcheckbox`, `menuitemradio`, `radio`, `tab`, `article` | `aria-posinset`, `aria-setsize` | Position in set | `3 of 7` |
+| `row` | `aria-rowindex`, and the `grid` it is in `aria-rowcount`: the row's `size`, its header row included | Row index | `1 of 501` |
 
 Any other role says none of them. `tree_view` says it for its rows, `virtual_list` for its options and `data_table`
 for its rows, its header row first.
+
+A box that says where it sits is a node of the desktop tree and the terminal's reading even when it is no control
+and has no name, such as a table's header row: its place is something only it can tell a reader, so it is read as
+its role and its place (`row, 1 of 501`), with an empty name. The controls and the text inside it keep their own
+names and none of their words becomes its name. Only a place its role takes earns that: an unnamed box with no
+place, or with a place its role does not take (`Group`), says nothing a reader would hear and is left out, so a
+list of plain `listitem` wrappers does not fill the tree with empty items. On a raster frame the place travels on
+the box's element beside its role, as the snapshot reads both along the frame's nesting.
 
 ## Lists that take several rows
 
@@ -288,6 +296,8 @@ tail -F /tmp/reading.txt
 
 The reading ends the line of whatever holds the keyboard with `, focused` (`Save, button, focused`), since a
 reader following the file has no ring to look at. A link marked `current:` says so after its role (`Web, link, current`).
+An item that says where it sits says it after its role, in the numbers its role takes (`src, treeitem, level 2, 3 of 7`;
+see [Where an item sits](#where-an-item-sits)), and a node with no name reads as its role alone (`row, 1 of 501`).
 
 ## Names the catalogue gives
 
@@ -337,3 +347,9 @@ Where the keyboard is shown on each target is in [keyboard.md](keyboard.md#what-
 The desktop tree is still flat and carries no structure: the snapshot is built from the controls and the text a
 frame draws, and a raster frame does not say which box is a heading or a landmark, so the fixture's heading
 reaches a desktop reader as a label. The document has the `<h1>`.
+
+A grid is flat on the desktop too: its rows, header row included, are siblings of their cells under the window
+rather than their parents, and the grid does not publish a row count, so a reader's table commands have no
+structure to walk. The nodes are in reading order, by where they show — of two at the same corner the larger
+first, so a row reads before its first cell — which puts the rows built above a scrolled view, and those scrolled
+under a header held at the top, ahead of that header row. The document reads its rows in the order they are built.

@@ -490,7 +490,7 @@ fn a_focused_tree_names_the_row_its_cursor_rests_on() {
     assert_eq!(said.active_descendant, Some(rows[1]));
     let read = platform_core::accessibility::transcript(&nodes);
     assert!(
-        read.ends_with(", treeitem, focused") && !read.contains("tree, focused"),
+        read.ends_with("\ntreeitem, focused") && !read.contains("tree, focused"),
         "a reader says the row is focused, not the tree: {read:?}"
     );
 
@@ -1162,4 +1162,129 @@ fn a_control_is_named_by_its_text_wherever_scrolling_put_it() {
         ["Beside the trigger", "Folded away"]
     );
     assert_eq!(names_of(&nodes, Role::Button), ["Open"]);
+}
+
+fn placed(position: u32, size: u32) -> platform_core::SetPosition {
+    platform_core::SetPosition {
+        level: 1,
+        position,
+        size,
+    }
+}
+
+fn header_cell(caption: &'static str) -> StyledContainer {
+    StyledContainer::new(
+        LayoutStyle::new(),
+        |_r| RectStyle::default(),
+        vec![box_item(letter(caption))],
+    )
+    .unwrap()
+    .control(Role::ColumnHeader)
+    .on_press(|| {})
+}
+
+fn header_row(cells: Vec<StyledContainer>) -> StyledContainer {
+    StyledContainer::new(
+        LayoutStyle::new().flex_row(),
+        |_r| RectStyle::default(),
+        cells.into_iter().map(box_item).collect(),
+    )
+    .unwrap()
+    .role(Role::Row)
+    .positioned_by(|| placed(1, 40))
+}
+
+/// A box that is no control and has no name, but says where it sits among items a reader cannot count, is read as its role and its place: a grid's header row, ahead of the headers it holds, which keep their own names.
+#[test]
+fn an_unnamed_box_that_says_where_it_sits_is_read_for_its_place() {
+    for capturing in [false, true] {
+        let was = ui_tree::set_element_capture(capturing);
+        reset_layout_runtime();
+        focus::clear();
+        let row = header_row(vec![header_cell("N"), header_cell("S")]);
+        let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(row)]).unwrap();
+
+        let nodes = snapshot_of(root);
+        ui_tree::set_element_capture(was);
+        let read: Vec<(Role, &str, Option<u32>)> = nodes
+            .iter()
+            .map(|n| (n.role, n.name.as_str(), n.position.map(|p| p.position)))
+            .collect();
+        assert_eq!(
+            read,
+            [
+                (Role::Row, "", Some(1)),
+                (Role::ColumnHeader, "N", None),
+                (Role::ColumnHeader, "S", None),
+            ],
+            "capturing elements: {capturing}"
+        );
+        assert_eq!(nodes[0].id, None, "nothing addresses the row");
+        assert_eq!(nodes[0].position, Some(placed(1, 40)));
+        assert_eq!(
+            platform_core::accessibility::transcript(&nodes[..1]),
+            "row, 1 of 40"
+        );
+    }
+}
+
+/// An unnamed box is a node only for a place its role says: one that says no place, or a place its role does not take, has nothing a reader would hear, so a list of plain wrappers does not fill the reading with empty items.
+#[test]
+fn an_unnamed_box_with_no_place_to_say_is_not_read() {
+    reset_layout_runtime();
+    focus::clear();
+    let unplaced = Container::new(LayoutStyle::new(), vec![box_item(letter("A"))])
+        .unwrap()
+        .role(Role::ListItem);
+    let unroled = StyledContainer::new(
+        LayoutStyle::new(),
+        |_r| RectStyle::default(),
+        vec![box_item(letter("B"))],
+    )
+    .unwrap()
+    .positioned(placed(2, 3));
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(unplaced), box_item(unroled)],
+    )
+    .unwrap();
+
+    let nodes = snapshot_of(root);
+    let read: Vec<(Role, &str)> = nodes.iter().map(|n| (n.role, n.name.as_str())).collect();
+    assert_eq!(read, [(Role::Label, "A"), (Role::Label, "B")]);
+}
+
+/// A placed box a reader is told to skip is skipped with everything in it, as any other box is.
+#[test]
+fn a_hidden_placed_box_is_not_read() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let row = header_row(vec![]).a11y_hidden();
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(row)]).unwrap();
+    assert_eq!(snapshot_of(root), []);
+}
+
+/// A named box that says where it sits keeps its place with its name: a named list item is read as one item of so many.
+#[test]
+fn a_named_box_keeps_its_place() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let item = StyledContainer::new(
+        LayoutStyle::new().width(40.0).height(20.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .role(Role::ListItem)
+    .positioned(placed(4, 9))
+    .a11y_label(|| "Chapter four");
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(item)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_eq!(nodes.len(), 1, "{nodes:?}");
+    assert_eq!(nodes[0].name, "Chapter four");
+    assert_eq!(nodes[0].role, Role::ListItem);
+    assert_eq!(nodes[0].position, Some(placed(4, 9)));
 }

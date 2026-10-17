@@ -200,3 +200,27 @@ fn a_list_of_several_choices_says_so() {
         "Recipients, listbox, multiselectable\nAda, option, selected\nAlan, option\nSender, listbox"
     );
 }
+
+/// An item that says where it sits is read with the numbers its role takes, and a row with no name of its own, such as a grid's header row, reads as its role and its place.
+#[test]
+fn an_item_says_where_it_sits() {
+    let place = |position, size| {
+        Some(SetPosition {
+            level: 2,
+            position,
+            size,
+        })
+    };
+    let mut header = node(Role::Row, "");
+    header.position = place(1, 501);
+    let mut src = node(Role::TreeItem, "src");
+    src.position = place(3, 4);
+    let mut ada = node(Role::Option, "Ada");
+    ada.position = place(1, 2);
+    let mut save = node(Role::Button, "Save");
+    save.position = place(1, 1);
+    assert_eq!(
+        transcript(&[header, src, ada, save]),
+        "row, 1 of 501\nsrc, treeitem, level 2, 3 of 4\nAda, option, 1 of 2\nSave, button"
+    );
+}

@@ -27,21 +27,38 @@ pub(crate) fn for_target(
     role: renderer_core::Role,
     document: impl FnOnce() -> Arc<Element>,
 ) -> Arc<Element> {
+    for_placed_target(node, role, || None, document)
+}
+
+/// [`for_target`] for a box that is no control and says where it sits among the items of its set: the place travels with the role, since the snapshot reads it along the same nesting and a box that only says where it sits is announced for it. `place` is read only where the document is not built, which reads it itself.
+pub(crate) fn for_placed_target(
+    node: NodeId,
+    role: renderer_core::Role,
+    place: impl FnOnce() -> Option<platform_core::SetPosition>,
+    document: impl FnOnce() -> Arc<Element>,
+) -> Arc<Element> {
     if ui_tree::element_capture() {
         document()
     } else {
-        identity_as(node, role)
+        identity_as(node, role, place())
     }
 }
 
 pub(crate) fn identity(node: NodeId) -> Arc<Element> {
-    identity_as(node, renderer_core::Role::Group)
+    identity_as(node, renderer_core::Role::Group, None)
 }
 
-fn identity_as(node: NodeId, role: renderer_core::Role) -> Arc<Element> {
+fn identity_as(
+    node: NodeId,
+    role: renderer_core::Role,
+    position: Option<platform_core::SetPosition>,
+) -> Arc<Element> {
     Arc::new(Element::new(
         ElementId(node.into()),
-        Semantics::of(role),
+        Semantics {
+            position,
+            ..Semantics::of(role)
+        },
         "",
         Rect::default(),
     ))

@@ -925,3 +925,27 @@ fn a_dialog_in_a_modal_layer_is_published_modal() {
     assert!(dialog(true));
     assert!(!dialog(false));
 }
+
+/// A grid's header row is no control and has no name, and still reaches a reader as a row with its index, ahead of the headers it holds and with nothing to focus or press.
+#[test]
+fn a_header_row_with_no_name_is_a_row_with_its_index() {
+    let header_row = AccessNode {
+        position: Some(platform_core::SetPosition {
+            level: 1,
+            position: 1,
+            size: 501,
+        }),
+        ..node(None, Role::Row, "")
+    };
+    let nodes = [
+        node(Some(1), Role::Grid, "Files"),
+        header_row,
+        node(Some(2), Role::ColumnHeader, "Name"),
+    ];
+    let update = tree_update(&nodes, "Explorer", None);
+    let row = &update.nodes[1].1;
+    assert_eq!(row.role(), AkRole::Row);
+    assert_eq!(row.row_index(), Some(0));
+    assert!(!row.supports_action(Action::Focus) && !row.supports_action(Action::Click));
+    assert_eq!(update.nodes[2].1.role(), AkRole::ColumnHeader);
+}

@@ -9,7 +9,9 @@ use std::sync::Arc;
 
 use geometry_core::Rect;
 use layout_core::NodeId;
-use platform_core::{AccessNode, CurrentKind, Event, Key, ModifiersState, NamedKey, Role};
+use platform_core::{
+    AccessNode, CurrentKind, Event, Key, ModifiersState, NamedKey, Role, SetPosition,
+};
 use renderer_core::DrawCommand;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -128,6 +130,7 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
                 role,
                 lang: named.lang.clone(),
                 url: None,
+                position: named.position,
                 named_box: Some(NamedBox {
                     node: named.node,
                     wraps: wrapped_control(named, &controls),
@@ -168,34 +171,59 @@ pub fn surface_snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
             Some(i) if piece.url.is_none() => append(&mut nodes[i].name, &piece.text),
             // Text belonging to no control is still content: a heading, a caption, the paragraph a dialog asks about. A link run is its own node wherever it sits.
             _ => nodes.push(AccessNode {
-                id: None,
-                role: piece.role,
-                name: piece.text,
-                rect: piece.rect,
-                focused: false,
-                enabled: true,
-                toggled: None,
-                value: None,
-                orientation: None,
-                expanded: None,
-                position: None,
                 lang: piece.lang.as_deref().map(str::to_string),
                 url: piece.url,
-                current: None,
-                active_descendant: None,
-                controls: None,
-                has_popup: None,
-                keyboard_shortcut: None,
-                sort: None,
-                multiselectable: false,
+                position: piece.position,
                 modal: piece.drawn_in.is_some_and(|node| modal(piece.role, node)),
+                ..unaddressed(piece.role, piece.text, piece.rect)
             }),
         }
     }
 
+    nodes.extend(
+        reading
+            .placed
+            .iter()
+            .filter(|placed| !layers.behind(placed.node))
+            .filter_map(|placed| {
+                let rect = visible_rect(placed.node).filter(|rect| area(*rect) > 0.0)?;
+                Some(AccessNode {
+                    position: Some(placed.position),
+                    ..unaddressed(placed.role, String::new(), rect)
+                })
+            }),
+    );
+
     sort_in_reading_order(&mut nodes);
-    nodes.retain(|n| n.id.is_some() || !n.name.is_empty());
+    nodes.retain(|n| n.id.is_some() || !n.name.is_empty() || n.position.is_some());
     nodes
+}
+
+/// A node nothing addresses and that carries no state, as text, a named box and a placed box begin before saying what sets each apart.
+fn unaddressed(role: Role, name: String, rect: Rect) -> AccessNode {
+    AccessNode {
+        id: None,
+        role,
+        name,
+        rect,
+        focused: false,
+        enabled: true,
+        toggled: None,
+        value: None,
+        orientation: None,
+        expanded: None,
+        position: None,
+        lang: None,
+        url: None,
+        current: None,
+        active_descendant: None,
+        controls: None,
+        has_popup: None,
+        keyboard_shortcut: None,
+        sort: None,
+        multiselectable: false,
+        modal: false,
+    }
 }
 
 /// Something a reader lands on that is not a control of its own: a run of text, or a box the application named.
@@ -207,6 +235,8 @@ struct Piece {
     lang: Option<Arc<str>>,
     /// Where a link run of a paragraph goes, as the address a reader announces.
     url: Option<String>,
+    /// Where a named box sits among the items of its set, as its role says it.
+    position: Option<SetPosition>,
     /// The box the application named, for a piece that is one rather than a run of text.
     named_box: Option<NamedBox>,
     /// Where in the frame a run of text was drawn, or a named box began.
@@ -269,6 +299,8 @@ struct Named {
     lang: Option<Arc<str>>,
     /// What the box said it is; [`Role::Group`] for a box with no role of its own.
     role: Role,
+    /// Where it sits among the items of its set, as its role says it.
+    position: Option<SetPosition>,
     /// The named box this one sits in, by its place in [`Reading::named`].
     enclosing: Option<usize>,
     /// Where in the frame the box began.
@@ -277,6 +309,13 @@ struct Named {
     drew_art: bool,
     /// Whether it drew words or artwork outside every control inside it.
     drew_beside_controls: bool,
+}
+
+/// A box given no name that says where it sits among items a reader cannot count, such as the header row of a grid whose rows are not all built. Its place is what it has to say, so it is a node of its own; the controls and the text inside it are read as they would be without it, and none of them becomes its name.
+struct Placed {
+    node: NodeId,
+    role: Role,
+    position: SetPosition,
 }
 
 impl Named {
@@ -406,6 +445,7 @@ struct Open {
 struct Reading {
     scopes: FxHashMap<NodeId, Scope>,
     named: Vec<Named>,
+    placed: Vec<Placed>,
     text: Vec<Piece>,
     artwork: Vec<SeenArt>,
     /// Where in the frame each control's box began.
@@ -469,13 +509,30 @@ impl Reading {
                         hidden: scope.hidden || annotation.hidden,
                         lang: annotation.lang.or(scope.lang),
                     };
+                    let role = element.semantics.role;
+                    let position = element
+                        .semantics
+                        .position
+                        .filter(|_| role.positioning().is_some());
+                    if let Some(position) = position
+                        && annotation.label.is_none()
+                        && !inner.hidden
+                        && !controls.contains(&node)
+                    {
+                        reading.placed.push(Placed {
+                            node,
+                            role,
+                            position,
+                        });
+                    }
                     let named = match annotation.label {
                         Some(label) if !inner.hidden => {
                             reading.named.push(Named {
                                 node,
                                 label,
                                 lang: inner.lang.clone(),
-                                role: element.semantics.role,
+                                role,
+                                position,
                                 enclosing: named,
                                 opened_at: at,
                                 drew_text: false,
@@ -539,6 +596,7 @@ impl Reading {
                         role: Role::Label,
                         lang: scope.lang.clone(),
                         url: None,
+                        position: None,
                         named_box: None,
                         drawn_at: Some(at),
                         drawn_in: innermost,
@@ -557,6 +615,7 @@ impl Reading {
                             role: Role::Link,
                             lang: scope.lang.clone(),
                             url: Some(platform_core::address_of(link)),
+                            position: None,
                             named_box: None,
                             drawn_at: Some(at),
                             drawn_in: innermost,
@@ -614,12 +673,15 @@ fn append(name: &mut String, piece: &str) {
 }
 
 /// Reading order rather than tab order: a label sits between the controls it explains. Tab order stays the focus registry's answer.
+///
+/// Of two nodes that begin at the same corner the larger is read first, as the one the other sits in: a grid before its header row, and the row before its first cell.
 pub fn sort_in_reading_order(nodes: &mut [AccessNode]) {
     nodes.sort_by(|a, b| {
         a.rect
             .y
             .total_cmp(&b.rect.y)
             .then(a.rect.x.total_cmp(&b.rect.x))
+            .then(area(b.rect).total_cmp(&area(a.rect)))
     });
 }
 
