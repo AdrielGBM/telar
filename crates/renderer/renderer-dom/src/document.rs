@@ -51,13 +51,16 @@ pub(crate) const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
 /// The scrollbars go too, and not for looks: a native one takes width out of the box it is in, layout never reserved it, and the sidebar came out fifteen pixels narrower than every rect hit-testing reads — with a horizontal scrollbar underneath for the fifteen pixels that no longer fitted. The scrolling stays the browser's; only the bar is Telar's, as it is on every other target.
 ///
 /// The outline goes only where Telar draws a ring of its own: a focusable box (`data-telar-focus`). Whatever else the browser walks Tab through — a link inside a paragraph, a scroll area Firefox makes focusable — keeps the browser's ring, since nothing else would show where the keyboard is. Forced colours drop the shadow Telar's ring is painted with, so there every focused element takes the browser's ring back, the field entry included.
+///
+/// The field entry's own selection goes as well: it is invisible text parked over the field, and the band an input method's selected clause gets there would sit over the text Telar draws, which marks the clause itself.
 pub(crate) const RESET: &str = "[data-telar]{font:400 16px sans-serif;color-scheme:light dark;color:CanvasText}\
 [data-telar] *{margin:0;border:0;padding:0;background:none;font:inherit;color:inherit;\
 text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;scrollbar-width:none;\
 -webkit-appearance:none;outline:none}\
 [data-telar] :focus-visible:not([data-telar-focus]){outline:revert}\
 @media (forced-colors:active){[data-telar] :focus-visible{outline:revert!important}}\
-[data-telar] *::-webkit-scrollbar{display:none}";
+[data-telar] *::-webkit-scrollbar{display:none}\
+[data-telar] [data-telar-entry]::selection{background:transparent;color:transparent}";
 
 /// Host properties the document scroll overrides, and what they must be for it: a host that keeps a fixed height stops the page from growing, and one that declines touch gestures stops a finger from scrolling it, because a touch pans only when every box between it and the scroller allows it. A page scrolls down only, like every other `ScrollPage`, so content wider than it is clipped rather than handed to the document as a sideways scroll; `clip`, not `hidden`, because `hidden` would make the host a scroller and take the scroll away from the document.
 pub(crate) const DOCUMENT_SCROLL_OVERRIDES: [(&str, &str); 3] = [

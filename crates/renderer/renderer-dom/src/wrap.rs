@@ -25,6 +25,8 @@ pub fn unbroken(text: &str, width_of: impl Fn(&str) -> f32) -> (f32, usize) {
 }
 
 /// Hands `on_line` each line `text` wraps to at `max_width`, in order and without the space it broke on.
+///
+/// A line breaks where Unicode's line-breaking rules allow it, which is where a browser breaks: after a space, and also between two ideographs or kana, after a CJK punctuation mark, after a hyphen. Breaking only at spaces put a whole run of Japanese on the next line where the browser had begun it on this one, and everything drawn from these lines, a caret and a composition's underline, a line below its text.
 pub fn each_line<'a>(
     text: &'a str,
     max_width: f32,
@@ -34,6 +36,7 @@ pub fn each_line<'a>(
     // A newline at the very end closes the last line rather than opening another: a document lays out no line box for it, and counting one made every text that ends in a break a line taller than it is drawn.
     let body = text.strip_suffix('\n').unwrap_or(text);
     for hard in body.split('\n') {
+        let opportunities = break_opportunities(hard);
         let mut line_start = 0usize;
         let mut last_break: Option<usize> = None;
         for (offset, c) in hard.char_indices() {
@@ -41,7 +44,7 @@ pub fn each_line<'a>(
             if offset < line_start {
                 continue;
             }
-            if c.is_whitespace() {
+            if offset > line_start && opportunities.contains(&offset) {
                 last_break = Some(offset);
             }
             // Trailing space does not count towards the fit. A space at a break hangs past the edge rather than pushing the word after it onto the next line, which is what every text engine does and what a document does with `pre-wrap` — measuring it broke one word early, and a paragraph came out a line taller than the page it was drawn on.
@@ -65,6 +68,14 @@ pub fn each_line<'a>(
     }
 }
 
+/// The byte offsets in `line`, which holds no `\n`, where a new line may begin.
+fn break_opportunities(line: &str) -> Vec<usize> {
+    unicode_linebreak::linebreaks(line)
+        .map(|(at, _)| at)
+        .filter(|&at| at < line.len())
+        .collect()
+}
+
 /// The byte offset in `text` each line [`each_line`] hands out begins at.
 pub fn line_starts(text: &str, max_width: f32, width_of: impl Fn(&str) -> f32) -> Vec<usize> {
     let mut starts = Vec::new();
@@ -77,9 +88,21 @@ pub fn line_starts(text: &str, max_width: f32, width_of: impl Fn(&str) -> f32) -
     starts
 }
 
-/// The widest run `text` has between spaces: the narrowest column [`greedy`] wraps it into without breaking inside a word.
+/// The widest run `text` has between two places [`each_line`] may break it: the narrowest column [`greedy`] wraps it into without breaking inside a word.
 pub fn widest_word(text: &str, width_of: impl Fn(&str) -> f32) -> f32 {
-    text.split_whitespace().map(width_of).fold(0.0, f32::max)
+    text.split('\n')
+        .flat_map(|line| {
+            let mut ends = break_opportunities(line);
+            ends.push(line.len());
+            let mut start = 0;
+            ends.into_iter().map(move |end| {
+                let run = &line[start..end];
+                start = end;
+                run
+            })
+        })
+        .map(|run| width_of(run.trim()))
+        .fold(0.0, f32::max)
 }
 
 #[cfg(test)]

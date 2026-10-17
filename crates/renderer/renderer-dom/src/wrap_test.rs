@@ -116,3 +116,16 @@ fn a_line_that_does_not_wrap_counts_the_spaces_at_its_end() {
     assert_eq!(unbroken("ab \nabcd\n", monospace), (40.0, 2));
     assert_eq!(unbroken("", monospace), (0.0, 1));
 }
+
+/// A browser breaks between kana as readily as at a space, so a run of Japanese after a word starts on the line the word ends.
+#[test]
+fn a_line_breaks_between_kana_where_a_browser_does() {
+    let mut lines = Vec::new();
+    each_line("ab!きょうは", 50.0, monospace, |line| lines.push(line));
+    assert_eq!(lines, ["ab!きょ", "うは"]);
+}
+
+#[test]
+fn the_narrowest_column_for_kana_is_one_character() {
+    assert_eq!(widest_word("きょうは ab", monospace), 20.0);
+}
