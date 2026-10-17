@@ -15,6 +15,15 @@ pub fn greedy(text: &str, max_width: f32, width_of: impl Fn(&str) -> f32) -> (f3
     (widest, lines)
 }
 
+/// The widest line `text` holds when only its `\n`s break it, and how many lines that is: what a document lays out for `white-space: pre`, where a space at the end of a line is a space like any other and takes its room.
+pub fn unbroken(text: &str, width_of: impl Fn(&str) -> f32) -> (f32, usize) {
+    let body = text.strip_suffix('\n').unwrap_or(text);
+    body.split('\n')
+        .fold((0.0f32, 0usize), |(widest, lines), line| {
+            (widest.max(width_of(line)), lines + 1)
+        })
+}
+
 /// Hands `on_line` each line `text` wraps to at `max_width`, in order and without the space it broke on.
 pub fn each_line<'a>(
     text: &'a str,

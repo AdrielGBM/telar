@@ -7,21 +7,22 @@ use telar::preview::host::{ArgState, Args};
 use telar::preview::{ArgValue, ControlKind, NumberControl};
 use telar::{
     Accessible, AlignItems, Children, Color, Container, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, ReadSignal, RectStyle, RwSignal, ShapeStyle, Slots, StyledContainer, Text, TextArea,
-    box_item, children, effect, signal,
+    Reactive, ReadSignal, RwSignal, ShapeStyle, Slots, StyledContainer, Text, box_item, effect,
+    signal,
 };
 use telar_components::{
     ItemProps, ScrubFieldProps, SelectProps, SliderProps, TabsProps, TextFieldProps, ToggleProps,
     item, scrub_field, select, slider, tabs, text_field, toggle,
 };
-use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_card, workbench_mono};
+use telar_devtools::{WORKBENCH_GRID, workbench_card, workbench_mono};
 
 use crate::strings::{self, UNSET, UNSET_ARG};
 
 const FIELD_WIDTH: f32 = 220.0;
 const SLIDER_WIDTH: f32 = 160.0;
 const SWATCH_SIZE: f32 = 20.0;
-const MULTILINE_HEIGHT: f32 = 64.0;
+/// How many lines a multi-line arg's field grows to before it scrolls.
+const MULTILINE_MAX_ROWS: u32 = 8;
 
 type Current = Rc<dyn Fn() -> Option<ArgValue>>;
 
@@ -239,31 +240,16 @@ fn text_editor(binding: &Binding, multiline: bool) -> Result<Editor, LayoutError
         },
         |text| Some(ArgValue::Text(text.clone())),
     );
-    let name = binding.name;
-    let item = match multiline {
-        false => text_field(
-            TextFieldProps::props()
-                .value(bound.shown)
-                .placeholder(name)
-                .width(FIELD_WIDTH)
-                .build(),
-            Children::default(),
-        )?,
-        true => {
-            let area = TextArea::declaring(bound.shown, LayoutStyle::new(), |text| text)?
-                .a11y_label(move || name);
-            let framed = StyledContainer::new(
-                LayoutStyle::column()
-                    .width(FIELD_WIDTH)
-                    .min_height(MULTILINE_HEIGHT)
-                    .padding_horizontal(WORKBENCH_GRID)
-                    .padding_vertical(WORKBENCH_GRID / 2.0),
-                |_| field_frame(),
-                children![area],
-            )?;
-            box_item(framed)
-        }
-    };
+    let item = text_field(
+        TextFieldProps::props()
+            .value(bound.shown)
+            .placeholder(binding.name)
+            .width(FIELD_WIDTH)
+            .multiline(multiline)
+            .max_rows(MULTILINE_MAX_ROWS)
+            .build(),
+        Children::default(),
+    )?;
     Ok(Editor {
         item,
         current: bound.current,
@@ -417,8 +403,4 @@ fn inline(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, Layout
         items,
     )?;
     Ok(box_item(row))
-}
-
-fn field_frame() -> RectStyle {
-    workbench_card().with_fill(use_workbench_tokens().sidebar_background)
 }

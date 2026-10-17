@@ -33,7 +33,7 @@ pub struct Element {
     ///
     /// The same shape of thing as [`Semantics::focused`], and for the same reason: a target that draws the content at the offset needs no telling, because there the offset is the whole of it. One that hands the box to a document does — there the compositor holds the content and reports where it moved it, so a widget that moves the offset itself (a bar dragged with the mouse, a jump to the top of a page just navigated to) is only stating a wish that the next report overrules. Said here, a backend can act on it.
     ///
-    /// Not part of [`Semantics`], which is what the box *means* and is compared and hashed as such. This is a fact about one frame, like [`rect`](Self::rect) beside it, and it is `None` on almost every one: only the frame in which the widget asks carries it.
+    /// Not part of [`Semantics`], which is what the box *means* and is compared and hashed as such. This is a fact about the frames it is carried by, like [`rect`](Self::rect) beside it, and it is `None` on almost every one: only the frames from the one in which the widget asks until the backend reports where the box went carry it, every one of them asking for the same offset, so a backend applies it where the box is not there yet and does nothing where it is.
     pub scroll_to: Option<(f32, f32)>,
     /// Whether this box scrolls its own content, whatever else its role says it is: a scroll area is one by role, and a control that scrolls, such as a tree whose rows overflow it, says so here instead of wrapping a scroll area in a box of its own. A document gives such a box an overflow, so the element a reader focuses is the one that scrolls.
     pub scrolls: bool,
@@ -47,7 +47,7 @@ pub struct Element {
     ///
     /// The frame draws the layer after the page, which is where a raster target needs it: above every box of the page, sticky ones included. A document needs it where it was declared instead, because there the order of the elements is the order Tab walks and a reader reads, so it puts the element in that place and fixes it against the viewport.
     pub fixed_in_place_of: Option<ElementId>,
-    /// Where the caret of a field that holds the keyboard is, in the box's own coordinates: where a document puts the element the browser types into, so an input method opens its candidates beside the caret rather than at the corner of the field. A fact about one frame, like [`scroll_to`](Self::scroll_to), and `None` on every box but that field.
+    /// Where the caret of a field that holds the keyboard is, in the box's own coordinates: where a document puts the element the browser types into, so an input method opens its candidates beside the caret rather than at the corner of the field. A fact about one frame, like [`rect`](Self::rect), and `None` on every box but that field.
     pub caret: Option<Rect>,
 }
 

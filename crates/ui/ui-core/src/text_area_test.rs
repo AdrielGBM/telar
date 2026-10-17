@@ -3,8 +3,14 @@ use crate::context::{
     compute_layout, new_container, relayout_if_dirty, reset_layout_runtime, track_layout,
 };
 use crate::layout_item::LayoutItem;
+use crate::text_place::CARET_WIDTH;
+use crate::visual_lines::{Affinity, VisualLines};
+use geometry_core::Rect;
 use layout_core::AvailableSpace;
+use platform_core::{Ime, NamedKey, PointerButton};
+use reactive_core::signal;
 use renderer_core::Color;
+use std::cell::RefCell;
 
 fn key(k: Key) -> Event {
     Event::KeyPressed {
@@ -56,7 +62,7 @@ fn shift_arrows_grow_a_selection_and_backspace_takes_it() {
     let (mut area, value) = focused("hello");
     area.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
     area.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
-    assert_eq!(area.selection("hello"), Some((3, 5)));
+    assert_eq!(area.editor.selection("hello"), Some((3, 5)));
     area.on_event(&key(Key::Named(NamedKey::Backspace)));
     assert_eq!(value.get(), "hel");
 }
@@ -76,7 +82,7 @@ fn copy_leaves_the_text_and_the_selection_alone() {
     area.on_event(&chord(Key::Char('a')));
     assert_eq!(area.on_event(&chord(Key::Char('c'))), EventResult::Handled);
     assert_eq!(value.get(), "one\ntwo");
-    assert_eq!(area.selection("one\ntwo"), Some((0, 7)));
+    assert_eq!(area.editor.selection("one\ntwo"), Some((0, 7)));
 }
 fn focused(initial: &str) -> (TextArea, RwSignal<String>) {
     reset_layout_runtime();
@@ -96,7 +102,7 @@ fn focused(initial: &str) -> (TextArea, RwSignal<String>) {
         AvailableSpace::Definite(400.0),
     )
     .unwrap();
-    focus::request(area.id);
+    focus::request(area.editor.id);
     (area, value)
 }
 
@@ -123,13 +129,12 @@ fn the_shortcut_guard_covers_every_key_this_editor_edits() {
     let keys: Vec<Key> = std::iter::once(Key::Char('x'))
         .chain(named.into_iter().map(Key::Named))
         .collect();
-    let style = TextStyle::new(14.0, Color::BLACK);
     for k in keys {
         let (mut area, _value) = focused("one\ntwo");
-        area.caret.set(5);
+        area.editor.caret.set(5);
         // Asked first, as dispatch does — Escape answers by giving up the focus the guard reads.
         let guarded = focus::text_entry_takes_key(&k, plain);
-        let edited = area.edit(&k, &plain, &style) == EventResult::Handled;
+        let edited = area.editor.edit(&k, &plain) == EventResult::Handled;
         assert!(
             !edited || guarded,
             "{k:?} is edited by the editor but the shortcut guard lets it through"
@@ -170,7 +175,7 @@ fn click_focuses_and_positions_caret_without_reborrow() {
     let (mut area, _value) = focused("hello\nworld");
     focus::clear();
     // The caret set must not run inside a `value.with` closure, which would re-borrow the reactive runtime.
-    let r = area.leaf.rect.get();
+    let r = area.editor.leaf.rect.get();
     let handled = area.on_event(&Event::PointerPressed {
         x: (r.x + 5.0) as f64,
         y: (r.y + 2.0) as f64,
@@ -179,7 +184,7 @@ fn click_focuses_and_positions_caret_without_reborrow() {
     });
     assert_eq!(handled, EventResult::Handled);
     assert!(
-        focus::is_focused(area.id),
+        focus::is_focused(area.editor.id),
         "a press inside focuses the area"
     );
 }
@@ -272,7 +277,7 @@ fn a_declaring_area_is_sized_by_the_tree_above_it() {
         .unwrap(),
     );
     crate::inherit::declare(laid.root, Declared::default().with_font_size(20.0));
-    assert_eq!((laid.area.style)().font_size, 20.0);
+    assert_eq!((laid.area.editor.style)().font_size, 20.0);
     let small = laid.height();
     crate::inherit::declare(laid.root, Declared::default().with_font_size(40.0));
     let large = laid.height();
@@ -291,10 +296,16 @@ fn a_declaring_area_follows_the_surfaces_family_and_a_complete_one_does_not() {
     })
     .unwrap();
     crate::set_font_family(Some(FontFamily::Monospace));
-    assert_eq!((declaring.style)().font_family, FontFamily::Monospace);
-    assert_eq!((complete.style)().font_family, FontFamily::SansSerif);
+    assert_eq!(
+        (declaring.editor.style)().font_family,
+        FontFamily::Monospace
+    );
+    assert_eq!((complete.editor.style)().font_family, FontFamily::SansSerif);
     crate::set_font_family(None);
-    assert_eq!((declaring.style)().font_family, FontFamily::SansSerif);
+    assert_eq!(
+        (declaring.editor.style)().font_family,
+        FontFamily::SansSerif
+    );
 }
 
 /// Like a field, an area shows what was typed: its caret and selection index the value, so a case inherited from above would put them between the wrong letters.
@@ -309,7 +320,7 @@ fn an_area_shows_what_was_typed_whatever_case_it_inherits() {
         renderer_core::Declared::default().with_text_case(renderer_core::TextCase::Upper),
     );
     assert_eq!(
-        (laid.area.style)().text_case,
+        (laid.area.editor.style)().text_case,
         renderer_core::TextCase::AsWritten
     );
 }
@@ -369,10 +380,11 @@ fn the_caret_stays_in_view_of_the_scroll_the_area_sits_in() {
 }
 
 fn row(area: &TextArea) -> usize {
-    let text = area.value.get();
-    let style = (area.style)();
-    area.placed(&text, &style)
-        .row_of(area.caret.get(), area.affinity.get())
+    let text = area.editor.value.get();
+    let style = (area.editor.style)();
+    area.editor
+        .placed(&text, &style)
+        .row_of(area.editor.caret.get(), area.editor.affinity.get())
 }
 
 const PARAGRAPH: &str =
@@ -401,11 +413,11 @@ impl Wrapping {
 
     fn with(area: Result<TextArea, LayoutError>, width: f32) -> Self {
         let area = area.unwrap().text_wrap(TextWrap::Wrap);
-        let value = area.value;
+        let value = area.editor.value;
         let root = new_container(column(width), &[area.layout_node()]).unwrap();
         let wrapping = Self { area, value, root };
         wrapping.lay_out(width);
-        focus::request(wrapping.area.id);
+        focus::request(wrapping.area.editor.id);
         wrapping
     }
 
@@ -422,13 +434,13 @@ impl Wrapping {
 
     fn lines(&self) -> Rc<VisualLines> {
         let text = self.value.get();
-        let style = (self.area.style)();
-        self.area.placed(&text, &style).lines
+        let style = (self.area.editor.style)();
+        self.area.editor.placed(&text, &style).lines
     }
 
     fn height(&self) -> f32 {
         relayout_if_dirty();
-        self.area.leaf.rect.get().height
+        self.area.editor.leaf.rect.get().height
     }
 
     fn press(&mut self, k: Key) {
@@ -436,7 +448,7 @@ impl Wrapping {
     }
 
     fn click(&mut self, x: f32, y: f32) {
-        let r = self.area.leaf.rect.get();
+        let r = self.area.editor.leaf.rect.get();
         self.area.on_event(&Event::PointerPressed {
             x: (r.x + x) as f64,
             y: (r.y + y) as f64,
@@ -489,10 +501,14 @@ fn caret_rect(area: &TextArea) -> Rect {
 fn an_area_that_does_not_wrap_keeps_a_long_line_on_one_row() {
     let (area, value) = focused(PARAGRAPH);
     let text = value.get();
-    let style = (area.style)();
-    assert_eq!(area.placed(&text, &style).lines.len(), 1);
-    assert!((area.leaf.rect.get().height - line_h()).abs() < 0.5);
-    assert_eq!(drawn(&area).1[0].width, NO_WRAP_WIDTH);
+    let style = (area.editor.style)();
+    assert_eq!(area.editor.placed(&text, &style).lines.len(), 1);
+    assert!((area.editor.leaf.rect.get().height - line_h()).abs() < 0.5);
+    let drawn = drawn(&area).1[0].width;
+    assert!(
+        drawn > 400.0,
+        "the row is drawn whole, past the box it scrolls under: {drawn}"
+    );
 }
 
 #[test]
@@ -550,7 +566,7 @@ fn a_placeholder_wraps_and_the_area_is_as_tall_as_it_is_drawn() {
     })
     .map(|area| area.placeholder(PARAGRAPH));
     let wrapping = Wrapping::with(area, 160.0);
-    let style = (wrapping.area.style)();
+    let style = (wrapping.area.editor.style)();
     let rows = VisualLines::of(PARAGRAPH, &style, Some(160.0)).len();
     assert!(rows >= 3);
     assert!((wrapping.height() - rows as f32 * line_h()).abs() < 0.5);
@@ -559,7 +575,7 @@ fn a_placeholder_wraps_and_the_area_is_as_tall_as_it_is_drawn() {
 #[test]
 fn down_and_up_keep_the_caret_s_x_across_wrapped_rows() {
     let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
-    wrapping.area.caret.set(6);
+    wrapping.area.editor.caret.set(6);
     let x = caret_rect(&wrapping.area).x;
     wrapping.press(Key::Named(NamedKey::ArrowDown));
     assert_eq!(row(&wrapping.area), 1);
@@ -570,22 +586,22 @@ fn down_and_up_keep_the_caret_s_x_across_wrapped_rows() {
     assert_eq!(row(&wrapping.area), 2);
     wrapping.press(Key::Named(NamedKey::ArrowUp));
     wrapping.press(Key::Named(NamedKey::ArrowUp));
-    assert_eq!(wrapping.area.caret.get(), 6, "back where it started");
+    assert_eq!(wrapping.area.editor.caret.get(), 6, "back where it started");
 }
 
 /// The column a run of vertical moves began in is the one it goes on in: a short line on the way takes the caret to its end and does not keep it there.
 #[test]
 fn a_short_row_on_the_way_does_not_pull_the_caret_in_for_good() {
     let (mut area, _value) = focused("abcdefgh\nab\nabcdefgh");
-    area.caret.set(6);
+    area.editor.caret.set(6);
     area.on_event(&key(Key::Named(NamedKey::ArrowDown)));
-    assert_eq!(area.caret.get(), 11);
+    assert_eq!(area.editor.caret.get(), 11);
     area.on_event(&key(Key::Named(NamedKey::ArrowDown)));
-    assert_eq!(area.caret.get(), 18);
+    assert_eq!(area.editor.caret.get(), 18);
     area.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
     area.on_event(&key(Key::Named(NamedKey::ArrowUp)));
     assert_eq!(
-        area.caret.get(),
+        area.editor.caret.get(),
         11,
         "a horizontal move starts a new column"
     );
@@ -595,9 +611,9 @@ fn a_short_row_on_the_way_does_not_pull_the_caret_in_for_good() {
 fn home_and_end_go_to_the_ends_of_the_row_on_screen() {
     let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
     let lines = wrapping.lines();
-    wrapping.area.caret.set(2);
+    wrapping.area.editor.caret.set(2);
     wrapping.press(Key::Named(NamedKey::End));
-    assert_eq!(wrapping.area.caret.get(), lines.row(0).end);
+    assert_eq!(wrapping.area.editor.caret.get(), lines.row(0).end);
     let end = caret_rect(&wrapping.area);
     assert_eq!(
         end.y, 0.0,
@@ -605,13 +621,13 @@ fn home_and_end_go_to_the_ends_of_the_row_on_screen() {
     );
     assert!(end.x > 100.0, "{}", end.x);
     wrapping.press(Key::Named(NamedKey::Home));
-    assert_eq!(wrapping.area.caret.get(), 0);
+    assert_eq!(wrapping.area.editor.caret.get(), 0);
     wrapping.press(Key::Named(NamedKey::ArrowDown));
     wrapping.press(Key::Named(NamedKey::Home));
-    assert_eq!(wrapping.area.caret.get(), lines.row(1).start);
+    assert_eq!(wrapping.area.editor.caret.get(), lines.row(1).start);
     assert_eq!(caret_rect(&wrapping.area).y, line_h());
     wrapping.press(Key::Named(NamedKey::End));
-    assert_eq!(wrapping.area.caret.get(), lines.row(1).end);
+    assert_eq!(wrapping.area.editor.caret.get(), lines.row(1).end);
     assert_eq!(caret_rect(&wrapping.area).y, line_h());
 }
 
@@ -620,12 +636,12 @@ fn typing_at_the_end_of_a_wrapped_row_moves_the_caret_on_with_the_letter() {
     let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
     let end = wrapping.lines().row(0).end;
     wrapping.press(Key::Named(NamedKey::Home));
-    wrapping.area.caret.set(0);
+    wrapping.area.editor.caret.set(0);
     wrapping.press(Key::Named(NamedKey::End));
     wrapping.press(Key::Char('x'));
     assert_eq!(&wrapping.value.get()[end..=end], "x");
-    assert_eq!(wrapping.area.caret.get(), end + 1);
-    assert_eq!(wrapping.area.affinity.get(), Affinity::Downstream);
+    assert_eq!(wrapping.area.editor.caret.get(), end + 1);
+    assert_eq!(wrapping.area.editor.affinity.get(), Affinity::Downstream);
 }
 
 #[test]
@@ -633,16 +649,15 @@ fn the_primary_modifier_with_home_and_end_goes_to_the_ends_of_the_text() {
     use platform_core::{KeyboardConvention, set_keyboard_convention};
     set_keyboard_convention(KeyboardConvention::Pc);
     let (mut area, value) = focused("one\ntwo\nthree");
-    area.caret.set(5);
+    area.editor.caret.set(5);
     let ctrl = ModifiersState {
         is_ctrl: true,
         ..ModifiersState::default()
     };
-    let style = (area.style)();
-    area.edit(&Key::Named(NamedKey::Home), &ctrl, &style);
-    assert_eq!(area.caret.get(), 0);
-    area.edit(&Key::Named(NamedKey::End), &ctrl, &style);
-    assert_eq!(area.caret.get(), value.get().len());
+    area.editor.edit(&Key::Named(NamedKey::Home), &ctrl);
+    assert_eq!(area.editor.caret.get(), 0);
+    area.editor.edit(&Key::Named(NamedKey::End), &ctrl);
+    assert_eq!(area.editor.caret.get(), value.get().len());
     set_keyboard_convention(KeyboardConvention::native());
 }
 
@@ -656,12 +671,11 @@ fn on_a_mac_command_with_the_arrows_goes_to_the_ends_of_the_row_and_of_the_text(
         is_meta: true,
         ..ModifiersState::default()
     };
-    let style = (wrapping.area.style)();
     let start = lines.row(1).start;
-    wrapping.area.caret.set(start + 2);
+    wrapping.area.editor.caret.set(start + 2);
     let mut press = |k: NamedKey| {
-        wrapping.area.edit(&Key::Named(k), &command, &style);
-        wrapping.area.caret.get()
+        wrapping.area.editor.edit(&Key::Named(k), &command);
+        wrapping.area.editor.caret.get()
     };
     assert_eq!(press(NamedKey::ArrowRight), lines.row(1).end);
     assert_eq!(press(NamedKey::ArrowLeft), start);
@@ -675,10 +689,10 @@ fn a_press_past_the_end_of_a_wrapped_row_lands_at_its_end_and_one_at_a_row_s_sta
     let mut wrapping = Wrapping::new(PARAGRAPH, 160.0);
     let lines = wrapping.lines();
     wrapping.click(159.0, line_h() * 0.5);
-    assert_eq!(wrapping.area.caret.get(), lines.row(0).end);
+    assert_eq!(wrapping.area.editor.caret.get(), lines.row(0).end);
     assert_eq!(caret_rect(&wrapping.area).y, 0.0);
     wrapping.click(0.5, line_h() * 1.5);
-    assert_eq!(wrapping.area.caret.get(), lines.row(1).start);
+    assert_eq!(wrapping.area.editor.caret.get(), lines.row(1).start);
     assert_eq!(caret_rect(&wrapping.area).y, line_h());
 }
 
@@ -750,12 +764,12 @@ fn composition_lines(area: &TextArea) -> Vec<Rect> {
 #[test]
 fn a_commit_types_its_text_once_lines_and_all() {
     let (mut area, value) = focused("ab");
-    area.caret.set(1);
+    area.editor.caret.set(1);
     area.on_event(&ime(Ime::preedit("か", None)));
     assert_eq!(value.get(), "ab", "a composition is not typed yet");
     area.on_event(&ime(Ime::Commit("x\r\ny".into())));
     assert_eq!(value.get(), "ax\nyb");
-    assert_eq!(area.caret.get(), 4);
+    assert_eq!(area.editor.caret.get(), 4);
     assert!(composition_lines(&area).is_empty());
 }
 
@@ -803,7 +817,7 @@ fn a_composition_that_runs_past_the_edge_wraps_and_grows_the_area() {
         "the caret is on the second row: {caret:?}"
     );
     let reported = crate::text_input().expect("the area holds the keyboard");
-    let at = wrapping.area.leaf.rect.get();
+    let at = wrapping.area.editor.leaf.rect.get();
     assert_eq!(
         reported.caret,
         Rect::new(at.x + caret.x, at.y + caret.y, caret.width, caret.height)

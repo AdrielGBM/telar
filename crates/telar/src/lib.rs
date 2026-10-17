@@ -339,7 +339,7 @@ pub use ui_core::{open_surface_font_family, set_font_family, use_font_family};
 #[cfg(feature = "runtime")]
 pub use ui_core::{
     Accessible, AnchorAlign, Anchoring, Axis, BuildFailure, COARSE_STEP, Canvas, Caret, ChildSlot,
-    Children, Clip, ClipAxis, ClippedItem, Component, ComponentList, Container,
+    Children, Clip, ClipAxis, ClippedItem, Component, ComponentList, Container, DOUBLE_CLICK,
     DismissRegistration, DragAxis, DragStart, Edge, ErrorBoundary, EventResult, FINE_STEP,
     FixedLayer, HeightIndex, Image, Inherited, Input, IntoClip, KeyAnswer, KeyNav, KeyNavMove,
     LayoutItem, LayoutLeaf, LayoutScrollArea, LayoutTransition, Lazy, Mask, NodeId, NodeVec,

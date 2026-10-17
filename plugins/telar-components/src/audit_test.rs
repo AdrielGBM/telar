@@ -12,8 +12,8 @@ use telar::{
 };
 use telar_components::{
     ButtonProps, CheckboxProps, ImageProps, ImageSource, ItemProps, LinkProps, ScrubFieldProps,
-    SearchFieldProps, SelectProps, TabsProps, TextFieldProps, TextareaProps, button, checkbox,
-    image, item, link as text_link, scrub_field, search_field, select, tabs, text_field, textarea,
+    SearchFieldProps, SelectProps, TabsProps, TextFieldProps, button, checkbox, image, item,
+    link as text_link, scrub_field, search_field, select, tabs, text_field,
 };
 #[cfg(feature = "overlays")]
 use telar_components::{
@@ -1206,9 +1206,10 @@ fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
             )?,
         ],
     )?;
-    let notes = textarea(
-        TextareaProps::props()
+    let notes = text_field(
+        TextFieldProps::props()
             .label("Notes")
+            .multiline(true)
             .rows(2)
             .counter(true)
             .max_length(80)

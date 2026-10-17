@@ -72,9 +72,12 @@ mod svg;
 mod test_support;
 mod text;
 mod text_area;
+mod text_edit;
+mod text_editor;
 mod text_fit;
 mod text_input;
 mod text_metrics;
+mod text_place;
 mod theme_provider;
 mod transform_origin;
 pub use text_metrics::{
@@ -114,7 +117,7 @@ pub use fixed_layer::FixedLayer;
 pub use height_index::HeightIndex;
 pub use image::Image;
 pub use inherit::{Inherited, context, declare, inherited_text_style, undeclare};
-pub use input::{Caret, Input, Underline};
+pub use input::Input;
 pub use input_region::{interactive_rects, visible_rect};
 pub use kept::kept;
 pub use keyboard::{
@@ -169,6 +172,8 @@ pub use surface_title::{
 pub use svg::Svg;
 pub use text::{Text, TextRun};
 pub use text_area::TextArea;
+pub use text_edit::DOUBLE_CLICK;
+pub use text_editor::{Caret, Underline};
 pub use text_input::text_input;
 pub use theme_provider::{
     ScopeProvider, follow_control_size, follow_theme, provide_control_size, provide_theme,

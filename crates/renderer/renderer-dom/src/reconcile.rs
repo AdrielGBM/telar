@@ -411,10 +411,6 @@ impl Reconciler {
         {
             crate::picture::show(&element, picture, *width, &mut live.shown);
         }
-        match self.document_scroll.as_ref() {
-            Some(held) if node.primary => held.scroll_as_asked(node.scroll_to),
-            _ => settle_scroll(&element, node.scroll_to),
-        }
         let audit = node
             .audit
             .map(|rect| format!("{} {} {} {}", rect.x, rect.y, rect.width, rect.height));
@@ -497,6 +493,11 @@ impl Reconciler {
                     self.served.as_mut(),
                 );
             }
+        }
+        // Last, once the box holds everything it holds this frame: a browser clamps a scroll to the content as it is when the scroll is written, and a row that arrived in the same frame as the scroll to it would otherwise be out of reach.
+        match self.document_scroll.as_ref() {
+            Some(held) if node.primary => held.scroll_as_asked(node.scroll_to),
+            _ => settle_scroll(&element, node.scroll_to),
         }
         element
     }
@@ -843,7 +844,7 @@ pub(crate) fn truncate(parent: &web_sys::Node, keep: u32) {
 ///
 /// The offset travels the other way on almost every frame — the compositor scrolls, and `watch_scroll` reports where the content ended up. This is the other direction, and without it a widget had no way to move a box the compositor is holding: the scrollbar could not be dragged with a mouse, and a page navigated to opened wherever the last one had been left.
 ///
-/// Only where the widget asks, and only for the one frame it asks in. Written every frame it would fight the scroll it is reporting — a fling is an offset the widget learns of a frame late, and answering with that stale value stops it dead.
+/// Only where the widget asks, which it stops doing once the box reports where it went. Written every frame it would fight the scroll it is reporting — a fling is an offset the widget learns of a frame late, and answering with that stale value stops it dead — so a request is compared with where the box is before anything is written, and one the box already satisfies writes nothing.
 fn settle_scroll(node: &web_sys::Element, scroll_to: Option<(f32, f32)>) {
     let Some((x, y)) = scroll_to else {
         return;

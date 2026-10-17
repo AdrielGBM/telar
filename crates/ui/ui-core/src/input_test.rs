@@ -7,6 +7,12 @@ use std::time::Duration;
 use super::*;
 use crate::context::{compute_layout, new_container};
 use crate::layout_item::LayoutItem;
+use crate::text_editor::{POINT_MARK, UNDERLINE_THICKNESS};
+use crate::text_place::CARET_WIDTH;
+use geometry_core::Rect;
+use platform_core::{Ime, NamedKey, PointerButton};
+use reactive_core::signal;
+use renderer_core::RectStyle;
 
 fn key(k: Key) -> Event {
     Event::KeyPressed {
@@ -41,9 +47,17 @@ fn shift_arrows_grow_a_selection_and_a_plain_one_drops_it() {
     let (mut input, _) = focused_input("hello");
     input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
     input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
-    assert_eq!(input.selection("hello"), Some((3, 5)), "two chars selected");
+    assert_eq!(
+        input.editor.selection("hello"),
+        Some((3, 5)),
+        "two chars selected"
+    );
     input.on_event(&key(Key::Named(NamedKey::ArrowRight)));
-    assert_eq!(input.selection("hello"), None, "a plain arrow drops it");
+    assert_eq!(
+        input.editor.selection("hello"),
+        None,
+        "a plain arrow drops it"
+    );
 }
 
 /// The behaviour that makes a selection worth having: what you type lands *instead of* it.
@@ -70,7 +84,7 @@ fn a_plain_arrow_collapses_to_the_selection_edge() {
     let (mut input, _) = focused_input("hello");
     input.on_event(&chord(Key::Char('a')));
     input.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
-    assert_eq!(input.caret.get(), 0, "collapsed to the low edge");
+    assert_eq!(input.editor.caret.get(), 0, "collapsed to the low edge");
 }
 
 #[test]
@@ -79,7 +93,11 @@ fn cut_removes_the_selection_and_copy_leaves_it() {
     input.on_event(&chord(Key::Char('a')));
     input.on_event(&chord(Key::Char('c')));
     assert_eq!(value.get(), "hello", "copy leaves the text alone");
-    assert_eq!(input.selection("hello"), Some((0, 5)), "and the selection");
+    assert_eq!(
+        input.editor.selection("hello"),
+        Some((0, 5)),
+        "and the selection"
+    );
     input.on_event(&chord(Key::Char('x')));
     assert_eq!(value.get(), "", "cut takes it");
 }
@@ -108,7 +126,7 @@ fn focused_input(initial: &str) -> (Input, RwSignal<String>) {
         AvailableSpace::Definite(100.0),
     )
     .unwrap();
-    focus::request(input.id);
+    focus::request(input.editor.id);
     (input, value)
 }
 
@@ -137,7 +155,7 @@ fn aligned_input(initial: &str, align: TextAlign) -> Input {
         AvailableSpace::Definite(100.0),
     )
     .unwrap();
-    focus::request(input.id);
+    focus::request(input.editor.id);
     input
 }
 
@@ -194,7 +212,7 @@ fn the_caret_follows_the_alignment_the_text_was_drawn_with() {
 fn the_caret_blinks_while_the_field_holds_the_keyboard() {
     let input = aligned_input("hola", TextAlign::Start);
     motion_core::reset();
-    input.blink.follow(true);
+    input.editor.blink.follow(true);
 
     let start = web_time::Instant::now();
     motion_core::tick(start);
@@ -211,7 +229,7 @@ fn the_caret_blinks_while_the_field_holds_the_keyboard() {
 fn typing_lights_the_caret_again() {
     let (mut input, _) = focused_input("hola");
     motion_core::reset();
-    input.blink.follow(true);
+    input.editor.blink.follow(true);
     let start = web_time::Instant::now();
     motion_core::tick(start);
     motion_core::tick(start + Duration::from_millis(700));
@@ -236,7 +254,7 @@ fn the_caret_is_as_tall_as_the_line_the_text_is_laid_out_on() {
         style
     })
     .unwrap();
-    focus::request(input.id);
+    focus::request(input.editor.id);
 
     let tall = caret_of(&input).0.height;
 
@@ -261,7 +279,7 @@ fn escape_says_so_before_it_hands_the_keyboard_back() {
     input.on_event(&key(Key::Named(NamedKey::Escape)));
 
     assert!(given_up.get(), "el campo se rindió sin decirlo");
-    assert!(!focus::is_focused(input.id), "y soltó el teclado");
+    assert!(!focus::is_focused(input.editor.id), "y soltó el teclado");
 }
 
 /// The other half of the blink, and the one that decides what the window costs: a sequence registered with the ticker is a standing request to redraw, so a field nobody is typing into must not be running one.
@@ -269,7 +287,7 @@ fn escape_says_so_before_it_hands_the_keyboard_back() {
 fn a_field_without_the_keyboard_asks_for_no_frames() {
     motion_core::reset();
     let input = aligned_input("hola", TextAlign::Start);
-    input.blink.follow(false);
+    input.editor.blink.follow(false);
     motion_core::tick(web_time::Instant::now());
     assert!(
         !motion_core::has_active(),
@@ -305,10 +323,10 @@ fn the_shortcut_guard_covers_every_key_this_field_edits() {
         .collect();
     for k in keys {
         let (mut input, _value) = focused_input("hello");
-        input.caret.set(2);
+        input.editor.caret.set(2);
         // Asked first, as dispatch does: a global handler decides before the field acts, and Escape proves it — the field answers by giving up the focus the guard reads.
         let guarded = focus::text_entry_takes_key(&k, plain);
-        let edited = input.edit(&k, &plain) == EventResult::Handled;
+        let edited = input.editor.edit(&k, &plain) == EventResult::Handled;
         assert!(
             !edited || guarded,
             "{k:?} is edited by the field but the shortcut guard lets it through"
@@ -328,7 +346,7 @@ fn autofocus_makes_a_field_typable_without_a_tap() {
     .unwrap()
     .autofocus();
     assert!(
-        focus::is_focused(input.id),
+        focus::is_focused(input.editor.id),
         "the field holds focus from construction"
     );
     input.on_event(&key(Key::Char('x')));
@@ -344,7 +362,7 @@ fn autofocus_makes_a_field_typable_without_a_tap() {
     )
     .unwrap();
     assert!(
-        !focus::is_focused(plain.id),
+        !focus::is_focused(plain.editor.id),
         "a field without autofocus is not focused for it"
     );
     plain.on_event(&key(Key::Char('x')));
@@ -394,7 +412,7 @@ fn typing_inserts_at_caret() {
         input.on_event(&key(Key::Char(c)));
     }
     assert_eq!(value.get(), "hi");
-    assert_eq!(input.caret.get(), 2);
+    assert_eq!(input.editor.caret.get(), 2);
 }
 
 #[test]
@@ -402,10 +420,10 @@ fn backspace_and_arrows_edit_mid_string() {
     let (mut input, value) = focused_input("abc");
     input.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
     input.on_event(&key(Key::Named(NamedKey::ArrowLeft)));
-    assert_eq!(input.caret.get(), 1);
+    assert_eq!(input.editor.caret.get(), 1);
     input.on_event(&key(Key::Named(NamedKey::Backspace)));
     assert_eq!(value.get(), "bc");
-    assert_eq!(input.caret.get(), 0);
+    assert_eq!(input.editor.caret.get(), 0);
     input.on_event(&key(Key::Char('X')));
     assert_eq!(value.get(), "Xbc");
 }
@@ -432,20 +450,20 @@ fn a_masked_field_hides_the_text_without_changing_it() {
         "the bound signal keeps the real text, which is what a submit handler reads"
     );
     assert_eq!(
-        input.shown(&value.get()),
+        input.editor.shown(&value.get()),
         "••••••",
         "and the screen does not"
     );
 
     // One per character, not per byte: a multi-byte password must not leak its length, and the caret is measured against this string.
-    assert_eq!(input.shown("mañana"), "••••••");
-    assert_eq!(input.shown(""), "");
+    assert_eq!(input.editor.shown("mañana"), "••••••");
+    assert_eq!(input.editor.shown(""), "");
 }
 
 #[test]
 fn an_unmasked_field_is_unchanged() {
     let (input, value) = focused_input("plain");
-    assert_eq!(input.shown(&value.get()), "plain");
+    assert_eq!(input.editor.shown(&value.get()), "plain");
 }
 
 #[test]
@@ -460,7 +478,7 @@ fn tap_focuses_and_ctrl_chord_is_ignored() {
     });
     assert_eq!(r, EventResult::Handled);
     assert!(
-        focus::is_focused(input.id),
+        focus::is_focused(input.editor.id),
         "a tap inside focuses the input"
     );
     let paste = chord(Key::Char('v'));
@@ -480,7 +498,7 @@ fn a_field_that_selects_on_focus_is_typed_over() {
     .unwrap()
     .select_on_focus();
     value.set("12.5".to_string());
-    focus::request(input.id);
+    focus::request(input.editor.id);
     input.on_event(&key(Key::Char('7')));
     assert_eq!(value.get(), "7");
 }
@@ -526,7 +544,7 @@ fn the_caret_is_read_and_moved_from_outside() {
     assert_eq!(caret.get(), 4);
     input.on_event(&chord(Key::Char('a')));
     caret.set(2);
-    assert_eq!(input.selection("hello"), None);
+    assert_eq!(input.editor.selection("hello"), None);
     input.on_event(&key(Key::Char('x')));
     assert_eq!(value.get(), "hexllo");
     assert_eq!(caret.peek(), 3);
@@ -609,7 +627,7 @@ fn a_field_shows_what_was_typed_whatever_case_it_inherits() {
             .with_text_case(renderer_core::TextCase::Upper)
             .with_underline(true),
     );
-    let style = (field.style)();
+    let style = (field.editor.style)();
     assert_eq!(style.text_case, renderer_core::TextCase::AsWritten);
     assert!(style.decoration.is_drawn(), "the rest still inherits");
 }
@@ -694,7 +712,7 @@ fn a_field_taller_than_its_line_centres_the_line_and_the_caret() {
         AvailableSpace::Definite(100.0),
     )
     .unwrap();
-    focus::request(input.id);
+    focus::request(input.editor.id);
 
     let caret = caret_of(&input).0;
     let inset = ((40.0 - crate::text_metrics::single_line_box(14.0)) / 2.0).round();
@@ -751,7 +769,7 @@ fn composition_lines(input: &Input) -> (Vec<Rect>, Vec<Rect>) {
 #[test]
 fn a_composition_is_drawn_at_the_caret_and_left_out_of_the_value() {
     let (mut input, value) = focused_input("ab");
-    input.caret.set(1);
+    input.editor.caret.set(1);
     assert_eq!(
         input.on_event(&ime(Ime::preedit("かな", Some((6, 6))))),
         EventResult::Handled
@@ -790,12 +808,12 @@ fn the_part_being_converted_is_marked_and_has_no_caret() {
 #[test]
 fn a_commit_inserts_its_text_once_at_the_caret() {
     let (mut input, value) = focused_input("ab");
-    input.caret.set(1);
+    input.editor.caret.set(1);
     input.on_event(&ime(Ime::preedit("か", Some((3, 3)))));
     input.on_event(&ime(Ime::preedit("", None)));
     input.on_event(&ime(Ime::Commit("可".into())));
     assert_eq!(value.get(), "a可b");
-    assert_eq!(input.caret.get(), 4);
+    assert_eq!(input.editor.caret.get(), 4);
     assert_eq!(drawn_text(&input), "a可b", "the composition is gone");
 }
 
@@ -818,7 +836,7 @@ fn a_commit_without_a_composition_types_over_the_selection() {
     input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
     input.on_event(&ime(Ime::Commit("p".into())));
     assert_eq!(value.get(), "hellp");
-    assert_eq!(input.selection("hellp"), None);
+    assert_eq!(input.editor.selection("hellp"), None);
 }
 
 /// An abandoned composition leaves the text as it was.
@@ -869,13 +887,13 @@ fn losing_the_keyboard_types_the_composition_in() {
     input.on_event(&ime(Ime::preedit("か", None)));
     focus::clear();
     assert_eq!(value.get(), "abか");
-    focus::request(input.id);
+    focus::request(input.editor.id);
     assert_eq!(
         drawn_text(&input),
         "abか",
         "and shows it once, not as a composition"
     );
-    assert_eq!(input.caret.get(), 5);
+    assert_eq!(input.editor.caret.get(), 5);
 }
 
 /// A masked field masks what is composed too.

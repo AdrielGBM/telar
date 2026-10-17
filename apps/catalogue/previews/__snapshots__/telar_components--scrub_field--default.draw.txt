@@ -22,7 +22,9 @@ element group
             rect 359,286 0x0 radius=10
             element group
               matrix 1,0,0,1,359,286
-                text 0,0 0x0 "" size=14 family=sans-serif weight=400 color=#171a2eff
+                clip 0,0 0x0
+                  text 0,0 0x0 "" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
+                end
               end
             end
           end

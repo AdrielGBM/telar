@@ -181,7 +181,7 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 | `StepperTokens` | `radius` → `radius_control` |
 | `SwatchesTokens` | `size` → `icon_size` and `gap_sm`; `ring` → `border_width_strong` |
 | `TabsTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x` |
-| `TextFieldTokens` | a `text_field`'s frame, and the `textarea`'s and `search_field`'s drawn in it: `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(21.5)` |
+| `TextFieldTokens` | a `text_field`'s frame, of one line or several, and the `search_field`'s drawn in it: `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(21.5)` |
 | `ToastTokens` | `radius` → `radius_surface`; `pad` → `gap_lg`; `width` → `measure(26)`; `stripe_width` → `gap_xs` |
 | `ToggleTokens` | `knob` → `icon_size`; `inset` → `gap_xs`; `radius` → a pill. A menu row's `switch` draws the same track as tall as `icon_size`, its knob what the inset leaves |
 | `TooltipTokens` | `radius` → `radius_surface`; `pad_x` → `gap_md`; `pad_y` → `gap_sm`; `max_width` → `measure(17)` |

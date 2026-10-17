@@ -9,8 +9,8 @@ language, reactive signals and a self-contained renderer.
 **An application depends on this crate directly**, alongside the [`telar`](https://crates.io/crates/telar)
 facade. The facade carries the primitives every widget is built from and no widgets of its own; this crate
 is the batteries, written against the same public API an application's own components use. Nothing is on by
-default, and the buttons, text fields, text areas, search fields, links, images, selects, tabs, sliders and
-indicators are in every build. Name the groups you draw beyond them:
+default, and the buttons, text fields (of one line or several), search fields, links, images, selects, tabs,
+sliders and indicators are in every build. Name the groups you draw beyond them:
 
 - `overlays`: menus, context menus, modals, drawers, tooltips, the command palette and the key caps its rows
   show, and toasts

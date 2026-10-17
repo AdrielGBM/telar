@@ -139,3 +139,7 @@ path = "src/composition_test.rs"
 [[test]]
 name = "text_area_entry"
 path = "src/text_area_entry_test.rs"
+
+[[test]]
+name = "editor"
+path = "src/editor_test.rs"

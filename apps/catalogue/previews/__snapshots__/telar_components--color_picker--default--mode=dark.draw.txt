@@ -179,7 +179,9 @@ element group
               rect 288,383 224x28 fill=#12141cff border=1 border-color=#3d4252ff radius=10
               element group
                 matrix 1,0,0,1,300,383
-                  text 0,4 200x20 "#4dc78c" size=14 family=sans-serif weight=400 color=#ebedf5ff
+                  clip 0,0 200x28
+                    text 0,4 200x20 "#4dc78c" size=14 family=sans-serif weight=400 color=#ebedf5ff line-height=1.2 wrap=none
+                  end
                 end
               end
             end

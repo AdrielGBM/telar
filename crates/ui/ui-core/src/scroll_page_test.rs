@@ -68,11 +68,22 @@ fn a_platform_moving_the_page_asks_the_surface_in_the_next_frame() {
     page.relayout(400.0, 300.0);
     assert!(platform_core::scroll_primary_to(0.0, 500.0));
     assert_eq!(page.viewport().offset().1.get(), 500.0);
-    assert_eq!(element_of(&page.view()).scroll_to, Some((0.0, 500.0)));
+    let element = element_of(&page.view());
+    assert_eq!(element.scroll_to, Some((0.0, 500.0)));
+    assert_eq!(
+        element_of(&page.view()).scroll_to,
+        Some((0.0, 500.0)),
+        "a drawing made again before the frame ships carries it too"
+    );
+    page.on_event(&Event::BoxScrolled {
+        box_id: element.id.0,
+        x: 0.0,
+        y: 500.0,
+    });
     assert_eq!(
         element_of(&page.view()).scroll_to,
         None,
-        "one frame carries the request"
+        "until the surface says the page is there"
     );
 }
 

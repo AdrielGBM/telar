@@ -190,6 +190,21 @@ menu label:"Edit"
 handler. A test pins what a shortcut shows with `telar::set_keyboard_convention`, which holds for the thread
 that calls it.
 
+## Editing text
+
+`Input` and `TextArea` are one editor underneath, so they edit alike: `Input` is the editor of one line, where
+Enter runs `on_submit` and Tab moves on, and `TextArea` the editor of several, where Enter breaks the line, Tab
+inserts spaces and the vertical arrows move by the rows on screen. In both, a press puts the caret beside the
+letter under it, a drag selects from there (on a mouse; a finger drags the page), a double-click takes a word,
+a triple-click takes the line in `TextArea` and the whole value in `Input`, and Shift with a press extends the
+selection. A drag after a double- or triple-click goes on by whole words or lines. `Shift` with the arrows,
+Home and End, and `Mod+A`, select from the keyboard; copy, cut and paste are on the primary modifier.
+
+A line never wraps in `Input`, nor in a `TextArea` without `TextWrap::Wrap`: one longer than the box is cut at
+the box's edges and scrolls sideways under it to keep the caret in view, as a horizontal wheel or swipe over it
+does too, and a field the keyboard leaves shows the start of its value again. A `TextArea` in a scroll area
+brings the caret's row into view of it as the caret moves, rows typed past the bottom of the view included.
+
 ## Input methods
 
 An input method (Japanese, Chinese or Korean input, dead keys on some layouts, a phone's predictive keyboard,

@@ -40,9 +40,9 @@ fn the_thumb_can_be_dragged_and_asks_the_surface_to_move() {
     );
 }
 
-/// One frame, one request. A box that cannot go as far as it was asked reports the offset it settled on, and a request left standing would drag it back there on every later frame.
+/// A request stands until the surface says where the box went. The area is drawn again before a frame ships whenever the layout moves under it — a row typed into a text area at the bottom of the view does both — and a request taken by the first drawing never reached the surface: the view stayed where it was and the caret went on below it.
 #[test]
-fn a_request_is_taken_by_the_frame_that_carries_it() {
+fn a_request_stands_until_the_surface_says_where_the_box_went() {
     use crate::canvas::Canvas;
     use crate::context::{compute_layout, new_container, reset_layout_runtime};
     use layout_core::AvailableSpace;
@@ -70,17 +70,40 @@ fn a_request_is_taken_by_the_frame_that_carries_it() {
     )
     .unwrap();
 
-    sa.core.command(0.0, 350.0);
-    let node = sa.view();
-    let asked = match &node {
+    let asked = |sa: &LayoutScrollArea| match sa.view() {
         RenderNode::Element { element, .. } => element.scroll_to,
         _ => panic!("a document backend gets an element"),
     };
-    assert_eq!(asked, Some((0.0, 350.0)), "the frame carries the request");
+    let mut sa = sa;
+    sa.core.command(0.0, 350.0);
     assert_eq!(
-        sa.core.commanded.get(),
-        None,
-        "and takes it, so no later frame repeats it"
+        asked(&sa),
+        Some((0.0, 350.0)),
+        "the frame carries the request"
+    );
+    assert_eq!(
+        asked(&sa),
+        Some((0.0, 350.0)),
+        "and so does a drawing made again before the frame ships"
+    );
+    sa.core.follow(0.0, 350.0);
+    assert_eq!(asked(&sa), None, "until the surface says the box is there");
+
+    sa.core.command(0.0, 600.0);
+    let taller = LayoutStyle::new().width(400.0).height(900.0);
+    crate::context::set_layout_style(sa.layout_node(), taller.clone()).unwrap();
+    crate::context::set_layout_style(root, taller.flex_column()).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(900.0),
+    )
+    .unwrap();
+    reactive_core::batch(|| {});
+    assert_eq!(
+        asked(&sa),
+        Some((0.0, 100.0)),
+        "a view grown past the request asks for no more than the end, as the offset it clamps does"
     );
 }
 

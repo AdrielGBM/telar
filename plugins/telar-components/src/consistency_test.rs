@@ -78,10 +78,13 @@ fn probes() -> Vec<Probe> {
             surface: Surface::Root,
         },
         Probe {
-            name: "textarea of one row",
+            name: "multiline text_field of one row",
             build: || {
-                crate::textarea(
-                    crate::TextareaProps::props().rows(1).build(),
+                crate::text_field(
+                    crate::TextFieldProps::props()
+                        .multiline(true)
+                        .rows(1)
+                        .build(),
                     Children::default(),
                 )
             },

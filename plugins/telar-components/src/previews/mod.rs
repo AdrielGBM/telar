@@ -54,7 +54,6 @@ mod stepper;
 mod swatches;
 mod tabs;
 mod text_field;
-mod textarea;
 #[cfg(feature = "overlays")]
 mod toast;
 mod toggle;
@@ -81,7 +80,6 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     let mut entries = Vec::new();
     entries.extend(button::previews());
     entries.extend(text_field::previews());
-    entries.extend(textarea::previews());
     entries.extend(search_field::previews());
     entries.extend(select::previews());
     entries.extend(checkbox::previews());

@@ -1558,7 +1558,7 @@ fn a_field_inside_the_frame_composes_where_the_window_shows_it() {
         no_focusable(),
         || {},
     );
-    window.click(FRAME.x + 10.0, FRAME.y + 10.0);
+    window.click(FRAME.x + 90.0, FRAME.y + 10.0);
     window.frame();
     let caret = crate::text_input()
         .expect("the window hears the field inside the frame")

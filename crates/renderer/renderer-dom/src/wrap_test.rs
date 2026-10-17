@@ -108,3 +108,11 @@ fn there_is_a_line_start_for_every_line_the_measure_counts() {
         );
     }
 }
+
+/// A line that must not wrap keeps the spaces at its end, as `white-space: pre` lays them out: a caret after a typed space stands after the space, not on the letter before it.
+#[test]
+fn a_line_that_does_not_wrap_counts_the_spaces_at_its_end() {
+    assert_eq!(unbroken("ab  ", monospace), (40.0, 1));
+    assert_eq!(unbroken("ab \nabcd\n", monospace), (40.0, 2));
+    assert_eq!(unbroken("", monospace), (0.0, 1));
+}

@@ -17,8 +17,10 @@ element group
                 matrix 1,0,0,1,262,287
                   element group
                     matrix 1,0,0,1,0,0
-                      text 0,0 276x51 "Ring twice and leave the parcel with the neighbour at number twelve if nobody answers; the side gate is open until six.!" size=14 family=sans-serif weight=400 color=#171a2eff
-                      rect 263.5,33.6 1.5x16.8 fill=#171a2eff
+                      clip 0,0 276x51
+                        text 0,0 276x51 "Ring twice and leave the parcel with the neighbour at number twelve if nobody answers; the side gate is open until six.!" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2
+                        rect 263.5,33.6 1.5x16.8 fill=#171a2eff
+                      end
                     end
                   end
                 end

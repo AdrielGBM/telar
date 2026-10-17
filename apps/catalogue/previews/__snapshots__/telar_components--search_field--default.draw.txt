@@ -13,8 +13,10 @@ element group
           end
           element group
             matrix 1,0,0,1,286,286
-              text 0,4 238x20 "Search" size=14 family=sans-serif weight=400 color=#171a2eb3
-              rect 0,4 1.5x16.8 fill=#171a2eff
+              clip 0,0 238x28
+                text 0,4 238x20 "Search" size=14 family=sans-serif weight=400 color=#171a2eb3 line-height=1.2 wrap=none
+                rect 0,4 1.5x16.8 fill=#171a2eff
+              end
             end
           end
           element group

@@ -171,8 +171,12 @@ pub(crate) fn baseline(style: &TextStyle) -> f32 {
 
 /// The paragraph as the browser would break it, in the style it will be drawn in.
 fn wrap(text: &str, max_width: f32, style: &TextStyle) -> (f32, usize) {
-    let (widest, mut lines) =
-        crate::wrap::greedy(text, column(max_width, style), |run| width_of(run, style));
+    let width = |run: &str| width_of(run, style);
+    // `pre` does not hang a space at the end of a line the way `pre-wrap` does: there it takes its room, and a caret after it is drawn after it.
+    let (widest, mut lines) = match style.text_wrap {
+        TextWrap::NoWrap => crate::wrap::unbroken(text, width),
+        TextWrap::Wrap => crate::wrap::greedy(text, column(max_width, style), width),
+    };
     if let Some(max) = style.clamp.max_lines() {
         lines = lines.min(max);
     }

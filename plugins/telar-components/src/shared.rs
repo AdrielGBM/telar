@@ -2,16 +2,13 @@
 //!
 //! **The rule.** A component takes every length, corner, border, wash and weight from a function here (or from its own `XTokens`, which default to one of these), never from a literal or from a primitive token scaled by a factor of its own. Two components that draw the same kind of thing then cannot disagree, and a theme or a control size moves them together. The subset an application needs to draw controls of its own that sit beside the catalogue's is public as [`crate::metrics`].
 
-use std::time::Duration;
-
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Chord, Color, Container, LayoutError, LayoutItem,
     LayoutStyle, Reactive, Rect, RectStyle, StyledContainer, Text, TextStyle, box_item, children,
     focus::Role, style_follows, use_theme_tokens,
 };
 
-/// The longest gap between two clicks that still reads as a double-click.
-pub const DOUBLE_CLICK: Duration = Duration::from_millis(400);
+pub use telar::DOUBLE_CLICK;
 
 /// The ink the document starts in — the root of the cascade, not the text at any particular node.
 ///

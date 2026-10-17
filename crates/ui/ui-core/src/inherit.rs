@@ -245,14 +245,6 @@ pub(crate) fn inherited_text_style_at(node: Option<NodeId>) -> TextStyle {
     }
 }
 
-/// Reads the context inside the closure, not before, so the widget re-runs when a declaration above it moves rather than baking whatever was in force when it was built.
-pub(crate) fn inheriting(
-    node: NodeId,
-    amend: impl Fn(TextStyle) -> TextStyle + 'static,
-) -> Rc<dyn Fn() -> TextStyle> {
-    Rc::new(move || amend(inherited_text_style(node)))
-}
-
 #[cfg(test)]
 #[path = "inherit_test.rs"]
 mod tests;

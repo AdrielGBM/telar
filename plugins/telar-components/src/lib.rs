@@ -99,7 +99,6 @@ mod tabs;
 #[cfg(test)]
 mod test_support;
 mod text_field;
-mod textarea;
 #[cfg(feature = "chrome")]
 mod title_bar;
 #[cfg(feature = "overlays")]
@@ -191,7 +190,6 @@ pub use stepper::{StepperProps, StepperTokens, stepper};
 pub use swatches::{SwatchesProps, SwatchesTokens, swatches};
 pub use tabs::{Tab, TabsProps, TabsTokens, tab_list, tabs};
 pub use text_field::{FieldKeyHandler, TextFieldProps, TextFieldTokens, text_field};
-pub use textarea::{TextareaProps, textarea};
 #[cfg(feature = "chrome")]
 pub use title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
 #[cfg(feature = "overlays")]

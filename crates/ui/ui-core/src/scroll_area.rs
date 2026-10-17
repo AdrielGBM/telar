@@ -410,11 +410,11 @@ impl ScrollCore {
         !(self.primary && ui_tree::element_capture())
     }
 
-    /// The offset this widget is asking the surface for, taken by the frame that carries it.
+    /// The offset this widget is asking the surface for, carried by every frame until the surface says where the box went.
     ///
-    /// One frame, one request: a scroll a backend applies is applied at once, and one it does not — because the box cannot go that far — must not be asked for again, or every later frame would drag the box back to it and nothing else could scroll at all.
-    fn take_command(&self) -> Option<(f32, f32)> {
-        self.commanded.take()
+    /// Not taken by the first frame that carries it: the area can be drawn again before a frame ships — a row typed in moves the layout, and the layout redraws the area — and a request taken by a drawing that was never shown never reached the surface. Left standing it asks for no more than the offset this widget already holds, since every move of that offset either makes a new request, is the surface reporting one ([`follow`](Self::follow), which drops it), or is a clamp that holds the request inside the content too.
+    fn pending_command(&self) -> Option<(f32, f32)> {
+        self.commanded.get()
     }
 
     /// [`ScrollCore::command`] for one axis, leaving the other where it is.
@@ -997,6 +997,7 @@ impl LayoutScrollArea {
             let viewport = leaf.rect;
             let content_rect = content_rect_signal;
             let (scroll_x, scroll_y) = (scroll_x, scroll_y);
+            let commanded = commanded.clone();
             effect(move || {
                 let vp = viewport.get();
                 let content = content_rect.get();
@@ -1012,6 +1013,9 @@ impl LayoutScrollArea {
                 }
                 if scroll_y.peek() > max_y {
                     scroll_y.set(max_y);
+                }
+                if let Some((x, y)) = commanded.get() {
+                    commanded.set(Some((x.min(max_x), y.min(max_y))));
                 }
             })
         };
@@ -1278,7 +1282,7 @@ impl Component for LayoutScrollArea {
             crate::element::with_semantics_scrolled(
                 self.leaf.node,
                 semantics,
-                self.core.take_command(),
+                self.core.pending_command(),
                 self.core.primary,
                 self.arrival.get(),
             )
