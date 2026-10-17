@@ -54,6 +54,16 @@ pub fn new_measured_leaf(
     Ok(created)
 }
 
+/// [`new_measured_leaf`] for a leaf that draws what it measured itself, as boxes placed inside it rather than text a document lays out: its [`declared_css`] says the size it measured to, which a document has no other way to learn.
+pub fn new_drawn_leaf(
+    style: LayoutStyle,
+    measure: MeasureFn,
+) -> Result<(NodeId, RwSignal<Rect>), LayoutError> {
+    let created = new_measured_leaf(style, measure)?;
+    with_runtime(|rt| rt.drawn_leaves.insert(created.0));
+    Ok(created)
+}
+
 /// Creates a container node holding `children`.
 pub fn new_container(style: LayoutStyle, children: &[NodeId]) -> Result<NodeId, LayoutError> {
     let node = relinking(|rt| rt.new_container(style, children))?;
@@ -801,6 +811,8 @@ struct LayoutRuntime {
     sticky_displacements: FxHashMap<NodeId, (f32, f32)>,
     /// The roots laid out against the surface. See [`lay_out_against_surface`].
     surface_roots: FxHashSet<NodeId>,
+    /// The measured leaves that draw their content themselves, which a document cannot measure and has to be told the size of: see [`declared_css`].
+    drawn_leaves: FxHashSet<NodeId>,
     /// The roots each node frees along with itself. See [`free_with`].
     held_roots: FxHashMap<NodeId, Vec<NodeId>>,
     /// What runs after each [`relayout_if_dirty`], keyed by the handle that withdraws it. See [`on_relayout`].
@@ -835,6 +847,7 @@ impl LayoutRuntime {
             sticky_anchors: FxHashMap::default(),
             sticky_displacements: FxHashMap::default(),
             surface_roots: FxHashSet::default(),
+            drawn_leaves: FxHashSet::default(),
             held_roots: FxHashMap::default(),
             relayout_hooks: Vec::new(),
             next_relayout_hook: 0,
@@ -1111,6 +1124,7 @@ impl LayoutRuntime {
             self.sticky_anchors.remove(&at);
             self.sticky_displacements.remove(&at);
             self.surface_roots.remove(&at);
+            self.drawn_leaves.remove(&at);
         }
         self.overlay_host.forget(&freed);
         // A freed id is handed out again, so an anchor left naming one would place whatever reuses it.
@@ -1145,22 +1159,35 @@ mod tests;
 pub fn declared_css(node: NodeId) -> Option<layout_core::Css> {
     let direction = crate::direction::current_direction();
     let surface = crate::surface_size::surface_size();
-    let (css, follows_surface, read) = with_runtime(|rt| {
+    let (css, follows_surface, drawn, read) = with_runtime(|rt| {
         let (css, follows_surface) = rt.engine.declared_style(node).map(|style| {
             (
                 style.to_css(direction, surface),
                 style.is_surface_relative(),
             )
         })?;
+        let content = rt
+            .drawn_leaves
+            .contains(&node)
+            .then(|| rt.engine.measured_content(node))
+            .flatten();
+        let css = match content {
+            Some(content) => css.sized_by_content(content),
+            None => css,
+        };
         let read = *rt
             .css_reads
             .entry(node)
             .or_insert_with(|| reactive_core::in_surface_world(|| signal(0u64)));
-        Some((css, follows_surface, read))
+        Some((css, follows_surface, content.is_some(), read))
     })?;
     let _ = read.get();
     if follows_surface {
         crate::surface_size::use_surface_size();
+    }
+    if drawn {
+        // What it measured to is laid out, not declared: measuring differently moves its rect and no style.
+        let _ = track_layout(node).map(|rect| rect.get());
     }
     Some(css)
 }

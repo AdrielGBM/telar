@@ -26,7 +26,7 @@ impl LayoutLeaf {
         layout_style: LayoutStyle,
         measure: impl FnMut(MeasureInput) -> (f32, f32) + 'static,
     ) -> Result<Self, LayoutError> {
-        let (node, rect) = context::new_measured_leaf(layout_style, Box::new(measure))?;
+        let (node, rect) = context::new_drawn_leaf(layout_style, Box::new(measure))?;
         Ok(Self { node, rect })
     }
 

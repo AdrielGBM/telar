@@ -25,6 +25,20 @@ impl Css {
         self.0.push(';');
     }
 
+    /// These declarations for a box whose content the browser cannot see, sized as `content` says: the browser lays it out as if that were what it held, still within its own min and max, as Taffy lays out a leaf from what its measure answers.
+    pub fn sized_by_content(mut self, content: Size) -> Self {
+        self.push("contain", "size");
+        self.push(
+            "contain-intrinsic-size",
+            &format!(
+                "{}px {}px",
+                format_number(content.width),
+                format_number(content.height)
+            ),
+        );
+        self
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }

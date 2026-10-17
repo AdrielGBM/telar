@@ -482,6 +482,20 @@ impl LayoutEngine {
             .map_err(LayoutError::from)
     }
 
+    /// The content box a leaf that measures itself was laid out to, or `None` for any other node: what a document has to be told, since it cannot measure what such a leaf draws.
+    pub fn measured_content(&self, node: NodeId) -> Option<Size> {
+        self.alive(node).ok()?;
+        self.tree.get_node_context(node)?;
+        let layout = self.tree.layout(node).ok()?;
+        let (padding, border) = (layout.padding, layout.border);
+        Some(Size::new(
+            (layout.size.width - padding.left - padding.right - border.left - border.right)
+                .max(0.0),
+            (layout.size.height - padding.top - padding.bottom - border.top - border.bottom)
+                .max(0.0),
+        ))
+    }
+
     pub fn is_dirty(&self, node: NodeId) -> bool {
         self.live.contains(&node) && self.tree.dirty(node).unwrap_or(true)
     }

@@ -1091,6 +1091,28 @@ fn a_document_hears_a_surface_fraction_as_the_pixels_it_resolved_to() {
     assert!(css.as_str().contains("width:250px;"), "{css}");
 }
 
+/// A document lays text out itself, but it cannot see what a leaf that draws its own content holds, so that leaf says the size it measured to.
+#[test]
+fn a_document_is_told_the_size_a_drawn_leaf_measured_to_and_not_a_text_leaf() {
+    reset_layout_runtime();
+    let (drawn, _) = new_drawn_leaf(LayoutStyle::new(), Box::new(|_| (30.0, 128.0))).unwrap();
+    let (text, _) = new_measured_leaf(LayoutStyle::new(), Box::new(|_| (30.0, 16.0))).unwrap();
+    let root = new_container(LayoutStyle::new().width(200.0), &[drawn, text]).unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let css = declared_css(drawn).unwrap();
+    assert!(
+        css.as_str()
+            .contains("contain:size;contain-intrinsic-size:200px 128px;"),
+        "{css}"
+    );
+    assert!(!declared_css(text).unwrap().as_str().contains("contain"));
+}
+
 #[test]
 fn a_new_measurement_generation_relays_measured_text_once() {
     use std::cell::Cell;
