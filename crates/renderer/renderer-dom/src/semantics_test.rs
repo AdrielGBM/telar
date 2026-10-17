@@ -219,3 +219,76 @@ fn a_state_follows_the_role_it_belongs_to() {
     assert_eq!(attribute(&node, "aria-selected").as_deref(), Some("true"));
     assert_eq!(attribute(&node, "aria-pressed"), None);
 }
+
+/// A role said from outside the widget that made a box, as a component call's `role:` says it, is the element the box becomes over a plain group, and a control keeps the element its own role is.
+#[wasm_bindgen_test]
+fn a_role_said_from_outside_is_the_element_a_group_becomes_and_never_a_controls() {
+    use layout_core::LayoutStyle;
+    use ui_core::{
+        Accessible, ComponentList, Container, StyledContainer, Text, WindowRoot, box_item,
+    };
+
+    renderer_core::set_text_metrics(telar_renderer_dom::CanvasTextMetrics);
+    let capturing = ui_tree::set_element_capture(true);
+    ui_core::reset_layout_runtime();
+    ui_core::set_surface_size(geometry_core::Size::new(400.0, 200.0));
+    let words = |content: &'static str| {
+        Text::new(
+            move || content.to_string(),
+            LayoutStyle::new(),
+            || TextStyle::new(14.0, Color::BLACK),
+        )
+        .expect("the text builds")
+    };
+    let places = Container::new(LayoutStyle::new(), vec![box_item(words("Home"))])
+        .expect("the column builds")
+        .a11y_role(Role::Navigation);
+    let title = words("Recent").a11y_role(Role::Heading(2));
+    let save = StyledContainer::new(
+        LayoutStyle::new(),
+        |_| renderer_core::RectStyle::default(),
+        vec![box_item(words("Save"))],
+    )
+    .expect("the button builds")
+    .control(Role::Button)
+    .on_press(|| {})
+    .a11y_role(Role::Navigation);
+    let column = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(places), box_item(title), box_item(save)],
+    )
+    .expect("the column builds");
+    let tree = ComponentList::new(WindowRoot::new(box_item(column)));
+    ui_core::relayout_if_dirty();
+    let host: web_sys::HtmlElement = document()
+        .create_element("div")
+        .expect("a host element")
+        .dyn_into()
+        .expect("a div is an HTML element");
+    document()
+        .body()
+        .expect("a body")
+        .append_child(host.as_ref())
+        .expect("the host went into the page");
+    let mut renderer = DomRenderer::new(host.clone()).expect("a renderer on the host");
+    renderer
+        .render_frame(&tree.commands(), None)
+        .expect("the frame reconciled");
+    ui_tree::set_element_capture(capturing);
+
+    let tags = |selector: &str| {
+        host.query_selector(selector)
+            .expect("a valid selector")
+            .map(|node| node.text_content().unwrap_or_default())
+    };
+    assert_eq!(tags("nav").as_deref(), Some("Home"));
+    assert_eq!(tags("h2").as_deref(), Some("Recent"));
+    assert_eq!(tags("button").as_deref(), Some("Save"));
+    assert_eq!(
+        host.query_selector_all("nav")
+            .expect("a valid selector")
+            .length(),
+        1,
+        "the button is not made a navigation"
+    );
+}

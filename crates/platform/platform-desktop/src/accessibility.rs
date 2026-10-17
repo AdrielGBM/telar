@@ -5,7 +5,7 @@
 //! Built only while something is listening. Every desktop accessibility API works this way, and it is what makes the cost honest: with no assistive technology attached, nothing here runs at all.
 
 use accesskit::{
-    Action, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Node, NodeId,
+    Action, ActionRequest, AriaCurrent, HasPopup as AkHasPopup, Live, Node, NodeId,
     Orientation as AkOrientation, Rect as AkRect, Role as AkRole, SortDirection as AkSortDirection,
     Toggled, TreeId, TreeInfo, TreeUpdate,
 };
@@ -124,7 +124,13 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
         {
             ak.set_controls(vec![control_id(target)]);
         }
+        if matches!(node.role, Role::Status | Role::Log) {
+            ak.set_live(Live::Polite);
+        }
         // AccessKit counts from zero.
+        if let Role::Heading(level) = node.role {
+            ak.set_level(usize::from(level.saturating_sub(1)));
+        }
         if let Some((kind, place)) = node
             .position
             .and_then(|place| Some((node.role.positioning()?, place)))
@@ -317,7 +323,7 @@ fn role_of(role: Role) -> AkRole {
         Role::Article => AkRole::Article,
         Role::Section => AkRole::Section,
         Role::Form => AkRole::Form,
-        Role::Search => AkRole::SearchInput,
+        Role::Search => AkRole::Search,
         Role::Heading(_) => AkRole::Heading,
         Role::List => AkRole::List,
         Role::ListItem => AkRole::ListItem,

@@ -318,7 +318,7 @@ fn component_calls_offer_the_annotations_of_their_item() {
         .into_iter()
         .map(|item| item.label)
         .collect();
-    assert_eq!(labels, ["a11y_label", "a11y_lang", "a11y"]);
+    assert_eq!(labels, ["a11y_label", "a11y_lang", "a11y", "role"]);
 }
 
 /// The classes a `@` may name include the ones the file's `[style]` imports.

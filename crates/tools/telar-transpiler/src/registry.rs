@@ -157,7 +157,60 @@ const COMPONENT_INSTANCE_ATTRS: &[AttrSpec] = &[
     AttrSpec::keywords("a11y", A11Y_VALUES).doc(
         "`a11y:hidden` takes the item the component returns, and everything under it, out of what assistive technology is told.",
     ),
+    AttrSpec::keywords("role", COMPONENT_ROLE_VALUES).doc(
+        "What the item the component returns is, where the component left it a plain box or a region: a landmark (`navigation`, `main`, `complementary`…), an `article`, a heading (`h1`–`h6`), a live region (`status`, `log`), an item of the list the call sits in (`listitem`), or `group`. A role a person operates, or one that promises what is inside the item, stays the component's to say; over a control the component made, this says nothing.",
+    ),
 ];
+
+/// The roles a component call may say about the item the component returns: the spellings of [`ROLE_VALUES`] whose role `Role::is_annotatable` accepts, those that describe a box from outside and ask nothing of what it holds.
+pub const COMPONENT_ROLE_VALUES: &[(&str, &str)] = &[
+    ("group", "Group"),
+    ("banner", "Banner"),
+    ("header", "Banner"),
+    ("navigation", "Navigation"),
+    ("nav", "Navigation"),
+    ("main", "Main"),
+    ("content", "Main"),
+    ("complementary", "Complementary"),
+    ("aside", "Complementary"),
+    ("sidebar", "Complementary"),
+    ("contentinfo", "ContentInfo"),
+    ("footer", "ContentInfo"),
+    ("article", "Article"),
+    ("section", "Section"),
+    ("form", "Form"),
+    ("search", "Search"),
+    ("h1", "Heading(1)"),
+    ("h2", "Heading(2)"),
+    ("h3", "Heading(3)"),
+    ("h4", "Heading(4)"),
+    ("h5", "Heading(5)"),
+    ("h6", "Heading(6)"),
+    ("listitem", "ListItem"),
+    ("item", "ListItem"),
+    ("status", "Status"),
+    ("log", "Log"),
+];
+
+/// Why a component call cannot say `role:{value}`, for a role the vocabulary knows that is not one of [`COMPONENT_ROLE_VALUES`]. `None` for a role a call may say, and for a word no role answers to, which the ordinary value check names.
+pub fn refused_component_role(value: &str) -> Option<String> {
+    let value = value.trim();
+    if keyword(COMPONENT_ROLE_VALUES, value).is_some() || role_variant(value).is_none() {
+        return None;
+    }
+    let operated = semantics_core::Role::parse(value).is_some_and(|role| role.is_control());
+    let why = match operated {
+        true => {
+            "a role a person operates decides how the keyboard reaches the item and what pressing it does"
+        }
+        false => {
+            "it promises what the boxes inside the item are, or changes how the item is reached or drawn"
+        }
+    };
+    Some(format!(
+        "`role:{value}` is the component's to say, not the call's: {why}, which only the component knows. A call may say a landmark, `article`, `h1`–`h6`, `status`, `log`, `listitem` or `group`"
+    ))
+}
 
 pub fn component_instance_attrs() -> Vec<AttrSpec> {
     COMPONENT_INSTANCE_ATTRS.to_vec()

@@ -695,7 +695,12 @@ impl<'a> ViewGen<'a> {
             .iter()
             .filter(|attr| builtin || crate::registry::is_component_instance_attr(&attr.key))
             .filter_map(|attr| {
-                value_error(&el.tag, &attr.key, attr.value.text(), self.theme_access)
+                let refused = (!builtin && attr.key == "role")
+                    .then(|| crate::registry::refused_component_role(attr.value.text()))
+                    .flatten();
+                refused.or_else(|| {
+                    value_error(&el.tag, &attr.key, attr.value.text(), self.theme_access)
+                })
             })
             .map(|message| format!("{pad}compile_error!({});\n", rust_str(&message)))
             .collect()

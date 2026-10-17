@@ -501,11 +501,17 @@ mod from_a_screen {
     }
 
     fn mount() -> ComponentList {
+        mount_with(screen)
+    }
+
+    fn mount_with(
+        build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
+    ) -> ComponentList {
         renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
         ui_core::reset_layout_runtime();
         focus::clear();
         ui_core::set_surface_size(Size::new(WIDTH as f32, HEIGHT as f32));
-        let mut tree = ComponentList::new(WindowRoot::new(screen().expect("the screen builds")));
+        let mut tree = ComponentList::new(WindowRoot::new(build().expect("the screen builds")));
         tree.on_event(&Event::WindowResized {
             width: WIDTH,
             height: HEIGHT,
@@ -574,6 +580,86 @@ mod from_a_screen {
             control(&update, "Send me the newsletter").toggled(),
             Some(Toggled::False)
         );
+    }
+
+    #[test]
+    fn a_heading_given_no_name_is_a_heading_named_by_its_text_at_its_level() {
+        let tree = mount();
+        let update = published(&tree);
+        let heading = named(&update, "Settings");
+        assert_eq!(heading.role(), AkRole::Heading);
+        assert_eq!(heading.level(), Some(0), "level 1, counted from zero");
+        assert!(
+            !labels(&update).contains(&(AkRole::Label, "Settings".to_string())),
+            "its text is its name rather than a label of its own: {:#?}",
+            labels(&update)
+        );
+    }
+
+    #[test]
+    fn a_role_said_from_outside_reaches_the_reader_and_a_control_keeps_its_own() {
+        let tree = mount_with(|| {
+            let places = Container::new(
+                LayoutStyle::new().flex_column(),
+                vec![link("About", || Location::root().segment("about"))?],
+            )?
+            .a11y_role(platform_core::Role::Navigation)
+            .a11y_label(|| "Places");
+            let title = words("Recent")?.a11y_role(platform_core::Role::Heading(3));
+            let save = button("Save")?.a11y_role(platform_core::Role::Navigation);
+            let column = Container::new(
+                LayoutStyle::new().flex_column().gap(12.0),
+                vec![box_item(places), box_item(title), save],
+            )?;
+            Ok(box_item(column))
+        });
+        let update = published(&tree);
+        assert_eq!(named(&update, "Places").role(), AkRole::Navigation);
+        let title = named(&update, "Recent");
+        assert_eq!(title.role(), AkRole::Heading);
+        assert_eq!(title.level(), Some(2));
+        assert_eq!(control(&update, "Save").role(), AkRole::Button);
+    }
+
+    #[test]
+    fn a_list_item_a_section_and_a_status_said_from_outside_are_nodes_around_what_they_hold() {
+        let tree = mount_with(|| {
+            let said = |role, text| -> Result<Box<dyn LayoutItem>, LayoutError> {
+                Ok(box_item(
+                    Container::new(LayoutStyle::new(), vec![box_item(words(text)?)])?
+                        .a11y_role(role),
+                ))
+            };
+            let column = Container::new(
+                LayoutStyle::new().flex_column().gap(12.0),
+                vec![
+                    said(platform_core::Role::ListItem, "First")?,
+                    said(platform_core::Role::Section, "Middle")?,
+                    said(platform_core::Role::Status, "Saved")?,
+                ],
+            )?;
+            Ok(box_item(column))
+        });
+        let update = published(&tree);
+        for (role, text) in [
+            (AkRole::ListItem, "First"),
+            (AkRole::Section, "Middle"),
+            (AkRole::Status, "Saved"),
+        ] {
+            let (_, holder) = update
+                .nodes
+                .iter()
+                .find(|(_, node)| node.role() == role)
+                .unwrap_or_else(|| panic!("a {role:?} is in the tree: {:#?}", labels(&update)));
+            let held: Vec<NodeId> = holder.children().to_vec();
+            assert!(
+                update
+                    .nodes
+                    .iter()
+                    .any(|(id, node)| held.contains(id) && node.label() == Some(text)),
+                "{role:?} holds {text:?}"
+            );
+        }
     }
 
     fn key(named: NamedKey) -> Event {
@@ -1090,4 +1176,33 @@ fn a_nested_node_keeps_its_id_and_its_active_descendant() {
     let tree = update_of(&update, control_id(1));
     assert_eq!(tree.active_descendant(), Some(control_id(3)));
     assert_eq!(tree.children(), [control_id(3)]);
+}
+
+#[test]
+fn every_role_said_from_outside_is_published_as_the_role_a_reader_knows() {
+    for (role, expected) in [
+        (Role::Group, AkRole::GenericContainer),
+        (Role::Banner, AkRole::Banner),
+        (Role::Navigation, AkRole::Navigation),
+        (Role::Main, AkRole::Main),
+        (Role::Complementary, AkRole::Complementary),
+        (Role::ContentInfo, AkRole::ContentInfo),
+        (Role::Article, AkRole::Article),
+        (Role::Section, AkRole::Section),
+        (Role::Form, AkRole::Form),
+        (Role::Search, AkRole::Search),
+        (Role::Heading(4), AkRole::Heading),
+        (Role::ListItem, AkRole::ListItem),
+        (Role::Status, AkRole::Status),
+        (Role::Log, AkRole::Log),
+    ] {
+        assert!(role.is_annotatable(), "{role:?}");
+        let update = tree_update(&[node(None, role, "Item")], "Window", None);
+        let published = &update.nodes[0].1;
+        assert_eq!(published.role(), expected, "{role:?}");
+        let level = matches!(role, Role::Heading(_)).then_some(3);
+        assert_eq!(published.level(), level, "{role:?}");
+        let live = matches!(role, Role::Status | Role::Log).then_some(accesskit::Live::Polite);
+        assert_eq!(published.live(), live, "{role:?}");
+    }
 }

@@ -39,3 +39,14 @@ fn a_preview_option_hovers_what_it_does() {
     assert!(args.contains("signals"), "{args}");
     assert!(hover_text(src, 3, 23).is_none(), "a value says nothing");
 }
+
+#[test]
+fn a_component_calls_role_hovers_only_the_roles_a_call_may_say() {
+    let src = "[view]\ncard role:nav\n";
+    let text = hover_text(src, 1, 6).expect("hover over `role`");
+    assert!(text.starts_with("`role` — group | banner"), "{text}");
+    assert!(text.contains("listitem"), "{text}");
+    assert!(!text.contains("button"), "{text}");
+    let builtin = hover_text("[view]\nbox role:nav\n", 1, 5).expect("hover over a box's `role`");
+    assert!(builtin.contains("button"), "{builtin}");
+}

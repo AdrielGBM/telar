@@ -1,4 +1,4 @@
-//! What an application says about a box for assistive technology: the name it goes by, the language it is in, and whether a reader skips it.
+//! What an application says about a box for assistive technology: the name it goes by, what it is, the language it is in, and whether a reader skips it.
 //!
 //! Kept beside the tree rather than on each widget, so every widget that owns a layout node takes it the same way and every target reads it from the same place: a document merges it into the element it writes, and the accessibility snapshot resolves it along the frame's element nesting.
 
@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use layout_core::NodeId;
 use reactive_core::{RwSignal, signal};
-use renderer_core::{Annotation, Modal};
+use renderer_core::{Annotation, Modal, Role};
 use rustc_hash::FxHashMap;
 
 use crate::layout_item::LayoutItem;
@@ -149,6 +149,21 @@ pub trait Accessible: LayoutItem + Sized {
     /// An empty name is no name: the box goes by what it draws, as if it had been given none. A control named `""` would otherwise be announced as nothing at all.
     fn a11y_label<S: Into<Arc<str>>>(self, label: impl Fn() -> S + 'static) -> Self {
         label_follows(self.layout_node(), move || Some(label()));
+        self
+    }
+
+    /// What this box is, said from outside the widget that made it: a region, an article, a heading, a live region, an item of the list around it, or a plain group ([`Role::is_annotatable`]).
+    ///
+    /// Taken only by a box that is no more than a group or a region and that the keyboard does not reach ([`Role::annotated`]): a control, a list or anything else the widget made it keeps that role on every target, since what a box is decides how it is reached and what pressing it does.
+    fn a11y_role(self, role: Role) -> Self {
+        debug_assert!(
+            role.is_annotatable(),
+            "`{}` is not a role that can be said from outside a widget",
+            role.as_str()
+        );
+        follow(self.layout_node(), move |annotation| {
+            annotation.role = Some(role);
+        });
         self
     }
 

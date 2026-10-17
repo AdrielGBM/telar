@@ -131,10 +131,32 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
         .collect();
 
     let is_control = |node: NodeId| controls.iter().any(|(e, _)| e.node == node);
+    let words_of_title = |named: &Named| {
+        named
+            .titled
+            .filter(|_| named.role == Role::Group && wrapped_control(named, &controls).is_none())
+    };
+    let mut titles: Vec<Vec<(usize, &str)>> = reading
+        .titled
+        .iter()
+        .map(|titled| {
+            titled
+                .words
+                .iter()
+                .map(|(at, word)| (*at, word.as_str()))
+                .collect()
+        })
+        .collect();
+    for named in reading.named.iter().filter(|named| !is_control(named.node)) {
+        if let Some(title) = words_of_title(named) {
+            titles[title].push((named.opened_at, &named.label));
+        }
+    }
     let pieces = reading
         .named
         .iter()
         .filter(|named| !is_control(named.node))
+        .filter(|named| words_of_title(named).is_none() || named.is_picture())
         .filter_map(|named| {
             let rect = visible_rect(named.node).filter(|rect| area(*rect) > 0.0)?;
             let role = match named.role {
@@ -236,6 +258,27 @@ pub fn surface_tree(commands: &[DrawCommand]) -> SurfaceTree {
             }),
     );
 
+    found.extend(
+        reading
+            .titled
+            .iter()
+            .zip(titles)
+            .filter(|(titled, _)| !layers.behind(titled.node))
+            .filter_map(|(titled, mut words)| {
+                let rect = visible_rect(titled.node).filter(|rect| area(*rect) > 0.0)?;
+                words.sort_by_key(|(at, _)| *at);
+                let mut name = String::new();
+                for (_, word) in words {
+                    append(&mut name, word);
+                }
+                let node = AccessNode {
+                    lang: titled.lang.as_deref().map(str::to_string),
+                    ..unaddressed(titled.role, name, rect)
+                };
+                Some(Found::holding(node, titled.node, &reading))
+            }),
+    );
+
     let surfaces = nested_surfaces(commands);
     let (nodes, anchors) = arrange(found, &reading, &reading.surfaces_in);
     SurfaceTree {
@@ -277,7 +320,7 @@ fn holds_what_is_inside(role: Role) -> bool {
     !matches!(role, Role::Label | Role::Drawing)
 }
 
-/// Whether a box given no name is still a node for the nodes inside it, as the element a document makes of it is: a tab list around its tabs, a dialog around what it asks, a landmark around its region. A plain group is scaffolding, a heading reads as its text, and a section or a form with no name is no landmark.
+/// Whether a box given no name is still a node for the nodes inside it, as the element a document makes of it is: a tab list around its tabs, a dialog around what it asks, a landmark around its region. A plain group is scaffolding, a heading is named by its text (see [`is_named_by_content`]), and a section or a form with no name is no landmark.
 fn holds_structure(role: Role) -> bool {
     matches!(
         role,
@@ -301,6 +344,16 @@ fn holds_structure(role: Role) -> bool {
             | Role::Article
             | Role::Search
     )
+}
+
+/// Whether a box given no name is a node for the nodes inside it because the application said what it is, as a component call's `role:` does: a role said on purpose is never scaffolding, so a list item, a section or a form said that way is read as one wherever a document makes it one, unlike a plain wrapper the widget gave that role. A plain group says nothing, said or not.
+fn said_as_structure(role: Role, said: Option<Role>) -> bool {
+    said == Some(role) && role != Role::Group && role.is_annotatable()
+}
+
+/// Whether a box given no name is named by the words drawn inside it, as a document's `<h2>` is by its text: a heading, read as one node of its role and level rather than as the plain text it holds.
+fn is_named_by_content(role: Role) -> bool {
+    matches!(role, Role::Heading(_))
 }
 
 /// A node on its way into the tree: the box it was read for, if it holds what is inside that box, where in the frame's nesting it sits, and where it falls in reading order.
@@ -583,6 +636,8 @@ struct Named {
     position: Option<SetPosition>,
     /// The named box this one sits in, by its place in [`Reading::named`].
     enclosing: Option<usize>,
+    /// The box named by its content that this one sits directly in, by its place in [`Reading::titled`], whose name this one's is part of when it has no role of its own.
+    titled: Option<usize>,
     /// Where in the frame the box began.
     opened_at: usize,
     drew_text: bool,
@@ -596,6 +651,14 @@ struct Placed {
     node: NodeId,
     role: Role,
     position: SetPosition,
+}
+
+/// A box given no name that a reader names by the words drawn in it, in draw order: see [`is_named_by_content`].
+struct Titled {
+    node: NodeId,
+    role: Role,
+    lang: Option<Arc<str>>,
+    words: Vec<(usize, String)>,
 }
 
 /// A box given no name whose role is a structure a reader steps into: see [`holds_structure`].
@@ -722,6 +785,8 @@ struct Open {
     scope: Scope,
     /// The innermost named box, by its place in [`Reading::named`].
     named: Option<usize>,
+    /// The box named by its content that the element sits in with no named box between, by its place in [`Reading::titled`].
+    titled: Option<usize>,
     control: Option<NodeId>,
     node: Option<NodeId>,
     /// How far the element and the boxes around it are moved from their places in the flow by sticking, on screen.
@@ -735,6 +800,7 @@ struct Reading {
     named: Vec<Named>,
     placed: Vec<Placed>,
     structures: Vec<Structure>,
+    titled: Vec<Titled>,
     text: Vec<Piece>,
     artwork: Vec<SeenArt>,
     /// Where in the frame each control's box began.
@@ -780,6 +846,7 @@ impl Reading {
             let Open {
                 scope,
                 named,
+                titled,
                 control,
                 node: innermost,
                 shift: outer_shift,
@@ -810,7 +877,11 @@ impl Reading {
                         hidden: scope.hidden || annotation.hidden,
                         lang: annotation.lang.or(scope.lang),
                     };
-                    let role = element.semantics.role;
+                    let role = match controls.contains(&node) {
+                        true => element.semantics.role,
+                        false => element.semantics.role.annotated(annotation.role),
+                    };
+                    let mut inner_titled = titled;
                     let position = element
                         .semantics
                         .position
@@ -823,6 +894,18 @@ impl Reading {
                                 position,
                             }),
                             None if holds_structure(role) => {
+                                reading.structures.push(Structure { node, role })
+                            }
+                            None if is_named_by_content(role) => {
+                                reading.titled.push(Titled {
+                                    node,
+                                    role,
+                                    lang: inner.lang.clone(),
+                                    words: Vec::new(),
+                                });
+                                inner_titled = Some(reading.titled.len() - 1);
+                            }
+                            None if said_as_structure(role, annotation.role) => {
                                 reading.structures.push(Structure { node, role })
                             }
                             None => {}
@@ -849,11 +932,13 @@ impl Reading {
                                 role,
                                 position,
                                 enclosing: named,
+                                titled,
                                 opened_at: at,
                                 drew_text: false,
                                 drew_art: false,
                                 drew_beside_controls: false,
                             });
+                            inner_titled = None;
                             Some(reading.named.len() - 1)
                         }
                         _ => named,
@@ -862,6 +947,7 @@ impl Reading {
                     open.push(Open {
                         scope: inner,
                         named,
+                        titled: inner_titled,
                         control: if controls.contains(&node) {
                             Some(node)
                         } else {
@@ -906,18 +992,21 @@ impl Reading {
                     if !in_control && clipped_away.last().copied().unwrap_or(false) {
                         return;
                     }
-                    reading.text.push(Piece {
-                        text: text.to_string(),
-                        rect: placed,
-                        role: Role::Label,
-                        lang: scope.lang.clone(),
-                        url: None,
-                        position: None,
-                        named_box: None,
-                        drawn_at: Some(at),
-                        drawn_in: innermost,
-                        control,
-                    });
+                    match titled.filter(|_| !in_control) {
+                        Some(title) => reading.titled[title].words.push((at, text.to_string())),
+                        None => reading.text.push(Piece {
+                            text: text.to_string(),
+                            rect: placed,
+                            role: Role::Label,
+                            lang: scope.lang.clone(),
+                            url: None,
+                            position: None,
+                            named_box: None,
+                            drawn_at: Some(at),
+                            drawn_in: innermost,
+                            control,
+                        }),
+                    }
                     for span in spans.iter().flat_map(|spans| spans.iter()) {
                         let (Some(link), Some(words)) = (
                             &span.link,

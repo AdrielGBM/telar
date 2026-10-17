@@ -6,7 +6,7 @@ use super::signals::substitute_reads;
 use super::{ChildEmit, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
-    /// Chains the annotations an element carries onto the widget it built, through `telar::Accessible`, which every widget with a layout node takes. A component call says them about the item it returns, spelled `a11y_label`/`a11y_lang` there because `label` and `lang` are its own props to declare.
+    /// Chains the annotations an element carries onto the widget it built, through `telar::Accessible`, which every widget with a layout node takes. A component call says them about the item it returns, spelled `a11y_label`/`a11y_lang` there because `label` and `lang` are its own props to declare, and may also say what that item is with a `role:` that only describes it.
     pub(super) fn accessible_tail(&self, el: &Element, emit: ChildEmit) -> ChildEmit {
         let find = |key: &str| el.attributes.iter().find(|a| a.key == key);
         if !crate::registry::is_builtin_tag(&el.tag) {
@@ -16,6 +16,14 @@ impl ViewGen<'_> {
             }
             if let Some(lang) = find("a11y_lang") {
                 calls.push_str(&format!(".a11y_lang({})", self.annotation_text(lang)));
+            }
+            if let Some(role) = find("role").and_then(|role| {
+                crate::registry::keyword(
+                    crate::registry::COMPONENT_ROLE_VALUES,
+                    role.value.text().trim(),
+                )
+            }) {
+                calls.push_str(&format!(".a11y_role(::telar::Role::{role})"));
             }
             calls.push_str(&self.a11y_keyword_call(find("a11y")));
             return self.chain_calls(emit, &calls);

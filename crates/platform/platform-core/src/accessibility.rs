@@ -108,6 +108,9 @@ pub fn transcript(nodes: &[AccessNode]) -> String {
             }
             out.push_str(role);
         }
+        if let Role::Heading(level) = node.role {
+            out.push_str(&format!(", level {level}"));
+        }
         if let Some(place) = node
             .position
             .and_then(|place| Some(place_words(node.role.positioning()?, place)))

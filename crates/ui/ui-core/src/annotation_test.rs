@@ -103,3 +103,27 @@ fn an_annotation_goes_with_the_scope_that_made_it() {
     dispose_owner(id);
     assert!(peek(node).is_none());
 }
+
+/// A role said from outside reaches a document as the element it is, over a box that was only a group, and a control keeps the role it was made with.
+#[test]
+fn a_said_role_makes_a_group_a_region_and_leaves_a_control_alone() {
+    reset_layout_runtime();
+    let region = Container::new(LayoutStyle::new(), vec![box_item(letter("x"))])
+        .unwrap()
+        .a11y_role(Role::Navigation);
+    let region = as_document(|| captured(&region.view()));
+    assert_eq!(region[0].semantics.role, Role::Navigation);
+    let pressed = Container::new(LayoutStyle::new(), vec![box_item(letter("y"))])
+        .unwrap()
+        .on_press(|| ())
+        .a11y_role(Role::Navigation);
+    let pressed = as_document(|| captured(&pressed.view()));
+    assert_eq!(pressed[0].semantics.role, Role::Button);
+    let title = letter("Settings").a11y_role(Role::Heading(2));
+    assert_eq!(
+        peek(title.layout_node()).and_then(|a| a.role),
+        Some(Role::Heading(2))
+    );
+    let title = as_document(|| captured(&title.view()));
+    assert_eq!(title[0].semantics.role, Role::Heading(2));
+}

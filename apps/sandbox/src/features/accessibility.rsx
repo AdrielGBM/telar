@@ -40,8 +40,13 @@ col gap:20
                     icon name:"lucide:smile" size:20 color:$theme.ink
                 text "press to change the name a reader hears" font_size:12 color:$theme.muted
         code_line code:"box label:(format!('Mood: {{}}', $mood))"
+    example title:"What a component's item is, said where it is used"
+        card role:article a11y_label:"Release notes"
+            text "The card is a plain box, so the call can say it is an article. A role a person operates stays the component's: role:button here is a build error." font_size:13
+        code_line code:"card role:article a11y_label:'Release notes'"
     example title:"Attributes"
         col gap:6
             prop_row name:"label" values:"text · t!(…) · $state expr" about:"The name assistive technology reads. On img and svg it is what makes a picture more than decoration."
             prop_row name:"lang" values:"BCP 47 tag" about:"The language of the box and everything under it; the nearest one wins."
             prop_row name:"a11y" values:"hidden" about:"Skipped by assistive technology, with its whole subtree. Still drawn and still pressable."
+            prop_row name:"role" values:"landmark · article · h1–h6 · status · log · listitem · group" about:"On a component call: what the item it returns is, where the component left it a plain box or a region. A control keeps its own role."

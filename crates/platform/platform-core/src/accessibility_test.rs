@@ -249,3 +249,15 @@ fn a_transcript_indents_each_node_under_the_one_it_sits_in() {
     assert_eq!(children_of(&nodes, Some(0)).collect::<Vec<_>>(), [1, 2, 4]);
     assert_eq!(children_of(&nodes, None).collect::<Vec<_>>(), [0, 5]);
 }
+
+/// A heading says how deep it is, as a reader announces "heading, level 2".
+#[test]
+fn a_heading_is_read_with_its_level() {
+    assert_eq!(
+        transcript(&[
+            node(Role::Heading(1), "Settings"),
+            node(Role::Heading(3), "Privacy")
+        ]),
+        "Settings, heading, level 1\nPrivacy, heading, level 3"
+    );
+}

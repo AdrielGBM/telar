@@ -139,6 +139,7 @@ fn an_annotation_names_a_box_over_what_the_widget_derived() {
     assert!(derived.label.is_none(), "a picture has no name of its own");
     let annotation = Annotation {
         label: Some("Company logo".into()),
+        role: None,
         lang: Some("es".into()),
         hidden: false,
         anchor: Some("logo".into()),
@@ -389,5 +390,89 @@ fn a_modal_layer_is_said_by_an_annotation_and_is_part_of_what_the_box_is() {
         said.clone().annotated(&Annotation::default()).modal,
         said.modal,
         "an annotation that says nothing of it leaves it"
+    );
+}
+
+#[test]
+fn only_the_roles_that_describe_a_box_can_be_said_from_outside_it() {
+    for role in [
+        Role::Group,
+        Role::Banner,
+        Role::Navigation,
+        Role::Main,
+        Role::Complementary,
+        Role::ContentInfo,
+        Role::Article,
+        Role::Section,
+        Role::Form,
+        Role::Search,
+        Role::Heading(2),
+        Role::ListItem,
+        Role::Status,
+        Role::Log,
+    ] {
+        assert!(role.is_annotatable(), "{role:?}");
+    }
+    for role in [
+        Role::Button,
+        Role::Link,
+        Role::Switch,
+        Role::Option,
+        Role::List,
+        Role::Grid,
+        Role::Row,
+        Role::Menu,
+        Role::TabList,
+        Role::TabPanel,
+        Role::Toolbar,
+        Role::Dialog,
+        Role::ScrollArea,
+        Role::Drawing,
+        Role::Label,
+        Role::ProgressBar,
+    ] {
+        assert!(!role.is_annotatable(), "{role:?}");
+    }
+}
+
+#[test]
+fn a_said_role_replaces_only_a_group_or_a_region() {
+    let navigation = Some(Role::Navigation);
+    assert_eq!(Role::Group.annotated(navigation), Role::Navigation);
+    assert_eq!(Role::Section.annotated(navigation), Role::Navigation);
+    assert_eq!(
+        Role::Group.annotated(Some(Role::Heading(3))),
+        Role::Heading(3)
+    );
+    for made in [
+        Role::Button,
+        Role::Heading(1),
+        Role::List,
+        Role::ScrollArea,
+        Role::Drawing,
+    ] {
+        assert_eq!(made.annotated(navigation), made, "{made:?}");
+    }
+    assert_eq!(
+        Role::Group.annotated(Some(Role::Button)),
+        Role::Group,
+        "a role a person operates is never laid over a box from outside"
+    );
+    assert_eq!(Role::Main.annotated(None), Role::Main);
+}
+
+#[test]
+fn a_box_the_keyboard_reaches_keeps_the_role_it_was_made_with() {
+    let said = Annotation {
+        role: Some(Role::Navigation),
+        ..Annotation::default()
+    };
+    assert!(!said.is_empty());
+    assert_eq!(Semantics::group().annotated(&said).role, Role::Navigation);
+    let reached = Semantics::group().focusable(Focusable::default());
+    assert_eq!(reached.annotated(&said).role, Role::Group);
+    assert_eq!(
+        Semantics::of(Role::Button).annotated(&said).role,
+        Role::Button
     );
 }

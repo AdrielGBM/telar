@@ -1697,3 +1697,207 @@ fn a_grafted_snapshot_joins_the_node_it_is_drawn_in() {
         [(Role::Main, "Page"), (Role::Label, "Footer")]
     );
 }
+
+/// A heading given no name is read as a heading of its level, named by the words drawn in it as a document's `<h2>` is, rather than as the plain text it holds.
+#[test]
+fn a_heading_given_no_name_is_named_by_its_text() {
+    reset_layout_runtime();
+    focus::clear();
+    let heading = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![box_item(words("Release")), box_item(words("notes"))],
+    )
+    .unwrap()
+    .role(Role::Heading(2));
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(heading), box_item(words("Below"))],
+    )
+    .unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_eq!(
+        held(&nodes, None),
+        [(Role::Heading(2), "Release notes"), (Role::Label, "Below")]
+    );
+    assert_eq!(
+        platform_core::accessibility::transcript(&nodes),
+        "Release notes, heading, level 2\nBelow"
+    );
+}
+
+/// A heading's name takes the name of a box inside it that has no role of its own, as split letters spell their word, and the link runs of its text are links inside it.
+#[test]
+fn a_heading_is_named_by_the_names_inside_it_and_holds_its_links() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let word = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![
+            box_item(letter("T").a11y_hidden()),
+            box_item(letter("e").a11y_hidden()),
+        ],
+    )
+    .unwrap()
+    .a11y_label(|| "Te");
+    let line = Text::runs(
+        vec![
+            crate::text::TextRun::new(|| "read ".to_string()),
+            crate::text::TextRun::new(|| "more".to_string())
+                .to(|| platform_core::Location::root().segment("more")),
+        ],
+        LayoutStyle::new().width(120.0).height(16.0),
+        |style| style,
+    )
+    .unwrap();
+    let heading = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(word), box_item(line)],
+    )
+    .unwrap()
+    .role(Role::Heading(1));
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(heading)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_listed_as_a_tree(&nodes);
+    assert_eq!(held(&nodes, None), [(Role::Heading(1), "Te read more")]);
+    assert_eq!(held(&nodes, Some(0)), [(Role::Link, "more")]);
+}
+
+/// The words of a control inside a heading name the control, as anywhere else, and the heading holds it.
+#[test]
+fn a_heading_around_a_control_leaves_the_control_its_words() {
+    reset_layout_runtime();
+    focus::clear();
+    let button = StyledContainer::new(
+        LayoutStyle::new(),
+        |_r| RectStyle::default(),
+        vec![box_item(words("Open"))],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {});
+    let heading = Container::new(LayoutStyle::new(), vec![box_item(button)])
+        .unwrap()
+        .role(Role::Heading(3));
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(heading)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_eq!(held(&nodes, None), [(Role::Heading(3), "")]);
+    assert_eq!(held(&nodes, Some(0)), [(Role::Button, "Open")]);
+}
+
+/// A role said from outside a widget is read as the box's own over a plain group, a heading said over a text is named by it, and a control keeps the role it was made with.
+#[test]
+fn a_role_said_from_outside_is_read_over_a_group_and_never_over_a_control() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let places = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(words("Home"))],
+    )
+    .unwrap()
+    .a11y_role(Role::Navigation);
+    let title = words("Recent").a11y_role(Role::Heading(2));
+    let button = StyledContainer::new(
+        LayoutStyle::new(),
+        |_r| RectStyle::default(),
+        vec![box_item(words("Save"))],
+    )
+    .unwrap()
+    .control(Role::Button)
+    .on_press(|| {})
+    .a11y_role(Role::Status);
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(places), box_item(title), box_item(button)],
+    )
+    .unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_eq!(
+        held(&nodes, None),
+        [
+            (Role::Navigation, ""),
+            (Role::Heading(2), "Recent"),
+            (Role::Button, "Save"),
+        ]
+    );
+    assert_eq!(held(&nodes, Some(0)), [(Role::Label, "Home")]);
+}
+
+/// Every role a call may say reaches the native tree: said on purpose, a landmark, an article, a list item, a section, a form or a live region is a node around what it holds even with no name, unlike a wrapper the widget gave that role; a heading is named by its text at its level; and a group says nothing.
+#[test]
+fn every_role_said_from_outside_is_read_natively() {
+    use crate::annotation::Accessible;
+    let annotatable = [
+        Role::Group,
+        Role::Banner,
+        Role::Navigation,
+        Role::Main,
+        Role::Complementary,
+        Role::ContentInfo,
+        Role::Article,
+        Role::Section,
+        Role::Form,
+        Role::Search,
+        Role::Heading(2),
+        Role::ListItem,
+        Role::Status,
+        Role::Log,
+    ];
+    for role in annotatable {
+        assert!(role.is_annotatable(), "{role:?}");
+        reset_layout_runtime();
+        focus::clear();
+        let said = Container::new(LayoutStyle::new(), vec![box_item(words("Inside"))])
+            .unwrap()
+            .a11y_role(role);
+        let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(said)]).unwrap();
+        let nodes = snapshot_of(root);
+        let transcript = platform_core::accessibility::transcript(&nodes);
+        match role {
+            Role::Group => {
+                assert_eq!(held(&nodes, None), [(Role::Label, "Inside")], "{role:?}");
+                assert_eq!(transcript, "Inside");
+            }
+            Role::Heading(_) => {
+                assert_eq!(held(&nodes, None), [(role, "Inside")], "{role:?}");
+                assert_eq!(transcript, "Inside, heading, level 2");
+            }
+            _ => {
+                assert_eq!(held(&nodes, None), [(role, "")], "{role:?}");
+                assert_eq!(held(&nodes, Some(0)), [(Role::Label, "Inside")], "{role:?}");
+                assert_eq!(transcript, format!("{}\n  Inside", role.as_str()));
+            }
+        }
+    }
+}
+
+/// A role said over a box that holds nothing to read adds no empty node, and `group` said over a region takes the landmark away.
+#[test]
+fn a_said_role_holding_nothing_is_not_read_and_a_said_group_unmakes_a_region() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let empty = StyledContainer::new(
+        LayoutStyle::new().width(40.0).height(20.0),
+        |_r| RectStyle::default(),
+        vec![],
+    )
+    .unwrap()
+    .a11y_role(Role::ListItem);
+    let unmade = Container::new(LayoutStyle::new(), vec![box_item(words("Aside"))])
+        .unwrap()
+        .role(Role::Complementary)
+        .a11y_role(Role::Group);
+    let root = Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![box_item(empty), box_item(unmade)],
+    )
+    .unwrap();
+    let nodes = snapshot_of(root);
+    assert_eq!(held(&nodes, None), [(Role::Label, "Aside")]);
+}

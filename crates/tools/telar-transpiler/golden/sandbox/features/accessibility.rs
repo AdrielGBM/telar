@@ -285,11 +285,50 @@ pub fn accessibility(props: AccessibilityProps, children: Children) -> Result<Bo
                     let mut __slots = Slots::new();
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     if __request.includes(None) {
+                        let __node_15 = {
+                            let __deferred = Children::per_slot(
+                                move |__request: SlotRequest<'_>| {
+                                    let mut __slots = Slots::new();
+                                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                    if __request.includes(None) {
+                                        let __text_6 = {
+                                            Text::declaring(
+                                                || "The card is a plain box, so the call can say it is an article. A role a person operates stays the component's: role:button here is a build error.".to_string(),
+                                                LayoutStyle::new(),
+                                                move |__inherited: TextStyle| __inherited.with_font_size(13.0),
+                                            )?
+                                        };
+                                        __children.push(box_item(__text_6));
+                                    }
+                                    __slots.extend_default(__children);
+                                    Ok(__slots)
+                                }
+                            );
+                            card(CardProps::props().build(), __deferred)?
+                        };
+                        let __node_15 = __node_15.a11y_label(|| "Release notes").a11y_role(::telar::Role::Article);
+                        __children.push(box_item(__node_15));
+                        let __node_16 = code_line(CodeLineProps::props().code("card role:article a11y_label:'Release notes'").build(), Children::default())?;
+                        __children.push(box_item(__node_16));
+                    }
+                    __slots.extend_default(__children);
+                    Ok(__slots)
+                }
+            );
+            example(ExampleProps::props().title("What a component's item is, said where it is used").build(), __deferred)?
+        };
+        let __node_17 = {
+            let __deferred = Children::per_slot(
+                move |__request: SlotRequest<'_>| {
+                    let mut __slots = Slots::new();
+                    let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                    if __request.includes(None) {
                         let __col_2 = {
-                            let __node_15 = prop_row(PropRowProps::props().name("label").values("text · t!(…) · $state expr").about("The name assistive technology reads. On img and svg it is what makes a picture more than decoration.").build(), Children::default())?;
-                            let __node_16 = prop_row(PropRowProps::props().name("lang").values("BCP 47 tag").about("The language of the box and everything under it; the nearest one wins.").build(), Children::default())?;
-                            let __node_17 = prop_row(PropRowProps::props().name("a11y").values("hidden").about("Skipped by assistive technology, with its whole subtree. Still drawn and still pressable.").build(), Children::default())?;
-                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_15, __node_16, __node_17])?
+                            let __node_18 = prop_row(PropRowProps::props().name("label").values("text · t!(…) · $state expr").about("The name assistive technology reads. On img and svg it is what makes a picture more than decoration.").build(), Children::default())?;
+                            let __node_19 = prop_row(PropRowProps::props().name("lang").values("BCP 47 tag").about("The language of the box and everything under it; the nearest one wins.").build(), Children::default())?;
+                            let __node_20 = prop_row(PropRowProps::props().name("a11y").values("hidden").about("Skipped by assistive technology, with its whole subtree. Still drawn and still pressable.").build(), Children::default())?;
+                            let __node_21 = prop_row(PropRowProps::props().name("role").values("landmark · article · h1–h6 · status · log · listitem · group").about("On a component call: what the item it returns is, where the component left it a plain box or a region. A control keeps its own role.").build(), Children::default())?;
+                            Container::new(LayoutStyle::new().flex_column().gap(6.0), children![__node_18, __node_19, __node_20, __node_21])?
                         };
                         __children.push(box_item(__col_2));
                     }
@@ -299,7 +338,7 @@ pub fn accessibility(props: AccessibilityProps, children: Children) -> Result<Bo
             );
             example(ExampleProps::props().title("Attributes").build(), __deferred)?
         };
-        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_14])?
+        Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_4, __node_7, __node_10, __node_14, __node_17])?
     };
     Ok(Box::new(__col_0))
 }

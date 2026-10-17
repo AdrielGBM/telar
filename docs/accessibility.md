@@ -22,12 +22,40 @@ button label:"Open" variant:ButtonVariant::Ghost a11y_label:"Open {name} in the 
 
 A quoted name or language interpolates `{…}` as text does, wherever it is written.
 
-A role is not one of them. What a box is decides how the keyboard reaches it and what pressing it does, so it is
-the component's to say from its own root — `split_pane`'s `region` takes the landmark its pane is — and not
-something a call can lay over the item it gets back.
+A call may also say what that item is with `role:`, but only in words that describe the item from outside and
+ask nothing of what it holds:
 
-From Rust the same three are methods of `telar::Accessible`, which every widget with a layout node has:
-`.a11y_label(|| …)`, `.a11y_lang(|| …)`, `.a11y_hidden()`.
+| `role:` on a component call | Why a call may say it |
+| --- | --- |
+| `banner` (`header`), `navigation` (`nav`), `main` (`content`), `complementary` (`aside`, `sidebar`), `contentinfo` (`footer`), `search`, `form`, `section` | A landmark: where the item sits on the screen, which the call site knows and the component cannot. `form` and `section` are landmarks only once named (`a11y_label:`); said by a call, each is still a node of its own natively. |
+| `article` | A self-contained piece, whatever is inside it. |
+| `h1` … `h6` | A heading, at the depth of the outline the call sits in — which the component cannot know. Named by the words drawn in it unless `a11y_label:` names it. |
+| `status`, `log` | A live region: what changes in it is announced without taking focus. |
+| `listitem` (`item`) | One item of the list the call sits in. The list is the call site's own box, so the call is where the pair is kept true. |
+| `group` | Says nothing: over a region the component made, it takes the landmark away on every target, and it adds no node of its own on any. |
+
+```text
+heading text:"Recent changes" role:h3
+card role:article a11y_label:"Release notes"
+```
+
+Every other role is a build error on the call's line. A role a person operates (`button`, `switch`, `tab`,
+`option`, `slider`, …) decides how the keyboard reaches the box and what pressing it does, which only the component
+that wires the press can keep true. A `list`, `grid`, `tree`, `menu`, `listbox`, `tablist` or `toolbar` promises what
+the boxes inside it are, and a `dialog`, `scrollarea` or `drawing` changes how the box is reached or drawn; the
+component's insides are not the call's to see. Those stay the component's to say from its own root —
+`split_pane`'s `region` takes the landmark its pane is.
+
+The role is laid only over a root the component left a plain box or a region (`Role::annotated`). A root the
+component made a control, a heading, a list or anything else keeps its own role on every target, and one the
+keyboard reaches keeps it too, so `role:navigation` on a `button` call cannot announce a navigation that answers
+Enter. The build cannot see which root a component returns, so this is the runtime's answer rather than an error:
+the same rule in the document's element, the snapshot, AccessKit and the terminal's reading. A `role` prop a
+component declares is unreachable from a call, as `a11y_label` would be.
+
+From Rust the same are methods of `telar::Accessible`, which every widget with a layout node has:
+`.a11y_label(|| …)`, `.a11y_lang(|| …)`, `.a11y_hidden()` and `.a11y_role(Role::…)`, which in a debug build panics
+on a role a call could not say (`Role::is_annotatable`).
 
 ## Pictures
 
@@ -300,7 +328,8 @@ tail -F /tmp/reading.txt
 The reading ends the line of whatever holds the keyboard with `, focused` (`Save, button, focused`), since a
 reader following the file has no ring to look at. A link marked `current:` says so after its role (`Web, link, current`).
 An item that says where it sits says it after its role, in the numbers its role takes (`src, treeitem, level 2, 3 of 7`;
-see [Where an item sits](#where-an-item-sits)), and a node with no name reads as its role alone (`row, 1 of 501`).
+see [Where an item sits](#where-an-item-sits)), a heading says its level after its role (`Settings, heading, level 1`),
+and a node with no name reads as its role alone (`row, 1 of 501`).
 
 ## Names the catalogue gives
 
@@ -331,7 +360,7 @@ a box under `a11y:hidden`.
 | Test | What it checks |
 | --- | --- |
 | `plugins/telar-components/src/audit_test.rs` | The document those widgets render to, audited by [axe-core](https://github.com/dequelabs/axe-core) with its WCAG 2.2 A/AA and best-practice rules (`region` off: the fixture is a fragment of a page). Run with nothing focused, with the field focused and with the button focused, and any violation fails the test with the rule, the element and the reason. It also checks that the keyboard's box wears Telar's ring in the document, and with `overlays` that a dialog whose body scrolls makes the body a named Tab stop that Page Down scrolls. With `advanced` the page holds a list and a table with more rows than they show, which say where each built row sits, and with both an open menu leaves them and the rest of the page inert until it closes. |
-| `crates/platform/platform-desktop/src/accessibility_test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen, built from `ui-core` primitives in place of the catalogue's button, field and checkbox: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, and that the tree's focus follows the Tab order. |
+| `crates/platform/platform-desktop/src/accessibility_test.rs` (`from_a_screen`) | The AccessKit tree a desktop window publishes for the same screen, built from `ui-core` primitives in place of the catalogue's button, field and checkbox: each control's role and name, that it takes `Focus` and `Click`, the URL of each link and link run, the state of the checkbox, the switch and the toggle button, that Space and Enter press the last two, that a link to the section under a bar is the current location as the page scrolls, the language and the hidden boxes, that the heading is a heading named by its text at its level, that a role said from outside a widget is published over a plain box and never over a control, and that the tree's focus follows the Tab order. |
 | `crates/renderer/renderer-dom/src/controls_test.rs` | A switch and a toggle button in the document: their role, `aria-checked` and `aria-pressed`, that each is a Tab stop, and that Space or Enter sent to the element is kept from the page, reaches the box through the platform and flips the state the next frame writes. `semantics_test.rs` checks that a box whose role changes drops the state attribute of the old one. |
 | `crates/tools/cargo-telar/src/workshop_audit_test.rs` | The exported `apps/catalogue` workshop in headless Chrome: axe-core over the canvas of every preview and matrix page, with the same rules (`crates/renderer/renderer-dom/axe.json`), and over the workshop's chrome once with `region` on. See [previews.md](previews.md#auditing-the-exported-workshop). |
 
@@ -356,10 +385,12 @@ nearest box around it, along the frame's element nesting, that is a node itself:
 named, a box that says where it sits, or a box given no name whose role is a structure — a `tablist`, `tabpanel`,
 `menu`, `listbox`, `tree`, `grid`, `row`, `toolbar`, `list`, `dialog`, `status`, `log`, `article` or a landmark
 (`banner`, `navigation`, `main`, `complementary`, `contentinfo`, `search`) — as long as it holds a node; holding
-none, it is left out. The boxes between them, plain groups and scroll areas, are not nodes. A box named as a group
-reads as a label beside what it groups rather than around it, and a heading given no name still reaches a desktop
-reader as the label of its text; the document has the `<h1>`. A surface nested in the frame joins the tree inside
-the node it is drawn in.
+none, it is left out. A box whose role an application said with `role:` on a call (`a11y_role`) is such a node for any role a call may say but `group` — a `listitem`, an unnamed `section` or `form` included — since a role said on purpose is never scaffolding; one a widget gave its own wrapper is a node only as above. The boxes between them, plain groups and scroll areas, are not nodes. AccessKit gets each landmark as its own role (`search` as `Search`), and `status` and `log` as polite live regions. A box named as a group
+reads as a label beside what it groups rather than around it. A heading given no name is a node too, as the
+document's `<h2>` is: a heading of its level named by the words drawn in it, and by the names of the boxes with no
+role of their own inside it, holding the link runs and controls among them; its words name it and are not read
+again as text of their own. AccessKit gets its level (`level`, counted from zero) and the terminal says it
+(`Settings, heading, level 1`). A surface nested in the frame joins the tree inside the node it is drawn in.
 
 AccessKit gets the same tree: every node is a child of the one it sits in, and the window holds the rest. A grid
 holds its rows and each row its cells; the grid says its row count — from the `size` its rows say, so a reader

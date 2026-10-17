@@ -182,6 +182,27 @@ impl Role {
         )
     }
 
+    /// Whether an application may say a box is this from outside the widget that made it, as a component call's `role:` does.
+    ///
+    /// The roles that only describe the box and ask nothing of what it holds: a region, an article, a heading, a live region, an item of the list the call sits in, or a plain group. A role a person operates decides how the keyboard reaches the box and what pressing it does; a list, a grid, a menu or a tab list promises what the boxes inside it are; a dialog, a scroll area or a drawing changes how the box is reached or drawn. Only the widget can keep any of those, so laid over its box from outside each would be a lie.
+    pub fn is_annotatable(&self) -> bool {
+        self.is_region()
+            || matches!(
+                self,
+                Self::Group | Self::Heading(_) | Self::ListItem | Self::Status | Self::Log
+            )
+    }
+
+    /// What a box the widget made as this is once an application said it is `said`: `said` when that is [annotatable](Self::is_annotatable) and the box is no more than a group or a region itself, this otherwise. A control, a heading, a list or anything else the widget made it stays that, so what a reader is told never contradicts how the box behaves.
+    pub fn annotated(self, said: Option<Role>) -> Role {
+        match said {
+            Some(said) if said.is_annotatable() && (self == Self::Group || self.is_region()) => {
+                said
+            }
+            _ => self,
+        }
+    }
+
     /// Whether a named box with this role lends its name to the control inside it, as `<label>` does for its field, rather than naming itself: it has no role of its own, holds exactly one control, and draws no words or artwork outside that control. Every target applies this one rule, so a wrapped control is named the same wherever it is read.
     pub fn lends_name_to_control(
         &self,
@@ -438,6 +459,8 @@ pub struct Semantics {
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct Annotation {
     pub label: Option<Arc<str>>,
+    /// What the box is, laid over what the widget made it as [`Role::annotated`] allows.
+    pub role: Option<Role>,
     pub lang: Option<Arc<str>>,
     pub hidden: bool,
     pub anchor: Option<Arc<str>>,
@@ -448,6 +471,7 @@ pub struct Annotation {
 impl Annotation {
     pub fn is_empty(&self) -> bool {
         self.label.is_none()
+            && self.role.is_none()
             && self.lang.is_none()
             && !self.hidden
             && self.anchor.is_none()
@@ -506,10 +530,13 @@ impl Semantics {
         self
     }
 
-    /// What the widget derived, with what the application said on top: its label and language win, and hiding can only be added.
+    /// What the widget derived, with what the application said on top: its label and language win, hiding can only be added, and its role is taken only where [`Role::annotated`] allows and the keyboard does not reach the box, which keeps the role the widget made it as.
     pub fn annotated(mut self, annotation: &Annotation) -> Self {
         if let Some(label) = &annotation.label {
             self.label = Some(label.clone());
+        }
+        if self.focusable.is_none() {
+            self.role = self.role.annotated(annotation.role);
         }
         if let Some(lang) = &annotation.lang {
             self.lang = Some(lang.clone());

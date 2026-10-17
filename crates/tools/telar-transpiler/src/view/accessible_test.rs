@@ -142,3 +142,76 @@ fn a_component_calls_a11y_takes_only_the_words_it_knows() {
     assert!(code.contains("compile_error!"), "{code}");
     assert!(!code.contains(".a11y_hidden()"), "{code}");
 }
+
+/// A call says what the item it gets back is with a role that only describes it, chained as an annotation rather than passed as a prop.
+#[test]
+fn a_component_call_says_a_describing_role_of_its_item() {
+    let code = transpile("col\n    heading text:\"Recent\" role:h2\n    card role:nav\n");
+    assert!(!code.contains("compile_error!"), "{code}");
+    assert!(
+        code.contains(".a11y_role(::telar::Role::Heading(2))"),
+        "{code}"
+    );
+    assert!(
+        code.contains(".a11y_role(::telar::Role::Navigation)"),
+        "an alias is the role it means:\n{code}"
+    );
+    assert!(!code.contains(".role("), "not passed as a prop:\n{code}");
+}
+
+fn transpiled(view: &str) -> crate::TranspiledSource {
+    crate::transpile_source(&format!("[view]\n{view}"), "demo", None, None).unwrap()
+}
+
+/// The `.rsx` line the generated line holding `needle` was written for, counted from 1.
+fn rsx_line_of(out: &crate::TranspiledSource, needle: &str) -> Option<u32> {
+    let generated = out
+        .rust_code
+        .lines()
+        .position(|line| line.contains(needle))?;
+    out.source_map[generated].map(|line| line + 1)
+}
+
+/// A role a person operates, or one that promises what the item holds, is the component's to say: a call writing one is an error on its own line, and nothing is chained.
+#[test]
+fn a_component_call_cannot_say_a_role_that_would_lie_about_its_item() {
+    for (role, why) in [
+        ("button", "a role a person operates"),
+        ("switch", "a role a person operates"),
+        ("list", "promises what the boxes inside the item are"),
+        ("dialog", "promises what the boxes inside the item are"),
+    ] {
+        let out = transpiled(&format!("col\n    card role:{role}\n"));
+        let message = format!("`role:{role}` is the component's to say, not the call's");
+        assert!(
+            out.rust_code.contains(&message),
+            "{role}:\n{}",
+            out.rust_code
+        );
+        assert!(out.rust_code.contains(why), "{role}:\n{}", out.rust_code);
+        assert!(
+            !out.rust_code.contains(".a11y_role("),
+            "{role}:\n{}",
+            out.rust_code
+        );
+        assert_eq!(rsx_line_of(&out, &message), Some(3), "{role}");
+    }
+}
+
+/// A word no role answers to is the ordinary value error, listing what a call may say.
+#[test]
+fn a_component_calls_role_takes_only_the_words_it_knows() {
+    let out = transpiled("card role:landmark\n");
+    assert!(
+        out.rust_code
+            .contains("`role:landmark` is not a value of `role`: expected `group`"),
+        "{}",
+        out.rust_code
+    );
+    assert!(
+        !out.rust_code.contains("`button`"),
+        "only the roles a call may say are offered:\n{}",
+        out.rust_code
+    );
+    assert!(!out.rust_code.contains(".a11y_role("), "{}", out.rust_code);
+}
