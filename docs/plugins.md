@@ -139,11 +139,12 @@ wraps them.
 A `virtual row_height:` loop is `VirtualList::new(style, viewport, row_height, overscan, source, key, build)?`, every
 row the same height. Rows that differ are `virtual estimated_height:<expr>`, which makes a `VirtualRows::new(viewport,
 estimate)` handle and builds `VirtualList::measured(style, rows, overscan_px, source, key, build)?` over it. The two are
-alternatives. `overscan:<px>` is how far beyond each edge to build (two estimated rows by default), and `rows:$handle`
-stores the handle in a `signal(None::<VirtualRows>)` so the view can call `rows.reveal(index, margin)`, the way
-`view_progress:$p` writes into a signal. Unbuilt rows stand at the estimate, built ones are measured after layout, and
-the first row on screen holds still while estimates are corrected. The items must be `Clone`, since rows are built from
-clones of what the source returned; a type that is not is refused with a message naming `Clone`. Give the
+alternatives. Either way the items must be `Clone`: the list keeps what the source last returned and builds each row
+from a clone of its item, so the source runs again only when what it reads changes, not on every scroll; a type that
+is not is refused with a message naming `Clone`. `overscan:<px>` is how far beyond each edge to build (two estimated
+rows by default), and `rows:$handle` stores the handle in a `signal(None::<VirtualRows>)` so the view can call
+`rows.reveal(index, margin)`, the way `view_progress:$p` writes into a signal. Unbuilt rows stand at the estimate,
+built ones are measured after layout, and the first row on screen holds still while estimates are corrected. Give the
 rows their spacing inside the row rather than as a `gap`, so that measuring counts it. Rows under a header held at
 the top of the scroll, a table's column headings, are `VirtualRows::new(viewport, estimate).under_header(height)`:
 their places count the header, and a row brought into view stops below it rather than behind it.

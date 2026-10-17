@@ -32,7 +32,7 @@ fn an_unmeasured_viewport_renders_everything_rather_than_nothing() {
 }
 
 mod measured {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::collections::BTreeMap;
     use std::rc::Rc;
 
@@ -61,6 +61,7 @@ mod measured {
         items: RwSignal<Vec<Item>>,
         live: Rc<RefCell<BTreeMap<usize, NodeId>>>,
         builds: Rc<RefCell<usize>>,
+        runs: Rc<Cell<usize>>,
     }
 
     fn numbered(heights: impl IntoIterator<Item = f32>) -> Vec<Item> {
@@ -78,9 +79,11 @@ mod measured {
             let items = signal(items);
             let live: Rc<RefCell<BTreeMap<usize, NodeId>>> = Rc::default();
             let builds = Rc::new(RefCell::new(0));
+            let runs = Rc::new(Cell::new(0));
             let mut handed = None;
             let scroll = {
-                let (live, builds) = (Rc::clone(&live), Rc::clone(&builds));
+                let (live, builds, counted) =
+                    (Rc::clone(&live), Rc::clone(&builds), Rc::clone(&runs));
                 LayoutScrollArea::new_with(
                     LayoutStyle::new().width(WIDTH).height(VIEW),
                     |viewport| {
@@ -91,7 +94,10 @@ mod measured {
                             LayoutStyle::new().flex_column(),
                             rows,
                             overscan,
-                            move || items.get(),
+                            move || {
+                                counted.set(counted.get() + 1);
+                                items.get()
+                            },
                             |item: &Item| item.0,
                             move |at, (_, height): Item| {
                                 let row = Canvas::new(LayoutStyle::new().height(height), |_| {
@@ -143,6 +149,7 @@ mod measured {
                 items,
                 live,
                 builds,
+                runs,
             };
             mounted.settle();
             mounted
@@ -178,6 +185,25 @@ mod measured {
         fn on_screen(&self, at: usize) -> f32 {
             self.laid_out(at).y - self.offset()
         }
+    }
+
+    #[test]
+    fn the_source_runs_once_per_change_of_its_items_not_per_scroll() {
+        let list = Mounted::new(numbered(std::iter::repeat_n(20.0, 1000)), 20.0, 0.0);
+        assert_eq!(list.runs.get(), 1);
+
+        for step in 1..=50 {
+            list.scroll_to(step as f32 * 20.0);
+            list.settle();
+        }
+        assert_eq!(list.runs.get(), 1, "fifty scrolls ran the source again");
+        assert!(list.built().contains(&50));
+
+        list.items
+            .set((0..1000).map(|at| (1000 + at, 40.0)).collect());
+        list.settle();
+        assert_eq!(list.runs.get(), 2, "new items ran it once more");
+        assert_eq!(list.rows.height_of(50), 40.0, "and their rows were built");
     }
 
     #[test]
@@ -390,11 +416,12 @@ mod measured {
 }
 
 mod fixed {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
+    use std::collections::BTreeMap;
     use std::rc::Rc;
 
     use layout_core::{AvailableSpace, LayoutStyle};
-    use reactive_core::on_cleanup;
+    use reactive_core::{RwSignal, on_cleanup, signal};
     use ui_tree::RenderNode;
 
     use super::super::*;
@@ -462,6 +489,133 @@ mod fixed {
         assert_eq!(
             content.height, 20_000.0,
             "the spacers keep the content every row tall"
+        );
+    }
+
+    type Row = (usize, String);
+
+    fn labelled(ids: std::ops::Range<usize>) -> Vec<Row> {
+        ids.map(|id| (id, format!("Row {id}"))).collect()
+    }
+
+    struct Fixed {
+        _scroll: LayoutScrollArea,
+        viewport: ScrollViewport,
+        items: RwSignal<Vec<Row>>,
+        runs: Rc<Cell<usize>>,
+        built: Rc<RefCell<BTreeMap<usize, usize>>>,
+    }
+
+    impl Fixed {
+        fn new(rows: Vec<Row>) -> Self {
+            reset_layout_runtime();
+            let items = signal(rows);
+            let runs = Rc::new(Cell::new(0));
+            let built: Rc<RefCell<BTreeMap<usize, usize>>> = Rc::default();
+            let mut handed = None;
+            let scroll = {
+                let (runs, built) = (Rc::clone(&runs), Rc::clone(&built));
+                LayoutScrollArea::new_with(
+                    LayoutStyle::new().width(200.0).height(100.0),
+                    |viewport| {
+                        handed = Some(viewport.clone());
+                        let list = VirtualList::new(
+                            LayoutStyle::new().flex_column(),
+                            viewport,
+                            20.0,
+                            2,
+                            move || {
+                                runs.set(runs.get() + 1);
+                                items.get()
+                            },
+                            |row: &Row| row.0,
+                            move |at, (id, _): Row| {
+                                built.borrow_mut().insert(at, id);
+                                let built = Rc::clone(&built);
+                                on_cleanup(move || {
+                                    let mut built = built.borrow_mut();
+                                    if built.get(&at) == Some(&id) {
+                                        built.remove(&at);
+                                    }
+                                });
+                                Ok(box_item(Canvas::new(
+                                    LayoutStyle::new().height(20.0),
+                                    |_| RenderNode::Empty,
+                                )?))
+                            },
+                        )?;
+                        Ok(box_item(list))
+                    },
+                )
+                .unwrap()
+            };
+            compute_layout(
+                scroll.layout_node(),
+                AvailableSpace::Definite(200.0),
+                AvailableSpace::Definite(100.0),
+            )
+            .unwrap();
+            Self {
+                _scroll: scroll,
+                viewport: handed.expect("the scroll built its content"),
+                items,
+                runs,
+                built,
+            }
+        }
+
+        fn scroll_to(&self, y: f32) {
+            self.viewport.scroll_to(0.0, y);
+            relayout_if_dirty();
+        }
+
+        fn built(&self) -> Vec<(usize, usize)> {
+            self.built
+                .borrow()
+                .iter()
+                .map(|(&at, &id)| (at, id))
+                .collect()
+        }
+    }
+
+    #[test]
+    fn the_source_runs_once_per_change_of_its_items_not_per_scroll() {
+        let list = Fixed::new(labelled(0..1000));
+        assert_eq!(list.runs.get(), 1);
+
+        for step in 1..=50 {
+            list.scroll_to(step as f32 * 20.0);
+        }
+        assert_eq!(list.runs.get(), 1, "fifty scrolls ran the source again");
+        assert_eq!(
+            list.built(),
+            (48..58).map(|at| (at, at)).collect::<Vec<_>>(),
+            "visible_window(1000, 100, 20, 1000, 2)"
+        );
+
+        list.items.set(labelled(5000..6000));
+        relayout_if_dirty();
+        assert_eq!(list.runs.get(), 2, "new items ran it once more");
+        assert_eq!(
+            list.built(),
+            (48..58).map(|at| (at, 5000 + at)).collect::<Vec<_>>(),
+            "and the window was rebuilt from them"
+        );
+    }
+
+    #[test]
+    fn walking_a_hundred_thousand_rows_a_row_at_a_time_stays_quick() {
+        let list = Fixed::new(labelled(0..100_000));
+        let start = web_time::Instant::now();
+        for step in 1..=300 {
+            list.scroll_to(step as f32 * 20.0);
+        }
+        let took = start.elapsed();
+        assert_eq!(list.runs.get(), 1);
+        assert_eq!(list.built().first(), Some(&(298, 298)));
+        assert!(
+            took < std::time::Duration::from_millis(400),
+            "300 one-row scrolls over 100 000 rows took {took:?}"
         );
     }
 }
