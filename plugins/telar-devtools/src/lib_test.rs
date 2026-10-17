@@ -312,6 +312,18 @@ fn the_overlay_is_drawn_over_the_app() {
     assert!(frame.len() > app.len(), "then the overlay");
 }
 
+#[test]
+fn the_overlay_is_marked_as_a_surface_of_its_own() {
+    let mut dev = devtools();
+    let app = [DrawCommand::PopClip];
+    let frame = dev.on_frame(&app, WIDTH, HEIGHT, true);
+    assert!(
+        matches!(frame[1], DrawCommand::PushSurface { .. }),
+        "its boxes are numbered in its own world, so read as the app's they would name the app's boxes"
+    );
+    assert!(matches!(frame.last(), Some(DrawCommand::PopSurface)));
+}
+
 thread_local! {
     static NOW: Cell<Option<Instant>> = const { Cell::new(None) };
 }

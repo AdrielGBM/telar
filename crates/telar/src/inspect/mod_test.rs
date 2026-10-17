@@ -54,8 +54,8 @@ fn canvas() -> Rc<SurfaceCanvas> {
     )
 }
 
-/// A window with `canvas` shown in a frame 200 × 120 at (40, 60), beside a button of its own.
-fn window(canvas: &Rc<SurfaceCanvas>) -> ComponentList {
+/// A window painted `backdrop`, with `canvas` shown in a frame 200 × 120 at (40, 60), beside a button of its own.
+fn window(canvas: &Rc<SurfaceCanvas>, backdrop: Color) -> ComponentList {
     let spacer = |width: f32, height: f32| {
         box_item(Container::new(LayoutStyle::new().width(width).height(height), vec![]).unwrap())
     };
@@ -71,7 +71,7 @@ fn window(canvas: &Rc<SurfaceCanvas>) -> ComponentList {
     .unwrap();
     let content = StyledContainer::new(
         fill().flex_column(),
-        |_| RectStyle::default().with_fill(Color::WHITE),
+        move |_| RectStyle::default().with_fill(backdrop),
         vec![
             spacer(10.0, 60.0),
             box_item(row),
@@ -102,7 +102,7 @@ fn the_window_and_the_canvas_agree_on_what_a_reader_is_told_inside_the_canvas() 
     crate::reset_layout_runtime();
     crate::focus::clear();
     let canvas = canvas();
-    let tree = window(&canvas);
+    let tree = window(&canvas, Color::WHITE);
     let window_frame = tree.commands().clone();
     let whole = audit(&window_frame, None);
 
@@ -170,4 +170,30 @@ fn a_surface_nobody_can_enter_any_more_is_left_out_rather_than_read_in_the_wrong
     let read = audit(&commands, None);
     assert!(read.nodes.is_empty(), "{:#?}", read.nodes);
     assert!(read.violations.is_empty());
+}
+
+#[test]
+fn text_a_canvas_draws_on_nothing_of_its_own_is_judged_against_what_the_window_shows_behind_it() {
+    crate::install_default_text_metrics();
+    crate::reset_layout_runtime();
+    crate::focus::clear();
+    let canvas = Rc::new(
+        SurfaceCanvas::new(crate::Size::new(1.0, 1.0), || {
+            Ok(box_item(Text::new(
+                || "Unreadable".to_string(),
+                LayoutStyle::new().width(80.0).height(16.0),
+                || TextStyle::new(12.0, Color::BLACK),
+            )?))
+        })
+        .unwrap(),
+    );
+    let tree = window(&canvas, Color::BLACK);
+    let read = audit(&tree.commands().clone(), Some(Color::WHITE));
+    assert!(
+        read.violations
+            .iter()
+            .any(|violation| violation.rule == AccessRule::Contrast),
+        "{:#?}",
+        read.violations
+    );
 }

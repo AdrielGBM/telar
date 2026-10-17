@@ -5,7 +5,7 @@ use telar::{
     ModifiersState, Rect, SegmentNodeInfo, Size,
 };
 
-use crate::{Built, DevTools};
+use crate::DevTools;
 
 /// Windows from roomy to the narrowest the drawer and the panel still sit side by side in.
 const WINDOWS: [Size; 2] = [Size::new(1000.0, 700.0), Size::new(600.0, 500.0)];
@@ -40,10 +40,6 @@ fn audit(dev: &mut DevTools, window: Size, background: Color) -> AccessAudit {
     let frame = dev
         .on_frame(&[], window.width, window.height, false)
         .into_owned();
-    let Built::Ready(overlay) = &dev.overlay else {
-        panic!("the overlay builds")
-    };
-    let _entered = overlay.canvas.enter();
     telar::inspect::audit(&frame, Some(background))
 }
 

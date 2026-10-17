@@ -94,6 +94,15 @@ impl fmt::Display for Report {
 /// - **Focus order:** a Tab stop, in the order Tab walks them, that reads before the previous one — on an earlier line and not in a later column, or earlier on the same line.
 /// - **Missing language:** text that neither the canvas nor anything around it gives a language.
 pub fn check(frame: &Frame, snapshot: &[AccessNode]) -> Report {
+    check_over(frame, snapshot, &|_, _| frame.background)
+}
+
+/// [`check`] for a surface drawn inside another's frame: `behind` is the colour showing under a point of the surface, in its own coordinates, wherever the surface paints nothing opaque itself.
+pub(crate) fn check_over(
+    frame: &Frame,
+    snapshot: &[AccessNode],
+    behind: &dyn Fn(f32, f32) -> Option<Color>,
+) -> Report {
     let live;
     let (reading, tab_order) = match frame.access.as_deref() {
         Some(access) => (&access.reading, access.tab_order.as_slice()),
@@ -107,7 +116,7 @@ pub fn check(frame: &Frame, snapshot: &[AccessNode]) -> Report {
     unnamed_controls(snapshot, &mut violations);
     symbol_only_names(snapshot, &mut violations);
     unnamed_pictures(reading, &walk, &mut violations);
-    contrast(frame, snapshot, &walk, &mut violations);
+    contrast(snapshot, &walk, behind, &mut violations);
     target_sizes(snapshot, &mut violations);
     let stops = tab_stops(tab_order, snapshot, &walk);
     hidden_focusables(&stops, &mut violations);
@@ -196,7 +205,12 @@ fn unnamed_pictures(reading: &FrameReading, walk: &Walk, out: &mut Vec<Violation
     }
 }
 
-fn contrast(frame: &Frame, snapshot: &[AccessNode], walk: &Walk, out: &mut Vec<Violation>) {
+fn contrast(
+    snapshot: &[AccessNode],
+    walk: &Walk,
+    behind: &dyn Fn(f32, f32) -> Option<Color>,
+    out: &mut Vec<Violation>,
+) {
     let disabled: Vec<Rect> = snapshot
         .iter()
         .filter(|node| node.id.is_some() && !node.enabled)
@@ -208,11 +222,11 @@ fn contrast(frame: &Frame, snapshot: &[AccessNode], walk: &Walk, out: &mut Vec<V
         if disabled.iter().any(|rect| rect.contains(x, y)) {
             continue;
         }
-        let Some(behind) = walk.backdrop(run, frame.background) else {
+        let Some(backdrop) = walk.backdrop(x, y, run.over, behind(x, y)) else {
             continue;
         };
-        let ink = over(ink, behind);
-        let ratio = ink.contrast_ratio(behind);
+        let ink = over(ink, backdrop);
+        let ratio = ink.contrast_ratio(backdrop);
         let large = run.size >= 24.0 || (run.size >= 18.66 && run.weight >= 700);
         let needed = if large {
             LARGE_TEXT_CONTRAST
@@ -370,6 +384,20 @@ fn missing_lang(frame: &Frame, snapshot: &[AccessNode], out: &mut Vec<Violation>
             "the canvas names no language, so a reader guesses how to pronounce its text",
             None,
         ));
+    }
+}
+
+/// What a frame paints, read for the colour it shows under a surface drawn inside it.
+pub(crate) struct Painted(Walk);
+
+impl Painted {
+    pub(crate) fn of(frame: &Frame) -> Self {
+        Self(Walk::of(frame))
+    }
+
+    /// The colour the frame shows at (`x`, `y`), with `background` under everything it paints.
+    pub(crate) fn at(&self, x: f32, y: f32, background: Option<Color>) -> Option<Color> {
+        self.0.backdrop(x, y, self.0.fills.len(), background)
     }
 }
 
@@ -552,12 +580,11 @@ impl Walk {
         walk
     }
 
-    /// The colour behind `run`'s centre: the nearest opaque fill under it, or `background` under everything, with the translucent fills between composited over it. `None` where something whose colour is unknown is in the way, or nothing is.
-    fn backdrop(&self, run: &Run, background: Option<Color>) -> Option<Color> {
-        let (x, y) = centre(run.rect);
+    /// The colour at (`x`, `y`) under the first `under` fills: the nearest opaque fill there, or `background` under everything, with the translucent fills between composited over it. `None` where something whose colour is unknown is in the way, or nothing is.
+    fn backdrop(&self, x: f32, y: f32, under: usize, background: Option<Color>) -> Option<Color> {
         let mut between = Vec::new();
         let mut base = None;
-        for fill in self.fills[..run.over].iter().rev() {
+        for fill in self.fills[..under].iter().rev() {
             match fill {
                 Fill::Unknown { rect } if rect.contains(x, y) => return None,
                 Fill::Solid { rect, color } if rect.contains(x, y) => {

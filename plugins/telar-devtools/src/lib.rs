@@ -119,9 +119,13 @@ impl DevOverlay for DevTools {
         overlay.show_reading(reading);
         overlay.fit(Size::new(window_w, window_h));
         let drawn = overlay.frame();
-        let mut commands = Vec::with_capacity(base.len() + drawn.len());
+        let mut commands = Vec::with_capacity(base.len() + drawn.len() + 2);
         commands.extend_from_slice(base);
+        commands.push(DrawCommand::PushSurface {
+            surface: overlay.surface(),
+        });
         commands.extend_from_slice(&drawn);
+        commands.push(DrawCommand::PopSurface);
         Cow::Owned(commands)
     }
 
