@@ -49,6 +49,7 @@ crate::dropless_thread_local! {
 
 std::thread_local! {
     // The one destructor this module exists to register, which a copy told it is a guest never reaches: see `on_thread_exit`.
+    #[cfg_attr(target_os = "android", expect(clippy::missing_const_for_thread_local, reason = "the initializer is already const; clippy misreads the macro's expansion on this target"))]
     static AT_EXIT: ReleaseAtExit = const { ReleaseAtExit };
 }
 

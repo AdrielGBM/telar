@@ -18,7 +18,7 @@ unsafe fn try_set_frame_rate(window: *mut std::ffi::c_void, fps: f32) {
     let sym = unsafe {
         dlsym(
             core::ptr::null_mut(),
-            b"ANativeWindow_setFrameRate\0".as_ptr() as _,
+            c"ANativeWindow_setFrameRate".as_ptr(),
         )
     };
     if sym.is_null() {
@@ -55,13 +55,18 @@ mod choreographer {
         let sym = unsafe {
             dlsym(
                 core::ptr::null_mut(),
-                b"AChoreographer_getInstance\0".as_ptr() as _,
+                c"AChoreographer_getInstance".as_ptr(),
             )
         };
         if sym.is_null() {
             None
         } else {
-            Some(unsafe { core::mem::transmute(sym) })
+            Some(unsafe {
+                core::mem::transmute::<
+                    *mut core::ffi::c_void,
+                    unsafe extern "C" fn() -> *mut AChoreographer,
+                >(sym)
+            })
         }
     }
 
@@ -77,13 +82,22 @@ mod choreographer {
         let sym = unsafe {
             dlsym(
                 core::ptr::null_mut(),
-                b"AChoreographer_postFrameCallback\0".as_ptr() as _,
+                c"AChoreographer_postFrameCallback".as_ptr(),
             )
         };
         if sym.is_null() {
             None
         } else {
-            Some(unsafe { core::mem::transmute(sym) })
+            Some(unsafe {
+                core::mem::transmute::<
+                    *mut core::ffi::c_void,
+                    unsafe extern "C" fn(
+                        *mut AChoreographer,
+                        FrameCallbackFn,
+                        *mut core::ffi::c_void,
+                    ),
+                >(sym)
+            })
         }
     }
 
@@ -312,11 +326,11 @@ impl<H: EventHandler<AndroidWindow>> ApplicationHandler<()> for AndroidRunner<H>
                 #[cfg(target_os = "android")]
                 {
                     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-                    if let Ok(handle) = w.window_handle() {
-                        if let RawWindowHandle::AndroidNdk(android_handle) = handle.as_raw() {
-                            unsafe {
-                                try_set_frame_rate(android_handle.a_native_window.as_ptr(), 60.0);
-                            }
+                    if let Ok(handle) = w.window_handle()
+                        && let RawWindowHandle::AndroidNdk(android_handle) = handle.as_raw()
+                    {
+                        unsafe {
+                            try_set_frame_rate(android_handle.a_native_window.as_ptr(), 60.0);
                         }
                     }
                 }
