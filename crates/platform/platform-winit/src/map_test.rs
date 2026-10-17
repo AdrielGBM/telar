@@ -176,3 +176,53 @@ fn a_press_carries_the_key_the_layout_makes_without_modifiers() {
         })
     ));
 }
+
+fn composing(ime: winit::event::Ime) -> Event {
+    match map_alone(WindowEvent::Ime(ime)) {
+        SurfaceIntent::Event(event) => event,
+        _ => panic!("an input method's event is delivered"),
+    }
+}
+
+#[test]
+fn an_input_method_s_events_reach_the_field_in_telar_s_terms() {
+    use platform_core::Ime;
+    assert_eq!(
+        composing(winit::event::Ime::Enabled),
+        Event::Ime(Ime::Enabled)
+    );
+    assert_eq!(
+        composing(winit::event::Ime::Preedit("かな".into(), Some((3, 3)))),
+        Event::Ime(Ime::Preedit {
+            text: "かな".into(),
+            cursor: Some(3..3)
+        })
+    );
+    assert_eq!(
+        composing(winit::event::Ime::Commit("仮名".into())),
+        Event::Ime(Ime::Commit("仮名".into()))
+    );
+    assert_eq!(
+        composing(winit::event::Ime::Disabled),
+        Event::Ime(Ime::Disabled)
+    );
+}
+
+/// winit passes on whatever the input method said; a cursor past the composition or inside a character is held to it, so a field never slices its text off a boundary.
+#[test]
+fn a_composition_cursor_off_its_text_is_held_to_it() {
+    assert_eq!(
+        composing(winit::event::Ime::Preedit("か".into(), Some((2, 9)))),
+        Event::Ime(platform_core::Ime::Preedit {
+            text: "か".into(),
+            cursor: Some(0..3)
+        })
+    );
+    assert_eq!(
+        composing(winit::event::Ime::Preedit(String::new(), None)),
+        Event::Ime(platform_core::Ime::Preedit {
+            text: String::new(),
+            cursor: None
+        })
+    );
+}

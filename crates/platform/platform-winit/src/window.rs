@@ -96,6 +96,26 @@ impl PlatformWindow for WinitWindow {
         self.0.focus_window();
     }
 
+    /// The purpose goes first because Wayland reads it when the input method is enabled, and the area last because it is dropped while none is.
+    fn set_text_input(&self, input: Option<platform_core::TextInput>) {
+        use winit::dpi::{LogicalPosition, LogicalSize};
+        use winit::window::ImePurpose;
+        let Some(input) = input else {
+            self.0.set_ime_allowed(false);
+            return;
+        };
+        self.0.set_ime_purpose(match input.secret {
+            true => ImePurpose::Password,
+            false => ImePurpose::Normal,
+        });
+        self.0.set_ime_allowed(true);
+        let caret = input.caret;
+        self.0.set_ime_cursor_area(
+            LogicalPosition::new(caret.x, caret.y),
+            LogicalSize::new(caret.width.max(1.0), caret.height.max(1.0)),
+        );
+    }
+
     fn set_cursor(&self, cursor: platform_core::Cursor) {
         use platform_core::Cursor;
         use winit::window::CursorIcon;

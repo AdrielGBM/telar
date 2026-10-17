@@ -24,6 +24,7 @@ pub mod loop_waker;
 pub mod primary_scroll;
 pub mod route;
 pub mod system_preferences;
+pub mod text_input;
 pub mod window;
 pub mod window_command;
 
@@ -68,6 +69,7 @@ pub use system_preferences::{
     ColorScheme, SystemPreferences, locales_from_env, posix_locale_to_bcp47,
     system_locales_from_env,
 };
+pub use text_input::{Ime, TextInput};
 pub use window::{
     Cursor, EventHandler, FullscreenMode, MultiSurfacePlatform, Platform, ResizeEdge, SurfaceId,
     Window, WindowConfig, WindowPosition, window_waker,

@@ -190,6 +190,38 @@ menu label:"Edit"
 handler. A test pins what a shortcut shows with `telar::set_keyboard_convention`, which holds for the thread
 that calls it.
 
+## Input methods
+
+An input method (Japanese, Chinese or Korean input, dead keys on some layouts, a phone's predictive keyboard,
+dictation) composes text before it commits it. `Input` and `TextArea` show a composition where it will land:
+inline at the caret, drawn with the field's text, underlined, and wrapped with the text in a wrapping area. The
+part the input method is converting gets a heavier line, and the caret stands where the input method puts it
+(none while a part is being converted). The bound value is not touched until the commit, so an application
+reading it mid-word never sees half a word. The commit is typed once at the caret, in place of a selection; a
+selection also gives way as soon as a composition starts, as typing over it would. `Input` keeps the first line
+of a commit, `TextArea` keeps its line breaks. While a composition is open the field ignores keys that reach
+it anyway, because the input method owns them. If the keyboard leaves the field mid-composition, the field
+types in what it was showing, as a browser's field does, and the next field starts with no composition.
+
+The platform speaks to the field with `Event::Ime` (`telar-platform-core`'s `Ime`): `Preedit` for each step,
+with the input method's cursor in bytes (`None` for no cursor), `Commit` for the end, and `Enabled`/`Disabled`.
+The field tells the platform where its caret is. `ui_core::text_input()` answers for the field that holds the
+keyboard with a `TextInput`: the caret's rect in surface coordinates, placed through every scroll and transform
+above the field and through a `SurfaceFrame`'s placement for a field inside one, whether the field is secret
+(a masked `Input`), and an opaque id for the field. The runner reads it after every frame and calls
+`Window::set_text_input` when it changes. When the id changes, it passes `None` first, so a composition is not
+carried from one field to the next. A document target reads the caret off the field's element instead
+(`Element::caret`), because there the browser decides where the element is.
+
+| Target | What happens |
+| --- | --- |
+| desktop (winit) | The input method is turned on only while a field holds the keyboard (`set_ime_allowed`), so every key stays a plain key for shortcuts anywhere else. Its candidate window opens at the caret (`set_ime_cursor_area`). A secret field asks for `ImePurpose::Password`, which Wayland passes on to the input method; X11, Windows and macOS ignore it. `WindowEvent::Ime` becomes `Event::Ime`, with the cursor held to the composition's char boundaries. |
+| Android | The same call shows the soft keyboard for a field and hides it when no field takes text. winit sends no composition events on Android, so text arrives as keys. |
+| web-dom | The hidden element the browser types into stands on the caret's line, as tall as the line and running to the field's far edge, so the browser opens the candidate window at the caret and a phone scrolls the caret into view. The entry reports `compositionupdate` and the `input` events during a composition as `Preedit` (the cursor read from the element's selection, in UTF-16 units), and `compositionend` as one `Commit`. It swallows the text some browsers insert again once a composition is over (Safari's `insertFromComposition`, a late `input`), and the key Safari reports with `keyCode` 229 for the Enter that confirms a composition. A composition belongs to the field it began in: if the keyboard moves to another field, nothing more of it is reported, and a press that ends it by moving the browser's focus reports no commit, because the field typed the text in itself. |
+| web (canvas) | No input method yet. A canvas has no editable element for a browser to compose into, so text arrives as keys only. The window seam (`Window::set_text_input`) is where a hidden element for the canvas would be placed. |
+| TUI | Nothing to do. The terminal runs the input method itself and sends the committed text as keys. The terminal draws its own composition at the terminal's cursor, which Telar keeps hidden and does not move to the caret. |
+| headless | `HeadlessWindow::text_input()` returns what the window was last told, for tests. |
+
 ## Tests
 
 `crates/renderer/renderer-dom/src/keyboard_test.rs` checks this contract in a browser: which keys are
@@ -199,7 +231,12 @@ focused elements keep the browser's outline. `plugins/telar-components/src/audit
 keyboard-focused control wears Telar's ring in the document (see [accessibility.md](accessibility.md#audits)).
 `crates/renderer/renderer-dom/src/controls_test.rs` sends Space and Enter to a switch and a toggle button
 written as boxes with a role, and checks that the page keeps neither, that the platform hands each to the
-box, and that its state attribute follows.
+box, and that its state attribute follows. `crates/renderer/renderer-dom/src/composition_test.rs` replays the
+composition events each browser sends and checks where the entry stands, that a composed word reaches the
+field as steps and one commit, and that it stays with the field it began in.
+`crates/renderer/renderer-dom/src/text_area_entry_test.rs` checks the entry stands on the row a wrapped area
+has its caret on. `ui-core`'s `input_test.rs`, `text_area_test.rs`, `composition_test.rs` and
+`text_input_test.rs` cover what a field does with each `Ime` event and the caret it reports.
 
 None of these press a real key. A synthetic `KeyboardEvent` is untrusted, so the browser runs no default
 action for it: no Tab walk, no scroll, no activation. Trusted input in an automated browser comes only from

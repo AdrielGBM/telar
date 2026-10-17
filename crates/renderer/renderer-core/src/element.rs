@@ -47,6 +47,8 @@ pub struct Element {
     ///
     /// The frame draws the layer after the page, which is where a raster target needs it: above every box of the page, sticky ones included. A document needs it where it was declared instead, because there the order of the elements is the order Tab walks and a reader reads, so it puts the element in that place and fixes it against the viewport.
     pub fixed_in_place_of: Option<ElementId>,
+    /// Where the caret of a field that holds the keyboard is, in the box's own coordinates: where a document puts the element the browser types into, so an input method opens its candidates beside the caret rather than at the corner of the field. A fact about one frame, like [`scroll_to`](Self::scroll_to), and `None` on every box but that field.
+    pub caret: Option<Rect>,
 }
 
 /// A box that is a linked picture, as a document is told about it.
@@ -80,6 +82,7 @@ impl Element {
             arrival_margin: Insets::default(),
             picture: None,
             fixed_in_place_of: None,
+            caret: None,
         }
     }
 
@@ -110,6 +113,12 @@ impl Element {
     /// Says the box scrolls its own content, whatever its role. See [`Element::scrolls`].
     pub fn scrolling(mut self) -> Self {
         self.scrolls = true;
+        self
+    }
+
+    /// Says where the caret of the field this box is stands. See [`Element::caret`].
+    pub fn with_caret(mut self, caret: Option<Rect>) -> Self {
+        self.caret = caret;
         self
     }
 

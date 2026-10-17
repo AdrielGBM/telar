@@ -630,6 +630,18 @@ pub fn visible_rect(node: NodeId) -> Option<Rect> {
     lift(node, layout_reactive::track_layout(node)?.peek(), false).map(|shape| shape.bounds())
 }
 
+/// `local`, a rect in `node`'s own coordinates, where the surface draws it: moved to where layout put the node, then through every scroll and transform above it.
+pub(crate) fn surface_rect(node: NodeId, local: Rect) -> Option<Rect> {
+    let laid = layout_reactive::track_layout(node)?.peek();
+    let rect = Rect::new(
+        laid.x + local.x,
+        laid.y + local.y,
+        local.width,
+        local.height,
+    );
+    lift(node, rect, false).map(|shape| shape.bounds())
+}
+
 /// [`visible_rect`] grown by the node's hit outset: where the pointer finds the box, and so the target a reader and a target-size check are told about.
 pub(crate) fn hit_rect(node: NodeId) -> Option<Rect> {
     let laid = layout_reactive::track_layout(node)?.peek();

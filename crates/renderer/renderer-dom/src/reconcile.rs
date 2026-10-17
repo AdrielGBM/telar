@@ -156,7 +156,7 @@ pub struct Reconciler {
     /// The one editable element the browser will type into, parked over whichever field holds the keyboard.
     entry: Option<crate::entry::TextEntry>,
     /// The field that holds the keyboard this frame, measured once everything is in the document.
-    entry_target: Option<(web_sys::Element, bool)>,
+    entry_target: Option<EntryTarget>,
     /// The box that holds the keyboard this frame, when it is not a field; focused once it is in the document.
     focus_target: Option<web_sys::HtmlElement>,
     _follows_focus: Option<FocusFollower>,
@@ -165,6 +165,35 @@ pub struct Reconciler {
     document_scroll: Option<crate::document_scroll::DocumentScroll>,
     /// What the page was served with inside the host before the app ran, until the first frame has taken it over.
     served: Option<crate::adopt::Served>,
+}
+
+/// The field that holds the keyboard this frame, and where its caret is in its own box.
+struct EntryTarget {
+    element: web_sys::Element,
+    multiline: bool,
+    caret: Option<Rect>,
+}
+
+/// `caret`, in the coordinates of the field `element` the browser placed at `placed`, where it is on the host: scaled by whatever transform the box is drawn under, so a field inside a zoomed frame still has its caret where it is drawn. The box's own size is no measure of that, since a field's content is placed in it rather than sizing it.
+fn caret_on(element: &web_sys::Element, placed: Rect, caret: Rect) -> Rect {
+    let (sx, sy) = element
+        .dyn_ref::<web_sys::HtmlElement>()
+        .map_or((1.0, 1.0), |element| {
+            let scale = |shown: f32, laid: i32| match laid {
+                0 => 1.0,
+                laid => shown / laid as f32,
+            };
+            (
+                scale(placed.width, element.offset_width()),
+                scale(placed.height, element.offset_height()),
+            )
+        });
+    Rect::new(
+        placed.x + caret.x * sx,
+        placed.y + caret.y * sy,
+        caret.width * sx,
+        caret.height * sy,
+    )
 }
 
 /// The live document, as the walk asks it things.
@@ -482,7 +511,12 @@ impl Reconciler {
         let claimed = std::mem::take(&mut self.claimed_focus);
         let ours = self.keyboard_is_ours();
         // A field is typed into through the entry, placed against what the browser did with the field.
-        if let Some((node, multiline)) = self.entry_target.take() {
+        if let Some(EntryTarget {
+            element: node,
+            multiline,
+            caret,
+        }) = self.entry_target.take()
+        {
             let host = self.host.get_bounding_client_rect();
             let box_rect = node.get_bounding_client_rect();
             let placed = Rect::new(
@@ -491,11 +525,13 @@ impl Reconciler {
                 box_rect.width() as f32,
                 box_rect.height() as f32,
             );
+            let caret = caret.map(|caret| caret_on(&node, placed, caret));
             let label = node.get_attribute("aria-label");
             let keys = node.get_attribute(CONSUMED_KEYS_ATTRIBUTE);
             if let Some(entry) = self.entry.as_mut() {
                 let field = crate::entry::Field {
                     rect: placed,
+                    caret,
                     multiline,
                     label: label.as_deref(),
                     keys: keys.as_deref(),
@@ -546,8 +582,11 @@ impl Reconciler {
             match node.role {
                 // A browser accepts characters for an editable element, and the box a person sees is not one.
                 Role::TextInput | Role::MultilineTextInput => {
-                    self.entry_target =
-                        Some((element.clone(), node.role == Role::MultilineTextInput));
+                    self.entry_target = Some(EntryTarget {
+                        element: element.clone(),
+                        multiline: node.role == Role::MultilineTextInput,
+                        caret: node.caret,
+                    });
                 }
                 // The document has a focus of its own, and two that disagree is one interface the keyboard and the screen reader read differently.
                 _ => self.focus_target = element.clone().dyn_into::<web_sys::HtmlElement>().ok(),

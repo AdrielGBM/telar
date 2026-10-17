@@ -701,3 +701,213 @@ fn a_field_taller_than_its_line_centres_the_line_and_the_caret() {
     assert_eq!(caret.y, inset, "the caret starts where the line does");
     assert!(inset > 0.0, "and that is below the top of the box");
 }
+
+fn ime(event: Ime) -> Event {
+    Event::Ime(event)
+}
+
+fn walk_view(node: &RenderNode, visit: &mut impl FnMut(&DrawCommand)) {
+    match node {
+        RenderNode::Primitive(command) => visit(command),
+        RenderNode::Group { children }
+        | RenderNode::Element { children, .. }
+        | RenderNode::Transform { children, .. }
+        | RenderNode::Clip { children, .. }
+        | RenderNode::Layer { children, .. } => {
+            for child in children.iter() {
+                walk_view(child, visit);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn drawn_text(input: &Input) -> String {
+    let mut drawn = String::new();
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Text { text, .. } = command {
+            drawn = text.to_string();
+        }
+    });
+    drawn
+}
+
+/// The thin lines drawn under a composition, and the heavy one under the part being converted.
+fn composition_lines(input: &Input) -> (Vec<Rect>, Vec<Rect>) {
+    let (mut thin, mut heavy) = (Vec::new(), Vec::new());
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Rect { rect, .. } = command {
+            if rect.height == 1.0 {
+                thin.push(*rect);
+            } else if rect.height == 2.0 {
+                heavy.push(*rect);
+            }
+        }
+    });
+    (thin, heavy)
+}
+
+/// **A composition is shown, not typed.** What the input method has not decided on is drawn in the field at the caret, underlined, while the value stays what was typed: an application reading it mid-word must not see half a kana.
+#[test]
+fn a_composition_is_drawn_at_the_caret_and_left_out_of_the_value() {
+    let (mut input, value) = focused_input("ab");
+    input.caret.set(1);
+    assert_eq!(
+        input.on_event(&ime(Ime::preedit("かな", Some((6, 6))))),
+        EventResult::Handled
+    );
+    assert_eq!(drawn_text(&input), "aかなb");
+    assert_eq!(value.get(), "ab");
+    let (thin, heavy) = composition_lines(&input);
+    assert_eq!(thin.len(), 1, "one line under the whole composition");
+    assert!(heavy.is_empty(), "nothing is being converted");
+    let caret = caret_of(&input).0;
+    assert!(
+        (caret.x - (thin[0].x + thin[0].width)).abs() < 0.5,
+        "the caret stands where the input method put it, at the end of the composition"
+    );
+}
+
+#[test]
+fn the_part_being_converted_is_marked_and_has_no_caret() {
+    let (mut input, _) = focused_input("");
+    input.on_event(&ime(Ime::preedit("日本語", Some((3, 9)))));
+    let (thin, heavy) = composition_lines(&input);
+    assert_eq!((thin.len(), heavy.len()), (1, 1));
+    assert!(heavy[0].x > thin[0].x, "the converted part starts after 日");
+    let mut caret = None;
+    walk_view(&input.view(), &mut |command| {
+        if let DrawCommand::Rect { rect, .. } = command
+            && rect.width == CARET_WIDTH
+        {
+            caret = Some(*rect);
+        }
+    });
+    assert_eq!(caret, None);
+}
+
+/// **A commit is typed once.** The composition goes and its text lands at the caret, which ends up after it.
+#[test]
+fn a_commit_inserts_its_text_once_at_the_caret() {
+    let (mut input, value) = focused_input("ab");
+    input.caret.set(1);
+    input.on_event(&ime(Ime::preedit("か", Some((3, 3)))));
+    input.on_event(&ime(Ime::preedit("", None)));
+    input.on_event(&ime(Ime::Commit("可".into())));
+    assert_eq!(value.get(), "a可b");
+    assert_eq!(input.caret.get(), 4);
+    assert_eq!(drawn_text(&input), "a可b", "the composition is gone");
+}
+
+/// The behaviour typing has, for the text an input method types: a selection gives way to the composition as soon as it starts.
+#[test]
+fn a_composition_replaces_the_selection() {
+    let (mut input, value) = focused_input("hello");
+    input.on_event(&chord(Key::Char('a')));
+    input.on_event(&ime(Ime::preedit("x", None)));
+    assert_eq!(value.get(), "");
+    assert_eq!(drawn_text(&input), "x");
+    input.on_event(&ime(Ime::Commit("x".into())));
+    assert_eq!(value.get(), "x");
+}
+
+/// What an input method sends for a letter it had nothing to compose for: a commit without a composition, typed over the selection like a key.
+#[test]
+fn a_commit_without_a_composition_types_over_the_selection() {
+    let (mut input, value) = focused_input("hello");
+    input.on_event(&shifted(Key::Named(NamedKey::ArrowLeft)));
+    input.on_event(&ime(Ime::Commit("p".into())));
+    assert_eq!(value.get(), "hellp");
+    assert_eq!(input.selection("hellp"), None);
+}
+
+/// An abandoned composition leaves the text as it was.
+#[test]
+fn an_emptied_composition_inserts_nothing() {
+    let (mut input, value) = focused_input("ab");
+    input.on_event(&ime(Ime::preedit("か", None)));
+    input.on_event(&ime(Ime::preedit("", None)));
+    input.on_event(&ime(Ime::Commit(String::new())));
+    assert_eq!(value.get(), "ab");
+    assert_eq!(drawn_text(&input), "ab");
+}
+
+/// While the input method composes, the keys are its own: a Backspace that reached the field anyway must not delete what is already typed.
+#[test]
+fn keys_that_reach_a_composing_field_edit_nothing() {
+    let (mut input, value) = focused_input("ab");
+    input.on_event(&ime(Ime::preedit("か", None)));
+    assert_eq!(
+        input.on_event(&key(Key::Named(NamedKey::Backspace))),
+        EventResult::Handled
+    );
+    assert_eq!(value.get(), "ab");
+}
+
+#[test]
+fn a_single_line_field_keeps_the_first_line_of_a_commit() {
+    let (mut input, value) = focused_input("");
+    input.on_event(&ime(Ime::Commit("one\ntwo".into())));
+    assert_eq!(value.get(), "one");
+}
+
+#[test]
+fn a_field_without_the_keyboard_hears_no_composition() {
+    let (mut input, value) = focused_input("ab");
+    focus::clear();
+    assert_eq!(
+        input.on_event(&ime(Ime::Commit("x".into()))),
+        EventResult::Ignored
+    );
+    assert_eq!(value.get(), "ab");
+}
+
+/// **The keyboard leaving keeps the word on screen.** The input method is turned off with the field, so it will never commit what it was composing: the field types it itself, as a browser's field does, rather than lose it.
+#[test]
+fn losing_the_keyboard_types_the_composition_in() {
+    let (mut input, value) = focused_input("ab");
+    input.on_event(&ime(Ime::preedit("か", None)));
+    focus::clear();
+    assert_eq!(value.get(), "abか");
+    focus::request(input.id);
+    assert_eq!(
+        drawn_text(&input),
+        "abか",
+        "and shows it once, not as a composition"
+    );
+    assert_eq!(input.caret.get(), 5);
+}
+
+/// A masked field masks what is composed too.
+#[test]
+fn a_masked_field_masks_its_composition() {
+    let (input, _) = focused_input("ab");
+    let mut input = input.secret();
+    input.on_event(&ime(Ime::preedit("か", None)));
+    assert_eq!(drawn_text(&input), "•••");
+}
+
+/// The caret an input method is told about is the caret that is drawn, whichever way the surface writes.
+#[test]
+fn the_reported_caret_is_the_drawn_one_in_a_right_to_left_surface() {
+    crate::context::set_direction(layout_core::Direction::Rtl);
+    let input = aligned_input("hola", TextAlign::Start);
+    let drawn = caret_of(&input).0;
+    let reported = crate::text_input().expect("the field holds the keyboard");
+    crate::context::set_direction(layout_core::Direction::Ltr);
+    assert_eq!(reported.caret, drawn);
+    assert!(drawn.x > 100.0, "the line starts at the right: {drawn:?}");
+}
+
+/// A document is told where the caret is on the field's own element, so the element the browser types into can stand there.
+#[test]
+fn a_document_reads_the_caret_off_the_field_s_element() {
+    let was = ui_tree::set_element_capture(true);
+    let (input, _) = focused_input("ab");
+    let mut caret = None;
+    if let RenderNode::Element { element, .. } = input.view() {
+        caret = element.caret;
+    }
+    ui_tree::set_element_capture(was);
+    assert_eq!(caret, Some(caret_of(&input).0));
+}

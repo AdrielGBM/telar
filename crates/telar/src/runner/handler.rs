@@ -65,6 +65,8 @@ where
     pub(super) title: Option<WindowTitle>,
     // The inputs of the prerendered page this surface takes over, until the first tree has been built from them.
     pub(super) hydration: Option<super::hydration::Hydration>,
+    // What the window was last told about the field taking text, so it hears only a change.
+    pub(super) text_input: Option<platform_core::TextInput>,
     #[cfg(all(
         feature = "dev",
         not(target_os = "android"),
@@ -153,6 +155,7 @@ where
         location: None,
         title: None,
         hydration: None,
+        text_input: None,
         #[cfg(all(
             feature = "dev",
             not(target_os = "android"),
@@ -268,6 +271,22 @@ where
             }
         }
         applied
+    }
+
+    /// Tells the window where the field taking text has its caret now that a frame drew it, when that changed: an input method composes into the field only while the window knows of one.
+    fn report_text_input(&mut self, window: &W) {
+        let input = self.app.text_input();
+        if input == self.text_input {
+            return;
+        }
+        // A composition belongs to the field it began in: turning the input method off between two fields is what keeps it from carrying one into the next.
+        if let (Some(was), Some(now)) = (self.text_input, input)
+            && was.field != now.field
+        {
+            window.set_text_input(None);
+        }
+        window.set_text_input(input);
+        self.text_input = input;
     }
 
     /// Hands `event` to the app's overlays, and to its tree where no overlay took it.
@@ -984,6 +1003,7 @@ where
         }
         // Before the platform first shows the window, so a tree that asked for no decorations is never seen with them.
         self.apply_window_commands(window);
+        self.text_input = None;
         self.pacer.presentation_owed = true;
 
         let w = window.clone();
@@ -1014,6 +1034,7 @@ where
             event,
             Event::KeyPressed { .. }
                 | Event::KeyReleased { .. }
+                | Event::Ime(_)
                 | Event::PointerMoved { .. }
                 | Event::PointerPressed { .. }
                 | Event::PointerReleased { .. }
@@ -1126,13 +1147,13 @@ where
         };
         self.advance_reactive_state(now);
         self.run_app_frame(window);
-        let Some(pass) = self.open_frame_pass(now, window) else {
-            return;
-        };
-        let msg = self.build_frame(&pass);
-        if self.submit_frame(msg) {
-            self.pacer.presentation_owed = false;
+        if let Some(pass) = self.open_frame_pass(now, window) {
+            let msg = self.build_frame(&pass);
+            if self.submit_frame(msg) {
+                self.pacer.presentation_owed = false;
+            }
         }
+        self.report_text_input(window);
     }
 
     /// Releases everything that presents the surface and keeps the tree, so a later [`on_resume`](EventHandler::on_resume) shows the same UI again.

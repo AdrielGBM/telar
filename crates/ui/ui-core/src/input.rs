@@ -1,16 +1,18 @@
 //! [`Input`]: the single-line text field — caret, selection, clipboard and the keys that drive them.
 
+use std::cell::Cell;
 use std::ops::Range;
 use std::rc::Rc;
 
 use geometry_core::Rect;
 use layout_core::{LayoutError, LayoutStyle};
-use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton};
+use platform_core::{Event, Ime, Key, ModifiersState, NamedKey, PointerButton, TextInput};
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{Color, RectStyle, ShapeStyle, TextStyle};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::caret::{Blink, align_origin};
+use crate::composition::{self, Composition, Step};
 use crate::focus::{self, FocusId};
 use crate::impl_leaf_widget;
 use crate::input_region::InputHandle;
@@ -66,7 +68,7 @@ impl Caret {
     }
 }
 
-/// A single-line editable text field bound to a `RwSignal<String>`. A base primitive: unstyled (no border or background — wrap it in a `box` for the look) and keyboard-driven. It requests focus on tap and, while focused, edits the bound signal from key events, drawing a caret at the insertion point. Selection (`Shift`+arrows/Home/End, `Mod+A`) with copy, cut and paste on the primary modifier, Command on a Mac and Ctrl elsewhere; IME composition is not yet supported. Drag-to-select waits on click-to-position, which this field does not have either.
+/// A single-line editable text field bound to a `RwSignal<String>`. A base primitive: unstyled (no border or background — wrap it in a `box` for the look) and keyboard-driven. It requests focus on tap and, while focused, edits the bound signal from key events, drawing a caret at the insertion point. Selection (`Shift`+arrows/Home/End, `Mod+A`) with copy, cut and paste on the primary modifier, Command on a Mac and Ctrl elsewhere. An input method composes in place: what it has not decided on yet is drawn at the caret, underlined, and what it commits is typed there (see `docs/keyboard.md`). Drag-to-select waits on click-to-position, which this field does not have either.
 pub struct Input {
     value: RwSignal<String>,
     home: HomeSurface,
@@ -86,6 +88,9 @@ pub struct Input {
     // Rendering only: the bound signal, the caret offsets and every edit still work on the real text.
     mask: Option<char>,
     blink: Blink,
+    composition: Composition,
+    // Where the caret was last drawn while the field held the keyboard, in the leaf's own coordinates.
+    drawn_caret: Rc<Cell<Option<TextInput>>>,
     // Keeps the blink running while the field holds the keyboard, and stops it when it does not.
     _blinking: Effect,
     _input: InputHandle,
@@ -130,18 +135,24 @@ impl Input {
         // A field shows what was typed: its caret and selection index the value, and a case that changed a letter's length would put them between the wrong letters.
         let style: Rc<dyn Fn() -> TextStyle> =
             Rc::new(move || declared().with_text_case(renderer_core::TextCase::AsWritten));
-        let caret = value.with(|s| s.len());
+        let caret = signal(value.with(|s| s.len()));
         let id = focus::next_id();
         // As the kind that takes keys as text, so an app-level shortcut table stands aside while the caret is here.
         focus::register_at(id, focus::FocusKind::TextEntry, leaf.node);
         let blink = Blink::new();
         let watching = blink.clone();
+        let composition = Composition::new();
+        let drawn_caret: Rc<Cell<Option<TextInput>>> = Rc::default();
+        focus::provide_text_input(id, {
+            let (node, drawn_caret) = (leaf.node, Rc::clone(&drawn_caret));
+            move || crate::text_input::placed(node, drawn_caret.get()?)
+        });
         let mut input = InputHandle::new();
         input.answer(leaf.node, leaf.rect.read_only());
         Ok(Self {
             value,
             home: HomeSurface::here(),
-            caret: signal(caret),
+            caret,
             anchor: signal(None),
             style,
             id,
@@ -153,7 +164,15 @@ impl Input {
             placeholder: String::new(),
             mask: None,
             blink,
-            _blinking: effect(move || watching.follow(focus::is_focused(id))),
+            composition,
+            drawn_caret,
+            _blinking: effect(move || {
+                let focused = focus::is_focused(id);
+                watching.follow(focused);
+                if !focused {
+                    composition.settle(value, caret);
+                }
+            }),
             _input: input,
         })
     }
@@ -414,6 +433,47 @@ impl Input {
         self.anchor.set(anchor.filter(|a| *a != caret && !edited));
         EventResult::Handled
     }
+
+    /// Follows the input method composing into the field: the composition is drawn until it is committed, and a selection gives way to it as soon as it starts.
+    fn compose(&mut self, ime: &Ime) -> EventResult {
+        match self.composition.apply(ime) {
+            Step::Ignored => return EventResult::Ignored,
+            Step::Began => {
+                let mut text = self.value.get();
+                if let Some(at) = self.take_selection(&mut text) {
+                    self.value.set(text);
+                    self.caret.set(at);
+                }
+                self.anchor.set(None);
+            }
+            Step::Changed | Step::Ended => {}
+            Step::Committed(committed) => self.insert(&committed),
+        }
+        self.blink.wake();
+        EventResult::Handled
+    }
+
+    /// Types `inserted` at the caret, in place of the selection. Only its first line: the value is one line, as a paste keeps it.
+    fn insert(&self, inserted: &str) {
+        let inserted: String = inserted
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .chars()
+            .filter(|c| !c.is_control())
+            .collect();
+        if inserted.is_empty() {
+            return;
+        }
+        let mut text = self.value.get();
+        let caret = self
+            .take_selection(&mut text)
+            .unwrap_or_else(|| self.caret_at(&text));
+        text.insert_str(caret, &inserted);
+        self.value.set(text);
+        self.caret.set(caret + inserted.len());
+        self.anchor.set(None);
+    }
 }
 
 impl Component for Input {
@@ -430,35 +490,45 @@ impl Component for Input {
             width: r.width,
             height: r.height - inset * 2.0,
         };
+        let focused = focus::is_focused(self.id);
+        let caret = self.caret_at(&text);
+        let composed = focused
+            .then(|| self.composition.get())
+            .flatten()
+            .map(|preedit| composition::compose(&text, caret, &preedit));
+        let drawn = composed.as_ref().map_or(text.as_str(), |c| c.text.as_str());
         // The field itself stays live: the caret and hit-test still work, so it is typable from empty.
-        let text_node = if text.is_empty() && !self.placeholder.is_empty() {
+        let text_node = if drawn.is_empty() && !self.placeholder.is_empty() {
             let mut ph_style = style.clone();
             ph_style.color = style.color.faded(PLACEHOLDER_OPACITY);
             RenderNode::text(self.placeholder.clone(), full, ph_style)
         } else {
-            RenderNode::text(self.shown(&text), full, style.clone())
+            RenderNode::text(self.shown(drawn), full, style.clone())
         };
         let spans = self
             .underlines
             .as_ref()
             .map_or_else(Vec::new, |spans| spans());
-        let focused = focus::is_focused(self.id);
+        if !focused {
+            self.drawn_caret.set(None);
+        }
         if !focused && spans.is_empty() {
             return self
                 .leaf
                 .at_layout_position_as(|| self.semantics(), text_node);
         }
-        let line = self.shown(&text);
+        let line = self.shown(drawn);
         let (line_w, _) = crate::text_metrics::measure_text(&line, None, 1.0e6, &style);
         let origin = align_origin(style.text_align, full.width, line_w);
         // A mask character is not the width of what it hides, so measuring the real prefix would put the caret somewhere the text is not.
         let measure = |upto: usize| {
-            crate::text_metrics::measure_text(&self.shown(&text[..upto]), None, 1.0e6, &style).0
+            crate::text_metrics::measure_text(&self.shown(&drawn[..upto]), None, 1.0e6, &style).0
         };
+        let shifted = |at: usize| composed.as_ref().map_or(at, |c| c.shift(at));
         let underlines = spans.into_iter().map(|underline| {
             let from = floor_boundary(&text, underline.range.start);
             let to = floor_boundary(&text, underline.range.end.max(from));
-            let (start, end) = (measure(from), measure(to));
+            let (start, end) = (measure(shifted(from)), measure(shifted(to)));
             let width = match from == to {
                 true => POINT_MARK,
                 false => (end - start).max(1.0),
@@ -477,8 +547,11 @@ impl Component for Input {
             let drawn = RenderNode::group(std::iter::once(text_node).chain(underlines));
             return self.leaf.at_layout_position_as(|| self.semantics(), drawn);
         }
-        let caret = self.caret_at(&text);
-        let highlight = self.selection(&text).map(|(from, to)| {
+        let highlight = match composed {
+            Some(_) => None,
+            None => self.selection(&text),
+        }
+        .map(|(from, to)| {
             let (start, end) = (measure(from), measure(to));
             let fill = style.color.faded(0.25);
             RenderNode::rect(
@@ -491,22 +564,50 @@ impl Component for Input {
                 RectStyle::default().with_fill(fill),
             )
         });
+        let composing = composed.as_ref().into_iter().flat_map(|c| {
+            let converting = c
+                .converting
+                .as_ref()
+                .map(|part| (origin + measure(part.start), origin + measure(part.end)));
+            composition::underlines(
+                origin + measure(c.span.start),
+                origin + measure(c.span.end),
+                converting,
+                inset + line_h,
+                paint,
+            )
+        });
+        let caret_at = composed.as_ref().map_or(caret, |c| c.anchor);
         let caret_rect = Rect {
-            x: origin + measure(caret),
+            x: origin + measure(caret_at),
             y: inset,
             width: CARET_WIDTH,
             height: line_h,
         };
-        // Read here and nowhere else, so the caret is the only thing on the surface redrawing on the blink's account.
-        let lit = paint.faded(self.blink.opacity());
-        let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit));
+        self.drawn_caret.set(Some(TextInput {
+            field: self.id,
+            caret: caret_rect,
+            secret: self.mask.is_some(),
+        }));
+        // Read here and nowhere else, so the caret is the only thing on the surface redrawing on the blink's account. An input method that asked for no caret, or is converting a part, gets none.
+        let caret_node = composed
+            .as_ref()
+            .is_none_or(|c| c.caret.is_some())
+            .then(|| {
+                let lit = paint.faded(self.blink.opacity());
+                RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit))
+            });
         let layers = highlight
             .into_iter()
             .chain(std::iter::once(text_node))
             .chain(underlines)
-            .chain(std::iter::once(caret_node));
-        self.leaf
-            .at_layout_position_as(|| self.semantics(), RenderNode::group(layers))
+            .chain(composing)
+            .chain(caret_node);
+        self.leaf.at_layout_position_editing(
+            || self.semantics(),
+            Some(caret_rect),
+            RenderNode::group(layers),
+        )
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
@@ -527,6 +628,13 @@ impl Component for Input {
                 } else {
                     EventResult::Ignored
                 }
+            }
+            Event::Ime(ime) if focus::is_key_target(self.id) => self.compose(ime),
+            // The input method owns the keys while it composes, whichever reach the field anyway.
+            Event::KeyPressed { .. }
+                if focus::is_key_target(self.id) && self.composition.is_active() =>
+            {
+                EventResult::Handled
             }
             Event::KeyPressed { key, modifiers, .. } if focus::is_key_target(self.id) => {
                 if self.on_key.as_ref().is_some_and(|f| f(key, *modifiers)) {

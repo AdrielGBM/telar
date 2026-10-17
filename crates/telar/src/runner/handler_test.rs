@@ -1887,3 +1887,45 @@ fn a_build_that_panics_as_it_starts_keeps_the_window_for_the_next() {
     assert_eq!(handler.dev.app_panic, None);
     assert!(handler.tree.is_some(), "the next build mounts its tree");
 }
+
+/// A window with one field, focused as it is built.
+struct OneField;
+
+impl App for OneField {
+    fn root(&self) -> Box<dyn ui_tree::Component> {
+        ui_core::reset_layout_runtime();
+        let field = ui_core::Input::new(
+            reactive_core::signal(String::from("ab")),
+            layout_core::LayoutStyle::new().width(100.0).height(20.0),
+            || renderer_core::TextStyle::new(14.0, renderer_core::Color::BLACK),
+        )
+        .expect("a field builds")
+        .autofocus();
+        Box::new(ui_core::WindowRoot::new(ui_core::box_item(field)))
+    }
+}
+
+/// **The window hears about the field once a frame has drawn it.** An input method composes into a window only while the window has been told a field takes text, and its candidates open where that field's caret was drawn; a field letting the keyboard go takes the input method away with it.
+#[test]
+fn the_window_is_told_where_the_focused_field_has_its_caret() {
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = build_app_handler::<HeadlessWindow, ()>(
+        Box::new(LocalApp(OneField)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "text-input-test".to_string(),
+        SurfaceRenderer::builtin(),
+    );
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    run_a_pass(&mut handler, &window);
+    let input = window.text_input().expect("the focused field was reported");
+    assert!(input.caret.x > 0.0 && input.caret.height > 0.0, "{input:?}");
+    assert!(!input.secret);
+
+    ui_core::focus::clear();
+    run_a_pass(&mut handler, &window);
+    assert_eq!(window.text_input(), None, "no field takes text any more");
+}

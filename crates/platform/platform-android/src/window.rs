@@ -69,6 +69,11 @@ impl Window for AndroidWindow {
         self.surface.retains_presented_contents()
     }
 
+    /// winit shows the soft keyboard for a field and hides it when no field takes text.
+    fn set_text_input(&self, input: Option<platform_core::TextInput>) {
+        self.surface.set_text_input(input);
+    }
+
     fn set_title(&self, title: &str) {
         if let Err(error) = describe_task(&self.app, title) {
             tracing::warn!(%error, "could not set the task description");

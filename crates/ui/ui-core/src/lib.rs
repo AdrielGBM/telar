@@ -13,6 +13,7 @@ mod breakpoints;
 mod canvas;
 mod caret;
 mod child_host;
+mod composition;
 mod container;
 mod context;
 mod cursor;
@@ -72,6 +73,7 @@ mod test_support;
 mod text;
 mod text_area;
 mod text_fit;
+mod text_input;
 mod text_metrics;
 mod theme_provider;
 mod transform_origin;
@@ -167,6 +169,7 @@ pub use surface_title::{
 pub use svg::Svg;
 pub use text::{Text, TextRun};
 pub use text_area::TextArea;
+pub use text_input::text_input;
 pub use theme_provider::{
     ScopeProvider, follow_control_size, follow_theme, provide_control_size, provide_theme,
 };

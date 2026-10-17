@@ -164,6 +164,8 @@ pub trait Window {
     fn focus_window(&self) {}
     /// Sets the pointer shape over this window. No-op where unsupported (headless).
     fn set_cursor(&self, _cursor: Cursor) {}
+    /// Tells the window that a field holds the keyboard and where its caret is, so an input method composes into it and opens its candidates beside the caret; `None` when no field does, which leaves every key a plain key. Called when the answer changes. No-op where the platform composes text itself (a terminal) or finds the caret elsewhere (a document, which reads it off the field's element).
+    fn set_text_input(&self, _input: Option<crate::TextInput>) {}
     /// A handle that asks this window for a frame, usable from any thread.
     ///
     /// `None` where a window cannot hand one out: a browser surface redraws through a callback that never leaves the thread that registered it. Such a platform installs a process-global [`set_loop_waker`](crate::set_loop_waker) instead, which is what the runtime prefers anyway. A window that is `Clone + Send + Sync` answers this with [`window_waker`].

@@ -107,6 +107,11 @@ pub(crate) fn with_semantics(node: NodeId, semantics: Semantics) -> Arc<Element>
     Arc::new(element_of(node, semantics))
 }
 
+/// The element for a field, carrying where its caret is while it holds the keyboard. See [`renderer_core::Element::caret`].
+pub(crate) fn editing(node: NodeId, semantics: Semantics, caret: Option<Rect>) -> Arc<Element> {
+    Arc::new(element_of(node, semantics).with_caret(caret))
+}
+
 pub(crate) fn showing(
     node: NodeId,
     semantics: Semantics,

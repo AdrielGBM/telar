@@ -127,6 +127,8 @@ pub enum Event {
         key: Key,
         modifiers: ModifiersState,
     },
+    /// An input method composing into the field that holds the keyboard. Only a window told about a field through [`Window::set_text_input`](crate::Window::set_text_input) reports these.
+    Ime(crate::Ime),
     /// The held modifier keys changed, and this is the authoritative reading.
     ///
     /// It has to be its own event because the key events cannot carry the news: a bare `Shift` press maps to no [`Key`] at all, so a chord that never types a character would be invisible. The platform also re-sends this when the window regains focus, which is what makes it safe to trust — a state reconstructed from presses and releases goes wrong exactly when the user alt-tabs mid-chord.

@@ -6,7 +6,7 @@ use std::rc::{Rc, Weak};
 use geometry_core::{Point, Rect, Size, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use layout_reactive::RelayoutHook;
-use platform_core::{Event, Key, NamedKey, PointerButton, Role, WindowCommand};
+use platform_core::{Event, Key, NamedKey, PointerButton, Role, TextInput, WindowCommand};
 use reactive_core::{OwnerId, dispose_owner, effect, owner_scope};
 use ui_tree::{Component, EventResult, RenderNode};
 
@@ -75,6 +75,23 @@ impl SurfaceFrame {
         focus::delegate_keyboard(id, {
             let surface = surface.clone();
             move || surface.upgrade().map(|surface| surface.enter())
+        });
+        focus::provide_text_input(id, {
+            let canvas = Rc::downgrade(&canvas);
+            let node = leaf.node;
+            move || {
+                let canvas = canvas.upgrade()?;
+                let inside = {
+                    let _inside = canvas.enter();
+                    crate::text_input()
+                }?;
+                let input = TextInput {
+                    field: inside.field.rotate_left(32) ^ id,
+                    caret: zoomed(canvas.scale_now(), inside.caret),
+                    secret: inside.secret,
+                };
+                crate::text_input::placed(node, input)
+            }
         });
 
         let relayout = layout_reactive::on_relayout({
@@ -224,7 +241,7 @@ impl Component for SurfaceFrame {
                 modifiers,
                 ..
             } if focused() => self.tab(event, modifiers.is_shift),
-            Event::KeyPressed { .. } | Event::KeyReleased { .. } if focused() => {
+            Event::KeyPressed { .. } | Event::KeyReleased { .. } | Event::Ime(_) if focused() => {
                 self.forward(event)
             }
             Event::InSurface { .. } => self.in_surface(event),
@@ -258,6 +275,15 @@ impl Drop for SurfaceFrame {
 
 fn zoom(scale: f32) -> Transform {
     Transform::scale_around(scale, scale, 0.0, 0.0)
+}
+
+fn zoomed(scale: f32, rect: Rect) -> Rect {
+    Rect::new(
+        rect.x * scale,
+        rect.y * scale,
+        rect.width * scale,
+        rect.height * scale,
+    )
 }
 
 fn placement(rect: Rect, scale: f32) -> Transform {

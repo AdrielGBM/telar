@@ -1,19 +1,22 @@
 //! [`TextArea`]: the multi-line editor — caret, selection, and a height measured from the rows it is drawn in.
 
 use std::cell::{Cell, RefCell};
+use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use geometry_core::Rect;
 use layout_core::{AvailableSpace, LayoutError, LayoutStyle, NodeId};
 use platform_core::{
-    Event, Key, KeyboardConvention, ModifiersState, NamedKey, PointerButton, keyboard_convention,
+    Event, Ime, Key, KeyboardConvention, ModifiersState, NamedKey, PointerButton, TextInput,
+    keyboard_convention,
 };
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::{RectStyle, ShapeStyle, TextStyle, TextWrap};
 use ui_tree::{Component, EventResult, RenderNode};
 
 use crate::caret::Blink;
+use crate::composition::{self, Composed, Composition, Step};
 use crate::context::{mark_dirty, new_measured_leaf};
 use crate::focus::{self, FocusId};
 use crate::impl_leaf_widget;
@@ -31,7 +34,7 @@ const TAB_INSERT: &str = "    ";
 
 /// A multi-line editable text area bound to a `RwSignal<String>` — the multi-line sibling of [`Input`](crate::Input). A base primitive: unstyled (wrap it in a `box` for a border/background) and keyboard-driven. It requests focus on tap, positions the caret at the click, edits the bound signal from key events (typing, Enter for a newline, Backspace/Delete joining lines, arrows in all four directions, Home/End, Tab), and draws a caret.
 ///
-/// By default only `\n` breaks a line and a long one overflows sideways, which is what a code editor and a line-number gutter beside it expect. [`text_wrap`](Self::text_wrap) with [`TextWrap::Wrap`] breaks lines at the area's width instead, between words and inside a word too long for a row, as a paragraph and an HTML `<textarea>` do; the caret then moves by the rows on screen. Its measured height grows with the rows it is drawn in, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor. Selection (`Shift`+arrows, `Mod+A`, shift-click) with copy, cut and paste on the primary modifier, Command on a Mac and Ctrl elsewhere, newlines and all. IME is not yet supported.
+/// By default only `\n` breaks a line and a long one overflows sideways, which is what a code editor and a line-number gutter beside it expect. [`text_wrap`](Self::text_wrap) with [`TextWrap::Wrap`] breaks lines at the area's width instead, between words and inside a word too long for a row, as a paragraph and an HTML `<textarea>` do; the caret then moves by the rows on screen. Its measured height grows with the rows it is drawn in, so wrapping it in a [`LayoutScrollArea`](crate::LayoutScrollArea) gives a scrolling editor. Selection (`Shift`+arrows, `Mod+A`, shift-click) with copy, cut and paste on the primary modifier, Command on a Mac and Ctrl elsewhere, newlines and all. An input method composes in place, as in [`Input`](crate::Input): its composition is drawn at the caret, underlined and wrapped with the text, and what it commits is typed there.
 pub struct TextArea {
     value: RwSignal<String>,
     home: HomeSurface,
@@ -48,6 +51,9 @@ pub struct TextArea {
     leaf: LayoutLeaf,
     _remeasure: Effect,
     blink: Blink,
+    composition: Composition,
+    // Where the caret was last drawn while the area held the keyboard, in the leaf's own coordinates.
+    drawn_caret: Rc<Cell<Option<TextInput>>>,
     _blinking: Effect,
     // A reveal of the whole area cannot keep the caret in view once the area is taller than the view.
     _follow_caret: Effect,
@@ -231,6 +237,8 @@ impl TextArea {
                     .with_text_wrap(rows.wrap.get())
             })
         };
+        let caret = signal(value.with(|s| s.len()));
+        let composition = Composition::new();
         // Width is left to the parent: a line that does not wrap overflows rather than widening the layout, and one that wraps does so at whatever width the parent gives.
         let measure = {
             let style = Rc::clone(&style);
@@ -241,13 +249,12 @@ impl TextArea {
                     AvailableSpace::Definite(width) => rows.wrap_width(width),
                     _ => None,
                 };
-                let shown = value.with(|text| rows.shown_rows(text, &style, width));
+                let shown = drawn_rows(&rows, value, caret, composition, &style, width);
                 (0.0, shown as f32 * crate::text_metrics::line_box(&style))
             })
         };
         let (node, rect) = new_measured_leaf(layout_style.align_self_stretch(), measure)?;
         node_cell.set(Some(node));
-        let caret = signal(value.with(|s| s.len()));
         let affinity = signal(Affinity::Downstream);
         let id = focus::next_id();
         focus::register_with_role(
@@ -263,7 +270,7 @@ impl TextArea {
             effect(move || {
                 let style = style();
                 let width = rows.wrap_width(laid_width(node, rect.peek()));
-                let shown = value.with(|text| rows.shown_rows(text, &style, width));
+                let shown = drawn_rows(&rows, value, caret, composition, &style, width);
                 let unchanged =
                     rows.measured
                         .borrow()
@@ -293,9 +300,15 @@ impl TextArea {
                 let style = style();
                 let line_h = crate::text_metrics::line_box(&style);
                 let (at, affinity) = (caret.get(), affinity.get());
+                let preedit = composition.get();
                 let (x, row) = value.with(|text| {
-                    let placed = place(&rows, text, &style, laid_width(node, area));
                     let at = char_boundary_at_or_before(text, at);
+                    let composed = preedit.as_ref().map(|p| composition::compose(text, at, p));
+                    let (drawn, at, affinity) = match &composed {
+                        Some(c) => (c.text.as_str(), c.anchor, Affinity::Downstream),
+                        None => (text.as_str(), at, affinity),
+                    };
+                    let placed = place(&rows, drawn, &style, laid_width(node, area));
                     (placed.caret_x(at, affinity), placed.row_of(at, affinity))
                 });
                 viewport.reveal_rect(
@@ -311,6 +324,11 @@ impl TextArea {
         };
         let blink = Blink::new();
         let watching = blink.clone();
+        let drawn_caret: Rc<Cell<Option<TextInput>>> = Rc::default();
+        focus::provide_text_input(id, {
+            let drawn_caret = Rc::clone(&drawn_caret);
+            move || crate::text_input::placed(node, drawn_caret.get()?)
+        });
         let mut input = InputHandle::new();
         input.answer(node, rect.read_only());
         Ok(Self {
@@ -326,7 +344,15 @@ impl TextArea {
             leaf: LayoutLeaf { node, rect },
             _remeasure: remeasure,
             blink,
-            _blinking: effect(move || watching.follow(focus::is_focused(id))),
+            composition,
+            drawn_caret,
+            _blinking: effect(move || {
+                let focused = focus::is_focused(id);
+                watching.follow(focused);
+                if !focused {
+                    composition.settle(value, caret);
+                }
+            }),
             _follow_caret: follow_caret,
             _input: input,
         })
@@ -580,6 +606,48 @@ impl TextArea {
             None => (0, Affinity::Downstream),
         }
     }
+
+    /// Follows the input method composing into the area. See [`Input`](crate::Input).
+    fn compose(&mut self, ime: &Ime) -> EventResult {
+        match self.composition.apply(ime) {
+            Step::Ignored => return EventResult::Ignored,
+            Step::Began => {
+                let mut text = self.value.get();
+                if let Some(at) = self.take_selection(&mut text) {
+                    self.value.set(text);
+                    self.caret.set(at);
+                }
+                self.anchor.set(None);
+            }
+            Step::Changed | Step::Ended => {}
+            Step::Committed(committed) => self.insert(&committed),
+        }
+        self.goal_x = None;
+        self.affinity.set(Affinity::Downstream);
+        self.blink.wake();
+        EventResult::Handled
+    }
+
+    /// Types `inserted` at the caret, in place of the selection, its lines and tabs included.
+    fn insert(&self, inserted: &str) {
+        let inserted: String = inserted
+            .replace("\r\n", "\n")
+            .chars()
+            .map(|c| if c == '\r' { '\n' } else { c })
+            .filter(|c| matches!(c, '\n' | '\t') || !c.is_control())
+            .collect();
+        if inserted.is_empty() {
+            return;
+        }
+        let mut text = self.value.get();
+        let caret = self
+            .take_selection(&mut text)
+            .unwrap_or_else(|| self.caret_at(&text));
+        text.insert_str(caret, &inserted);
+        self.value.set(text);
+        self.caret.set(caret + inserted.len());
+        self.anchor.set(None);
+    }
 }
 
 /// `text` laid out in `rows` at `width`, the width the area was laid out at.
@@ -591,6 +659,58 @@ fn place<'a>(rows: &Rows, text: &'a str, style: &TextStyle, width: f32) -> Place
         flat: style.clone().with_text_wrap(TextWrap::NoWrap),
         width,
     }
+}
+
+/// How many rows tall the area draws its text, with the composition in progress drawn into it: one that runs onto a new row grows the area as typing would.
+fn drawn_rows(
+    rows: &Rows,
+    value: RwSignal<String>,
+    caret: RwSignal<usize>,
+    composition: Composition,
+    style: &TextStyle,
+    width: Option<f32>,
+) -> usize {
+    match composition.get() {
+        Some(preedit) => {
+            let at = caret.get();
+            let composed = value.with(|text| composition::compose(text, at, &preedit));
+            rows.shown_rows(&composed.text, style, width)
+        }
+        None => value.with(|text| rows.shown_rows(text, style, width)),
+    }
+}
+
+/// The lines under a composition, one stretch per row it is drawn across.
+fn composing_marks(
+    placed: &Placed<'_>,
+    composed: &Composed,
+    line_h: f32,
+    style: &TextStyle,
+) -> RenderNode {
+    let span = &composed.span;
+    let first = placed.row_of(span.start, Affinity::Downstream);
+    let last = placed.row_of(span.end, Affinity::Upstream);
+    let mut marks = Vec::new();
+    for row in first..=last {
+        let range = placed.lines.row(row);
+        let on_row = |part: &Range<usize>| {
+            let (from, to) = (part.start.max(range.start), part.end.min(range.end));
+            (from <= to).then(|| (placed.x_at(row, from), placed.x_at(row, to)))
+        };
+        let Some((x0, x1)) = on_row(span) else {
+            continue;
+        };
+        let converting = composed.converting.as_ref().and_then(on_row);
+        let bottom = (row + 1) as f32 * line_h;
+        marks.extend(composition::underlines(
+            x0,
+            x1,
+            converting,
+            bottom,
+            style.color,
+        ));
+    }
+    RenderNode::group(marks)
 }
 
 /// The width the area's rows wrap at: as wide as layout made it before rounding took any off, since that is the width it was measured at and a row measured to fit must not break again when drawn.
@@ -607,7 +727,14 @@ impl Component for TextArea {
         let text = self.value.get();
         let style = (self.style)();
         let line_h = crate::text_metrics::line_box(&style);
-        let placed = self.placed(&text, &style);
+        let focused = focus::is_focused(self.id);
+        let caret = self.caret_at(&text);
+        let composed = focused
+            .then(|| self.composition.get())
+            .flatten()
+            .map(|preedit| composition::compose(&text, caret, &preedit));
+        let drawn = composed.as_ref().map_or(text.as_str(), |c| c.text.as_str());
+        let placed = self.placed(drawn, &style);
         let full = Rect {
             x: 0.0,
             y: 0.0,
@@ -615,23 +742,26 @@ impl Component for TextArea {
             height: r.height.max(line_h),
         };
         let placeholder = self.rows.placeholder.borrow();
-        let text_node = if text.is_empty() && !placeholder.is_empty() {
+        let text_node = if drawn.is_empty() && !placeholder.is_empty() {
             let mut ph_style = style.clone();
             ph_style.color = style.color.faded(crate::input::PLACEHOLDER_OPACITY);
             RenderNode::text(placeholder.clone(), full, ph_style)
         } else {
-            RenderNode::text(Arc::<str>::from(text.as_str()), full, style.clone())
+            RenderNode::text(Arc::<str>::from(drawn), full, style.clone())
         };
 
-        if !focus::is_focused(self.id) {
+        if !focused {
+            self.drawn_caret.set(None);
             return self
                 .leaf
                 .at_layout_position_as(|| self.semantics(), text_node);
         }
-        let caret = self.caret_at(&text);
-        let affinity = self.affinity.get();
         // One rect per row the selection spans: a selection that wraps is not one box, and drawing it as one would paint over the margin the text does not occupy.
-        let highlight = self.selection(&text).map(|(from, to)| {
+        let highlight = match composed {
+            Some(_) => None,
+            None => self.selection(&text),
+        }
+        .map(|(from, to)| {
             let first = placed.row_of(from, Affinity::Downstream);
             let last = placed.row_of(to, Affinity::Upstream);
             let fill = style.color.faded(0.25);
@@ -658,21 +788,42 @@ impl Component for TextArea {
             });
             RenderNode::group(bands)
         });
+        let composing = composed
+            .as_ref()
+            .map(|c| composing_marks(&placed, c, line_h, &style));
+        let (caret_at, affinity) = match &composed {
+            Some(c) => (c.anchor, Affinity::Downstream),
+            None => (caret, self.affinity.get()),
+        };
         let caret_rect = Rect {
-            x: placed.caret_x(caret, affinity),
-            y: placed.row_of(caret, affinity) as f32 * line_h,
+            x: placed.caret_x(caret_at, affinity),
+            y: placed.row_of(caret_at, affinity) as f32 * line_h,
             width: CARET_WIDTH,
             height: line_h,
         };
+        self.drawn_caret.set(Some(TextInput {
+            field: self.id,
+            caret: caret_rect,
+            secret: false,
+        }));
         // Read here and nowhere else, so this is what subscribes the area's view to the blink.
-        let lit = style.color.faded(self.blink.opacity());
-        let caret_node = RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit));
-        let layers = match highlight {
-            Some(highlight) => vec![highlight, text_node, caret_node],
-            None => vec![text_node, caret_node],
-        };
-        self.leaf
-            .at_layout_position_as(|| self.semantics(), RenderNode::group(layers))
+        let caret_node = composed
+            .as_ref()
+            .is_none_or(|c| c.caret.is_some())
+            .then(|| {
+                let lit = style.color.faded(self.blink.opacity());
+                RenderNode::rect(caret_rect, RectStyle::default().with_fill(lit))
+            });
+        let layers = highlight
+            .into_iter()
+            .chain(std::iter::once(text_node))
+            .chain(composing)
+            .chain(caret_node);
+        self.leaf.at_layout_position_editing(
+            || self.semantics(),
+            Some(caret_rect),
+            RenderNode::group(layers),
+        )
     }
 
     fn on_event(&mut self, event: &Event) -> EventResult {
@@ -707,6 +858,13 @@ impl Component for TextArea {
                 }
                 self.caret.set(at);
                 self.affinity.set(affinity);
+                EventResult::Handled
+            }
+            Event::Ime(ime) if focus::is_key_target(self.id) => self.compose(ime),
+            // The input method owns the keys while it composes, whichever reach the area anyway.
+            Event::KeyPressed { .. }
+                if focus::is_key_target(self.id) && self.composition.is_active() =>
+            {
                 EventResult::Handled
             }
             Event::KeyPressed { key, modifiers, .. } if focus::is_key_target(self.id) => {

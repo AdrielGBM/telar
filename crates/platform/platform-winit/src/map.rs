@@ -99,6 +99,16 @@ pub fn map_named_key(key: WinitNamedKey) -> Option<platform_core::NamedKey> {
     Some(nk)
 }
 
+/// Translates what an input method did, its cursor held inside the composition whatever winit reported.
+pub fn map_ime(ime: winit::event::Ime) -> platform_core::Ime {
+    match ime {
+        winit::event::Ime::Enabled => platform_core::Ime::Enabled,
+        winit::event::Ime::Preedit(text, cursor) => platform_core::Ime::preedit(text, cursor),
+        winit::event::Ime::Commit(text) => platform_core::Ime::Commit(text),
+        winit::event::Ime::Disabled => platform_core::Ime::Disabled,
+    }
+}
+
 /// Translates a winit mouse button, returning `None` for one Telar has no spelling for.
 pub fn map_mouse_button(button: WinitMouseButton) -> Option<platform_core::PointerButton> {
     match button {
@@ -326,6 +336,7 @@ pub fn map_window_event(
             crate::map_key(&key_without_modifiers(&event), event.location),
             *modifiers,
         ),
+        WindowEvent::Ime(ime) => SurfaceIntent::Event(Event::Ime(map_ime(ime))),
         WindowEvent::ThemeChanged(_) => SurfaceIntent::RereadPreferences,
         _ => SurfaceIntent::Ignore,
     }

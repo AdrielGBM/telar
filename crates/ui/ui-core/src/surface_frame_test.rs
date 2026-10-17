@@ -1532,3 +1532,42 @@ fn the_windows_walk_lists_a_frames_components_where_the_frame_shows_them() {
         "in window coordinates"
     );
 }
+
+/// **The input method composes where the field is on the window.** A field inside a frame reports its caret in the canvas's coordinates; the window has to hear it where the frame put the canvas, and the composition it sends has to reach the field.
+#[test]
+fn a_field_inside_the_frame_composes_where_the_window_shows_it() {
+    reset_layout_runtime();
+    let value = signal(String::from("ab"));
+    let canvas = Rc::new(
+        SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
+            let field =
+                crate::Input::new(value, LayoutStyle::new().width(100.0).height(20.0), || {
+                    renderer_core::TextStyle::new(14.0, Color::BLACK)
+                })?;
+            Ok(boxed(Container::new(fill(), vec![boxed(field)])?))
+        })
+        .unwrap(),
+    );
+    let window = Window::new(
+        SurfaceFrame::filling(
+            Rc::clone(&canvas),
+            LayoutStyle::new().width(FRAME.width).height(FRAME.height),
+        )
+        .unwrap(),
+        no_focusable(),
+        no_focusable(),
+        || {},
+    );
+    window.click(FRAME.x + 10.0, FRAME.y + 10.0);
+    window.frame();
+    let caret = crate::text_input()
+        .expect("the window hears the field inside the frame")
+        .caret;
+    assert!(
+        FRAME.contains(caret.x, caret.y) && caret.x > FRAME.x,
+        "the caret is on the frame, after the text: {caret:?}"
+    );
+
+    window.send(Event::Ime(platform_core::Ime::Commit("c".into())));
+    assert_eq!(value.get(), "abc", "and the commit reaches it");
+}

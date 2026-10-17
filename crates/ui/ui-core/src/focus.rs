@@ -105,9 +105,13 @@ struct Entry {
     controls: Option<Rc<dyn Fn() -> Option<FocusId>>>,
     /// The surface that answers for this entry's keyboard while it holds focus. See [`delegate_keyboard`].
     keyboard: Option<KeyboardDelegate>,
+    /// Where a widget that takes text has its caret, for the input method composing into it. See [`crate::text_input`].
+    text_input: Option<TextInputSource>,
 }
 
 type KeyboardDelegate = Rc<dyn Fn() -> Option<crate::SurfaceGuard>>;
+
+pub(crate) type TextInputSource = Rc<dyn Fn() -> Option<platform_core::TextInput>>;
 
 /// Per-surface keyboard-focus state: the id allocator, the focused-widget signal, and the tab order.
 struct FocusState {
@@ -502,6 +506,7 @@ fn register_node(id: FocusId, kind: FocusKind, node: Option<NodeId>, role: Role,
                     active_descendant: None,
                     controls: None,
                     keyboard: None,
+                    text_input: None,
                 });
                 true
             }
@@ -628,6 +633,27 @@ pub(crate) fn delegate_keyboard(
             entry.keyboard = Some(enter);
         }
     });
+}
+
+/// Says where the caret of the widget `id` names is, as `source` answers when it is asked: what [`crate::text_input`] reports while `id` holds focus.
+pub(crate) fn provide_text_input(
+    id: FocusId,
+    source: impl Fn() -> Option<platform_core::TextInput> + 'static,
+) {
+    let source: TextInputSource = Rc::new(source);
+    with_focus(|s| {
+        if let Some(entry) = s.entry_mut(id) {
+            entry.text_input = Some(source);
+        }
+    });
+}
+
+/// What the focused widget said about its caret through [`provide_text_input`], read without subscribing.
+pub(crate) fn focused_text_input() -> Option<TextInputSource> {
+    with_focus_ref(|s| {
+        let id = s.focused.peek()?;
+        s.entry(id).and_then(|e| e.text_input.clone())
+    })
 }
 
 fn delegated<R>(id: FocusId, ask: impl FnOnce() -> R) -> Option<R> {

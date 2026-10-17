@@ -734,3 +734,81 @@ fn the_caret_on_a_wrapped_row_stays_in_view_of_the_scroll_the_area_sits_in() {
     );
     focus::clear();
 }
+
+fn ime(event: Ime) -> Event {
+    Event::Ime(event)
+}
+
+fn composition_lines(area: &TextArea) -> Vec<Rect> {
+    drawn(area)
+        .0
+        .into_iter()
+        .filter(|rect| rect.height == 1.0)
+        .collect()
+}
+
+#[test]
+fn a_commit_types_its_text_once_lines_and_all() {
+    let (mut area, value) = focused("ab");
+    area.caret.set(1);
+    area.on_event(&ime(Ime::preedit("か", None)));
+    assert_eq!(value.get(), "ab", "a composition is not typed yet");
+    area.on_event(&ime(Ime::Commit("x\r\ny".into())));
+    assert_eq!(value.get(), "ax\nyb");
+    assert_eq!(area.caret.get(), 4);
+    assert!(composition_lines(&area).is_empty());
+}
+
+#[test]
+fn a_composition_replaces_a_selection_across_lines() {
+    let (mut area, value) = focused("one\ntwo");
+    area.on_event(&chord(Key::Char('a')));
+    area.on_event(&ime(Ime::preedit("か", Some((3, 3)))));
+    assert_eq!(value.get(), "");
+    area.on_event(&ime(Ime::Commit("可".into())));
+    assert_eq!(value.get(), "可");
+}
+
+#[test]
+fn keys_that_reach_a_composing_area_edit_nothing() {
+    let (mut area, value) = focused("ab");
+    area.on_event(&ime(Ime::preedit("か", None)));
+    area.on_event(&key(Key::Named(NamedKey::Enter)));
+    assert_eq!(value.get(), "ab");
+}
+
+/// **A composition wraps with the text.** One long enough to run past the edge is drawn on the next row, underlined on both, and the area grows to hold it as typing would.
+#[test]
+fn a_composition_that_runs_past_the_edge_wraps_and_grows_the_area() {
+    let mut wrapping = Wrapping::new("abc", 160.0);
+    let one = wrapping.height();
+    let long = "あいうえおかきくけこさしすせそたちつてと";
+    wrapping
+        .area
+        .on_event(&ime(Ime::preedit(long, Some((long.len(), long.len())))));
+    assert_eq!(wrapping.value.get(), "abc");
+    assert_eq!(
+        composition_lines(&wrapping.area).len(),
+        2,
+        "one line per row"
+    );
+    assert!(
+        (wrapping.height() - 2.0 * one).abs() < 0.5,
+        "{} for two rows",
+        wrapping.height()
+    );
+    let caret = caret_rect(&wrapping.area);
+    assert!(
+        caret.y >= line_h(),
+        "the caret is on the second row: {caret:?}"
+    );
+    let reported = crate::text_input().expect("the area holds the keyboard");
+    let at = wrapping.area.leaf.rect.get();
+    assert_eq!(
+        reported.caret,
+        Rect::new(at.x + caret.x, at.y + caret.y, caret.width, caret.height)
+    );
+
+    wrapping.area.on_event(&ime(Ime::preedit("", None)));
+    assert!((wrapping.height() - one).abs() < 0.5, "and shrinks back");
+}

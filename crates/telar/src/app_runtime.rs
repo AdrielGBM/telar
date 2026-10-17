@@ -101,6 +101,11 @@ pub trait AppRuntime: 'static {
         platform_core::take_window_commands()
     }
 
+    /// Where the field that holds the keyboard has its caret, read against the focus and layout registries this application's widgets live in. See [`ui_core::text_input`].
+    fn text_input(&self) -> Option<platform_core::TextInput> {
+        ui_core::text_input()
+    }
+
     /// Reports the user's system preferences into the store [`use_system_preferences`](crate::use_system_preferences) reads, which the theme's `follow_system` and the motion engine follow from there.
     fn set_system_preferences(&self, preferences: &SystemPreferences) {
         preferences_core::set_system_preferences(preferences.clone());

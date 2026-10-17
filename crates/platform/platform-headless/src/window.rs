@@ -3,7 +3,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
-use platform_core::{Cursor, Window};
+use platform_core::{Cursor, TextInput, Window};
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, WindowHandle,
 };
@@ -28,6 +28,7 @@ struct Inner {
     titles: Mutex<Option<TitleSink>>,
     maximized: AtomicBool,
     decorated: AtomicBool,
+    text_input: Mutex<Option<TextInput>>,
 }
 
 impl HeadlessWindow {
@@ -48,6 +49,7 @@ impl HeadlessWindow {
                 titles: Mutex::new(None),
                 maximized: AtomicBool::new(false),
                 decorated: AtomicBool::new(true),
+                text_input: Mutex::new(None),
             }),
         }
     }
@@ -71,6 +73,11 @@ impl HeadlessWindow {
     /// Whether the window system would draw its title bar and borders, as [`Window::set_decorations`] last left it.
     pub fn is_decorated(&self) -> bool {
         self.inner.decorated.load(Ordering::Relaxed)
+    }
+
+    /// The field an input method would compose into, as [`Window::set_text_input`] last said: where its caret is, or `None` for no field.
+    pub fn text_input(&self) -> Option<TextInput> {
+        *lock(&self.inner.text_input)
     }
 
     /// The pointer shape last requested through [`Window::set_cursor`], so a test can see what a real window would show.
@@ -131,6 +138,9 @@ impl Window for HeadlessWindow {
     }
     fn set_decorations(&self, decorated: bool) {
         self.inner.decorated.store(decorated, Ordering::Relaxed);
+    }
+    fn set_text_input(&self, input: Option<TextInput>) {
+        *lock(&self.inner.text_input) = input;
     }
     fn is_offscreen(&self) -> bool {
         true

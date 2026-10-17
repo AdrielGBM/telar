@@ -317,6 +317,13 @@ impl crate::app_runtime::AppRuntime for HotApp {
             .unwrap_or_default()
     }
 
+    // The field and its caret live in the dylib's focus and layout registries.
+    fn text_input(&self) -> Option<platform_core::TextInput> {
+        self.guest
+            .call(|| unsafe { (self.exports.text_input)() })
+            .flatten()
+    }
+
     // The dylib reads its own copy of the store; the host's copy is kept too, for the devtools that live on this side.
     fn set_system_preferences(&self, preferences: &platform_core::SystemPreferences) {
         preferences_core::set_system_preferences(preferences.clone());

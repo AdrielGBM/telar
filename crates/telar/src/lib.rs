@@ -175,8 +175,8 @@ pub use texture_ui::{TextureUi, TextureUiError};
 // Backend-author API: an out-of-tree `Platform` implements these and drives a full app through `run_with_platform` without depending on `platform-core` directly.
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    EventHandler, KeyPairing, ModifiersState, MultiSurfacePlatform, Platform, PlatformError,
-    PointerButton, PointerSource, SurfaceId, Window,
+    EventHandler, Ime, KeyPairing, ModifiersState, MultiSurfacePlatform, Platform, PlatformError,
+    PointerButton, PointerSource, SurfaceId, TextInput, Window,
 };
 #[cfg(all(
     feature = "runtime",

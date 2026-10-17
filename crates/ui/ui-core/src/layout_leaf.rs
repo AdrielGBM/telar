@@ -51,6 +51,20 @@ impl LayoutLeaf {
         self.at_layout_position_as(semantics, content)
     }
 
+    /// As [`Self::at_layout_position_as`], for a field that says where its caret is while it holds the keyboard, in the leaf's own coordinates. See [`renderer_core::Element::caret`].
+    pub(crate) fn at_layout_position_editing(
+        &self,
+        semantics: impl FnOnce() -> renderer_core::Semantics,
+        caret: Option<Rect>,
+        content: RenderNode,
+    ) -> RenderNode {
+        if ui_tree::element_capture() {
+            let element = crate::element::editing(self.node, semantics(), caret);
+            return RenderNode::element(element, [content]);
+        }
+        self.at_layout_position_as(semantics, content)
+    }
+
     /// As [`Self::at_layout_position`], for a leaf that is more than a box — artwork, a bitmap — and has to say so where the box becomes an element. `semantics` is only called on that target.
     pub(crate) fn at_layout_position_as(
         &self,

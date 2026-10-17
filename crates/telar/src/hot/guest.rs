@@ -51,6 +51,7 @@ macro_rules! __hot_guest_api {
             set_safe_area_insets => _rsx_hot_set_safe_area_insets(top: f32, right: f32, bottom: f32, left: f32) -> ();
             set_surface_maximized => _rsx_hot_set_surface_maximized(maximized: bool) -> ();
             drain_window_commands => _rsx_hot_drain_window_commands() -> ::std::vec::Vec<$crate::WindowCommand>;
+            text_input => _rsx_hot_text_input() -> ::std::option::Option<$crate::TextInput>;
             set_location_history => _rsx_hot_set_location_history(history: &[$crate::Location]) -> ();
             open_title => _rsx_hot_open_title(app: &str, showing: &str) -> ();
             open_font_family => _rsx_hot_open_font_family(family: ::std::option::Option<&str>) -> ();
@@ -222,6 +223,10 @@ pub fn set_surface_maximized(maximized: bool) -> GuestResult<()> {
 
 pub fn drain_window_commands() -> GuestResult<Vec<WindowCommand>> {
     guest_call(crate::take_window_commands)
+}
+
+pub fn text_input() -> GuestResult<Option<platform_core::TextInput>> {
+    guest_call(ui_core::text_input)
 }
 
 pub fn set_location_history(history: &[Location]) -> GuestResult<()> {

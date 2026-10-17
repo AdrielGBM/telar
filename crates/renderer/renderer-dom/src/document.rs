@@ -145,6 +145,8 @@ pub(crate) struct BoxNode {
     /// The picture an `<img>` shows, and the width it is laid out at.
     pub picture: Option<(Arc<Picture>, f32)>,
     pub scroll_to: Option<(f32, f32)>,
+    /// Where the caret of a field holding the keyboard is, in its box's own coordinates.
+    pub caret: Option<Rect>,
     /// The rect layout computed, carried only when the page asked to compare the two.
     pub audit: Option<Rect>,
     pub content: Content,
@@ -1132,6 +1134,7 @@ impl Walk<'_> {
                 .as_ref()
                 .map(|picture| (Arc::clone(picture), element.rect.width)),
             scroll_to: element.scroll_to,
+            caret: element.caret,
             audit: self.audit.then_some(element.rect),
             content: Content::Children {
                 children: Vec::new(),
