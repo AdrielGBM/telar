@@ -122,3 +122,6 @@ pub fn sample_previews() -> Vec<PreviewEntry> {
             .title("Display/Badge"),
     ]
 }
+
+/// The gap the workbench theme leaves between the window's areas and around them: its small spacing step.
+pub const AREA_GAP: f32 = telar_devtools::WORKBENCH_GRID / 2.0;

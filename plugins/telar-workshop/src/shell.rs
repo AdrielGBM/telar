@@ -3,17 +3,19 @@
 //! The shell owns where each region sits, how big it is and what it is announced as, and how that changes with the window's width (see [`Arrangement`](crate::arrangement::Arrangement)): a narrow window shows the sidebar in a drawer and the panels below the canvas. What a region shows is its own module's.
 //!
 //! The workspace — the canvas area and the panels, each a region of it — is the main landmark, and it holds both splitters: the one between it and the sidebar too, so a reader finds nothing between the landmarks.
+//!
+//! Each region is an area: a framed surface over the backdrop, set a gap apart from its neighbours and from the window's edges. The gap between two areas is the splitter that resizes them.
 
 use telar::{
-    Accessible, Children, Color, Container, Key, LayoutError, LayoutItem, LayoutStyle, Movable,
-    Reactive, ReactiveList, RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer,
-    box_item, children, effect,
+    Accessible, Children, Clip, ClippedItem, Color, Container, Key, LayoutError, LayoutItem,
+    LayoutStyle, Movable, Reactive, ReactiveList, RectStyle, Role, ShapeStyle, SizeDimension,
+    Slots, StyledContainer, box_item, effect, use_theme_tokens,
 };
 use telar_components::{
-    DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer, split_pane,
-    window_edges,
+    DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer, metrics,
+    split_pane, window_edges,
 };
-use telar_devtools::{use_workbench_tokens, workbench_fill};
+use telar_devtools::{use_workbench_tokens, workbench_card, workbench_fill};
 
 use crate::keymap::Keymap;
 use crate::state::{
@@ -24,8 +26,6 @@ use crate::strings::{self, PANELS, PREVIEWS, RESIZE_PANELS, RESIZE_SIDEBAR, WORK
 use crate::top_bar::Frame;
 use crate::view_switch::view_key;
 use crate::{canvas, docs, matrix, panels, sidebar, top_bar};
-
-const DIVIDER: f32 = 1.0;
 
 pub(crate) fn shell(
     state: &WorkshopState,
@@ -40,15 +40,9 @@ pub(crate) fn shell_in(
     project_name: Option<String>,
     frame: Frame,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let divider = StyledContainer::new(
-        LayoutStyle::new().height(DIVIDER).flex_shrink(0.0),
-        |_| RectStyle::default().with_fill(use_workbench_tokens().border_subtle),
-        Vec::new(),
-    )?;
     let keymap = Keymap::new(state);
     let mut regions = vec![
         top_bar::top_bar(state, &keymap, project_name, frame)?,
-        box_item(divider),
         body(state)?,
     ];
     regions.extend(keymap.overlays()?);
@@ -59,7 +53,7 @@ pub(crate) fn shell_in(
         LayoutStyle::column()
             .width(SizeDimension::Percent(1.0))
             .height(SizeDimension::Percent(1.0)),
-        |_| RectStyle::default().with_fill(use_workbench_tokens().panel_background),
+        |_| RectStyle::default().with_fill(use_workbench_tokens().backdrop),
         regions,
     )?
     .on_key(move |key: &Key| keymap.on_key(key));
@@ -79,8 +73,9 @@ fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     });
     let regions = Regions::new(state)?;
     let building = state.clone();
+    let gap = metrics::gap_sm();
     let body = ReactiveList::with_style(
-        workbench_fill(),
+        workbench_fill().padding_horizontal(gap).padding_bottom(gap),
         move || vec![arrangement.get().sidebar_in_drawer()],
         |in_drawer: &bool| *in_drawer,
         move |in_drawer| match in_drawer {
@@ -124,6 +119,7 @@ fn beside_sidebar(
             .min(SIDEBAR_MIN_WIDTH)
             .max(SIDEBAR_MAX_WIDTH)
             .collapsed(state.sidebar_collapsed())
+            .divider(false)
             .label(Reactive::of(|| strings::text(RESIZE_SIDEBAR)))
             .region(SplitRegion::new(Role::Main, strings::reactive(WORKSPACE)))
             .build(),
@@ -132,10 +128,9 @@ fn beside_sidebar(
 }
 
 fn sidebar_pane(regions: &Regions) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let pane = StyledContainer::new(
-        workbench_fill(),
-        |_| RectStyle::default().with_fill(use_workbench_tokens().sidebar_background),
-        vec![place(&regions.sidebar)?],
+    let pane = area(
+        || use_workbench_tokens().sidebar_background,
+        place(&regions.sidebar)?,
     )?
     .role(Role::Navigation)
     .a11y_label(|| strings::text(PREVIEWS));
@@ -209,6 +204,7 @@ fn split_workspace(
             .min(PANEL_MIN_SIZE)
             .max_fraction(PANEL_MAX_FRACTION)
             .collapsed(state.panel_collapsed())
+            .divider(false)
             .label(Reactive::of(|| strings::text(RESIZE_PANELS)))
             .build(),
         panes([place(&regions.canvas)?, place(&regions.panels)?]),
@@ -229,17 +225,15 @@ fn canvas_pane(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError
             ViewMode::Docs => docs::docs(&building),
         },
     )?;
-    let pane = StyledContainer::new(
-        workbench_fill(),
-        move |_| {
+    let pane = area(
+        move || {
             let tokens = use_workbench_tokens();
-            let fill = match view.get() {
+            match view.get() {
                 ViewMode::Docs => tokens.panel_background,
                 _ => tokens.canvas_backdrop,
-            };
-            RectStyle::default().with_fill(fill)
+            }
         },
-        children![shown],
+        box_item(shown),
     )?
     .role(Role::Section)
     .a11y_label(move || strings::text(view_key(view.get())));
@@ -247,14 +241,31 @@ fn canvas_pane(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError
 }
 
 fn panels_pane(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let pane = StyledContainer::new(
-        workbench_fill(),
-        |_| RectStyle::default().with_fill(use_workbench_tokens().panel_background),
-        vec![panels::panels(state)?],
+    let pane = area(
+        || use_workbench_tokens().panel_background,
+        panels::panels(state)?,
     )?
     .role(Role::Section)
     .a11y_label(|| strings::text(PANELS));
     Ok(box_item(pane))
+}
+
+fn area(
+    fill: impl Fn() -> Color + 'static,
+    content: Box<dyn LayoutItem>,
+) -> Result<StyledContainer, LayoutError> {
+    let content = ClippedItem::following(content, || {
+        let tokens = use_theme_tokens();
+        let line = tokens.border_width();
+        Clip::both()
+            .rounded(tokens.radius_control() - line)
+            .inset(line)
+    });
+    StyledContainer::new(
+        workbench_fill(),
+        move |_| workbench_card().with_fill(fill()),
+        vec![box_item(content)],
+    )
 }
 
 fn panes(items: [Box<dyn LayoutItem>; 2]) -> Children {

@@ -11,6 +11,7 @@ use crate::state::{
     PANEL_DEFAULT_SIZE, PANEL_MAX_FRACTION, PANEL_MIN_SIZE, SIDEBAR_DEFAULT_WIDTH,
     SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH,
 };
+use crate::test_support::AREA_GAP;
 
 const WIDTH: u32 = 1200;
 const HEIGHT: u32 = 800;
@@ -67,14 +68,14 @@ fn the_shell_lays_out_every_region() {
         SIDEBAR_DEFAULT_WIDTH
     );
     let panels = region(&runtime, &tree, "Panels");
-    assert_eq!(panels.x + panels.width, WIDTH as f32);
+    assert_eq!(panels.x + panels.width, WIDTH as f32 - AREA_GAP);
     // The splitter is announced by its grab area, which reaches over both neighbours, so only its middle marks the gap.
     let splitter = region(&runtime, &tree, "Resize the sidebar");
     assert_eq!(
         splitter.x + splitter.width / 2.0,
-        (SIDEBAR_DEFAULT_WIDTH + panels.x) / 2.0
+        (AREA_GAP + SIDEBAR_DEFAULT_WIDTH + panels.x) / 2.0
     );
-    assert!(panels.x > SIDEBAR_DEFAULT_WIDTH);
+    assert!(panels.x > AREA_GAP + SIDEBAR_DEFAULT_WIDTH);
 }
 
 #[test]

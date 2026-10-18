@@ -17,7 +17,7 @@ use crate::WorkshopApp;
 use crate::arrangement::PANES_FROM;
 use crate::settings::CanvasSettings;
 use crate::state::{PANEL_DEFAULT_SIZE, PanelPosition, WorkshopState};
-use crate::test_support::{Shell, control, sample_previews, setting_row, settle};
+use crate::test_support::{AREA_GAP, Shell, control, sample_previews, setting_row, settle};
 use telar::Direction;
 
 const HEIGHT: u32 = 800;
@@ -393,8 +393,8 @@ fn a_narrow_window_shows_the_sidebar_in_a_drawer_that_a_pick_shuts() {
     );
     assert_eq!(
         workshop.region(Role::Section, "Canvas").width,
-        NARROW as f32,
-        "the canvas takes the window's width"
+        NARROW as f32 - 2.0 * AREA_GAP,
+        "the canvas takes the window's width but the gap around it"
     );
 
     workshop.click(Role::Button, "Previews");
@@ -449,7 +449,7 @@ fn a_narrow_window_puts_the_panels_below_the_canvas_wherever_they_were_put() {
     let canvas = workshop.region(Role::Section, "Canvas");
     let panels = workshop.region(Role::Section, "Panels");
     assert!(panels.y >= canvas.y + canvas.height, "below the canvas");
-    assert_eq!(panels.width, NARROW as f32);
+    assert_eq!(panels.width, NARROW as f32 - 2.0 * AREA_GAP);
     assert_eq!(panels.height, PANEL_DEFAULT_SIZE);
     assert_eq!(
         workshop.state().panel_position().get(),
