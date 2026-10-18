@@ -333,3 +333,57 @@ fn focus_search_takes_the_keyboard_to_the_field() {
     settle(&sidebar.tree);
     assert!(focus::text_entry_focused());
 }
+
+fn packaged_entries() -> Vec<PreviewEntry> {
+    vec![
+        PreviewEntry::new("app--button--primary", "button", "Primary", blank)
+            .package("app")
+            .title("Inputs/Button"),
+        PreviewEntry::new("kit--button--ghost", "button", "Ghost", blank)
+            .package("kit")
+            .title("Inputs/Button"),
+        PreviewEntry::new("kit--modal--open", "modal", "Open", blank)
+            .package("kit")
+            .title("Overlays/Modal"),
+    ]
+}
+
+#[test]
+fn previews_of_more_than_one_package_are_listed_under_their_package_in_the_order_they_come() {
+    let sidebar = Mounted::new(packaged_entries());
+    let shown = texts(&sidebar.tree);
+    let at = |text: &str| {
+        shown
+            .iter()
+            .position(|shown| shown == text)
+            .unwrap_or_else(|| panic!("{text} is not drawn in {shown:?}"))
+    };
+    assert!(at("app") < at("Primary"));
+    assert!(at("Primary") < at("kit"));
+    assert!(at("kit") < at("Ghost"));
+    assert!(at("Ghost") < at("Overlays"));
+    assert_eq!(shown[at("kit") + 1], "2");
+    let expanded = sidebar.state().expanded().get();
+    assert!(expanded.contains("/kit/Inputs/Button"));
+    assert!(expanded.contains("/app/Inputs/Button"));
+}
+
+#[test]
+fn previews_of_one_package_are_listed_without_it() {
+    let one_package = packaged_entries()
+        .into_iter()
+        .filter(|entry| entry.package == "kit")
+        .collect();
+    let sidebar = Mounted::new(one_package);
+    assert!(!sidebar.drawn("kit"));
+    assert!(sidebar.drawn("Inputs"));
+}
+
+#[test]
+fn a_search_finds_previews_by_their_package_and_keeps_the_package_level() {
+    let sidebar = Mounted::new(packaged_entries());
+    sidebar.search("app");
+    assert!(sidebar.drawn("app"));
+    assert!(sidebar.drawn("Primary"));
+    assert!(!sidebar.drawn("Ghost"));
+}

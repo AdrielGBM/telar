@@ -1,6 +1,6 @@
 //! The Docs view: a page per component, written from what its previews carry.
 //!
-//! The page is the selected preview's component, as the sidebar lists it by title. It opens with the prose its previews carry and the props' own doc, shows the component's first preview with its controls and source, lists the props, and then shows every other preview over its source, each mounted the first time it scrolls into view. The previews' callbacks log their calls in the workshop's one action log, which each page empties as it opens.
+//! The page is the selected preview's component, as the sidebar lists it by package and title. It opens with the prose its previews carry and the props' own doc, shows the component's first preview with its controls and source, lists the props, and then shows every other preview over its source, each mounted the first time it scrolls into view. The previews' callbacks log their calls in the workshop's one action log, which each page empties as it opens.
 
 telar::rsx_modules!();
 
@@ -34,22 +34,26 @@ pub(crate) fn docs(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutE
         move || {
             selected
                 .selected()
-                .map(|entry| entry.title)
+                .map(|entry| (entry.package, entry.title))
                 .into_iter()
                 .collect()
         },
-        |title: &&'static str| *title,
-        move |title| page(&building, title),
+        |component: &(&'static str, &'static str)| *component,
+        move |(package, title)| page(&building, package, title),
     )?;
     Ok(box_item(docs))
 }
 
-/// The page of the component listed under `title`, which empties the action log as it opens.
-fn page(state: &WorkshopState, title: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
+/// The page of the component `package` lists under `title`, which empties the action log as it opens.
+fn page(
+    state: &WorkshopState,
+    package: &'static str,
+    title: &'static str,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let entries: Vec<PreviewEntry> = state
         .entries()
         .iter()
-        .filter(|entry| entry.title == title)
+        .filter(|entry| entry.package == package && entry.title == title)
         .copied()
         .collect();
     if entries.is_empty() {

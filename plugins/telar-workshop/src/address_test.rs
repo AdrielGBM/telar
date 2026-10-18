@@ -245,3 +245,28 @@ fn a_title_with_spaces_around_its_slash_is_opened_by_either_spelling_and_written
         Some(Page::Docs("Forms/Button".into()))
     );
 }
+
+#[test]
+fn a_docs_address_names_the_package_and_tells_apart_two_components_under_one_title() {
+    const LIBRARY_BUTTON: &str = "kit--button--primary";
+    let entries: Rc<[PreviewEntry]> = Rc::from(vec![
+        PreviewEntry::new(PRIMARY, "button", "Primary", body)
+            .package("app")
+            .title("Inputs/Button"),
+        PreviewEntry::new(LIBRARY_BUTTON, "button", "Primary", body)
+            .package("kit")
+            .title("Inputs/Button"),
+    ]);
+    let state = WorkshopState::new(entries, &PreviewRequest::default());
+    follow(&state);
+    state.select(LIBRARY_BUTTON);
+    state.view().set(ViewMode::Docs);
+    assert_eq!(
+        shown().last().map(String::as_str),
+        Some("/docs/kit/Inputs/Button")
+    );
+    receive_location_history(vec![at("/docs/app/Inputs/Button")]);
+    assert_eq!(state.selection().peek().as_deref(), Some(PRIMARY));
+    receive_location_history(vec![at("/docs/kit/Inputs/Button")]);
+    assert_eq!(state.selection().peek().as_deref(), Some(LIBRARY_BUTTON));
+}

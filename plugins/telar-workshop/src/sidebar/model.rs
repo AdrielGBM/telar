@@ -1,4 +1,4 @@
-//! What the sidebar lists: the previews grouped by their title path into a tree, narrowed by a query.
+//! What the sidebar lists: the previews grouped by their title path into a tree, under their package when they come from more than one, narrowed by a query.
 
 use std::sync::Arc;
 
@@ -6,20 +6,21 @@ use telar::preview::PreviewEntry;
 use telar_components::{TreeNode, fuzzy_match};
 use telar_project::protocol::title_path;
 
-/// The tree of `entries` whose title, name or tags match `query`, grouped by title path, with `badge` naming what a preview's row carries. An empty query keeps every preview.
+/// The tree of `entries` whose package, title, name or tags match `query`, grouped by package when there is more than one and then by title path, with `badge` naming what a preview's row carries. An empty query keeps every preview.
 pub(super) fn tree(
     entries: &[PreviewEntry],
     query: &str,
     badge: impl Fn(&PreviewEntry) -> Option<String>,
 ) -> Vec<TreeNode> {
+    let by_package = spans_packages(entries);
     let mut root = Vec::new();
     for entry in entries.iter().filter(|entry| matches(query, entry)) {
-        insert(&mut root, "", &segments(entry), *entry);
+        insert(&mut root, "", &segments(entry, by_package), *entry);
     }
     root.iter().map(|group| group.node(&badge)).collect()
 }
 
-/// The previews `query` keeps, in the order the sidebar lists them: by title path, each group's subgroups before its own previews.
+/// The previews `query` keeps, in the order the sidebar lists them: by package and title path, each group's subgroups before its own previews.
 pub(crate) fn listed(entries: &[PreviewEntry], query: &str) -> Vec<PreviewEntry> {
     let mut ids = Vec::new();
     collect_leaves(&tree(entries, query, |_| None), &mut ids);
@@ -55,23 +56,32 @@ pub(super) fn collect_branches(nodes: &[TreeNode], ids: &mut Vec<Arc<str>>) {
 
 fn matches(query: &str, entry: &PreviewEntry) -> bool {
     query.split_whitespace().all(|token| {
-        [entry.title, entry.name]
+        [entry.package, entry.title, entry.name]
             .into_iter()
             .chain(entry.tags.iter().copied())
             .any(|field| fuzzy_match(token, field).is_some())
     })
 }
 
-fn segments(entry: &PreviewEntry) -> Vec<&'static str> {
-    let path: Vec<_> = title_path(entry.title).collect();
-    if path.is_empty() {
-        vec![entry.component]
-    } else {
-        path
-    }
+/// Whether `entries` come from more than one package. Read over every preview rather than the ones a search keeps, so the tree keeps its shape as a search narrows it.
+fn spans_packages(entries: &[PreviewEntry]) -> bool {
+    entries
+        .split_first()
+        .is_some_and(|(first, rest)| rest.iter().any(|entry| entry.package != first.package))
 }
 
-/// A group of the title path. Its id starts with `/`, which no preview id does, so a group and a preview never share one.
+fn segments(entry: &PreviewEntry, by_package: bool) -> Vec<&'static str> {
+    let mut path: Vec<_> = title_path(entry.title).collect();
+    if path.is_empty() {
+        path.push(entry.component);
+    }
+    if by_package && !entry.package.is_empty() {
+        path.insert(0, entry.package);
+    }
+    path
+}
+
+/// A package, or a group of the title path. Its id starts with `/`, which no preview id does, so a group and a preview never share one.
 struct Group {
     label: &'static str,
     path: String,

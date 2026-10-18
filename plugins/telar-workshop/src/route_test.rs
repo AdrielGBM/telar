@@ -221,6 +221,7 @@ fn every_page_an_export_writes_opens_its_own_route_at_the_directory_a_static_hos
     use telar_project::protocol::{ListedPreview, workshop_pages};
     let listed = |id: &str, title: &str| ListedPreview {
         id: id.to_string(),
+        package: "demo".to_string(),
         title: title.to_string(),
     };
     let pages = workshop_pages(&[
@@ -230,10 +231,10 @@ fn every_page_an_export_writes_opens_its_own_route_at_the_directory_a_static_hos
     let expected = [
         Page::Preview("demo--card--a".into()),
         Page::Matrix("demo--card--a".into()),
-        Page::Docs("Inputs/Card".into()),
+        Page::Docs("demo/Inputs/Card".into()),
         Page::Preview("demo--text field--ñ".into()),
         Page::Matrix("demo--text field--ñ".into()),
-        Page::Docs("Text field".into()),
+        Page::Docs("demo/Text field".into()),
     ];
     assert_eq!(pages.len(), expected.len());
     for (page, expected) in pages.iter().zip(expected) {
@@ -284,10 +285,10 @@ const AWKWARD_TITLES: [&str; 7] = [
 ];
 
 #[test]
-fn a_docs_title_reaches_its_route_as_its_canonical_form_and_back() {
-    use telar_project::protocol::canonical_title;
+fn a_docs_page_reaches_its_route_as_its_key_and_back() {
+    use telar_project::protocol::docs_key;
     for title in AWKWARD_TITLES {
-        let route = WorkshopRoute::new(Page::Docs(canonical_title(title).into()), true);
+        let route = WorkshopRoute::new(Page::Docs(docs_key("demo", title).into()), true);
         let written = written(&route.to_location());
         assert_eq!(
             WorkshopRoute::from_location(&at(&written)),
@@ -299,17 +300,18 @@ fn a_docs_title_reaches_its_route_as_its_canonical_form_and_back() {
 
 #[test]
 fn every_awkward_title_an_export_writes_opens_its_own_route() {
-    use telar_project::protocol::{ListedPreview, canonical_title, workshop_pages};
+    use telar_project::protocol::{ListedPreview, docs_key, workshop_pages};
     let previews: Vec<_> = AWKWARD_TITLES
         .iter()
         .enumerate()
         .map(|(at, title)| ListedPreview {
             id: format!("p{at}"),
+            package: "demo".to_string(),
             title: title.to_string(),
         })
         .collect();
     for (at, title) in AWKWARD_TITLES.iter().enumerate() {
-        let route = WorkshopRoute::new(Page::Docs(canonical_title(title).into()), true);
+        let route = WorkshopRoute::new(Page::Docs(docs_key("demo", title).into()), true);
         let page = workshop_pages(&previews[at..=at]).pop().unwrap();
         assert_eq!(route.to_location().segments(), page.segments.as_slice());
     }

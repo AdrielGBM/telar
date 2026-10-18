@@ -1,4 +1,4 @@
-//! [`WorkshopRoute`]: where the workshop is, as an address carries it — `/preview/<id>`, `/matrix/<id>` or `/docs/<title>` — with what is set on it there, so reloading the address, or opening a copy of it, comes back to the same place.
+//! [`WorkshopRoute`]: where the workshop is, as an address carries it — `/preview/<id>`, `/matrix/<id>` or `/docs/<package>/<title>` — with what is set on it there, so reloading the address, or opening a copy of it, comes back to the same place.
 //!
 //! - `?args=name:value;…`: the selected preview's args that differ from their defaults, each value in [`ArgValue`]'s text form.
 //! - `?axes=mode;dir;arg.size;…`: on a matrix page, the axes picked for a matrix the view builds itself, present, even empty, whenever the view shows one rather than the preview's own.
@@ -35,7 +35,7 @@ pub(crate) enum Page {
     Preview(Arc<str>),
     /// A preview's matrix, by the preview's id.
     Matrix(Arc<str>),
-    /// A component's docs, by the title its previews are listed under, in its canonical form.
+    /// A component's docs, by the package and title its previews are listed under, as [`docs_key`](telar_project::protocol::docs_key) names them.
     Docs(Arc<str>),
 }
 
@@ -73,8 +73,8 @@ impl Route for WorkshopRoute {
         let mut location = match &self.page {
             Page::Preview(id) => Location::from_segments([PREVIEW, id.as_ref()]),
             Page::Matrix(id) => Location::from_segments([MATRIX, id.as_ref()]),
-            Page::Docs(title) => {
-                Location::from_segments(std::iter::once(DOCS).chain(title_path(title)))
+            Page::Docs(key) => {
+                Location::from_segments(std::iter::once(DOCS).chain(title_path(key)))
             }
         };
         if !self.chrome {
@@ -105,9 +105,7 @@ impl Route for WorkshopRoute {
         let page = match location.segments() {
             [kind, id] if kind == PREVIEW && !id.is_empty() => Page::Preview(id.as_str().into()),
             [kind, id] if kind == MATRIX && !id.is_empty() => Page::Matrix(id.as_str().into()),
-            [kind, title @ ..] if kind == DOCS && !title.is_empty() => {
-                Page::Docs(title.join("/").into())
-            }
+            [kind, key @ ..] if kind == DOCS && !key.is_empty() => Page::Docs(key.join("/").into()),
             _ => return None,
         };
         let (axes, cell) = match &page {

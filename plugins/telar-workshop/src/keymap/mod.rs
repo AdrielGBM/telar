@@ -375,18 +375,20 @@ impl Keymap {
     fn step_component(&self, delta: isize) {
         let mut firsts: Vec<PreviewEntry> = Vec::new();
         for entry in self.listed() {
-            if !firsts.iter().any(|first| first.title == entry.title) {
+            if !firsts.iter().any(|first| same_component(first, &entry)) {
                 firsts.push(entry);
             }
         }
-        let selected = self.state.selection().peek();
-        let title = self
+        let selection = self.state.selection().peek();
+        let selected = self
             .state
             .entries()
             .iter()
-            .find(|entry| selected.as_deref() == Some(entry.id))
-            .map(|entry| entry.title);
-        let at = firsts.iter().position(|first| Some(first.title) == title);
+            .find(|entry| selection.as_deref() == Some(entry.id))
+            .copied();
+        let at = firsts
+            .iter()
+            .position(|first| selected.is_some_and(|entry| same_component(first, &entry)));
         if let Some(entry) = stepped(&firsts, at, delta) {
             self.state.select(entry.id);
         }
@@ -405,6 +407,10 @@ impl Keymap {
         sidebar.set(shown_sidebar);
         panels.set(shown_panels);
     }
+}
+
+fn same_component(a: &PreviewEntry, b: &PreviewEntry) -> bool {
+    a.package == b.package && a.title == b.title
 }
 
 /// The item `delta` places from `at` in `items`, staying at either end; from no item, the first going forwards and the last going back.

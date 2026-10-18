@@ -65,8 +65,13 @@ fn an_id_with_characters_a_path_cannot_hold_is_encoded() {
 }
 
 fn listed(id: &str, title: &str) -> ListedPreview {
+    from_package("", id, title)
+}
+
+fn from_package(package: &str, id: &str, title: &str) -> ListedPreview {
     ListedPreview {
         id: id.to_string(),
+        package: package.to_string(),
         title: title.to_string(),
     }
 }
@@ -118,9 +123,12 @@ fn a_docs_page_is_written_as_the_workshop_writes_its_title() {
 
 #[test]
 fn a_listing_reads_back_what_it_wrote() {
-    let previews = vec![listed("app--card--plain", "Card")];
+    let previews = vec![from_package("app", "app--card--plain", "Card")];
     let json = serde_json::to_string(&previews).unwrap();
-    assert_eq!(json, r#"[{"id":"app--card--plain","title":"Card"}]"#);
+    assert_eq!(
+        json,
+        r#"[{"id":"app--card--plain","package":"app","title":"Card"}]"#
+    );
     assert_eq!(
         serde_json::from_str::<Vec<ListedPreview>>(&json).unwrap(),
         previews
@@ -138,8 +146,41 @@ fn a_title_is_cut_into_trimmed_groups_and_has_one_canonical_form() {
         (" / ", vec![]),
     ] {
         assert_eq!(title_path(title).collect::<Vec<_>>(), path, "{title}");
-        assert_eq!(canonical_title(title), path.join("/"), "{title}");
+        assert_eq!(docs_key("", title), path.join("/"), "{title}");
     }
+}
+
+#[test]
+fn a_listing_that_names_no_package_reads_as_one_whose_package_is_unknown() {
+    let previews: Vec<ListedPreview> =
+        serde_json::from_str(r#"[{"id":"app--card--plain","title":"Card"}]"#).unwrap();
+    assert_eq!(previews, vec![listed("app--card--plain", "Card")]);
+}
+
+#[test]
+fn a_docs_page_stands_under_the_package_of_its_previews() {
+    let pages = workshop_pages(&[
+        from_package("app", "app--button--primary", "Inputs/Button"),
+        from_package(
+            "telar-components",
+            "telar_components--button--primary",
+            "Inputs/Button",
+        ),
+        from_package("app", "app--blank--plain", " / "),
+    ]);
+    let docs: Vec<Vec<&str>> = segments(&pages)
+        .into_iter()
+        .filter(|page| page[0] == "docs")
+        .collect();
+    assert_eq!(
+        docs,
+        vec![
+            vec!["docs", "app", "Inputs", "Button"],
+            vec!["docs", "telar-components", "Inputs", "Button"],
+        ]
+    );
+    assert_eq!(docs_key("app", "Inputs / Button"), "app/Inputs/Button");
+    assert_eq!(docs_key("app", " / "), "");
 }
 
 #[test]

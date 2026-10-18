@@ -12,7 +12,7 @@ use telar::preview::host::{Args, PreviewRequest};
 use telar::preview::{ActionLog, ArgValue, PreviewEntry};
 use telar::{Memo, OwnerId, Route, RwSignal, batch, hot_signal, owner_scope, signal, with_owner};
 use telar_devtools::Inspection;
-use telar_project::protocol::{canonical_title, title_path};
+use telar_project::protocol::{docs_key, docs_path, title_path};
 
 use crate::arrangement::Arrangement;
 use crate::interactions::Interactions;
@@ -376,13 +376,13 @@ impl WorkshopState {
 
     /// Goes where `route` points and sets what it carries: the args of the preview it lands on, every other arg back at its default, the Matrix view's axes and focused cell, and the canvas toolbar's settings. What it leaves out is left as it is, as is what already matches it, so opening the address the workshop reports changes nothing.
     ///
-    /// An id or a title no preview has leaves the selection as it was, and sets nothing on a preview; an arg the preview no longer has, or a value it no longer takes, is left at its default.
+    /// An id or a docs page no preview has leaves the selection as it was, and sets nothing on a preview; an arg the preview no longer has, or a value it no longer takes, is left at its default.
     pub(crate) fn open(&self, route: &WorkshopRoute) {
         batch(|| {
             let (view, listed) = match &route.page {
                 Page::Preview(id) => (ViewMode::Canvas, self.select(id)),
                 Page::Matrix(id) => (ViewMode::Matrix, self.select(id)),
-                Page::Docs(title) => (ViewMode::Docs, self.select_title(title)),
+                Page::Docs(key) => (ViewMode::Docs, self.select_docs(key)),
             };
             if listed {
                 self.view.set_if_changed(view);
@@ -442,16 +442,17 @@ impl WorkshopState {
         self.entries.iter().find(|entry| *entry.id == *id).copied()
     }
 
-    /// Selects the first preview listed under `title`, unless the selected one already is.
-    fn select_title(&self, title: &str) -> bool {
-        let listed_under = |entry_title: &str| title_path(entry_title).eq(title_path(title));
-        if self
-            .current_entry()
-            .is_some_and(|entry| listed_under(entry.title))
-        {
+    /// Selects the first preview of the component whose docs page `key` names, unless the selected one already is.
+    fn select_docs(&self, key: &str) -> bool {
+        let documented = |entry: &PreviewEntry| {
+            docs_path(entry.package, entry.title)
+                .into_iter()
+                .eq(title_path(key))
+        };
+        if self.current_entry().is_some_and(|entry| documented(&entry)) {
             return true;
         }
-        let first = self.entries.iter().find(|entry| listed_under(entry.title));
+        let first = self.entries.iter().find(|entry| documented(entry));
         first.is_some_and(|entry| self.select(entry.id))
     }
 
@@ -499,7 +500,7 @@ fn route_of(entry: &PreviewEntry, view: ViewMode, chrome: bool) -> WorkshopRoute
     let page = match view {
         ViewMode::Canvas => Page::Preview(entry.id.into()),
         ViewMode::Matrix => Page::Matrix(entry.id.into()),
-        ViewMode::Docs => Page::Docs(canonical_title(entry.title).into()),
+        ViewMode::Docs => Page::Docs(docs_key(entry.package, entry.title).into()),
     };
     WorkshopRoute::new(page, chrome)
 }

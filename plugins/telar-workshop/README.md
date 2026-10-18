@@ -1,6 +1,6 @@
 # telar-workshop
 
-The component workshop `cargo telar preview` opens: every preview an application carries, listed in a sidebar, rendered one at a time in a canvas of its own, with panels to edit its args live.
+The component workshop `cargo telar preview` opens: every preview an application carries, listed in a sidebar (under the package each comes from, when they come from more than one), rendered one at a time in a canvas of its own, with panels to edit its args live.
 
 Part of [Telar](https://github.com/AdrielGBM/telar), a modular Rust UI framework with its own template
 language, reactive signals and a self-contained renderer.
@@ -23,7 +23,7 @@ Writing previews, their args, matrices, plays and snapshots are covered in [docs
 
 `cargo telar preview <ID>` opens on the preview of that id, as `cargo telar preview --list` prints it (`telar_components--button--primary`). With the package's workshop already open, the command moves that window to the preview instead of opening another. `--component <name>` narrows the sidebar to the previews whose title matches, starting the search with it.
 
-Each page of the workshop has an address: `/preview/<id>`, `/matrix/<id>` and `/docs/<title>`, such as `/docs/Inputs/Button`. The address carries what is set on the page too: the edited args, as `?args=label:"Save";disabled:true`, and on a matrix page the axes picked, `?axes=mode;dir;arg.size`, and the focused cell, `?cell=` with its id past the preview's (`mode=dark--dir=rtl`, escaped). **Copy link**, in the canvas header, copies that address with the canvas toolbar's settings added, as `/preview/<id>?args=label:"Save"&globals=mode:dark;locale:ar`. `cargo telar preview '<link>'` opens it again, args and settings included. `?chrome=0` shows the canvas alone, with no sidebar, top bar or panels, for embedding.
+Each page of the workshop has an address: `/preview/<id>`, `/matrix/<id>` and `/docs/<package>/<title>`, such as `/docs/telar-components/Inputs/Button`. The address carries what is set on the page too: the edited args, as `?args=label:"Save";disabled:true`, and on a matrix page the axes picked, `?axes=mode;dir;arg.size`, and the focused cell, `?cell=` with its id past the preview's (`mode=dark--dir=rtl`, escaped). **Copy link**, in the canvas header, copies that address with the canvas toolbar's settings added, as `/preview/<id>?args=label:"Save"&globals=mode:dark;locale:ar`. `cargo telar preview '<link>'` opens it again, args and settings included. `?chrome=0` shows the canvas alone, with no sidebar, top bar or panels, for embedding.
 
 ## What it remembers
 
