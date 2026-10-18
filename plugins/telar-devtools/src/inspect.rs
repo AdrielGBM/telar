@@ -187,6 +187,8 @@ pub struct Inspection {
     pub(crate) outline: RwSignal<bool>,
     pub(crate) measure: RwSignal<bool>,
     pub(crate) details_height: RwSignal<f32>,
+    /// The details' width while they stand beside the tree, kept apart from their height below it so turning the panel keeps each.
+    pub(crate) details_width: RwSignal<f32>,
     /// How many inspector panels are mounted: the selection is marked only while one is.
     pub(crate) inspecting: RwSignal<u32>,
     /// How many accessibility panels are mounted: the audit is read only while one is.
@@ -195,6 +197,7 @@ pub struct Inspection {
 }
 
 pub(crate) const DETAILS_HEIGHT: f32 = 220.0;
+pub(crate) const DETAILS_WIDTH: f32 = 280.0;
 
 impl Inspection {
     pub fn new() -> Self {
@@ -213,6 +216,7 @@ impl Inspection {
             outline: signal(false),
             measure: signal(false),
             details_height: signal(DETAILS_HEIGHT),
+            details_width: signal(DETAILS_WIDTH),
             inspecting: signal(0),
             auditing: signal(0),
             read: signal(None),

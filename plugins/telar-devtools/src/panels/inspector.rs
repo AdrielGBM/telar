@@ -2,7 +2,7 @@
 
 use telar::{
     Accessible, AlignItems, Container, Insets, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    Role, Size, Text, box_item, children, memo,
+    ReactiveList, Rect, Role, RwSignal, Size, Text, box_item, children, memo, signal, track_layout,
 };
 use telar_components::{
     SizedPane, SplitDirection, SplitPaneProps, TreeNode, TreeViewProps, split_pane, tree_view,
@@ -17,18 +17,46 @@ use crate::strings::{
 use crate::workbench::{WORKBENCH_GRID, workbench_fill, workbench_mono, workbench_muted};
 
 const DETAILS_MIN_HEIGHT: f32 = 96.0;
+const DETAILS_MIN_WIDTH: f32 = 200.0;
 const DETAILS_MAX_FRACTION: f32 = 0.7;
 const LABEL_WIDTH: f32 = 72.0;
 
 /// The components of what `inspection` reads, nested as they are mounted, over the selected one's details: its name, depth, position, size and box model.
 pub fn inspector_panel(inspection: Inspection) -> Result<Box<dyn LayoutItem>, LayoutError> {
     count_mounted(inspection.inspecting);
+    let laid = signal(None::<RwSignal<Rect>>);
+    let panel = ReactiveList::with_style(
+        workbench_fill(),
+        move || vec![facing(laid.get().map(|rect| rect.get()))],
+        |direction: &SplitDirection| *direction,
+        move |direction| split(inspection, direction),
+    )?;
+    laid.set(track_layout(panel.layout_node()));
+    Ok(box_item(panel))
+}
+
+/// Beside the tree in a panel wider than it is tall, and under it in one that is not: the details are a short column, so put across a wide panel they leave most of it empty.
+fn facing(panel: Option<Rect>) -> SplitDirection {
+    match panel {
+        Some(panel) if panel.width > panel.height => SplitDirection::Row,
+        _ => SplitDirection::Column,
+    }
+}
+
+fn split(
+    inspection: Inspection,
+    direction: SplitDirection,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let (size, min) = match direction {
+        SplitDirection::Row => (inspection.details_width, DETAILS_MIN_WIDTH),
+        SplitDirection::Column => (inspection.details_height, DETAILS_MIN_HEIGHT),
+    };
     split_pane(
         SplitPaneProps::props()
-            .direction(SplitDirection::Column)
+            .direction(direction)
             .sized(SizedPane::Second)
-            .size(inspection.details_height)
-            .min(DETAILS_MIN_HEIGHT)
+            .size(size)
+            .min(min)
             .max_fraction(DETAILS_MAX_FRACTION)
             .label(Reactive::of(|| strings::text(RESIZE_DETAILS)))
             .build(),

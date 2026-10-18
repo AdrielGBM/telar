@@ -51,7 +51,7 @@ impl SplitPaneTokens {
 }
 
 /// How the two panes sit relative to each other.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, telar::PreviewArg)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, telar::PreviewArg)]
 pub enum SplitDirection {
     /// Side by side, the first pane at the inline start; the splitter is a vertical bar.
     #[default]

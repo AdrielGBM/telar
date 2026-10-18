@@ -8,7 +8,7 @@ use telar::{
 };
 
 use super::*;
-use crate::inspect::InspectSource;
+use crate::inspect::{DETAILS_HEIGHT, DETAILS_WIDTH, InspectSource};
 use crate::workbench::workbench_scope;
 
 const SIZE: Size = Size::new(600.0, 400.0);
@@ -104,9 +104,16 @@ fn audit() -> AccessAudit {
 fn mounted(
     build: impl FnOnce() -> Result<Box<dyn LayoutItem>, telar::LayoutError> + 'static,
 ) -> SurfaceCanvas {
+    mounted_at(SIZE, build)
+}
+
+fn mounted_at(
+    size: Size,
+    build: impl FnOnce() -> Result<Box<dyn LayoutItem>, telar::LayoutError> + 'static,
+) -> SurfaceCanvas {
     telar::install_default_text_metrics();
-    let canvas = SurfaceCanvas::new(SIZE, || Ok(box_item(workbench_scope(build)?))).unwrap();
-    canvas.resize(SIZE);
+    let canvas = SurfaceCanvas::new(size, || Ok(box_item(workbench_scope(build)?))).unwrap();
+    canvas.resize(size);
     canvas
 }
 
@@ -452,4 +459,60 @@ fn the_reader_rows_nest_as_a_reader_steps_through_them() {
     assert_eq!(ids(&reader.children), ["reader/0", "reader/3"]);
     assert_eq!(ids(&reader.children[0].children), ["reader/1"]);
     assert_eq!(ids(&reader.children[0].children[0].children), ["reader/2"]);
+}
+
+/// Where the selected component's size is drawn among its details, in an inspector `size` big.
+fn details_at(size: Size) -> Rect {
+    let inspection = Inspection::new();
+    let canvas = mounted_at(size, move || {
+        Ok(box_item(telar::Container::new(
+            telar::LayoutStyle::column()
+                .width(size.width)
+                .height(size.height),
+            vec![inspector_panel(inspection)?],
+        )?))
+    });
+    {
+        let _entered = canvas.enter();
+        refreshed(
+            inspection,
+            &Given {
+                nodes: walk(),
+                audit: None,
+                placement: Transform::IDENTITY,
+            },
+        );
+        inspection.selected.set(Some(Arc::from("1")));
+    }
+    for _ in 0..3 {
+        let _ = frame(&canvas);
+    }
+    let drawn = frame(&canvas);
+    let at = |wanted: &str| {
+        let mut found = None;
+        for_each_with_matrix(&drawn, |command, matrix| {
+            if let DrawCommand::Text { text, rect, .. } = command
+                && &**text == wanted
+                && found.is_none()
+            {
+                found = Some(transform_clip_rect(matrix, *rect));
+            }
+        });
+        found.unwrap_or_else(|| panic!("{wanted} is drawn: {:?}", texts(&canvas)))
+    };
+    at("100 × 40")
+}
+
+#[test]
+fn the_details_stand_beside_the_tree_in_a_wide_panel_and_under_it_in_a_tall_one() {
+    let wide = details_at(Size::new(900.0, 300.0));
+    assert!(
+        wide.x >= 900.0 - DETAILS_WIDTH && wide.y < 150.0,
+        "in the pane at the end, from the top: {wide:?}"
+    );
+    let tall = details_at(Size::new(320.0, 700.0));
+    assert!(
+        tall.y >= 700.0 - DETAILS_HEIGHT && tall.x < 160.0,
+        "in the pane at the bottom, from the start: {tall:?}"
+    );
 }
