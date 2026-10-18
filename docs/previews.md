@@ -249,7 +249,8 @@ the frame it left. `cargo telar test` runs it on a headless canvas.
 Each preview and cell is checked for what would keep someone from using it, by rule: `unnamed-control`,
 `symbol-only-name`, `unnamed-picture`, `contrast`, `hidden-focusable` (errors), and `target-size`, `focus-order`,
 `missing-lang` (warnings). The workshop's Accessibility panel shows the findings of the canvas on screen, and
-`expect_accessible()` in a play asserts there are none.
+`expect_accessible()` in a play asserts there are none. A canvas with no `locale` of its own is in the language
+the app's setup chose, or else its catalog's default, in the workshop and in `cargo telar test` alike.
 
 A preview that breaks a rule on purpose, such as a dense layout with small targets, says so, and the checks leave
 that rule out: `.a11y_ignore(&[Rule::TargetSize])` in Rust.

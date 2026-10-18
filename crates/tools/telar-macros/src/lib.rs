@@ -296,6 +296,7 @@ pub fn app(input: TokenStream) -> TokenStream {
     let hot_exports = if is_hot_reload {
         let body = quote! {
             ::telar::__previews! {
+                ::telar::preview::host::speak_the_app_language();
                 return ::std::boxed::Box::new((#shell)(__telar_app_previews()));
             }
             ::telar::__without_previews! {

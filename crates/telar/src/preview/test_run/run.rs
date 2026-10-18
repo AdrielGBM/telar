@@ -4,7 +4,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::AppConfig;
 use crate::preview::a11y::Severity;
-use crate::preview::host::duplicate_ids;
+use crate::preview::host::{duplicate_ids, speak_the_app_language};
 use crate::preview::snapshot::SnapshotKey;
 use crate::preview::{Matrices, MatrixCell, Play, PlayError, PlayStep, PreviewEntry};
 
@@ -109,12 +109,6 @@ pub fn __test_library(entries: Vec<PreviewEntry>, config: AppConfig) {
         "{} preview check(s) failed; each is listed above",
         run.summary.failed
     );
-}
-
-fn speak_the_app_language() {
-    if i18n_core::current_locale().is_none() {
-        i18n_core::set_locale(i18n_core::default_locale());
-    }
 }
 
 fn start_snapshots(

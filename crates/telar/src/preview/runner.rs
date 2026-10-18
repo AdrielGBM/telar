@@ -29,6 +29,7 @@ where
         return false;
     };
     setup();
+    super::host::speak_the_app_language();
     match request {
         #[cfg(feature = "preview-headless")]
         Request::Png(out_dir) => {

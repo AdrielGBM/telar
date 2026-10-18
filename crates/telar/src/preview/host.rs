@@ -105,6 +105,13 @@ fn follow_height(placed: &Container, measured: RwSignal<f32>) {
 
 pub use telar_project::protocol::{PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, WORKSPACE_DIR_VAR};
 
+/// Gives the previews the language their text is in when the app's setup chose none: the installed catalog's default. A preview host is what every canvas without a locale of its own follows, so without one a reader is told no language for text that is in one.
+pub fn speak_the_app_language() {
+    if i18n_core::current_locale().is_none() {
+        i18n_core::set_locale(i18n_core::default_locale());
+    }
+}
+
 /// The workspace [`WORKSPACE_DIR_VAR`] names, or `None` for a preview build started some other way.
 pub fn workspace_dir() -> Option<std::path::PathBuf> {
     std::env::var_os(WORKSPACE_DIR_VAR)
