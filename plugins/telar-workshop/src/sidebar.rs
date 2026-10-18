@@ -25,11 +25,6 @@ pub(crate) use model::{group_ids, listed};
 
 /// What fills the sidebar pane the shell sizes.
 pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let heading = Text::declaring(
-        || strings::text(PREVIEWS),
-        LayoutStyle::new().padding_all(WORKBENCH_GRID),
-        workbench_muted,
-    )?;
     let panel = Rc::new(Panel::new(state));
     panel.reveal_matches();
     let items = panel.items;
@@ -45,11 +40,7 @@ pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layo
     )?;
     let sidebar = Container::new(
         LayoutStyle::column().flex_grow(1.0).min_height(0.0),
-        vec![
-            box_item(heading),
-            search_field_item(&panel)?,
-            box_item(body),
-        ],
+        vec![search_field_item(&panel)?, box_item(body)],
     )?;
     Ok(box_item(sidebar))
 }
@@ -159,8 +150,7 @@ fn search_field_item(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutErr
     let margin = Container::new(
         LayoutStyle::column()
             .flex_shrink(0.0)
-            .padding_horizontal(WORKBENCH_GRID)
-            .padding_bottom(WORKBENCH_GRID),
+            .padding_all(WORKBENCH_GRID),
         children![field],
     )?;
     Ok(box_item(margin))

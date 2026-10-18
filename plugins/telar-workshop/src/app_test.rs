@@ -1,6 +1,6 @@
 use telar::preview::host::PreviewRequest;
 use telar::preview::{ArgValue, PreviewCtx};
-use telar::testing::{find_text, mount, rect_of};
+use telar::testing::{find_text, mount};
 use telar::{
     AppRuntime, Color, ComponentList, LayoutError, LayoutItem, LayoutStyle, LocalApp, Text,
     TextStyle, box_item, relayout_if_dirty,
@@ -35,12 +35,6 @@ fn entries() -> Vec<PreviewEntry> {
     ]
 }
 
-fn width_of(tree: &ComponentList, text: &str) -> f32 {
-    rect_of(tree, text)
-        .unwrap_or_else(|| panic!("{text} is not drawn"))
-        .width
-}
-
 fn lay_out(app: &WorkshopApp) -> ComponentList {
     let tree = mount(app.root(), WIDTH, HEIGHT);
     relayout_if_dirty();
@@ -65,10 +59,13 @@ fn region(runtime: &LocalApp<WorkshopApp>, tree: &ComponentList, name: &str) -> 
 fn the_shell_lays_out_every_region() {
     let runtime = LocalApp(WorkshopApp::new(entries()).project_name("bench"));
     let tree = lay_out(&runtime.0);
-    for text in ["bench", "Search previews", "Previews", "Controls"] {
+    for text in ["bench", "Search previews", "Controls"] {
         assert!(find_text(&tree, text), "{text} is not drawn");
     }
-    assert_eq!(width_of(&tree, "Previews"), SIDEBAR_DEFAULT_WIDTH);
+    assert_eq!(
+        region_width(&runtime, &tree, "Previews"),
+        SIDEBAR_DEFAULT_WIDTH
+    );
     let panels = region(&runtime, &tree, "Panels");
     assert_eq!(panels.x + panels.width, WIDTH as f32);
     // The splitter is announced by its grab area, which reaches over both neighbours, so only its middle marks the gap.
@@ -123,15 +120,16 @@ fn panels_on_the_right_take_their_size_in_width() {
     );
     let runtime = LocalApp(WorkshopApp::new(entries()));
     let tree = lay_out(&runtime.0);
-    assert_eq!(width_of(&tree, "Previews"), 300.0);
+    assert_eq!(region_width(&runtime, &tree, "Previews"), 300.0);
     assert_eq!(region_width(&runtime, &tree, "Panels"), PANEL_DEFAULT_SIZE);
 }
 
 #[test]
 fn a_sidebar_width_out_of_range_is_kept_within_it() {
     telar::hot_restore_json(r#"{"@workshop/sidebar.width":"40.0"}"#);
-    let tree = lay_out(&WorkshopApp::new(entries()));
-    assert_eq!(width_of(&tree, "Previews"), SIDEBAR_MIN_WIDTH);
+    let runtime = LocalApp(WorkshopApp::new(entries()));
+    let tree = lay_out(&runtime.0);
+    assert_eq!(region_width(&runtime, &tree, "Previews"), SIDEBAR_MIN_WIDTH);
 }
 
 fn splitter(
