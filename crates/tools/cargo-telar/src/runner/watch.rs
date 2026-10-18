@@ -372,11 +372,15 @@ fn watch_and_hot_reload(
 
     loop {
         match child.try_wait() {
-            Ok(Some(_)) => {
-                eprintln!("[cargo-telar] App exited.");
+            Ok(Some(status)) => {
+                if status.success() {
+                    eprintln!("[cargo-telar] App exited.");
+                } else {
+                    eprintln!("[cargo-telar] App exited abnormally ({status}).");
+                }
                 // `exit` runs no destructors, and the channel's removes the file naming a workshop that is gone.
                 drop(workshop);
-                std::process::exit(0);
+                std::process::exit(if status.success() { 0 } else { 1 });
             }
             Ok(None) => {}
             Err(e) => eprintln!("[cargo-telar] error: {e}"),
