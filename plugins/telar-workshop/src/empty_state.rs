@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use telar::{
     AlignItems, Children, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea,
-    LayoutStyle, Reactive, Role, Text, TextAlign, box_item, children,
+    LayoutStyle, Reactive, Role, SizeDimension, Text, TextAlign, box_item, children,
 };
 use telar_components::{ButtonProps, CodeViewProps, button, code_view};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
@@ -127,6 +127,7 @@ fn snippets(examples: &'static [Example]) -> Result<Box<dyn LayoutItem>, LayoutE
         .collect::<Result<Vec<_>, _>>()?;
     let row = Container::new(
         LayoutStyle::row()
+            .max_width(SizeDimension::Percent(1.0))
             .flex_wrap()
             .justify_content(JustifyContent::CENTER)
             .gap(WORKBENCH_GRID * 2.0)
@@ -154,6 +155,7 @@ fn snippet(example: Example) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let column = Container::new(
         LayoutStyle::column()
             .flex_grow(1.0)
+            .min_width(0.0)
             .gap(WORKBENCH_GRID / 2.0),
         vec![box_item(caption), code],
     )?;

@@ -140,3 +140,44 @@ fn one_under_the_other_the_blocks_stand_as_wide_as_each_other() {
     assert!(rsx.y > rust.y, "on lines of their own");
     assert_eq!(rust.width, rsx.width);
 }
+
+/// Code wider than the panel scrolls inside its block, rather than standing the block out past the panel's sides.
+#[test]
+fn code_wider_than_the_panel_keeps_its_block_inside_it() {
+    telar::install_default_text_metrics();
+    telar::reset_layout_runtime();
+    let state = EmptyState::new(crate::strings::NO_PLAY)
+        .examples(&[Example {
+            language: "Rust",
+            code: "canvas.click(by_role(Role::Button).named(\"Save\"))?;",
+        }])
+        .build()
+        .unwrap();
+    let root = new_container(
+        LayoutStyle::new().flex_column().width(240.0).height(400.0),
+        &[state.layout_node()],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(240.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(state);
+    let mut frames = Vec::new();
+    for_each_with_matrix(&tree.commands(), |command, matrix| {
+        if let DrawCommand::Rect { rect, style } = command
+            && style.border.is_some()
+        {
+            frames.push(transform_clip_rect(matrix, *rect));
+        }
+    });
+    let [block] = frames[..] else {
+        panic!("one code block, not {frames:?}");
+    };
+    assert!(
+        block.x >= 0.0 && block.x + block.width <= 240.0,
+        "{block:?} in a panel 240 wide"
+    );
+}
