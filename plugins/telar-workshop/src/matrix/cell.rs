@@ -19,6 +19,7 @@ use telar_devtools::{
 };
 
 use super::plan::cell_label;
+use crate::canvas::inspected::PreviewOnly;
 use crate::guarded::guarded;
 use crate::settings::CanvasSettings;
 use crate::settle::run_when_sized;
@@ -405,7 +406,9 @@ fn follow_while_focused(
     let following: Rc<RefCell<Option<RelayoutHook>>> = Rc::default();
     let held = Rc::clone(&following);
     effect(move || {
-        let hook = focused.get().then(|| inspection.follow(Rc::clone(&canvas)));
+        let hook = focused
+            .get()
+            .then(|| inspection.follow(PreviewOnly(Rc::clone(&canvas))));
         held.replace(hook);
     });
     on_cleanup(move || drop(following.take()));

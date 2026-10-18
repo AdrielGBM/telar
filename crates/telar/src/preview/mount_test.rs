@@ -57,3 +57,51 @@ fn a_mounted_preview_fills_the_box_a_row_gives_it() {
     let rect = laid_out_in(LayoutStyle::new().flex_row().width(300.0).height(200.0));
     assert_eq!(rect, Rect::new(0.0, 0.0, 300.0, 200.0));
 }
+
+fn segment(name: &'static str, depth: usize) -> SegmentNodeInfo {
+    SegmentNodeInfo {
+        id: 0,
+        name,
+        depth,
+        rect: crate::Rect::default(),
+        padding: crate::Insets::default(),
+        margin: crate::Insets::default(),
+        border: crate::Insets::default(),
+        gap: crate::Size::ZERO,
+    }
+}
+
+#[test]
+fn a_preview_s_own_nodes_are_those_under_the_boundary_it_is_mounted_in() {
+    let walk = [
+        segment("SurfaceRoot", 0),
+        segment("Container", 1),
+        segment("ReactiveList", 2),
+        segment(ErrorBoundary::SEGMENT_NAME, 3),
+        segment("Card", 4),
+        segment("Text", 5),
+        segment(ErrorBoundary::SEGMENT_NAME, 5),
+        segment("Text", 6),
+        segment("Overlay", 1),
+    ];
+    let own: Vec<(&str, usize)> = preview_nodes(&walk)
+        .iter()
+        .map(|node| (node.name, node.depth))
+        .collect();
+    assert_eq!(
+        own,
+        [
+            ("Card", 0),
+            ("Text", 1),
+            (ErrorBoundary::SEGMENT_NAME, 1),
+            ("Text", 2)
+        ],
+        "a boundary of the preview's own is kept, and what the host has beside the preview is left out"
+    );
+    let bare = [segment("SurfaceRoot", 0), segment("Text", 1)];
+    assert_eq!(
+        preview_nodes(&bare).len(),
+        2,
+        "a walk with no boundary is kept whole"
+    );
+}

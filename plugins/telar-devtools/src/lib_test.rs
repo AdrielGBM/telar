@@ -196,7 +196,10 @@ fn the_inspector_lists_the_mounted_components_nested() {
         column < button && button < caption,
         "in walk order, every branch open"
     );
-    assert!(shows(&mut dev, "Select a component to see its box."));
+    assert!(
+        shows(&mut dev, "0 · #0"),
+        "with the outermost one chosen, so its details are shown"
+    );
 }
 
 #[test]

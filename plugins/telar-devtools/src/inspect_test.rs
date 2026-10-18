@@ -216,3 +216,30 @@ fn following_a_canvas_reads_it_after_every_layout_pass_and_starts_with_nothing_c
         "a dropped hook reads nothing more"
     );
 }
+
+#[test]
+fn the_outermost_component_is_chosen_while_nothing_is_or_what_was_is_gone() {
+    let inspection = Inspection::new();
+    let walk = |ids: &[u64]| -> Vec<SegmentNodeInfo> {
+        ids.iter()
+            .enumerate()
+            .map(|(depth, id)| info(*id, "Box", depth, Rect::new(0.0, 0.0, 10.0, 10.0)))
+            .collect()
+    };
+    inspection.take_walk(&walk(&[7, 8]));
+    assert_eq!(inspection.selected.peek().as_deref(), Some("7"));
+
+    inspection.selected.set(Some(Arc::from("8")));
+    inspection.take_walk(&walk(&[7, 8, 9]));
+    assert_eq!(
+        inspection.selected.peek().as_deref(),
+        Some("8"),
+        "a choice still there is kept"
+    );
+
+    inspection.take_walk(&walk(&[3, 4]));
+    assert_eq!(inspection.selected.peek().as_deref(), Some("3"));
+
+    inspection.take_walk(&[]);
+    assert_eq!(inspection.selected.peek(), None, "nothing to choose");
+}

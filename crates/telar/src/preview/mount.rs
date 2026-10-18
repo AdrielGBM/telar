@@ -2,7 +2,10 @@
 
 use std::rc::Rc;
 
-use crate::{BuildFailure, ErrorBoundary, LayoutError, LayoutItem, LayoutStyle, ReactiveList};
+use crate::{
+    BuildFailure, ErrorBoundary, LayoutError, LayoutItem, LayoutStyle, ReactiveList,
+    SegmentNodeInfo,
+};
 
 use super::PreviewCtx;
 
@@ -35,6 +38,25 @@ pub fn remounting(
         },
     )?;
     Ok(Box::new(mounts))
+}
+
+/// The part of a walk of a tree [`remounting`] mounted in that is the preview's own: what is under the boundary it catches the preview's failures in, a level up for every level the host put around it. That boundary is the first in the walk, since a parent comes before what it holds and nothing a host puts around a preview is one. A walk with no boundary is returned whole.
+pub fn preview_nodes(walk: &[SegmentNodeInfo]) -> Vec<SegmentNodeInfo> {
+    let Some(at) = walk
+        .iter()
+        .position(|node| node.name == ErrorBoundary::SEGMENT_NAME)
+    else {
+        return walk.to_vec();
+    };
+    let below = walk[at].depth + 1;
+    walk[at + 1..]
+        .iter()
+        .take_while(|node| node.depth >= below)
+        .map(|node| SegmentNodeInfo {
+            depth: node.depth - below,
+            ..node.clone()
+        })
+        .collect()
 }
 
 fn filling() -> LayoutStyle {

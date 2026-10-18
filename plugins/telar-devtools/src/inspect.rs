@@ -307,6 +307,7 @@ impl Inspection {
     }
 
     fn take_walk(&self, walk: &[SegmentNodeInfo]) {
+        self.keep_a_selection(walk);
         let same = self.nodes.peek_with(|current| {
             current.len() == walk.len()
                 && current
@@ -330,6 +331,20 @@ impl Inspection {
         }
         self.nodes
             .set(walk.iter().map(InspectedNode::of).collect::<Rc<[_]>>());
+    }
+
+    /// Selects the outermost component while nothing is, or what was is gone, so the details always show one where there is any.
+    fn keep_a_selection(&self, walk: &[SegmentNodeInfo]) {
+        let kept = self.selected.peek_with(|selected| {
+            selected
+                .as_deref()
+                .and_then(|id| id.parse::<u64>().ok())
+                .is_some_and(|id| walk.iter().any(|node| node.id == id))
+        });
+        if !kept {
+            self.selected
+                .set(walk.first().map(|root| Arc::from(root.id.to_string())));
+        }
     }
 }
 

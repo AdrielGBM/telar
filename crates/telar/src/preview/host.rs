@@ -13,7 +13,7 @@ use crate::{
 use super::{Layout, PreviewCtx, PreviewEntry};
 
 pub use super::args::{ArgError, ArgState, Args};
-pub use super::mount::remounting;
+pub use super::mount::{preview_nodes, remounting};
 
 #[cfg(not(target_os = "android"))]
 pub use super::app::PreviewApp;

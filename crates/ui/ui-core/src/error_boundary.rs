@@ -62,6 +62,9 @@ enum Attempt {
 }
 
 impl ErrorBoundary {
+    /// What a walk of the tree names a boundary's segment.
+    pub const SEGMENT_NAME: &'static str = "ErrorBoundary";
+
     /// A boundary laid out as a column around whichever subtree it shows.
     pub fn new(
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError> + 'static,
@@ -238,7 +241,7 @@ impl Component for ErrorBoundary {
     }
 
     fn debug_name(&self) -> &'static str {
-        "ErrorBoundary"
+        Self::SEGMENT_NAME
     }
 }
 

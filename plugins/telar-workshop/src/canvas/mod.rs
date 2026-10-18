@@ -7,6 +7,7 @@ telar::rsx_modules!();
 pub(crate) mod env;
 mod frame;
 mod guides;
+pub(crate) mod inspected;
 pub(crate) mod states;
 
 use std::rc::Rc;
@@ -92,7 +93,9 @@ fn mount(
         )
     })?;
     interactions::drive(state, &entry, playing, &surface, failures);
-    let following = state.inspection().follow(Rc::clone(&surface));
+    let following = state
+        .inspection()
+        .follow(inspected::PreviewOnly(Rc::clone(&surface)));
     on_cleanup(move || drop(following));
     let stage = frame::stage(state, entry.layout, globals, surface)?;
     let items = match header {

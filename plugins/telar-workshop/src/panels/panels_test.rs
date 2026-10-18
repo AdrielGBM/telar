@@ -657,25 +657,33 @@ fn inspected(id: &str) -> (crate::state::WorkshopState, ComponentList) {
 }
 
 #[test]
-fn the_layout_panel_lists_what_the_canvas_mounted_with_the_marks_to_draw_over_it() {
+fn the_layout_panel_lists_the_preview_s_components_with_its_root_chosen() {
     let (state, tree) = inspected(FIRING);
     state.panel_tab().set(crate::state::PanelTab::Layout);
     settle(&tree);
     let shown = texts(&tree);
-    for expected in [
-        "SurfaceRoot",
-        "Outline",
-        "Measure",
-        "Select a component to see its box.",
-    ] {
+    for expected in ["StyledContainer", "Outline", "Measure"] {
         assert!(
             shown.iter().any(|text| text == expected),
             "{expected:?} is shown: {shown:?}"
         );
     }
-    assert!(
-        !state.inspection().nodes().is_empty(),
-        "the inspection follows the mounted canvas"
+    for host in ["SurfaceRoot", "ReactiveList", "ErrorBoundary"] {
+        assert!(
+            !shown.iter().any(|text| text == host),
+            "{host} is the workshop's, not the preview's: {shown:?}"
+        );
+    }
+    let inspection = state.inspection();
+    let nodes = inspection.nodes();
+    let root = nodes
+        .first()
+        .expect("the inspection follows the mounted canvas");
+    assert_eq!(root.depth, 0);
+    assert_eq!(
+        inspection.selected_node().map(|node| node.id),
+        Some(root.id),
+        "the preview's root is chosen"
     );
 }
 
