@@ -1,5 +1,6 @@
-//! The sidebar: a search field over the previews, grouped by their title path in a tree.
+//! The sidebar: a search field over the previews, grouped by their title path in a tree, with a context menu on a secondary press.
 
+mod context;
 mod model;
 
 use std::cell::Cell;
@@ -9,11 +10,13 @@ use telar::focus::{self, Role};
 use telar::preview::PreviewEntry;
 use telar::{
     Accessible, AlignItems, BorderRadius, Children, Container, Key, LayoutError, LayoutItem,
-    LayoutStyle, Memo, NamedKey, NodeId, Reactive, ReactiveList, RectStyle, StyledContainer, Text,
-    box_item, children, effect, memo, signal, use_theme_tokens,
+    LayoutStyle, Memo, NamedKey, NodeId, PointerButton, Reactive, ReactiveList, RectStyle,
+    RwSignal, StyledContainer, Text, box_item, children, effect, memo, pointer_position, signal,
+    use_theme_tokens,
 };
 use telar_components::{
-    SearchFieldProps, TrailingBuilder, TreeNode, TreeViewProps, search_field, tree_view,
+    SearchFieldProps, TrailingBuilder, TreeContext, TreeNode, TreeViewProps, search_field,
+    tree_view,
 };
 use telar_devtools::{WORKBENCH_GRID, WORKBENCH_RADIUS, workbench_muted};
 
@@ -38,9 +41,28 @@ pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layo
             false => tree(&body_panel),
         },
     )?;
+    let asked = panel.asked;
+    let body = StyledContainer::new(
+        LayoutStyle::column().flex_grow(1.0).min_height(0.0),
+        |_| RectStyle::default(),
+        vec![box_item(body)],
+    )?
+    .on_alt_press(move |button| {
+        if button == PointerButton::Secondary {
+            asked.set(Some(context::Asked {
+                node: None,
+                at: pointer_position().unwrap_or_default(),
+                around: None,
+            }));
+        }
+    });
     let sidebar = Container::new(
         LayoutStyle::column().flex_grow(1.0).min_height(0.0),
-        vec![search_field_item(&panel)?, box_item(body)],
+        vec![
+            search_field_item(&panel)?,
+            box_item(body),
+            context::context_layer(state, asked)?,
+        ],
     )?;
     Ok(box_item(sidebar))
 }
@@ -54,6 +76,7 @@ struct Panel {
     state: WorkshopState,
     items: Memo<Vec<TreeNode>>,
     tree: Cell<Option<NodeId>>,
+    asked: RwSignal<Option<context::Asked>>,
 }
 
 impl Panel {
@@ -65,6 +88,7 @@ impl Panel {
             state: state.clone(),
             items,
             tree: Cell::new(None),
+            asked: signal(None),
         }
     }
 
@@ -207,6 +231,7 @@ fn drift_badges(state: &WorkshopState) -> TrailingBuilder {
 fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let state = &panel.state;
     let picked = panel.clone();
+    let asked = panel.asked;
     let tree = tree_view(
         TreeViewProps::props()
             .items(panel.items)
@@ -214,6 +239,9 @@ fn tree(panel: &Rc<Panel>) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .expanded(state.expanded())
             .on_select(Rc::new(move |_: &TreeNode| {
                 picked.close_drawer();
+            }))
+            .on_context(Rc::new(move |asked_for: TreeContext| {
+                asked.set(Some(asked_for.into()))
             }))
             .select_branches(false)
             .trailing(drift_badges(state))

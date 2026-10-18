@@ -20,6 +20,8 @@ pub(crate) const BUILD_FAILED: &str = "build_failed";
 pub(crate) const CANVAS_TOOLS: &str = "canvas_tools";
 pub(crate) const CLEAR_ACTIONS: &str = "clear_actions";
 pub(crate) const CLEAR_SEARCH: &str = "clear_search";
+pub(crate) const COLLAPSE_ALL: &str = "collapse_all";
+pub(crate) const COLLAPSE_GROUP: &str = "collapse_group";
 pub(crate) const COLUMN_DEFAULT: &str = "column_default";
 pub(crate) const COLUMN_DESCRIPTION: &str = "column_description";
 pub(crate) const COLUMN_NAME: &str = "column_name";
@@ -44,6 +46,8 @@ pub(crate) const DIRECTION: &str = "direction";
 pub(crate) const DIRECTION_AUTO: &str = "direction_auto";
 pub(crate) const DIRECTION_LTR: &str = "direction_ltr";
 pub(crate) const DIRECTION_RTL: &str = "direction_rtl";
+pub(crate) const EXPAND_ALL: &str = "expand_all";
+pub(crate) const EXPAND_GROUP: &str = "expand_group";
 pub(crate) const FILTER_ACTIONS: &str = "filter_actions";
 pub(crate) const FIND: &str = "find";
 pub(crate) const FIND_IN: &str = "find_in";
@@ -212,6 +216,8 @@ static CATALOG: Catalog = Catalog {
         english!(CANVAS_TOOLS, "Canvas tools"),
         english!(CLEAR_ACTIONS, "Clear"),
         english!(CLEAR_SEARCH, "Clear search"),
+        english!(COLLAPSE_ALL, "Collapse all"),
+        english!(COLLAPSE_GROUP, "Collapse the group"),
         english!(COLUMN_DEFAULT, "Default"),
         english!(COLUMN_DESCRIPTION, "Description"),
         english!(COLUMN_NAME, "Name"),
@@ -236,6 +242,8 @@ static CATALOG: Catalog = Catalog {
         english!(DIRECTION_AUTO, "Auto direction"),
         english!(DIRECTION_LTR, "Left to right"),
         english!(DIRECTION_RTL, "Right to left"),
+        english!(EXPAND_ALL, "Expand all"),
+        english!(EXPAND_GROUP, "Expand the group"),
         english!(FILTER_ACTIONS, "Filter actions"),
         english!(FIND, "Find a preview or command"),
         english!(FIND_IN, "Find a preview or command in ", { arg }),

@@ -44,7 +44,7 @@ pub(super) fn location(entry: &PreviewEntry) -> Option<String> {
 }
 
 /// The URI that opens `file` at `line` in the editor the system hands it to, the path percent-encoded and with forward slashes on every platform.
-pub(super) fn editor_uri(file: &str, line: u32) -> String {
+pub(crate) fn editor_uri(file: &str, line: u32) -> String {
     let path = file.replace('\\', "/");
     let mut encoded = String::with_capacity(path.len());
     for byte in path.trim_start_matches('/').bytes() {

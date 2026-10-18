@@ -2,10 +2,11 @@ use telar::preview::PreviewCtx;
 use telar::testing::{centre, find_text, key_with, mount, named, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Component, ComponentList, Container, Event, LayoutStyle, LocalApp,
-    Rect, WindowRoot, reset_layout_runtime,
+    PointerSource, Rect, WindowRoot, reset_layout_runtime,
 };
 
 use super::*;
+use crate::state::ViewMode;
 use crate::test_support::settle;
 
 fn blank(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -386,4 +387,142 @@ fn a_search_finds_previews_by_their_package_and_keeps_the_package_level() {
     assert!(sidebar.drawn("app"));
     assert!(sidebar.drawn("Primary"));
     assert!(!sidebar.drawn("Ghost"));
+}
+
+impl Mounted {
+    fn secondary_click(&mut self, rect: Rect) {
+        let (x, y) = centre(rect);
+        let button = PointerButton::Secondary;
+        self.send(Event::PointerPressed {
+            x,
+            y,
+            button,
+            source: PointerSource::Mouse,
+        });
+        self.send(Event::PointerReleased {
+            x,
+            y,
+            button,
+            source: PointerSource::Mouse,
+        });
+    }
+
+    fn menu(&self) -> Vec<String> {
+        self.runtime
+            .access_snapshot(&self.tree.commands())
+            .into_iter()
+            .filter(|node| node.role == Role::MenuItem)
+            .map(|node| node.name)
+            .collect()
+    }
+
+    fn pick(&mut self, name: &str) {
+        let row = self
+            .runtime
+            .access_snapshot(&self.tree.commands())
+            .into_iter()
+            .find(|node| node.role == Role::MenuItem && node.name == name)
+            .unwrap_or_else(|| panic!("no menu row named {name:?} among {:?}", self.menu()));
+        self.click(row.rect);
+    }
+}
+
+#[test]
+fn a_group_s_menu_opens_or_shuts_it_and_everything_else() {
+    let mut sidebar = Mounted::new(entries());
+    let inputs = sidebar.row("Inputs").rect;
+    sidebar.secondary_click(inputs);
+    assert_eq!(
+        sidebar.menu(),
+        [
+            "Expand the group",
+            "Collapse the group",
+            "Expand all",
+            "Collapse all"
+        ]
+    );
+    sidebar.pick("Collapse the group");
+    let open = sidebar.state().expanded().get();
+    assert!(!open.contains("/Inputs") && !open.contains("/Inputs/Button"));
+    assert!(open.contains("/Overlays"), "the other groups stay open");
+    assert!(sidebar.menu().is_empty(), "picking a row closes the menu");
+
+    sidebar.secondary_click(sidebar.row("Overlays").rect);
+    sidebar.pick("Collapse all");
+    assert!(sidebar.state().expanded().get().is_empty());
+    assert!(!sidebar.drawn("Primary"));
+
+    sidebar.secondary_click(sidebar.row("Inputs").rect);
+    sidebar.pick("Expand all");
+    assert_eq!(
+        sidebar.state().expanded().get(),
+        crate::sidebar::group_ids(sidebar.state().entries())
+            .into_iter()
+            .collect()
+    );
+    assert!(sidebar.drawn("Primary"));
+}
+
+#[test]
+fn a_preview_s_menu_shows_it_in_a_view_and_selects_it() {
+    let mut sidebar = Mounted::new(entries());
+    sidebar.secondary_click(sidebar.row("Open").rect);
+    assert_eq!(
+        sidebar.menu(),
+        [
+            "Show the canvas",
+            "Show the matrix",
+            "Show the docs",
+            "Copy link",
+            "Expand all",
+            "Collapse all"
+        ]
+    );
+    assert_eq!(
+        sidebar.selected().as_deref(),
+        Some("button--primary"),
+        "asking for the menu chooses nothing"
+    );
+    sidebar.pick("Show the docs");
+    assert_eq!(sidebar.selected().as_deref(), Some("modal--open"));
+    assert_eq!(sidebar.state().view().get(), ViewMode::Docs);
+}
+
+#[test]
+fn the_space_under_the_rows_offers_what_concerns_every_group() {
+    let mut sidebar = Mounted::new(entries());
+    sidebar.secondary_click(Rect::new(20.0, 560.0, 10.0, 10.0));
+    assert_eq!(sidebar.menu(), ["Expand all", "Collapse all"]);
+}
+
+#[test]
+fn the_context_menu_key_opens_the_menu_of_the_row_the_keyboard_is_on() {
+    let mut sidebar = Mounted::new(entries());
+    sidebar.focus_tree();
+    sidebar.key(NamedKey::ContextMenu);
+    assert_eq!(
+        sidebar.menu(),
+        [
+            "Show the canvas",
+            "Show the matrix",
+            "Show the docs",
+            "Copy link",
+            "Expand all",
+            "Collapse all"
+        ],
+        "the keyboard arrives on the selected preview"
+    );
+    sidebar.key(NamedKey::Escape);
+    assert!(sidebar.menu().is_empty());
+}
+
+#[test]
+fn a_preview_written_in_a_known_file_offers_to_open_it_in_the_editor() {
+    let mut sidebar = Mounted::new(vec![
+        PreviewEntry::new("card--plain", "card", "Plain", blank)
+            .title("Display/Card")
+            .location("/src/card.rsx", 12),
+    ]);
+    sidebar.secondary_click(sidebar.row("Plain").rect);
+    assert!(sidebar.menu().contains(&"Open in editor".to_string()));
 }
