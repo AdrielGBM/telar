@@ -369,12 +369,13 @@ pub(crate) fn dismissed_by_press(
     backdrop.role(Role::Group).on_press(dismiss)
 }
 
-/// A drawn mark: what a control wears where a text glyph would depend on a face carrying it. `ChevronForward` is toward the end of the line, so it turns round in a right-to-left region.
+/// A drawn mark: what a control wears where a text glyph would depend on a face carrying it. `ChevronForward` is toward the end of the line and `ChevronBack` toward its start, so both turn round in a right-to-left region.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mark {
     ChevronDown,
     ChevronUp,
     ChevronForward,
+    ChevronBack,
     Close,
     Check,
     Minimize,
@@ -416,7 +417,9 @@ fn mark_box(shape: Mark) -> LayoutStyle {
     let whole = |ratio: f32| (icon_size() * ratio / 2.0).round() * 2.0;
     let (width, height) = match shape {
         Mark::ChevronDown | Mark::ChevronUp => (whole(CHEVRON_RATIO), whole(CHEVRON_RATIO) / 2.0),
-        Mark::ChevronForward => (whole(CHEVRON_RATIO) / 2.0, whole(CHEVRON_RATIO)),
+        Mark::ChevronForward | Mark::ChevronBack => {
+            (whole(CHEVRON_RATIO) / 2.0, whole(CHEVRON_RATIO))
+        }
         Mark::Close
         | Mark::Check
         | Mark::Minimize
@@ -445,10 +448,11 @@ fn mark_path(shape: Mark, rect: Rect) -> telar::PathData {
     match (shape, telar::current_direction()) {
         (Mark::ChevronDown, _) => stroke(&[(0.0, 0.0), (w / 2.0, h), (w, 0.0)]),
         (Mark::ChevronUp, _) => stroke(&[(0.0, h), (w / 2.0, 0.0), (w, h)]),
-        (Mark::ChevronForward, telar::Direction::Rtl) => {
-            stroke(&[(w, 0.0), (0.0, h / 2.0), (w, h)])
+        (Mark::ChevronForward, telar::Direction::Rtl)
+        | (Mark::ChevronBack, telar::Direction::Ltr) => stroke(&[(w, 0.0), (0.0, h / 2.0), (w, h)]),
+        (Mark::ChevronForward | Mark::ChevronBack, _) => {
+            stroke(&[(0.0, 0.0), (w, h / 2.0), (0.0, h)])
         }
-        (Mark::ChevronForward, _) => stroke(&[(0.0, 0.0), (w, h / 2.0), (0.0, h)]),
         (Mark::Close, _) => stroke(&[(0.0, 0.0), (w, h)])
             .move_to(at((w, 0.0)))
             .line_to(at((0.0, h))),

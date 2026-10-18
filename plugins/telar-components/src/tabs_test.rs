@@ -374,3 +374,134 @@ fn a_trailing_item_keeps_a_gap_from_the_name() {
     let gap = count.x - (name.x + name.width);
     assert!((gap - shared::gap_sm()).abs() < 0.5, "{gap}");
 }
+
+const MANY: [&str; 6] = [
+    "Overview", "Activity", "Settings", "Members", "Billing", "Archive",
+];
+
+/// Six tabs in a row `width` wide, the second chosen, laid out and drawn.
+fn strip_of(width: f32, selected: RwSignal<u32>) -> (ComponentList, NodeId) {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let item = tab_list(
+        selected,
+        MANY.iter()
+            .zip(0u32..)
+            .map(|(name, i)| Tab::new(i, *name))
+            .collect(),
+        Color::TRANSPARENT.into(),
+        None,
+    )
+    .unwrap();
+    let node = item.layout_node();
+    let root = new_container(
+        LayoutStyle::new().flex_row().width(width).height(100.0),
+        &[node],
+    )
+    .unwrap();
+    compute_layout(
+        root,
+        AvailableSpace::Definite(width),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let mut tree = ComponentList::new(item);
+    settle(&mut tree);
+    (tree, node)
+}
+
+fn settle(tree: &mut ComponentList) {
+    for _ in 0..3 {
+        telar::relayout_if_dirty();
+        let _ = tree.commands();
+    }
+}
+
+/// Where each tab is drawn, after every transform and clip between it and the surface.
+fn tab_rects() -> Vec<telar::Rect> {
+    crate::test_support::drawn(Role::Tab)
+}
+
+#[test]
+fn tabs_that_fit_stand_as_they_are_with_no_arrows() {
+    let (_tree, strip) = strip_of(800.0, signal(0));
+    let tabs = tab_rects();
+    let strip = telar::track_layout(strip).unwrap().get();
+    assert_eq!(tabs[0].x, strip.x, "the first tab starts the strip");
+    let last = tabs[tabs.len() - 1];
+    assert!(
+        (last.x + last.width - (strip.x + strip.width)).abs() < 0.5,
+        "and the last one ends it: nothing beside them"
+    );
+}
+
+#[test]
+fn an_arrow_chooses_the_tab_before_or_after_the_chosen_one() {
+    let selected = signal(0u32);
+    let (mut tree, strip) = strip_of(220.0, selected);
+    let strip = telar::track_layout(strip).unwrap().get();
+    let first = tab_rects()[0];
+    assert!(
+        first.x > strip.x,
+        "an arrow stands before the tabs: {first:?}"
+    );
+    let y = (first.y + first.height / 2.0) as f64;
+    let click = |tree: &mut ComponentList, x: f32| {
+        route(tree, &press(x as f64, y));
+        route(tree, &release(x as f64, y));
+        settle(tree);
+    };
+
+    click(&mut tree, strip.x + 4.0);
+    assert_eq!(
+        selected.get(),
+        0,
+        "before the first tab there is none to choose"
+    );
+    click(&mut tree, strip.x + strip.width - 4.0);
+    assert_eq!(selected.get(), 1);
+    click(&mut tree, strip.x + 4.0);
+    assert_eq!(selected.get(), 0);
+}
+
+#[test]
+fn the_tab_chosen_stands_in_the_middle_of_the_strip() {
+    let selected = signal(0u32);
+    let (mut tree, strip) = strip_of(220.0, selected);
+    let strip = telar::track_layout(strip).unwrap().get();
+    selected.set(3);
+    settle(&mut tree);
+    let chosen = tab_rects()[3];
+    let middle = strip.x + strip.width / 2.0;
+    assert!(
+        (chosen.x + chosen.width / 2.0 - middle).abs() < 1.0,
+        "{chosen:?} centred in {strip:?}"
+    );
+}
+
+/// A mouse with one wheel moves the strip too, and moving it chooses nothing.
+#[test]
+fn the_wheel_moves_the_tabs_along_without_choosing_one() {
+    let selected = signal(0u32);
+    let (mut tree, _) = strip_of(220.0, selected);
+    let first = tab_rects()[0];
+    route(
+        &mut tree,
+        &telar::Event::Scrolled {
+            delta: telar::ScrollDelta::Pixels { x: 0.0, y: -40.0 },
+            x: (first.x + first.width / 2.0) as f64,
+            y: (first.y + first.height / 2.0) as f64,
+        },
+    );
+    settle(&mut tree);
+    assert_eq!(tab_rects()[0].x, first.x - 40.0);
+    assert_eq!(selected.get(), 0);
+}
+
+/// A list a fraction wider than the whole-pixel strip snapping gave it fits: read as overflowing, the arrows would come and go every frame.
+#[test]
+fn a_list_overflows_its_strip_only_by_more_than_snapping_opens_between_them() {
+    assert!(!overflows(480.62, 480.0));
+    assert!(!overflows(480.0, 480.0));
+    assert!(overflows(500.0, 480.0));
+}

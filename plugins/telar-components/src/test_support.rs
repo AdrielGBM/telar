@@ -103,14 +103,15 @@ pub(crate) fn painted_at(tree: &telar::ComponentList, at: telar::Rect) -> telar:
         .iter()
         .all(|d| d.abs() < 0.5)
     };
-    tree.commands()
-        .iter()
-        .rev()
-        .find_map(|command| match command {
-            telar::DrawCommand::Rect { rect, style, .. } if same(*rect) => Some(**style),
-            _ => None,
-        })
-        .expect("a box is drawn there")
+    let mut painted = None;
+    telar::for_each_with_matrix(&tree.commands(), |command, matrix| {
+        if let telar::DrawCommand::Rect { rect, style, .. } = command
+            && same(telar::transform_clip_rect(matrix, *rect))
+        {
+            painted = Some(**style);
+        }
+    });
+    painted.expect("a box is drawn there")
 }
 
 /// The corner role a floating panel is rounded by.

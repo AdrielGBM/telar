@@ -6,9 +6,10 @@ use std::rc::Rc;
 use telar::focus::{self, FocusId};
 use telar::{
     Accessible, AlignItems, BorderRadius, Children, Color, Container, JustifyContent, Key, KeyNav,
-    KeyNavMove, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, RectStyle, RwSignal,
-    ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextStyle, amend_surface, box_item,
-    current_direction, focus::Role, key_nav_apply, signal,
+    KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, Props, Reactive,
+    Rect, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextStyle,
+    amend_surface, box_item, current_direction, effect, focus::Role, key_nav_apply, signal,
+    track_layout,
 };
 
 #[cfg(feature = "workbench")]
@@ -183,13 +184,180 @@ where
         tab_items.push(tab(selected, entry, index, &paint, &values, &focus_ids)?);
     }
 
+    let nodes: Rc<[NodeId]> = tab_items.iter().map(|tab| tab.layout_node()).collect();
     let row = Container::new(bar(), tab_items)?
         .styled_by(bar)
         .role(Role::TabList);
-    Ok(match label {
+    let list = match label {
         Some(label) => box_item(row.a11y_label(move || label.get())),
         None => box_item(row),
-    })
+    };
+    let stepping = Stepping {
+        selected,
+        values,
+        nodes,
+    };
+    scrolling(list, stepping)
+}
+
+/// `list` in a strip that scrolls it sideways, by the wheel as well, once it is wider than the room it is given, with the tab chosen kept in its middle and an arrow at either end that chooses the tab before or after it. The arrows are no Tab stops and say nothing to a reader: the keys that walk the tabs already do what they do.
+fn scrolling<T>(
+    list: Box<dyn LayoutItem>,
+    stepping: Stepping<T>,
+) -> Result<Box<dyn LayoutItem>, LayoutError>
+where
+    T: Copy + PartialEq + 'static,
+{
+    let list_rect = track_layout(list.layout_node()).expect("a tab list is registered");
+    let mut held = None;
+    let scroll = LayoutScrollArea::new_with(
+        LayoutStyle::row().flex_shrink(1.0).min_width(0.0),
+        |viewport| {
+            held = Some(viewport);
+            Ok(list)
+        },
+    )?
+    .wheel_sideways();
+    let viewport = held.expect("a scroll area builds its content before it returns");
+    let centring = stepping.clone();
+    // Follows where the chosen tab stands and how wide the view is, never the offset, so scrolling the strip by hand is left alone until another tab is chosen.
+    effect(move || {
+        let Some(tab) = centring.chosen_node().and_then(track_layout) else {
+            return;
+        };
+        let (tab, view) = (tab.get(), viewport.rect().get());
+        let furthest = (list_rect.peek().width - view.width).max(0.0);
+        let middle = tab.x + tab.width / 2.0 - view.width / 2.0;
+        viewport.scroll_to(middle.clamp(0.0, furthest), 0.0);
+    });
+    let laid = signal(None::<RwSignal<Rect>>);
+    let overflows = move || {
+        laid.get()
+            .is_some_and(|strip| overflows(list_rect.get().width, strip.get().width))
+    };
+    let strip_box = || {
+        LayoutStyle::row()
+            .align_items(AlignItems::CENTER)
+            .flex_shrink(1.0)
+            .min_width(0.0)
+    };
+    let (back, forward) = (stepping.clone(), stepping);
+    let strip = Container::new(
+        strip_box(),
+        vec![
+            shared::shown_while(overflows, LayoutStyle::row(), move || {
+                arrow(back.clone(), false)
+            })?,
+            box_item(scroll),
+            shared::shown_while(overflows, LayoutStyle::row(), move || {
+                arrow(forward.clone(), true)
+            })?,
+        ],
+    )?
+    .styled_by(strip_box);
+    laid.set(track_layout(strip.layout_node()));
+    Ok(box_item(strip))
+}
+
+/// Whether a list `list` wide overflows a strip `strip` wide: by more than the pixel snapping can open between the two, since the strip's edges are snapped to whole pixels and the list's width is not.
+///
+/// Against the whole strip rather than the part the arrows leave. A strip with room to spare is as wide as it asks, arrows and all, so were a list a fraction wider than its snapped strip read as overflowing, the arrows would widen the strip, take themselves away, and come back the next frame.
+fn overflows(list: f32, strip: f32) -> bool {
+    list > strip + 1.0
+}
+
+/// What the arrows move: the selection, along the tabs in their order.
+struct Stepping<T: 'static> {
+    selected: RwSignal<T>,
+    values: Rc<[T]>,
+    nodes: Rc<[NodeId]>,
+}
+
+impl<T: 'static> Clone for Stepping<T> {
+    fn clone(&self) -> Self {
+        Self {
+            selected: self.selected,
+            values: Rc::clone(&self.values),
+            nodes: Rc::clone(&self.nodes),
+        }
+    }
+}
+
+impl<T: Copy + PartialEq + 'static> Stepping<T> {
+    fn chosen(&self) -> Option<usize> {
+        let at = self.selected.get();
+        self.values.iter().position(|value| *value == at)
+    }
+
+    fn chosen_node(&self) -> Option<NodeId> {
+        self.chosen()
+            .and_then(|index| self.nodes.get(index).copied())
+    }
+
+    /// The tab an arrow toward the end of the line, or toward its start, would choose: `None` past the last or the first.
+    fn next(&self, toward_end: bool) -> Option<usize> {
+        let at = self.chosen()?;
+        match toward_end {
+            true => (at + 1 < self.values.len()).then_some(at + 1),
+            false => at.checked_sub(1),
+        }
+    }
+
+    fn step(&self, toward_end: bool) {
+        if let Some(next) = self.next(toward_end) {
+            self.selected.set(self.values[next]);
+        }
+    }
+}
+
+fn arrow<T: Copy + PartialEq + 'static>(
+    stepping: Stepping<T>,
+    toward_end: bool,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let spent = {
+        let stepping = stepping.clone();
+        move || stepping.next(toward_end).is_none()
+    };
+    let shape = move || match toward_end {
+        true => shared::Mark::ChevronForward,
+        false => shared::Mark::ChevronBack,
+    };
+    let faded = spent.clone();
+    let face = shared::mark(shape, move |text| match faded() {
+        true => text.color.faded(shared::QUIET_ALPHA * shared::QUIET_ALPHA),
+        false => text.color.faded(shared::QUIET_ALPHA),
+    })?;
+    let wash = |fill: fn() -> Color| {
+        let spent = spent.clone();
+        move |_r| {
+            let rect =
+                RectStyle::default().with_radius(BorderRadius::all(TabsTokens::current().radius()));
+            match spent() {
+                true => rect,
+                false => rect.with_fill(fill()),
+            }
+        }
+    };
+    let arrow_box = || {
+        LayoutStyle::row()
+            .align_items(AlignItems::CENTER)
+            .justify_content(JustifyContent::CENTER)
+            .flex_shrink(0.0)
+            .width(shared::icon_size() + shared::icon_pad() * 2.0)
+            .min_height(shared::control_height())
+    };
+    let pressed = spent.clone();
+    let arrow = StyledContainer::new(arrow_box(), |_r| RectStyle::default(), vec![face])?
+        .styled_by(arrow_box)
+        .hover_style(wash(shared::hover_wash))
+        .active_style(wash(shared::pressed_wash))
+        .on_press(move || {
+            if !pressed() {
+                stepping.step(toward_end);
+            }
+        })
+        .a11y_hidden();
+    Ok(box_item(arrow))
 }
 
 fn tab<T>(

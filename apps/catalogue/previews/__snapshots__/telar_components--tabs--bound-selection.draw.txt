@@ -4,38 +4,50 @@ element group
   element group
     element group
       element group
-        element tablist
-          element tab
-            rect 243,286 87x28 radius=10
-            element group
-              matrix 1,0,0,1,255,286
-                text 0,5 63x16.8 "Overview" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+        element group
+          element group
+          end
+          element scrollarea
+            clip 243,286 314x28
+              matrix 1,0,0,1,243,286
+                element tablist
+                  element tab
+                    rect 0,0 87x28 radius=10
+                    element group
+                      matrix 1,0,0,1,12,0
+                        text 0,5 63x16.8 "Overview" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+                      end
+                    end
+                  end
+                  element tab
+                    rect 91,0 73x28 radius=10
+                    element group
+                      matrix 1,0,0,1,103,0
+                        text 0,5 49.61x16.8 "Activity" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+                      end
+                    end
+                  end
+                  element tab
+                    rect 168,0 78x28 fill=#3852caff radius=10
+                    element group
+                      matrix 1,0,0,1,180,0
+                        text 0,5 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
+                      end
+                    end
+                  end
+                  element tab
+                    rect 250,0 64x28 radius=10
+                    element group
+                      matrix 1,0,0,1,262,0
+                        text 0,5 40x16.8 "Billing" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+                      end
+                    end
+                  end
+                end
               end
             end
           end
-          element tab
-            rect 334,286 73x28 radius=10
-            element group
-              matrix 1,0,0,1,346,286
-                text 0,5 49.61x16.8 "Activity" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
-              end
-            end
-          end
-          element tab
-            rect 411,286 78x28 fill=#3852caff radius=10
-            element group
-              matrix 1,0,0,1,423,286
-                text 0,5 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#ffffffff lang=en
-              end
-            end
-          end
-          element tab
-            rect 493,286 64x28 radius=10
-            element group
-              matrix 1,0,0,1,505,286
-                text 0,5 40x16.8 "Billing" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
-              end
-            end
+          element group
           end
         end
       end

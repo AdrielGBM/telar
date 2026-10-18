@@ -4,30 +4,42 @@ element group
   element group
     element group
       element group
-        element tablist
-          element tab
-            rect 277,286 87x28 radius=10
-            element group
-              matrix 1,0,0,1,289,286
-                text 0,5 63x16.8 "Overview" size=14 family=sans-serif weight=400 color=#ebedf5b3 lang=en
+        element group
+          element group
+          end
+          element scrollarea
+            clip 277,286 246x28
+              matrix 1,0,0,1,277,286
+                element tablist
+                  element tab
+                    rect 0,0 87x28 radius=10
+                    element group
+                      matrix 1,0,0,1,12,0
+                        text 0,5 63x16.8 "Overview" size=14 family=sans-serif weight=400 color=#ebedf5b3 lang=en
+                      end
+                    end
+                  end
+                  element tab
+                    rect 91,0 73x28 fill=#627ed9ff radius=10
+                    element group
+                      matrix 1,0,0,1,103,0
+                        text 0,5 49.61x16.8 "Activity" size=14 family=sans-serif weight=400 color=#0d0f1fff lang=en
+                      end
+                    end
+                  end
+                  element tab
+                    rect 168,0 78x28 radius=10
+                    element group
+                      matrix 1,0,0,1,180,0
+                        text 0,5 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#ebedf5b3 lang=en
+                      end
+                    end
+                  end
+                end
               end
             end
           end
-          element tab
-            rect 368,286 73x28 fill=#627ed9ff radius=10
-            element group
-              matrix 1,0,0,1,380,286
-                text 0,5 49.61x16.8 "Activity" size=14 family=sans-serif weight=400 color=#0d0f1fff lang=en
-              end
-            end
-          end
-          element tab
-            rect 445,286 78x28 radius=10
-            element group
-              matrix 1,0,0,1,457,286
-                text 0,5 54x16.8 "Settings" size=14 family=sans-serif weight=400 color=#ebedf5b3 lang=en
-              end
-            end
+          element group
           end
         end
       end
