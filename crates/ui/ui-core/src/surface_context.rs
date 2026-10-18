@@ -11,7 +11,7 @@ use std::rc::{Rc, Weak};
 use i18n_core::{LocaleContext, LocaleGuard};
 use layout_reactive::{
     DirectionContext, DirectionGuard, LayoutContext, LayoutGuard, ParentsContext, ParentsGuard,
-    SurfaceSizeContext, SurfaceSizeGuard,
+    ScrollHostsContext, ScrollHostsGuard, SurfaceSizeContext, SurfaceSizeGuard,
 };
 use platform_core::{WindowCommandContext, WindowCommandGuard};
 use preferences_core::{HighContrastContext, HighContrastGuard};
@@ -41,6 +41,7 @@ pub struct Surface {
     layout: LayoutContext,
     /// Which node hangs from which, swapped with `layout` and never apart from it. Each surface's layout tree mints its node ids from its own counter, so the same `NodeId` names a different node in every surface — one shared map would have them overwrite each other's links, and a climb would leave the surface it started in. It is a separate world only because a measure closure runs inside the layout runtime's borrow and reaching back into it would re-enter.
     parents: ParentsContext,
+    scroll_hosts: ScrollHostsContext,
     size: SurfaceSizeContext,
     overlay: OverlayContext,
     dismiss: DismissContext,
@@ -75,6 +76,7 @@ impl Surface {
                 handle,
                 layout: LayoutContext::new_owned(),
                 parents: ParentsContext::new_owned(),
+                scroll_hosts: ScrollHostsContext::new_owned(),
                 size: SurfaceSizeContext::new_owned(),
                 overlay: OverlayContext::new_owned(),
                 dismiss: DismissContext::new_owned(),
@@ -120,6 +122,7 @@ impl Surface {
         SurfaceGuard {
             _layout: self.layout.enter(),
             _parents: self.parents.enter(),
+            _scroll_hosts: self.scroll_hosts.enter(),
             _size: self.size.enter(),
             _overlay: self.overlay.enter(),
             _dismiss: self.dismiss.enter(),
@@ -155,6 +158,7 @@ impl Surface {
         SurfaceGuard {
             _layout: LayoutContext::enter_ambient(),
             _parents: ParentsContext::enter_ambient(),
+            _scroll_hosts: ScrollHostsContext::enter_ambient(),
             _size: SurfaceSizeContext::enter_ambient(),
             _overlay: OverlayContext::enter_ambient(),
             _dismiss: DismissContext::enter_ambient(),
@@ -198,6 +202,7 @@ impl Drop for Surface {
 pub struct SurfaceGuard {
     _layout: LayoutGuard,
     _parents: ParentsGuard,
+    _scroll_hosts: ScrollHostsGuard,
     _size: SurfaceSizeGuard,
     _overlay: OverlayGuard,
     _dismiss: DismissGuard,

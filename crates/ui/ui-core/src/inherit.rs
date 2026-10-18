@@ -111,6 +111,42 @@ pub(crate) fn reset_cascade() {
     with_cascade(|c| *c = reactive_core::in_surface_world(Cascade::default));
 }
 
+/// `node` and every node above it, nearest first, crossing from a scroll's content to the area that shows it as an `overflow: auto` box's content inherits in CSS, though the layout tree keeps the two apart.
+fn lineage(node: NodeId) -> Lineage {
+    Lineage {
+        climb: layout_reactive::ancestors(node),
+        last: None,
+        crossed: 0,
+    }
+}
+
+/// How many scroll areas a climb crosses at most, which only a cycle the registry should never hold could reach.
+const MAX_CROSSINGS: u32 = 64;
+
+struct Lineage {
+    climb: layout_reactive::Ancestors,
+    last: Option<NodeId>,
+    crossed: u32,
+}
+
+impl Iterator for Lineage {
+    type Item = NodeId;
+
+    fn next(&mut self) -> Option<NodeId> {
+        if let Some(node) = self.climb.next() {
+            self.last = Some(node);
+            return Some(node);
+        }
+        let area = layout_reactive::scroll_host(self.last.take()?)?;
+        self.crossed += 1;
+        if self.crossed > MAX_CROSSINGS {
+            return None;
+        }
+        self.climb = layout_reactive::ancestors(area);
+        self.next()
+    }
+}
+
 /// Records what `node` says for everything beneath it.
 pub fn declare(node: NodeId, declared: Declared) {
     let existing = with_cascade_ref(|c| c.declared.get(&node).cloned());
@@ -189,7 +225,7 @@ pub fn context(node: NodeId) -> Rc<Inherited> {
 
     let mut chain: Vec<Declared> = Vec::new();
     let mut theme = None;
-    for current in layout_reactive::ancestors(node) {
+    for current in lineage(node) {
         let (declared, themed) = with_cascade_ref(|c| {
             (
                 c.declared.get(&current).copied(),

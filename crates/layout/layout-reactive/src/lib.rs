@@ -18,15 +18,16 @@ pub use surface_size::{
 
 pub use context::{
     Ancestors, LayoutContext, LayoutGuard, NodeRecording, ParentsContext, ParentsGuard,
-    RelayoutHook, absolute_rect, after_layout, ancestors, attach_overlay, box_model, children,
-    compute_layout, container_is_row, declared_css, detach_node, detach_overlay, free_with,
-    is_descendant_of, is_hidden, is_sticky, lay_out_against_surface, layout_passes,
-    live_node_count, mark_dirty, measure_again, new_container, new_drawn_leaf, new_leaf,
-    new_measured_leaf, on_relayout, overlay_viewport, parent, record_nodes, relayout_if_dirty,
-    remeasure_since, remove_node, reset_layout_runtime, set_children, set_container_row,
-    set_display, set_layout_style, set_leading_margin, set_min_height, set_overlay_host,
-    set_scroll_content, set_sticky_view, sticky_displacement, track_display_none, track_layout,
-    track_parent, unrounded_height, unrounded_width,
+    RelayoutHook, ScrollHostsContext, ScrollHostsGuard, absolute_rect, after_layout, ancestors,
+    attach_overlay, box_model, children, compute_layout, container_is_row, declared_css,
+    detach_node, detach_overlay, free_with, is_descendant_of, is_hidden, is_sticky,
+    lay_out_against_surface, layout_passes, live_node_count, mark_dirty, measure_again,
+    new_container, new_drawn_leaf, new_leaf, new_measured_leaf, on_relayout, overlay_viewport,
+    parent, record_nodes, relayout_if_dirty, remeasure_since, remove_node, reset_layout_runtime,
+    scroll_host, set_children, set_container_row, set_display, set_layout_style,
+    set_leading_margin, set_min_height, set_overlay_host, set_scroll_content, set_sticky_view,
+    sticky_displacement, track_display_none, track_layout, track_parent, unrounded_height,
+    unrounded_width,
 };
 pub use layout_core::{
     AlignItems, AvailableSpace, Css, Direction, JustifyContent, LayoutError, LayoutStyle,

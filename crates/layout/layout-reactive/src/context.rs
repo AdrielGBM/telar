@@ -20,6 +20,13 @@ reactive_core::surface_local! {
 }
 
 reactive_core::surface_local! {
+    /// Which scroll area shows each scroll content, kept apart from [`PARENTS`] because a climb up the layout tree stops at a scroll's content, and kept apart from [`LAYOUT_RUNTIME`] for the reason [`PARENTS`] is: inheritance reads it while text is measured.
+    slot SCROLL_HOSTS: FxHashMap<NodeId, NodeId> = FxHashMap::default();
+    access with_scroll_hosts, with_scroll_hosts_ref;
+    context ScrollHostsContext, ScrollHostsGuard;
+}
+
+reactive_core::surface_local! {
     /// A per-surface layout tree: the taffy engine plus the node→rect-signal registry. The layout tree is a per-surface world so nodes can be created and laid out from anywhere — including reactive effects (reactive lists) that fire from an effect body. Under M3 several surfaces share one UI thread, so the runner activates each surface's [`LayoutContext`] around its build/event/frame; app code just calls the free functions, which operate on whichever surface is currently active.
     slot LAYOUT_RUNTIME: LayoutRuntime = LayoutRuntime::new();
     access with_runtime, with_runtime_ref;
@@ -30,6 +37,7 @@ reactive_core::surface_local! {
 pub fn reset_layout_runtime() {
     with_runtime(|rt| *rt = LayoutRuntime::new());
     with_parents(|p| p.clear());
+    with_scroll_hosts(|h| h.clear());
 }
 
 /// Creates a leaf node and returns it with the signal its laid-out rect is published through.
@@ -342,12 +350,19 @@ pub fn free_with(root: NodeId, holder: NodeId) {
 
 /// Makes `host` a scroll container showing `content`, as an `overflow: auto` box shows its children in CSS.
 ///
-/// The content is laid out inside the host in the same pass, so the host is sized by it wherever it is sized by its content — a shrink-to-fit parent, an auto height, a `max_height` it is clamped to — and is freed with it. It is still placed apart: its rects are published in a space of its own with its top-left at the origin, the space the scroll offset indexes into, and no parent link joins it to the host, so a climb from inside it ends at the content.
+/// The content is laid out inside the host in the same pass, so the host is sized by it wherever it is sized by its content — a shrink-to-fit parent, an auto height, a `max_height` it is clamped to — and is freed with it. It is still placed apart: its rects are published in a space of its own with its top-left at the origin, the space the scroll offset indexes into, and no parent link joins it to the host, so a climb from inside it ends at the content. [`scroll_host`] answers which host shows it, for a reader that has to cross, as inheritance does.
 pub fn set_scroll_content(host: NodeId, content: NodeId) -> Result<(), LayoutError> {
     with_runtime(|rt| {
         rt.engine.set_scroll_content(host, content)?;
         rt.engine.mark_dirty(host)
-    })
+    })?;
+    with_scroll_hosts(|h| h.insert(content, host));
+    Ok(())
+}
+
+/// The scroll area that shows `content`, a scroll's content: `None` for any other node.
+pub fn scroll_host(content: NodeId) -> Option<NodeId> {
+    with_scroll_hosts_ref(|h| h.get(&content).copied())
 }
 
 /// How many layout passes the active surface has run: computes that found something dirty and laid it out, not the calls that found everything clean.
@@ -1131,6 +1146,9 @@ impl LayoutRuntime {
         for anchors in self.sticky_anchors.values_mut() {
             anchors.retain(|anchor| !freed.contains(&anchor.node()));
         }
+        with_scroll_hosts(|h| {
+            h.retain(|content, host| !freed.contains(content) && !freed.contains(host))
+        });
         // Every link naming a freed node goes with it, not only the one it owned: taffy hands a freed index back out.
         let orphaned: Vec<NodeId> = with_parents(|p| {
             let orphaned = p

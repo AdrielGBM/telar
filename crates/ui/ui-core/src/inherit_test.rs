@@ -123,3 +123,17 @@ fn changing_a_declaration_is_visible_to_everything_under_it() {
         Inherited::initial().text.font_size
     );
 }
+
+/// What a scroll area's content inherits runs on past the area to what is around it, as an `overflow: auto` box's content inherits in CSS, though the layout tree lays the content out as a root of its own.
+#[test]
+fn a_declaration_reaches_into_a_scroll_area_s_content() {
+    reset_layout_runtime();
+    with_cascade(|c| *c = Cascade::default());
+    let (leaf, _) = layout_reactive::new_leaf(LayoutStyle::new()).unwrap();
+    let content = layout_reactive::new_container(LayoutStyle::new(), &[leaf]).unwrap();
+    let (area, _) = layout_reactive::new_leaf(LayoutStyle::new()).unwrap();
+    layout_reactive::set_scroll_content(area, content).unwrap();
+    let outer = layout_reactive::new_container(LayoutStyle::new(), &[area]).unwrap();
+    declare(outer, Declared::default().with_font_size(11.0));
+    assert_eq!(context(leaf).text.font_size, 11.0);
+}

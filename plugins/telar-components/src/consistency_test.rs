@@ -2,8 +2,8 @@
 
 use telar::{
     AvailableSpace, BorderRadius, Children, ComponentList, ControlSize, DrawCommand, LayoutError,
-    LayoutItem, LayoutStyle, Rect, ThemeTokens, compute_layout, focus::Role, provide_control_size,
-    relayout_if_dirty, set_theme, track_layout,
+    LayoutItem, LayoutStyle, Rect, ThemeTokens, compute_layout, dispose_owner, focus::Role,
+    owner_scope, provide_control_size, relayout_if_dirty, set_theme, track_layout,
 };
 
 use crate::metrics;
@@ -157,9 +157,12 @@ struct Measured {
     radius: Option<BorderRadius>,
 }
 
+/// Each probe is built under an owner of its own and disposed once measured: the next one is laid out on a fresh runtime that hands the same node ids out again, and an effect of this one left running would write into whatever now has them.
 fn measure(probe: &Probe, size: ControlSize) -> Measured {
     fresh_layout_runtime();
     set_theme(Distinct);
+    let scope = owner_scope();
+    let owner = scope.id();
     let control = provide_control_size(size, probe.build).expect("the control builds");
     let rect = track_layout(control.layout_node()).expect("the control has a node");
     let row = telar::Container::new(
@@ -189,10 +192,15 @@ fn measure(probe: &Probe, size: ControlSize) -> Measured {
             _ => None,
         })
     });
-    Measured {
+    let measured = Measured {
         height: surface.map_or(root.height, |surface| surface.height),
         radius,
-    }
+    };
+    drop(commands);
+    drop(tree);
+    drop(scope);
+    dispose_owner(owner);
+    measured
 }
 
 fn same(a: Rect, b: Rect) -> bool {

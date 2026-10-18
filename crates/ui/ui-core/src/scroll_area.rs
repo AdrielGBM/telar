@@ -1082,6 +1082,8 @@ impl LayoutScrollArea {
         };
         let content_node = content.layout_node();
         layout_reactive::set_scroll_content(leaf.node, content_node)?;
+        // What the content inherits now runs on through the area to what is around it.
+        crate::inherit::restructured();
         let content_rect_signal =
             track_layout(content_node).expect("content node not registered in ctx");
         handed.content.set(Some(content_rect_signal.read_only()));
