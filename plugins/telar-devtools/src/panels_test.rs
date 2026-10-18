@@ -196,7 +196,7 @@ fn the_accessibility_panel_lists_what_the_checks_found_over_what_a_reader_is_tol
         "Problems",
         "\"Save\" is 2.10:1 against its background",
         "error · contrast",
-        "What a reader is told",
+        "Screen reader",
         "Save",
         "button",
     ] {
@@ -262,7 +262,7 @@ fn the_summary_wraps_in_its_pane_and_the_pane_closes_cleanly_once_the_audit_is_i
     });
     let waiting = text_rect(
         &frame(&canvas),
-        "Nothing to show: the app has not said what a reader is told.",
+        "Nothing to show: the app has not told a screen reader anything.",
     );
     assert!(
         waiting.x + waiting.width <= PANE,

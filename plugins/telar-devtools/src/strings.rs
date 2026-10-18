@@ -62,7 +62,7 @@ static CATALOG: Catalog = Catalog {
         english!(AUDIT_CLEAN, "No problems found."),
         english!(
             AUDIT_UNAVAILABLE,
-            "Nothing to show: the app has not said what a reader is told."
+            "Nothing to show: the app has not told a screen reader anything."
         ),
         english!(BORDER, "Border"),
         english!(BUILD_ERROR, "Build error"),
@@ -91,7 +91,7 @@ static CATALOG: Catalog = Catalog {
         english!(PADDING, "Padding"),
         english!(POSITION, "Position"),
         english!(PROBLEMS, "Problems"),
-        english!(READER, "What a reader is told"),
+        english!(READER, "Screen reader"),
         english!(RENDERER, "Renderer"),
         english!(RENDERER_STARTING, "Starting"),
         english!(RESIZE_DETAILS, "Resize the details"),
