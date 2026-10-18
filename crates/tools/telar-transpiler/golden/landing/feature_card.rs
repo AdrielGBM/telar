@@ -102,6 +102,7 @@ pub fn feature_card_preview_1(__preview: &::telar::preview::PreviewCtx) -> Resul
 
 pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--fast"), "feature_card", "Fast", feature_card_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 20)
         .title("Landing/Feature card")
         .docs("A feature highlighted on the landing page: an icon in the `icon` slot, a one-line heading and a supporting sentence that wraps.")
@@ -110,6 +111,7 @@ pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
         .args(&[::telar::preview::ArgSpec::new("title").default("\"Fast\""), ::telar::preview::ArgSpec::new("body").default("\"Software and wgpu renderers with dirty-tracking and scroll-blit detection.\"")])
         .layout(::telar::preview::Layout::Centered),
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--long-body"), "feature_card", "Long body", feature_card_preview_1)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/feature_card.rsx"), 24)
         .title("Landing/Feature card")
         .docs("A feature highlighted on the landing page: an icon in the `icon` slot, a one-line heading and a supporting sentence that wraps.")

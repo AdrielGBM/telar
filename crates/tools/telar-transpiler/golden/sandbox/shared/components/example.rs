@@ -96,6 +96,7 @@ pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box
 
 pub const EXAMPLE_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--example--example"), "example", "Example", example_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/example.rsx"), 20)
         .title("Sandbox/Example")
         .docs("A titled block that stacks a demo above its code snippet.")

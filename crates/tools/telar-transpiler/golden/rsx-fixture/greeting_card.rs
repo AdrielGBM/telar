@@ -46,6 +46,7 @@ pub fn greeting_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resu
 
 pub const GREETING_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--greeting_card--ada"), "greeting_card", "Ada", greeting_card_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/greeting_card.rsx"), 16)
         .title("Fixture/Greeting card")
         .docs("A greeting in the fixture's own catalog, beside a baked mark and a baked icon.")

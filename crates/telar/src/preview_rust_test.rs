@@ -63,6 +63,11 @@ fn the_id_names_the_crate_the_tag_and_the_slugged_name() {
 }
 
 #[test]
+fn the_package_is_the_one_the_preview_is_written_in() {
+    assert_eq!(primary().package, env!("CARGO_PKG_NAME"));
+}
+
+#[test]
 fn the_location_is_where_the_preview_is_written() {
     let line = line!() + 1;
     let entry = preview!(tally: TallyProps, "Here", |_| tally(TallyProps::props().label("x").build(), Children::default()));

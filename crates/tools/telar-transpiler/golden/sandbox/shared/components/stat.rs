@@ -52,6 +52,7 @@ pub fn stat_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
 
 pub const STAT_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--stat--stat"), "stat", "Stat", stat_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/stat.rsx"), 16)
         .title("Sandbox/Stat")
         .docs("A highlighted figure with a caption beneath it.")

@@ -62,6 +62,7 @@ pub fn prop_row_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Bo
 
 pub const PROP_ROW_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--prop_row--prop-row"), "prop_row", "Prop row", prop_row_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/prop_row.rsx"), 19)
         .title("Sandbox/Prop row")
         .docs("One documentation row for an attribute: its name, accepted values and a short description.")

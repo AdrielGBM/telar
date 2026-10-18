@@ -61,6 +61,7 @@ pub fn doc_header_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<
 
 pub const DOC_HEADER_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--doc_header--doc-header"), "doc_header", "Doc header", doc_header_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/doc_header.rsx"), 18)
         .title("Sandbox/Doc header")
         .docs("The kicker, title and description that open a documentation page.")

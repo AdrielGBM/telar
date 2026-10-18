@@ -74,6 +74,7 @@ pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
 
 pub const FEATURE_CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--feature_card--feature-card"), "feature_card", "Feature card", feature_card_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/feature_card.rsx"), 17)
         .title("Sandbox/Feature card")
         .docs("An icon, title and body on a bordered surface, for the feature grid.")

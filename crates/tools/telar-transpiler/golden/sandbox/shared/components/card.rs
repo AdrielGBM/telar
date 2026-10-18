@@ -87,6 +87,7 @@ pub fn card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
 
 pub const CARD_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--card--card"), "card", "Card", card_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/card.rsx"), 20)
         .title("Sandbox/Card")
         .docs("The standard surface panel: a rounded, bordered container with an optional header slot above its stacked body.")

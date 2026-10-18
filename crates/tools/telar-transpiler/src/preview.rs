@@ -311,7 +311,7 @@ impl Entry<'_> {
             None => "\"\"".to_string(),
         };
         let mut entry = format!(
-            "    ::telar::preview::PreviewEntry::new(concat!(env!(\"CARGO_CRATE_NAME\"), {:?}), {component:?}, {:?}, {component}_preview_{})\n        .location({file}, {})",
+            "    ::telar::preview::PreviewEntry::new(concat!(env!(\"CARGO_CRATE_NAME\"), {:?}), {component:?}, {:?}, {component}_preview_{})\n        .package(env!(\"CARGO_PKG_NAME\"))\n        .location({file}, {})",
             self.suffix, preview.name, self.index, preview.line
         );
         let mut push = |setter: String| {

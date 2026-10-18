@@ -639,6 +639,7 @@ pub fn home_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
 
 pub const HOME_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--home--landing-full-page"), "home", "Landing — full page", home_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/home.rsx"), 162)
         .title("Landing/Home")
         .docs("The whole landing page, from the hero down to the footer.")

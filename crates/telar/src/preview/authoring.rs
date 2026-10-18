@@ -56,7 +56,7 @@ impl<T: LayoutItem + 'static> IntoPreviewRoot for Result<T, LayoutError> {
 ///
 /// When `: ButtonProps` is written, every call the body makes to `button` logs its callbacks in the canvas's [`ActionLog`](crate::preview::ActionLog), each under its prop's name: one the body sets is logged as it runs, and one it leaves unset is logged and does nothing else. `button` must then be the component's fn in scope, called by that name. The body sees it as a closure, so a `'static` closure in the body that calls it is written `move`.
 ///
-/// The entry also records the absolute path of the file it is written in, its line and the body's source text.
+/// The entry also records the package it is written in, the absolute path of the file it is written in, its line and the body's source text.
 ///
 /// Write previews, and the `pub fn telar_all_previews() -> Vec<Preview>` that lists a crate's, inside [`crate::__previews!`], so a build without the `previews` feature compiles none of them.
 #[macro_export]
@@ -87,6 +87,7 @@ macro_rules! __preview_entry {
             }
             __telar_preview_build
         })
+        .package(::core::env!("CARGO_PKG_NAME"))
         .location($crate::preview::__preview_file_of!($name), ::core::line!())
         .source($crate::preview::__preview_source!($body), &[])
         $(.props(<$props as $crate::preview::HasPropsSchema>::schema))?

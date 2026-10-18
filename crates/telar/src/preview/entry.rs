@@ -231,12 +231,14 @@ impl SourceSpan {
 
 /// One preview: where it is written, how its canvas is set up, and the fn that builds it.
 ///
-/// Built with [`PreviewEntry::new`] and the `const` setters, so a generated table stays a `const` and a field added later is not a breaking change. A Rust preview starts from [`preview!`](super::preview) instead, which fills in the id, the location, the source and the props, and goes on with the same setters.
+/// Built with [`PreviewEntry::new`] and the `const` setters, so a generated table stays a `const` and a field added later is not a breaking change. A Rust preview starts from [`preview!`](super::preview) instead, which fills in the id, the package, the location, the source and the props, and goes on with the same setters.
 #[non_exhaustive]
 #[derive(Clone, Copy)]
 pub struct PreviewEntry {
     /// `<crate>--<component>--<slug(name)>`: stable across builds, and what deep links and snapshot files are named by.
     pub id: &'static str,
+    /// The package the preview is written in, as `Cargo.toml` names it: what a workshop showing the previews of more than one package lists it under, and what its docs address starts with. Empty when unknown.
+    pub package: &'static str,
     /// The `Group/Title` path the preview is listed under. Defaults to [`Self::component`].
     pub title: &'static str,
     /// Prose about the component, shown at the top of its docs page: the body of a `.rsx` file's `[previews]` section, which every preview of the file carries. Empty when there is none.
@@ -279,6 +281,7 @@ impl PreviewEntry {
     ) -> Self {
         Self {
             id,
+            package: "",
             title: component,
             docs: "",
             component,
@@ -300,6 +303,10 @@ impl PreviewEntry {
             a11y_ignore: &[],
             props: None,
         }
+    }
+
+    pub const fn package(self, package: &'static str) -> Self {
+        Self { package, ..self }
     }
 
     /// The `Group/Title` path to list the preview under.

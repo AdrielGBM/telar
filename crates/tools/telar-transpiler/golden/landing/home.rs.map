@@ -647,8 +647,9 @@
 646	162
 647	162
 648	162
-649	.
+649	162
 650	.
+651	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1534..1541	5550	`PRIMARY`

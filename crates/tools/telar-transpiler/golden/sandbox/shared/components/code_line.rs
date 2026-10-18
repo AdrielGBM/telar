@@ -45,6 +45,7 @@ pub fn code_line_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<B
 
 pub const CODE_LINE_PREVIEW_ENTRIES: &[::telar::preview::PreviewEntry] = &[
     ::telar::preview::PreviewEntry::new(concat!(env!("CARGO_CRATE_NAME"), "--code_line--code-line"), "code_line", "Code line", code_line_preview_0)
+        .package(env!("CARGO_PKG_NAME"))
         .location(concat!(env!("CARGO_MANIFEST_DIR"), "/src/shared/components/code_line.rsx"), 16)
         .title("Sandbox/Code line")
         .docs("A one-line code snippet in a dark pill, used under each documented example.")
