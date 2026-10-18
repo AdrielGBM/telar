@@ -324,9 +324,9 @@ fn the_start_of_the_bar_has_a_preview_label_before_the_settings_button() {
     assert!(
         texts(&workshop.tree)
             .iter()
-            .any(|text| text == "Telar Preview")
+            .any(|text| text == "Telar Workshop")
     );
-    assert!(workshop.find(Role::Button, "Telar Preview").is_none());
+    assert!(workshop.find(Role::Button, "Telar Workshop").is_none());
     workshop.click(Role::Button, "Settings");
     crate::test_support::setting_row(&workshop.nodes(), "Direction");
 }
@@ -496,14 +496,14 @@ fn the_project_name_is_centred_in_the_field_by_its_ink() {
 fn the_preview_label_is_inset_and_centred_like_a_control_label() {
     let pad = telar_components::metrics::control_pad_x();
     let wide = Workshop::open(Frame::Host, WIDE);
-    let (label, _) = drawn_text(&wide, "Telar Preview");
+    let (label, _) = drawn_text(&wide, "Telar Workshop");
     assert_eq!(label.x, WORKBENCH_GRID + pad, "first in the bar");
     let (settings, _) = drawn_text(&wide, "Settings");
     assert_eq!(label.y, settings.y, "on the line the menu's label is on");
 
     let narrow = Workshop::open(Frame::Host, 800);
     let opener = narrow.control(Role::Button, "Previews").rect;
-    let (label, _) = drawn_text(&narrow, "Telar Preview");
+    let (label, _) = drawn_text(&narrow, "Telar Workshop");
     assert_eq!(
         label.x,
         opener.x + opener.width + GAP + pad,

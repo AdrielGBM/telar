@@ -336,7 +336,7 @@ static CATALOG: Catalog = Catalog {
         english!(PRESET_LAPTOP, "Laptop"),
         english!(PRESET_MOBILE, "Mobile"),
         english!(PRESET_TABLET, "Tablet"),
-        english!(PREVIEW, "Telar Preview"),
+        english!(PREVIEW, "Telar Workshop"),
         english!(PREVIEWS, "Previews"),
         english!(PREVIOUS_COMPONENT, "Previous component"),
         english!(PREVIOUS_PREVIEW, "Previous preview"),

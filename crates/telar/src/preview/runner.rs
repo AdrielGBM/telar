@@ -42,7 +42,7 @@ where
             if let Some(duplicates) = duplicate_ids(&entries) {
                 refuse(&duplicates);
             }
-            crate::run_app_with_name(config, shell(entries), "telar-preview");
+            crate::run_app_with_name(config, shell(entries), "telar-workshop");
             true
         }
     }
