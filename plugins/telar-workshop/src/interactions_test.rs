@@ -6,7 +6,7 @@ use telar::{
     AccessNode, App, AppRuntime, Children, ComponentList, DrawCommand, Event, Key, LayoutError,
     LayoutItem, LocalApp, ModifiersState, NamedKey, Reactive, Rect, RenderNode, Role, Size, signal,
 };
-use telar_components::{ButtonProps, button};
+use telar_components::{ButtonProps, TooltipProps, button, tooltip};
 
 use super::Verdict;
 use super::frame::drawn;
@@ -19,6 +19,7 @@ const PASSING: &str = "plays--counter--passing";
 const FAILING: &str = "plays--counter--failing";
 const PANICKING: &str = "plays--counter--panicking";
 const PLAIN: &str = "plays--counter--plain";
+const TIPPED: &str = "plays--tipped--clicked";
 
 fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let presses = signal(0_u32);
@@ -33,8 +34,28 @@ fn counter(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )
 }
 
+fn tipped(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let go = button(
+        ButtonProps::props()
+            .label("Go")
+            .on_press(std::rc::Rc::new(|| {}))
+            .build(),
+        Children::default(),
+    )?;
+    let mut slots = telar::Slots::new();
+    slots.push(None, go);
+    tooltip(
+        TooltipProps::props().text("Explains").build(),
+        Children::from(slots),
+    )
+}
+
 fn entries() -> Vec<PreviewEntry> {
     vec![
+        PreviewEntry::new(TIPPED, "tipped", "Clicked", tipped).play(|canvas| {
+            canvas.click(by_role(Role::Button).named("Go"))?;
+            canvas.expect_text("Explains")
+        }),
         PreviewEntry::new(PASSING, "counter", "Passing", counter).play(|canvas| {
             canvas.click(by_role(Role::Button).named("Pressed 0"))?;
             canvas.expect_text("Pressed 1")
@@ -512,4 +533,18 @@ fn a_users_edit_survives_remounts_and_the_play_starts_from_it() {
     assert!(matches!(stepping.verdict(), Verdict::Failed(_)));
     stepping.remount();
     assert!(stepping.drawn("Count 5"));
+}
+
+#[test]
+fn a_play_that_ran_as_the_canvas_mounted_leaves_nothing_hovered_behind() {
+    let mut workshop = Workshop::open(TIPPED);
+    workshop.next_turn();
+    assert!(
+        workshop.draws("Steps passed: 2"),
+        "the play saw the tooltip open"
+    );
+    assert!(
+        !workshop.draws("Explains"),
+        "the play's pointer is not the person's, so what it hovered is let go"
+    );
 }

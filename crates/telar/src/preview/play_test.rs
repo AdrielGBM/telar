@@ -400,3 +400,30 @@ fn the_room_outside_a_node_is_the_widest_strip_beside_it() {
         None
     );
 }
+
+fn hover_reader(_: &PreviewCtx) -> Built {
+    let over = signal(false);
+    let target = StyledContainer::new(
+        LayoutStyle::new().padding_all(8.0),
+        |_| RectStyle::default(),
+        vec![label(|| String::from("Target"))],
+    )?
+    .control(Role::Button)
+    .on_hover(move |now| over.set(now));
+    Ok(box_item(Container::new(
+        LayoutStyle::new().flex_column(),
+        vec![
+            box_item(target),
+            label(move || String::from(if over.get() { "over" } else { "away" })),
+        ],
+    )?))
+}
+
+#[test]
+fn letting_go_takes_the_play_s_pointer_off_what_it_hovered() {
+    let mut play = Play::mount(&entry(hover_reader)).unwrap();
+    play.hover(by_role(Role::Button).named("Target")).unwrap();
+    play.expect_text("over").unwrap();
+    play.let_go();
+    play.expect_text("away").unwrap();
+}

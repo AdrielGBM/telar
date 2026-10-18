@@ -293,6 +293,12 @@ impl Play {
         self.step(format!("hover {query}"), outcome)
     }
 
+    /// Takes the play's pointer off the canvas, as a hand moving away would, so whatever it left hovered settles back. Not a step: a canvas a person goes on to use after the play shows no hover but theirs, while a snapshot keeps the canvas as the play left it and never calls this.
+    pub fn let_go(&mut self) {
+        self.dispatch(&Event::CursorLeft);
+        self.settle_now();
+    }
+
     /// Presses on the node `query` matches, moves the pointer `dx`, `dy` logical px away in even steps, and releases it there, as a person drags a thumb, a divider or a row.
     pub fn drag(&mut self, query: Query, dx: f32, dy: f32) -> PlayResult {
         let outcome = self.enabled_target(&query).map(|node| {

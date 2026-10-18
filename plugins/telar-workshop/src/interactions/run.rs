@@ -42,10 +42,11 @@ pub(crate) enum Verdict {
 }
 
 impl Run {
-    /// Runs `play`'s entry's play on its canvas, a panic in it failing a last step of its own.
+    /// Runs `play`'s entry's play on its canvas, a panic in it failing a last step of its own, then takes its pointer off the canvas the person goes on to use.
     pub(crate) fn of(mount: u64, play: &mut Play) -> Self {
         let outcome = guarded(|| play.run());
         let mut steps: Vec<Step> = play.steps().iter().map(Step::of).collect();
+        let _ = guarded(|| play.let_go());
         if let Err(panic) = outcome {
             steps.push(Step {
                 action: String::from("play"),
