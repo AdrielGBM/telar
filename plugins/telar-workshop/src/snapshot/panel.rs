@@ -9,8 +9,8 @@ use telar::{
     use_theme_tokens,
 };
 use telar_components::{
-    BadgeProps, ButtonProps, ButtonVariant, CodeSpan, CodeViewProps, Tab, TokenKind, badge, button,
-    code_view, tab_list,
+    BadgeProps, ButtonProps, CodeSpan, CodeViewProps, Tab, TokenKind, badge, button, code_view,
+    tab_list,
 };
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_mono, workbench_muted};
 
@@ -23,8 +23,8 @@ use crate::strings::{
     SNAPSHOT_DRAW_CHANGED, SNAPSHOT_DRAW_DIFF, SNAPSHOT_DRIFT, SNAPSHOT_END, SNAPSHOT_FAILED,
     SNAPSHOT_MATCHES, SNAPSHOT_MOMENT, SNAPSHOT_NO_GOLDEN, SNAPSHOT_NO_REPORT,
     SNAPSHOT_NO_REPORT_HINT, SNAPSHOT_NOT_TAKEN, SNAPSHOT_OVERLAY, SNAPSHOT_PIXELS,
-    SNAPSHOT_RELOAD, SNAPSHOT_RESIZED, SNAPSHOT_SIDE_BY_SIDE, SNAPSHOT_START, SNAPSHOT_SWIPE,
-    SNAPSHOT_UNREADABLE, SNAPSHOT_WRITTEN,
+    SNAPSHOT_RESIZED, SNAPSHOT_SIDE_BY_SIDE, SNAPSHOT_START, SNAPSHOT_SWIPE, SNAPSHOT_UNREADABLE,
+    SNAPSHOT_WRITTEN,
 };
 
 const MESSAGE_MAX_WIDTH: f32 = WORKBENCH_GRID * 90.0;
@@ -97,19 +97,6 @@ pub(crate) fn panel(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
         },
     )?;
     Ok(box_item(body))
-}
-
-/// What acts on the report, for the end of the strip while this panel is shown: reading it again after a test run.
-pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let review = state.snapshots().clone();
-    button(
-        ButtonProps::props()
-            .label(strings::reactive(SNAPSHOT_RELOAD))
-            .variant(ButtonVariant::Ghost)
-            .on_press(Rc::new(move || review.reload()))
-            .build(),
-        Children::default(),
-    )
 }
 
 /// How many snapshots of the selected preview the last test run failed, in red on the panel's tab; nothing when none did.

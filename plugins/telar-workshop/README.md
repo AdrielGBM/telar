@@ -45,7 +45,7 @@ The panels beside the canvas show one tab at a time: Controls, Actions, Interact
 
 ## Snapshot
 
-The **Snapshot** panel shows what the last `cargo telar test` found of the selected preview's snapshot, or of the focused matrix cell's, against its golden: the golden and the picture the run captured side by side, one over the other with an opacity, or swiped between, and the line diff of the draw text. **Accept** writes both files, as `cargo telar test --update-snapshots` does, and **Reload report** reads the run again. The panel reads `target/telar-snapshots/report.json`, so it has nothing to show until `cargo telar test` has run; its tab counts the selected preview's failing snapshots, and the sidebar badges each preview whose snapshot failed.
+The **Snapshot** panel shows what the last `cargo telar test` found of the selected preview's snapshot, or of the focused matrix cell's, against its golden: the golden and the picture the run captured side by side, one over the other with an opacity, or swiped between, and the line diff of the draw text. **Accept** writes both files, as `cargo telar test --update-snapshots` does. The panel reads `target/telar-snapshots/report.json`, and again whenever a `cargo telar test` run beside the workshop rewrites it, so it has nothing to show until one has run; its tab counts the selected preview's failing snapshots, and the sidebar badges each preview whose snapshot failed.
 
 ## Matrix
 

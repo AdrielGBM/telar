@@ -1,14 +1,19 @@
 //! What the workspace's last `cargo telar test` found of each snapshot, read from the `report.json` it wrote, and accepting a drift it found.
 
+use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
+use std::time::{Duration, SystemTime};
 
 use serde::{Deserialize, Serialize};
 use telar::preview::snapshot::{Moment, SnapshotReport, SnapshotResult, SnapshotStatus};
 use telar::preview::test_run::TestReport;
-use telar::{RwSignal, batch, hot_signal, signal};
+use telar::{RwSignal, Timer, batch, hot_signal, run_after, signal};
 
 use crate::state::keys;
+
+/// How often the report is looked at for a test run that rewrote it.
+pub(crate) const WATCH_EVERY: Duration = Duration::from_secs(1);
 
 /// How the Snapshot panel sets the picture captured against its golden.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -34,10 +39,11 @@ pub(crate) enum Loaded {
 
 /// The last test run's snapshots, the way the Snapshot panel compares them, and accepting one.
 ///
-/// A cheap handle: clones share one state. The report is read as the workshop's tree is built, so a hot reload reads it again, and on [`reload`](Self::reload).
+/// A cheap handle: clones share one state. The report is read as the workshop's tree is built, and again whenever a test run rewrites it, which the review looks for every [`WATCH_EVERY`] for as long as a clone of it lives.
 #[derive(Clone)]
 pub(crate) struct SnapshotReview {
     path: Option<Rc<Path>>,
+    _watch: Option<Rc<Watch>>,
     loaded: RwSignal<Loaded>,
     failure: RwSignal<Option<String>>,
     mode: RwSignal<CompareMode>,
@@ -50,24 +56,18 @@ impl SnapshotReview {
     /// The review of the report at `path`, read now; `None` for a workshop that does not know where its workspace's report is.
     pub(crate) fn reading(path: Option<PathBuf>) -> Self {
         let path: Option<Rc<Path>> = path.map(Rc::from);
+        let loaded = signal(load(path.as_deref()));
+        let failure = signal(None);
         Self {
-            loaded: signal(load(path.as_deref())),
+            _watch: path.clone().map(|path| Watch::start(path, loaded, failure)),
+            loaded,
             path,
-            failure: signal(None),
+            failure,
             mode: hot_signal(keys::SNAPSHOT_MODE, CompareMode::default()),
             opacity: signal(0.5),
             swipe: signal(0.5),
             moment: signal(Moment::End),
         }
-    }
-
-    /// Reads the report again, as a test run run since left it.
-    pub(crate) fn reload(&self) {
-        let loaded = load(self.path.as_deref());
-        batch(|| {
-            self.failure.set_if_changed(None);
-            self.loaded.set_if_changed(loaded);
-        });
     }
 
     /// Tracked.
@@ -159,6 +159,70 @@ impl SnapshotReview {
     /// Where the line between the golden and the picture captured sits across the picture in [`CompareMode::Swipe`], 0–1.
     pub(crate) fn swipe(&self) -> RwSignal<f32> {
         self.swipe
+    }
+}
+
+fn reload(path: Option<&Path>, loaded: RwSignal<Loaded>, failure: RwSignal<Option<String>>) {
+    let read = load(path);
+    batch(|| {
+        failure.set_if_changed(None);
+        loaded.set_if_changed(read);
+    });
+}
+
+/// Looks at the report every [`WATCH_EVERY`] and reads it again once it is not the file it was: a test run wrote it, or removed it. Its timer holds it only weakly, so it stops once the review that holds it is gone.
+struct Watch {
+    path: Rc<Path>,
+    seen: Cell<Option<Stamp>>,
+    next: RefCell<Option<Timer>>,
+}
+
+/// What tells one write of the report from another without reading it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Stamp {
+    modified: Option<SystemTime>,
+    len: u64,
+}
+
+impl Stamp {
+    fn of(path: &Path) -> Option<Self> {
+        let meta = std::fs::metadata(path).ok()?;
+        Some(Self {
+            modified: meta.modified().ok(),
+            len: meta.len(),
+        })
+    }
+}
+
+impl Watch {
+    fn start(
+        path: Rc<Path>,
+        loaded: RwSignal<Loaded>,
+        failure: RwSignal<Option<String>>,
+    ) -> Rc<Self> {
+        let watch = Rc::new(Self {
+            seen: Cell::new(Stamp::of(&path)),
+            path,
+            next: RefCell::new(None),
+        });
+        Self::schedule(Rc::downgrade(&watch), loaded, failure);
+        watch
+    }
+
+    fn schedule(watch: Weak<Self>, loaded: RwSignal<Loaded>, failure: RwSignal<Option<String>>) {
+        let Some(held) = watch.upgrade() else {
+            return;
+        };
+        let timer = run_after(WATCH_EVERY, move || {
+            if let Some(held) = watch.upgrade() {
+                let now = Stamp::of(&held.path);
+                if held.seen.replace(now) != now {
+                    reload(Some(&held.path), loaded, failure);
+                }
+            }
+            Self::schedule(watch, loaded, failure);
+        });
+        held.next.replace(Some(timer));
     }
 }
 

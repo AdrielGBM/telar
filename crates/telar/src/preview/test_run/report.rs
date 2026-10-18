@@ -283,7 +283,10 @@ impl TestReport {
             std::fs::create_dir_all(dir)?;
         }
         let json = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
-        std::fs::write(path, json)
+        // Renamed into place whole, so a reader watching the report, as the workshop does, never reads one half written.
+        let partial = path.with_extension("json.partial");
+        std::fs::write(&partial, json)?;
+        std::fs::rename(&partial, path)
     }
 
     /// [`SnapshotReport::accept`], with the cell the snapshot `id` is of reported as a run that wrote its goldens reports it, and the run counted again.

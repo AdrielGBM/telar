@@ -6,7 +6,7 @@ mod panel;
 mod pictures;
 mod review;
 
-pub(crate) use panel::{drift_badge, panel, tab_badge, tools};
+pub(crate) use panel::{drift_badge, panel, tab_badge};
 pub(crate) use review::SnapshotReview;
 
 use crate::state::{ViewMode, WorkshopState};

@@ -531,3 +531,34 @@ fn a_canvas_snapshotted_at_both_ends_of_its_play_reviews_either() {
     assert!(workshop.draws("Snapshot matches"));
     assert_eq!(workshop.pictures(), 1, "the golden of the start");
 }
+
+/// A test run run beside the workshop is shown as it lands, without asking: the review looks at the report every [`super::review::WATCH_EVERY`], and reads it only once it is not the file it was.
+#[test]
+fn a_report_a_test_run_rewrites_is_read_again_by_itself() {
+    use telar::testing::advance_time;
+    telar::reset_timers();
+    let run = Run::new("watch");
+    let review = SnapshotReview::reading(Some(run.report()));
+    assert_eq!(review.loaded(), Loaded::Absent, "no run yet");
+
+    run.write();
+    assert_eq!(
+        review.loaded(),
+        Loaded::Absent,
+        "nothing is read before it looks"
+    );
+    advance_time(super::review::WATCH_EVERY);
+    assert_eq!(review.status(DRIFTED), Some(SnapshotStatus::Changed));
+
+    std::fs::write(run.report(), "not json").unwrap();
+    advance_time(super::review::WATCH_EVERY);
+    assert!(matches!(review.loaded(), Loaded::Unreadable(_)));
+
+    std::fs::remove_file(run.report()).unwrap();
+    advance_time(super::review::WATCH_EVERY);
+    assert_eq!(
+        review.loaded(),
+        Loaded::Absent,
+        "and gone again once removed"
+    );
+}

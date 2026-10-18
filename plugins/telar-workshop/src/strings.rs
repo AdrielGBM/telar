@@ -155,7 +155,6 @@ pub(crate) const SNAPSHOT_NOT_TAKEN: &str = "snapshot_not_taken";
 pub(crate) const SNAPSHOT_OPACITY: &str = "snapshot_opacity";
 pub(crate) const SNAPSHOT_OVERLAY: &str = "snapshot_overlay";
 pub(crate) const SNAPSHOT_PIXELS: &str = "snapshot_pixels";
-pub(crate) const SNAPSHOT_RELOAD: &str = "snapshot_reload";
 pub(crate) const SNAPSHOT_RESIZED: &str = "snapshot_resized";
 pub(crate) const SNAPSHOT_SIDE_BY_SIDE: &str = "snapshot_side_by_side";
 pub(crate) const SNAPSHOT_START: &str = "snapshot_start";
@@ -397,7 +396,6 @@ static CATALOG: Catalog = Catalog {
             { delta },
             " a channel"
         ),
-        english!(SNAPSHOT_RELOAD, "Reload report"),
         english!(
             SNAPSHOT_RESIZED,
             "The picture is ",

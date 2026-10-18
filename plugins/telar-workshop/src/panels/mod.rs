@@ -105,8 +105,7 @@ fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
             PanelTab::Actions => actions::tools(&state),
             PanelTab::Interactions => interactions::tools(&state),
             PanelTab::Layout => inspection_toggles(state.inspection()),
-            PanelTab::Accessibility => nothing(),
-            PanelTab::Snapshot => snapshot::tools(&state),
+            PanelTab::Accessibility | PanelTab::Snapshot => nothing(),
         },
     )?;
     Ok(box_item(tools))
