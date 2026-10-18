@@ -14,7 +14,10 @@ element group
           end
         end
         element separator
-          rect 120,0 4x600 fill=#3d4252ff border=2 border-color=#7394ffff radius=2
+          rect 120,0 4x600 border=2 border-color=#7394ffff
+          element group
+            rect 121,0 2x600 fill=#3d4252ff radius=1
+          end
         end
         element group
           clip 124,0 676x600

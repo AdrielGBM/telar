@@ -1,14 +1,14 @@
-//! [`split_pane`]: two panes divided by a draggable splitter that the arrow keys, Home, End and Enter also drive.
+//! [`split_pane`]: two panes divided by a gap that is the splitter: dragged, or driven by the arrow keys, Home, End and Enter.
 
 use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::{
     Accessible, BorderRadius, Children, Clip, ClippedItem, Container, Cursor, Direction, DragAxis,
-    Insets, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, NumericValue, Orientation, Props,
-    Reactive, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension, StyledContainer,
-    SurfaceAmendment, Transaction, amend_surface, box_item, current_direction, drag_start,
-    focus::Role, signal, step_factor, track_layout,
+    Insets, JustifyContent, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, NumericValue,
+    Orientation, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, SizeDimension,
+    StyledContainer, SurfaceAmendment, Transaction, amend_surface, box_item, current_direction,
+    drag_start, focus::Role, signal, step_factor, track_layout,
 };
 use web_time::Instant;
 
@@ -25,9 +25,9 @@ const DEFAULT_STEP: f32 = 16.0;
 /// Every field left `None` follows the role named beside it, read when the splitter paints.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SplitPaneTokens {
-    /// Thickness of the splitter's bar at the regular control size, scaled with the control size in force. Its grab area is never thinner than [`metrics::MIN_TARGET`](crate::metrics::MIN_TARGET) whatever this is. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm).
+    /// Width of the gap between the panes at the regular control size, scaled with the control size in force. The splitter is grabbed from a strip twice as wide, reaching half a gap over each pane and no further, so what a pane keeps at its edge, such as a scrollbar, stays its own. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm).
     pub thickness: Option<f32>,
-    /// Corner radius of the bar. `None` is a pill.
+    /// Corner radius of the rule drawn in the gap. `None` is a pill.
     pub radius: Option<f32>,
 }
 
@@ -221,6 +221,9 @@ pub struct SplitPaneProps {
     /// Whether a double-click or Enter on the splitter collapses the sized pane. On by default.
     #[props(default = true)]
     pub collapsible: bool,
+    /// Whether a quiet rule shows in the gap at rest. On by default, for panes that do not set themselves apart; an application whose panes are framed surfaces turns it off, and the gap is only the background between them. A drag shows the rule either way.
+    #[props(default = true)]
+    pub divider: bool,
     /// One unscaled arrow-key step in px. Non-positive means 16; Shift makes it larger.
     #[props(default)]
     pub step: f32,
@@ -230,7 +233,7 @@ pub struct SplitPaneProps {
     /// A landmark around the pane that takes the rest and the splitter, for a split whose panes are landmarks: a reader then finds the splitter inside a region rather than between two, collapsed or not. The sized pane stays the caller's to announce. `None` (the default) leaves the splitter between the panes.
     #[props(some, default)]
     pub region: Option<SplitRegion>,
-    /// Amends the paint of the splitter's bar — the split's **principal surface** — at rest and while dragged. See [`telar::SurfaceStyle`] for when a theme token or [`SplitPaneTokens`] is the right instrument instead.
+    /// Amends the paint of the rule drawn in the gap — the split's **principal surface** — at rest and while dragged. See [`telar::SurfaceStyle`] for when a theme token or [`SplitPaneTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
 }
@@ -250,6 +253,7 @@ pub fn split_pane(
         max_fraction,
         collapsed,
         collapsible,
+        divider,
         step,
         label,
         region,
@@ -329,19 +333,29 @@ pub fn split_pane(
         write_through(transaction, raw.clamp(lo, hi));
     };
 
-    let bar = StyledContainer::new(
-        bar_box(direction),
+    let rule = StyledContainer::new(
+        rule_box(direction),
         move |r| {
-            let fill = match dragging.get() {
-                true => shared::accent(),
-                false => shared::border(),
+            let fill = match (dragging.get(), divider) {
+                (true, _) => Some(shared::muted()),
+                (false, true) => Some(shared::border()),
+                (false, false) => None,
             };
-            let rest = RectStyle::default()
-                .with_fill(fill)
-                .with_radius(SplitPaneTokens::current().radius(r));
-            amend_surface(rest, &style)
+            let paint = fill.map_or_else(RectStyle::default, |fill| {
+                RectStyle::default()
+                    .with_fill(fill)
+                    .with_radius(SplitPaneTokens::current().radius(r))
+            });
+            amend_surface(paint, &style)
         },
         vec![],
+    )?
+    .styled_by(move || rule_box(direction))
+    .a11y_hidden();
+    let bar = StyledContainer::new(
+        bar_box(direction),
+        |_| RectStyle::default(),
+        vec![box_item(rule)],
     )?
     .styled_by(move || bar_box(direction))
     .hit_outset(Reactive::of(move || grab_outset(direction)))
@@ -466,9 +480,8 @@ fn bar_thickness() -> f32 {
     SplitPaneTokens::current().thickness()
 }
 
-/// How far the splitter's grab area reaches past each long side of its bar.
 fn grab_reach() -> f32 {
-    ((shared::MIN_TARGET - bar_thickness()) / 2.0).max(0.0)
+    bar_thickness() / 2.0
 }
 
 fn grab_outset(direction: SplitDirection) -> Insets {
@@ -491,7 +504,22 @@ fn reach_over_sized(direction: SplitDirection, sized: SizedPane) -> Insets {
 }
 
 fn bar_box(direction: SplitDirection) -> LayoutStyle {
-    direction.sized(LayoutStyle::new().flex_shrink(0.0), bar_thickness())
+    direction.sized(
+        direction
+            .flow()
+            .justify_content(JustifyContent::CENTER)
+            .flex_shrink(0.0),
+        bar_thickness(),
+    )
+}
+
+fn rule_box(direction: SplitDirection) -> LayoutStyle {
+    direction.sized(LayoutStyle::new().flex_shrink(0.0), rule_width())
+}
+
+/// Half the gap, so it sits on whole pixels in the middle of it, and never thinner than a pixel.
+fn rule_width() -> f32 {
+    (bar_thickness() / 2.0).max(1.0)
 }
 
 #[cfg(test)]

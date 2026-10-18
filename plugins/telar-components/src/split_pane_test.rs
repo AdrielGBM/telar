@@ -462,10 +462,9 @@ fn splitter_rect() -> Rect {
     telar::track_layout(node).unwrap().get()
 }
 
-/// Just inside the far edge of the grab area, measured from the middle of the bar: over a pane, not over the bar.
+/// Just inside the far edge of the grab strip, measured from the middle of the gap: over a pane, not over the gap.
 fn grab_edge() -> f64 {
-    let reach = (shared::MIN_TARGET - bar_thickness()) / 2.0;
-    (bar_thickness() / 2.0 + reach - 1.0) as f64
+    (bar_thickness() * 0.75) as f64
 }
 
 fn sized(direction: SplitDirection, size: RwSignal<f32>) -> SplitPaneProps {
@@ -542,31 +541,67 @@ fn divided_by_the_thin_bar_alone(direction: SplitDirection) {
 }
 
 #[test]
-fn the_splitter_is_a_full_size_target_though_its_bar_is_thin() {
+fn the_grab_strip_reaches_half_a_gap_over_each_pane_and_no_further() {
     for direction in [SplitDirection::Row, SplitDirection::Column] {
-        a_full_size_target_though_the_bar_is_thin(direction);
+        reaches_half_a_gap_over_each_pane(direction);
     }
 }
 
-fn a_full_size_target_though_the_bar_is_thin(direction: SplitDirection) {
-    let split = Split::build(SplitPaneProps::props().direction(direction).build());
-    let tree = telar::ComponentList::new(split.item);
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
-    let target = nodes
-        .iter()
+fn reaches_half_a_gap_over_each_pane(direction: SplitDirection) {
+    let panes = heard();
+    let split = Split::holding(sized(direction, signal(200.0)), || listening(&panes));
+    let past: Vec<_> = [-1.0, 1.0]
+        .into_iter()
+        .map(|side| split.across(side * f64::from(bar_thickness() + 1.0)))
+        .collect();
+    let mut tree = telar::ComponentList::new(split.item);
+    let target = ui_core::accessibility::snapshot(&tree.commands())
+        .into_iter()
         .find(|node| node.role == Role::Splitter)
         .expect("the splitter is announced")
         .rect;
-    assert_eq!(direction.main(target), shared::MIN_TARGET);
-    let drawn = tree
-        .commands()
-        .iter()
-        .filter_map(|c| match c {
-            telar::DrawCommand::Rect { rect, .. } => Some(direction.main(*rect)),
-            _ => None,
-        })
-        .any(|main| main == bar_thickness());
-    assert!(drawn, "the drawn bar keeps its thickness");
+    assert_eq!(direction.main(target), 2.0 * bar_thickness());
+    for (pane, (x, y)) in panes.iter().zip(past) {
+        telar::testing::route(&mut tree, &press(x, y));
+        telar::testing::route(&mut tree, &release(x, y));
+        assert_eq!(
+            pane.presses.get(),
+            1,
+            "past the strip, what the pane keeps at its edge takes the press"
+        );
+    }
+}
+
+#[test]
+fn a_drag_lights_a_rule_in_the_middle_of_the_gap() {
+    for divider in [true, false] {
+        let split = Split::build(
+            SplitPaneProps::props()
+                .size(signal(200.0))
+                .divider(divider)
+                .build(),
+        );
+        let (x, y) = split.bar_centre();
+        let mut tree = telar::ComponentList::new(split.item);
+        let at_rest = divider.then(|| shared::border().into());
+        assert_eq!(rule_fill(&tree), at_rest, "at rest");
+        telar::testing::route(&mut tree, &press(x, y));
+        telar::testing::route(&mut tree, &moved(x + 20.0, y));
+        assert_eq!(
+            rule_fill(&tree),
+            Some(shared::muted().into()),
+            "while dragged"
+        );
+        telar::testing::route(&mut tree, &release(x + 20.0, y));
+        assert_eq!(rule_fill(&tree), at_rest, "let go");
+    }
+}
+
+fn rule_fill(tree: &telar::ComponentList) -> Option<telar::Paint> {
+    tree.commands().iter().find_map(|command| match command {
+        telar::DrawCommand::Rect { rect, style } if rect.width == rule_width() => style.fill,
+        _ => None,
+    })
 }
 
 #[test]
@@ -825,14 +860,14 @@ fn bar_paint(style: Option<SurfaceAmendment>) -> (Rect, RectStyle) {
             }
             _ => None,
         })
-        .expect("the bar paints")
+        .expect("the rule paints")
 }
 
 #[test]
-fn the_bar_is_a_pill_a_step_thick_until_the_tokens_say_otherwise() {
+fn the_rule_is_a_pill_half_a_step_wide_until_the_tokens_say_otherwise() {
     telar::set_theme(Plain::default());
     let (bar, style) = bar_paint(None);
-    assert_eq!(bar.width, crate::metrics::gap_sm());
+    assert_eq!(bar.width, crate::metrics::gap_sm() / 2.0);
     assert_eq!(style.radius, BorderRadius::all(bar.width / 2.0));
 
     telar::set_theme(Plain {
@@ -847,7 +882,7 @@ fn the_bar_is_a_pill_a_step_thick_until_the_tokens_say_otherwise() {
 }
 
 #[test]
-fn a_hairline_bar_is_still_a_full_size_target() {
+fn a_hairline_gap_is_still_grabbed_beside_it() {
     telar::set_theme(Plain {
         splits: Some(SplitPaneTokens {
             thickness: Some(1.0),
