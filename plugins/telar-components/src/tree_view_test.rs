@@ -13,6 +13,10 @@ fn pad_x() -> f32 {
     TreeViewTokens::current().pad_x()
 }
 
+fn inset() -> f32 {
+    TreeViewTokens::current().inset()
+}
+
 fn caret_width() -> f32 {
     crate::shared::icon_size()
 }
@@ -370,7 +374,7 @@ fn a_bound_selection_and_open_set_are_read_and_written_both_ways() {
 fn clicking_a_row_selects_it_and_clicking_its_caret_opens_it() {
     let mut tree = Mounted::new(catalogue(), 400.0);
     let row = row_height() as f64;
-    let caret_x = (pad_x() + caret_width() / 2.0) as f64;
+    let caret_x = (inset() + pad_x() + caret_width() / 2.0) as f64;
 
     tree.click(120.0, row * 1.5);
     assert_eq!(tree.selected().as_deref(), Some("layout"));
@@ -405,7 +409,7 @@ fn shutting_a_branch_around_the_cursor_brings_the_cursor_out() {
         NamedKey::ArrowRight,
         NamedKey::ArrowDown,
     ]);
-    let caret_x = (pad_x() + caret_width() / 2.0) as f64;
+    let caret_x = (inset() + pad_x() + caret_width() / 2.0) as f64;
     tree.click(caret_x, row_height() as f64 * 0.5);
     tree.key(NamedKey::Enter);
     assert_eq!(tree.selected().as_deref(), Some("inputs"));
@@ -882,4 +886,16 @@ fn the_context_menu_key_asks_for_the_cursor_row_s_menu_under_it() {
     assert_eq!(around.y, row_height());
     assert_eq!(around.height, row_height());
     assert_eq!(tree.selected(), None);
+}
+
+/// A row's wash and corners stand clear of the tree's sides, as a menu's rows do of its panel's.
+#[test]
+fn the_rows_stand_in_from_the_tree_s_sides() {
+    let tree = Mounted::new(catalogue(), 400.0);
+    let (view, rows) = laid_rows(&tree);
+    assert!(inset() > 0.0);
+    for (name, row) in rows {
+        assert_eq!(row.x, view.x + inset(), "{name}");
+        assert_eq!(row.width, view.width - inset() * 2.0, "{name}");
+    }
 }

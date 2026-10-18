@@ -34,6 +34,8 @@ pub struct TreeViewTokens {
     pub radius: Option<f32>,
     /// Space between a row's edges and what it shows, likewise. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
     pub pad_x: Option<f32>,
+    /// Space between the tree's sides and its rows, so a row's wash stands clear of them as a menu's does of its panel, likewise. `None` is [`metrics::panel_pad`](crate::metrics::panel_pad).
+    pub inset: Option<f32>,
 }
 
 impl TreeViewTokens {
@@ -61,6 +63,11 @@ impl TreeViewTokens {
     pub fn pad_x(&self) -> f32 {
         self.pad_x
             .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+    }
+
+    pub fn inset(&self) -> f32 {
+        self.inset
+            .map_or_else(shared::panel_pad, |inset| inset * telar::control_scale())
     }
 }
 
@@ -214,7 +221,8 @@ pub fn tree_view(
             },
             move |_, row| build_row(&tree, row, trailing.as_ref(), &color),
         )?;
-        Ok(box_item(rows))
+        let inset = Container::new(inset_box(), vec![box_item(rows)])?.styled_by(inset_box);
+        Ok(box_item(inset))
     })?;
     let tree = made.expect("a scroll area builds its content before it returns");
 
@@ -240,6 +248,11 @@ pub fn tree_view(
 
 fn fill() -> LayoutStyle {
     LayoutStyle::new().flex_grow(1.0)
+}
+
+/// Only across: the virtual list places its rows from the content's top, so space above them would stand every row off where it reckons it is.
+fn inset_box() -> LayoutStyle {
+    LayoutStyle::column().padding_horizontal(TreeViewTokens::current().inset())
 }
 
 struct Row {
