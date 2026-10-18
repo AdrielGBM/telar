@@ -65,10 +65,11 @@ fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         .map(|tab| {
             let named = Tab::new(tab, strings::reactive(tab_key(tab)));
             Ok(match tab {
+                PanelTab::Controls => named.trailing(controls::count_badge(state)?),
                 PanelTab::Actions => named.trailing(actions::count_badge(state.actions())?),
                 PanelTab::Interactions => named.trailing(interactions::tab_badge(state)?),
                 PanelTab::Snapshot => named.trailing(snapshot::tab_badge(state)?),
-                PanelTab::Controls | PanelTab::Layout | PanelTab::Accessibility => named,
+                PanelTab::Layout | PanelTab::Accessibility => named,
             })
         })
         .collect::<Result<Vec<_>, LayoutError>>()?;

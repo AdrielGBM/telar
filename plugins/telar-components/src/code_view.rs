@@ -121,6 +121,9 @@ pub struct CodeViewProps {
     /// The tallest the block grows, in logical px, before it scrolls. `0.0` (the default) grows to fit every line.
     #[props(default)]
     pub max_height: f32,
+    /// Grows along its parent's main axis into the room the parent leaves, rather than keeping to its lines: blocks in a row of columns stand as tall as each other. Off by default.
+    #[props(default)]
+    pub grow: bool,
     /// Restyles each kind of token over the theme's own choice, for a palette of the caller's.
     #[props(some, default)]
     pub token_style: Option<TokenStyler>,
@@ -229,6 +232,7 @@ pub fn code_view(
         on_copy,
         label,
         max_height,
+        grow,
         token_style,
         color,
         style,
@@ -317,8 +321,12 @@ pub fn code_view(
     if copyable {
         layers.push(copy_button(code, on_copy)?);
     }
+    let frame_box = match grow {
+        true => LayoutStyle::column().flex_grow(1.0),
+        false => LayoutStyle::column(),
+    };
     let frame = StyledContainer::new(
-        LayoutStyle::column(),
+        frame_box,
         move |_r| amend_surface(frame_paint(), &style),
         layers,
     )?

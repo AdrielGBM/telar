@@ -486,9 +486,31 @@ fn edited_args_survive_a_hot_reload() {
 }
 
 #[test]
-fn a_preview_without_args_says_so() {
+fn a_preview_without_args_says_so_and_how_to_give_it_some() {
     let workshop = Workshop::open(entries(), BARE);
-    assert!(workshop.draws("No args"));
+    assert!(workshop.draws("This preview has no args"));
+    assert!(workshop.draws(".label(p.arg(\"label\", \"Save\"))"));
+}
+
+#[test]
+fn the_controls_tab_counts_the_preview_s_args() {
+    let workshop = Workshop::open(entries(), LIVE);
+    let drawn = crate::test_support::drawn(&workshop.tree);
+    let at = |text: &str| {
+        drawn
+            .iter()
+            .find(|drawn| drawn.text == text)
+            .unwrap_or_else(|| panic!("{text} is drawn"))
+            .rect
+    };
+    let (controls, actions) = (at("Controls"), at("Actions"));
+    assert!(
+        drawn.iter().any(|drawn| drawn.text == "1"
+            && drawn.rect.x > controls.x
+            && drawn.rect.x < actions.x
+            && (drawn.rect.y - controls.y).abs() < controls.height),
+        "one arg, counted after the tab's name"
+    );
 }
 
 #[test]
@@ -510,6 +532,9 @@ fn a_press_in_the_preview_lists_the_call_with_its_payload() {
     workshop.click(Role::Tab, "Actions");
     assert!(workshop.shows_tab("Actions"));
     assert!(workshop.draws("No actions yet"));
+    assert!(workshop.draws(
+        "Each call of a callback the preview hands its component, such as on_press, is listed here as it happens."
+    ));
     workshop.press_text("Pick");
     for text in ["#1", "on_pick", "\"apple\", 2"] {
         assert!(workshop.draws(text), "the log draws {text}");

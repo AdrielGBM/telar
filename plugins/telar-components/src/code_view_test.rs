@@ -428,3 +428,15 @@ fn the_copy_button_stands_beside_the_code_rather_than_over_it() {
         copy.x
     );
 }
+
+#[test]
+fn a_growing_block_takes_the_room_its_parent_leaves() {
+    let kept = Mounted::new(source_props().build());
+    assert!(
+        kept.height() < 400.0,
+        "keeps to its lines: {}",
+        kept.height()
+    );
+    let grown = Mounted::new(source_props().grow(true).build());
+    assert_eq!(grown.height(), 400.0);
+}

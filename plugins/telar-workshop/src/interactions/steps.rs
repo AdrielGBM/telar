@@ -6,9 +6,9 @@ use std::rc::Rc;
 use telar::focus::{self, FocusId};
 use telar::preview::Frame;
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, JustifyContent, Key,
-    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NamedKey, Reactive, ReactiveList,
-    RectStyle, Role, ShapeStyle, StyledContainer, Text, box_item, children, use_theme_tokens,
+    Accessible, AlignItems, Border, BorderRadius, Children, Color, Container, Key, LayoutError,
+    LayoutItem, LayoutScrollArea, LayoutStyle, NamedKey, Reactive, ReactiveList, RectStyle, Role,
+    ShapeStyle, StyledContainer, Text, box_item, children, use_theme_tokens,
 };
 use telar_components::{
     BadgeProps, ButtonProps, ButtonVariant, ToggleProps, badge, button, metrics, toggle,
@@ -20,6 +20,7 @@ use telar_devtools::{
 
 use super::frame::thumbnail;
 use super::{Interactions, Run, Step, StepStatus, Verdict, replay};
+use crate::empty_state::{EmptyState, Example};
 use crate::state::WorkshopState;
 use crate::strings::{
     self, BACK_TO_LIVE, NO_PLAY, NO_PLAY_HINT, NOTHING_SELECTED, PLAY_FAILED_AT, PLAY_NEEDS_CANVAS,
@@ -31,6 +32,17 @@ const NUMBER_WIDTH: f32 = WORKBENCH_GRID * 3.0;
 const MARK_WIDTH: f32 = WORKBENCH_GRID * 2.0;
 const FAILED_EDGE: f32 = 3.0;
 const MESSAGE_MAX_WIDTH: f32 = WORKBENCH_GRID * 90.0;
+
+const PLAY_EXAMPLES: &[Example] = &[
+    Example {
+        language: "Rust",
+        code: ".play(|canvas| {\n    canvas.click(by_role(Role::Button).named(\"Save\"))?;\n    canvas.expect_action(\"on_press\", 1)\n})",
+    },
+    Example {
+        language: ".rsx",
+        code: "[play]\ncanvas.click(by_role(Role::Button).named(\"Save\"))?;\ncanvas.expect_action(\"on_press\", 1)?;",
+    },
+];
 
 /// What the panel shows for the selected preview.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -69,17 +81,18 @@ pub(crate) fn panel(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
         move || vec![shown(&watching)],
         |shown: &Shown| *shown,
         move |shown| match shown {
-            Shown::NothingSelected => message(NOTHING_SELECTED, None, None),
-            Shown::NoPlay => message(NO_PLAY, Some(NO_PLAY_HINT), None),
+            Shown::NothingSelected => EmptyState::new(NOTHING_SELECTED).build(),
+            Shown::NoPlay => EmptyState::new(NO_PLAY)
+                .about(NO_PLAY_HINT)
+                .examples(PLAY_EXAMPLES)
+                .build(),
             Shown::NeedsCanvas => {
                 let state = building.clone();
-                let show = Action {
-                    label: SHOW_CANVAS,
-                    on_press: Rc::new(move || replay(&state)),
-                };
-                message(PLAY_NEEDS_CANVAS, None, Some(show))
+                EmptyState::new(PLAY_NEEDS_CANVAS)
+                    .action(SHOW_CANVAS, Rc::new(move || replay(&state)))
+                    .build()
             }
-            Shown::NotRun => message(PLAY_NOT_RUN, None, None),
+            Shown::NotRun => EmptyState::new(PLAY_NOT_RUN).build(),
             Shown::Steps(_) => steps(building.interactions()),
         },
     )?;
@@ -157,49 +170,6 @@ pub(crate) fn tab_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, La
         },
     )?;
     Ok(box_item(tally))
-}
-
-struct Action {
-    label: &'static str,
-    on_press: Rc<dyn Fn()>,
-}
-
-fn message(
-    key: &'static str,
-    hint: Option<&'static str>,
-    action: Option<Action>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let mut items = children![Text::declaring(
-        move || strings::text(key),
-        LayoutStyle::new(),
-        workbench_muted,
-    )?];
-    if let Some(hint) = hint {
-        items.push(box_item(Text::declaring(
-            move || strings::text(hint),
-            LayoutStyle::new().max_width(MESSAGE_MAX_WIDTH),
-            |text| workbench_muted(workbench_mono(text)),
-        )?));
-    }
-    if let Some(Action { label, on_press }) = action {
-        items.push(button(
-            ButtonProps::props()
-                .label(Reactive::of(move || strings::text(label)))
-                .on_press(on_press)
-                .build(),
-            Children::default(),
-        )?);
-    }
-    let centred = Container::new(
-        workbench_fill()
-            .gap(WORKBENCH_GRID)
-            .padding_all(WORKBENCH_GRID * 2.0)
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER),
-        items,
-    )?
-    .role(Role::Status);
-    Ok(box_item(centred))
 }
 
 /// The run's verdict over its steps, oldest first.

@@ -84,7 +84,9 @@ pub(crate) const MOVE_PANELS: &str = "move_panels";
 pub(crate) const NEXT_COMPONENT: &str = "next_component";
 pub(crate) const NEXT_PREVIEW: &str = "next_preview";
 pub(crate) const NO_ACTIONS: &str = "no_actions";
+pub(crate) const NO_ACTIONS_HINT: &str = "no_actions_hint";
 pub(crate) const NO_ARGS: &str = "no_args";
+pub(crate) const NO_ARGS_HINT: &str = "no_args_hint";
 pub(crate) const NO_MATCHES: &str = "no_matches";
 pub(crate) const NO_MATCHING_ACTIONS: &str = "no_matching_actions";
 pub(crate) const NO_PLAY: &str = "no_play";
@@ -290,13 +292,21 @@ static CATALOG: Catalog = Catalog {
         english!(NEXT_COMPONENT, "Next component"),
         english!(NEXT_PREVIEW, "Next preview"),
         english!(NO_ACTIONS, "No actions yet"),
-        english!(NO_ARGS, "No args"),
+        english!(
+            NO_ACTIONS_HINT,
+            "Each call of a callback the preview hands its component, such as on_press, is listed here as it happens."
+        ),
+        english!(NO_ARGS, "This preview has no args"),
+        english!(
+            NO_ARGS_HINT,
+            "An arg is a value you change here while the preview is on screen. Read one as the preview is built, or give its root component a literal attribute in .rsx, and its control shows here."
+        ),
         english!(NO_MATCHES, "No matches"),
         english!(NO_MATCHING_ACTIONS, "No actions match the filter"),
         english!(NO_PLAY, "This preview has no play"),
         english!(
             NO_PLAY_HINT,
-            "Give it one with .play(…) in Rust or a [play] block in .rsx, and the steps it takes are listed here."
+            "A play drives the preview as a person would, then checks what it left. Its steps are listed here as it runs."
         ),
         english!(NO_PREVIEWS, "No previews"),
         english!(

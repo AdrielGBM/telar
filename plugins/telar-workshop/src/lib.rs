@@ -20,6 +20,7 @@ mod arrangement;
 mod canvas;
 mod canvas_toolbar;
 mod docs;
+mod empty_state;
 mod guarded;
 mod interactions;
 mod keymap;

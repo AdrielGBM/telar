@@ -330,6 +330,12 @@ fn a_preview_without_a_play_says_how_to_give_it_one() {
     let mut workshop = Workshop::open(PLAIN);
     workshop.next_turn();
     assert!(workshop.draws("This preview has no play"));
+    assert!(
+        texts(&workshop.tree)
+            .iter()
+            .any(|drawn| drawn.starts_with("[play]\n")),
+        "with how to give it one in .rsx"
+    );
 }
 
 #[test]

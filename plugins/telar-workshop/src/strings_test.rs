@@ -41,7 +41,7 @@ fn every_string_has_an_english_default() {
         (COLUMN_DESCRIPTION, "Description"),
         (COLUMN_NAME, "Name"),
         (COLUMN_VALUE, "Value"),
-        (NO_ARGS, "No args"),
+        (NO_ARGS, "This preview has no args"),
         (NOTHING_SELECTED, "Nothing selected"),
         (RESET, "Reset"),
         (RESET_ALL, "Reset all"),

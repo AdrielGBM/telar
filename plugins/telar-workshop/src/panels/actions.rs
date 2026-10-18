@@ -2,17 +2,17 @@
 
 use telar::preview::{ActionCall, ActionLog};
 use telar::{
-    Accessible, AlignItems, Children, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutScrollArea, LayoutStyle, Memo, Reactive, ReactiveList, Role, Text, box_item, children,
-    memo,
+    Accessible, Children, Container, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo,
+    Reactive, ReactiveList, Role, box_item, children, memo,
 };
 use telar_components::{BadgeProps, badge};
-use telar_devtools::{workbench_fill, workbench_muted};
+use telar_devtools::workbench_fill;
 
 use super::action_row::{ActionRowProps, action_row};
 use super::actions_tools::{ActionsToolsProps, actions_tools};
+use crate::empty_state::EmptyState;
 use crate::state::WorkshopState;
-use crate::strings::{self, ACTIONS, NO_ACTIONS, NO_MATCHING_ACTIONS};
+use crate::strings::{self, ACTIONS, NO_ACTIONS, NO_ACTIONS_HINT, NO_MATCHING_ACTIONS};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum Shown {
@@ -38,8 +38,8 @@ pub(super) fn actions(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layo
         },
         |shown: &Shown| *shown,
         move |shown| match shown {
-            Shown::Nothing => empty(NO_ACTIONS),
-            Shown::NoMatches => empty(NO_MATCHING_ACTIONS),
+            Shown::Nothing => EmptyState::new(NO_ACTIONS).about(NO_ACTIONS_HINT).build(),
+            Shown::NoMatches => EmptyState::new(NO_MATCHING_ACTIONS).build(),
             Shown::Calls => calls(listed),
         },
     )?;
@@ -113,20 +113,4 @@ fn calls(listed: Memo<Vec<ActionCall>>) -> Result<Box<dyn LayoutItem>, LayoutErr
     let scroll = LayoutScrollArea::new(LayoutStyle::new().flex_grow(1.0), box_item(log))?
         .stop_label(|| strings::text(ACTIONS));
     Ok(box_item(scroll))
-}
-
-fn empty(key: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let message = Text::declaring(
-        move || strings::text(key),
-        LayoutStyle::new(),
-        workbench_muted,
-    )?;
-    let centred = Container::new(
-        workbench_fill()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER),
-        children![message],
-    )?
-    .role(Role::Status);
-    Ok(box_item(centred))
 }

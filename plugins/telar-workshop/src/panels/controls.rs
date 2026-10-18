@@ -5,20 +5,20 @@ use std::rc::Rc;
 use telar::preview::host::{ArgState, Args};
 use telar::preview::{ControlKind, PreviewEntry, PropDefault};
 use telar::{
-    Accessible, AlignItems, Border, Children, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer, Text,
-    box_item, children,
+    Accessible, AlignItems, Border, Children, Container, LayoutError, LayoutItem, LayoutScrollArea,
+    LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer, Text, box_item, children,
 };
-use telar_components::{ButtonProps, ButtonVariant, button};
+use telar_components::{BadgeProps, ButtonProps, ButtonVariant, badge, button};
 use telar_devtools::{
     WORKBENCH_GRID, use_workbench_tokens, workbench_fill, workbench_mono, workbench_muted,
 };
 
 use super::editors::{self, Binding};
+use crate::empty_state::{EmptyState, Example};
 use crate::state::WorkshopState;
 use crate::strings::{
     self, COLUMN_DEFAULT, COLUMN_DESCRIPTION, COLUMN_NAME, COLUMN_VALUE, CONTROLS, NO_ARGS,
-    NOTHING_SELECTED, RESET, RESET_ARG,
+    NO_ARGS_HINT, NOTHING_SELECTED, RESET, RESET_ARG,
 };
 
 const NAME_WIDTH: f32 = 160.0;
@@ -26,6 +26,17 @@ const VALUE_WIDTH: f32 = 300.0;
 const DEFAULT_WIDTH: f32 = 140.0;
 const DOC_MIN_WIDTH: f32 = 160.0;
 const RESET_WIDTH: f32 = 72.0;
+
+const ARG_EXAMPLES: &[Example] = &[
+    Example {
+        language: "Rust",
+        code: ".label(p.arg(\"label\", \"Save\"))",
+    },
+    Example {
+        language: ".rsx",
+        code: "[preview \"Default\"]\nbutton label:\"Save\"",
+    },
+];
 
 /// The selected preview's controls, or why there are none.
 pub(super) fn controls(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -37,7 +48,7 @@ pub(super) fn controls(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Lay
         |entry: &Option<PreviewEntry>| entry.map(|entry| entry.id),
         move |entry| match entry {
             Some(entry) => preview_controls(state.args(&entry)),
-            None => empty(NOTHING_SELECTED),
+            None => EmptyState::new(NOTHING_SELECTED).build(),
         },
     )?;
     Ok(box_item(panel))
@@ -51,10 +62,42 @@ fn preview_controls(args: Args) -> Result<Box<dyn LayoutItem>, LayoutError> {
         |has_args: &bool| *has_args,
         move |has_args| match has_args {
             true => scrolling(table(args.clone())?),
-            false => empty(NO_ARGS),
+            false => EmptyState::new(NO_ARGS)
+                .about(NO_ARGS_HINT)
+                .examples(ARG_EXAMPLES)
+                .build(),
         },
     )?;
     Ok(box_item(controls))
+}
+
+/// How many args the selected preview has, for the panel's tab; `0` for none or no preview.
+fn arg_count(state: &WorkshopState) -> usize {
+    state
+        .selected()
+        .map_or(0, |entry| state.args(&entry).states().len())
+}
+
+/// [`arg_count`] for the panel's tab; nothing while there are none.
+pub(super) fn count_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let state = state.clone();
+    let count = ReactiveList::with_style(
+        LayoutStyle::row(),
+        move || match arg_count(&state) {
+            0 => Vec::new(),
+            count => vec![count],
+        },
+        |count: &usize| *count,
+        |count| {
+            badge(
+                BadgeProps::props()
+                    .label(Reactive::of(move || count.to_string()))
+                    .build(),
+                Children::default(),
+            )
+        },
+    )?;
+    Ok(box_item(count))
 }
 
 /// The controls of the preview `args` belong to, at the height of their rows, for a page that scrolls them with the rest of it. Nothing until the preview reads an arg.
@@ -255,19 +298,4 @@ fn growing() -> LayoutStyle {
 fn spacer(width: f32) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let spacer = Container::new(fixed(width), Vec::new())?;
     Ok(box_item(spacer))
-}
-
-fn empty(key: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let message = Text::declaring(
-        move || strings::text(key),
-        LayoutStyle::new(),
-        workbench_muted,
-    )?;
-    let centred = Container::new(
-        workbench_fill()
-            .align_items(AlignItems::CENTER)
-            .justify_content(JustifyContent::CENTER),
-        children![message],
-    )?;
-    Ok(box_item(centred))
 }
