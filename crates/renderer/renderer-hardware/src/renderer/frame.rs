@@ -304,6 +304,12 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> RenderBacken
         true
     }
 
+    fn forget_frames(&mut self) {
+        self.prev_commands.clear();
+        self.prev_generation = u64::MAX;
+        self.clear_pending();
+    }
+
     fn begin_frame(
         &mut self,
         width: u32,

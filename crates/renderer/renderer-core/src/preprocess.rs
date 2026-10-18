@@ -176,6 +176,7 @@ impl ScaleScratch {
 
     /// Scales every command in `commands` by `sf` into the reusable internal buffer and returns it. The pointer-keyed caches are cleared on entry, so a recycled allocator address can never yield a stale hit (ABA-safe); cache reuse only spans commands within this single call.
     pub fn scale_into(&mut self, commands: &[DrawCommand], sf: f32) -> &[DrawCommand] {
+        self.forget();
         // Destructure so the output buffer and the caches are borrowed as disjoint fields in the loop.
         let Self {
             storage,
@@ -184,11 +185,6 @@ impl ScaleScratch {
             path_styles,
             path_data,
         } = self;
-        storage.clear();
-        rect_styles.clear();
-        text_styles.clear();
-        path_styles.clear();
-        path_data.clear();
         storage.reserve(commands.len());
         for cmd in commands {
             storage.push(scale_command_cached(
@@ -201,6 +197,14 @@ impl ScaleScratch {
             ));
         }
         storage
+    }
+
+    pub fn forget(&mut self) {
+        self.storage.clear();
+        self.rect_styles.clear();
+        self.text_styles.clear();
+        self.path_styles.clear();
+        self.path_data.clear();
     }
 }
 

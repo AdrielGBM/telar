@@ -1085,3 +1085,38 @@ fn a_mask_that_draws_nothing_hides_everything() {
     let drawn = draw(SMALL, &[&frame], false);
     assert_eq!(pixel(&drawn, SMALL.0, 320, 200), BACKGROUND);
 }
+
+#[test]
+fn a_renderer_that_forgot_its_frames_holds_none_of_their_values_and_draws_the_next_in_full() {
+    let style = Arc::new(RectStyle::filled(Color::WHITE, 0.0));
+    let frame = [DrawCommand::Rect {
+        rect: Rect::new(10.0, 10.0, 40.0, 40.0),
+        style: Arc::clone(&style),
+    }];
+    let (width, height) = SMALL;
+    let mut renderer = SoftwareRenderer::<HeadlessWindow, HeadlessWindow>::new_headless(
+        width,
+        height,
+        SoftwareRendererConfig::default(),
+    );
+    renderer.begin_frame(width, height, 1.0, 0).unwrap();
+    renderer.render(&frame, None);
+    renderer.begin_frame(width, height, 1.0, 0).unwrap();
+    assert!(
+        matches!(renderer.render(&frame, None), FrameOp::NoChange),
+        "precondition: an unchanged frame is not drawn again"
+    );
+    assert!(
+        Arc::strong_count(&style) > 2,
+        "precondition: the renderer holds the frame"
+    );
+
+    renderer.forget_frames();
+    assert_eq!(
+        Arc::strong_count(&style),
+        2,
+        "only the frame here holds the style"
+    );
+    renderer.begin_frame(width, height, 1.0, 0).unwrap();
+    assert!(matches!(renderer.render(&frame, None), FrameOp::Full));
+}

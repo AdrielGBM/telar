@@ -51,6 +51,9 @@ pub trait RenderBackend {
     /// Makes the next [`render_frame`](Self::render_frame) reach the compositor even if it draws nothing new, for surface state that only a commit applies. A backend that presents every frame it is handed has nothing to do.
     fn owe_present(&mut self) {}
 
+    /// Drops every command this backend kept from the frames it drew, and every value taken from one, so the next frame is drawn in full. A command can point into the image of the code that built it: an empty `Arc<[T]>` or `Arc<str>` made by `Default` shares one static allocation in that image, and a trait object's vtable lives there too. The runner calls this before it unloads a hot-reloaded library, so a backend that keeps anything of a frame past [`render_frame`](Self::render_frame), such as the commands it diffs the next frame against, has to let go of it here.
+    fn forget_frames(&mut self) {}
+
     /// Whether this backend applies `begin_frame`'s `scale_factor` itself — the hardware path folds it into the shader's transform. A backend that returns `false` (the default, and what the software rasteriser does) must be handed commands already scaled into physical pixels, which is why the frame pipeline runs [`ScaleScratch`](crate::ScaleScratch) for it.
     fn applies_scale_factor(&self) -> bool {
         false
@@ -103,6 +106,10 @@ impl RenderBackend for Box<dyn RenderBackend + Send> {
 
     fn owe_present(&mut self) {
         (**self).owe_present()
+    }
+
+    fn forget_frames(&mut self) {
+        (**self).forget_frames()
     }
 
     fn applies_scale_factor(&self) -> bool {

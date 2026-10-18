@@ -91,6 +91,9 @@ pub trait DevOverlay: Default + 'static {
 
     /// The mounted component tree as the inspector sees it, once per frame. Takes the walked slice rather than a trait that walks on demand: the two questions the trait offered were asked one after the other, and each walked the whole tree.
     fn on_tree(&mut self, _nodes: &[SegmentNodeInfo]) {}
+
+    /// Drops whatever the overlay kept of the frames and trees it was handed, before the runner unloads the hot-reloaded library that built them: a node's `name`, like a command's empty `Arc`, can point into that library's image.
+    fn forget_frames(&mut self) {}
 }
 
 impl DevOverlay for () {

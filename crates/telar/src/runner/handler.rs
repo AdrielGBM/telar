@@ -13,7 +13,7 @@ use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
 
 use super::COMMAND_BUF_POOL_CAP;
-use super::frame_thread::FrameMsg;
+use super::frame_thread::{FrameMsg, RenderMsg};
 use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, SurfaceRenderer};
 use super::state::{AppEnv, FramePacer, WindowTitle};
 use super::{FRAME_BUDGET, HW_KEEPALIVE_INTERVAL, IDLE_GRACE};
@@ -165,7 +165,7 @@ where
     }
 }
 
-/// The tree goes first, inside its own surface: its widgets withdraw what they registered from that surface's worlds, which do not outlive the `Surface`, and under hot reload its closures are code in the app's dylib, which dropping `app` unmaps.
+/// The tree goes first, inside its own surface: its widgets withdraw what they registered from that surface's worlds, which do not outlive the `Surface`, and under hot reload its closures are code in the app's dylib, which dropping `app` unmaps. The frames it drew go next, for the same reason.
 impl<W, D> Drop for AppHandler<W, D>
 where
     W: Window + Clone + 'static,
@@ -174,6 +174,7 @@ where
     fn drop(&mut self) {
         let _surface = self.enter_surface();
         self.tree = None;
+        self.forget_frames();
     }
 }
 
@@ -489,6 +490,7 @@ where
         let snapshot = self.app.hot_snapshot();
         // Dropped first, so effect closures holding old-dylib code are destroyed while that lib is still mapped; only then does replacing `self.app` dlclose it.
         self.tree = None;
+        self.forget_frames();
         self.app = app;
         // Before anything runs in the new runtime, so a task or timer its restore or its first build starts already wakes the loop.
         self.install_task_waker();
@@ -513,6 +515,20 @@ where
         self.dev.set_app_panic(Some(report));
         self.pacer.presentation_owed = true;
         self.pacer.frame_owed = true;
+    }
+
+    /// Drops every frame this surface keeps, on this thread and on the render thread, and waits until both have. A command can point into the image of the library that built it, so this runs before a hot-reloaded app is unloaded; the next frame is drawn in full.
+    fn forget_frames(&mut self) {
+        for buffer in &mut self.command_buf_pool {
+            buffer.clear();
+        }
+        self.frame_text.clear();
+        self.scale_scratch.forget();
+        if let Some(renderer) = &mut self.renderer {
+            renderer.forget_frames();
+        }
+        self.renderer_host.forget_frames();
+        self.dev.forget_frames();
     }
 
     /// Hands the app's runtime the loop wake, so a task finishing in it, or a timer it schedules, runs a frame. Every runtime swapped in needs it again: a reloaded dylib's reactive-core copy starts with an empty waker slot of its own.
@@ -910,15 +926,15 @@ where
     fn submit_frame(&mut self, msg: FrameMsg) -> bool {
         // Dropped if the render thread is still busy, which keeps input handling off the rasteriser's critical path. On a dropped or disconnected send, the buffer is recovered for the free-list.
         if let Some(channels) = self.renderer_host.channels() {
-            let Err(e) = channels.tx.try_send(msg) else {
+            let Err(e) = channels.tx.try_send(RenderMsg::Frame(msg)) else {
                 return true;
             };
-            let recovered = match e {
-                std::sync::mpsc::TrySendError::Full(m)
-                | std::sync::mpsc::TrySendError::Disconnected(m) => m.commands,
-            };
-            if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
-                self.command_buf_pool.push(recovered);
+            let (std::sync::mpsc::TrySendError::Full(unsent)
+            | std::sync::mpsc::TrySendError::Disconnected(unsent)) = e;
+            if let RenderMsg::Frame(msg) = unsent
+                && self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP
+            {
+                self.command_buf_pool.push(msg.commands);
             }
             return false;
         }

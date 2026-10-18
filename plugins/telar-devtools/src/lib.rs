@@ -179,6 +179,10 @@ impl DevOverlay for DevTools {
         self.show_window();
     }
 
+    fn forget_frames(&mut self) {
+        self.window.set_nodes(&[]);
+    }
+
     fn wants_access(&self) -> bool {
         match &self.overlay {
             Built::Ready(overlay) => overlay.wants_audit(),

@@ -751,6 +751,12 @@ where
         SoftwareRenderer::release_idle_buffers(self)
     }
 
+    fn forget_frames(&mut self) {
+        self.forget_previous_frame();
+        self.expanded_commands_cache = None;
+        self.layer_bounds_cache = None;
+    }
+
     fn begin_frame(
         &mut self,
         width: u32,

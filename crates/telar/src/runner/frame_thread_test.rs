@@ -23,6 +23,7 @@ struct StubBackend {
     releases: Arc<std::sync::Mutex<Vec<u32>>>,
     // What each release asks for in turn, as a buffer still held would.
     retries: Vec<Duration>,
+    drawn_at_each_forget: Arc<std::sync::Mutex<Vec<u32>>>,
 }
 
 impl RenderBackend for StubBackend {
@@ -50,6 +51,11 @@ impl RenderBackend for StubBackend {
         let sweeps = self.sweeps.load(Ordering::SeqCst);
         self.releases.lock().unwrap().push(sweeps);
         self.retries.pop()
+    }
+
+    fn forget_frames(&mut self) {
+        let drawn = self.rendered.load(Ordering::SeqCst);
+        self.drawn_at_each_forget.lock().unwrap().push(drawn);
     }
 
     fn begin_frame(
@@ -87,8 +93,8 @@ fn rect(x: f32) -> DrawCommand {
     }
 }
 
-fn frame(width: u32, height: u32, scale_factor: f32, age: Duration) -> FrameMsg {
-    FrameMsg {
+fn frame(width: u32, height: u32, scale_factor: f32, age: Duration) -> RenderMsg {
+    RenderMsg::Frame(FrameMsg {
         width,
         height,
         scale_factor,
@@ -97,7 +103,7 @@ fn frame(width: u32, height: u32, scale_factor: f32, age: Duration) -> FrameMsg 
         clear: None,
         timestamp: Instant::now() - age,
         owed: false,
-    }
+    })
 }
 
 /// What one call to `render_frame` was handed: the surface size in force, and the commands themselves.
@@ -138,6 +144,7 @@ fn stub_watching_bind(
             idle_release_after: None,
             releases: Arc::default(),
             retries: Vec::new(),
+            drawn_at_each_forget: Arc::default(),
         },
         rendered,
         seen,
@@ -342,6 +349,33 @@ fn an_idle_release_that_asks_to_be_retried_runs_again_until_it_is_done() {
     std::thread::sleep(Duration::from_millis(400));
     assert_eq!(sweeps.load(Ordering::SeqCst), 1);
     assert_eq!(releases.lock().unwrap().len(), 3);
+
+    drop(tx);
+    join.join().unwrap();
+}
+
+#[test]
+fn a_forget_is_handled_after_the_frames_sent_before_it_and_answered_once_done() {
+    let (backend, _rendered, seen) = stub(true);
+    let drawn_at_each_forget = Arc::clone(&backend.drawn_at_each_forget);
+    let (tx, ret_rx, join) = spawn_render_thread(backend);
+
+    tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
+    let (answer, answered) = std::sync::mpsc::channel();
+    tx.send(RenderMsg::Forget(answer)).unwrap();
+    answered
+        .recv_timeout(Duration::from_secs(5))
+        .expect("the forget is answered");
+    assert_eq!(
+        *drawn_at_each_forget.lock().unwrap(),
+        [1],
+        "the frame sent first is drawn before the backend forgets"
+    );
+    seen.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(
+        ret_rx.try_recv().is_ok(),
+        "the frame's buffer came back before the answer"
+    );
 
     drop(tx);
     join.join().unwrap();

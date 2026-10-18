@@ -267,6 +267,16 @@ impl<W: SurfaceWindow> RendererHost<W> for BuiltinHost<W> {
         self.channels.as_ref()
     }
 
+    fn forget_frames(&mut self) {
+        if let Some(channels) = &self.channels {
+            channels.forget_frames();
+        }
+        #[cfg(feature = "hardware")]
+        if let Some(warm) = &mut self.warm {
+            renderer_core::RenderBackend::forget_frames(warm);
+        }
+    }
+
     fn suspend(&mut self) {
         self.join_thread(true);
     }

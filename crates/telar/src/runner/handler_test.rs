@@ -1929,3 +1929,149 @@ fn the_window_is_told_where_the_focused_field_has_its_caret() {
     run_a_pass(&mut handler, &window);
     assert_eq!(window.text_input(), None, "no field takes text any more");
 }
+
+thread_local! {
+    static UNLOAD_JOURNAL: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn note(event: &'static str) {
+    UNLOAD_JOURNAL.with(|journal| journal.borrow_mut().push(event));
+}
+
+fn unload_journal() -> Vec<&'static str> {
+    UNLOAD_JOURNAL.with(|journal| journal.borrow().clone())
+}
+
+/// An app that notes when it is dropped: for a hot-reloaded one, the moment its library is unmapped.
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+struct Unloading(LocalApp<Unchanging>);
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+impl AppRuntime for Unloading {
+    fn mount(&mut self) -> Box<dyn crate::tree::UiTree> {
+        self.0.mount()
+    }
+
+    fn clear_color(&self) -> Option<renderer_core::Color> {
+        self.0.clear_color()
+    }
+
+    fn window_config(&self) -> Option<platform_core::WindowConfig> {
+        self.0.window_config()
+    }
+
+    fn on_frame(&mut self, ctx: &mut platform_core::AppCtx) {
+        self.0.on_frame(ctx)
+    }
+}
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+impl Drop for Unloading {
+    fn drop(&mut self) {
+        note("app unloaded");
+    }
+}
+
+#[derive(Default)]
+struct Forgetting;
+
+impl DevOverlay for Forgetting {
+    fn on_frame<'a>(
+        &mut self,
+        base: &'a [renderer_core::DrawCommand],
+        _window_w: f32,
+        _window_h: f32,
+        _tree_dirty: bool,
+    ) -> std::borrow::Cow<'a, [renderer_core::DrawCommand]> {
+        std::borrow::Cow::Borrowed(base)
+    }
+
+    fn forget_frames(&mut self) {
+        note("overlay forgot");
+    }
+}
+
+struct ForgettingHost(crate::runner::host::BuiltinHost<HeadlessWindow>);
+
+impl RendererHost<HeadlessWindow> for ForgettingHost {
+    fn start(&mut self, window: &HeadlessWindow, req: &RendererRequest<'_>) -> RendererStart {
+        self.0.start(window, req)
+    }
+
+    fn channels(&self) -> Option<&RenderChannels> {
+        self.0.channels()
+    }
+
+    fn forget_frames(&mut self) {
+        self.0.forget_frames();
+        note("renderer forgot");
+    }
+
+    fn suspend(&mut self) {
+        self.0.suspend();
+    }
+
+    fn retire(&mut self) {
+        self.0.retire();
+    }
+
+    fn build_offscreen(
+        &mut self,
+        window: &HeadlessWindow,
+        req: &RendererRequest<'_>,
+    ) -> Option<Box<dyn RenderBackend>> {
+        self.0.build_offscreen(window, req)
+    }
+}
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+fn unloading_handler(window: &HeadlessWindow) -> AppHandler<HeadlessWindow, Forgetting> {
+    let mut handler = build_app_handler::<HeadlessWindow, Forgetting>(
+        Box::new(Unloading(LocalApp(Unchanging))),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "unload-test".to_string(),
+        SurfaceRenderer::builtin(),
+    );
+    handler.renderer_host = Box::new(ForgettingHost(crate::runner::host::BuiltinHost::new()));
+    handler.new_events();
+    assert!(handler.on_resume(window));
+    handler.on_redraw(window);
+    handler
+}
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+fn forgot_before_unloading(journal: &[&str]) -> bool {
+    let at = |event: &str| journal.iter().position(|noted| *noted == event);
+    let unloaded = at("app unloaded").expect("the app is unloaded");
+    at("renderer forgot").is_some_and(|forgot| forgot < unloaded)
+        && at("overlay forgot").is_some_and(|forgot| forgot < unloaded)
+}
+
+/// A command can point into the image of the library that built it, so a renderer still holding a frame when that library is unmapped crashes the process as it lets go.
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+#[test]
+fn a_reload_forgets_every_frame_before_the_outgoing_app_is_unloaded() {
+    let window = HeadlessWindow::new(40, 40);
+    let mut handler = unloading_handler(&window);
+    handler.swap_app(Box::new(LocalApp(Unchanging)), &window);
+    assert!(
+        forgot_before_unloading(&unload_journal()),
+        "{:?}",
+        unload_journal()
+    );
+}
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+#[test]
+fn closing_forgets_every_frame_before_the_app_is_unloaded() {
+    let window = HeadlessWindow::new(40, 40);
+    drop(unloading_handler(&window));
+    assert!(
+        forgot_before_unloading(&unload_journal()),
+        "{:?}",
+        unload_journal()
+    );
+}

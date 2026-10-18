@@ -18,7 +18,14 @@ pub(super) struct FrameMsg {
     pub(super) owed: bool,
 }
 
-/// Drives `renderer` on a thread of its own, fed one [`FrameMsg`] at a time.
+/// What the UI thread hands the render thread, handled in the order it was sent.
+pub(super) enum RenderMsg {
+    Frame(FrameMsg),
+    /// Drop everything kept of the frames drawn so far, then answer: once the answer arrives, nothing on the render thread holds a value any of those frames carried.
+    Forget(std::sync::mpsc::Sender<()>),
+}
+
+/// Drives `renderer` on a thread of its own, fed one [`RenderMsg`] at a time.
 ///
 /// Generic over the backend so the software rasteriser gets the same pipeline the hardware one has always had — stale-frame dropping, buffer recycling, `catch_unwind`, and an ADPF session keyed to the thread that actually does the work. Staying generic (rather than boxing) is what lets `on_suspend` join and reclaim the *concrete* renderer, which is how the hardware path keeps its device, pipelines and caches warm.
 ///
@@ -28,14 +35,14 @@ pub(super) struct FrameMsg {
 pub(super) fn spawn_render_thread<R>(
     renderer: R,
 ) -> (
-    std::sync::mpsc::SyncSender<FrameMsg>,
+    std::sync::mpsc::SyncSender<RenderMsg>,
     std::sync::mpsc::Receiver<Vec<renderer_core::DrawCommand>>,
     std::thread::JoinHandle<R>,
 )
 where
     R: RenderBackend + Send + 'static,
 {
-    let (tx, rx) = std::sync::mpsc::sync_channel::<FrameMsg>(1);
+    let (tx, rx) = std::sync::mpsc::sync_channel::<RenderMsg>(1);
     // Handed back to the UI thread so it refills the same allocation instead of allocating a fresh Vec each frame.
     let (ret_tx, ret_rx) = std::sync::mpsc::channel::<Vec<renderer_core::DrawCommand>>();
     let join = std::thread::Builder::new()
@@ -54,8 +61,15 @@ where
             let hint_session = platform_android::AdpfSession::new(16_666_667, None);
             let idle_steps = idle_steps(&renderer);
             loop {
-                let Some(msg) = next_frame(&rx, &mut renderer, &idle_steps) else {
-                    break;
+                let msg = match next_message(&rx, &mut renderer, &idle_steps) {
+                    Some(RenderMsg::Frame(msg)) => msg,
+                    Some(RenderMsg::Forget(answer)) => {
+                        renderer.forget_frames();
+                        scale_scratch.forget();
+                        let _ = answer.send(());
+                        continue;
+                    }
+                    None => break,
                 };
                 // Never skip a frame that resizes: the surface is reconfigured inside `begin_frame`, so dropping one leaves it at the old size and the window shows clipped content until the next accepted frame.
                 let size_changed = msg.width != current_width || msg.height != current_height;
@@ -120,11 +134,11 @@ fn idle_steps<R: RenderBackend>(renderer: &R) -> Vec<(std::time::Duration, IdleS
 }
 
 // Each step runs once per idle stretch, or again when a release asks to be retried, then the thread parks on a plain `recv`: a repeating timer would wake it forever on a screen nobody is looking at.
-fn next_frame<R: RenderBackend>(
-    rx: &std::sync::mpsc::Receiver<FrameMsg>,
+fn next_message<R: RenderBackend>(
+    rx: &std::sync::mpsc::Receiver<RenderMsg>,
     renderer: &mut R,
     steps: &[(std::time::Duration, IdleStep)],
-) -> Option<FrameMsg> {
+) -> Option<RenderMsg> {
     let idle_since = web_time::Instant::now();
     let mut due: Vec<_> = steps
         .iter()

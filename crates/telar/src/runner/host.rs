@@ -15,7 +15,7 @@ use renderer_core::{DrawCommand, RenderBackend, RendererError, RendererFactory};
 
 use crate::config::RendererBackend;
 
-use super::frame_thread::{FrameMsg, spawn_render_thread};
+use super::frame_thread::{RenderMsg, spawn_render_thread};
 
 pub(super) use builtin::BuiltinHost;
 
@@ -72,8 +72,19 @@ impl<W: 'static> SurfaceRenderer<W> {
 
 /// The frame channels of a running render thread: composed frames out, spent command buffers back.
 pub(super) struct RenderChannels {
-    pub(super) tx: SyncSender<FrameMsg>,
+    pub(super) tx: SyncSender<RenderMsg>,
     pub(super) ret_rx: Receiver<Vec<DrawCommand>>,
+}
+
+impl RenderChannels {
+    /// A thread that is gone holds nothing to wait for.
+    fn forget_frames(&self) {
+        let (answer, answered) = std::sync::mpsc::channel();
+        if self.tx.send(RenderMsg::Forget(answer)).is_ok() {
+            let _ = answered.recv();
+        }
+        while self.ret_rx.try_recv().is_ok() {}
+    }
 }
 
 /// What a renderer is built from that the handler happens to own: the app's fonts, paths and surface facts.
@@ -127,6 +138,13 @@ pub(super) trait RendererHost<W>: 'static {
 
     /// The channels of the running renderer, or `None` when there is none to send to.
     fn channels(&self) -> Option<&RenderChannels>;
+
+    /// Returns only once every renderer this host holds has forgotten them, as [`RenderBackend::forget_frames`] says.
+    fn forget_frames(&mut self) {
+        if let Some(channels) = self.channels() {
+            channels.forget_frames();
+        }
+    }
 
     /// Retires the render thread, keeping what makes the next [`start`](Self::start) cheap — for hardware, the device with its pipelines and warm caches.
     fn suspend(&mut self);
