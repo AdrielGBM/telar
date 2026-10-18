@@ -63,16 +63,24 @@ struct Mounted {
 
 impl Mounted {
     fn new(props: CodeViewProps) -> Self {
+        Self::in_box(props, LayoutStyle::new().flex_column())
+    }
+
+    /// Laid out as wide as its code, rather than stretched across the space it is given.
+    fn hugging(props: CodeViewProps) -> Self {
+        Self::in_box(
+            props,
+            LayoutStyle::row().align_items(telar::AlignItems::START),
+        )
+    }
+
+    fn in_box(props: CodeViewProps, frame: LayoutStyle) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::set_locale("en");
         focus::clear();
         let item = code_view(props, Children::default()).unwrap();
         let node = item.layout_node();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(600.0).height(400.0),
-            &[node],
-        )
-        .unwrap();
+        let root = new_container(frame.width(600.0).height(400.0), &[node]).unwrap();
         compute_layout(
             root,
             AvailableSpace::Definite(600.0),
@@ -396,5 +404,27 @@ fn a_line_wider_than_the_block_scrolls_sideways_under_a_scrollbar() {
         telar::focus::tab_order()
             .iter()
             .any(|stop| stop.role == Role::ScrollArea)
+    );
+}
+
+/// A block no wider than its code keeps the copy button beside the lines, so neither covers the other.
+#[test]
+fn the_copy_button_stands_beside_the_code_rather_than_over_it() {
+    let mounted = Mounted::hugging(CodeViewProps::props().code("let x = 1;").build());
+    let copy = mounted.button("Copy").expect("a copy button").rect;
+    let mut code = None;
+    telar::for_each_with_matrix(&mounted.tree.commands(), |command, matrix| {
+        if let DrawCommand::Text { text, rect, .. } = command
+            && text.as_ref() == "let x = 1;"
+        {
+            code = Some(telar::transform_clip_rect(matrix, *rect));
+        }
+    });
+    let code = code.expect("the code is drawn");
+    assert!(
+        code.x + code.width <= copy.x,
+        "the code ends at {} and the button starts at {}",
+        code.x + code.width,
+        copy.x
     );
 }

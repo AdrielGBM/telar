@@ -293,7 +293,13 @@ pub fn code_view(
         row.push(box_item(gutter));
     }
     row.push(box_item(source));
-    let content_box = || LayoutStyle::row().padding_all(pad()).gap(shared::gap_lg());
+    let content_box = move || {
+        let style = LayoutStyle::row().padding_all(pad()).gap(shared::gap_lg());
+        match copyable {
+            true => style.padding_end(copy_room()),
+            false => style,
+        }
+    };
     let content = Container::new(content_box(), row)?.styled_by(content_box);
     let viewport_box = if max_height > 0.0 {
         LayoutStyle::new().max_height(max_height)
@@ -329,6 +335,11 @@ fn frame_paint() -> RectStyle {
         .with_fill(shared::surface_alt())
         .with_border(Border::uniform(shared::border(), shared::border_width()))
         .with_radius(BorderRadius::all(CodeViewTokens::current().radius()))
+}
+
+/// How far the lines keep from the block's end so the copy button in its corner stands beside them rather than over them: the button, its inset from the edge, and the same again between it and the code.
+fn copy_room() -> f32 {
+    shared::control_height() + shared::gap_sm() * 2.0
 }
 
 fn copy_button(
