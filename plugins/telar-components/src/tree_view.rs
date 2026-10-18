@@ -108,6 +108,20 @@ impl TreeNode {
     pub fn is_branch(&self) -> bool {
         !self.children.is_empty()
     }
+
+    /// The id of every branch among `nodes` and under them, at any depth, parents before what they hold: what opening them all opens.
+    pub fn branch_ids(nodes: &[TreeNode]) -> Vec<Arc<str>> {
+        let mut ids = Vec::new();
+        collect_branch_ids(nodes, &mut ids);
+        ids
+    }
+}
+
+fn collect_branch_ids(nodes: &[TreeNode], ids: &mut Vec<Arc<str>>) {
+    for node in nodes.iter().filter(|node| node.is_branch()) {
+        ids.push(node.id.clone());
+        collect_branch_ids(&node.children, ids);
+    }
 }
 
 /// A tree of rows given as data, walked with the arrow keys, Home, End, Page Up, Page Down and type-ahead, and bound to a selection and a set of open branches.

@@ -5,6 +5,7 @@
 mod accessibility;
 mod inspector;
 mod marks;
+mod tree_menu;
 
 pub use accessibility::accessibility_panel;
 pub use inspector::inspector_panel;

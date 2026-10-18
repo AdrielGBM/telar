@@ -7,6 +7,7 @@ use telar::{
 use telar_components::{TreeNode, TreeViewProps, tree_view};
 
 use super::count_mounted;
+use super::tree_menu::TreeMenu;
 use crate::inspect::Inspection;
 use crate::strings::{
     self, ACCESSIBILITY, AUDIT_CLEAN, AUDIT_UNAVAILABLE, ERRORS, FOCUSED, PROBLEMS, READER,
@@ -45,18 +46,20 @@ pub fn accessibility_panel(inspection: Inspection) -> Result<Box<dyn LayoutItem>
             .map(|audit| audit_rows(&audit))
             .unwrap_or_default()
     });
+    let menu = TreeMenu::new(items, inspection.access_expanded);
     let tree = tree_view(
         TreeViewProps::props()
             .items(items)
             .selected(inspection.access_selected)
             .expanded(inspection.access_expanded)
+            .on_context(menu.on_context())
             .label(Reactive::of(|| strings::text(ACCESSIBILITY)))
             .build(),
         Children::default(),
     )?;
     Ok(box_item(Container::new(
         workbench_fill(),
-        vec![box_item(header), tree],
+        vec![box_item(header), menu.around(tree)?],
     )?))
 }
 

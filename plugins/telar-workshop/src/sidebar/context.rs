@@ -142,9 +142,7 @@ pub(super) fn run(state: &WorkshopState, command: Command, node: Option<&TreeNod
 }
 
 fn within(group: &TreeNode) -> Vec<Arc<str>> {
-    let mut groups = vec![group.id.clone()];
-    model::collect_branches(&group.children, &mut groups);
-    groups
+    TreeNode::branch_ids(std::slice::from_ref(group))
 }
 
 pub(super) fn context_layer(

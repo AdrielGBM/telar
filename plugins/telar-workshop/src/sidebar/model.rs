@@ -41,17 +41,7 @@ fn collect_leaves(nodes: &[TreeNode], ids: &mut Vec<Arc<str>>) {
 
 /// The id of every group `entries` are listed under.
 pub(crate) fn group_ids(entries: &[PreviewEntry]) -> Vec<Arc<str>> {
-    let mut ids = Vec::new();
-    collect_branches(&tree(entries, "", |_| None), &mut ids);
-    ids
-}
-
-/// The id of every branch of `nodes`, at any depth.
-pub(super) fn collect_branches(nodes: &[TreeNode], ids: &mut Vec<Arc<str>>) {
-    for node in nodes.iter().filter(|node| node.is_branch()) {
-        ids.push(node.id.clone());
-        collect_branches(&node.children, ids);
-    }
+    TreeNode::branch_ids(&tree(entries, "", |_| None))
 }
 
 fn matches(query: &str, entry: &PreviewEntry) -> bool {

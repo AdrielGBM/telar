@@ -99,8 +99,7 @@ impl Panel {
             if search.with(|query| query.trim().is_empty()) {
                 return;
             }
-            let mut groups = Vec::new();
-            items.with(|items| model::collect_branches(items, &mut groups));
+            let groups = items.with(|items| TreeNode::branch_ids(items));
             if !expanded.peek_with(|open| groups.iter().all(|id| open.contains(id))) {
                 expanded.update(|open| open.extend(groups));
             }

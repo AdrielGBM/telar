@@ -15,12 +15,16 @@ pub(crate) const BUILD_ERROR: &str = "build_error";
 pub(crate) const BUILD_FAILED: &str = "build_failed";
 pub(crate) const BUILD_FAILED_HINT: &str = "build_failed_hint";
 pub(crate) const CLOSE: &str = "close";
+pub(crate) const COLLAPSE: &str = "collapse";
+pub(crate) const COLLAPSE_ALL: &str = "collapse_all";
 pub(crate) const COMPONENTS: &str = "components";
 pub(crate) const DEPTH: &str = "depth";
 pub(crate) const DETAILS: &str = "details";
 pub(crate) const DEV: &str = "dev";
 pub(crate) const DEVTOOLS: &str = "devtools";
 pub(crate) const ERRORS: &str = "errors";
+pub(crate) const EXPAND: &str = "expand";
+pub(crate) const EXPAND_ALL: &str = "expand_all";
 pub(crate) const FOCUSED: &str = "focused";
 pub(crate) const FPS: &str = "fps";
 pub(crate) const FRAME_TIME: &str = "frame_time";
@@ -72,12 +76,16 @@ static CATALOG: Catalog = Catalog {
             "The app keeps running the last build that compiled."
         ),
         english!(CLOSE, "Close"),
+        english!(COLLAPSE, "Collapse"),
+        english!(COLLAPSE_ALL, "Collapse all"),
         english!(COMPONENTS, "Components"),
         english!(DEPTH, "Depth"),
         english!(DETAILS, "Details"),
         english!(DEV, "DEV"),
         english!(DEVTOOLS, "Telar devtools"),
         english!(ERRORS, { arg }, " errors"),
+        english!(EXPAND, "Expand"),
+        english!(EXPAND_ALL, "Expand all"),
         english!(FOCUSED, "has focus"),
         english!(FPS, { arg }, " fps"),
         english!(FRAME_TIME, { arg }, " ms per frame"),

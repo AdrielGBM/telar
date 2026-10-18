@@ -8,6 +8,7 @@ use telar_components::{
     SizedPane, SplitDirection, SplitPaneProps, TreeNode, TreeViewProps, split_pane, tree_view,
 };
 
+use super::tree_menu::TreeMenu;
 use super::{count_mounted, mounted_while, number, panes};
 use crate::inspect::{InspectedNode, Inspection};
 use crate::strings::{
@@ -66,16 +67,18 @@ fn split(
 
 fn components(inspection: Inspection) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let items = memo(move || inspection.nodes.with(|nodes| tree_items(nodes)));
+    let menu = TreeMenu::new(items, inspection.expanded);
     let tree = tree_view(
         TreeViewProps::props()
             .items(items)
             .selected(inspection.selected)
             .expanded(inspection.expanded)
+            .on_context(menu.on_context())
             .label(Reactive::of(|| strings::text(COMPONENTS)))
             .build(),
         telar::Children::default(),
     )?;
-    Ok(box_item(Container::new(workbench_fill(), vec![tree])?))
+    menu.around(tree)
 }
 
 /// Nests a pre-order walk by depth. Only what the tree shows goes in, so a walk whose rects moved and whose shape did not leaves the rows alone.

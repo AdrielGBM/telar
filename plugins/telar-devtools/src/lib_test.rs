@@ -501,3 +501,38 @@ fn the_accessibility_tab_asks_for_the_windows_audit_and_shows_it() {
     drawn(&mut dev);
     assert!(!dev.wants_access(), "a closed drawer reads nothing");
 }
+
+#[test]
+fn a_secondary_press_on_a_component_offers_to_open_or_shut_the_tree() {
+    let mut dev = devtools();
+    dev.on_tree(&walk());
+    dev.on_event(&chord('i'));
+    let (x, y) = centre_of(&mut dev, "Column");
+    let button = telar::PointerButton::Secondary;
+    let source = telar::PointerSource::Mouse;
+    let (x, y) = (x as f64, y as f64);
+    dev.on_event(&telar::Event::PointerPressed {
+        x,
+        y,
+        button,
+        source: source.clone(),
+    });
+    dev.on_event(&telar::Event::PointerReleased {
+        x,
+        y,
+        button,
+        source,
+    });
+    let text = texts(&mut dev);
+    for row in ["Expand", "Collapse", "Expand all", "Collapse all"] {
+        assert!(text.iter().any(|t| t == row), "{row} is offered: {text:?}");
+    }
+    let (x, y) = centre_of(&mut dev, "Collapse all");
+    dev.on_event(&press(x, y));
+    dev.on_event(&release(x, y));
+    let text = texts(&mut dev);
+    assert!(
+        !text.iter().any(|t| t == "Column"),
+        "the tree is shut down to its root: {text:?}"
+    );
+}
