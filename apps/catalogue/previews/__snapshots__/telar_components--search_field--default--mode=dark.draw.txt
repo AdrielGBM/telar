@@ -7,19 +7,25 @@ element group
         element group
           rect 260,286 280x28 fill=#12141cff border=2 border-color=#7394ffff radius=10
           element group
-            matrix 1,0,0,1,272,295
-              path M7,3.5 C7,5.43 5.43,7 3.5,7 C1.57,7 0,5.43 0,3.5 C0,1.57 1.57,0 3.5,0 C5.43,0 7,1.57 7,3.5 Z M5.97,5.97 L10,10 stroke=1.5 stroke-color=#ebedf5b3
+            rect 266,292 16x16
+            element group
+              matrix 1,0,0,1,269,295
+                path M7,3.5 C7,5.43 5.43,7 3.5,7 C1.57,7 0,5.43 0,3.5 C0,1.57 1.57,0 3.5,0 C5.43,0 7,1.57 7,3.5 Z M5.97,5.97 L10,10 stroke=1.5 stroke-color=#ebedf5b3
+              end
             end
           end
           element group
             matrix 1,0,0,1,286,286
-              clip 0,0 238x28
-                text 0,4 238x20 "Search" size=14 family=sans-serif weight=400 color=#ebedf5b3 line-height=1.2 wrap=none
+              clip 0,0 228x28
+                text 0,4 228x20 "Search" size=14 family=sans-serif weight=400 color=#ebedf5b3 line-height=1.2 wrap=none
                 rect 0,4 1.5x16.8 fill=#ebedf5ff
               end
             end
           end
           element group
+            rect 518,292 16x16
+            element group
+            end
           end
         end
       end

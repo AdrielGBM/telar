@@ -208,7 +208,8 @@ pub(crate) fn adorned_field(
         }
     };
     let Adornments { leading, trailing } = adornments;
-    let adorned = leading.is_some() || trailing.is_some();
+    let (leads, trails) = (leading.is_some(), trailing.is_some());
+    let adorned = leads || trails;
     let editor = match multiline {
         false => single_line(value, &placeholder, name, text, on_submit, on_key, adorned)?,
         true => {
@@ -236,9 +237,14 @@ pub(crate) fn adorned_field(
         published.set(Some(line_focus));
         telar::on_cleanup(move || published.set(None));
     }
-    let mut content: Vec<Box<dyn LayoutItem>> = leading.into_iter().collect();
+    let mut content: Vec<Box<dyn LayoutItem>> = Vec::new();
+    if let Some(leading) = leading {
+        content.push(icon_square(leading)?);
+    }
     content.push(item);
-    content.extend(trailing);
+    if let Some(trailing) = trailing {
+        content.push(icon_square(trailing)?);
+    }
 
     let arranged = move || {
         let framed = match multiline {
@@ -247,7 +253,7 @@ pub(crate) fn adorned_field(
         };
         match (adorned, multiline) {
             (false, _) => framed,
-            (true, multiline) => framed
+            (true, multiline) => adornment_insets(framed, leads, trails)
                 .flex_row()
                 .align_items(match multiline {
                     true => AlignItems::START,
@@ -275,6 +281,36 @@ pub(crate) fn adorned_field(
         children![field, count],
     )?;
     Ok((box_item(column), line_focus))
+}
+
+/// `adornment` centred in a square an icon wide, so the inset [`adornment_insets`] gives is the one the eye sees however narrow its mark is.
+fn icon_square(adornment: Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let square = || {
+        LayoutStyle::row()
+            .width(shared::icon_size())
+            .height(shared::icon_size())
+            .flex_shrink(0.0)
+            .align_items(AlignItems::CENTER)
+            .justify_content(JustifyContent::CENTER)
+    };
+    let square = StyledContainer::new(square(), |_| RectStyle::default(), vec![adornment])?
+        .styled_by(square);
+    Ok(box_item(square))
+}
+
+/// An adornment stands as far from the frame's side as from its top and bottom, as an icon centred in a square at that end would.
+fn adornment_insets(framed: LayoutStyle, leads: bool, trails: bool) -> LayoutStyle {
+    let inset = ((shared::control_height() - shared::icon_size()) / 2.0).max(0.0);
+    let framed = if leads {
+        framed.padding_start(inset)
+    } else {
+        framed
+    };
+    if trails {
+        framed.padding_end(inset)
+    } else {
+        framed
+    }
 }
 
 /// The field of one line: an `Input` the whole height of the box.
