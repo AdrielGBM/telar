@@ -511,24 +511,45 @@ fn grid_lines_skip_the_edges_and_thin_out_when_they_would_crowd() {
 }
 
 #[test]
-fn ruler_ticks_label_round_numbers_as_far_apart_as_reads() {
+fn ruler_ticks_label_the_grid_s_lines_as_far_apart_as_reads() {
     use super::guides::ticks;
-    let ticks_at_one = ticks(-20.0, 200.0, 1.0);
+    let ticks_at_one = ticks(-16.0, 200.0, 1.0);
     let labels: Vec<i32> = ticks_at_one.iter().filter_map(|tick| tick.label).collect();
-    assert_eq!(labels, [0, 50, 100, 150, 200]);
+    assert_eq!(labels, [0, 64, 128, 192]);
     assert_eq!(
-        ticks_at_one[0].at, -20.0,
+        ticks_at_one[0].at, -16.0,
         "ticks run outside the canvas too"
     );
     assert!(
         ticks_at_one
             .windows(2)
-            .all(|pair| pair[1].at - pair[0].at == 5.0)
+            .all(|pair| pair[1].at - pair[0].at == 4.0)
     );
     let zoomed_out: Vec<i32> = ticks(0.0, 200.0, 0.25)
         .iter()
         .filter_map(|tick| tick.label)
         .collect();
-    assert_eq!(zoomed_out, [0, 200, 400, 600, 800]);
+    assert_eq!(zoomed_out, [0, 256, 512, 768]);
     assert!(ticks(10.0, 0.0, 1.0).is_empty());
+}
+
+/// The ruler and the grid count in the same steps, so at any zoom each grid line has a tick under it and each major line a label.
+#[test]
+fn every_grid_line_has_a_ruler_tick_at_every_zoom() {
+    use super::guides::{grid_lines, ticks};
+    for scale in [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0] {
+        let marks = ticks(0.0, 1024.0 * scale, scale);
+        for line in grid_lines(1024.0, scale) {
+            let tick = marks.iter().find(|tick| (tick.at - line.at).abs() < 1e-3);
+            let tick =
+                tick.unwrap_or_else(|| panic!("no tick at {} shown px, at {scale}", line.at));
+            if line.major && scale >= 0.75 {
+                assert!(
+                    tick.label.is_some(),
+                    "no label at {} shown px, at {scale}",
+                    line.at
+                );
+            }
+        }
+    }
 }

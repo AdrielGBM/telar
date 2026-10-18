@@ -507,9 +507,9 @@ fn the_rulers_measure_the_canvas_from_its_origin() {
         PreviewEntry::new("fake--probe--sized", "probe", "Sized", environment)
             .viewport(400.0, 300.0),
     ]);
-    assert!(!workshop.draws("100"));
+    assert!(!workshop.draws("128"));
     workshop.click(Role::Button, "Rulers");
-    for label in ["0", "100", "200", "300"] {
+    for label in ["0", "64", "128", "192", "256"] {
         assert!(
             workshop.draws(label),
             "{label}: {:?}",
@@ -519,13 +519,13 @@ fn the_rulers_measure_the_canvas_from_its_origin() {
     let canvas = workshop.canvas_rect("env");
     let zero = drawn(&workshop.tree)
         .into_iter()
-        .filter(|drawn| drawn.text == "100")
+        .filter(|drawn| drawn.text == "128")
         .map(|drawn| drawn.rect)
         .find(|rect| rect.y < canvas.y)
-        .expect("the top ruler labels 100");
+        .expect("the top ruler labels 128");
     assert!(
-        (zero.x - (canvas.x + 100.0)).abs() <= 3.0,
-        "100 is labelled 100 px into the canvas: {zero:?} against {canvas:?}"
+        (zero.x - (canvas.x + 128.0)).abs() <= 3.0,
+        "128 is labelled 128 px into the canvas: {zero:?} against {canvas:?}"
     );
 }
 

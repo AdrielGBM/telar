@@ -17,10 +17,10 @@ const MAJOR_EVERY: u32 = 8;
 const MIN_GAP: f32 = 4.0;
 /// The closest two ruler labels are drawn, in shown px.
 const LABEL_GAP: f32 = 48.0;
-/// The canvas px a ruler labels, the smallest that leaves [`LABEL_GAP`] between labels.
-const LABEL_STEPS: &[u32] = &[10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10_000];
-/// How many ticks a ruler tries to draw between two labels, fewer where they would crowd.
-const TICK_DIVISIONS: &[u32] = &[10, 5, 2];
+/// How many times a ruler's label step may double from [`GRID_STEP`] as the canvas is zoomed out.
+const MAX_LABEL_DOUBLINGS: u32 = 12;
+/// How many ticks a ruler tries to draw between two labels, fewer where they would crowd. Powers of two, so with labels on multiples of [`GRID_STEP`] every grid line has a tick.
+const TICK_DIVISIONS: &[u32] = &[16, 8, 4, 2];
 const LINE: f32 = 1.0;
 const LABEL_SIZE: f32 = 9.0;
 const LABEL_INSET: f32 = 2.0;
@@ -58,16 +58,15 @@ pub(super) struct Tick {
     pub(super) label: Option<i32>,
 }
 
-/// The marks of a ruler running from `from` to `to` shown px either side of the canvas's origin, for a canvas shown at `scale`: labels as far apart as reads, and ticks between them as many as fit.
+/// The marks of a ruler running from `from` to `to` shown px either side of the canvas's origin, for a canvas shown at `scale`: labels on the grid's lines as far apart as reads, and ticks between them as many as fit.
 pub(super) fn ticks(from: f32, to: f32, scale: f32) -> Vec<Tick> {
     if !(scale > 0.0 && to > from) {
         return Vec::new();
     }
-    let label = LABEL_STEPS
-        .iter()
-        .copied()
+    let label = (0..=MAX_LABEL_DOUBLINGS)
+        .map(|doublings| (GRID_STEP as u32) << doublings)
         .find(|&step| step as f32 * scale >= LABEL_GAP)
-        .unwrap_or(LABEL_STEPS[LABEL_STEPS.len() - 1]);
+        .unwrap_or((GRID_STEP as u32) << MAX_LABEL_DOUBLINGS);
     let tick = TICK_DIVISIONS
         .iter()
         .map(|&divisions| label / divisions)
