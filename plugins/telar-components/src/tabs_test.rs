@@ -343,3 +343,34 @@ fn the_padding_tokens_scale_with_the_control_size() {
     });
     assert_eq!(padded, 12.5);
 }
+
+/// A count after a tab's name reads as its own word, not run into the name.
+#[test]
+fn a_trailing_item_keeps_a_gap_from_the_name() {
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let badge = Text::declaring(|| "7".to_string(), LayoutStyle::new(), |t| t).unwrap();
+    let item = tab_list(
+        signal(Page::First),
+        vec![Tab::new(Page::First, "Actions").trailing(box_item(badge))],
+        Reactive::of(|| Color::TRANSPARENT),
+        None,
+    )
+    .unwrap();
+    lay_out(item.layout_node());
+    let tree = ComponentList::new(item);
+    let at = |wanted: &str| {
+        let mut found = None;
+        telar::for_each_with_matrix(&tree.commands(), |command, matrix| {
+            if let DrawCommand::Text { text, rect, .. } = command
+                && text.as_ref() == wanted
+            {
+                found = Some(telar::transform_clip_rect(matrix, *rect));
+            }
+        });
+        found.unwrap_or_else(|| panic!("{wanted} is drawn"))
+    };
+    let (name, count) = (at("Actions"), at("7"));
+    let gap = count.x - (name.x + name.width);
+    assert!((gap - shared::gap_sm()).abs() < 0.5, "{gap}");
+}

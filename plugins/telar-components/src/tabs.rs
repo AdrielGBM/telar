@@ -49,6 +49,7 @@ fn tab_box() -> LayoutStyle {
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .padding_horizontal(TabsTokens::current().pad_x())
+        .gap(shared::gap_sm())
         .min_height(shared::control_height())
 }
 #[cfg(feature = "workbench")]
