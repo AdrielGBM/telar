@@ -281,3 +281,20 @@ fn a_press_on_a_hidden_bar_s_lane_is_the_content_s() {
     assert_ne!(sa.on_event(&press(396.0, 200.0)), EventResult::Handled);
     assert_eq!(sa.core.scroll_y.get(), 0.0, "nothing paged");
 }
+
+/// Only an area asked to turns a vertical wheel sideways: by default a block that only scrolls sideways leaves that turn to the page around it.
+#[test]
+fn a_sideways_area_takes_a_vertical_wheel_sideways_only_when_asked() {
+    let wheel = Event::Scrolled {
+        delta: ScrollDelta::Pixels { x: 0.0, y: -40.0 },
+        x: 200.0,
+        y: 150.0,
+    };
+    let mut sa = make_scroll_area_wide();
+    assert_ne!(sa.on_event(&wheel), EventResult::Handled);
+    assert_eq!(sa.core.scroll_x.get(), 0.0);
+
+    sa.core.wheel_sideways = true;
+    assert_eq!(sa.on_event(&wheel), EventResult::Handled);
+    assert_eq!(sa.core.scroll_x.get(), 40.0);
+}

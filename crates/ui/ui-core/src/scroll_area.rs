@@ -292,15 +292,11 @@ fn content_origin(viewport: Rect, scroll_x: f32, scroll_y: f32) -> (f32, f32) {
     (viewport.x - sx, viewport.y - sy)
 }
 
-fn handle_scroll_event(
-    event: &Event,
-    viewport: Rect,
-    scroll_x: RwSignal<f32>,
-    scroll_y: RwSignal<f32>,
-    content_rect_signal: RwSignal<Rect>,
-    content: &Rc<RefCell<Box<dyn LayoutItem>>>,
-    motion: &mut Motion,
-) -> EventResult {
+fn handle_scroll_event(core: &mut ScrollCore, event: &Event, viewport: Rect) -> EventResult {
+    let (scroll_x, scroll_y) = (core.scroll_x, core.scroll_y);
+    let (content_rect_signal, wheel_sideways) = (core.content_rect_signal, core.wheel_sideways);
+    let content = &core.content;
+    let motion = &mut core.motion;
     if let Event::Scrolled { delta, x, y } = event {
         // A surface that scrolls for itself has already decided which box the wheel moved and says so with `BoxScrolled`; answering here too would move the offset twice for one turn.
         if ui_tree::element_capture() {
@@ -324,6 +320,10 @@ fn handle_scroll_event(
         let content_rect = content_rect_signal.get();
         let max_scroll_x = (content_rect.width - viewport.width).max(0.0);
         let max_scroll_y = (content_rect.height - viewport.height).max(0.0);
+        let (delta_x, delta_y) = match wheel_sideways && max_scroll_y <= 0.0 {
+            true => (delta_x + delta_y, 0.0),
+            false => (delta_x, delta_y),
+        };
         // An area with no room left the way the wheel turns hands it on, so a code block that only scrolls sideways, or a list already at its end, lets the page around it scroll.
         if !travels(scroll_x.peek(), delta_x, max_scroll_x)
             && !travels(scroll_y.peek(), delta_y, max_scroll_y)
@@ -390,6 +390,8 @@ pub(crate) struct ScrollCore {
     commanded: Commanded,
     /// Whether this is the surface's primary scroll. See [`LayoutScrollArea::into_primary`].
     primary: bool,
+    /// Whether a vertical turn of the wheel moves the content sideways while it has nowhere to go vertically. See [`LayoutScrollArea::wheel_sideways`].
+    wheel_sideways: bool,
     bars: BarPresence,
     /// Wakes [`bars`](Self::bars) whenever the offset moves, however it was moved.
     _bars_follow: Effect,
@@ -462,6 +464,7 @@ impl ScrollCore {
             bar_drag: None,
             commanded,
             primary: false,
+            wheel_sideways: false,
             bars,
             _bars_follow: bars_follow,
             lane_hovered: false,
@@ -749,15 +752,7 @@ impl ScrollCore {
             Event::ScrollEnded { .. } => self.launch_fling(viewport),
             _ => {}
         }
-        handle_scroll_event(
-            event,
-            viewport,
-            self.scroll_x,
-            self.scroll_y,
-            self.content_rect_signal,
-            &self.content,
-            &mut self.motion,
-        )
+        handle_scroll_event(self, event, viewport)
     }
 }
 
@@ -1301,6 +1296,12 @@ impl LayoutScrollArea {
                 arrival.set(margin);
             }
         });
+    }
+
+    /// Moves the content sideways for a vertical turn of the wheel while it has nowhere to go vertically: a strip of tabs or chips, which a mouse with one wheel could otherwise only move by its arrows. Off by default, so a block that only scrolls sideways lets the page around it take the wheel.
+    pub fn wheel_sideways(mut self) -> Self {
+        self.core.wheel_sideways = true;
+        self
     }
 
     /// Makes this the surface's primary scroll: the one that stands for the whole page. [`ScrollPage`](crate::ScrollPage) is the way in; a document maps this scroll onto its own and shows its own bar for it, and every other target is unchanged.
