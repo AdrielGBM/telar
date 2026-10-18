@@ -6,7 +6,7 @@ use telar::{
     Reactive, ReactiveList, Role, box_item, children, memo,
 };
 use telar_components::{BadgeProps, badge};
-use telar_devtools::workbench_fill;
+use telar_devtools::{WORKBENCH_GRID, workbench_fill};
 
 use super::action_row::{ActionRowProps, action_row};
 use super::actions_tools::{ActionsToolsProps, actions_tools};
@@ -43,7 +43,27 @@ pub(super) fn actions(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layo
             Shown::Calls => calls(listed),
         },
     )?;
-    Ok(box_item(body))
+    let filtering = state.clone();
+    let bar = ReactiveList::with_style(
+        LayoutStyle::row().flex_shrink(0.0),
+        move || match log.last().is_some() {
+            true => vec![()],
+            false => Vec::new(),
+        },
+        |_: &()| (),
+        move |()| {
+            let bar = Container::new(
+                LayoutStyle::row()
+                    .flex_grow(1.0)
+                    .padding_horizontal(WORKBENCH_GRID * 1.5)
+                    .padding_vertical(WORKBENCH_GRID / 2.0),
+                vec![tools(&filtering)?],
+            )?;
+            Ok(box_item(bar))
+        },
+    )?;
+    let column = Container::new(workbench_fill(), vec![box_item(bar), box_item(body)])?;
+    Ok(box_item(column))
 }
 
 /// The calls whose name or arguments contain `filter`, ignoring case, newest first. A blank filter keeps every call.
@@ -64,8 +84,8 @@ pub(super) fn matching(calls: &[ActionCall], filter: &str) -> Vec<ActionCall> {
         .collect()
 }
 
-/// The filter field and the button that empties the log, for the end of the strip while this panel is shown.
-pub(super) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+/// The filter field and the button that empties the log, over the calls once there are any: in the panel rather than on the strip of tabs, where a field has no menu to fold into.
+fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     actions_tools(
         ActionsToolsProps::props()
             .filter(state.actions_filter())

@@ -169,10 +169,14 @@ struct Workshop {
 
 impl Workshop {
     fn open(entries: Vec<PreviewEntry>, id: &str) -> Self {
+        Self::open_at(entries, id, WIDTH)
+    }
+
+    fn open_at(entries: Vec<PreviewEntry>, id: &str, width: u32) -> Self {
         telar::install_default_text_metrics();
         telar::hot_restore_json(r#"{"@workshop/panel.size":"1000.0"}"#);
         let runtime = LocalApp(WorkshopApp::new(entries).select(id));
-        let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+        let tree = mount(runtime.0.root(), width, HEIGHT);
         let workshop = Self { runtime, tree };
         settle(&workshop.tree);
         workshop
@@ -773,5 +777,45 @@ fn the_selected_component_is_marked_over_the_canvas_where_the_window_draws_it() 
     assert!(
         stroked.iter().any(|rect| close(*rect, expected)),
         "{expected:?} is outlined among {stroked:?}"
+    );
+}
+
+/// Beside tabs that need the room, a panel's tools fold behind one menu, offering each as a row, before the tabs have to scroll.
+#[test]
+fn a_panel_s_tools_fold_behind_a_menu_where_the_tabs_need_the_room() {
+    let mut workshop = Workshop::open_at(entries(), FIRING, 560);
+    workshop.click(Role::Tab, "Interactions");
+    assert!(
+        workshop
+            .access()
+            .iter()
+            .all(|node| node.name != "Run on mount"),
+        "no switch on the strip"
+    );
+    workshop.click(Role::Button, "More panel tools");
+    let rows: Vec<String> = workshop
+        .access()
+        .into_iter()
+        .filter(|node| matches!(node.role, Role::MenuItem | Role::MenuItemCheckBox))
+        .map(|node| node.name)
+        .collect();
+    assert_eq!(rows, ["Run on mount", "Replay"]);
+}
+
+#[test]
+fn a_panel_s_tools_stand_on_the_strip_where_there_is_room() {
+    let mut workshop = Workshop::open(entries(), FIRING);
+    workshop.click(Role::Tab, "Interactions");
+    assert!(
+        workshop
+            .control(Role::Switch, "Run on mount")
+            .toggled
+            .is_some()
+    );
+    assert!(
+        workshop
+            .access()
+            .iter()
+            .all(|node| node.name != "More panel tools")
     );
 }

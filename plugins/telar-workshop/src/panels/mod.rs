@@ -6,14 +6,16 @@ mod actions;
 mod controls;
 mod editors;
 
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use telar::preview::PreviewEntry;
 use telar::{
-    Accessible, AlignItems, Children, Color, Container, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, box_item, children,
+    Accessible, AlignItems, Children, Color, Container, LayoutError, LayoutItem, LayoutStyle, Memo,
+    Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, ShapeStyle, Slots, StyledContainer,
+    box_item, children, effect, memo, signal, track_layout,
 };
-use telar_components::{ButtonProps, ButtonVariant, Tab, button, tab_list};
+use telar_components::{ButtonProps, ButtonVariant, ItemProps, Tab, button, item, tab_list};
 use telar_devtools::{
     WORKBENCH_GRID, accessibility_panel, inspection_toggles, inspector_panel, use_workbench_tokens,
     workbench_fill,
@@ -21,9 +23,11 @@ use telar_devtools::{
 
 pub(crate) use controls::arg_table;
 
+use crate::more_menu::{Rows, more_button};
 use crate::state::{PanelTab, WorkshopState};
 use crate::strings::{
-    self, ACCESSIBILITY, ACTIONS, CONTROLS, INTERACTIONS, LAYOUT, PANELS, RESET_ALL, SNAPSHOT,
+    self, ACCESSIBILITY, ACTIONS, BACK_TO_LIVE, CONTROLS, INTERACTIONS, LAYOUT, MEASURE,
+    MORE_PANEL_TOOLS, OUTLINE, PANELS, REPLAY, RESET_ALL, RUN_ON_MOUNT, SNAPSHOT,
 };
 use crate::{interactions, snapshot};
 
@@ -45,17 +49,51 @@ pub(crate) fn panels(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layou
     Ok(box_item(panels))
 }
 
+const HEADER_PAD: f32 = WORKBENCH_GRID;
+
+/// The tabs, and what acts on the panel shown at the strip's end. Where the two do not fit side by side the tools fold behind one menu before the tabs give up any room, so the tabs only scroll once the tools have gone.
 fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let shown = state.panel_tab();
+    let laid = signal(None::<RwSignal<Rect>>);
+    let tabs_width = signal(0.0_f32);
+    let tools_widths = signal(HashMap::<PanelTab, f32>::new());
+    // Against widths taken while nothing was folded, so folding cannot change the answer that folded.
+    let folded = memo(move || {
+        let Some(header) = laid.get() else {
+            return false;
+        };
+        let tab = shown.get();
+        let tools = tools_widths.with(|widths| widths.get(&tab).copied().unwrap_or(0.0));
+        let room = header.get().width - 2.0 * HEADER_PAD - WORKBENCH_GRID;
+        tools > 0.0 && tabs_width.get() + tools > room
+    });
+    let tabs_box = move || match folded.get() {
+        true => LayoutStyle::row().flex_shrink(1.0).min_width(0.0),
+        false => LayoutStyle::row().flex_shrink(0.0),
+    };
+    let tabs = Container::new(tabs_box(), vec![strip(state)?])?.styled_by(tabs_box);
+    let tabs_rect = track_layout(tabs.layout_node()).expect("the tabs are laid out");
+    effect(move || {
+        let width = tabs_rect.get().width;
+        if !folded.get() {
+            tabs_width.set_if_changed(width);
+        }
+    });
     let spacer = Container::new(LayoutStyle::new().flex_grow(1.0), Vec::new())?;
     let header = Container::new(
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
             .gap(WORKBENCH_GRID)
-            .padding_horizontal(WORKBENCH_GRID)
+            .padding_horizontal(HEADER_PAD)
             .padding_vertical(WORKBENCH_GRID / 2.0),
-        vec![strip(state)?, box_item(spacer), tools(state)?],
+        vec![
+            box_item(tabs),
+            box_item(spacer),
+            tools(state, folded, tools_widths)?,
+        ],
     )?;
+    laid.set(track_layout(header.layout_node()));
     Ok(box_item(header))
 }
 
@@ -92,23 +130,137 @@ fn tab_key(tab: PanelTab) -> &'static str {
     }
 }
 
-/// What acts on the panel shown, at the end of the strip.
-fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+/// What acts on the panel shown, at the end of the strip: in place, recording in `widths` how wide the tools of each panel stand, or folded behind one menu.
+fn tools(
+    state: &WorkshopState,
+    folded: Memo<bool>,
+    widths: RwSignal<HashMap<PanelTab, f32>>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let shown = state.panel_tab();
     let state = state.clone();
     let tools = ReactiveList::with_style(
-        LayoutStyle::row().align_items(AlignItems::CENTER),
-        move || vec![shown.get()],
-        |tab: &PanelTab| *tab,
-        move |tab| match tab {
-            PanelTab::Controls => reset_all(&state),
-            PanelTab::Actions => actions::tools(&state),
-            PanelTab::Interactions => interactions::tools(&state),
-            PanelTab::Layout => inspection_toggles(state.inspection()),
-            PanelTab::Accessibility | PanelTab::Snapshot => nothing(),
+        LayoutStyle::row()
+            .align_items(AlignItems::CENTER)
+            .flex_shrink(0.0),
+        move || vec![(shown.get(), folded.get())],
+        |key: &(PanelTab, bool)| *key,
+        move |(tab, folded)| match folded {
+            true => match tool_rows(&state, tab) {
+                Some(rows) => more_button(MORE_PANEL_TOOLS, rows),
+                None => nothing(),
+            },
+            false => {
+                let spread = Container::new(
+                    LayoutStyle::row().flex_shrink(0.0),
+                    vec![spread_tools(&state, tab)?],
+                )?;
+                let laid = track_layout(spread.layout_node()).expect("the tools are laid out");
+                effect(move || {
+                    let width = laid.get().width;
+                    if widths.with(|widths| widths.get(&tab) != Some(&width)) {
+                        widths.update(|widths| {
+                            widths.insert(tab, width);
+                        });
+                    }
+                });
+                Ok(box_item(spread))
+            }
         },
     )?;
     Ok(box_item(tools))
+}
+
+fn spread_tools(state: &WorkshopState, tab: PanelTab) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    match tab {
+        PanelTab::Controls => reset_all(state),
+        PanelTab::Interactions => interactions::tools(state),
+        PanelTab::Layout => inspection_toggles(state.inspection()),
+        PanelTab::Actions | PanelTab::Accessibility | PanelTab::Snapshot => nothing(),
+    }
+}
+
+/// The tools of panel `tab` as the rows of a menu, built as it opens; `None` for a panel with none on the strip.
+fn tool_rows(state: &WorkshopState, tab: PanelTab) -> Option<Rows> {
+    let state = state.clone();
+    let rows: Rows = match tab {
+        PanelTab::Controls => Rc::new(move || {
+            let state = state.clone();
+            Children::new(move || {
+                let edited = state
+                    .selected()
+                    .map(|entry| state.args(&entry))
+                    .filter(|args| args.states().iter().any(|arg| arg.edited));
+                let mut slots = Slots::new();
+                slots.push(
+                    None,
+                    action_row(RESET_ALL, edited.is_some(), move || {
+                        if let Some(args) = &edited {
+                            args.reset();
+                        }
+                    })?,
+                );
+                Ok(slots)
+            })
+        }),
+        PanelTab::Interactions => Rc::new(move || {
+            let state = state.clone();
+            Children::new(move || {
+                let interactions = state.interactions().clone();
+                let mut slots = Slots::new();
+                if interactions.picked().is_some() {
+                    let live = interactions.clone();
+                    slots.push(
+                        None,
+                        action_row(BACK_TO_LIVE, true, move || live.back_to_live())?,
+                    );
+                }
+                slots.push(None, switch_row(RUN_ON_MOUNT, interactions.auto_run())?);
+                let replaying = state.clone();
+                slots.push(
+                    None,
+                    action_row(REPLAY, true, move || interactions::replay(&replaying))?,
+                );
+                Ok(slots)
+            })
+        }),
+        PanelTab::Layout => Rc::new(move || {
+            let inspection = state.inspection();
+            Children::new(move || {
+                let mut slots = Slots::new();
+                slots.push(None, switch_row(OUTLINE, inspection.outline())?);
+                slots.push(None, switch_row(MEASURE, inspection.measure())?);
+                Ok(slots)
+            })
+        }),
+        PanelTab::Actions | PanelTab::Accessibility | PanelTab::Snapshot => return None,
+    };
+    Some(rows)
+}
+
+fn action_row(
+    label: &'static str,
+    enabled: bool,
+    act: impl Fn() + 'static,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    item(
+        ItemProps::props()
+            .label(Reactive::of(move || strings::text(label)))
+            .disabled(Reactive::of(move || !enabled))
+            .on_press(Rc::new(act))
+            .build(),
+        Children::default(),
+    )
+}
+
+fn switch_row(label: &'static str, on: RwSignal<bool>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    item(
+        ItemProps::props()
+            .label(Reactive::of(move || strings::text(label)))
+            .switch(Reactive::of(move || on.get()))
+            .on_press(Rc::new(move || on.update(|on| *on = !*on)))
+            .build(),
+        Children::default(),
+    )
 }
 
 fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {

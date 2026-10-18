@@ -79,6 +79,8 @@ pub(crate) const MODE: &str = "mode";
 pub(crate) const MODE_DARK: &str = "mode_dark";
 pub(crate) const MODE_LIGHT: &str = "mode_light";
 pub(crate) const MODE_SYSTEM: &str = "mode_system";
+pub(crate) const MEASURE: &str = "measure";
+pub(crate) const MORE_PANEL_TOOLS: &str = "more_panel_tools";
 pub(crate) const MORE_TOOLS: &str = "more_tools";
 pub(crate) const MOVE_PANELS: &str = "move_panels";
 pub(crate) const NEXT_COMPONENT: &str = "next_component";
@@ -96,6 +98,7 @@ pub(crate) const NO_PREVIEWS_HINT: &str = "no_previews_hint";
 pub(crate) const NOTHING_SELECTED: &str = "nothing_selected";
 pub(crate) const OPEN_IN_CANVAS: &str = "open_in_canvas";
 pub(crate) const OPEN_IN_EDITOR: &str = "open_in_editor";
+pub(crate) const OUTLINE: &str = "outline";
 pub(crate) const PANELS: &str = "panels";
 pub(crate) const PANICKED: &str = "panicked";
 pub(crate) const PLAY_FAILED: &str = "play_failed";
@@ -282,10 +285,12 @@ static CATALOG: Catalog = Catalog {
         english!(MATRIX_OWN, "The preview's matrix"),
         english!(MATRIX_PICK, "Pick axes to build a matrix."),
         english!(MATRIX_SOURCE, "Matrix shown"),
+        english!(MEASURE, "Measure"),
         english!(MODE, "Mode"),
         english!(MODE_DARK, "Dark"),
         english!(MODE_LIGHT, "Light"),
         english!(MODE_SYSTEM, "System"),
+        english!(MORE_PANEL_TOOLS, "More panel tools"),
         english!(MORE_TOOLS, "More canvas tools"),
         english!(MOVE_PANELS, "Move the panels"),
         english!(NEXT_COMPONENT, "Next component"),
@@ -315,6 +320,7 @@ static CATALOG: Catalog = Catalog {
         english!(NOTHING_SELECTED, "Nothing selected"),
         english!(OPEN_IN_CANVAS, "Open in canvas"),
         english!(OPEN_IN_EDITOR, "Open in editor"),
+        english!(OUTLINE, "Outline"),
         english!(PANELS, "Panels"),
         english!(PANICKED, "This preview panicked"),
         english!(PLAY_FAILED, "Play failed"),
