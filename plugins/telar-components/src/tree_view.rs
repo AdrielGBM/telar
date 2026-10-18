@@ -8,12 +8,13 @@ use std::sync::Arc;
 use telar::{
     Accessible, AlignItems, Children, Clip, ClippedItem, Color, Container, Direction,
     JustifyContent, Key, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, NamedKey,
-    Props, Reactive, RectStyle, RwSignal, StyledContainer, Text, TextWrap, box_item,
-    current_direction,
+    PointerButton, Props, Reactive, Rect, RectStyle, RwSignal, StyledContainer, Text, TextWrap,
+    box_item, current_direction,
     focus::{self, FocusId, Role, SetPosition},
     memo, signal,
 };
 
+use crate::menu::{focused_rect, is_context_menu_key};
 use crate::rows::{BuiltRows, RowPlaces, RowState, cursor_row_paint};
 use crate::shared;
 use crate::type_ahead::TypeAhead;
@@ -118,6 +119,9 @@ pub struct TreeViewProps {
     /// Fired with the node a click, Enter or Space chose.
     #[props(some, default)]
     pub on_select: Option<SelectHandler>,
+    /// Fired when a row's context menu is asked for — a secondary press on the row, or the context-menu key or Shift+F10 on the row the keyboard is on — with the row and where the menu opens. The row takes the keyboard cursor first, so it reads as the one the menu is about. `None` (the default) leaves a secondary press to what is behind the tree.
+    #[props(some, default)]
+    pub on_context: Option<ContextHandler>,
     /// Whether a branch can be selected. Off, a click, Enter or Space on a branch opens or shuts it instead, for a tree whose selection only ever names a leaf. On by default.
     #[props(default = true)]
     pub select_branches: bool,
@@ -138,6 +142,16 @@ pub struct TreeViewProps {
 /// What [`TreeViewProps::on_select`] is called with.
 pub type SelectHandler = Rc<dyn Fn(&TreeNode)>;
 
+/// What a row's context menu was asked for on, and where it opens, as [`ContextMenuProps`](crate::ContextMenuProps) takes it: at the pointer for a secondary press, or under the row for one asked for from the keyboard.
+#[derive(Clone, Debug)]
+pub struct TreeContext {
+    pub node: TreeNode,
+    pub at: (f32, f32),
+    pub around: Option<Rect>,
+}
+
+pub type ContextHandler = Rc<dyn Fn(TreeContext)>;
+
 /// What [`TreeViewProps::trailing`] builds a row's trailing content with.
 pub type TrailingBuilder = Rc<dyn Fn(&TreeNode) -> Result<Box<dyn LayoutItem>, LayoutError>>;
 
@@ -151,6 +165,7 @@ pub fn tree_view(
         selected,
         expanded,
         on_select,
+        on_context,
         select_branches,
         trailing,
         wrap,
@@ -174,6 +189,7 @@ pub fn tree_view(
             expanded,
             search: RefCell::default(),
             on_select,
+            on_context,
             select_branches,
             places: RowPlaces::new(viewport, row_height, wrap),
             focus: Cell::new(None),
@@ -283,6 +299,7 @@ struct Tree {
     expanded: RwSignal<HashSet<Arc<str>>>,
     search: RefCell<TypeAhead>,
     on_select: Option<SelectHandler>,
+    on_context: Option<ContextHandler>,
     select_branches: bool,
     places: RowPlaces,
     focus: Cell<Option<FocusId>>,
@@ -407,6 +424,24 @@ impl Tree {
         }
     }
 
+    fn ask_context(&self, row: &Row, at: (f32, f32), around: Option<Rect>) {
+        let Some(on_context) = &self.on_context else {
+            return;
+        };
+        self.cursor.set(Some(row.node.id.clone()));
+        on_context(TreeContext {
+            node: row.node.clone(),
+            at,
+            around,
+        });
+    }
+
+    fn row_rect(&self, id: &Arc<str>) -> Option<Rect> {
+        let node = focus::node_of(self.built.get(id)?)?;
+        let laid = telar::track_layout(node)?;
+        Some(telar::anchor_rect(node, &laid))
+    }
+
     fn take_focus(&self) {
         if let Some(id) = self.focus.get() {
             focus::request_from_pointer(id);
@@ -427,6 +462,13 @@ impl Tree {
         }
         let last = rows.len() - 1;
         let at = self.at(&rows);
+        if is_context_menu_key(key) && self.on_context.is_some() {
+            let i = at.unwrap_or(0);
+            self.move_to(&rows, i);
+            let around = self.row_rect(&rows[i].node.id).or_else(focused_rect);
+            self.ask_context(&rows[i], (0.0, 0.0), around);
+            return true;
+        }
         let (opens, shuts) = match current_direction() {
             Direction::Rtl => (NamedKey::ArrowLeft, NamedKey::ArrowRight),
             _ => (NamedKey::ArrowRight, NamedKey::ArrowLeft),
@@ -538,7 +580,17 @@ fn build_row(
         .presented(Role::TreeItem)
         .toggled(selected)
         .positioned(row.position)
-        .on_press(press);
+        .on_press(press)
+        .maybe_on_alt_press(tree.on_context.is_some().then(|| {
+            let (tree, row) = (tree.clone(), row.clone());
+            move |button: PointerButton| {
+                if button == PointerButton::Secondary {
+                    tree.take_focus();
+                    let at = telar::pointer_position().unwrap_or_default();
+                    tree.ask_context(&row, at, None);
+                }
+            }
+        }));
     let built = if row.node.is_branch() {
         let (tree, id) = (tree.clone(), id.clone());
         built.expanded(move || tree.is_open(&id))

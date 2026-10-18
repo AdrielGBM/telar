@@ -204,7 +204,8 @@ pub use toolbar::{ToolbarProps, toolbar};
 pub use tooltip::{TooltipProps, TooltipTokens, tooltip};
 #[cfg(feature = "workbench")]
 pub use tree_view::{
-    SelectHandler, TrailingBuilder, TreeNode, TreeViewProps, TreeViewTokens, tree_view,
+    ContextHandler, SelectHandler, TrailingBuilder, TreeContext, TreeNode, TreeViewProps,
+    TreeViewTokens, tree_view,
 };
 #[cfg(feature = "advanced")]
 pub use virtual_list::{ListRow, RowBuilder, RowHandler, VirtualListProps, virtual_list};

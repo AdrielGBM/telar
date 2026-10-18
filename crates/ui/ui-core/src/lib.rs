@@ -140,7 +140,8 @@ pub use overlay::{AnchorAlign, Anchoring, Overlay, Placement, anchor_rect};
 pub use page_anchor::PageAnchor;
 pub use path::Path;
 pub use pointer::{
-    PointerButtons, covered, observe_pointer, pointer_buttons, reset_pointer, transform_pointer,
+    PointerButtons, covered, observe_pointer, pointer_buttons, pointer_position, reset_pointer,
+    transform_pointer,
 };
 pub use presence::{Presence, Transition, exits_in_flight};
 pub use reactive_list::ReactiveList;

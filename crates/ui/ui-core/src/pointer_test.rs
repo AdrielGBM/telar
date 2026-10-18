@@ -412,3 +412,27 @@ fn a_scroll_end_is_mapped_like_the_scroll_before_it() {
     );
     assert_eq!(at(offset_pointer(&ended, 10.0, 40.0)), Some((60.0, 50.0)));
 }
+
+#[test]
+fn the_pointer_is_where_the_last_move_press_or_release_put_it() {
+    use platform_core::{PointerButton, PointerSource};
+
+    reset_pointer();
+    assert_eq!(pointer_position(), None);
+    observe_pointer(&Event::PointerMoved {
+        x: 12.0,
+        y: 34.0,
+        source: PointerSource::Mouse,
+    });
+    assert_eq!(pointer_position(), Some((12.0, 34.0)));
+    observe_pointer(&Event::PointerPressed {
+        x: 56.0,
+        y: 78.0,
+        button: PointerButton::Secondary,
+        source: PointerSource::Mouse,
+    });
+    observe_pointer(&Event::CursorLeft);
+    assert_eq!(pointer_position(), Some((56.0, 78.0)));
+    reset_pointer();
+    assert_eq!(pointer_position(), None);
+}

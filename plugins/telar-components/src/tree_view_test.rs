@@ -36,6 +36,7 @@ struct Mounted {
     selected: RwSignal<Option<Arc<str>>>,
     expanded: RwSignal<HashSet<Arc<str>>>,
     picked: Rc<RefCell<Vec<String>>>,
+    asked: Rc<RefCell<Vec<TreeContext>>>,
 }
 
 impl Mounted {
@@ -61,6 +62,8 @@ impl Mounted {
         let expanded = signal(HashSet::new());
         let picked = Rc::new(RefCell::new(Vec::new()));
         let sink = picked.clone();
+        let asked = Rc::new(RefCell::new(Vec::new()));
+        let asking = asked.clone();
         let item = tree_view(
             TreeViewProps::props()
                 .items(items)
@@ -68,6 +71,9 @@ impl Mounted {
                 .expanded(expanded)
                 .on_select(Rc::new(move |node: &TreeNode| {
                     sink.borrow_mut().push(node.id.to_string())
+                }))
+                .on_context(Rc::new(move |context: TreeContext| {
+                    asking.borrow_mut().push(context)
                 }))
                 .label("Components")
                 .select_branches(select_branches)
@@ -84,6 +90,7 @@ impl Mounted {
             selected,
             expanded,
             picked,
+            asked,
         }
     }
 
@@ -828,4 +835,51 @@ fn the_tree_holds_every_row_it_shows() {
             ("About", Some(1)),
         ]
     );
+}
+
+fn secondary(pressed: bool, x: f64, y: f64) -> Event {
+    let (button, source) = (PointerButton::Secondary, telar::PointerSource::Mouse);
+    match pressed {
+        true => Event::PointerPressed {
+            x,
+            y,
+            button,
+            source,
+        },
+        false => Event::PointerReleased {
+            x,
+            y,
+            button,
+            source,
+        },
+    }
+}
+
+#[test]
+fn a_secondary_press_on_a_row_asks_for_its_menu_at_the_pointer_and_moves_the_cursor_there() {
+    let mut tree = Mounted::new(catalogue(), 400.0);
+    let (x, y) = (120.0, row_height() as f64 * 1.5);
+    tree.send(secondary(true, x, y));
+    tree.send(secondary(false, x, y));
+    let asked = tree.asked.borrow().clone();
+    assert_eq!(asked.len(), 1);
+    assert_eq!(&*asked[0].node.id, "layout");
+    assert_eq!(asked[0].at, (x as f32, y as f32));
+    assert_eq!(asked[0].around, None);
+    assert_eq!(pointed(&tree).as_deref(), Some("Layout"));
+    assert_eq!(tree.selected(), None, "asking for a menu chooses nothing");
+}
+
+#[test]
+fn the_context_menu_key_asks_for_the_cursor_row_s_menu_under_it() {
+    let mut tree = Mounted::focused(catalogue());
+    tree.key(NamedKey::ArrowDown);
+    tree.key(NamedKey::ContextMenu);
+    let asked = tree.asked.borrow().clone();
+    assert_eq!(asked.len(), 1);
+    assert_eq!(&*asked[0].node.id, "layout");
+    let around = asked[0].around.expect("opened under the row");
+    assert_eq!(around.y, row_height());
+    assert_eq!(around.height, row_height());
+    assert_eq!(tree.selected(), None);
 }

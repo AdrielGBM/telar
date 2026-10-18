@@ -53,12 +53,19 @@ reactive_core::dropless_thread_local! {
     static BUTTONS: Cell<PointerButtons> = const {
         Cell::new(PointerButtons { primary: false, secondary: false, auxiliary: false })
     };
+    static POSITION: Cell<Option<(f32, f32)>> = const { Cell::new(None) };
 }
 
-/// Records what `event` says about the buttons. The runner calls this for every event before dispatch, so a handler running on this very event already sees the state it establishes.
+/// Records what `event` says about the buttons and where the pointer is. The runner calls this for every event before dispatch, so a handler running on this very event already sees the state it establishes.
 pub fn observe_pointer(event: &Event) {
     if matches!(event, Event::PointerPressed { .. } | Event::Scrolled { .. }) {
         crate::link::reader_moved();
+    }
+    if let Event::PointerMoved { x, y, .. }
+    | Event::PointerPressed { x, y, .. }
+    | Event::PointerReleased { x, y, .. } = event
+    {
+        POSITION.with(|p| p.set(Some((*x as f32, *y as f32))));
     }
     BUTTONS.with(|b| {
         let mut held = b.get();
@@ -78,9 +85,15 @@ pub fn pointer_buttons() -> PointerButtons {
     BUTTONS.with(|b| b.get())
 }
 
+/// Where the pointer was at the last event that placed it, in surface coordinates, or `None` before any did: what a menu opened by a secondary press is placed at, since the press handler is told the button but not the point.
+pub fn pointer_position() -> Option<(f32, f32)> {
+    POSITION.with(Cell::get)
+}
+
 /// Drops the button state; parallels the other per-tree resets on teardown and hot reload.
 pub fn reset_pointer() {
     BUTTONS.with(|b| b.set(PointerButtons::default()));
+    POSITION.with(|p| p.set(None));
 }
 
 /// Whether the move being dispatched right now landed on something drawn in front of this widget.

@@ -357,11 +357,11 @@ pub use ui_core::{
     insertion_index, interactive_rects, kept, key_held, key_nav_apply, key_nav_apply_grid,
     key_pressed, line_box, logical_border_radius, logical_border_widths, mark_dirty, modifiers,
     new_container, new_leaf, observe_keyboard, observe_pointer, on_relayout, open_overlay,
-    overlay_state, overlay_viewport, pointer_buttons, provide_control_size, provide_theme,
-    register_transaction, register_transaction_within, relayout_if_dirty, remove_node,
-    requested_cursor, set_children, set_direction, set_display, set_min_height, set_overlay_host,
-    shortcut_key, single_line_box, step_factor, style_follows, track_layout, transform_pointer,
-    undeclare, use_context, use_direction, use_dismiss_depth, visible_window,
+    overlay_state, overlay_viewport, pointer_buttons, pointer_position, provide_control_size,
+    provide_theme, register_transaction, register_transaction_within, relayout_if_dirty,
+    remove_node, requested_cursor, set_children, set_direction, set_display, set_min_height,
+    set_overlay_host, shortcut_key, single_line_box, step_factor, style_follows, track_layout,
+    transform_pointer, undeclare, use_context, use_direction, use_dismiss_depth, visible_window,
 };
 #[cfg(feature = "async-assets")]
 pub use ui_core::{
