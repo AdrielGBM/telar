@@ -8,7 +8,8 @@ use telar::{
     Accessible, AlignItems, Border, BorderRadius, Canvas, Children, Clip, ClippedItem, Color,
     Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle, Memo, Reactive, ReactiveList,
     Rect, RectStyle, RenderNode, Role, RwSignal, ShapeStyle, Size, SizeDimension, StyledContainer,
-    SurfaceCanvas, SurfaceFrame, Text, box_item, children, effect, memo, signal, track_layout,
+    SurfaceCanvas, SurfaceFrame, Text, TextWrap, box_item, children, effect, memo, signal,
+    track_layout,
 };
 use telar_components::{ResizeEdge, ResizeGrowth, ResizeHandleProps, resize_handle};
 use telar_devtools::{
@@ -173,6 +174,7 @@ fn framed(
         item: box_item(ClippedItem::new(box_item(stage), Clip::both().paint_only())),
         size: Some(SizeLabel {
             canvas: Rc::downgrade(&canvas),
+            scale,
         }),
     })
 }
@@ -236,21 +238,29 @@ fn room(stage: Rect, edge: f32) -> Size {
     Size::new(stage.width - chrome, stage.height - chrome)
 }
 
-/// The canvas's size as `W × H`, in its own logical px whatever the zoom, which resets the viewport when pressed.
+/// The canvas's size as `W × H`, in its own logical px whatever the zoom, and the zoom where it is not actual size, which resets the viewport when pressed.
+#[derive(Clone)]
 pub(super) struct SizeLabel {
     canvas: Weak<SurfaceCanvas>,
+    scale: RwSignal<f32>,
 }
 
 impl SizeLabel {
     pub(super) fn build(self, state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-        let canvas = self.canvas;
+        let (canvas, scale) = (self.canvas, self.scale);
         let text = Text::declaring(
             move || {
                 let size = canvas.upgrade().map_or(Size::ZERO, |canvas| canvas.size());
-                format!("{} × {}", size.width.round(), size.height.round())
+                let size = format!("{} × {}", size.width.round(), size.height.round());
+                let percent = (scale.get() * 100.0).round();
+                if percent == 100.0 {
+                    size
+                } else {
+                    format!("{size} · {percent}%")
+                }
             },
             LayoutStyle::new(),
-            |text| workbench_muted(workbench_mono(text)),
+            |text| workbench_muted(workbench_mono(text)).with_text_wrap(TextWrap::NoWrap),
         )?;
         let settings = state.canvas_settings();
         let label = StyledContainer::new(

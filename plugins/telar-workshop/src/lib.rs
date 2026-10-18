@@ -25,6 +25,7 @@ mod guarded;
 mod interactions;
 mod keymap;
 mod matrix;
+mod more_menu;
 mod panels;
 mod route;
 mod settings;

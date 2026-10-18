@@ -52,7 +52,6 @@ pub(crate) const FILTER_ACTIONS: &str = "filter_actions";
 pub(crate) const FIND: &str = "find";
 pub(crate) const FIND_IN: &str = "find_in";
 pub(crate) const FOCUS_CELL: &str = "focus_cell";
-pub(crate) const FRAME_SETTINGS: &str = "frame_settings";
 pub(crate) const FULLSCREEN: &str = "fullscreen";
 pub(crate) const GRID: &str = "grid";
 pub(crate) const GROUP_CANVAS: &str = "group_canvas";
@@ -80,6 +79,7 @@ pub(crate) const MODE: &str = "mode";
 pub(crate) const MODE_DARK: &str = "mode_dark";
 pub(crate) const MODE_LIGHT: &str = "mode_light";
 pub(crate) const MODE_SYSTEM: &str = "mode_system";
+pub(crate) const MORE_TOOLS: &str = "more_tools";
 pub(crate) const MOVE_PANELS: &str = "move_panels";
 pub(crate) const NEXT_COMPONENT: &str = "next_component";
 pub(crate) const NEXT_PREVIEW: &str = "next_preview";
@@ -249,7 +249,6 @@ static CATALOG: Catalog = Catalog {
         english!(FIND, "Find a preview or command"),
         english!(FIND_IN, "Find a preview or command in ", { arg }),
         english!(FOCUS_CELL, "Focus ", { arg }),
-        english!(FRAME_SETTINGS, "Viewport and zoom"),
         english!(FULLSCREEN, "Fullscreen canvas"),
         english!(GRID, "Grid"),
         english!(GROUP_CANVAS, "Canvas"),
@@ -287,6 +286,7 @@ static CATALOG: Catalog = Catalog {
         english!(MODE_DARK, "Dark"),
         english!(MODE_LIGHT, "Light"),
         english!(MODE_SYSTEM, "System"),
+        english!(MORE_TOOLS, "More canvas tools"),
         english!(MOVE_PANELS, "Move the panels"),
         english!(NEXT_COMPONENT, "Next component"),
         english!(NEXT_PREVIEW, "Next preview"),

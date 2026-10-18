@@ -1,7 +1,7 @@
 use telar::preview::{Layout, PreviewCtx, PreviewEntry};
 use telar::testing::{centre, mount, named as named_key, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Color, ColorScheme, ComponentList, Container, DrawCommand,
+    AccessNode, App, AppRuntime, Color, ColorScheme, ComponentList, Container, DrawCommand, Event,
     LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect, Role, SystemPreferences, Text,
     TextStyle, box_item, effect, for_each_with_matrix, high_contrast_override,
     reduced_motion_override, set_high_contrast_override, set_reduced_motion_override,
@@ -90,9 +90,13 @@ struct Workshop {
 
 impl Workshop {
     fn open(entries: Vec<PreviewEntry>) -> Self {
+        Self::open_at(entries, WIDTH)
+    }
+
+    fn open_at(entries: Vec<PreviewEntry>, width: u32) -> Self {
         telar::install_default_text_metrics();
         let runtime = LocalApp(WorkshopApp::new(entries).project_name(PROJECT));
-        let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+        let tree = mount(runtime.0.root(), width, HEIGHT);
         let workshop = Self { runtime, tree };
         settle(&workshop.tree);
         workshop
@@ -100,6 +104,13 @@ impl Workshop {
 
     fn draws(&self, text: &str) -> bool {
         texts(&self.tree).iter().any(|drawn| drawn == text)
+    }
+
+    /// Whether the size label reads `size`, whatever zoom it shows after it.
+    fn shows_size(&self, size: &str) -> bool {
+        texts(&self.tree)
+            .iter()
+            .any(|drawn| drawn == size || drawn.starts_with(&format!("{size} · ")))
     }
 
     fn control(&self, role: Role, name: &str) -> AccessNode {
@@ -128,14 +139,18 @@ impl Workshop {
         settle(&self.tree);
     }
 
-    fn choose(&mut self, select: &str, row: &str) {
-        self.click(Role::ComboBox, select);
-        self.click(Role::Option, row);
+    /// Picks `row` from the submenu of the canvas setting `setting`, in the canvas header's menu of tools.
+    fn choose(&mut self, setting: &str, row: &str) {
+        self.pick_from("More canvas tools", setting, row);
     }
 
     /// Picks `row` from the submenu of the preview setting `setting`, in the top bar's settings menu.
     fn pick(&mut self, setting: &str, row: &str) {
-        self.click(Role::Button, "Settings");
+        self.pick_from("Settings", setting, row);
+    }
+
+    fn pick_from(&mut self, menu: &str, setting: &str, row: &str) {
+        self.click(Role::Button, menu);
         let nodes = self.runtime.access_snapshot(&self.tree.commands());
         let (x, y) = centre(crate::test_support::setting_row(&nodes, setting).rect);
         for event in [press(x, y), release(x, y)] {
@@ -344,11 +359,15 @@ fn a_device_frame_sets_the_safe_area_and_rotating_turns_it() {
     assert!(workshop.draws("safe 0 0 0 0"));
     workshop.choose("Viewport", "Phone");
     assert!(workshop.draws("safe 47 0 34 0"));
-    assert!(workshop.draws("390 × 844"), "{:?}", texts(&workshop.tree));
+    assert!(
+        workshop.shows_size("390 × 844"),
+        "{:?}",
+        texts(&workshop.tree)
+    );
 
     workshop.click(Role::Button, "Rotate");
     assert!(workshop.draws("safe 0 34 0 47"));
-    assert!(workshop.draws("844 × 390"));
+    assert!(workshop.shows_size("844 × 390"));
 
     workshop.choose("Viewport", "Fill");
     assert!(
@@ -382,12 +401,18 @@ fn a_viewport_larger_than_the_stage_is_zoomed_to_fit_until_a_zoom_is_chosen() {
         "the whole canvas shows: {fitted:?}"
     );
     assert!((fitted.width / fitted.height - 4.0 / 3.0).abs() < 0.01);
-    assert!(workshop.draws("4000 × 3000"), "at the size it asked for");
+    assert!(
+        workshop.shows_size("4000 × 3000"),
+        "at the size it asked for"
+    );
 
     workshop.choose("Zoom", "50%");
     let halved = workshop.canvas_rect("env");
     assert_eq!((halved.width, halved.height), (2000.0, 1500.0));
-    assert!(workshop.draws("4000 × 3000"));
+    assert!(
+        workshop.draws("4000 × 3000 · 50%"),
+        "the size, and the zoom it is shown at"
+    );
 }
 
 #[test]
@@ -582,4 +607,177 @@ fn the_settings_menu_holds_a_submenu_per_choice_and_the_switches() {
     workshop.pick("Direction", "Right to left");
     workshop.click(Role::Button, "Settings");
     workshop.control(Role::MenuItem, "Direction Right to left");
+}
+
+/// A header with room for the toolbar shows it in place, and keeps only the size, the zoom and the theme mode behind its menu.
+#[test]
+fn a_wide_header_keeps_only_the_size_zoom_and_mode_behind_its_menu() {
+    let mut wide = Workshop::open(sized_probe());
+    assert!(wide.find(Role::Button, "Grid").is_some());
+    assert!(
+        wide.find(Role::ComboBox, "Viewport").is_none(),
+        "no select in the header"
+    );
+    wide.click(Role::Button, "More canvas tools");
+    let rows = menu_rows(&wide);
+    assert_eq!(rows.len(), 3, "{rows:?}");
+    for (row, name) in rows.iter().zip(["Viewport", "Zoom", "Mode"]) {
+        assert!(row.starts_with(name), "{rows:?}");
+    }
+}
+
+fn menu_rows(workshop: &Workshop) -> Vec<String> {
+    workshop
+        .runtime
+        .access_snapshot(&workshop.tree.commands())
+        .into_iter()
+        .filter(|node| {
+            matches!(
+                node.role,
+                Role::MenuItem | Role::MenuItemCheckBox | Role::MenuItemRadio
+            )
+        })
+        .map(|node| node.name)
+        .collect()
+}
+
+fn sized_probe() -> Vec<PreviewEntry> {
+    vec![
+        PreviewEntry::new("fake--probe--sized", "probe", "Sized", environment)
+            .viewport(400.0, 300.0),
+    ]
+}
+
+/// A header too narrow for every tool keeps the preview's name and its size, and folds the rest into one menu offering each as a row: the size and zoom as submenus, the marks as switches and the actions as they are.
+#[test]
+fn a_narrow_header_folds_its_tools_into_one_menu() {
+    let mut narrow = Workshop::open_at(sized_probe(), 320);
+    assert!(narrow.find(Role::Button, "Grid").is_none());
+    assert!(narrow.shows_size("400 × 300"), "the size stays");
+    narrow.click(Role::Button, "More canvas tools");
+    let rows = menu_rows(&narrow);
+    for name in [
+        "Viewport",
+        "Zoom",
+        "Rotate",
+        "Grid",
+        "Rulers",
+        "Remount",
+        "Copy link",
+    ] {
+        assert!(
+            rows.iter().any(|row| row.starts_with(name)),
+            "{name} in {rows:?}"
+        );
+    }
+}
+
+fn wheel(workshop: &mut Workshop, at: (f64, f64), dy: f32) {
+    route(
+        &mut workshop.tree,
+        &Event::Scrolled {
+            delta: telar::ScrollDelta::Pixels { x: 0.0, y: dy },
+            x: at.0,
+            y: at.1,
+        },
+    );
+    settle(&workshop.tree);
+}
+
+fn hold_ctrl(workshop: &mut Workshop, held: bool) {
+    route(
+        &mut workshop.tree,
+        &Event::ModifiersChanged {
+            modifiers: telar::ModifiersState {
+                is_ctrl: held,
+                ..Default::default()
+            },
+        },
+    );
+}
+
+/// The wheel zooms the canvas only while Ctrl is held: a notch at a time, up to zoom in.
+#[test]
+fn the_wheel_with_ctrl_held_over_the_canvas_zooms_it() {
+    let mut workshop = Workshop::open(sized_probe());
+    let canvas = workshop.canvas_rect("env");
+    assert_eq!(canvas.width, 400.0);
+    let at = centre(canvas);
+
+    wheel(&mut workshop, at, 60.0);
+    assert_eq!(
+        workshop.canvas_rect("env").width,
+        400.0,
+        "a plain wheel leaves it"
+    );
+
+    hold_ctrl(&mut workshop, true);
+    wheel(&mut workshop, at, 30.0);
+    assert_eq!(
+        workshop.canvas_rect("env").width,
+        400.0,
+        "half a notch is not a step"
+    );
+    wheel(&mut workshop, at, 30.0);
+    assert_eq!(workshop.canvas_rect("env").width, 600.0);
+    assert!(workshop.draws("400 × 300 · 150%"));
+    hold_ctrl(&mut workshop, false);
+}
+
+/// A secondary press on the stage offers every tool of the header at the pointer, so none needs the header's menu.
+#[test]
+fn a_secondary_press_on_the_stage_offers_every_tool() {
+    let mut workshop = Workshop::open(sized_probe());
+    let canvas = workshop.canvas_rect("env");
+    let (x, y) = ((canvas.x - 8.0) as f64, (canvas.y + 8.0) as f64);
+    for event in [
+        Event::PointerPressed {
+            x,
+            y,
+            button: telar::PointerButton::Secondary,
+            source: telar::PointerSource::Mouse,
+        },
+        Event::PointerReleased {
+            x,
+            y,
+            button: telar::PointerButton::Secondary,
+            source: telar::PointerSource::Mouse,
+        },
+    ] {
+        route(&mut workshop.tree, &event);
+        settle(&workshop.tree);
+    }
+    let rows = menu_rows(&workshop);
+    for name in [
+        "Viewport",
+        "Zoom",
+        "Rotate",
+        "Grid",
+        "Rulers",
+        "Remount",
+        "Copy link",
+    ] {
+        assert!(
+            rows.iter().any(|row| row.starts_with(name)),
+            "{name} in {rows:?}"
+        );
+    }
+}
+
+/// The theme mode is in the canvas's own menu too, so changing it does not mean going to the top bar.
+#[test]
+fn the_canvas_menu_switches_the_theme_mode() {
+    theme_core::register_mode_theme("night", Night);
+    theme_core::set_mode_scheme("night", ColorScheme::Dark);
+    let mut workshop = Workshop::open(entries(environment));
+    let canvas = workshop.canvas_rect("env");
+    let night = |workshop: &Workshop| {
+        workshop
+            .fills(canvas)
+            .iter()
+            .any(|(_, color, in_canvas)| *color == NIGHT && *in_canvas)
+    };
+    assert!(!night(&workshop));
+    workshop.choose("Mode", "Dark");
+    assert!(night(&workshop), "picked from the canvas's menu");
 }

@@ -10,21 +10,22 @@ mod guides;
 pub(crate) mod inspected;
 pub(crate) mod states;
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use telar::preview::host::mount_preview;
 use telar::preview::{CaughtFailures, PreviewCtx, PreviewEntry};
 use telar::{
-    Accessible, AlignItems, Children, Container, LayoutError, LayoutItem, LayoutStyle, Reactive,
-    ReactiveList, RectStyle, Role, ShapeStyle, SizeDimension, Slots, StyledContainer, Text,
-    box_item, children, on_cleanup,
+    Accessible, AlignItems, Clip, ClippedItem, Container, LayoutError, LayoutItem, LayoutStyle,
+    PointerButton, ReactiveList, Rect, RectStyle, Role, RwSignal, ShapeStyle, SizeDimension,
+    StyledContainer, Text, TextWrap, box_item, children, effect, memo, modifiers, on_cleanup,
+    pointer_position, signal, track_layout,
 };
-use telar_components::{IconButtonProps, ToolbarProps, icon_button, toolbar};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_fill};
-use telar_icons::icon;
 
+use crate::more_menu::{Asked, menu_layer, more_button};
 use crate::state::WorkshopState;
-use crate::strings::{self, CANVAS_TOOLS, COPY_LINK, REMOUNT};
+use crate::strings::MORE_TOOLS;
 use crate::{canvas_toolbar, interactions};
 
 pub(crate) const HEADER_HEIGHT: f32 = WORKBENCH_GRID * 5.0;
@@ -99,99 +100,184 @@ fn mount(
     on_cleanup(move || drop(following));
     let stage = frame::stage(state, entry.layout, globals, surface)?;
     let items = match header {
-        Header::Shown => vec![self::header(state, &entry, stage.size)?, stage.item],
+        Header::Shown => {
+            let tools = Rc::new(canvas_toolbar::HeaderTools::new(
+                state,
+                &entry,
+                stage.size.is_some(),
+            ));
+            vec![
+                self::header(state, &entry, stage.size, &tools)?,
+                acting_on(state, stage.item, &tools)?,
+            ]
+        }
         Header::Hidden => vec![stage.item],
     };
     let column = Container::new(fill(), items)?;
     Ok(box_item(column))
 }
 
+const HEADER_PAD: f32 = WORKBENCH_GRID * 1.5;
+/// The least the preview's name keeps beside the tools before they fold into one menu.
+const TITLE_ROOM: f32 = WORKBENCH_GRID * 12.0;
+
 fn header(
     state: &WorkshopState,
     entry: &PreviewEntry,
     size: Option<frame::SizeLabel>,
+    tools: &Rc<canvas_toolbar::HeaderTools>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = format!("{} / {}", entry.title, entry.name);
     let shown = name.clone();
     let title = Text::declaring(
         move || shown.clone(),
         LayoutStyle::new().min_width(0.0),
-        |text| text.with_font_weight(600),
+        |text| text.with_font_weight(600).with_text_wrap(TextWrap::NoWrap),
     )?;
     let title = Container::new(
         LayoutStyle::new().flex_grow(1.0).min_width(0.0),
-        children![title],
+        children![ClippedItem::new(box_item(title), Clip::both())],
     )?
     .role(Role::Status)
     .a11y_label(move || name.clone());
-    let mut items = children![title];
-    let framed = size.is_some();
-    if let Some(size) = size {
-        items.push(canvas_toolbar::frame_settings(state, entry)?);
-        items.push(size.build(state)?);
-    }
-    items.push(canvas_tools(state, entry, framed)?);
+    let tools = Rc::clone(tools);
+    let laid = signal(None::<RwSignal<Rect>>);
+    let spread = signal(0.0_f32);
+    // Against the width the tools took the last time they were spread out, so folding them cannot change the answer that folded them.
+    let folded = memo(move || {
+        let Some(header) = laid.get() else {
+            return false;
+        };
+        let room = header.get().width - 2.0 * HEADER_PAD - WORKBENCH_GRID - TITLE_ROOM;
+        spread.get() > room
+    });
+    let state = state.clone();
+    let controls = ReactiveList::with_style(
+        LayoutStyle::row()
+            .align_items(AlignItems::CENTER)
+            .flex_shrink(0.0),
+        move || vec![folded.get()],
+        |folded: &bool| *folded,
+        move |folded| match folded {
+            false => spread_out(&tools, size.clone(), &state, spread),
+            true => folded_up(&tools, size.clone(), &state),
+        },
+    )?;
     let header = StyledContainer::new(
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
             .height(HEADER_HEIGHT)
-            .padding_horizontal(WORKBENCH_GRID * 1.5)
+            .padding_horizontal(HEADER_PAD)
             .gap(WORKBENCH_GRID),
         |_| {
             let tokens = use_workbench_tokens();
             RectStyle::default().with_fill(tokens.panel_background)
         },
-        items,
+        vec![box_item(title), box_item(controls)],
     )?;
+    laid.set(track_layout(header.layout_node()));
     Ok(box_item(header))
 }
 
-/// The canvas header's toolbar: what acts on the mounted preview, the grid over it, and on a framed one, its rotation and the rulers along it.
-fn canvas_tools(
+/// The canvas's size, the toolbar, then the size and zoom of a framed preview and the theme mode behind a menu. Records in `spread` how wide they stand, which never shrinks below what they need.
+fn spread_out(
+    tools: &Rc<canvas_toolbar::HeaderTools>,
+    size: Option<frame::SizeLabel>,
     state: &WorkshopState,
-    entry: &PreviewEntry,
-    framed: bool,
+    spread: RwSignal<f32>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let state = state.clone();
-    let asked = entry.env.viewport;
-    let tools = Children::new(move || {
-        let mut slots = Slots::new();
-        if framed {
-            slots.push(None, canvas_toolbar::rotate(&state, asked)?);
-        }
-        slots.push(None, canvas_toolbar::grid(&state)?);
-        if framed {
-            slots.push(None, canvas_toolbar::rulers(&state)?);
-        }
-        let linking = state.clone();
-        let state = state.clone();
-        let remount = icon_button(
-            IconButtonProps::props()
-                .icon(icon!("lucide:rotate-cw"))
-                .label(Reactive::of(|| strings::text(REMOUNT)))
-                .on_press(Rc::new(move || state.remount()))
-                .build(),
-            Children::default(),
-        )?;
-        slots.push(None, remount);
-        let copy_link = icon_button(
-            IconButtonProps::props()
-                .icon(icon!("lucide:link"))
-                .label(Reactive::of(|| strings::text(COPY_LINK)))
-                .on_press(Rc::new(move || linking.copy_link()))
-                .build(),
-            Children::default(),
-        )?;
-        slots.push(None, copy_link);
-        Ok(slots)
+    let mut items = Vec::new();
+    if let Some(size) = size {
+        items.push(size.build(state)?);
+    }
+    items.push(tools.toolbar()?);
+    items.push(more(tools, false)?);
+    let row = Container::new(tools_row(), items)?;
+    let laid = track_layout(row.layout_node()).expect("the tools are laid out");
+    effect(move || {
+        spread.set_if_changed(laid.get().width);
     });
-    toolbar(
-        ToolbarProps::props()
-            .label(Reactive::of(|| strings::text(CANVAS_TOOLS)))
-            .build(),
-        tools,
-    )
+    Ok(box_item(row))
+}
+
+/// The tools folded into one menu behind a button, beside the canvas's size.
+fn folded_up(
+    tools: &Rc<canvas_toolbar::HeaderTools>,
+    size: Option<frame::SizeLabel>,
+    state: &WorkshopState,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let mut items = Vec::new();
+    if let Some(size) = size {
+        items.push(size.build(state)?);
+    }
+    items.push(more(tools, true)?);
+    Ok(box_item(Container::new(tools_row(), items)?))
+}
+
+fn tools_row() -> LayoutStyle {
+    LayoutStyle::row()
+        .align_items(AlignItems::CENTER)
+        .flex_shrink(0.0)
+        .gap(WORKBENCH_GRID)
+}
+
+/// The button a menu of the tools opens from: the size and zoom and the theme mode, and with `all` every other tool too.
+fn more(
+    tools: &Rc<canvas_toolbar::HeaderTools>,
+    all: bool,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let tools = Rc::clone(tools);
+    more_button(MORE_TOOLS, Rc::new(move || tools.menu_rows(all)))
+}
+
+/// How far the wheel turns, in px, for one step of zoom: a notch of a mouse wheel, which a trackpad reaches by many smaller ones.
+const WHEEL_STEP: f32 = 60.0;
+
+/// The stage, which takes what its preview leaves of the pointer: a secondary press opens every tool as a menu, and the wheel with Ctrl or ⌘ held zooms the canvas.
+fn acting_on(
+    state: &WorkshopState,
+    stage: Box<dyn LayoutItem>,
+    tools: &Rc<canvas_toolbar::HeaderTools>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let tools = Rc::clone(tools);
+    let open = signal(None::<Asked>);
+    let settings = state.canvas_settings();
+    let turned = Rc::new(Cell::new(0.0_f32));
+    let stage = StyledContainer::new(fill(), |_| RectStyle::default(), vec![stage])?
+        .on_alt_press(move |button| {
+            if button == PointerButton::Secondary {
+                open.set(Some(Asked {
+                    at: pointer_position().unwrap_or_default(),
+                    around: None,
+                }));
+            }
+        })
+        .on_scroll(move |_, dy| {
+            let held = modifiers();
+            if !(held.is_ctrl || held.is_meta) {
+                turned.set(0.0);
+                return;
+            }
+            let total = turned.get() + dy;
+            let steps = (total / WHEEL_STEP).trunc();
+            turned.set(total - steps * WHEEL_STEP);
+            for _ in 0..steps.abs() as u32 {
+                settings.update(|settings| {
+                    settings.zoom = match steps > 0.0 {
+                        true => settings.zoom.zoomed_in(),
+                        false => settings.zoom.zoomed_out(),
+                    }
+                });
+            }
+        });
+    Ok(box_item(Container::new(
+        fill(),
+        vec![
+            box_item(stage),
+            menu_layer(open, Rc::new(move || tools.menu_rows(true)))?,
+        ],
+    )?))
 }
 
 fn fill() -> LayoutStyle {

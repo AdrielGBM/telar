@@ -4,12 +4,12 @@ use std::rc::Rc;
 
 use telar::preview::{Matrices, PreviewEntry, ViewportPreset};
 use telar::{
-    Accessible, AlignItems, Children, Container, ControlSize, Direction, LayoutError, LayoutItem,
-    LayoutStyle, Reactive, Role, RwSignal, Size, Slots, box_item, effect, signal,
+    Accessible, Children, Container, ControlSize, Direction, LayoutError, LayoutItem, LayoutStyle,
+    Reactive, RwSignal, Size, Slots, box_item, effect, signal,
 };
 use telar_components::{
     GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, SubmenuProps,
-    group, icon_button, item, menu, select, separator, submenu,
+    ToolbarProps, group, icon_button, item, menu, select, separator, submenu, toolbar,
 };
 use telar_devtools::WORKBENCH_GRID;
 use telar_icons::icon;
@@ -21,11 +21,11 @@ use crate::settings::{
 use crate::state::WorkshopState;
 use crate::strings::{
     self, BACKGROUND, BACKGROUND_DARK, BACKGROUND_LIGHT, BACKGROUND_PREVIEW,
-    BACKGROUND_TRANSPARENT, CONTROL_SIZE, CONTROL_SIZE_DEFAULT, CONTROL_SIZE_LARGE,
-    CONTROL_SIZE_MINI, CONTROL_SIZE_REGULAR, CONTROL_SIZE_SMALL, DEVICE_FRAMES, DIRECTION,
-    DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL, FRAME_SETTINGS, GRID, HIGH_CONTRAST, LOCALE,
-    LOCALE_DEFAULT, MODE, PROJECT_VIEWPORTS, REDUCED_MOTION, ROTATE, RULERS, SETTINGS, VIEWPORT,
-    VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM, ZOOM_FIT,
+    BACKGROUND_TRANSPARENT, CANVAS_TOOLS, CONTROL_SIZE, CONTROL_SIZE_DEFAULT, CONTROL_SIZE_LARGE,
+    CONTROL_SIZE_MINI, CONTROL_SIZE_REGULAR, CONTROL_SIZE_SMALL, COPY_LINK, DEVICE_FRAMES,
+    DIRECTION, DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL, GRID, HIGH_CONTRAST, LOCALE,
+    LOCALE_DEFAULT, MODE, PROJECT_VIEWPORTS, REDUCED_MOTION, REMOUNT, ROTATE, RULERS, SETTINGS,
+    VIEWPORT, VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM, ZOOM_FIT,
     ZOOM_PERCENT,
 };
 
@@ -62,23 +62,28 @@ pub(crate) fn environment_menu(state: &WorkshopState) -> Result<Box<dyn LayoutIt
     )
 }
 
-fn environment_settings(state: &WorkshopState) -> Vec<Box<dyn Setting>> {
-    let settings = state.canvas_settings();
+/// The theme mode every canvas is shown in: the system's, each of the application's schemes and its other modes, and one restored from elsewhere that is none of them.
+fn mode(settings: RwSignal<CanvasSettings>) -> Choice<ModeChoice> {
     let modes = mode_choices();
     let unlisted = Some(settings.peek().mode).filter(|current| !modes.contains(current));
+    Choice::new(
+        MODE,
+        REGULAR,
+        modes
+            .into_iter()
+            .chain(unlisted)
+            .map(|mode| Row::choice(mode.clone(), Label::Mode(mode)))
+            .collect(),
+        move || settings.with(|settings| settings.mode.clone()),
+        move |mode| settings.update(|settings| settings.mode = mode),
+    )
+}
+
+fn environment_settings(state: &WorkshopState) -> Vec<Box<dyn Setting>> {
+    let settings = state.canvas_settings();
     let locales = listed(locales(state), settings.peek().locale);
     vec![
-        Box::new(Choice::new(
-            MODE,
-            REGULAR,
-            modes
-                .into_iter()
-                .chain(unlisted)
-                .map(|mode| Row::choice(mode.clone(), Label::Mode(mode)))
-                .collect(),
-            move || settings.with(|settings| settings.mode.clone()),
-            move |mode| settings.update(|settings| settings.mode = mode),
-        )),
+        Box::new(mode(settings)),
         Box::new(Choice::new(
             LOCALE,
             REGULAR,
@@ -127,91 +132,130 @@ fn environment_settings(state: &WorkshopState) -> Vec<Box<dyn Setting>> {
     ]
 }
 
-/// The canvas header's settings for a framed preview: its size and its zoom.
-pub(crate) fn frame_settings(
-    state: &WorkshopState,
-    entry: &PreviewEntry,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let settings = state.canvas_settings();
-    let asked = entry.env.viewport;
-    let project = Matrices::installed().viewports();
-    let zooms = std::iter::once(Row::choice(Zoom::Fit, Label::Key(ZOOM_FIT)))
-        .chain(
-            ZOOM_STEPS
-                .iter()
-                .map(|&percent| Row::choice(Zoom::Percent(percent), Label::Percent(percent))),
-        )
-        .collect();
-    let items = vec![
-        Choice::new(
-            VIEWPORT,
-            WIDE,
-            size_rows(asked, project),
-            move || settings.with(|settings| SizeChoice::of(&settings.size)),
-            move |choice| {
-                settings.update(|settings| choice.apply(settings, asked, project));
-            },
-        )
-        .inline()?,
-        Choice::new(
-            ZOOM,
-            NARROW,
-            zooms,
-            move || settings.with(|settings| settings.zoom),
-            move |zoom| settings.update(|settings| settings.zoom = zoom),
-        )
-        .inline()?,
-    ];
-    frame_group(items)
+/// What acts on the mounted preview from its header: its size and zoom while it is framed, the marks drawn over it, and what acts on the canvas itself. Each shows in place, or, where the header has no room for them, as rows of one menu.
+pub(crate) struct HeaderTools {
+    frame: Vec<Box<dyn Setting>>,
+    look: Vec<Box<dyn Setting>>,
+    marks: Vec<Box<dyn Setting>>,
+    acts: Vec<Box<dyn Setting>>,
 }
 
-/// Turns the canvas a quarter, swapping its width and height; off while it has no fixed size to turn. An item of a `toolbar`, so it is built among its children.
-pub(crate) fn rotate(
-    state: &WorkshopState,
-    asked: Option<Size>,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let settings = state.canvas_settings();
-    let project = Matrices::installed().viewports();
-    icon_button(
-        IconButtonProps::props()
-            .icon(icon!("lucide:rotate-ccw-square"))
-            .label(Reactive::of(|| strings::text(ROTATE)))
-            .pressed(Reactive::of(move || {
-                settings.with(|settings| settings.rotated)
-            }))
-            .disabled(Reactive::of(move || {
-                settings.with(|settings| settings.upright_size(asked, project).is_none())
-            }))
-            .on_press(Rc::new(move || {
-                settings.update(|settings| settings.rotated = !settings.rotated)
-            }))
-            .build(),
-        Children::default(),
-    )
-}
+impl HeaderTools {
+    pub(crate) fn new(state: &WorkshopState, entry: &PreviewEntry, framed: bool) -> Self {
+        let settings = state.canvas_settings();
+        let asked = entry.env.viewport;
+        let project = Matrices::installed().viewports();
+        let mut frame: Vec<Box<dyn Setting>> = Vec::new();
+        let mut marks: Vec<Box<dyn Setting>> = Vec::new();
+        if framed {
+            let zooms =
+                std::iter::once(Row::choice(Zoom::Fit, Label::Key(ZOOM_FIT)))
+                    .chain(ZOOM_STEPS.iter().map(|&percent| {
+                        Row::choice(Zoom::Percent(percent), Label::Percent(percent))
+                    }))
+                    .collect();
+            frame.push(Box::new(Choice::new(
+                VIEWPORT,
+                WIDE,
+                size_rows(asked, project),
+                move || settings.with(|settings| SizeChoice::of(&settings.size)),
+                move |choice| {
+                    settings.update(|settings| choice.apply(settings, asked, project));
+                },
+            )));
+            frame.push(Box::new(Choice::new(
+                ZOOM,
+                NARROW,
+                zooms,
+                move || settings.with(|settings| settings.zoom),
+                move |zoom| settings.update(|settings| settings.zoom = zoom),
+            )));
+            marks.push(Box::new(
+                Switch::new(
+                    icon!("lucide:rotate-ccw-square"),
+                    ROTATE,
+                    move || settings.with(|settings| settings.rotated),
+                    move || settings.update(|settings| settings.rotated = !settings.rotated),
+                )
+                .enabled(move || {
+                    settings.with(|settings| settings.upright_size(asked, project).is_some())
+                }),
+            ));
+        }
+        marks.push(Box::new(Switch::new(
+            icon!("lucide:grid-3x3"),
+            GRID,
+            move || settings.with(|settings| settings.grid),
+            move || settings.update(|settings| settings.grid = !settings.grid),
+        )));
+        if framed {
+            marks.push(Box::new(Switch::new(
+                icon!("lucide:ruler"),
+                RULERS,
+                move || settings.with(|settings| settings.rulers),
+                move || settings.update(|settings| settings.rulers = !settings.rulers),
+            )));
+        }
+        let (remounting, linking) = (state.clone(), state.clone());
+        let acts: Vec<Box<dyn Setting>> = vec![
+            Box::new(Action::new(icon!("lucide:rotate-cw"), REMOUNT, move || {
+                remounting.remount()
+            })),
+            Box::new(Action::new(icon!("lucide:link"), COPY_LINK, move || {
+                linking.copy_link()
+            })),
+        ];
+        let look: Vec<Box<dyn Setting>> = vec![Box::new(mode(settings))];
+        Self {
+            frame,
+            look,
+            marks,
+            acts,
+        }
+    }
 
-/// Shows the grid over the canvas while pressed. An item of a `toolbar`, so it is built among its children.
-pub(crate) fn grid(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let settings = state.canvas_settings();
-    Switch::new(
-        icon!("lucide:grid-3x3"),
-        GRID,
-        move || settings.with(|settings| settings.grid),
-        move || settings.update(|settings| settings.grid = !settings.grid),
-    )
-    .inline()
-}
+    /// The marks and the canvas's own actions as one toolbar of icon buttons.
+    pub(crate) fn toolbar(self: &Rc<Self>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let tools = Rc::clone(self);
+        toolbar(
+            ToolbarProps::props()
+                .label(Reactive::of(|| strings::text(CANVAS_TOOLS)))
+                .build(),
+            Children::new(move || {
+                let mut slots = Slots::new();
+                for setting in tools.marks.iter().chain(&tools.acts) {
+                    slots.push(None, setting.inline()?);
+                }
+                Ok(slots)
+            }),
+        )
+    }
 
-/// Shows the rulers along the stage while pressed. An item of a `toolbar`, so it is built among its children.
-pub(crate) fn rulers(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let settings = state.canvas_settings();
-    Switch::new(
-        icon!("lucide:ruler"),
-        RULERS,
-        move || settings.with(|settings| settings.rulers),
-        move || settings.update(|settings| settings.rulers = !settings.rulers),
-    )
-    .inline()
+    /// The rows of the menu, a group to a stretch between separators: the size and zoom of a framed preview and the theme mode, and with `all` every other tool too, for a header with no room for the toolbar.
+    pub(crate) fn menu_rows(self: &Rc<Self>, all: bool) -> Children {
+        let tools = Rc::clone(self);
+        Children::new(move || {
+            let mut slots = Slots::new();
+            let none = Vec::new();
+            let (marks, acts) = match all {
+                true => (&tools.marks, &tools.acts),
+                false => (&none, &none),
+            };
+            let groups = [&tools.frame, &tools.look, marks, acts];
+            for group in groups.into_iter().filter(|group| !group.is_empty()) {
+                if !slots.is_empty() {
+                    slots.push(
+                        None,
+                        separator(SeparatorProps::props().build(), Children::default())?,
+                    );
+                }
+                for setting in group.iter() {
+                    setting.menu_rows(&mut slots)?;
+                }
+            }
+            Ok(slots)
+        })
+    }
 }
 
 fn reduced_motion(settings: RwSignal<CanvasSettings>) -> Switch {
@@ -257,6 +301,7 @@ struct Switch {
     name: &'static str,
     on: Rc<dyn Fn() -> bool>,
     flip: Rc<dyn Fn()>,
+    enabled: Option<Rc<dyn Fn() -> bool>>,
 }
 
 impl Switch {
@@ -271,6 +316,7 @@ impl Switch {
             name,
             on: Rc::new(on),
             flip: Rc::new(flip),
+            enabled: None,
         }
     }
 
@@ -279,9 +325,20 @@ impl Switch {
         Reactive::of(move || strings::text(name))
     }
 
+    /// Off, and shown so, while `enabled` reads false.
+    fn enabled(mut self, enabled: impl Fn() -> bool + 'static) -> Self {
+        self.enabled = Some(Rc::new(enabled));
+        self
+    }
+
     fn is_on(&self) -> Reactive<bool> {
         let on = Rc::clone(&self.on);
         Reactive::of(move || on())
+    }
+
+    fn is_disabled(&self) -> Reactive<bool> {
+        let enabled = self.enabled.clone();
+        Reactive::of(move || enabled.as_ref().is_some_and(|enabled| !enabled()))
     }
 }
 
@@ -292,6 +349,7 @@ impl Setting for Switch {
                 .icon(self.icon.clone())
                 .label(self.label())
                 .pressed(self.is_on())
+                .disabled(self.is_disabled())
                 .on_press(Rc::clone(&self.flip))
                 .build(),
             Children::default(),
@@ -303,6 +361,7 @@ impl Setting for Switch {
             ItemProps::props()
                 .label(self.label())
                 .switch(self.is_on())
+                .disabled(self.is_disabled())
                 .on_press(Rc::clone(&self.flip))
                 .build(),
             Children::default(),
@@ -313,6 +372,50 @@ impl Setting for Switch {
 
     fn is_switch(&self) -> bool {
         true
+    }
+}
+
+/// Something done to the canvas at once: an icon button, or a menu row.
+struct Action {
+    icon: telar_icons::IconName,
+    name: &'static str,
+    act: Rc<dyn Fn()>,
+}
+
+impl Action {
+    fn new(icon: telar_icons::IconName, name: &'static str, act: impl Fn() + 'static) -> Self {
+        Self {
+            icon,
+            name,
+            act: Rc::new(act),
+        }
+    }
+}
+
+impl Setting for Action {
+    fn inline(&self) -> Result<Box<dyn LayoutItem>, LayoutError> {
+        let name = self.name;
+        icon_button(
+            IconButtonProps::props()
+                .icon(self.icon.clone())
+                .label(Reactive::of(move || strings::text(name)))
+                .on_press(Rc::clone(&self.act))
+                .build(),
+            Children::default(),
+        )
+    }
+
+    fn menu_rows(&self, slots: &mut Slots) -> Result<(), LayoutError> {
+        let name = self.name;
+        let row = item(
+            ItemProps::props()
+                .label(Reactive::of(move || strings::text(name)))
+                .on_press(Rc::clone(&self.act))
+                .build(),
+            Children::default(),
+        )?;
+        slots.push(None, row);
+        Ok(())
     }
 }
 
@@ -634,19 +737,6 @@ impl<T: PartialEq> Row<T> {
             ),
         }
     }
-}
-
-fn frame_group(items: Vec<Box<dyn LayoutItem>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let row = Container::new(
-        LayoutStyle::row()
-            .align_items(AlignItems::CENTER)
-            .flex_shrink(0.0)
-            .gap(WORKBENCH_GRID),
-        items,
-    )?
-    .role(Role::Group)
-    .a11y_label(|| strings::text(FRAME_SETTINGS));
-    Ok(box_item(row))
 }
 
 #[cfg(test)]
