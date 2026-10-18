@@ -141,6 +141,13 @@ pub fn advance_time(by: Duration) {
     crate::fire_timers();
 }
 
+/// Plays every animation in flight to its end, as the runner's frames would over the next few seconds, without the test waiting them out.
+pub fn settle_motion() {
+    let now = web_time::Instant::now();
+    motion_core::tick(now);
+    motion_core::tick(now + Duration::from_secs(5));
+}
+
 /// Lays `node` out as the only child of a `width`×`height` column and answers its absolute rect.
 pub fn lay_out(node: NodeId, width: f32, height: f32) -> Rect {
     lay_out_in(

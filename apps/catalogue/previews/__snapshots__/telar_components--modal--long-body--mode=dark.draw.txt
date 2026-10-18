@@ -236,7 +236,6 @@ element group
           end
         end
       end
-      rect 392,68 6x53.31 fill=#5c6175ff radius=3
     end
   end
 end

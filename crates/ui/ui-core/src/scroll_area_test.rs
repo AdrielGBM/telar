@@ -623,6 +623,7 @@ fn as_layout_item_emits_clip_and_vbar_on_overflow() {
         AvailableSpace::MaxContent,
     )
     .unwrap();
+    sa.core.bars_up();
     let view = sa.view();
     let RenderNode::Element {
         children: drawn, ..
@@ -834,6 +835,7 @@ fn moves_and_releases_outside_the_viewport_reach_the_content_as_covered() {
 #[test]
 fn view_emits_clip_and_scrollbar_when_content_overflows() {
     let sa = make_scroll_area();
+    sa.core.bars_up();
     let view = sa.view();
     if let RenderNode::Group { children, .. } = view {
         assert_eq!(children.len(), 3);
@@ -981,6 +983,7 @@ fn scroll_x_clamps_to_zero() {
 #[test]
 fn view_emits_hbar_when_content_overflows_x() {
     let sa = make_scroll_area_wide();
+    sa.core.bars_up();
     let view = sa.view();
     if let RenderNode::Group { children, .. } = view {
         assert_eq!(children.len(), 3);

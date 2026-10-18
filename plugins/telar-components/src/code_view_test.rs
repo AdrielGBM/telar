@@ -379,12 +379,15 @@ fn a_block_taller_than_its_limit_is_a_named_stop_too() {
 
 #[test]
 fn a_line_wider_than_the_block_scrolls_sideways_under_a_scrollbar() {
-    let mounted = Mounted::new(
+    let mut mounted = Mounted::new(
         CodeViewProps::props()
             .code(wide_code())
             .copyable(false)
             .build(),
     );
+    let lane = (300.0, f64::from(mounted.height()) - 3.0);
+    route(&mut mounted.tree, &telar::testing::moved(lane.0, lane.1));
+    telar::testing::settle_motion();
     let thumb = mounted.tree.commands().iter().any(|command| {
         matches!(command, DrawCommand::Rect { rect, .. } if rect.width < 600.0 && rect.height < 12.0 && rect.y > mounted.height() - 12.0)
     });

@@ -1,15 +1,17 @@
 //! The scroll viewport: offsets, scrollbars, the fling, and the content placed in a space of its own.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
 
 use geometry_core::{Insets, LayoutGrid, Rect};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
+use motion_core::{Animated, Easing, tween};
 use platform_core::{
     ConsumedKeys, Event, Key, ModifiersState, NamedKey, PointerButton, ScrollDelta,
 };
-use reactive_core::{Effect, ReadSignal, RwSignal, effect, signal};
+use reactive_core::{Effect, ReadSignal, RwSignal, Timer, effect, run_after, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
 use theme_core::{current_control_size, use_theme_tokens};
 use ui_tree::{Component, EventResult, RenderNode, Segment};
@@ -183,6 +185,57 @@ fn draw_scrollbars(
     (vbar, hbar)
 }
 
+const BARS_IDLE: Duration = Duration::from_millis(1000);
+const BARS_FADE: Duration = Duration::from_millis(200);
+
+/// How much of a scroll area's bars shows. They float over the content, so at rest they keep out of its way: they come up while the content moves, while the pointer is on a bar's lane and while a bar is held, and fade once nothing has kept them up for [`BARS_IDLE`].
+#[derive(Clone)]
+struct BarPresence {
+    shown: Animated<f32>,
+    up: Rc<Cell<bool>>,
+    held: Rc<Cell<bool>>,
+    fade: Rc<RefCell<Option<Timer>>>,
+}
+
+impl BarPresence {
+    fn new() -> Self {
+        Self {
+            shown: Animated::new(0.0, tween(BARS_FADE, Easing::EaseOut)),
+            up: Rc::default(),
+            held: Rc::default(),
+            fade: Rc::default(),
+        }
+    }
+
+    fn shown(&self) -> f32 {
+        self.shown.get()
+    }
+
+    /// Whether the bars are up or on their way up: only then is a press on a lane theirs, so a tap at a hidden bar's edge reaches the content under it.
+    fn is_up(&self) -> bool {
+        self.up.get()
+    }
+
+    fn wake(&self) {
+        self.shown.retarget(1.0);
+        self.up.set(true);
+        let (shown, held, up) = (self.shown, self.held.clone(), self.up.clone());
+        let fade = run_after(BARS_IDLE, move || {
+            if !held.get() {
+                up.set(false);
+                shown.retarget(0.0);
+            }
+        });
+        *self.fade.borrow_mut() = Some(fade);
+    }
+
+    fn hold(&self, held: bool) {
+        if self.held.replace(held) != held {
+            self.wake();
+        }
+    }
+}
+
 /// How one scroll area's offset is moving other than by being set outright.
 #[derive(Default)]
 struct Motion {
@@ -337,6 +390,10 @@ pub(crate) struct ScrollCore {
     commanded: Commanded,
     /// Whether this is the surface's primary scroll. See [`LayoutScrollArea::into_primary`].
     primary: bool,
+    bars: BarPresence,
+    /// Wakes [`bars`](Self::bars) whenever the offset moves, however it was moved.
+    _bars_follow: Effect,
+    lane_hovered: bool,
 }
 
 /// The offset a scroll area is asking a surface that holds its content for. See [`ScrollCore::commanded`].
@@ -380,6 +437,16 @@ impl ScrollCore {
     ) -> Self {
         let content = Rc::new(RefCell::new(content));
         let content_segment = mount_item_segment(Rc::clone(&content));
+        let bars = BarPresence::new();
+        let woken = bars.clone();
+        let placed = Cell::new(false);
+        let bars_follow = effect(move || {
+            scroll_x.get();
+            scroll_y.get();
+            if placed.replace(true) {
+                woken.wake();
+            }
+        });
         Self {
             content_rect_signal,
             scroll_x,
@@ -395,6 +462,9 @@ impl ScrollCore {
             bar_drag: None,
             commanded,
             primary: false,
+            bars,
+            _bars_follow: bars_follow,
+            lane_hovered: false,
         }
     }
 
@@ -461,7 +531,7 @@ impl ScrollCore {
 
     /// Takes hold of a bar under `(x, y)`, or pages towards a press on its track. `false` when the press landed somewhere else and belongs to the content.
     fn grab_bar(&mut self, viewport: Rect, x: f32, y: f32) -> bool {
-        if !self.draws_bars() || !viewport.contains(x, y) {
+        if !self.draws_bars() || !self.bars.is_up() || !viewport.contains(x, y) {
             return false;
         }
         let content = self.content_rect_signal.get();
@@ -505,11 +575,36 @@ impl ScrollCore {
         self.catch_all();
         if thumb.holds(along) {
             self.bar_drag = Some((axis, along - thumb.start));
+            self.bars.hold(true);
         } else {
             let by = if along < thumb.start { -extent } else { extent };
             self.command_axis(axis, (offset.get() + by).clamp(0.0, thumb.max_scroll));
         }
         true
+    }
+
+    /// Keeps the bars up while the pointer is on a lane a bar runs in, so one can be found and taken hold of before it is grabbed.
+    fn follow_lane(&mut self, event: &Event, viewport: Rect) {
+        let on_lane = match event {
+            Event::PointerMoved { x, y, .. } => self.on_lane(viewport, *x as f32, *y as f32),
+            Event::CursorLeft => false,
+            _ => return,
+        };
+        if on_lane != self.lane_hovered {
+            self.lane_hovered = on_lane;
+            self.bars.hold(on_lane || self.bar_drag.is_some());
+        }
+    }
+
+    fn on_lane(&self, viewport: Rect, x: f32, y: f32) -> bool {
+        if !self.draws_bars() || !viewport.contains(x, y) {
+            return false;
+        }
+        let content = self.content_rect_signal.get();
+        let width = self.scrollbar_style().width;
+        let (wide, tall) = overflow_axes(viewport, content);
+        (tall && x >= viewport.x + viewport.width - width)
+            || (wide && y >= viewport.y + viewport.height - width)
     }
 
     fn drag_bar(&mut self, viewport: Rect, x: f32, y: f32) {
@@ -597,17 +692,18 @@ impl ScrollCore {
         } else {
             viewport
         };
-        let (vbar, hbar) = draw_scrollbars(
-            bar_viewport,
-            scroll_x,
-            scroll_y,
-            content_rect,
-            &self.scrollbar_style(),
-        );
+        let shown = self.bars.shown();
+        if shown <= 0.0 {
+            return RenderNode::group([scrollable, RenderNode::Empty, RenderNode::Empty]);
+        }
+        let mut style = self.scrollbar_style();
+        style.color.a *= shown;
+        let (vbar, hbar) = draw_scrollbars(bar_viewport, scroll_x, scroll_y, content_rect, &style);
         RenderNode::group([scrollable, vbar, hbar])
     }
 
     fn on_event(&mut self, event: &Event, viewport: Rect) -> EventResult {
+        self.follow_lane(event, viewport);
         match event {
             // A press on a scrollbar is the bar's, not the content's: a button under the thumb must not take the click that grabbed it.
             Event::PointerPressed { x, y, .. } if self.grab_bar(viewport, *x as f32, *y as f32) => {
@@ -619,6 +715,7 @@ impl ScrollCore {
             }
             Event::PointerReleased { .. } if self.bar_drag.is_some() => {
                 self.bar_drag = None;
+                self.bars.hold(self.lane_hovered);
                 return EventResult::Handled;
             }
             // A new press starts a fresh tap candidate; forget the prior gesture's accumulated scroll.
@@ -1389,6 +1486,16 @@ fn scrolling_keys(viewport: Rect, content: Rect) -> ConsumedKeys {
             | ConsumedKeys::SPACE;
     }
     keys
+}
+
+#[cfg(test)]
+impl ScrollCore {
+    fn bars_up(&self) {
+        self.bars.wake();
+        let now = std::time::Instant::now();
+        motion_core::tick(now);
+        motion_core::tick(now + BARS_FADE * 2);
+    }
 }
 
 #[cfg(test)]

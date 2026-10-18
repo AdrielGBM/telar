@@ -450,6 +450,7 @@ fn the_wheel_scrolls_a_row_running_past_the_area_to_its_end() {
 fn a_row_running_past_the_area_draws_the_horizontal_scrollbar() {
     reset_layout_runtime();
     let (area, _) = area(wide_row());
+    area.core.bars_up();
     let (tree, _) = mounted(area);
     let bar = tree.commands().iter().any(|command| {
         matches!(command, DrawCommand::Rect { rect, .. } if rect.width < VIEW.0 && rect.height < 12.0 && rect.y > VIEW.1 - 12.0)

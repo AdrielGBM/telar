@@ -152,7 +152,6 @@ element group
                     end
                   end
                 end
-                rect 532,140 6x24 fill=#5c6175ff radius=3
               end
             end
             element status

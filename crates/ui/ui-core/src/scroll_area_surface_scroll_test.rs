@@ -22,6 +22,7 @@ impl Drop for AsADocument {
 fn the_thumb_can_be_dragged_and_asks_the_surface_to_move() {
     let _document = AsADocument::new();
     let mut sa = make_scroll_area();
+    sa.on_event(&moved(396.0, 45.0));
     assert_eq!(
         sa.on_event(&press(396.0, 45.0)),
         EventResult::Handled,
@@ -112,6 +113,7 @@ fn a_request_stands_until_the_surface_says_where_the_box_went() {
 fn a_scroll_the_surface_reports_drops_the_request_still_pending() {
     let _document = AsADocument::new();
     let mut sa = make_scroll_area();
+    sa.on_event(&moved(396.0, 45.0));
     sa.on_event(&press(396.0, 45.0));
     sa.on_event(&moved(396.0, 150.0));
     sa.core.follow(0.0, 120.0);
@@ -123,6 +125,7 @@ fn a_scroll_the_surface_reports_drops_the_request_still_pending() {
 #[test]
 fn a_target_that_draws_the_offset_asks_for_nothing() {
     let mut sa = make_scroll_area();
+    sa.on_event(&moved(396.0, 45.0));
     sa.on_event(&press(396.0, 45.0));
     sa.on_event(&moved(396.0, 150.0));
     assert_eq!(sa.core.scroll_y.get(), 350.0);
