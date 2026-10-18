@@ -321,8 +321,12 @@ fn the_borders_of_a_window_the_workshop_frames_resize_it() {
 #[test]
 fn the_start_of_the_bar_has_a_preview_label_before_the_settings_button() {
     let mut workshop = Workshop::open(Frame::Host, WIDE);
-    assert!(texts(&workshop.tree).iter().any(|text| text == "Preview"));
-    assert!(workshop.find(Role::Button, "Preview").is_none());
+    assert!(
+        texts(&workshop.tree)
+            .iter()
+            .any(|text| text == "Telar Preview")
+    );
+    assert!(workshop.find(Role::Button, "Telar Preview").is_none());
     workshop.click(Role::Button, "Settings");
     crate::test_support::setting_row(&workshop.nodes(), "Direction");
 }
@@ -492,14 +496,14 @@ fn the_project_name_is_centred_in_the_field_by_its_ink() {
 fn the_preview_label_is_inset_and_centred_like_a_control_label() {
     let pad = telar_components::metrics::control_pad_x();
     let wide = Workshop::open(Frame::Host, WIDE);
-    let (label, _) = drawn_text(&wide, "Preview");
+    let (label, _) = drawn_text(&wide, "Telar Preview");
     assert_eq!(label.x, WORKBENCH_GRID + pad, "first in the bar");
     let (settings, _) = drawn_text(&wide, "Settings");
     assert_eq!(label.y, settings.y, "on the line the menu's label is on");
 
     let narrow = Workshop::open(Frame::Host, 800);
     let opener = narrow.control(Role::Button, "Previews").rect;
-    let (label, _) = drawn_text(&narrow, "Preview");
+    let (label, _) = drawn_text(&narrow, "Telar Preview");
     assert_eq!(
         label.x,
         opener.x + opener.width + GAP + pad,
@@ -521,7 +525,7 @@ fn the_sidebar_opener_is_an_icon_button_named_previews() {
     assert!(workshop.find(Role::Dialog, "Previews").is_some());
 }
 
-/// The Settings menu's label stands as far from the trigger's left edge as from its right, in either frame and at either width: the trigger is sized from the label in the style it is drawn in, and the line drawn in it is that wide.
+/// The Settings menu's label stands as far from the trigger's left edge as from its right, in either frame and at either width: the trigger is sized from the label in the style it is drawn in, and the line drawn in it is that wide. Within a pixel, as the label and the trigger's edges are each snapped to whole pixels wherever the bar puts the trigger.
 #[test]
 fn the_settings_label_is_as_far_from_either_edge_of_its_trigger() {
     for frame in [Frame::Own, Frame::Host] {
@@ -533,7 +537,7 @@ fn the_settings_label_is_as_far_from_either_edge_of_its_trigger() {
             let before = line.x - trigger.x;
             let after = trigger.x + trigger.width - (line.x + drawn);
             assert!(
-                (before - after).abs() <= 0.5,
+                (before - after).abs() < 1.0,
                 "{frame:?} {width}: {before} px before the label and {after} px after it"
             );
         }

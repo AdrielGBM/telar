@@ -1,4 +1,4 @@
-//! The top bar, which is also the title bar of a window the workshop frames itself: the sidebar's opener, the "Preview" label and the preview settings at the start, the trigger of the command palette in the middle, and the view switch, then the window's own controls, at the end.
+//! The top bar, which is also the title bar of a window the workshop frames itself: the sidebar's opener, the "Telar Preview" label and the preview settings at the start, the trigger of the command palette in the middle, and the view switch, then the window's own controls, at the end.
 //!
 //! The trigger is centred on the window rather than between its neighbours: the two ends split the rest of the bar evenly whatever each holds. A window too narrow for that sets it between the two groups instead, as far from one as from the other, rather than letting the group that needs more push it towards the other and leave a gap on one side only.
 
@@ -151,7 +151,7 @@ enum Start {
     Settings,
 }
 
-/// The sidebar's opener while the sidebar is a drawer, then the bold "Preview" label, then the preview settings.
+/// The sidebar's opener while the sidebar is a drawer, then the bold "Telar Preview" label, then the preview settings.
 fn start(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let arrangement = state.arrangement();
     let state = state.clone();
