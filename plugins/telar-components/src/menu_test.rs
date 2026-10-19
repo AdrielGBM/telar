@@ -1115,3 +1115,76 @@ fn a_row_s_shortcut_shows_as_the_platform_writes_it() {
         "a Mac names Command, not Control"
     );
 }
+
+/// A row can come and go while its menu is open: hidden, it takes no room and the keyboard passes over it; shown, it is there without the menu opening again.
+#[test]
+fn a_row_comes_and_goes_with_what_it_acts_on_while_the_menu_is_open() {
+    use telar::NamedKey;
+
+    crate::test_support::fresh_layout_runtime();
+    telar::focus::clear();
+    let shown = signal(false);
+    let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
+    let sink = seen.clone();
+    let structured = Children::new(move || {
+        let mut slots = Slots::new();
+        let row = |label: &'static str, shown: Reactive<bool>| {
+            crate::list::item(
+                crate::list::ItemProps::props()
+                    .label(Reactive::of(move || label.to_string()))
+                    .shown(shown)
+                    .build(),
+                Children::default(),
+            )
+        };
+        slots.push(None, row("Rename", Reactive::of(|| true))?);
+        slots.push(
+            None,
+            crate::list::separator(
+                crate::list::SeparatorProps::props()
+                    .shown(Reactive::of(move || shown.get()))
+                    .build(),
+                Children::default(),
+            )?,
+        );
+        slots.push(None, row("Restore", Reactive::of(move || shown.get()))?);
+        slots.push(None, row("Delete", Reactive::of(|| true))?);
+        Ok(slots)
+    });
+    let item = menu(
+        MenuProps::props()
+            .label("Actions")
+            .on_select(Rc::new(move |i| sink.set(Some(i))))
+            .build(),
+        structured,
+    )
+    .unwrap();
+    compute_layout(
+        item.layout_node(),
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let mut tree = ComponentList::new(item);
+    telar::focus::focus_next();
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    settle(&tree);
+    assert!(!telar::testing::texts(&tree).contains(&"Restore".to_string()));
+
+    shown.set(true);
+    settle(&tree);
+    assert!(
+        telar::testing::texts(&tree).contains(&"Restore".to_string()),
+        "shown without opening the menu again"
+    );
+    shown.set(false);
+    settle(&tree);
+    assert!(!telar::testing::texts(&tree).contains(&"Restore".to_string()));
+    route(&mut tree, &named(NamedKey::ArrowDown));
+    route(&mut tree, &named(NamedKey::Enter));
+    assert_eq!(
+        seen.get(),
+        Some(3),
+        "the hidden rule and row are passed over"
+    );
+}

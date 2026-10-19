@@ -8,8 +8,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use telar::{
     Accessible, AlignItems, BorderRadius, Children, Color, Container, LayoutError, LayoutItem,
-    LayoutStyle, Margin, NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle, StyledContainer,
-    Text, TextWrap, box_item,
+    LayoutStyle, Lazy, Margin, NodeId, Props, Reactive, RectStyle, RwSignal, ShapeStyle,
+    StyledContainer, Text, TextWrap, box_item,
     focus::{FocusId, Role},
     signal, use_context,
 };
@@ -409,6 +409,9 @@ pub struct ItemProps {
     /// Fired when the row is committed, on top of whatever the enclosing list does with the index.
     #[props(some, default)]
     pub on_press: Option<Rc<dyn Fn()>>,
+    /// Whether the row is in the list. A hidden row takes no room and the keyboard passes over it, yet keeps its position, so a row can come and go with what it acts on while its menu stays open.
+    #[props(some, into, default)]
+    pub shown: Option<Reactive<bool>>,
 }
 
 /// What a row tells a reader beyond being a row of its list.
@@ -431,11 +434,15 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         hint,
         shortcut,
         on_press,
+        shown,
     } = props;
     let list = use_context::<ListContext>();
     let index = list.as_ref().map(|ctx| {
-        let disabled = disabled.clone();
-        ctx.claim(Reactive::of(move || !disabled.get()), label.clone())
+        let (disabled, shown) = (disabled.clone(), shown.clone());
+        ctx.claim(
+            Reactive::of(move || shown.as_ref().is_none_or(Reactive::get) && !disabled.get()),
+            label.clone(),
+        )
     });
     if let Some(bare) = declared_placeholder(&list) {
         return bare;
@@ -538,7 +545,7 @@ pub fn item(props: ItemProps, children: Children) -> Result<Box<dyn LayoutItem>,
         Some(ticked) => row.toggled(move || ticked.get()),
         None => row,
     };
-    Ok(box_item(row))
+    shown_while(box_item(row), shown)
 }
 
 /// A row's box and paint in the list it is in — the wash under the cursor, the selection's, the pointer moving the cursor in a menu — around `content`, laid start to end.
@@ -651,11 +658,15 @@ fn look_of(list: &Option<ListContext>) -> RowLook {
 
 /// A rule between groups of rows. Registered like a row so it takes a position in the list, and unreachable so the keyboard passes straight over it.
 #[derive(Props)]
-pub struct SeparatorProps {}
+pub struct SeparatorProps {
+    /// Whether the rule is in the list, as an [`item`]'s `shown` says for a row.
+    #[props(some, into, default)]
+    pub shown: Option<Reactive<bool>>,
+}
 
 /// A rule between groups of rows. Never takes the keyboard cursor.
 pub fn separator(
-    _props: SeparatorProps,
+    props: SeparatorProps,
     _children: Children,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let list = use_context::<ListContext>();
@@ -676,7 +687,22 @@ pub fn separator(
         vec![],
     )?
     .styled_by(rule_box);
-    Ok(box_item(rule))
+    shown_while(box_item(rule), props.shown)
+}
+
+/// `piece` as it is, or, given `shown`, drawn and laid out only while that holds. Built already, so it has claimed its position in the list by the time it is first hidden.
+fn shown_while(
+    piece: Box<dyn LayoutItem>,
+    shown: Option<Reactive<bool>>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let Some(shown) = shown else {
+        return Ok(piece);
+    };
+    Ok(box_item(Lazy::new(
+        LayoutStyle::column(),
+        move || shown.get(),
+        move || Ok(vec![piece]),
+    )?))
 }
 
 /// A heading over the rows beneath it. Also unreachable: it names a group, it is not one of its members.
