@@ -907,3 +907,21 @@ fn a_style_amendment_reshapes_the_bar() {
         Some(telar::Color::rgb(0.9, 0.1, 0.1))
     );
 }
+
+/// A pane collapsed to a size keeps that much of itself, such as a panel's strip of tabs, and its own size waits to come back.
+#[test]
+fn a_pane_collapsed_to_a_size_keeps_that_much() {
+    let size = signal(200.0f32);
+    let collapsed = signal(true);
+    let split = Split::build(
+        SplitPaneProps::props()
+            .size(size)
+            .collapsed(collapsed)
+            .collapsed_size(40.0)
+            .build(),
+    );
+    assert_eq!(split.applied(), 40.0);
+    collapsed.set(false);
+    telar::relayout_if_dirty();
+    assert_eq!(split.applied(), 200.0);
+}

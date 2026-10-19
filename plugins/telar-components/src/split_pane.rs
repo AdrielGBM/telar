@@ -218,6 +218,9 @@ pub struct SplitPaneProps {
     /// Bound collapsed state. `None` (the default) is uncontrolled. A collapsed pane is zero-sized while [`size`](Self::size) keeps its last value.
     #[props(some, into, default)]
     pub collapsed: Option<RwSignal<bool>>,
+    /// How much of the sized pane stays while it is collapsed, in px along the split: a panel folded down to its strip of tabs, which a press brings back. `0.0` (the default) folds it away entirely.
+    #[props(default)]
+    pub collapsed_size: f32,
     /// Whether a double-click or Enter on the splitter collapses the sized pane. On by default.
     #[props(default = true)]
     pub collapsible: bool,
@@ -252,6 +255,7 @@ pub fn split_pane(
         min_fraction,
         max_fraction,
         collapsed,
+        collapsed_size,
         collapsible,
         divider,
         step,
@@ -282,7 +286,10 @@ pub fn split_pane(
     let fixed = move || {
         let style = LayoutStyle::column().flex_shrink(0.0);
         if collapsed.get() {
-            return style.shown(false);
+            return match collapsed_size > 0.0 {
+                true => direction.sized(style, collapsed_size),
+                false => style.shown(false),
+            };
         }
         let style = direction.at_least(direction.sized(style, size.get()), limits.min_dimension());
         match limits.max_dimension() {
@@ -309,7 +316,7 @@ pub fn split_pane(
         SizedPane::Second => (second_rect, first_rect),
     };
     let applied = move || match collapsed.get() {
-        true => 0.0,
+        true => collapsed_size.max(0.0),
         false => direction.main(sized_rect.get()),
     };
     let total = move || applied() + direction.main(other_rect.get()) + bar_thickness();
