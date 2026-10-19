@@ -1141,3 +1141,86 @@ fn a_clear_colour_change_repaints_the_whole_surface() {
         frac * 100.0
     );
 }
+
+fn card_clip() -> DrawCommand {
+    DrawCommand::PushClip {
+        rect: Rect::new(100.0, 100.0, 400.0, 200.0),
+        radius: Default::default(),
+    }
+}
+
+fn card_below_its_clip() -> DrawCommand {
+    filled(
+        100.0,
+        150.0,
+        400.0,
+        400.0,
+        Color::from_rgb_u8(240, 240, 240),
+    )
+}
+
+fn indicator(color: Color) -> DrawCommand {
+    filled(450.0, 400.0, 60.0, 60.0, color)
+}
+
+/// A card runs on under the clip that shows its top, as the last row of a scrolled list does, and a change past the clip falls on the part of the card it hides. The card reaches the damage, so it is drawn, but only where its clip meets the damage: nowhere, rather than over the whole clip, where it would paint over the title it carries, which lies outside the damage and is not drawn again.
+#[test]
+fn a_clip_beside_the_damage_draws_nothing_of_what_it_holds() {
+    let clear = Some(Color::from_rgb_u8(20, 20, 28));
+    let scene = |color| {
+        vec![
+            card_clip(),
+            card_below_its_clip(),
+            filled(120.0, 170.0, 300.0, 100.0, Color::from_rgb_u8(30, 60, 160)),
+            DrawCommand::PopClip,
+            indicator(color),
+        ]
+    };
+    let Some((incremental, fresh)) = after_and_from_scratch(
+        (&scene(Color::from_rgb_u8(40, 160, 80)), clear),
+        (&scene(Color::from_rgb_u8(240, 200, 60)), clear),
+        "clip-beside-damage test",
+    ) else {
+        return;
+    };
+    let frac = diverging_fraction(&incremental, &fresh);
+    assert!(
+        frac < 0.003,
+        "the frame diverged from a full repaint over {:.3}% of the surface",
+        frac * 100.0
+    );
+}
+
+/// The same card inside a layer, which composites where its clip meets the damage: nowhere, rather than over the whole damage, where the part of the card the clip hides would cover what was drawn under it.
+#[test]
+fn a_layer_in_a_clip_beside_the_damage_composites_nothing() {
+    let clear = Some(Color::from_rgb_u8(20, 20, 28));
+    let scene = |color| {
+        vec![
+            indicator(color),
+            card_clip(),
+            DrawCommand::PushLayer {
+                opacity: 0.9,
+                backdrop_blur: 0.0,
+                blend: BlendMode::Normal,
+                mask: renderer_core::LayerMask::None,
+            },
+            card_below_its_clip(),
+            DrawCommand::PopLayer,
+            DrawCommand::PopClip,
+        ]
+    };
+    let Some((incremental, fresh)) = after_and_from_scratch(
+        (&scene(Color::from_rgb_u8(40, 160, 80)), clear),
+        (&scene(Color::from_rgb_u8(240, 200, 60)), clear),
+        "layer-beside-damage test",
+    ) else {
+        return;
+    };
+    let frac = diverging_fraction(&incremental, &fresh);
+    assert!(
+        frac < 0.003,
+        "the frame diverged from a full repaint over {:.3}% of the surface",
+        frac * 100.0
+    );
+}

@@ -327,26 +327,37 @@ fn hw_damage_with_clear_enabled() -> bool {
     *V.get_or_init(|| std::env::var("TELAR_HW_DAMAGE").as_deref() != Ok("0"))
 }
 
+/// What of the target a draw may touch: where its clip meets the frame's damage.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Visible {
+    Whole,
+    Within(geometry_core::Rect),
+    Nowhere,
+}
+
+fn visible(
+    scissor: Option<geometry_core::Rect>,
+    dirty_scissor: Option<geometry_core::Rect>,
+) -> Visible {
+    match (scissor, dirty_scissor) {
+        (None, None) => Visible::Whole,
+        (Some(rect), None) | (None, Some(rect)) => Visible::Within(rect),
+        (Some(clip), Some(dirty)) => clip
+            .intersect(dirty)
+            .map_or(Visible::Nowhere, Visible::Within),
+    }
+}
+
 fn cull_bounds(
     bounds: geometry_core::Rect,
     scissor: Option<geometry_core::Rect>,
     dirty_scissor: Option<geometry_core::Rect>,
 ) -> bool {
-    if !renderer_core::culling::overlaps(bounds.x, bounds.y, bounds.width, bounds.height, scissor) {
-        return true;
+    match visible(scissor, dirty_scissor) {
+        Visible::Whole => false,
+        Visible::Within(rect) => !bounds.overlaps(rect),
+        Visible::Nowhere => true,
     }
-    if let Some(ds) = dirty_scissor
-        && !renderer_core::culling::overlaps(
-            bounds.x,
-            bounds.y,
-            bounds.width,
-            bounds.height,
-            Some(ds),
-        )
-    {
-        return true;
-    }
-    false
 }
 
 // Width and height are at least 1, since wgpu rejects empty scissors.

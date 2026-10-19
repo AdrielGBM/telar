@@ -181,14 +181,6 @@ fn texel_copy(texture: &wgpu::Texture, origin: wgpu::Origin3d) -> wgpu::TexelCop
     }
 }
 
-// A layer's mini-layer can be larger than the dirty region and composites at opacity over the parent, so without confinement it re-blends over the preserved previous frame and accumulates opacity every frame. A `None` dirty scissor means no damage, so the composite keeps its own clip.
-fn confine_to_dirty(scissor: Option<Rect>, dirty: Option<Rect>) -> Option<Rect> {
-    match dirty {
-        None => scissor,
-        Some(ds) => Some(scissor.and_then(|s| s.intersect(ds)).unwrap_or(ds)),
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Prime {
     None,
@@ -2105,23 +2097,16 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
                     );
                     render_pass.draw_indexed(*index_start..*index_end, 0, 0..1);
                 }
-                DrawStep::SetScissor { rect } => {
-                    let clipped_rect = match (*rect, dirty_scissor) {
-                        (r, None) => r,
-                        (None, Some(ds)) => Some(ds),
-                        (Some(r), Some(ds)) => r.intersect(ds).or(Some(r)),
-                    };
-                    match clipped_rect {
-                        None => {
-                            render_pass.set_scissor_rect(0, 0, target_w, target_h);
-                        }
-                        Some(r) => {
-                            let (x, y, w, h) =
-                                physical_scissor(r, target_w, target_h, self.scale_factor);
-                            render_pass.set_scissor_rect(x, y, w, h);
-                        }
+                DrawStep::SetScissor { rect } => match visible(*rect, dirty_scissor) {
+                    Visible::Whole => render_pass.set_scissor_rect(0, 0, target_w, target_h),
+                    Visible::Within(r) => {
+                        let (x, y, w, h) =
+                            physical_scissor(r, target_w, target_h, self.scale_factor);
+                        render_pass.set_scissor_rect(x, y, w, h);
                     }
-                }
+                    // Culling already dropped every draw under a clip beside the damage; an empty scissor holds the same for any step it could not.
+                    Visible::Nowhere => render_pass.set_scissor_rect(0, 0, 0, 0),
+                },
                 DrawStep::SetShaderClip {
                     viewport_bind_group,
                 } => {
@@ -2304,6 +2289,14 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         root_view: &wgpu::TextureView,
         composite: Composite<'_>,
     ) {
+        // Confined to the damage only at the top level, since a nested composite writes into a parent layer in that layer's coordinate space, where the window-space dirty rect does not apply. A layer can be larger than the damage and composites at opacity over the preserved previous frame, so unconfined it would blend over it again every frame.
+        let scissor = match parent {
+            None => visible(composite.scissor, ctx.dirty_scissor),
+            Some(_) => visible(composite.scissor, None),
+        };
+        if scissor == Visible::Nowhere {
+            return;
+        }
         // A masked composite binds its source where a blend reads its backdrop, and blends fixed-function (see `CompositePipeline::prepare_mask`).
         let backdrop = crate::composite::blend_shader_mode(composite.blend)
             .filter(|_| composite.mask.is_none())
@@ -2342,12 +2335,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         if let Some(group) = composite.mask.or(backdrop.as_ref()) {
             blit.set_bind_group(2, group, &[]);
         }
-        // Only a top-level composite: a nested one writes into a parent layer in that layer's coordinate space, where the window-space dirty rect does not apply.
-        let scissor = match parent {
-            None => confine_to_dirty(composite.scissor, ctx.dirty_scissor),
-            Some(_) => composite.scissor,
-        };
-        if let Some(s) = scissor {
+        if let Visible::Within(s) = scissor {
             let (x, y, w, h) = physical_scissor(s, target_w, target_h, self.scale_factor);
             blit.set_scissor_rect(x, y, w, h);
         }
