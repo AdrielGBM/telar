@@ -301,3 +301,18 @@ fn a_restored_selection_beats_a_requested_id_and_component() {
     let state = WorkshopState::new(entries(), &request);
     assert_eq!(state.selection().peek().as_deref(), Some(SECONDARY));
 }
+
+/// The canvas shows the panels and a matrix or a docs page folds them, until each is told otherwise, which it then keeps.
+#[test]
+fn each_view_keeps_whether_it_folds_the_panels() {
+    let state = WorkshopState::new(entries(), &PreviewRequest::default());
+    let (view, folded) = (state.view(), state.panel_collapsed());
+    assert!(!folded.peek(), "the canvas shows them");
+    view.set(ViewMode::Matrix);
+    assert!(folded.peek(), "a matrix folds them");
+    folded.set(false);
+    view.set(ViewMode::Docs);
+    assert!(folded.peek(), "a docs page folds them too");
+    view.set(ViewMode::Matrix);
+    assert!(!folded.peek(), "and the matrix kept them unfolded");
+}

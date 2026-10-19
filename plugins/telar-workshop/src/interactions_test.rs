@@ -342,6 +342,7 @@ fn a_preview_without_a_play_says_how_to_give_it_one() {
 fn away_from_the_canvas_the_panel_offers_to_show_it_and_runs_the_play_there() {
     let mut workshop = Workshop::open(PASSING);
     workshop.click(Role::Tab, "Matrix");
+    workshop.click(Role::Button, "Unfold the panels");
     assert!(workshop.draws("The play runs on the canvas"));
     workshop.click(Role::Button, "Show the canvas");
     workshop.next_turn();

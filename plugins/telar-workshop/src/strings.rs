@@ -100,6 +100,9 @@ pub(crate) const OPEN_IN_CANVAS: &str = "open_in_canvas";
 pub(crate) const OPEN_IN_EDITOR: &str = "open_in_editor";
 pub(crate) const OUTLINE: &str = "outline";
 pub(crate) const PANELS: &str = "panels";
+pub(crate) const FOLD_PANELS: &str = "fold_panels";
+pub(crate) const HIDE_PANELS: &str = "hide_panels";
+pub(crate) const UNFOLD_PANELS: &str = "unfold_panels";
 pub(crate) const PANICKED: &str = "panicked";
 pub(crate) const PLAY_FAILED: &str = "play_failed";
 pub(crate) const PLAY_FAILED_AT: &str = "play_failed_at";
@@ -252,11 +255,13 @@ static CATALOG: Catalog = Catalog {
         english!(FIND, "Find a preview or command"),
         english!(FIND_IN, "Find a preview or command in ", { arg }),
         english!(FOCUS_CELL, "Focus ", { arg }),
+        english!(FOLD_PANELS, "Fold the panels"),
         english!(FULLSCREEN, "Fullscreen canvas"),
         english!(GRID, "Grid"),
         english!(GROUP_CANVAS, "Canvas"),
         english!(GROUP_NAVIGATE, "Navigate"),
         english!(GROUP_VIEW, "View"),
+        english!(HIDE_PANELS, "Hide the panels"),
         english!(HIGH_CONTRAST, "High contrast"),
         english!(INTERACTIONS, "Interactions"),
         english!(KEYBOARD_SHORTCUTS, "Keyboard shortcuts"),
@@ -435,6 +440,7 @@ static CATALOG: Catalog = Catalog {
         english!(TOGGLE_PANELS, "Show or hide the panels"),
         english!(TOGGLE_RULERS, "Show or hide the rulers"),
         english!(TOGGLE_SIDEBAR, "Show or hide the sidebar"),
+        english!(UNFOLD_PANELS, "Unfold the panels"),
         english!(UNSET, "Unset"),
         english!(UNSET_ARG, "Unset ", { arg }),
         english!(VIEW, "View"),

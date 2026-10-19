@@ -176,7 +176,7 @@ fn each_splitter_is_named_and_reports_the_room_its_pane_has() {
 #[test]
 fn collapsed_panes_keep_their_sizes_for_when_they_open() {
     telar::hot_restore_json(
-        r#"{"@workshop/sidebar.collapsed":"true","@workshop/panel.collapsed":"true","@workshop/sidebar.width":"300.0"}"#,
+        r#"{"@workshop/sidebar.collapsed":"true","@workshop/panel.collapsed":"{\"canvas\":true,\"matrix\":true,\"docs\":true}","@workshop/sidebar.width":"300.0"}"#,
     );
     let runtime = LocalApp(WorkshopApp::new(entries()));
     let tree = lay_out(&runtime.0);
@@ -186,12 +186,13 @@ fn collapsed_panes_keep_their_sizes_for_when_they_open() {
         "a folded sidebar is not announced"
     );
     assert_eq!(runtime.0.entries.len(), 2);
-    assert_eq!(
-        splitter(&runtime, &tree, "Resize the panels")
-            .value
-            .unwrap()
-            .now,
-        0.0
+    let folded = splitter(&runtime, &tree, "Resize the panels")
+        .value
+        .unwrap()
+        .now;
+    assert!(
+        folded > 0.0 && folded < f64::from(crate::panels::HEADER_HEIGHT) + 4.0,
+        "folded down to the strip of tabs: {folded}"
     );
     assert!(
         find_text(&tree, "primary body"),

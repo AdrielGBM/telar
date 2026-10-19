@@ -6,6 +6,7 @@ mod actions;
 mod controls;
 mod editors;
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -15,19 +16,24 @@ use telar::{
     Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, ShapeStyle, Slots, StyledContainer,
     box_item, children, effect, memo, signal, track_layout,
 };
-use telar_components::{ButtonProps, ButtonVariant, ItemProps, Tab, button, item, tab_list};
+use telar_components::{
+    ButtonProps, ButtonVariant, IconButtonProps, ItemProps, Tab, button, icon_button, item,
+    metrics, tab_list,
+};
 use telar_devtools::{
     WORKBENCH_GRID, accessibility_panel, inspection_toggles, inspector_panel, use_workbench_tokens,
     workbench_fill,
 };
+use telar_icons::icon;
 
 pub(crate) use controls::arg_table;
 
 use crate::more_menu::{Rows, more_button};
-use crate::state::{PanelTab, WorkshopState};
+use crate::state::{PanelPosition, PanelTab, WorkshopState};
 use crate::strings::{
-    self, ACCESSIBILITY, ACTIONS, BACK_TO_LIVE, CONTROLS, INTERACTIONS, LAYOUT, MEASURE,
-    MORE_PANEL_TOOLS, OUTLINE, PANELS, REPLAY, RESET_ALL, RUN_ON_MOUNT, SNAPSHOT,
+    self, ACCESSIBILITY, ACTIONS, BACK_TO_LIVE, CONTROLS, FOLD_PANELS, HIDE_PANELS, INTERACTIONS,
+    LAYOUT, MEASURE, MORE_PANEL_TOOLS, OUTLINE, PANELS, REPLAY, RESET_ALL, RUN_ON_MOUNT, SNAPSHOT,
+    UNFOLD_PANELS,
 };
 use crate::{interactions, snapshot};
 
@@ -50,6 +56,8 @@ pub(crate) fn panels(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layou
 }
 
 const HEADER_PAD: f32 = WORKBENCH_GRID;
+/// The strip of tabs, which is all of the panels that folding them leaves.
+pub(crate) const HEADER_HEIGHT: f32 = WORKBENCH_GRID * 5.0;
 
 /// The tabs, and what acts on the panel shown at the strip's end. Where the two do not fit side by side the tools fold behind one menu before the tabs give up any room, so the tabs only scroll once the tools have gone.
 fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -64,7 +72,8 @@ fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         };
         let tab = shown.get();
         let tools = tools_widths.with(|widths| widths.get(&tab).copied().unwrap_or(0.0));
-        let room = header.get().width - 2.0 * HEADER_PAD - WORKBENCH_GRID;
+        let fold = metrics::control_height() + WORKBENCH_GRID;
+        let room = header.get().width - 2.0 * HEADER_PAD - WORKBENCH_GRID - fold;
         tools > 0.0 && tabs_width.get() + tools > room
     });
     let tabs_box = move || match folded.get() {
@@ -84,17 +93,60 @@ fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
+            .height(HEADER_HEIGHT)
             .gap(WORKBENCH_GRID)
-            .padding_horizontal(HEADER_PAD)
-            .padding_vertical(WORKBENCH_GRID / 2.0),
+            .padding_horizontal(HEADER_PAD),
         vec![
             box_item(tabs),
             box_item(spacer),
             tools(state, folded, tools_widths)?,
+            fold_button(state)?,
         ],
     )?;
+    unfold_on_a_tab(state);
     laid.set(track_layout(header.layout_node()));
     Ok(box_item(header))
+}
+
+/// Folds the panels down to their strip of tabs, or unfolds them; with the panels on the right, where a strip of tabs has no room to stand on its own, it hides them instead.
+fn fold_button(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let (collapsed, position) = (state.panel_collapsed(), state.panel_position());
+    let shape = move || (collapsed.get(), position.get());
+    let button = ReactiveList::with_style(
+        LayoutStyle::row().flex_shrink(0.0),
+        move || vec![shape()],
+        |shape: &(bool, PanelPosition)| *shape,
+        move |(folded, position)| {
+            let (icon, label) = match (position, folded) {
+                (PanelPosition::Right, _) => (icon!("lucide:chevron-right"), HIDE_PANELS),
+                (PanelPosition::Bottom, false) => (icon!("lucide:chevron-down"), FOLD_PANELS),
+                (PanelPosition::Bottom, true) => (icon!("lucide:chevron-up"), UNFOLD_PANELS),
+            };
+            icon_button(
+                IconButtonProps::props()
+                    .icon(icon)
+                    .label(Reactive::of(move || strings::text(label)))
+                    .on_press(Rc::new(move || {
+                        collapsed.update(|folded| *folded = !*folded)
+                    }))
+                    .build(),
+                Children::default(),
+            )
+        },
+    )?;
+    Ok(box_item(button))
+}
+
+/// Unfolds the panels whenever a tab is chosen, the one already chosen included: choosing a tab is asking to see it.
+fn unfold_on_a_tab(state: &WorkshopState) {
+    let (tab, collapsed) = (state.panel_tab(), state.panel_collapsed());
+    let first = Cell::new(true);
+    effect(move || {
+        let _ = tab.get();
+        if !first.replace(false) {
+            collapsed.set_if_changed(false);
+        }
+    });
 }
 
 fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {

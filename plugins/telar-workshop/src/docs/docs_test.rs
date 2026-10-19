@@ -132,7 +132,9 @@ struct Docs {
 impl Docs {
     fn open(id: &str) -> Self {
         telar::install_default_text_metrics();
-        telar::hot_restore_json(r#"{"@workshop/view":"\"Docs\"","@workshop/panel.size":"160.0"}"#);
+        telar::hot_restore_json(
+            r#"{"@workshop/view":"\"Docs\"","@workshop/panel.size":"160.0","@workshop/panel.collapsed":"{\"canvas\":false,\"matrix\":true,\"docs\":false}"}"#,
+        );
         let runtime = LocalApp(WorkshopApp::new(entries()).select(id));
         let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
         let docs = Self { runtime, tree };

@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 use telar::focus::{self, FocusId};
 use telar::preview::host::{Args, PreviewRequest};
 use telar::preview::{ActionLog, ArgValue, PreviewEntry};
-use telar::{Memo, OwnerId, Route, RwSignal, batch, hot_signal, owner_scope, signal, with_owner};
+use telar::{
+    Memo, OwnerId, Route, RwSignal, batch, effect, hot_signal, owner_scope, signal, with_owner,
+};
 use telar_devtools::Inspection;
 use telar_project::protocol::{docs_key, docs_path, title_path};
 
@@ -51,6 +53,42 @@ pub(crate) const SIDEBAR_MAX_WIDTH: f32 = 400.0;
 pub(crate) const PANEL_DEFAULT_SIZE: f32 = 240.0;
 pub(crate) const PANEL_MIN_SIZE: f32 = 160.0;
 pub(crate) const PANEL_MAX_FRACTION: f32 = 0.6;
+
+/// Whether each view folds the panels down to their tabs: the canvas shows them, while a matrix and a docs page have panels of little use to them and the room to spare.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct FoldedViews {
+    canvas: bool,
+    matrix: bool,
+    docs: bool,
+}
+
+impl Default for FoldedViews {
+    fn default() -> Self {
+        Self {
+            canvas: false,
+            matrix: true,
+            docs: true,
+        }
+    }
+}
+
+impl FoldedViews {
+    fn of(&self, view: ViewMode) -> bool {
+        match view {
+            ViewMode::Canvas => self.canvas,
+            ViewMode::Matrix => self.matrix,
+            ViewMode::Docs => self.docs,
+        }
+    }
+
+    fn set(&mut self, view: ViewMode, folded: bool) {
+        match view {
+            ViewMode::Canvas => self.canvas = folded,
+            ViewMode::Matrix => self.matrix = folded,
+            ViewMode::Docs => self.docs = folded,
+        }
+    }
+}
 
 /// Which of the workshop's views the area beside the sidebar shows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -95,6 +133,7 @@ pub(crate) struct WorkshopState {
     sidebar_collapsed: RwSignal<bool>,
     panel_size: RwSignal<f32>,
     panel_collapsed: RwSignal<bool>,
+    panels_folded: RwSignal<FoldedViews>,
     panel_position: RwSignal<PanelPosition>,
     panel_tab: RwSignal<PanelTab>,
     actions_filter: RwSignal<String>,
@@ -160,7 +199,7 @@ impl WorkshopState {
         }
         keeper.keep(selection, store::keys::SELECTION);
         let every_group = group_ids(&entries).into_iter().collect();
-        Self {
+        let state = Self {
             selection,
             expanded: hot_signal(keys::SIDEBAR_EXPANDED, every_group),
             view: keeper.kept(keys::VIEW, store::keys::VIEW, ViewMode::default()),
@@ -180,10 +219,11 @@ impl WorkshopState {
                 store::keys::PANEL_SIZE,
                 PANEL_DEFAULT_SIZE,
             ),
-            panel_collapsed: keeper.kept(
+            panel_collapsed: signal(false),
+            panels_folded: keeper.kept(
                 keys::PANEL_COLLAPSED,
                 store::keys::PANEL_COLLAPSED,
-                false,
+                FoldedViews::default(),
             ),
             panel_position: keeper.kept(
                 keys::PANEL_POSITION,
@@ -216,7 +256,26 @@ impl WorkshopState {
             args: Rc::default(),
             owner: owner_scope().id(),
             entries,
-        }
+        };
+        state.fold_per_view();
+        state
+    }
+
+    /// Keeps [`panel_collapsed`](Self::panel_collapsed) to what the view shown keeps: a view brought up folds the panels as it last did, and folding them is kept for the view they were folded in.
+    fn fold_per_view(&self) {
+        let (view, collapsed, folded) = (self.view, self.panel_collapsed, self.panels_folded);
+        collapsed.set(folded.peek().of(view.peek()));
+        effect(move || {
+            let shown = view.get();
+            collapsed.set_if_changed(folded.peek().of(shown));
+        });
+        effect(move || {
+            let now = collapsed.get();
+            let shown = view.peek();
+            if folded.peek().of(shown) != now {
+                folded.update(|folded| folded.set(shown, now));
+            }
+        });
     }
 
     pub(crate) fn entries(&self) -> &[PreviewEntry] {
@@ -305,7 +364,7 @@ impl WorkshopState {
         self.panel_size
     }
 
-    /// Whether the panels are folded away. Their size is kept for when they open again.
+    /// Whether the panels are folded down to their tabs, as the view shown keeps them. Their size is kept for when they open again.
     pub(crate) fn panel_collapsed(&self) -> RwSignal<bool> {
         self.panel_collapsed
     }

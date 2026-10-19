@@ -819,3 +819,30 @@ fn a_panel_s_tools_stand_on_the_strip_where_there_is_room() {
             .all(|node| node.name != "More panel tools")
     );
 }
+
+/// The arrow folds the panels down to their tabs, and choosing a tab, the one shown included, brings them back.
+#[test]
+fn the_arrow_folds_the_panels_to_their_tabs_and_a_tab_unfolds_them() {
+    let mut workshop = Workshop::open(entries(), FIRING);
+    workshop.click(Role::Button, "Fold the panels");
+    assert!(
+        workshop
+            .access()
+            .iter()
+            .any(|node| node.name == "Unfold the panels")
+    );
+    assert!(
+        workshop
+            .access()
+            .iter()
+            .any(|node| node.role == Role::Tab && node.name == "Controls"),
+        "the tabs stay"
+    );
+    workshop.click(Role::Tab, "Controls");
+    assert!(
+        workshop
+            .access()
+            .iter()
+            .any(|node| node.name == "Fold the panels")
+    );
+}

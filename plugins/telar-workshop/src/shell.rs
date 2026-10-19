@@ -192,9 +192,12 @@ fn split_workspace(
     regions: &Regions,
     position: PanelPosition,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let direction = match position {
-        PanelPosition::Bottom => SplitDirection::Column,
-        PanelPosition::Right => SplitDirection::Row,
+    let (direction, folded_to) = match position {
+        PanelPosition::Bottom => (
+            SplitDirection::Column,
+            panels::HEADER_HEIGHT + 2.0 * use_theme_tokens().border_width(),
+        ),
+        PanelPosition::Right => (SplitDirection::Row, 0.0),
     };
     split_pane(
         SplitPaneProps::props()
@@ -204,6 +207,7 @@ fn split_workspace(
             .min(PANEL_MIN_SIZE)
             .max_fraction(PANEL_MAX_FRACTION)
             .collapsed(state.panel_collapsed())
+            .collapsed_size(folded_to)
             .divider(false)
             .label(Reactive::of(|| strings::text(RESIZE_PANELS)))
             .build(),
