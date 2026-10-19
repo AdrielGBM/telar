@@ -265,3 +265,28 @@ fn an_empty_frame_after_a_drawn_one_is_blank() {
         assert!(blank.iter().all(|byte| *byte == 0));
     });
 }
+
+/// A frame painted over the one before it, damage and all, comes out as the same frame painted from scratch: the check answers nothing for a square that moves and grows.
+#[test]
+fn frames_painted_over_each_other_match_the_same_frames_painted_whole() {
+    let frames = vec![red_square(10.0), red_square(20.0), red_square(14.0)];
+    assert_eq!(
+        first_partial_redraw_mismatch(&frames, 32, 32, Some(Color::rgba(1.0, 1.0, 1.0, 1.0))),
+        None
+    );
+}
+
+#[test]
+fn differing_pixels_are_boxed_where_they_differ() {
+    let width = 4;
+    let a = vec![0u8; 4 * 4 * 4];
+    let mut b = a.clone();
+    for (x, y) in [(1, 1), (2, 3)] {
+        b[(y * width + x) * 4] = 200;
+    }
+    assert_eq!(
+        differing_box(&a, &b, width as u32),
+        Some(Rect::new(1.0, 1.0, 2.0, 3.0))
+    );
+    assert_eq!(differing_box(&a, &a, width as u32), None);
+}
