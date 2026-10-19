@@ -1,7 +1,7 @@
 //! [`WorkshopRoute`]: where the workshop is, as an address carries it — `/preview/<id>`, `/matrix/<id>` or `/docs/<package>/<title>` — with what is set on it there, so reloading the address, or opening a copy of it, comes back to the same place.
 //!
 //! - `?args=name:value;…`: the selected preview's args that differ from their defaults, each value in [`ArgValue`]'s text form.
-//! - `?axes=mode;dir;arg.size;…`: on a matrix page, the axes picked for a matrix the view builds itself, present, even empty, whenever the view shows one rather than the preview's own.
+//! - `?axes=mode;dir;arg.size;…`: on a matrix page, the axes picked in place of the preview's own matrix, present, even empty, whenever the view shows them; `declared.mode` is an axis that takes only the values the preview's own matrix gives it.
 //! - `?cell=<axis>=<value>--…`: on a matrix page, the focused cell, by its id past the preview's.
 //! - `?globals=key:value;…`: the canvas toolbar's settings, at their defaults adding nothing, which only a copied link carries: they are kept between runs where the workshop keeps its state, and the address the workshop reports as it moves leaves them out.
 //! - `?chrome=0`: the canvas alone.
@@ -16,7 +16,7 @@ use telar::preview::{
 use telar::{Location, Route};
 use telar_project::protocol::title_path;
 
-use crate::matrix::CustomAxis;
+use crate::matrix::{CustomAxis, PickedAxis};
 use crate::settings::{Background, CanvasSettings, CanvasSize, ModeChoice, Zoom};
 
 const PREVIEW: &str = "preview";
@@ -27,6 +27,7 @@ const AXES: &str = "axes";
 const CELL: &str = "cell";
 const GLOBALS: &str = "globals";
 const CHROME: &str = "chrome";
+const DECLARED: &str = "declared.";
 
 /// Which page the workshop shows.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,8 +47,8 @@ pub(crate) struct WorkshopRoute {
     pub(crate) chrome: bool,
     /// The selected preview's args that differ from their defaults, by name.
     pub(crate) args: Vec<(String, ArgValue)>,
-    /// The axes of the matrix the Matrix view builds, while it shows one rather than the preview's own. Only a matrix page has any.
-    pub(crate) axes: Option<Vec<CustomAxis>>,
+    /// The axes the Matrix view varies in place of the preview's own matrix, while it does. Only a matrix page has any.
+    pub(crate) axes: Option<Vec<PickedAxis>>,
     /// The focused matrix cell, by its whole id. Only a matrix page has one.
     pub(crate) cell: Option<String>,
     /// The canvas toolbar's settings, whole. Only a copied link carries them.
@@ -136,37 +137,54 @@ pub(crate) fn cell_past<'a>(id: &str, cell: &'a str) -> Option<&'a str> {
         .filter(|rest| !rest.is_empty())
 }
 
-/// `axes` as an address carries them: one word each, joined by `;`, an arg as `arg.<name>`.
-pub(crate) fn axes_text(axes: &[CustomAxis]) -> String {
+/// `axes` as an address carries them: one word each, joined by `;`, an arg as `arg.<name>`, and one the preview's own matrix narrows prefixed with `declared.`.
+pub(crate) fn axes_text(axes: &[PickedAxis]) -> String {
     axes.iter()
-        .map(|axis| match axis {
-            CustomAxis::Mode => "mode".to_string(),
-            CustomAxis::Locale => "locale".to_string(),
-            CustomAxis::Direction => "dir".to_string(),
-            CustomAxis::ControlSize => "control_size".to_string(),
-            CustomAxis::Viewport => "viewport".to_string(),
-            CustomAxis::Arg(name) => format!("arg.{name}"),
+        .map(|picked| {
+            let word = match &picked.axis {
+                CustomAxis::Mode => "mode".to_string(),
+                CustomAxis::Locale => "locale".to_string(),
+                CustomAxis::Direction => "dir".to_string(),
+                CustomAxis::ControlSize => "control_size".to_string(),
+                CustomAxis::Viewport => "viewport".to_string(),
+                CustomAxis::Arg(name) => format!("arg.{name}"),
+            };
+            match picked.declared {
+                true => format!("{DECLARED}{word}"),
+                false => word,
+            }
         })
         .collect::<Vec<_>>()
         .join(";")
 }
 
 /// The axes [`axes_text`] wrote. A word this workshop does not know is passed over.
-pub(crate) fn parse_axes(text: &str) -> Vec<CustomAxis> {
+pub(crate) fn parse_axes(text: &str) -> Vec<PickedAxis> {
     text.split(';')
         .map(str::trim)
-        .filter_map(|word| match word {
-            "mode" => Some(CustomAxis::Mode),
-            "locale" => Some(CustomAxis::Locale),
-            "dir" => Some(CustomAxis::Direction),
-            "control_size" => Some(CustomAxis::ControlSize),
-            "viewport" => Some(CustomAxis::Viewport),
-            _ => word
-                .strip_prefix("arg.")
-                .filter(|name| !name.is_empty())
-                .map(|name| CustomAxis::Arg(name.to_string())),
+        .filter_map(|word| {
+            let (declared, word) = match word.strip_prefix(DECLARED) {
+                Some(rest) => (true, rest),
+                None => (false, word),
+            };
+            let axis = parse_axis(word)?;
+            Some(PickedAxis { axis, declared })
         })
         .collect()
+}
+
+fn parse_axis(word: &str) -> Option<CustomAxis> {
+    match word {
+        "mode" => Some(CustomAxis::Mode),
+        "locale" => Some(CustomAxis::Locale),
+        "dir" => Some(CustomAxis::Direction),
+        "control_size" => Some(CustomAxis::ControlSize),
+        "viewport" => Some(CustomAxis::Viewport),
+        _ => word
+            .strip_prefix("arg.")
+            .filter(|name| !name.is_empty())
+            .map(|name| CustomAxis::Arg(name.to_string())),
+    }
 }
 
 /// `args` as a link carries them: `name:value`, each value in its text form, joined by `;`.

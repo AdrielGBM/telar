@@ -8,25 +8,28 @@ use telar::preview::snapshot::SnapshotStatus;
 use telar::preview::{Globals, MatrixCell, Play, PreviewEntry};
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Children, Color, ColorScheme, Container,
-    Direction, LayoutError, LayoutItem, LayoutStyle, Lazy, Memo, Reactive, ReactiveList, RectStyle,
-    RelayoutHook, Role, RwSignal, ShapeStyle, Size, StyledContainer, SurfaceFrame, Text, ViewRange,
-    box_item, children, effect, memo, on_cleanup, scroll_progress, signal, use_theme_tokens,
+    Direction, LayoutError, LayoutItem, LayoutStyle, Lazy, Memo, PointerButton, Reactive,
+    ReactiveList, RectStyle, RelayoutHook, Role, RwSignal, ShapeStyle, Size, Slots,
+    StyledContainer, SurfaceFrame, Text, ViewRange, box_item, children, effect, memo, on_cleanup,
+    pointer_position, scroll_progress, signal, use_theme_tokens,
 };
-use telar_components::{BadgeProps, badge};
+use telar_components::{BadgeProps, ItemProps, TooltipProps, badge, item, tooltip};
 use telar_devtools::{
     WORKBENCH_GRID, WORKBENCH_RADIUS, inspection_marks, use_workbench_tokens, workbench_mono,
     workbench_muted,
 };
 
+use super::open_cell;
 use super::plan::cell_label;
 use crate::canvas::inspected::PreviewOnly;
 use crate::guarded::guarded;
+use crate::more_menu::{Asked, menu_layer};
 use crate::settings::CanvasSettings;
 use crate::settle::run_when_sized;
 use crate::state::WorkshopState;
 use crate::strings::{
-    self, A11Y_ERRORS, A11Y_PASSED, A11Y_WARNINGS, BUILD_FAILED, FOCUS_CELL, PLAY_FAILED,
-    PLAY_PASSED, SNAPSHOT_DRIFTED, SNAPSHOT_MATCHES,
+    self, A11Y_ERRORS, A11Y_PASSED, A11Y_WARNINGS, BUILD_FAILED, FOCUS_CELL, OPEN_IN_CANVAS,
+    PLAY_FAILED, PLAY_PASSED, PLAY_SKIPPED, SNAPSHOT_DRIFTED, SNAPSHOT_MATCHES,
 };
 
 pub(super) const CELL_WIDTH: f32 = 480.0;
@@ -41,6 +44,8 @@ pub(crate) enum Status {
     BuildFailed(String),
     PlayPassed,
     PlayFailed(String),
+    /// Not run: the cell changes args the play was written against.
+    PlaySkipped,
     Accessible,
     A11yWarnings(usize),
     A11yErrors(usize),
@@ -53,6 +58,7 @@ enum Tone {
     Good,
     Fair,
     Bad,
+    Quiet,
 }
 
 impl Status {
@@ -61,6 +67,7 @@ impl Status {
             Self::BuildFailed(_) => strings::text(BUILD_FAILED),
             Self::PlayPassed => strings::text(PLAY_PASSED),
             Self::PlayFailed(_) => strings::text(PLAY_FAILED),
+            Self::PlaySkipped => strings::text(PLAY_SKIPPED),
             Self::Accessible => strings::text(A11Y_PASSED),
             Self::A11yWarnings(count) => strings::text_with(A11Y_WARNINGS, &count.to_string()),
             Self::A11yErrors(count) => strings::text_with(A11Y_ERRORS, &count.to_string()),
@@ -73,6 +80,7 @@ impl Status {
         match self {
             Self::PlayPassed | Self::Accessible | Self::SnapshotMatches => Tone::Good,
             Self::A11yWarnings(_) => Tone::Fair,
+            Self::PlaySkipped => Tone::Quiet,
             Self::BuildFailed(_)
             | Self::PlayFailed(_)
             | Self::A11yErrors(_)
@@ -151,8 +159,10 @@ pub(super) fn cell(
     cell: MatrixCell,
     settings: Rc<CanvasSettings>,
     scheme: ColorScheme,
+    plays: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let label = cell_label(&cell);
+    let menu = cell_menu(state, entry, cell.clone())?;
     let focus = state.matrix_focus();
     let id = cell.id.clone();
     let focused = memo(move || focus.with(|focused| focused.as_deref() == Some(id.as_str())));
@@ -187,6 +197,7 @@ pub(super) fn cell(
                     focused,
                     viewport,
                     scale,
+                    plays,
                 },
             )?])
         },
@@ -230,8 +241,56 @@ pub(super) fn cell(
     )?
     .role(Role::Group)
     .a11y_label(move || label.clone())
-    .on_press(focus_this);
-    Ok(box_item(card))
+    .on_press(focus_this.clone())
+    .on_alt_press(move |button| {
+        if button == PointerButton::Secondary {
+            focus_this();
+            menu.open.set(Some(Asked {
+                at: pointer_position().unwrap_or_default(),
+                around: None,
+            }));
+        }
+    });
+    let column = Container::new(
+        LayoutStyle::column().flex_shrink(0.0),
+        vec![box_item(card), menu.layer],
+    )?;
+    Ok(box_item(column))
+}
+
+struct CellMenu {
+    open: RwSignal<Option<Asked>>,
+    layer: Box<dyn LayoutItem>,
+}
+
+/// The menu a secondary press on the cell opens: the preview on the Canvas view as the cell shows it.
+fn cell_menu(
+    state: &WorkshopState,
+    entry: PreviewEntry,
+    cell: MatrixCell,
+) -> Result<CellMenu, LayoutError> {
+    let open = signal(None::<Asked>);
+    let state = state.clone();
+    let rows = Rc::new(move || {
+        let (state, cell) = (state.clone(), cell.clone());
+        Children::new(move || {
+            let (state, cell) = (state.clone(), cell.clone());
+            let mut slots = Slots::new();
+            slots.push(
+                None,
+                item(
+                    ItemProps::props()
+                        .label(strings::reactive(OPEN_IN_CANVAS))
+                        .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
+                        .build(),
+                    Children::default(),
+                )?,
+            );
+            Ok(slots)
+        })
+    });
+    let layer = menu_layer(open, rows)?;
+    Ok(CellMenu { open, layer })
 }
 
 /// Names the cell, and focuses it when pressed: the keyboard's way to what a press anywhere on the cell does.
@@ -280,7 +339,7 @@ fn badges(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErro
     Ok(box_item(row))
 }
 
-/// Why a cell failed, under its badges.
+/// Why a cell failed, under its badges: one line ending in an ellipsis at the cell's edge, so a failed cell stands as tall as its neighbours, with the whole of it in a tooltip and in the panels once the cell is focused.
 fn details(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let lines = ReactiveList::with_style(
         LayoutStyle::column(),
@@ -294,12 +353,20 @@ fn details(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErr
         },
         |detail: &String| detail.clone(),
         |detail| {
+            let line = detail.clone();
             let text = Text::declaring(
-                move || detail.clone(),
+                move || line.clone(),
                 LayoutStyle::new().max_width(CELL_WIDTH),
-                |text| workbench_muted(workbench_mono(text)),
+                |text| workbench_muted(workbench_mono(text)).with_clamp(1, true),
             )?;
-            Ok(box_item(text))
+            let mut slots = Slots::new();
+            slots.push(None, box_item(text));
+            tooltip(
+                TooltipProps::props()
+                    .text(Reactive::of(move || detail.clone()))
+                    .build(),
+                Children::from(slots),
+            )
         },
     )?;
     Ok(box_item(lines))
@@ -311,6 +378,7 @@ fn tone_color(tone: Tone) -> Color {
         Tone::Good => tokens.success(),
         Tone::Fair => tokens.warning(),
         Tone::Bad => tokens.error(),
+        Tone::Quiet => tokens.muted(),
     }
 }
 
@@ -319,6 +387,8 @@ struct Mount {
     focused: Memo<bool>,
     viewport: Size,
     scale: f32,
+    /// Whether the cell runs the preview's play: see [`Plan::plays_in`](super::plan::Plan::plays_in).
+    plays: bool,
 }
 
 /// The preview mounted for `cell` as `cargo telar test` mounts it, under the toolbar's settings, its play run and its accessibility checked on the canvas the play leaves, shown through a frame the inspection panels follow while the cell is focused.
@@ -335,6 +405,7 @@ fn mounted(
         focused,
         viewport,
         scale,
+        plays,
     } = mount;
     let failed = |message: String| {
         checks.update(|checks| checks.insert(0, Status::BuildFailed(message)));
@@ -354,7 +425,7 @@ fn mounted(
     let held: Rc<RefCell<Option<Play>>> = Rc::default();
     let keeper = Rc::clone(&held);
     run_when_sized(play, move |mut play| {
-        checks.set(run_checks(&mut play));
+        checks.set(run_checks(&mut play, plays));
         held.replace(Some(play));
     });
     on_cleanup(move || drop(keeper.take()));
@@ -376,13 +447,16 @@ fn mounted(
     Ok(box_item(stack))
 }
 
-fn run_checks(play: &mut Play) -> Vec<Status> {
+fn run_checks(play: &mut Play, plays: bool) -> Vec<Status> {
     let mut found = Vec::new();
     if play.entry().play.is_some() {
-        found.push(match guarded(|| play.run()) {
-            Ok(Ok(())) => Status::PlayPassed,
-            Ok(Err(error)) => Status::PlayFailed(error.message),
-            Err(panic) => Status::PlayFailed(panic),
+        found.push(match plays.then(|| guarded(|| play.run())) {
+            None => Status::PlaySkipped,
+            Some(outcome) => match outcome {
+                Ok(Ok(())) => Status::PlayPassed,
+                Ok(Err(error)) => Status::PlayFailed(error.message),
+                Err(panic) => Status::PlayFailed(panic),
+            },
         });
     }
     if let Ok(report) = guarded(|| play.check_a11y()) {

@@ -8,6 +8,7 @@ use telar::{
 };
 
 use super::*;
+use crate::matrix::{CustomAxis, PickedAxis};
 use crate::settings::{CanvasSize, Zoom};
 
 fn body(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -53,7 +54,6 @@ fn the_hot_signal_keys_are_stable() {
     assert_eq!(keys::PANEL_COLLAPSED, "@workshop/panel.collapsed");
     assert_eq!(keys::PANEL_POSITION, "@workshop/panel.position");
     assert_eq!(keys::CANVAS_SETTINGS, "@workshop/canvas.settings");
-    assert_eq!(keys::MATRIX_SOURCE, "@workshop/matrix.source");
     assert_eq!(keys::MATRIX_AXES, "@workshop/matrix.axes");
     assert_eq!(keys::MATRIX_FOCUS, "@workshop/matrix.focus");
 }
@@ -73,7 +73,6 @@ fn a_snapshot_carries_every_key() {
         keys::PANEL_COLLAPSED,
         keys::PANEL_POSITION,
         keys::CANVAS_SETTINGS,
-        keys::MATRIX_SOURCE,
         keys::MATRIX_AXES,
         keys::MATRIX_FOCUS,
     ] {
@@ -131,16 +130,23 @@ fn a_restored_selection_wins_over_the_request() {
 fn the_matrix_view_and_its_focused_cell_survive_a_hot_reload() {
     restore(&[
         (keys::VIEW, "\"Matrix\""),
-        (keys::MATRIX_SOURCE, "\"Custom\""),
-        (keys::MATRIX_AXES, r#"["Direction",{"Arg":"ghost"}]"#),
+        (
+            keys::MATRIX_AXES,
+            r#"{"Picked":[{"axis":"Direction","declared":false},{"axis":{"Arg":"ghost"},"declared":true}]}"#,
+        ),
         (keys::MATRIX_FOCUS, "\"fake--button--primary--dir=rtl\""),
     ]);
     let state = WorkshopState::new(entries(), &PreviewRequest::default());
     assert_eq!(state.view().peek(), ViewMode::Matrix);
-    assert_eq!(state.matrix_source().peek(), MatrixSource::Custom);
     assert_eq!(
         state.matrix_axes().peek(),
-        [CustomAxis::Direction, CustomAxis::Arg("ghost".into())]
+        MatrixAxes::Picked(vec![
+            PickedAxis::all_of(CustomAxis::Direction),
+            PickedAxis {
+                axis: CustomAxis::Arg("ghost".into()),
+                declared: true,
+            },
+        ])
     );
     assert_eq!(
         state.matrix_focus().peek().as_deref(),

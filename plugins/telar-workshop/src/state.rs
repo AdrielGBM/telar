@@ -8,17 +8,18 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use telar::focus::{self, FocusId};
-use telar::preview::host::{Args, PreviewRequest};
-use telar::preview::{ActionLog, ArgValue, PreviewEntry};
+use telar::preview::host::{Args, PreviewRequest, mount_preview};
+use telar::preview::{ActionLog, ArgValue, PreviewCtx, PreviewEntry};
 use telar::{
-    Memo, OwnerId, Route, RwSignal, batch, effect, hot_signal, owner_scope, signal, with_owner,
+    Container, LayoutError, LayoutItem, LayoutStyle, Memo, OwnerId, Route, RwSignal, Size,
+    SurfaceCanvas, batch, box_item, effect, hot_signal, owner_scope, signal, with_owner,
 };
 use telar_devtools::Inspection;
 use telar_project::protocol::{docs_key, docs_path, title_path};
 
 use crate::arrangement::Arrangement;
 use crate::interactions::Interactions;
-use crate::matrix::{CustomAxis, MatrixSource};
+use crate::matrix::MatrixAxes;
 use crate::route::{Page, WorkshopRoute, cell_past};
 use crate::settings::CanvasSettings;
 use crate::sidebar::{group_ids, listed};
@@ -40,7 +41,6 @@ pub(crate) mod keys {
     pub(crate) const ACTIONS_FILTER: &str = "@workshop/actions.filter";
     pub(crate) const CANVAS_SETTINGS: &str = "@workshop/canvas.settings";
     pub(crate) const CHROME: &str = "@workshop/chrome";
-    pub(crate) const MATRIX_SOURCE: &str = "@workshop/matrix.source";
     pub(crate) const MATRIX_AXES: &str = "@workshop/matrix.axes";
     pub(crate) const MATRIX_FOCUS: &str = "@workshop/matrix.focus";
     pub(crate) const PLAY_AUTO_RUN: &str = "@workshop/play.auto_run";
@@ -139,8 +139,7 @@ pub(crate) struct WorkshopState {
     actions_filter: RwSignal<String>,
     canvas_settings: RwSignal<CanvasSettings>,
     chrome: RwSignal<bool>,
-    matrix_source: RwSignal<MatrixSource>,
-    matrix_axes: RwSignal<Vec<CustomAxis>>,
+    matrix_axes: RwSignal<MatrixAxes>,
     matrix_focus: RwSignal<Option<String>>,
     remounts: RwSignal<u64>,
     arrangement: Memo<Arrangement>,
@@ -151,6 +150,8 @@ pub(crate) struct WorkshopState {
     snapshots: SnapshotReview,
     search_field: Rc<Cell<Option<FocusId>>>,
     args: Rc<RefCell<HashMap<&'static str, Args>>>,
+    /// The previews built once off screen so their args are known; see [`WorkshopState::learn_args`].
+    learned: Rc<RefCell<HashSet<&'static str>>>,
     // Args are made lazily, often from inside a canvas, and would otherwise be freed with whichever canvas asked first.
     owner: OwnerId,
 }
@@ -238,8 +239,7 @@ impl WorkshopState {
                 CanvasSettings::default(),
             ),
             chrome: hot_signal(keys::CHROME, true),
-            matrix_source: hot_signal(keys::MATRIX_SOURCE, MatrixSource::default()),
-            matrix_axes: hot_signal(keys::MATRIX_AXES, Vec::new()),
+            matrix_axes: hot_signal(keys::MATRIX_AXES, MatrixAxes::default()),
             matrix_focus: hot_signal(keys::MATRIX_FOCUS, None),
             remounts: signal(0),
             arrangement: Arrangement::follow(),
@@ -254,6 +254,7 @@ impl WorkshopState {
             snapshots: SnapshotReview::reading(report),
             search_field: Rc::default(),
             args: Rc::default(),
+            learned: Rc::default(),
             owner: owner_scope().id(),
             entries,
         };
@@ -392,13 +393,8 @@ impl WorkshopState {
         self.chrome
     }
 
-    /// Whether the Matrix view shows the selected preview's own matrix or one built from [`Self::matrix_axes`]. A preview with no matrix of its own always shows the built one.
-    pub(crate) fn matrix_source(&self) -> RwSignal<MatrixSource> {
-        self.matrix_source
-    }
-
-    /// What the Matrix view varies when it builds a matrix itself, for every preview alike.
-    pub(crate) fn matrix_axes(&self) -> RwSignal<Vec<CustomAxis>> {
+    /// What the Matrix view varies: each preview's own matrix, or the axes picked in its place for every preview alike.
+    pub(crate) fn matrix_axes(&self) -> RwSignal<MatrixAxes> {
         self.matrix_axes
     }
 
@@ -414,9 +410,9 @@ impl WorkshopState {
         let mut route = route_of(&entry, view, self.chrome.get());
         route.args = edited_args(&self.args(&entry));
         if view == ViewMode::Matrix {
-            route.axes = match self.matrix_source.get().shown_for(&entry) {
-                MatrixSource::Custom => Some(self.matrix_axes.get()),
-                MatrixSource::Preview => None,
+            route.axes = match self.matrix_axes.get() {
+                MatrixAxes::Picked(picked) => Some(picked),
+                MatrixAxes::Declared => None,
             };
             route.cell = self
                 .matrix_focus
@@ -457,10 +453,8 @@ impl WorkshopState {
                 self.set_args(&entry, &route.args);
             }
             if let Some(axes) = &route.axes {
-                self.matrix_axes.set_if_changed(axes.clone());
-                if entry.matrix.is_some() {
-                    self.matrix_source.set_if_changed(MatrixSource::Custom);
-                }
+                self.matrix_axes
+                    .set_if_changed(MatrixAxes::Picked(axes.clone()));
             }
             if let Some(cell) = &route.cell {
                 self.matrix_focus.set_if_changed(Some(cell.clone()));
@@ -545,6 +539,22 @@ impl WorkshopState {
         self.actions
     }
 
+    /// Builds `entry` once off screen, the first time it is asked for, so the args it reads as it builds are known where nothing has mounted it yet, such as among a matrix's axes: an arg the preview reads rather than declares is known only once a build has read it.
+    pub(crate) fn learn_args(&self, entry: &PreviewEntry) {
+        if !self.learned.borrow_mut().insert(entry.id) {
+            return;
+        }
+        let ctx =
+            PreviewCtx::for_entry_with(entry, self.args(entry)).with_actions(ActionLog::new());
+        let entry = *entry;
+        let built = with_owner(Some(self.owner), || {
+            SurfaceCanvas::new(Size::new(400.0, 300.0), move || {
+                mount_preview(&entry, ctx, |_| nothing(), None)
+            })
+        });
+        drop(built);
+    }
+
     /// The args `entry`'s canvas mounts it with and its controls list: one handle per preview for as long as the workshop lives, so both sides share it, with the overrides kept across a hot reload under the preview's id.
     pub(crate) fn args(&self, entry: &PreviewEntry) -> Args {
         self.args
@@ -553,6 +563,10 @@ impl WorkshopState {
             .or_insert_with(|| with_owner(Some(self.owner), || Args::for_entry(entry)))
             .clone()
     }
+}
+
+fn nothing() -> Result<Box<dyn LayoutItem>, LayoutError> {
+    Ok(box_item(Container::new(LayoutStyle::new(), Vec::new())?))
 }
 
 fn route_of(entry: &PreviewEntry, view: ViewMode, chrome: bool) -> WorkshopRoute {

@@ -8,7 +8,7 @@ use telar::{
 };
 
 use super::*;
-use crate::matrix::CustomAxis;
+use crate::matrix::{CustomAxis, MatrixAxes, PickedAxis};
 use crate::route::Page;
 use crate::settings::CanvasSettings;
 use crate::settings::ModeChoice;
@@ -101,10 +101,11 @@ fn the_address_follows_the_args_as_they_are_edited_and_reset() {
 fn the_address_carries_the_matrix_view_s_axes_and_focused_cell() {
     let state = workshop();
     state.view().set(ViewMode::Matrix);
-    assert_eq!(shown(), ["/matrix/fake--button--primary?axes="]);
-    state
-        .matrix_axes()
-        .set(vec![CustomAxis::Mode, CustomAxis::Arg("tone".into())]);
+    assert_eq!(shown(), ["/matrix/fake--button--primary"]);
+    state.matrix_axes().set(MatrixAxes::Picked(vec![
+        PickedAxis::all_of(CustomAxis::Mode),
+        PickedAxis::all_of(CustomAxis::Arg("tone".into())),
+    ]));
     state
         .matrix_focus()
         .set(Some(format!("{PRIMARY}--mode=dark--tone=loud")));
@@ -127,7 +128,8 @@ fn a_workshop_started_at_its_address_comes_back_to_where_it_was() {
         .set("label", ArgValue::Text("Hi".into()))
         .unwrap();
     state.view().set(ViewMode::Matrix);
-    state.matrix_axes().set(vec![CustomAxis::Direction]);
+    let direction = MatrixAxes::Picked(vec![PickedAxis::all_of(CustomAxis::Direction)]);
+    state.matrix_axes().set(direction.clone());
     state
         .matrix_focus()
         .set(Some(format!("{SECONDARY}--dir=rtl")));
@@ -142,7 +144,7 @@ fn a_workshop_started_at_its_address_comes_back_to_where_it_was() {
         reloaded.args(&entry).overrides(),
         [("label".to_string(), ArgValue::Text("Hi".into()))]
     );
-    assert_eq!(reloaded.matrix_axes().peek(), [CustomAxis::Direction]);
+    assert_eq!(reloaded.matrix_axes().peek(), direction);
     assert_eq!(
         reloaded.matrix_focus().peek().as_deref(),
         Some("fake--button--secondary--dir=rtl")

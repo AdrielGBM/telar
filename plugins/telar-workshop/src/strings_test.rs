@@ -11,8 +11,7 @@ fn every_string_has_an_english_default() {
         (SHOW_MATRIX, "Show the matrix"),
         (TOGGLE_MEASURE, "Show or hide the measure"),
         (TOGGLE_OUTLINE, "Show or hide the outline"),
-        (MATRIX_OWN, "The preview's matrix"),
-        (MATRIX_CUSTOM, "Custom axes"),
+        (RESET_AXES, "Reset the axes"),
         (PLAY_PASSED, "Play passed"),
         (SNAPSHOT_DRIFTED, "Snapshot drifted"),
         (PREVIEWS, "Previews"),
@@ -69,10 +68,6 @@ fn a_message_naming_an_arg_puts_the_arg_in() {
     assert_eq!(text_with(UNSET_ARG, "note"), "Unset note");
     assert_eq!(text_with(SOURCE_OF, "Primary"), "Source of Primary");
     assert_eq!(text_with(A11Y_ERRORS, "2"), "A11y errors: 2");
-    assert_eq!(
-        text_with(MATRIX_NAMED, "themes"),
-        "The preview's themes matrix"
-    );
 }
 
 #[test]

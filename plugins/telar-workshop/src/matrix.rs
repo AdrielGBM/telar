@@ -7,29 +7,31 @@ mod plan;
 
 use std::rc::Rc;
 
-use telar::preview::{Matrices, Matrix, MatrixCell, PreviewEntry, control_size_word};
+use telar::preview::host::ArgState;
+use telar::preview::{Axis, Matrices, Matrix, MatrixCell, PreviewEntry, control_size_word};
 use telar::{
-    Accessible, AlignItems, Children, Color, ColorScheme, Container, JustifyContent, LayoutError,
-    LayoutItem, LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle, Role, RwSignal,
-    ShapeStyle, StyledContainer, Text, batch, box_item, children, effect, signal,
-    use_resolved_scheme, use_theme_tokens,
+    Accessible, AlignItems, Children, Clip, ClippedItem, ColorScheme, Container, JustifyContent,
+    LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle,
+    Role, RwSignal, ShapeStyle, Slots, StyledContainer, Text, TextWrap, batch, box_item, children,
+    signal, use_resolved_scheme, use_theme_tokens,
 };
-use telar_components::{
-    ButtonProps, ButtonVariant, CheckboxProps, Tab, button, checkbox, tab_list,
-};
+use telar_components::{IconButtonProps, ItemProps, SeparatorProps, icon_button, item, separator};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_muted};
+use telar_icons::icon;
 
-pub(crate) use plan::{CustomAxis, MatrixSource};
+pub(crate) use plan::{CustomAxis, MatrixAxes, PickedAxis};
 
 use self::cell::CELL_OUTER_WIDTH;
-use self::plan::{GLOBAL_AXES, Grid, MATRIX_WARN_AT, Plan, Problem, grid, toggled, varied_args};
+use self::plan::{
+    GLOBAL_AXES, Grid, MATRIX_WARN_AT, Plan, Problem, declared_axes, grid, varied_args,
+};
 use crate::canvas::{HEADER_HEIGHT, states};
+use crate::more_menu::more_button;
 use crate::settings::{CanvasSettings, CanvasSize, ModeChoice};
 use crate::state::{ViewMode, WorkshopState};
 use crate::strings::{
-    self, MATRIX_AXES, MATRIX_CAPPED, MATRIX_CELLS, MATRIX_CUSTOM, MATRIX_EMPTY, MATRIX_INVALID,
-    MATRIX_LARGE, MATRIX_NAMED, MATRIX_NONE, MATRIX_OWN, MATRIX_PICK, MATRIX_SOURCE,
-    OPEN_IN_CANVAS,
+    self, MATRIX_AXES_MENU, MATRIX_CAPPED, MATRIX_CELLS, MATRIX_EMPTY, MATRIX_INVALID,
+    MATRIX_LARGE, MATRIX_NONE, MATRIX_PICK, OPEN_IN_CANVAS, RESET_AXES,
 };
 
 const ROW_HEADING_WIDTH: f32 = WORKBENCH_GRID * 20.0;
@@ -51,6 +53,7 @@ pub(crate) fn matrix(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layou
 }
 
 fn page(state: &WorkshopState, entry: PreviewEntry) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    state.learn_args(&entry);
     let shown: RwSignal<Rc<[MatrixCell]>> = signal(Rc::from([]));
     let column = Container::new(
         workbench_fill(),
@@ -59,36 +62,36 @@ fn page(state: &WorkshopState, entry: PreviewEntry) -> Result<Box<dyn LayoutItem
     Ok(box_item(column))
 }
 
+/// As tall as the canvas header, so switching views leaves the header where it was: the preview's name, the button opening the focused cell in the canvas, and the axes behind a menu.
 fn header(
     state: &WorkshopState,
     entry: PreviewEntry,
     shown: RwSignal<Rc<[MatrixCell]>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let title = format!("{} / {}", entry.title, entry.name);
+    let name = format!("{} / {}", entry.title, entry.name);
     let title = Text::declaring(
-        move || title.clone(),
+        move || name.clone(),
         LayoutStyle::new().min_width(0.0),
-        |text| text.with_font_weight(600),
+        |text| text.with_font_weight(600).with_text_wrap(TextWrap::NoWrap),
+    )?;
+    let title = Container::new(
+        LayoutStyle::new().flex_grow(1.0).min_width(0.0),
+        children![ClippedItem::new(box_item(title), Clip::both())],
     )?;
     let mut items = children![title];
-    if let Some(matrix) = entry.matrix {
-        items.push(source_switch(state, matrix)?);
-    }
-    items.push(axis_picker(state, entry)?);
-    items.push(box_item(Container::new(
-        LayoutStyle::new().flex_grow(1.0),
-        Vec::new(),
-    )?));
     items.push(open_in_canvas(state, entry, shown)?);
+    let picking = state.clone();
+    items.push(more_button(
+        MATRIX_AXES_MENU,
+        Rc::new(move || axis_rows(&picking, entry)),
+    )?);
     let header = StyledContainer::new(
         LayoutStyle::row()
-            .flex_wrap()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
-            .min_height(HEADER_HEIGHT)
+            .height(HEADER_HEIGHT)
             .padding_horizontal(WORKBENCH_GRID * 1.5)
-            .padding_vertical(WORKBENCH_GRID / 2.0)
-            .gap(WORKBENCH_GRID * 1.5),
+            .gap(WORKBENCH_GRID),
         |_| {
             let tokens = telar_devtools::use_workbench_tokens();
             RectStyle::default().with_fill(tokens.panel_background)
@@ -98,96 +101,133 @@ fn header(
     Ok(box_item(header))
 }
 
-fn source_switch(
-    state: &WorkshopState,
-    matrix: Matrix,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let own = Reactive::of(move || match matrix {
-        Matrix::Named(name) => strings::text_with(MATRIX_NAMED, name),
-        _ => strings::text(MATRIX_OWN),
-    });
-    tab_list(
-        state.matrix_source(),
-        vec![
-            Tab::new(MatrixSource::Preview, own),
-            Tab::new(MatrixSource::Custom, strings::reactive(MATRIX_CUSTOM)),
-        ],
-        Color::TRANSPARENT.into(),
-        Some(strings::reactive(MATRIX_SOURCE)),
-    )
+/// A switch for each axis the matrix can vary, with the values it takes beside it: those of the preview's own matrix are on while it is shown, and turning any changes it into a matrix of the axes picked, which a last row, there while it is, resets.
+fn axis_rows(state: &WorkshopState, entry: PreviewEntry) -> Children {
+    let state = state.clone();
+    Children::new(move || {
+        let mut slots = Slots::new();
+        let args = state.args(&entry).states();
+        let matrices = Matrices::installed();
+        for (axis, label) in pickable(&entry, &args, &matrices) {
+            slots.push(None, axis_row(&state, entry, axis, label)?);
+        }
+        let axes = state.matrix_axes();
+        if entry.matrix.is_some() {
+            let changed =
+                move || Reactive::of(move || !axes.with(|axes| axes.is_declared_for(&entry)));
+            slots.push(
+                None,
+                separator(
+                    SeparatorProps::props().shown(changed()).build(),
+                    Children::default(),
+                )?,
+            );
+            slots.push(
+                None,
+                item(
+                    ItemProps::props()
+                        .label(strings::reactive(RESET_AXES))
+                        .shown(changed())
+                        .on_press(Rc::new(move || axes.set(MatrixAxes::Declared)))
+                        .build(),
+                    Children::default(),
+                )?,
+            );
+        }
+        Ok(slots)
+    })
 }
 
-/// The axes a built matrix can vary, each picked or not, shown while the built matrix is.
-fn axis_picker(
-    state: &WorkshopState,
-    entry: PreviewEntry,
-) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let source = state.matrix_source();
-    let building = state.clone();
-    let picker = ReactiveList::with_style(
-        LayoutStyle::row(),
-        move || match source.get().shown_for(&entry) {
-            MatrixSource::Custom => vec![()],
-            MatrixSource::Preview => Vec::new(),
-        },
-        |_: &()| (),
-        move |()| axes(&building, &entry),
-    )?;
-    Ok(box_item(picker))
-}
-
-fn axes(state: &WorkshopState, entry: &PreviewEntry) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let args = state.args(entry).states();
-    let matrices = Matrices::installed();
-    let varies = |axis: &CustomAxis| {
-        axis.axis(&args, &matrices)
-            .is_some_and(|axis| Matrix::count(&[axis], &matrices) > 1)
+/// The axes `entry`'s matrix can vary, each with its label: the globals that take more than one value and the args with a fixed set of values, and whatever the preview's own matrix varies besides.
+fn pickable(
+    entry: &PreviewEntry,
+    args: &[ArgState],
+    matrices: &Matrices,
+) -> Vec<(CustomAxis, Reactive<String>)> {
+    let declared = declared_axes(entry, matrices);
+    let declares = |axis: &CustomAxis| {
+        declared
+            .iter()
+            .any(|own| CustomAxis::of(own).as_ref() == Some(axis))
     };
-    let mut boxes = Vec::new();
-    for (axis, key) in GLOBAL_AXES.into_iter().filter(|(axis, _)| varies(axis)) {
-        boxes.push(axis_box(state, axis, strings::reactive(key))?);
+    let varies = |axis: &CustomAxis| {
+        axis.axis(args, matrices)
+            .is_some_and(|axis| Matrix::count(&[axis], matrices) > 1)
+    };
+    let mut pickable: Vec<(CustomAxis, Reactive<String>)> = GLOBAL_AXES
+        .into_iter()
+        .filter(|(axis, _)| varies(axis) || declares(axis))
+        .map(|(axis, key)| (axis, strings::reactive(key)))
+        .collect();
+    let mut names = varied_args(args);
+    for axis in declared {
+        if let Axis::Arg(name, _) = axis
+            && !names.contains(name)
+        {
+            names.push(name);
+        }
     }
-    for name in varied_args(&args) {
-        boxes.push(axis_box(
-            state,
+    for name in names {
+        pickable.push((
             CustomAxis::Arg(name.to_string()),
             Reactive::of(move || name.to_string()),
-        )?);
+        ));
     }
-    let group = Container::new(
-        LayoutStyle::row()
-            .flex_wrap()
-            .align_items(AlignItems::CENTER)
-            .gap(WORKBENCH_GRID * 1.5),
-        boxes,
-    )?
-    .role(Role::Group)
-    .a11y_label(|| strings::text(MATRIX_AXES));
-    Ok(box_item(group))
+    pickable
 }
 
-fn axis_box(
+fn axis_row(
     state: &WorkshopState,
+    entry: PreviewEntry,
     axis: CustomAxis,
     label: Reactive<String>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let picked = state.matrix_axes();
-    let checked = signal(false);
+    let axes = state.matrix_axes();
+    let picked_now = move |axis: &CustomAxis| {
+        axes.with(|axes| {
+            axes.picked(&entry, &Matrices::installed())
+                .into_iter()
+                .find(|picked| picked.axis == *axis)
+        })
+    };
     let watched = axis.clone();
-    effect(move || {
-        let on = picked.with(|axes| axes.contains(&watched));
-        checked.set_if_changed(on);
+    let on = Reactive::of(move || picked_now(&watched).is_some());
+    let shown = axis.clone();
+    let args = state.args(&entry).states();
+    let values = Reactive::of(move || {
+        let matrices = Matrices::installed();
+        let picked = PickedAxis {
+            declared: picked_now(&shown).is_some_and(|picked| picked.declared),
+            axis: shown.clone(),
+        };
+        picked
+            .axis_in(declared_axes(&entry, &matrices), &args, &matrices)
+            .map(|axis| axis_values(axis, &entry, &matrices))
+            .unwrap_or_default()
     });
-    let on_toggle: Rc<dyn Fn(bool)> =
-        Rc::new(move |on| picked.update(|axes| *axes = toggled(axes, &axis, on)));
-    checkbox(
-        CheckboxProps::props()
-            .checked(checked)
+    item(
+        ItemProps::props()
             .label(label)
-            .on_toggle(on_toggle)
+            .switch(on)
+            .hint(values)
+            .on_press(Rc::new(move || {
+                let flipped = picked_now(&axis).is_none();
+                let matrices = Matrices::installed();
+                axes.update(|axes| *axes = axes.toggled(&entry, &matrices, &axis, flipped));
+            }))
             .build(),
         Children::default(),
     )
+}
+
+/// The values `axis` takes, as the cells' headings name them.
+fn axis_values(axis: Axis, entry: &PreviewEntry, matrices: &Matrices) -> String {
+    Matrix::expand(&[axis], entry, matrices)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|cell| cell.coordinates.first().map(|(_, value)| value.clone()))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Opens the preview on the Canvas view as the focused cell shows it, offered while a cell shown is focused.
@@ -214,10 +254,10 @@ fn open_in_canvas(
         |cell: &MatrixCell| cell.id.clone(),
         move |cell| {
             let state = opening.clone();
-            button(
-                ButtonProps::props()
+            icon_button(
+                IconButtonProps::props()
+                    .icon(icon!("lucide:square-arrow-out-up-right"))
                     .label(strings::reactive(OPEN_IN_CANVAS))
-                    .variant(ButtonVariant::Ghost)
                     .on_press(Rc::new(move || open_cell(&state, &entry, &cell)))
                     .build(),
                 Children::default(),
@@ -228,12 +268,14 @@ fn open_in_canvas(
 }
 
 /// Shows `entry` on the Canvas view with the toolbar set to `cell`'s globals and its args to the cell's.
-fn open_cell(state: &WorkshopState, entry: &PreviewEntry, cell: &MatrixCell) {
+pub(super) fn open_cell(state: &WorkshopState, entry: &PreviewEntry, cell: &MatrixCell) {
     batch(|| {
         let globals = &cell.globals;
+        // Read before the update: telling a mode for a scheme reads the theme's signals, which the settings' borrow would already hold.
+        let mode = globals.mode.as_deref().map(ModeChoice::for_mode);
         state.canvas_settings().update(|settings| {
-            if let Some(mode) = &globals.mode {
-                settings.mode = ModeChoice::for_mode(mode);
+            if let Some(mode) = mode {
+                settings.mode = mode;
             }
             if let Some(locale) = &globals.locale {
                 settings.locale = Some(locale.clone());
@@ -263,8 +305,7 @@ fn open_cell(state: &WorkshopState, entry: &PreviewEntry, cell: &MatrixCell) {
 /// What the cells are built from: a change to any of it mounts every cell afresh, so each runs its play again in what it now shows.
 #[derive(Clone)]
 struct Asked {
-    source: MatrixSource,
-    axes: Vec<CustomAxis>,
+    axes: MatrixAxes,
     settings: Rc<CanvasSettings>,
     scheme: ColorScheme,
     remounts: u64,
@@ -275,7 +316,6 @@ impl Asked {
     fn key(&self, asked: Option<&str>) -> impl std::hash::Hash + use<> {
         let settings = &self.settings;
         (
-            self.source,
             self.axes.clone(),
             settings.mode.mode(asked, self.scheme),
             settings.locale.clone(),
@@ -299,7 +339,6 @@ fn cells(
         workbench_fill(),
         move || {
             vec![Asked {
-                source: asking.matrix_source().get(),
                 axes: asking.matrix_axes().get(),
                 settings: Rc::new(asking.canvas_settings().get()),
                 scheme: use_resolved_scheme(),
@@ -309,13 +348,7 @@ fn cells(
         move |asked: &Asked| asked.key(entry.env.mode),
         move |asked| {
             let args = building.args(&entry).states();
-            let planned = plan::plan(
-                &entry,
-                asked.source,
-                &asked.axes,
-                &args,
-                &Matrices::installed(),
-            );
+            let planned = plan::plan(&entry, &asked.axes, &args, &Matrices::installed());
             match planned {
                 Ok(plan) => {
                     shown.set(Rc::from(plan.cells.as_slice()));
@@ -356,7 +389,15 @@ fn planned_cells(
     if let Some(warning) = warning(plan) {
         items.push(warning);
     }
-    items.push(table(state, entry, &grid(&plan.cells), &settings, scheme)?);
+    let args = state.args(&entry).states();
+    let plays = |cell: &MatrixCell| plan.plays_in(cell, &args);
+    items.push(table(
+        state,
+        entry,
+        &grid(&plan.cells),
+        (&settings, scheme),
+        &plays,
+    )?);
     let column = Container::new(
         LayoutStyle::column()
             .align_items(AlignItems::FLEX_START)
@@ -398,8 +439,8 @@ fn table(
     state: &WorkshopState,
     entry: PreviewEntry,
     grid: &Grid,
-    settings: &Rc<CanvasSettings>,
-    scheme: ColorScheme,
+    (settings, scheme): (&Rc<CanvasSettings>, ColorScheme),
+    plays: &dyn Fn(&MatrixCell) -> bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let headed = grid.rows.iter().any(|row| row.heading.is_some());
     let mut lines = Vec::new();
@@ -423,6 +464,7 @@ fn table(
                 matrix_cell.clone(),
                 Rc::clone(settings),
                 scheme,
+                plays(matrix_cell),
             )?);
         }
         lines.push(line(items)?);

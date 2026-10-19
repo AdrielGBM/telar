@@ -22,19 +22,90 @@ const CONTROL_SIZES: &[ControlSize] = &[
 ];
 const TOGGLE_VALUES: &[&str] = &["false", "true"];
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub(crate) enum MatrixSource {
+/// What the Matrix view varies: the selected preview's own matrix, or axes picked in its place, starting from the preview's.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(crate) enum MatrixAxes {
     #[default]
-    Preview,
-    Custom,
+    Declared,
+    Picked(Vec<PickedAxis>),
 }
 
-impl MatrixSource {
-    /// What `entry`'s matrix view shows when this is asked for: a preview with no matrix of its own shows the built one.
-    pub(crate) fn shown_for(self, entry: &PreviewEntry) -> Self {
-        match entry.matrix {
-            Some(_) => self,
-            None => Self::Custom,
+/// An axis picked for the matrix, and whether it takes only the values the preview's own matrix gives it rather than every value it has.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(crate) struct PickedAxis {
+    pub(crate) axis: CustomAxis,
+    pub(crate) declared: bool,
+}
+
+impl PickedAxis {
+    pub(crate) fn all_of(axis: CustomAxis) -> Self {
+        Self {
+            axis,
+            declared: false,
+        }
+    }
+
+    /// The axis as `declared`, the axes of the preview's own matrix, narrow it, or as it is with every value.
+    pub(crate) fn axis_in(
+        &self,
+        declared: &[Axis],
+        args: &[ArgState],
+        matrices: &Matrices,
+    ) -> Option<Axis> {
+        let narrowed = declared
+            .iter()
+            .find(|axis| self.declared && CustomAxis::of(axis).as_ref() == Some(&self.axis));
+        match narrowed {
+            Some(axis) => Some(*axis),
+            None => self.axis.axis(args, matrices),
+        }
+    }
+}
+
+/// The axes of `entry`'s own matrix, none where it has none or names one the project does not.
+pub(crate) fn declared_axes(entry: &PreviewEntry, matrices: &Matrices) -> &'static [Axis] {
+    entry
+        .matrix
+        .and_then(|matrix| matrix.axes(matrices).ok())
+        .unwrap_or_default()
+}
+
+impl MatrixAxes {
+    /// The axes the view varies for `entry`, each with whether the preview's own matrix narrows it.
+    pub(crate) fn picked(&self, entry: &PreviewEntry, matrices: &Matrices) -> Vec<PickedAxis> {
+        match self {
+            Self::Declared => declared_axes(entry, matrices)
+                .iter()
+                .filter_map(CustomAxis::of)
+                .map(|axis| PickedAxis {
+                    axis,
+                    declared: true,
+                })
+                .collect(),
+            Self::Picked(picked) => picked.clone(),
+        }
+    }
+
+    /// Whether the view shows `entry`'s own matrix.
+    pub(crate) fn is_declared_for(&self, entry: &PreviewEntry) -> bool {
+        matches!(self, Self::Declared) && entry.matrix.is_some()
+    }
+
+    /// With `axis` picked or not, every value of it taken once it is picked again, and back to the preview's own matrix once that is what is picked.
+    pub(crate) fn toggled(
+        &self,
+        entry: &PreviewEntry,
+        matrices: &Matrices,
+        axis: &CustomAxis,
+        on: bool,
+    ) -> Self {
+        let picked = toggled(&self.picked(entry, matrices), axis, on);
+        let declared = Self::Declared.picked(entry, matrices);
+        let same =
+            picked.len() == declared.len() && picked.iter().all(|axis| declared.contains(axis));
+        match same {
+            true => Self::Declared,
+            false => Self::Picked(picked),
         }
     }
 }
@@ -60,6 +131,19 @@ pub(crate) const GLOBAL_AXES: [(CustomAxis, &str); 5] = [
 ];
 
 impl CustomAxis {
+    /// The axis the view picks for one a preview's own matrix varies; `None` for a kind of axis this workshop does not know.
+    pub(crate) fn of(axis: &Axis) -> Option<Self> {
+        Some(match axis {
+            Axis::Mode(_) | Axis::RegisteredModes => Self::Mode,
+            Axis::Locale(_) => Self::Locale,
+            Axis::Dir(_) => Self::Direction,
+            Axis::Viewport(_) | Axis::ProjectViewports => Self::Viewport,
+            Axis::ControlSize(_) => Self::ControlSize,
+            Axis::Arg(name, _) => Self::Arg(name.to_string()),
+            _ => return None,
+        })
+    }
+
     /// `None` for an arg the preview does not have, or one with no fixed set of values. The locales are the application catalog's, the viewports the project's or, where it names none, the workshop's presets.
     pub(crate) fn axis(&self, args: &[ArgState], matrices: &Matrices) -> Option<Axis> {
         Some(match self {
@@ -87,11 +171,15 @@ impl CustomAxis {
     }
 }
 
-pub(crate) fn toggled(axes: &[CustomAxis], axis: &CustomAxis, picked: bool) -> Vec<CustomAxis> {
-    let mut axes: Vec<CustomAxis> = axes.iter().filter(|held| *held != axis).cloned().collect();
+pub(crate) fn toggled(axes: &[PickedAxis], axis: &CustomAxis, picked: bool) -> Vec<PickedAxis> {
+    let mut axes: Vec<PickedAxis> = axes
+        .iter()
+        .filter(|held| held.axis != *axis)
+        .cloned()
+        .collect();
     if picked {
-        axes.push(axis.clone());
-        axes.sort_by_key(CustomAxis::rank);
+        axes.push(PickedAxis::all_of(axis.clone()));
+        axes.sort_by_key(|picked| picked.axis.rank());
     }
     axes
 }
@@ -128,28 +216,41 @@ pub(crate) struct Plan {
     /// At most [`MATRIX_CELL_CAP`], the first axis outermost.
     pub(crate) cells: Vec<MatrixCell>,
     pub(crate) total: usize,
+    /// Whether the cells are the preview's own matrix rather than one built from the axes picked.
+    pub(crate) own: bool,
 }
 
 impl Plan {
     pub(crate) fn capped(&self) -> bool {
         self.total > self.cells.len()
     }
+
+    /// Whether `cell` runs the preview's play: every cell of the preview's own matrix does, since its author declared the play holds across it, and a cell of one built from the axes picked only where its args are the preview's defaults, which are what the play was written against.
+    pub(crate) fn plays_in(&self, cell: &MatrixCell, args: &[ArgState]) -> bool {
+        self.own
+            || cell.args.iter().all(|(name, value)| {
+                args.iter()
+                    .any(|arg| arg.name == *name && arg.default.as_ref() == Some(value))
+            })
+    }
 }
 
-/// The cells of `entry`'s matrix as `source` asks for it, built from `axes` where that is the built one.
+/// The cells of `entry`'s matrix as `axes` asks for it.
 pub(crate) fn plan(
     entry: &PreviewEntry,
-    source: MatrixSource,
-    axes: &[CustomAxis],
+    axes: &MatrixAxes,
     args: &[ArgState],
     matrices: &Matrices,
 ) -> Result<Plan, Problem> {
-    let expanded = match (source.shown_for(entry), entry.matrix) {
-        (MatrixSource::Preview, Some(matrix)) => matrix.cells(entry, matrices),
-        _ => {
-            let axes: Vec<Axis> = axes
+    let own = axes.is_declared_for(entry);
+    let expanded = match (axes, entry.matrix) {
+        (MatrixAxes::Declared, Some(matrix)) => matrix.cells(entry, matrices),
+        (MatrixAxes::Declared, None) => return Err(Problem::NoMatrix),
+        (MatrixAxes::Picked(picked), _) => {
+            let declared = declared_axes(entry, matrices);
+            let axes: Vec<Axis> = picked
                 .iter()
-                .filter_map(|axis| axis.axis(args, matrices))
+                .filter_map(|axis| axis.axis_in(declared, args, matrices))
                 .collect();
             if axes.is_empty() {
                 return Err(match entry.matrix {
@@ -166,7 +267,7 @@ pub(crate) fn plan(
     }
     let total = cells.len();
     cells.truncate(MATRIX_CELL_CAP);
-    Ok(Plan { cells, total })
+    Ok(Plan { cells, total, own })
 }
 
 /// The cells laid out as the view shows them: a column per value of the last axis, and a row per combination of the others.

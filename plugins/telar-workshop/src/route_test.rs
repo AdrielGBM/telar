@@ -115,9 +115,12 @@ fn a_page_with_nothing_set_is_its_page_alone() {
 fn a_matrix_page_carries_its_axes_and_its_focused_cell() {
     let route = WorkshopRoute {
         axes: Some(vec![
-            CustomAxis::Mode,
-            CustomAxis::Direction,
-            CustomAxis::Arg("size".into()),
+            PickedAxis::all_of(CustomAxis::Mode),
+            PickedAxis {
+                axis: CustomAxis::Direction,
+                declared: true,
+            },
+            PickedAxis::all_of(CustomAxis::Arg("size".into())),
         ]),
         cell: Some("demo--card--a--mode=dark--dir=rtl--size=Large".into()),
         ..WorkshopRoute::new(Page::Matrix("demo--card--a".into()), true)
@@ -125,7 +128,7 @@ fn a_matrix_page_carries_its_axes_and_its_focused_cell() {
     let address = written(&route.to_location());
     assert_eq!(
         address,
-        "/matrix/demo--card--a?axes=mode;dir;arg.size&cell=mode%3Ddark--dir%3Drtl--size%3DLarge"
+        "/matrix/demo--card--a?axes=mode;declared.dir;arg.size&cell=mode%3Ddark--dir%3Drtl--size%3DLarge"
     );
     assert_eq!(WorkshopRoute::from_location(&at(&address)), Some(route));
 }
@@ -159,11 +162,11 @@ fn only_a_matrix_page_reads_axes_and_a_cell_and_a_cell_of_another_preview_is_lef
 #[test]
 fn axes_this_workshop_cannot_build_are_passed_over() {
     assert_eq!(
-        parse_axes("mode; teleport ;arg.;arg.flag;viewport"),
+        parse_axes("mode; teleport ;arg.;arg.flag;declared.;viewport"),
         [
-            CustomAxis::Mode,
-            CustomAxis::Arg("flag".into()),
-            CustomAxis::Viewport
+            PickedAxis::all_of(CustomAxis::Mode),
+            PickedAxis::all_of(CustomAxis::Arg("flag".into())),
+            PickedAxis::all_of(CustomAxis::Viewport),
         ]
     );
     let every = [
@@ -174,7 +177,16 @@ fn axes_this_workshop_cannot_build_are_passed_over() {
         CustomAxis::Viewport,
         CustomAxis::Arg("tone".into()),
     ];
-    assert_eq!(parse_axes(&axes_text(&every)), every);
+    for declared in [false, true] {
+        let picked: Vec<PickedAxis> = every
+            .iter()
+            .map(|axis| PickedAxis {
+                axis: axis.clone(),
+                declared,
+            })
+            .collect();
+        assert_eq!(parse_axes(&axes_text(&picked)), picked);
+    }
 }
 
 #[test]

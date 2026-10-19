@@ -64,17 +64,14 @@ pub(crate) const LAYOUT: &str = "layout";
 pub(crate) const LOCALE: &str = "locale";
 pub(crate) const LOCALE_DEFAULT: &str = "locale_default";
 pub(crate) const MATRIX_AXES: &str = "matrix_axes";
+pub(crate) const MATRIX_AXES_MENU: &str = "matrix_axes_menu";
 pub(crate) const MATRIX_CAPPED: &str = "matrix_capped";
 pub(crate) const MATRIX_CELLS: &str = "matrix_cells";
-pub(crate) const MATRIX_CUSTOM: &str = "matrix_custom";
 pub(crate) const MATRIX_EMPTY: &str = "matrix_empty";
 pub(crate) const MATRIX_INVALID: &str = "matrix_invalid";
 pub(crate) const MATRIX_LARGE: &str = "matrix_large";
-pub(crate) const MATRIX_NAMED: &str = "matrix_named";
 pub(crate) const MATRIX_NONE: &str = "matrix_none";
-pub(crate) const MATRIX_OWN: &str = "matrix_own";
 pub(crate) const MATRIX_PICK: &str = "matrix_pick";
-pub(crate) const MATRIX_SOURCE: &str = "matrix_source";
 pub(crate) const MODE: &str = "mode";
 pub(crate) const MODE_DARK: &str = "mode_dark";
 pub(crate) const MODE_LIGHT: &str = "mode_light";
@@ -109,6 +106,7 @@ pub(crate) const PLAY_FAILED_AT: &str = "play_failed_at";
 pub(crate) const PLAY_NEEDS_CANVAS: &str = "play_needs_canvas";
 pub(crate) const PLAY_NOT_RUN: &str = "play_not_run";
 pub(crate) const PLAY_PASSED: &str = "play_passed";
+pub(crate) const PLAY_SKIPPED: &str = "play_skipped";
 pub(crate) const PLAY_STEPS: &str = "play_steps";
 pub(crate) const PLAY_STEPS_PASSED: &str = "play_steps_passed";
 pub(crate) const PRESET_DESKTOP: &str = "preset_desktop";
@@ -128,6 +126,7 @@ pub(crate) const REQUIRED: &str = "required";
 pub(crate) const RESET: &str = "reset";
 pub(crate) const RESET_ALL: &str = "reset_all";
 pub(crate) const RESET_ARG: &str = "reset_arg";
+pub(crate) const RESET_AXES: &str = "reset_axes";
 pub(crate) const RESIZE_PANELS: &str = "resize_panels";
 pub(crate) const RESIZE_SIDEBAR: &str = "resize_sidebar";
 pub(crate) const ROTATE: &str = "rotate";
@@ -269,6 +268,7 @@ static CATALOG: Catalog = Catalog {
         english!(LOCALE, "Locale"),
         english!(LOCALE_DEFAULT, "Default locale"),
         english!(MATRIX_AXES, "Axes"),
+        english!(MATRIX_AXES_MENU, "Pick the matrix's axes"),
         english!(
             MATRIX_CAPPED,
             "Showing the first ",
@@ -278,18 +278,14 @@ static CATALOG: Catalog = Catalog {
             " cells: narrow the matrix to see the rest"
         ),
         english!(MATRIX_CELLS, "Matrix cells"),
-        english!(MATRIX_CUSTOM, "Custom axes"),
         english!(MATRIX_EMPTY, "This matrix has no cells"),
         english!(MATRIX_INVALID, "This matrix cannot be built: ", { arg }),
         english!(MATRIX_LARGE, { arg }, " cells take a while to mount"),
-        english!(MATRIX_NAMED, "The preview's ", { arg }, " matrix"),
         english!(
             MATRIX_NONE,
             "This preview has no matrix. Pick axes to build one."
         ),
-        english!(MATRIX_OWN, "The preview's matrix"),
         english!(MATRIX_PICK, "Pick axes to build a matrix."),
-        english!(MATRIX_SOURCE, "Matrix shown"),
         english!(MEASURE, "Measure"),
         english!(MODE, "Mode"),
         english!(MODE_DARK, "Dark"),
@@ -335,6 +331,7 @@ static CATALOG: Catalog = Catalog {
         english!(PLAY_NEEDS_CANVAS, "The play runs on the canvas"),
         english!(PLAY_NOT_RUN, "The play has not run on this canvas"),
         english!(PLAY_PASSED, "Play passed"),
+        english!(PLAY_SKIPPED, "Play skipped"),
         english!(PLAY_STEPS, "Play steps"),
         english!(PLAY_STEPS_PASSED, "Steps passed: ", { arg }),
         english!(PRESET_DESKTOP, "Desktop"),
@@ -354,6 +351,7 @@ static CATALOG: Catalog = Catalog {
         english!(RESET, "Reset"),
         english!(RESET_ALL, "Reset all"),
         english!(RESET_ARG, "Reset ", { arg }),
+        english!(RESET_AXES, "Reset the axes"),
         english!(RESIZE_PANELS, "Resize the panels"),
         english!(RESIZE_SIDEBAR, "Resize the sidebar"),
         english!(ROTATE, "Rotate"),

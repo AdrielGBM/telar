@@ -5,17 +5,17 @@ use telar::preview::{
     ArgSpec, ArgValue, Axis, ControlKind, Globals, Matrices, Matrix, Play, PreviewCtx,
     PreviewEntry, PreviewEnv, ViewportPreset,
 };
-use telar::testing::{centre, mount, press, release, route, texts};
+use telar::testing::{centre, mount, named as named_key, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Children, Color, ColorScheme, ComponentList, ControlSize,
-    Direction, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, LocalApp, Rect, Role,
-    Size, SystemPreferences, Text, TextStyle, box_item, focus, for_each_with_matrix,
+    Direction, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect,
+    Role, Size, SystemPreferences, Text, TextStyle, box_item, focus, for_each_with_matrix,
     reset_layout_runtime, set_system_preferences, transform_clip_rect,
 };
 use telar_components::{ButtonProps, ModalProps, button, modal};
 
 use super::cell::{Status, seed, sizing};
-use super::plan::{self, CustomAxis, MatrixSource, Problem, grid, toggled};
+use super::plan::{self, CustomAxis, MatrixAxes, PickedAxis, Problem, grid, toggled};
 use super::*;
 use crate::settings::{Background, CanvasSettings, ModeChoice};
 use crate::state::{PanelTab, WorkshopState};
@@ -25,6 +25,7 @@ const WIDTH: u32 = 1600;
 const HEIGHT: u32 = 1100;
 const DAY: Color = Color::rgb(0.95, 0.9, 0.8);
 const NIGHT: Color = Color::rgb(0.05, 0.1, 0.2);
+const AXES_MENU: &str = "Pick the matrix's axes";
 
 #[derive(Clone)]
 struct Day;
@@ -52,6 +53,16 @@ fn register_modes() {
 fn widget(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     Ok(box_item(Text::new(
         || "widget".to_string(),
+        LayoutStyle::new(),
+        || TextStyle::new(13.0, Color::BLACK),
+    )?))
+}
+
+/// A widget lit or not by an arg it reads as it builds, and declares nowhere else.
+fn lit(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let on = ctx.signal("lit", false);
+    Ok(box_item(Text::new(
+        move || format!("lit {}", on.get()),
         LayoutStyle::new(),
         || TextStyle::new(13.0, Color::BLACK),
     )?))
@@ -106,6 +117,8 @@ const PLAIN: &str = "kit--badge--plain";
 const FAILING: &str = "kit--badge--failing";
 const ASKING: &str = "kit--dialog--asking";
 const COUNTING: &str = "kit--counter--counting";
+const LONG_FAILING: &str = "kit--badge--long-failing";
+const LIT: &str = "kit--badge--lit";
 
 fn entries() -> Vec<PreviewEntry> {
     vec![
@@ -121,6 +134,14 @@ fn entries() -> Vec<PreviewEntry> {
         PreviewEntry::new(FAILING, "badge", "Failing", widget)
             .matrix(Matrix::Axes(&[Axis::Dir(&[Direction::Ltr])]))
             .play(|canvas| canvas.expect_text("gadget")),
+        PreviewEntry::new(LIT, "badge", "Lit", lit),
+        PreviewEntry::new(LONG_FAILING, "badge", "Long failing", widget)
+            .matrix(Matrix::Axes(&[Axis::Dir(&[Direction::Ltr])]))
+            .play(|canvas| {
+                canvas.expect_text(
+                    "a text long enough that the message saying it is missing runs well past one cell",
+                )
+            }),
         PreviewEntry::new(COUNTING, "counter", "Counting", counter)
             .matrix(Matrix::Axes(&[Axis::Dir(&[Direction::Ltr])]))
             .play(|canvas| {
@@ -206,6 +227,62 @@ impl Workshop {
         let (x, y) = centre(self.node(role, name).rect);
         self.send(press(x, y));
         self.send(release(x, y));
+    }
+
+    /// Turns `axis` on or off from the header's menu of axes, which stays open for it, and shuts the menu after.
+    fn pick(&mut self, axis: &str) {
+        self.click(Role::Button, AXES_MENU);
+        let (x, y) = centre(self.axis_row(axis).rect);
+        self.send(press(x, y));
+        self.send(release(x, y));
+        self.send(named_key(NamedKey::Escape));
+    }
+
+    /// The row of the open menu of axes naming `axis`, which reads out the values it takes after it.
+    fn axis_row(&self, axis: &str) -> AccessNode {
+        let named = format!("{axis} ");
+        self.nodes()
+            .into_iter()
+            .find(|node| node.role == Role::MenuItemCheckBox && node.name.starts_with(&named))
+            .unwrap_or_else(|| panic!("no row for {axis} in {:?}", self.nodes()))
+    }
+
+    /// What `axis` takes, as its row in the menu of axes says.
+    fn values(&mut self, axis: &str) -> String {
+        self.click(Role::Button, AXES_MENU);
+        let name = self.axis_row(axis).name;
+        self.send(named_key(NamedKey::Escape));
+        name[axis.len() + 1..].to_string()
+    }
+
+    /// Whether `axis` is on in the header's menu of axes.
+    fn picked(&mut self, axis: &str) -> Option<bool> {
+        self.click(Role::Button, AXES_MENU);
+        let on = self.axis_row(axis).toggled;
+        self.send(named_key(NamedKey::Escape));
+        on
+    }
+
+    fn reset_axes(&mut self) {
+        self.click(Role::Button, AXES_MENU);
+        self.click(Role::MenuItem, "Reset the axes");
+    }
+
+    fn secondary_click(&mut self, role: Role, name: &str) {
+        let (x, y) = centre(self.node(role, name).rect);
+        let button = telar::PointerButton::Secondary;
+        self.send(Event::PointerPressed {
+            x,
+            y,
+            button,
+            source: telar::PointerSource::Mouse,
+        });
+        self.send(Event::PointerReleased {
+            x,
+            y,
+            button,
+            source: telar::PointerSource::Mouse,
+        });
     }
 
     /// The cells shown, by the name of the control that focuses each.
@@ -299,14 +376,14 @@ fn a_preview_with_no_matrix_builds_one_from_the_axes_picked() {
     assert!(workshop.draws("This preview has no matrix. Pick axes to build one."));
     assert!(workshop.cells().is_empty());
 
-    workshop.click(Role::CheckBox, "Direction");
+    workshop.pick("Direction");
     assert_eq!(
         workshop.state().matrix_axes().peek(),
-        [CustomAxis::Direction]
+        MatrixAxes::Picked(vec![PickedAxis::all_of(CustomAxis::Direction)])
     );
     assert_eq!(workshop.cells(), ["Focus dir: ltr", "Focus dir: rtl"]);
 
-    workshop.click(Role::CheckBox, "ghost");
+    workshop.pick("ghost");
     assert_eq!(
         workshop.cells(),
         [
@@ -321,22 +398,53 @@ fn a_preview_with_no_matrix_builds_one_from_the_axes_picked() {
     }
 }
 
+/// The preview's own matrix is where the axes start: picking another changes it into a matrix of the axes picked, those it had keeping its values, and a button brings it back.
 #[test]
-fn a_preview_with_a_matrix_switches_to_one_built_from_the_axes_picked() {
+fn picking_an_axis_changes_the_preview_s_matrix_and_restoring_brings_it_back() {
     let mut workshop = Workshop::open(BOTH_WAYS);
-    workshop.click(Role::Tab, "Custom axes");
+    assert_eq!(workshop.picked("Direction"), Some(true));
+    assert_eq!(workshop.state().matrix_axes().peek(), MatrixAxes::Declared);
+
+    workshop.pick("ghost");
     assert_eq!(
-        workshop.state().matrix_source().peek(),
-        MatrixSource::Custom
+        workshop.state().matrix_axes().peek(),
+        MatrixAxes::Picked(vec![
+            PickedAxis {
+                axis: CustomAxis::Direction,
+                declared: true,
+            },
+            PickedAxis::all_of(CustomAxis::Arg("ghost".into())),
+        ])
     );
+    assert_eq!(workshop.cells().len(), 4);
+
+    workshop.pick("ghost");
+    assert_eq!(
+        workshop.state().matrix_axes().peek(),
+        MatrixAxes::Declared,
+        "back to the axes the preview declares is its own matrix"
+    );
+
+    workshop.pick("Direction");
     assert!(workshop.draws("Pick axes to build a matrix."));
-    workshop.click(Role::CheckBox, "ghost");
-    assert_eq!(
-        workshop.cells(),
-        ["Focus ghost: false", "Focus ghost: true"]
-    );
-    workshop.click(Role::Tab, "The preview's matrix");
+    workshop.reset_axes();
     assert_eq!(workshop.cells(), ["Focus dir: ltr", "Focus dir: rtl"]);
+}
+
+/// An axis the preview's own matrix narrows keeps those values while it stays picked, and takes every value once it is picked again.
+#[test]
+fn an_axis_picked_again_takes_every_value() {
+    let mut workshop = Workshop::open(COUNTING);
+    assert_eq!(workshop.cells(), ["Focus dir: ltr"]);
+    assert_eq!(workshop.values("Direction"), "ltr");
+    workshop.pick("Direction");
+    workshop.pick("Direction");
+    assert_eq!(workshop.cells(), ["Focus dir: ltr", "Focus dir: rtl"]);
+    assert_eq!(workshop.values("Direction"), "ltr, rtl");
+    assert!(matches!(
+        workshop.state().matrix_axes().peek(),
+        MatrixAxes::Picked(_)
+    ));
 }
 
 #[test]
@@ -384,9 +492,10 @@ fn the_first_cell_is_focused_and_a_press_focuses_another_for_the_panels_to_follo
 fn open_in_canvas_shows_the_focused_cell_on_the_canvas_view() {
     let mut workshop = Workshop::open(PLAIN);
     let state = workshop.state().clone();
-    state
-        .matrix_axes()
-        .set(vec![CustomAxis::Direction, CustomAxis::Arg("ghost".into())]);
+    state.matrix_axes().set(MatrixAxes::Picked(vec![
+        PickedAxis::all_of(CustomAxis::Direction),
+        PickedAxis::all_of(CustomAxis::Arg("ghost".into())),
+    ]));
     workshop.settle();
     workshop.click(Role::Button, "Focus dir: rtl · ghost: true");
     workshop.click(Role::Button, "Open in canvas");
@@ -433,8 +542,7 @@ fn the_view_stops_at_the_cap_and_says_how_many_cells_it_left_out() {
     assert_eq!(every.len(), 81, "expanding never caps");
     let capped = plan::plan(
         &entry.matrix(Matrix::Axes(AXES)),
-        MatrixSource::Preview,
-        &[],
+        &MatrixAxes::Declared,
         &[],
         &Matrices::default(),
     )
@@ -532,11 +640,17 @@ fn a_grid_puts_the_last_axis_across_and_the_others_down() {
 
 #[test]
 fn the_axes_picked_nest_the_same_way_whatever_order_they_were_picked_in() {
+    let names = |picked: &[PickedAxis]| {
+        picked
+            .iter()
+            .map(|picked| picked.axis.clone())
+            .collect::<Vec<_>>()
+    };
     let axes = toggled(&[], &CustomAxis::Arg("size".into()), true);
     let axes = toggled(&axes, &CustomAxis::Direction, true);
     let axes = toggled(&axes, &CustomAxis::Mode, true);
     assert_eq!(
-        axes,
+        names(&axes),
         [
             CustomAxis::Mode,
             CustomAxis::Direction,
@@ -544,7 +658,7 @@ fn the_axes_picked_nest_the_same_way_whatever_order_they_were_picked_in() {
         ]
     );
     assert_eq!(
-        toggled(&axes, &CustomAxis::Direction, false),
+        names(&toggled(&axes, &CustomAxis::Direction, false)),
         [CustomAxis::Mode, CustomAxis::Arg("size".into())]
     );
 }
@@ -580,32 +694,45 @@ fn a_built_matrix_varies_the_globals_and_the_args_with_a_fixed_set_of_values() {
 fn what_keeps_a_plan_from_having_cells_is_told_apart() {
     let plain = PreviewEntry::new(PLAIN, "badge", "Plain", widget);
     let none = Matrices::default();
-    let plan_of = |entry: &PreviewEntry, source, axes: &[CustomAxis]| {
-        plan::plan(entry, source, axes, &[], &none)
+    let plan_of = |entry: &PreviewEntry, axes: MatrixAxes| plan::plan(entry, &axes, &[], &none);
+    let picked = |axes: &[CustomAxis]| {
+        MatrixAxes::Picked(axes.iter().cloned().map(PickedAxis::all_of).collect())
     };
     assert_eq!(
-        plan_of(&plain, MatrixSource::Preview, &[]),
+        plan_of(&plain, MatrixAxes::Declared),
         Err(Problem::NoMatrix)
     );
     let themed = plain.matrix(Matrix::Named("themes"));
     assert_eq!(
-        plan_of(&themed, MatrixSource::Preview, &[]),
+        plan_of(&themed, MatrixAxes::Declared),
         Err(Problem::Empty),
         "no mode is registered"
     );
-    assert_eq!(
-        plan_of(&themed, MatrixSource::Custom, &[]),
-        Err(Problem::NoAxes)
-    );
+    assert_eq!(plan_of(&themed, picked(&[])), Err(Problem::NoAxes));
     let unknown = plain.matrix(Matrix::Named("nowhere"));
     assert!(matches!(
-        plan_of(&unknown, MatrixSource::Preview, &[]),
+        plan_of(&unknown, MatrixAxes::Declared),
         Err(Problem::Invalid(_))
     ));
     assert_eq!(
-        plan_of(&plain, MatrixSource::Preview, &[CustomAxis::Direction]).map(|plan| plan.total),
-        Ok(2),
-        "a preview with no matrix of its own shows the built one"
+        plan_of(&plain, picked(&[CustomAxis::Direction])).map(|plan| plan.total),
+        Ok(2)
+    );
+    let narrowed = plain.matrix(Matrix::Axes(&[Axis::Dir(&[Direction::Rtl])]));
+    let direction = |declared| {
+        MatrixAxes::Picked(vec![PickedAxis {
+            axis: CustomAxis::Direction,
+            declared,
+        }])
+    };
+    assert_eq!(
+        plan_of(&narrowed, direction(true)).map(|plan| plan.total),
+        Ok(1),
+        "the preview's own matrix narrows the axis"
+    );
+    assert_eq!(
+        plan_of(&narrowed, direction(false)).map(|plan| plan.total),
+        Ok(2)
     );
 }
 
@@ -680,4 +807,129 @@ fn a_play_that_clicks_sees_the_reactive_result_in_its_cell() {
     let workshop = Workshop::open(COUNTING);
     assert!(workshop.draws("Play passed"), "{:?}", workshop.texts());
     assert!(workshop.draws("Pressed 1"), "{:?}", workshop.texts());
+}
+
+/// A cell of the themes matrix opens on the canvas in its mode, which is told for a scheme from the theme's own signals: read while the settings were held, it panicked.
+#[test]
+fn open_in_canvas_takes_the_focused_cell_s_mode() {
+    register_modes();
+    let mut workshop = Workshop::open(THEMED);
+    let state = workshop.state().clone();
+    workshop.click(Role::Button, "Focus mode: night");
+    workshop.click(Role::Button, "Open in canvas");
+    assert_eq!(state.view().peek(), ViewMode::Canvas);
+    assert_eq!(
+        state.canvas_settings().peek().mode,
+        crate::settings::ModeChoice::for_mode("night")
+    );
+}
+
+/// A play is written against the preview's args, so a matrix built from the axes picked runs it only where they are the defaults, while the preview's own matrix, which its author declared the play holds across, runs it everywhere.
+#[test]
+fn a_picked_arg_axis_runs_the_play_only_where_the_args_are_the_defaults() {
+    let mut workshop = Workshop::open(BOTH_WAYS);
+    workshop.pick("ghost");
+    workshop.next_turn();
+    assert_eq!(workshop.cells().len(), 4);
+    assert_eq!(workshop.count("Play passed"), 2, "{:?}", workshop.texts());
+    assert_eq!(workshop.count("Play skipped"), 2);
+
+    workshop.reset_axes();
+    workshop.next_turn();
+    assert_eq!(workshop.count("Play passed"), 2);
+    assert_eq!(workshop.count("Play skipped"), 0);
+}
+
+/// Why a cell failed takes one line however long it runs, so a failed cell stands as tall as one that passed.
+#[test]
+fn a_cell_s_failure_takes_one_line() {
+    let workshop = Workshop::open(LONG_FAILING);
+    let line = workshop
+        .texts()
+        .into_iter()
+        .find(|text| text.contains("runs well past one cell"))
+        .unwrap_or_else(|| panic!("the failure is shown: {:?}", workshop.texts()));
+    let rect = telar::testing::rect_of(&workshop.tree, &line).expect("drawn");
+    assert!(rect.height < 24.0, "one line, not {rect:?}");
+}
+
+/// An arg the preview reads as it builds, rather than declares, is an axis to pick before the canvas has ever shown the preview: the matrix builds it once off screen to learn it.
+#[test]
+fn an_arg_read_at_build_is_an_axis_without_visiting_the_canvas() {
+    let mut workshop = Workshop::open(LIT);
+    workshop.pick("lit");
+    assert_eq!(workshop.cells(), ["Focus lit: false", "Focus lit: true"]);
+}
+
+#[test]
+fn an_axis_s_tooltip_lists_the_values_it_takes() {
+    let entry = PreviewEntry::new(PLAIN, "badge", "Plain", widget);
+    let values = super::axis_values(
+        Axis::Dir(&[Direction::Ltr, Direction::Rtl]),
+        &entry,
+        &Matrices::default(),
+    );
+    assert_eq!(values, "ltr, rtl");
+}
+
+/// The header stands as tall as the canvas's whatever the matrix can vary, its axes behind a menu rather than wrapped onto more lines.
+#[test]
+fn the_header_is_as_tall_as_the_canvas_header_and_keeps_its_axes_in_a_menu() {
+    let workshop = Workshop::open(BOTH_WAYS);
+    let menu = workshop.node(Role::Button, AXES_MENU).rect;
+    let open = workshop.node(Role::Button, "Open in canvas").rect;
+    let header = crate::canvas::HEADER_HEIGHT;
+    let top = workshop.node(Role::Button, "Focus dir: ltr").rect.y;
+    assert!(
+        menu.y + menu.height <= top - header / 2.0,
+        "{menu:?} over {top}"
+    );
+    assert!(
+        (menu.y - open.y).abs() < 1.0,
+        "on one line: {menu:?} {open:?}"
+    );
+    assert!(
+        workshop
+            .nodes()
+            .iter()
+            .all(|node| node.role != Role::CheckBox),
+        "no axis is picked in the header itself"
+    );
+}
+
+#[test]
+fn a_secondary_press_on_a_cell_opens_it_in_the_canvas() {
+    let mut workshop = Workshop::open(BOTH_WAYS);
+    workshop.secondary_click(Role::Button, "Focus dir: rtl");
+    assert_eq!(
+        workshop.state().matrix_focus().peek().as_deref(),
+        Some("kit--badge--both-ways--dir=rtl")
+    );
+    workshop.click(Role::MenuItem, "Open in canvas");
+    let state = workshop.state();
+    assert_eq!(state.view().peek(), ViewMode::Canvas);
+    assert_eq!(
+        state.canvas_settings().peek().direction,
+        Some(Direction::Rtl)
+    );
+}
+
+/// Turning an axis leaves the menu open, and the row that resets the axes comes and goes in it as they stop and start being the preview's own.
+#[test]
+fn the_reset_row_comes_and_goes_while_the_menu_is_open() {
+    let mut workshop = Workshop::open(BOTH_WAYS);
+    workshop.click(Role::Button, AXES_MENU);
+    let reset = |workshop: &Workshop| {
+        workshop
+            .nodes()
+            .iter()
+            .any(|node| node.role == Role::MenuItem && node.name == "Reset the axes")
+    };
+    assert!(!reset(&workshop));
+    let (x, y) = centre(workshop.axis_row("ghost").rect);
+    workshop.send(press(x, y));
+    workshop.send(release(x, y));
+    assert!(reset(&workshop), "there without opening the menu again");
+    workshop.click(Role::MenuItem, "Reset the axes");
+    assert_eq!(workshop.state().matrix_axes().peek(), MatrixAxes::Declared);
 }
