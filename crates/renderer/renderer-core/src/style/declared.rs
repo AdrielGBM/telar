@@ -35,6 +35,16 @@ pub struct Declared {
 }
 
 impl Declared {
+    /// This declaration with its size settled in pixels against `em_base` and `surface`, for one applied over a style whose own size is not the one its `em` means.
+    pub fn sized_against(&self, em_base: f32, surface: Size) -> Self {
+        Self {
+            font_size: self
+                .font_size
+                .map(|size| TextLength::Px(size.resolve(em_base, surface))),
+            ..self.clone()
+        }
+    }
+
     /// `base` with everything this declares applied over it, on a surface of `surface`: a size in `em` is of `base`'s, a spacing in `em` of the size this resolves to, and a fraction of the surface of `surface`.
     ///
     /// A renderer is handed spans already resolved against their surface (see [`on_surface`](Self::on_surface)), so it passes `Size::ZERO`: pixels and `em` are all it can meet.

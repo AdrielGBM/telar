@@ -116,7 +116,9 @@ pub use error_boundary::{BuildFailure, ErrorBoundary};
 pub use fixed_layer::FixedLayer;
 pub use height_index::HeightIndex;
 pub use image::Image;
-pub use inherit::{Inherited, context, declare, inherited_text_style, undeclare};
+pub use inherit::{
+    AuthoredText, Inherited, author, context, declare, inherited_text_style, undeclare,
+};
 pub use input::Input;
 pub use input_region::{interactive_rects, visible_rect};
 pub use kept::kept;

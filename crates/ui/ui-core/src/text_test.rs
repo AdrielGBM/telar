@@ -668,3 +668,77 @@ fn clipped_lowercase_text_is_centred_in_a_control_by_its_ink() {
         );
     }
 }
+
+fn drawn_style(item: impl LayoutItem + 'static) -> TextStyle {
+    compute_layout(
+        item.layout_node(),
+        AvailableSpace::MaxContent,
+        AvailableSpace::MaxContent,
+    )
+    .unwrap();
+    let tree = ui_tree::ComponentList::new(item);
+    tree.commands()
+        .iter()
+        .find_map(|command| match command {
+            renderer_core::DrawCommand::Text { style, .. } => Some((**style).clone()),
+            _ => None,
+        })
+        .expect("the text is drawn")
+}
+
+fn titled() -> Text {
+    Text::declaring(
+        || "Title".to_string(),
+        LayoutStyle::new(),
+        |inherited| {
+            let size = inherited.font_size * 2.0;
+            inherited.with_font_size(size).with_font_weight(700)
+        },
+    )
+    .unwrap()
+}
+
+/// What the call placing a text authors lands after the text's own style, so it wins where a declaration around it would lose: the weight and size given replace the ones the widget chose, and what it did not name stays the widget's.
+#[test]
+fn what_the_call_authors_wins_over_the_text_s_own_style() {
+    use crate::inherit::AuthoredText;
+    use renderer_core::Declared;
+    reset_layout_runtime();
+    let text = titled().authored_text(|| {
+        Declared::default()
+            .with_font_weight(400)
+            .with_font_size(20.0)
+    });
+    let style = drawn_style(text);
+    assert_eq!((style.font_weight, style.font_size), (400, 20.0));
+}
+
+/// An authored `em` is of the size the text was handed, not of the one its own style worked out: `1.5em` on a title is half again the text around it.
+#[test]
+fn an_authored_em_is_of_the_size_the_text_was_handed() {
+    use crate::inherit::AuthoredText;
+    use renderer_core::{Declared, TextLength};
+    reset_layout_runtime();
+    let handed = crate::inherit::Inherited::initial().text.font_size;
+    let text = titled().authored_text(|| Declared::default().with_font_size(TextLength::Em(1.5)));
+    assert_eq!(drawn_style(text).font_size, handed * 1.5);
+}
+
+/// A container's authoring is inherited the way a declaration is, and a text inside still has the last word on what it names itself, as a style on an element in CSS is inherited by its children without overruling theirs.
+#[test]
+fn what_a_container_authors_is_inherited_and_a_text_inside_still_overrides_it() {
+    use crate::inherit::AuthoredText;
+    use renderer_core::Declared;
+    reset_layout_runtime();
+    let text = titled();
+    let row = crate::Container::new(LayoutStyle::new(), vec![crate::box_item(text)])
+        .unwrap()
+        .authored_text(|| {
+            Declared::default()
+                .with_font_weight(300)
+                .with_letter_spacing(2.0)
+        });
+    let style = drawn_style(row);
+    assert_eq!(style.font_weight, 700);
+    assert_eq!(style.letter_spacing, 2.0);
+}

@@ -77,6 +77,8 @@ reactive_core::surface_local! {
 struct Cascade {
     /// Behind a signal so reading it subscribes the reader; empty until something declares, so an undeclared walk costs one map miss per ancestor.
     declared: FxHashMap<NodeId, RwSignal<Declared>>,
+    /// What the call placing a node said about it, apart from what the node's widget declared, because it lands on the other side of the node's own style: see [`author`].
+    authored: FxHashMap<NodeId, RwSignal<Declared>>,
     /// Bumped only when nodes start or stop declaring, not on value changes, so a value write reruns only its own readers.
     structure: RwSignal<u64>,
     /// The nodes a [`provide_theme`](crate::provide_theme) put a theme of their own on. A walk stops at the nearest one and starts from that theme's root row, so a themed card inside a bar is set the way it would be in a window of its own, rather than in whatever the bar declared for its own text.
@@ -98,6 +100,7 @@ impl Default for Cascade {
     fn default() -> Self {
         Self {
             declared: FxHashMap::default(),
+            authored: FxHashMap::default(),
             structure: signal(0),
             themed: FxHashMap::default(),
             roots: Vec::new(),
@@ -147,35 +150,101 @@ impl Iterator for Lineage {
     }
 }
 
+/// Who said a declaration: the widget that built the node, or the call that placed it.
+#[derive(Clone, Copy)]
+enum Layer {
+    Declared,
+    Authored,
+}
+
+impl Cascade {
+    fn layer(&self, layer: Layer) -> &FxHashMap<NodeId, RwSignal<Declared>> {
+        match layer {
+            Layer::Declared => &self.declared,
+            Layer::Authored => &self.authored,
+        }
+    }
+
+    fn layer_mut(&mut self, layer: Layer) -> &mut FxHashMap<NodeId, RwSignal<Declared>> {
+        match layer {
+            Layer::Declared => &mut self.declared,
+            Layer::Authored => &mut self.authored,
+        }
+    }
+}
+
 /// Records what `node` says for everything beneath it.
 pub fn declare(node: NodeId, declared: Declared) {
-    let existing = with_cascade_ref(|c| c.declared.get(&node).cloned());
+    record(Layer::Declared, node, declared);
+}
+
+/// Forgets what `node` declared, for a node leaving the tree or stopping.
+pub fn undeclare(node: NodeId) {
+    withdraw(Layer::Declared, node);
+}
+
+/// Records what the call that placed `node` says about its text, over whatever the widget behind it says: a text node takes it after its own style, and everything beneath inherits it as it would a declaration.
+pub fn author(node: NodeId, declared: Declared) {
+    record(Layer::Authored, node, declared);
+}
+
+/// What the call placing a widget says about its text, over what the widget itself says: `heading font_weight:normal` keeps the heading's role and size and takes the weight it was given, where a container's declaration around it would lose to the heading's own.
+pub trait AuthoredText: crate::LayoutItem + Sized {
+    /// Re-read when what `declared` reads changes, and withdrawn with the owner that said it.
+    fn authored_text(self, declared: impl Fn() -> Declared + 'static) -> Self {
+        let node = self.layout_node();
+        reactive_core::effect(move || author(node, declared()));
+        self
+    }
+}
+
+impl<T: crate::LayoutItem> AuthoredText for T {}
+
+fn record(layer: Layer, node: NodeId, declared: Declared) {
+    let existing = with_cascade_ref(|c| c.layer(layer).get(&node).cloned());
     match (existing, declared.is_empty()) {
         (Some(sig), false) => {
             if sig.peek() != declared {
                 sig.set(declared);
             }
         }
-        (Some(_), true) => undeclare(node),
+        (Some(_), true) => withdraw(layer, node),
         (None, false) => {
             let structure = with_cascade(|c| {
-                c.declared.insert(node, signal(declared));
+                c.layer_mut(layer).insert(node, signal(declared));
                 c.structure
             });
             // The owner that started declaring is what stops: tying withdrawal to the widget's `Drop` instead raced the path that frees layout nodes.
-            reactive_core::on_cleanup(move || undeclare(node));
+            reactive_core::on_cleanup(move || withdraw(layer, node));
             structure.set(structure.peek().wrapping_add(1));
         }
         (None, true) => {}
     }
 }
 
-/// Forgets what `node` declared, for a node leaving the tree or stopping.
-pub fn undeclare(node: NodeId) {
-    let structure = with_cascade(|c| c.declared.remove(&node).map(|_| c.structure));
+fn withdraw(layer: Layer, node: NodeId) {
+    let structure = with_cascade(|c| c.layer_mut(layer).remove(&node).map(|_| c.structure));
     if let Some(structure) = structure {
         structure.set(structure.peek().wrapping_add(1));
     }
+}
+
+/// `own`, the style the text at `node` settled on, with what the call that placed it authored applied over it. A size in `em` there is of `em_base`, the size the text was handed, as an author's `font_size:1.5em` on a heading means half again the text around it rather than of the heading's own.
+pub(crate) fn authored_over(
+    node: NodeId,
+    own: TextStyle,
+    em_base: impl FnOnce() -> f32,
+) -> TextStyle {
+    let (structure, authored) = with_cascade_ref(|c| (c.structure, c.authored.get(&node).copied()));
+    let _ = structure.get();
+    let Some(authored) = authored else {
+        return own;
+    };
+    let authored = authored.get();
+    let surface = surface_for(&authored);
+    authored
+        .sized_against(em_base(), surface)
+        .over(&own, surface)
 }
 
 /// Re-resolves every walk, for a subtree hung from a different parent: what it inherits is now what its new ancestors declare, and nothing about any one declaration changed to say so.
@@ -226,12 +295,19 @@ pub fn context(node: NodeId) -> Rc<Inherited> {
     let mut chain: Vec<Declared> = Vec::new();
     let mut theme = None;
     for current in lineage(node) {
-        let (declared, themed) = with_cascade_ref(|c| {
+        let (declared, authored, themed) = with_cascade_ref(|c| {
             (
                 c.declared.get(&current).copied(),
+                c.authored.get(&current).copied(),
                 c.themed.get(&current).map(|boundary| boundary.theme),
             )
         });
+        // Ahead of the node's own declaration, so it is applied after it and wins. A node's own authoring is left out: it lands after the node's own style, in `authored_over`, not before it.
+        if current != node
+            && let Some(sig) = authored
+        {
+            chain.push(sig.get());
+        }
         if let Some(sig) = declared {
             chain.push(sig.get());
         }

@@ -255,6 +255,30 @@ impl Text {
             let cell = Rc::clone(&node_cell);
             Rc::new(move || crate::inherit::inherited_text_style_at(cell.get()))
         });
+        let authored = |amend: Rc<dyn Fn(TextStyle) -> TextStyle>| {
+            let cell = Rc::clone(&node_cell);
+            Rc::new(move |handed: TextStyle| {
+                let em_base = handed.font_size;
+                match cell.get() {
+                    Some(node) => crate::inherit::authored_over(node, amend(handed), || em_base),
+                    None => amend(handed),
+                }
+            }) as Rc<dyn Fn(TextStyle) -> TextStyle>
+        };
+        let source = match source {
+            StyleSource::Complete(style_fn) => {
+                let cell = Rc::clone(&node_cell);
+                let inherited = Rc::clone(&inherited);
+                StyleSource::Complete(Rc::new(move || match cell.get() {
+                    Some(node) => {
+                        crate::inherit::authored_over(node, style_fn(), || inherited().font_size)
+                    }
+                    None => style_fn(),
+                }))
+            }
+            StyleSource::Inheriting(amend) => StyleSource::Inheriting(authored(amend)),
+            StyleSource::Fitting(amend, fit) => StyleSource::Fitting(authored(amend), fit),
+        };
         let declared_by = |amend: Rc<dyn Fn(TextStyle) -> TextStyle>| {
             let inherited = Rc::clone(&inherited);
             Rc::new(move || amend(inherited())) as Rc<dyn Fn() -> TextStyle>

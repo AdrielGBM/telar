@@ -22,18 +22,23 @@ impl ViewGen<'_> {
     /// A class carries whatever it was written with. It used to be gated to the paint keys, which is why `@heading { font_size: 22 }` compiled and did nothing at all.
     pub(super) fn effective_attrs(&self, el: &Element) -> Vec<Attr> {
         let mut attrs = el.attributes.clone();
-        for name in el.classes.iter().rev() {
-            if let Some(class) = self.classes.iter().find(|c| &c.name == name) {
-                for prop in &class.props {
-                    attrs.push(Attr {
-                        key: prop.key.clone(),
-                        value: Value::Expr(prop.value.clone()),
-                        value_start: 0,
-                    });
-                }
-            }
-        }
+        attrs.extend(self.class_attrs(&el.classes));
         attrs
+    }
+
+    /// The props `classes` carry, as attributes, the last class's first.
+    pub(super) fn class_attrs(&self, classes: &[String]) -> Vec<Attr> {
+        classes
+            .iter()
+            .rev()
+            .filter_map(|name| self.classes.iter().find(|c| &c.name == name))
+            .flat_map(|class| &class.props)
+            .map(|prop| Attr {
+                key: prop.key.clone(),
+                value: Value::Expr(prop.value.clone()),
+                value_start: 0,
+            })
+            .collect()
     }
 
     /// The `Some(Shadow::new(...))` the `shadow_*` attrs ask for, or `None` when there are none. Each value is emitted as written, so `shadow_blur:$theme.elevation` follows the theme like any other paint value; only an unwritten one takes its default.

@@ -7,7 +7,7 @@ use super::{ChildEmit, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
     /// Chains the annotations an element carries onto the widget it built, through `telar::Accessible`, which every widget with a layout node takes. A component call says them about the item it returns, spelled `a11y_label`/`a11y_lang` there because `label` and `lang` are its own props to declare, and may also say what that item is with a `role:` that only describes it.
-    pub(super) fn accessible_tail(&self, el: &Element, emit: ChildEmit) -> ChildEmit {
+    pub(super) fn accessible_tail(&mut self, el: &Element, emit: ChildEmit) -> ChildEmit {
         let find = |key: &str| el.attributes.iter().find(|a| a.key == key);
         if !crate::registry::is_builtin_tag(&el.tag) {
             let mut calls = String::new();
@@ -21,6 +21,7 @@ impl ViewGen<'_> {
                 &self.role_annotation(find("role"), crate::registry::COMPONENT_ROLE_VALUES),
             );
             calls.push_str(&self.a11y_keyword_call(find("a11y")));
+            calls.push_str(&self.class_authored_text(&el.classes));
             return self.chain_calls(emit, &calls);
         }
         let mut calls = String::new();
@@ -57,6 +58,34 @@ impl ViewGen<'_> {
             ));
         }
         self.chain_calls(emit, &calls)
+    }
+
+    /// The `.authored_text(…)` a component call's classes put on the item it returns: their text properties, applied over what the component says about its own text, where an inline attribute there is a prop. Nothing when they name none.
+    fn class_authored_text(&mut self, classes: &[String]) -> String {
+        let attrs: Vec<Attr> = self
+            .class_attrs(classes)
+            .into_iter()
+            .filter(|attr| crate::registry::is_inheritable_text_attr(&attr.key))
+            .collect();
+        let mut hoists = Vec::new();
+        let modifiers = self.inheritable_modifiers(
+            &attrs,
+            &std::collections::HashMap::new(),
+            &mut hoists,
+            super::text::StyleTarget::Declared,
+        );
+        if modifiers.is_empty() {
+            return String::new();
+        }
+        let closure = format!("move || Declared::default(){modifiers}");
+        format!(
+            ".authored_text({})",
+            super::signals::wrap_signal_clones(
+                &super::text::raw_reactive_values(&attrs),
+                closure,
+                self.theme_access
+            )
+        )
     }
 
     /// A `role:` that only describes what it is written on, by one of `table`'s names or as an expression yielding the `Role`. A value that is neither emits nothing here: the value check has already said why.
