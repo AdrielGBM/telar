@@ -105,9 +105,7 @@ pub(crate) fn without_deferred_closures(expr: &str) -> String {
         match bytes[i] {
             b'(' => {
                 let before = expr[..i].trim_end();
-                let callee =
-                    before.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == ':');
-                keeps.push(crate::registry::keeps_closure(&before[callee.len()..]));
+                keeps.push(crate::registry::keeps_closure(&callee_path(before)));
             }
             b'[' | b'{' => keeps.push(false),
             b')' | b']' | b'}' => {
@@ -209,3 +207,45 @@ pub(crate) fn format_arg_positions(code: &str, ident: &str) -> Vec<usize> {
 #[cfg(all(test, feature = "transpile"))]
 #[path = "lexer_test.rs"]
 mod tests;
+
+/// The path written before a call's `(` at the end of `before`, with its generic arguments (`::<f32>`, `::<dyn Fn()>`) dropped so `Reactive::<f32>::of` reads as `Reactive::of`; empty when what precedes is not a path.
+fn callee_path(before: &str) -> String {
+    let bytes = before.as_bytes();
+    let mut end = bytes.len();
+    let mut path: Vec<u8> = Vec::new();
+    while end > 0 {
+        let b = bytes[end - 1];
+        if b == b'>' {
+            let mut depth = 0usize;
+            let mut at = end;
+            while at > 0 {
+                at -= 1;
+                match bytes[at] {
+                    b'>' if at > 0 && bytes[at - 1] == b'-' => at -= 1,
+                    b'>' => depth += 1,
+                    b'<' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if depth != 0 || !before[..at].ends_with("::") {
+                return String::new();
+            }
+            end = at - 2;
+        } else if is_ident_byte(b) || b == b':' {
+            path.push(b);
+            end -= 1;
+        } else {
+            break;
+        }
+    }
+    if before[..end].trim_end().ends_with('.') {
+        return String::new();
+    }
+    path.reverse();
+    String::from_utf8(path).unwrap_or_default()
+}

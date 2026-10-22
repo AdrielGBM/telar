@@ -84,3 +84,13 @@ fn a_closure_given_to_an_unknown_function_stays() {
         super::without_deferred_closures("std::array::from_fn(|i| v[i]) + helper(|| x.get())");
     assert!(code.contains("v[i]") && code.contains("x.get()"));
 }
+
+#[test]
+fn generic_arguments_do_not_hide_a_closure_keeping_callee() {
+    let kept = super::without_deferred_closures("Reactive::<f32>::of(move || sig.get())");
+    assert!(!kept.contains("sig"));
+    let kept = super::without_deferred_closures("Rc::<dyn Fn() -> f32>::new(move || sig.get())");
+    assert!(!kept.contains("sig"));
+    let run = super::without_deferred_closures("a > (|| sig.get())");
+    assert!(run.contains("sig"));
+}

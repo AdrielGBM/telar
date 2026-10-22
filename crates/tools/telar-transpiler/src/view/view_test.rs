@@ -2102,3 +2102,41 @@ fn a_direct_signal_read_in_a_prop_still_follows_the_signal() {
     let code = prop_code("let sig = signal(0.0f32);", "$sig");
     assert!(code.contains(".value(sig.clone())"), "{code}");
 }
+
+#[test]
+fn a_turbofished_closure_keeping_callee_is_not_wrapped_again() {
+    for callee in [
+        "Reactive::<f32>::of",
+        "Reactive::of::<f32>",
+        "Rc::<dyn Fn() -> f32>::new",
+        "Box::<dyn Fn() -> f32>::new",
+    ] {
+        let code = prop_code(
+            "let x = signal(0.0f32);",
+            &format!("({callee}(move || $x))"),
+        );
+        assert!(!code.contains("Reactive::of({"), "{callee}:\n{code}");
+        assert!(code.contains("move || x.get()"), "{callee}:\n{code}");
+    }
+}
+
+#[test]
+fn a_reactive_constructor_that_stores_its_closure_is_not_wrapped_again() {
+    for call in [
+        "memo(move || $x + 1.0)",
+        "derive(x, |v| v + 1.0)",
+        "derive_pair(x, x, |a, b| a + b)",
+    ] {
+        let code = prop_code("let x = signal(0.0f32);", &format!("({call})"));
+        assert!(
+            !code.contains("move || memo") && !code.contains("move || derive"),
+            "{call}:\n{code}"
+        );
+    }
+}
+
+#[test]
+fn a_method_named_like_a_closure_keeping_callee_is_not_one() {
+    let code = prop_code("let x = signal(0.0f32);", "(table.memo(move || $x))");
+    assert!(code.contains("Reactive::of("), "{code}");
+}
