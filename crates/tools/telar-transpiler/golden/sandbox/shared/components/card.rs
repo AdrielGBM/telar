@@ -80,7 +80,7 @@ pub fn card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box<dy
             }
             }
         );
-        card(CardProps::props().gap(::telar::__preview_arg!(__preview, "gap", 8.0)).__preview_actions(&__preview.actions()).build(), __deferred)?
+        card(CardProps::props().gap(::telar::__preview_arg!(__preview, "gap", ::telar::Int(8))).__preview_actions(&__preview.actions()).build(), __deferred)?
     };
     Ok(Box::new(__node_0))
 }

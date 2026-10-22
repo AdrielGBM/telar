@@ -183,7 +183,7 @@
 1251..1281	4192	`|| telar::set_page_title(None)`
 1337..1357	4376	`ButtonVariant::Ghost`
 1368..1412	4429	`|| telar::window::set_title("Telar sandbox")`
-1820..1840	7604	`ButtonVariant::Ghost`
-1851..1887	7657	`|| telar::set_title_format(bar_rule)`
-1941..1961	7846	`ButtonVariant::Ghost`
-1972..2020	7899	`|| telar::set_title_format(telar::compose_title)`
+1820..1840	7616	`ButtonVariant::Ghost`
+1851..1887	7669	`|| telar::set_title_format(bar_rule)`
+1941..1961	7858	`ButtonVariant::Ghost`
+1972..2020	7911	`|| telar::set_title_format(telar::compose_title)`

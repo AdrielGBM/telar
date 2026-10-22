@@ -362,7 +362,7 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_13));
                         let __node_14 = code_line(CodeLineProps::props().code("on_press:|| set_mode(\"midnight\")").build(), Children::default())?;
@@ -436,7 +436,7 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_16));
                         let __node_18 = code_line(CodeLineProps::props().code("col theme:(if $night { Theme::midnight() } else { Theme::pastel() })").build(), Children::default())?;
@@ -508,7 +508,7 @@ pub fn color(props: ColorProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_20));
                         let __node_22 = code_line(CodeLineProps::props().code("col theme:(…)  ›  children in:ctx   — slot children are built where they are placed").build(), Children::default())?;

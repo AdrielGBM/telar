@@ -114,7 +114,7 @@ pub fn frame_clock(props: FrameClockProps, children: Children) -> Result<Box<dyn
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_5 = code_line(CodeLineProps::props().code("let time = motion::use_frame_time_while(move || running.get());").build(), Children::default())?;

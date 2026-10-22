@@ -115,7 +115,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("box cursor:pointer   ·   crosshair · grab · grabbing · col_resize · row_resize · text · wait · not_allowed").build(), Children::default())?;
@@ -221,7 +221,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_5));
                         let __node_6 = code_line(CodeLineProps::props().code("box track_rect:$handle …      then      box absolute inset_start:$x width:$w").build(), Children::default())?;
@@ -280,7 +280,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_9 = code_line(CodeLineProps::props().code("box on_pointer_move:|x, y| { $at_x.set(x); $at_y.set(y) }").build(), Children::default())?;
@@ -338,7 +338,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_11));
                         let __node_12 = code_line(CodeLineProps::props().code("box on_drag:|x, _| …  on_drag_end:|x, y| …    ·   active_style(fill:…) while the press is held").build(), Children::default())?;
@@ -390,7 +390,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_14));
                         let __node_15 = code_line(CodeLineProps::props().code("box drag_button:secondary,auxiliary     (the primary button is always armed)").build(), Children::default())?;
@@ -466,7 +466,7 @@ pub fn pointer(props: PointerProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_17));
                         let __node_18 = code_line(CodeLineProps::props().code("box on_scroll:|dx, dy| …    ·    on_alt_press:|button| …").build(), Children::default())?;

@@ -90,7 +90,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(6)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("text 'Heading' font_size:18 color:$theme.ink").build(), Children::default())?;
@@ -159,7 +159,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(4.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(4)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_5));
                         let __node_6 = code_line(CodeLineProps::props().code("text 'muted' color:$theme.muted").build(), Children::default())?;
@@ -252,7 +252,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(6)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_9 = code_line(CodeLineProps::props().code("text 'Bold' font_weight:bold   ·   'Note' font_style:italic   ·   '…' text_align:center").build(), Children::default())?;
@@ -321,7 +321,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(6)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_11));
                         let __node_12 = code_line(CodeLineProps::props().code("text 'code' font_family:monospace   ·   text 'set' font_family:'Iosevka, monospace'").build(), Children::default())?;
@@ -382,7 +382,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(6)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_14));
                         let __node_15 = code_line(CodeLineProps::props().code("[[telar.fonts]]   family = 'Telar Test'   src = '../../crates/renderer/renderer-text/test-fonts/TelarTest.ttf'").build(), Children::default())?;
@@ -438,7 +438,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(6)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_17));
                         let __node_18 = code_line(CodeLineProps::props().code("text font_size:5sw letter_spacing:-0.03em   ·   font_size:1.5em   ·   sw sh smin smax em").build(), Children::default())?;
@@ -526,7 +526,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_20));
                         let __node_22 = code_line(CodeLineProps::props().code("text font_variation:(wght $w, opsz 32) transition(font_variation 400ms)   ·   font_features:(tnum, liga 0)").build(), Children::default())?;
@@ -587,7 +587,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_24));
                         let __node_25 = code_line(CodeLineProps::props().code("text '…' lines:2 ellipsis   ·   'label' lines:1 ellipsis").build(), Children::default())?;
@@ -750,7 +750,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_33));
                         let __node_36 = code_line(CodeLineProps::props().code("heading 'Title'      section 'Title' > …children…").build(), Children::default())?;
@@ -807,7 +807,7 @@ pub fn typography(props: TypographyProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_38));
                         let __node_40 = code_line(CodeLineProps::props().code("button label:t!('nav.overview')   ·   text '{t!(\\'greeting\\', name = n)}'").build(), Children::default())?;

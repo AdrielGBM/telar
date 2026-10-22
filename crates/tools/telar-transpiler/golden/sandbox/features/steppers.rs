@@ -49,7 +49,7 @@ pub fn steppers(props: SteppersProps, children: Children) -> Result<Box<dyn Layo
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_0 = {
-                                            let __node_3 = stepper(StepperProps::props().value(qty.clone()).min(0.0).max(10.0).step(1.0).build(), Children::default())?;
+                                            let __node_3 = stepper(StepperProps::props().value(qty.clone()).min(::telar::Int(0)).max(::telar::Int(10)).step(::telar::Int(1)).build(), Children::default())?;
                                             let __text_0 = {
                                                 let qty = qty.clone();
                                                 Text::declaring(
@@ -67,7 +67,7 @@ pub fn steppers(props: SteppersProps, children: Children) -> Result<Box<dyn Layo
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_4 = code_line(CodeLineProps::props().code("stepper value:$qty min:0 max:10 step:1").build(), Children::default())?;
@@ -107,7 +107,7 @@ pub fn steppers(props: SteppersProps, children: Children) -> Result<Box<dyn Layo
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_1 = {
-                                            let __node_7 = stepper(StepperProps::props().value(seats.clone()).min(1.0).max(8.0).step(1.0).on_change(std::rc::Rc::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build(), Children::default())?;
+                                            let __node_7 = stepper(StepperProps::props().value(seats.clone()).min(::telar::Int(1)).max(::telar::Int(8)).step(::telar::Int(1)).on_change(std::rc::Rc::new({ let last_change = last_change.clone(); move |v| last_change.set(format!("stepped to {v:.0}")) })).build(), Children::default())?;
                                             let __text_1 = {
                                                 let last_change = last_change.clone();
                                                 Text::declaring(
@@ -125,7 +125,7 @@ pub fn steppers(props: SteppersProps, children: Children) -> Result<Box<dyn Layo
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_6));
                         let __node_8 = code_line(CodeLineProps::props().code("stepper value:$seats on_change:|v| $last_change.set(…)   (the binding still updates on its own)").build(), Children::default())?;

@@ -124,7 +124,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_11));
                         let __node_15 = code_line(CodeLineProps::props().code("button label:'+1' on_press:|| $clicks += 1      ($x += n desugars to .update)").build(), Children::default())?;
@@ -185,7 +185,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_17));
                         let __node_18 = code_line(CodeLineProps::props().code("box on_press(|| $clicks += 1)      (paren form: delimited, order-independent)").build(), Children::default())?;
@@ -254,7 +254,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_20));
                         let __node_21 = code_line(CodeLineProps::props().code("box fill:$theme.surface_alt hover_style(fill:$theme.primary)      (swap style while hovered)").build(), Children::default())?;
@@ -331,7 +331,7 @@ pub fn buttons(props: ButtonsProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_23));
                         let __node_24 = code_line(CodeLineProps::props().code("box on_hover(|h| $hovering.set(h))   ·   col on_key(|k| …)").build(), Children::default())?;

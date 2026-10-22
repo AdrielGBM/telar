@@ -51,7 +51,7 @@ pub fn indicators(props: IndicatorsProps, children: Children) -> Result<Box<dyn 
                                     let mut __slots = Slots::new();
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
-                                        let __node_3 = progress(ProgressProps::props().value(p.clone()).width(280.0).build(), Children::default())?;
+                                        let __node_3 = progress(ProgressProps::props().value(p.clone()).width(::telar::Int(280)).build(), Children::default())?;
                                         __children.push(box_item(__node_3));
                                         let __row_0 = {
                                             let __text_0 = {
@@ -73,7 +73,7 @@ pub fn indicators(props: IndicatorsProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_6 = code_line(CodeLineProps::props().code("progress value:$p width:280").build(), Children::default())?;
@@ -105,8 +105,8 @@ pub fn indicators(props: IndicatorsProps, children: Children) -> Result<Box<dyn 
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
                                         let __row_1 = {
-                                            let __node_9 = spinner(SpinnerProps::props().size(28.0).build(), Children::default())?;
-                                            let __node_10 = spinner(SpinnerProps::props().size(20.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
+                                            let __node_9 = spinner(SpinnerProps::props().size(::telar::Int(28)).build(), Children::default())?;
+                                            let __node_10 = spinner(SpinnerProps::props().size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build(), Children::default())?;
                                             let __text_1 = {
                                                 Text::declaring(
                                                     || "working…".to_string(),
@@ -123,7 +123,7 @@ pub fn indicators(props: IndicatorsProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_11 = code_line(CodeLineProps::props().code("spinner size:28").build(), Children::default())?;

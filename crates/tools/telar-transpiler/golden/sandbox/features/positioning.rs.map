@@ -807,16 +807,16 @@
 806	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-2885..2892	11861	`section`
-3074..3075	13469	`i`
-3089..3096	13472	`section`
-5384..5385	29285	`i`
-5916..5936	35033	`ButtonVariant::Ghost`
-7942..7949	50673	`caption`
-7966..7976	50727	`Some(note)`
-8004..8008	51033	`note`
-8059..8063	51579	`None`
-8186..8197	52918	`Slot::Empty`
-8409..8424	54398	`Slot::Filled(n)`
-8562..8563	54747	`n`
-8769..8789	56511	`ButtonVariant::Ghost`
+2885..2892	11885	`section`
+3074..3075	13493	`i`
+3089..3096	13496	`section`
+5384..5385	29333	`i`
+5916..5936	35093	`ButtonVariant::Ghost`
+7942..7949	50781	`caption`
+7966..7976	50835	`Some(note)`
+8004..8008	51141	`note`
+8059..8063	51687	`None`
+8186..8197	53026	`Slot::Empty`
+8409..8424	54506	`Slot::Filled(n)`
+8562..8563	54855	`n`
+8769..8789	56619	`ButtonVariant::Ghost`

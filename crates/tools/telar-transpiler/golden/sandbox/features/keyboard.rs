@@ -88,7 +88,7 @@ pub fn keyboard(props: KeyboardProps, children: Children) -> Result<Box<dyn Layo
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_5 = code_line(CodeLineProps::props().code("box role:slider focus_style(…) consumes_keys:arrows on_key:(|key| …)").build(), Children::default())?;

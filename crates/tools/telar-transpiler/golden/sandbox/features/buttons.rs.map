@@ -356,6 +356,6 @@
 1035..1055	3470	`ButtonVariant::Ghost`
 1402..1408	6689	`clicks`
 1675..1695	7903	`ButtonVariant::Ghost`
-2092..2098	10869	`clicks`
-3424..3432	20662	`hovering`
-3553..3557	21841	`keys`
+2092..2098	10881	`clicks`
+3424..3432	20698	`hovering`
+3553..3557	21877	`keys`

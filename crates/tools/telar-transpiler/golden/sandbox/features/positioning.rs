@@ -86,7 +86,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("box absolute inset_top:12 inset_end:12     ·   inset_bottom · inset_start").build(), Children::default())?;
@@ -137,7 +137,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_5));
                         let __node_6 = code_line(CodeLineProps::props().code("box absolute:fill      (what overlay uses; name three edges instead for a floating panel)").build(), Children::default())?;
@@ -229,7 +229,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_10 = code_line(CodeLineProps::props().code("box sticky inset_top:0     ·   a header stops at the end of its section; inset_bottom holds the lower edge").build(), Children::default())?;
@@ -303,7 +303,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_12));
                         let __node_14 = code_line(CodeLineProps::props().code("col height:600 > box sticky inset_top:40     (the track is the containing block the stage stays inside)").build(), Children::default())?;
@@ -408,7 +408,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_16));
                         let __node_21 = code_line(CodeLineProps::props().code("box sticky:$pinned inset_top:40     ·   box clip:$cut     (a bool, a Clip or an Option<Clip>)").build(), Children::default())?;
@@ -469,7 +469,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_23));
                         let __node_25 = code_line(CodeLineProps::props().code("box absolute inset_top:$top inset_start:$start     (the node keeps an effect and re-styles)").build(), Children::default())?;
@@ -527,7 +527,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_27));
                         let __node_28 = code_line(CodeLineProps::props().code("box margin_start:40      (left under LTR, right under RTL — switch the locale to see it)").build(), Children::default())?;
@@ -588,7 +588,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_30));
                         let __node_31 = code_line(CodeLineProps::props().code("box min_height:72        ·   min_width · max_width · max_height").build(), Children::default())?;
@@ -647,7 +647,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_33));
                         let __node_35 = code_line(CodeLineProps::props().code("text text_wrap:nowrap    ·   wrap (the default)").build(), Children::default())?;
@@ -760,7 +760,7 @@ pub fn positioning(props: PositioningProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_37));
                         let __node_41 = code_line(CodeLineProps::props().code("match caption > Some(note) > text …            (no $ — the arm is chosen once)").build(), Children::default())?;

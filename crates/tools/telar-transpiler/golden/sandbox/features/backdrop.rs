@@ -114,7 +114,7 @@ pub fn backdrop(props: BackdropProps, children: Children) -> Result<Box<dyn Layo
                                 }
                                 }
                             );
-                            card(CardProps::props().pad(24.0).build(), __deferred)?
+                            card(CardProps::props().pad(::telar::Int(24)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("box fill:#ffffff59 backdrop_blur:20   (CSS backdrop-filter: blur(10px))").build(), Children::default())?;

@@ -154,7 +154,7 @@ pub fn shadows(props: ShadowsProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().pad(24.0).build(), __deferred)?
+                            card(CardProps::props().pad(::telar::Int(24)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_4));
                         let __node_5 = code_line(CodeLineProps::props().code("box fill:$theme.primary shadow_y:8 shadow_blur:22 shadow_color:$theme.primary").build(), Children::default())?;
@@ -195,7 +195,7 @@ pub fn shadows(props: ShadowsProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().pad(24.0).build(), __deferred)?
+                            card(CardProps::props().pad(::telar::Int(24)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_7));
                         let __node_8 = code_line(CodeLineProps::props().code("box shadow_x:8 shadow_y:8 shadow_blur:4 shadow_color:$theme.warning").build(), Children::default())?;

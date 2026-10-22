@@ -392,5 +392,5 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1448..1454	5539	`picked`
-1853..1859	10003	`action`
-3334..3344	25981	`shade_name`
+1853..1859	10015	`action`
+3334..3344	26017	`shade_name`

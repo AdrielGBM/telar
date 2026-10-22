@@ -110,7 +110,7 @@ pub fn virtual_lists(props: VirtualListsProps, children: Children) -> Result<Box
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_6 = code_line(CodeLineProps::props().code("for note in $notes key note.id virtual estimated_height:64").build(), Children::default())?;
@@ -205,7 +205,7 @@ pub fn virtual_lists(props: VirtualListsProps, children: Children) -> Result<Box
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_15 = code_line(CodeLineProps::props().code("let rows = signal(None::<VirtualRows>);   for … virtual estimated_height:64 overscan:96 rows:$rows   ·   rows.reveal(index, margin)").build(), Children::default())?;

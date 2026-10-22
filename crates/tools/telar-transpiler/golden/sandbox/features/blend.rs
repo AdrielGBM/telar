@@ -132,7 +132,7 @@ pub fn blend(props: BlendProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().pad(24.0).build(), __deferred)?
+                            card(CardProps::props().pad(::telar::Int(24)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("box fill:$theme.warning blend:multiply").build(), Children::default())?;

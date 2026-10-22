@@ -94,7 +94,7 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_4 = code_line(CodeLineProps::props().code("box fill:$accent transition(fill 250ms ease-out)").build(), Children::default())?;
@@ -205,7 +205,7 @@ pub fn transitions(props: TransitionsProps, children: Children) -> Result<Box<dy
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_10));
                         let __node_12 = code_line(CodeLineProps::props().code("box translate_x:$x transition(translate_x 600ms steps(6, jump-end))").build(), Children::default())?;

@@ -217,7 +217,7 @@ pub fn current_place(props: CurrentPlaceProps, children: Children) -> Result<Box
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_4));
                         let __node_5 = code_line(CodeLineProps::props().code("memo(|| use_anchor_at(48.0))   ·   the anchor under a bar fixed over the page, or None").build(), Children::default())?;

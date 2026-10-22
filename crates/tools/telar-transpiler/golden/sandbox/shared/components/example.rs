@@ -78,7 +78,7 @@ pub fn example_preview_0(__preview: &::telar::preview::PreviewCtx) -> Result<Box
                             }
                             }
                         );
-                        card(CardProps::props().gap(10.0).build(), __deferred)?
+                        card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                     };
                     __children.push(box_item(__node_1));
                     let __node_2 = code_line(CodeLineProps::props().code("row justify:between").build(), Children::default())?;

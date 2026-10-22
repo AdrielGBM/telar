@@ -119,7 +119,7 @@ pub fn scroll_timeline(props: ScrollTimelineProps, children: Children) -> Result
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_4 = code_line(CodeLineProps::props().code("col height:800 view_progress:$p view_range:contain  >  box sticky inset_top:40 fill:$tl.sample(p)").build(), Children::default())?;
@@ -191,7 +191,7 @@ pub fn scroll_timeline(props: ScrollTimelineProps, children: Children) -> Result
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_6));
                         let __node_8 = code_line(CodeLineProps::props().code("box view_progress:$p view_range:entry opacity:$p     ·   cover · contain · entry · exit").build(), Children::default())?;

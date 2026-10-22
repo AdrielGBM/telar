@@ -82,7 +82,7 @@ pub fn dialogs(props: DialogsProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_5 = code_line(CodeLineProps::props().code("modal id:\"confirm\"  >  …      open_overlay(\"confirm\")  from anywhere on this surface").build(), Children::default())?;
@@ -147,7 +147,7 @@ pub fn dialogs(props: DialogsProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_7));
                         let __node_10 = code_line(CodeLineProps::props().code("drawer id:\"nav\" side:\"right\"  >  text \"Drawer content\"").build(), Children::default())?;
@@ -193,7 +193,7 @@ pub fn dialogs(props: DialogsProps, children: Children) -> Result<Box<dyn Layout
                                     Ok(__slots)
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_12));
                         let __node_15 = code_line(CodeLineProps::props().code("tooltip text:\"Helpful hint\"  >  button label:\"Hover me\"").build(), Children::default())?;

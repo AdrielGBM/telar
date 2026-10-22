@@ -81,7 +81,7 @@ pub fn text_case(props: TextCaseProps, children: Children) -> Result<Box<dyn Lay
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(6)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("text t!(\"nav.work\") text_case:upper   ·   lang:\"tr\" dots the capital İ").build(), Children::default())?;
@@ -169,7 +169,7 @@ pub fn text_case(props: TextCaseProps, children: Children) -> Result<Box<dyn Lay
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_5));
                         let __node_6 = code_line(CodeLineProps::props().code("text 'Contact' underline underline_offset:0.18em underline_thickness:2 underline_color:$theme.primary").build(), Children::default())?;

@@ -67,7 +67,7 @@ pub fn text_fit(props: TextFitProps, children: Children) -> Result<Box<dyn Layou
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("text 'TELAR' font_size:fit(60%) letter_spacing:-0.04em").build(), Children::default())?;
@@ -169,7 +169,7 @@ pub fn text_fit(props: TextFitProps, children: Children) -> Result<Box<dyn Layou
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_10 = code_line(CodeLineProps::props().code("let share = memo(move || FitWidth::Containing(…));   text font_size:fit($share)").build(), Children::default())?;
@@ -232,7 +232,7 @@ pub fn text_fit(props: TextFitProps, children: Children) -> Result<Box<dyn Layou
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_12));
                         let __node_13 = code_line(CodeLineProps::props().code("text font_size:fit(320)   ·   fit(40sw)   ·   fit(12em)").build(), Children::default())?;

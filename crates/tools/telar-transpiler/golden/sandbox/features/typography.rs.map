@@ -854,6 +854,6 @@
 853	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-4744..4764	34674	`ButtonVariant::Ghost`
-7341..7359	52373	`t!("nav.overview")`
-7368..7388	52401	`ButtonVariant::Ghost`
+4744..4764	34746	`ButtonVariant::Ghost`
+7341..7359	52481	`t!("nav.overview")`
+7368..7388	52509	`ButtonVariant::Ghost`

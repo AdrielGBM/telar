@@ -74,6 +74,9 @@ pub mod inspect;
 #[cfg(feature = "previews")]
 pub mod preview;
 
+mod markup_number;
+pub use markup_number::{Float, Int, PropNumber};
+
 /// Keeps items that exist only for previews — preview tables, props metadata, preview-only builder methods — in a crate's source while compiling them only when `telar/previews` is on, so a dependency carries its previews to an app that asks for them and costs every other build nothing.
 #[cfg(feature = "previews")]
 #[doc(hidden)]

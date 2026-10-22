@@ -1973,7 +1973,7 @@ fn a_text_length_takes_a_worked_out_number_before_its_unit() {
 /// A class on a component call says what its text looks like over what the component says itself, while an inline attribute there stays a prop.
 #[test]
 fn a_class_on_a_component_authors_its_text() {
-    let src = "[style]\n@quiet\n    font_weight: normal\n    font_size: 1.25em\n    radius: 0\n[view]\nheading @quiet text:\"Account\" level:3u8\n";
+    let src = "[style]\n@quiet\n    font_weight: normal\n    font_size: 1.25em\n    radius: 0\n[view]\nheading @quiet text:\"Account\" level:3\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
@@ -1983,7 +1983,7 @@ fn a_class_on_a_component_authors_its_text() {
     );
     assert!(code.contains(".with_font_weight(400)"), "{code}");
     assert!(code.contains("TextLength::Em(1.25)"), "{code}");
-    assert!(code.contains(".level(3u8)"), "{code}");
+    assert!(code.contains(".level(::telar::Int(3))"), "{code}");
     assert!(!code.contains("compile_error!"), "{code}");
 }
 

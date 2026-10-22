@@ -117,7 +117,7 @@ pub fn reduced_motion(props: ReducedMotionProps, children: Children) -> Result<B
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_6 = code_line(CodeLineProps::props().code("set_reduced_motion_override(Some(true))   ·   use_reduced_motion()   ·   use_system_reduced_motion()").build(), Children::default())?;
@@ -154,7 +154,7 @@ pub fn reduced_motion(props: ReducedMotionProps, children: Children) -> Result<B
                                     if __request.includes(None) {
                                         let __row_1 = {
                                             let __node_9 = button(ButtonProps::props().label("Slide").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pulse = pulse.clone(); move || pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }) })).build(), Children::default())?;
-                                            let __node_10 = spinner(SpinnerProps::props().size(20.0).build(), Children::default())?;
+                                            let __node_10 = spinner(SpinnerProps::props().size(::telar::Int(20)).build(), Children::default())?;
                                             Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_9, __node_10])?
                                         };
                                         __children.push(box_item(__row_1));
@@ -180,7 +180,7 @@ pub fn reduced_motion(props: ReducedMotionProps, children: Children) -> Result<B
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_11 = code_line(CodeLineProps::props().code("motion::follow_reduced_motion(false)   // only for an app that tones its motion down itself").build(), Children::default())?;

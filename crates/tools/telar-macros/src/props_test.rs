@@ -11,6 +11,22 @@ macro_rules! __previews {
     ($($item:tt)*) => {};
 }
 
+pub trait PropNumber<T> {
+    fn into_prop(self) -> T;
+}
+
+macro_rules! numbers {
+    ($($ty:ty),*) => {$(
+        impl PropNumber<$ty> for $ty {
+            fn into_prop(self) -> $ty {
+                self
+            }
+        }
+    )*};
+}
+
+numbers!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64);
+
 #[derive(Props)]
 struct LabelProps {
     #[props(into)]

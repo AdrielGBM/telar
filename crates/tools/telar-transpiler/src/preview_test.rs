@@ -61,7 +61,7 @@ fn the_roots_literals_are_read_through_the_args() {
     );
     for (key, value) in [
         ("label", "\"I agree\""),
-        ("size", "12.0"),
+        ("size", "::telar::Int(12)"),
         ("count", "3u32"),
         ("ghost", "true"),
         ("on", "true"),

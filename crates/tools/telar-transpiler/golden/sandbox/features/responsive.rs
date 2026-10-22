@@ -90,7 +90,7 @@ pub fn responsive(props: ResponsiveProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(6)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("use_surface_width()   ·   use_surface_height()   ·   use_surface_size()").build(), Children::default())?;
@@ -210,7 +210,7 @@ pub fn responsive(props: ResponsiveProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_10 = code_line(CodeLineProps::props().code("box width:50sw   ·   width:25sw   ·   width:40smin height:10sh").build(), Children::default())?;

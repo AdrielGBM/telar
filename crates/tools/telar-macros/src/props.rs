@@ -48,8 +48,34 @@ impl Prop {
                     false => quote! { value.into() },
                 },
             ),
+            false if is_number(param_ty) => (
+                quote! { impl ::telar::PropNumber<#param_ty> },
+                match inner.is_some() {
+                    true => quote! {
+                        ::core::option::Option::Some(::telar::PropNumber::into_prop(value))
+                    },
+                    false => quote! { ::telar::PropNumber::into_prop(value) },
+                },
+            ),
             false => (quote! { #param_ty }, value),
         }
+    }
+}
+
+/// Whether `ty` is a primitive number, whose setter also takes the [`Int`](telar::Int) or [`Float`](telar::Float) a `.rsx` literal is handed over as. Only these: a Rust literal reaching the setter still has the one integer or float type to be.
+fn is_number(ty: &Type) -> bool {
+    const NUMBERS: [&str; 12] = [
+        "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize", "f32", "f64",
+    ];
+    match ty {
+        Type::Path(path) => {
+            path.qself.is_none()
+                && path
+                    .path
+                    .get_ident()
+                    .is_some_and(|ident| NUMBERS.iter().any(|n| ident == n))
+        }
+        _ => false,
     }
 }
 

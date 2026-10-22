@@ -70,7 +70,7 @@ pub fn layout(props: LayoutProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(16.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(16)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("row gap:10").build(), Children::default())?;
@@ -132,7 +132,7 @@ pub fn layout(props: LayoutProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_6));
                         let __node_7 = code_line(CodeLineProps::props().code("row justify:between   ·   center · end · around · evenly").build(), Children::default())?;
@@ -182,7 +182,7 @@ pub fn layout(props: LayoutProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_9));
                         let __node_10 = code_line(CodeLineProps::props().code("row align:center   ·   start · end · stretch").build(), Children::default())?;

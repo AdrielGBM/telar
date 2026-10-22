@@ -23,7 +23,7 @@ pub fn greeting_card(props: GreetingCardProps, children: Children) -> Result<Box
                 move || ObjectFit::Contain,
             )?
         };
-        let __node_0 = icon(IconProps::props().name(("fixture:dot", crate::__rsx_assets::ASSET_6504A2AF.get(), true)).size(16.0).build(), Children::default())?;
+        let __node_0 = icon(IconProps::props().name(("fixture:dot", crate::__rsx_assets::ASSET_6504A2AF.get(), true)).size(::telar::Int(16)).build(), Children::default())?;
         let __text_0 = {
             Text::declaring(
                 move || format!("{}", t!("greeting", name = props.name)),

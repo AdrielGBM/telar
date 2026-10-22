@@ -670,7 +670,10 @@ fn component_with_quoted_string_attr() {
         code.contains(".label(\"hello\")"),
         "an unknown component's quoted attr stays a string literal"
     );
-    assert!(code.contains(".size(16.0)"), "numeric attr must become f32");
+    assert!(
+        code.contains(".size(::telar::Int(16))"),
+        "a numeric attr is handed over untyped, for the prop to type"
+    );
 }
 
 #[test]
@@ -3184,7 +3187,7 @@ fn a_baked_icon_id_becomes_the_artifacts_pair() {
     let name = static_name_for_path("mdi:home");
     assert!(
         code.contains(&format!(
-            "IconProps::props().name((\"mdi:home\", crate::__rsx_assets::{name}.get(), false)).size(20.0).build()"
+            "IconProps::props().name((\"mdi:home\", crate::__rsx_assets::{name}.get(), false)).size(::telar::Int(20)).build()"
         )),
         "{code}"
     );

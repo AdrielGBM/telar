@@ -165,7 +165,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_7 = code_line(CodeLineProps::props().code("tabs selected:$tab items:vec!['Overview','Pricing','Team']").build(), Children::default())?;
@@ -241,7 +241,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_9));
                         let __node_11 = code_line(CodeLineProps::props().code("accordion title:'Shipping details' open:$open  >  …body…").build(), Children::default())?;
@@ -317,7 +317,7 @@ pub fn navigation(props: NavigationProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_13));
                         let __node_18 = code_line(CodeLineProps::props().code("let panes = Navigator::new(Pane::Overview).follow_location();").build(), Children::default())?;

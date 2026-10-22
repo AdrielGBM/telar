@@ -67,7 +67,7 @@ pub fn sizing(props: SizingProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("box width:120   ·   width:50%   ·   width:100%").build(), Children::default())?;

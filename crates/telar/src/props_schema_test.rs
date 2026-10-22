@@ -157,3 +157,44 @@ fn a_preview_names_its_component_s_schema() {
     let schema = DOT_PREVIEW.props.expect("the preview names a schema")();
     assert_eq!(schema.name, "DotProps");
 }
+
+#[derive(Props)]
+struct OutlineProps {
+    #[props(default = 2)]
+    level: u8,
+    #[props(default)]
+    indent: f32,
+    #[props(default, some)]
+    limit: Option<usize>,
+    #[props(into, default)]
+    count: Reactive<usize>,
+}
+
+/// A numeric prop takes the number a `.rsx` literal is handed over as, whole or not, as well as a Rust value of its own type.
+#[test]
+fn a_numeric_prop_takes_a_markup_number_or_its_own_type() {
+    let marked = OutlineProps::props()
+        .level(telar::Int(3))
+        .indent(telar::Int(12))
+        .limit(telar::Int(5))
+        .count(telar::Int(4))
+        .build();
+    assert_eq!(
+        (
+            marked.level,
+            marked.indent,
+            marked.limit,
+            marked.count.get()
+        ),
+        (3, 12.0, Some(5), 4)
+    );
+    let written = OutlineProps::props()
+        .level(4)
+        .indent(telar::Float(1.5))
+        .limit(6)
+        .build();
+    assert_eq!(
+        (written.level, written.indent, written.limit),
+        (4, 1.5, Some(6))
+    );
+}

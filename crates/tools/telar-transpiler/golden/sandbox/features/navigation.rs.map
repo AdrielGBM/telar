@@ -338,12 +338,12 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1848..1881	4000	`vec!["Overview","Pricing","Team"]`
-2579..2583	13773	`open`
-2880..2913	17017	`|| { panes.push(Pane::Overview) }`
-2964..2996	17221	`|| { panes.push(Pane::Pricing) }`
-3044..3073	17421	`|| { panes.push(Pane::Team) }`
-3119..3139	17595	`ButtonVariant::Ghost`
-3150..3173	17648	`|| { navigate_back(); }`
-3195..3202	18337	`address`
-3209..3214	18352	`depth`
-3302..3309	19125	`address`
+2579..2583	13785	`open`
+2880..2913	17041	`|| { panes.push(Pane::Overview) }`
+2964..2996	17245	`|| { panes.push(Pane::Pricing) }`
+3044..3073	17445	`|| { panes.push(Pane::Team) }`
+3119..3139	17619	`ButtonVariant::Ghost`
+3150..3173	17672	`|| { navigate_back(); }`
+3195..3202	18361	`address`
+3209..3214	18376	`depth`
+3302..3309	19149	`address`

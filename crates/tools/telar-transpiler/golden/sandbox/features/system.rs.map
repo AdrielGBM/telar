@@ -300,12 +300,12 @@
 2022..2030	6781	`contrast`
 2096..2103	7480	`locales`
 2185..2195	8200	`negotiated`
-2490..2499	11134	`safe_area`
-2974..2980	15097	`chosen`
-3007..3013	15123	`scheme`
-3115..3135	15712	`ButtonVariant::Ghost`
-3146..3210	15765	`|| telar::set_scheme_preference(telar::SchemePreference::System)`
-3257..3277	15975	`ButtonVariant::Ghost`
-3288..3351	16028	`|| telar::set_scheme_preference(telar::SchemePreference::Light)`
-3397..3417	16236	`ButtonVariant::Ghost`
-3428..3490	16289	`|| telar::set_scheme_preference(telar::SchemePreference::Dark)`
+2490..2499	11146	`safe_area`
+2974..2980	15121	`chosen`
+3007..3013	15147	`scheme`
+3115..3135	15736	`ButtonVariant::Ghost`
+3146..3210	15789	`|| telar::set_scheme_preference(telar::SchemePreference::System)`
+3257..3277	15999	`ButtonVariant::Ghost`
+3288..3351	16052	`|| telar::set_scheme_preference(telar::SchemePreference::Light)`
+3397..3417	16260	`ButtonVariant::Ghost`
+3428..3490	16313	`|| telar::set_scheme_preference(telar::SchemePreference::Dark)`

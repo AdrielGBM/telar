@@ -46,7 +46,7 @@ pub fn sliders(props: SlidersProps, children: Children) -> Result<Box<dyn Layout
                                     let mut __slots = Slots::new();
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
-                                        let __node_3 = slider(SliderProps::props().value(volume.clone()).min(0.0).max(100.0).step(1.0).width(260.0).build(), Children::default())?;
+                                        let __node_3 = slider(SliderProps::props().value(volume.clone()).min(::telar::Int(0)).max(::telar::Int(100)).step(::telar::Int(1)).width(::telar::Int(260)).build(), Children::default())?;
                                         __children.push(box_item(__node_3));
                                         let __text_0 = {
                                             let volume = volume.clone();
@@ -63,7 +63,7 @@ pub fn sliders(props: SlidersProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_4 = code_line(CodeLineProps::props().code("slider value:$volume min:0 max:100 step:1 width:260").build(), Children::default())?;
@@ -98,7 +98,7 @@ pub fn sliders(props: SlidersProps, children: Children) -> Result<Box<dyn Layout
                                     let mut __slots = Slots::new();
                                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                     if __request.includes(None) {
-                                        let __node_7 = slider(SliderProps::props().value(temp.clone()).min(60.0).max(80.0).step(5.0).label("Temperature").width(260.0).build(), Children::default())?;
+                                        let __node_7 = slider(SliderProps::props().value(temp.clone()).min(::telar::Int(60)).max(::telar::Int(80)).step(::telar::Int(5)).label("Temperature").width(::telar::Int(260)).build(), Children::default())?;
                                         __children.push(box_item(__node_7));
                                         let __text_1 = {
                                             let temp = temp.clone();
@@ -115,7 +115,7 @@ pub fn sliders(props: SlidersProps, children: Children) -> Result<Box<dyn Layout
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_6));
                         let __node_8 = code_line(CodeLineProps::props().code("slider value:$temp min:60 max:80 step:5 label:'Temperature'").build(), Children::default())?;

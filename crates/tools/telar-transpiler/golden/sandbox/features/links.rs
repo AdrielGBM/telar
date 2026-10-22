@@ -84,7 +84,7 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("box to:Page::Project(slug)   ·   any typed Route, or a Location").build(), Children::default())?;
@@ -144,7 +144,7 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_5));
                         let __node_6 = code_line(CodeLineProps::props().code("box to:external(\"https://…\")   ·   open_uri: the portal or xdg-open, ShellExecute, NSWorkspace, window.open").build(), Children::default())?;
@@ -203,7 +203,7 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_9 = code_line(CodeLineProps::props().code("text  >  span \"words\" to:external(\"https://…\") color:$theme.primary").build(), Children::default())?;
@@ -272,7 +272,7 @@ pub fn links(props: LinksProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_11));
                         let __node_12 = code_line(CodeLineProps::props().code("box anchor:\"outside\"   ·   box to:anchor(\"outside\")").build(), Children::default())?;

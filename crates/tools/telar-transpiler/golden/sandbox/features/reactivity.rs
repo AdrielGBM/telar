@@ -150,7 +150,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_6 = code_line(CodeLineProps::props().code("let count = signal(0);   let doubled = memo(move || count.get() * 2);").build(), Children::default())?;
@@ -210,7 +210,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_9 = code_line(CodeLineProps::props().code("box fill:$theme.primary opacity:$level      (level is a memo of count/10)").build(), Children::default())?;
@@ -284,7 +284,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_11));
                         let __node_16 = code_line(CodeLineProps::props().code("for todo in $todos key todo.id   >   row …   (reused/moved/dropped by key)").build(), Children::default())?;
@@ -369,7 +369,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_18));
                         let __node_21 = code_line(CodeLineProps::props().code("if $show  >  …  else  …   (branch swaps; old nodes disposed, new built)").build(), Children::default())?;
@@ -461,7 +461,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_23));
                         let __node_25 = code_line(CodeLineProps::props().code("lazy when:$open  >  …   (deferred until first shown, then kept)").build(), Children::default())?;
@@ -526,7 +526,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_27));
                         let __node_28 = code_line(CodeLineProps::props().code("input value:$name      (tap or Tab to focus · type · arrows, Home, End, Backspace · Esc blurs)").build(), Children::default())?;
@@ -579,7 +579,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_30));
                         let __node_31 = code_line(CodeLineProps::props().code("box on_focus(|f| $box_focused.set(f))      (Tab-focusable; drive a focus ring)").build(), Children::default())?;
@@ -644,7 +644,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_33));
                         let __node_34 = code_line(CodeLineProps::props().code("box on_drag(|px, _| $slider.set(px / 280))      (keeps tracking even off the track)").build(), Children::default())?;
@@ -687,7 +687,7 @@ pub fn reactivity(props: ReactivityProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_36));
                         let __node_38 = ReactiveList::new(

@@ -61,7 +61,7 @@ pub fn pills(props: PillsProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_6 = code_line(CodeLineProps::props().code("badge label:'NEW' color:$theme.success").build(), Children::default())?;
@@ -118,7 +118,7 @@ pub fn pills(props: PillsProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_12 = code_line(CodeLineProps::props().code("chip label:'removable' on_close:|| remove()").build(), Children::default())?;

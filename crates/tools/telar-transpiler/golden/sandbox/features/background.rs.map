@@ -336,7 +336,7 @@
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 3337..3342	6395	`total`
-3713..3735	8804	`ButtonVariant::Outline`
-4587..4609	14295	`ButtonVariant::Outline`
-4820..4825	16313	`found`
-5065..5069	17970	`name`
+3713..3735	8816	`ButtonVariant::Outline`
+4587..4609	14319	`ButtonVariant::Outline`
+4820..4825	16349	`found`
+5065..5069	18006	`name`

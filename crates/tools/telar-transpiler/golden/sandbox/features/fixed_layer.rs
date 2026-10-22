@@ -114,7 +114,7 @@ pub fn fixed_layer(props: FixedLayerProps, children: Children) -> Result<Box<dyn
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_6 = code_line(CodeLineProps::props().code("layer justify:end align:center pad:24  >  row …     (laid out against the whole surface)").build(), Children::default())?;
@@ -164,7 +164,7 @@ pub fn fixed_layer(props: FixedLayerProps, children: Children) -> Result<Box<dyn
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_9 = code_line(CodeLineProps::props().code("memo(|| use_primary_scroll().map_or(0.0, |page| page.progress(Axis::Vertical)))").build(), Children::default())?;
@@ -325,7 +325,7 @@ pub fn fixed_layer(props: FixedLayerProps, children: Children) -> Result<Box<dyn
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_11));
                         let __node_13 = code_line(CodeLineProps::props().code("scroll arrival_margin_top:40   ·   ScrollPage::arrival_margin(|| Insets::new(56.0, 0.0, 0.0, 0.0))").build(), Children::default())?;

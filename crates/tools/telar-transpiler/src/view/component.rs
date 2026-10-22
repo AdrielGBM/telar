@@ -409,8 +409,12 @@ impl ViewGen<'_> {
         if v.starts_with('#') {
             return hex_to_color_expr(v);
         }
+        // Handed over untyped, since only the prop knows whether `3` is a `u8` or an `f32`: see `telar::PropNumber`.
+        if let Ok(n) = v.parse::<i64>() {
+            return format!("::telar::Int({n})");
+        }
         if let Ok(n) = v.parse::<f32>() {
-            return format_f32(n);
+            return format!("::telar::Float({})", format_f32(n));
         }
         // Includes the delimiting paren stripped above: `value_start` still points at it, so a span built from `v` would start one byte early and end one short.
         let lead = attr.value.text().len() - attr.value.text().trim_start().len() + delimiters;

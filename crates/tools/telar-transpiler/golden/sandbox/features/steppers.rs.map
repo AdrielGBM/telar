@@ -145,5 +145,5 @@
 144	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-976..979	3358	`qty`
-1376..1387	7057	`last_change`
+976..979	3394	`qty`
+1376..1387	7141	`last_change`

@@ -65,7 +65,7 @@ pub fn forms(props: FormsProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_4 = code_line(CodeLineProps::props().code("checkbox checked:$agree label:'I agree to the terms'").build(), Children::default())?;
@@ -117,7 +117,7 @@ pub fn forms(props: FormsProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_6));
                         let __node_8 = code_line(CodeLineProps::props().code("toggle checked:$notify label:'Email notifications'").build(), Children::default())?;
@@ -173,7 +173,7 @@ pub fn forms(props: FormsProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_10));
                         let __node_14 = code_line(CodeLineProps::props().code("radio selected:$choice value:0u32 label:'Small'      (a group shares one signal)").build(), Children::default())?;

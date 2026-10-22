@@ -69,7 +69,7 @@ pub fn text_fields(props: TextFieldsProps, children: Children) -> Result<Box<dyn
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_5 = code_line(CodeLineProps::props().code("text_field value:$name label:'Name' placeholder:'Type your name'   (bordered box + label + muted placeholder while empty)").build(), Children::default())?;

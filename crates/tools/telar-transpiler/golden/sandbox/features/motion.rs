@@ -153,7 +153,7 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_4 = code_line(CodeLineProps::props().code("box fill:$theme.primary radius:12 width:60 height:60 scale:$scale   // scale.retarget(1.3)").build(), Children::default())?;
@@ -251,7 +251,7 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_9));
                         let __node_11 = code_line(CodeLineProps::props().code("Keyframes::new(0.0).then(100.0, 1100ms, EaseInOut).start(Repeat::Once)").build(), Children::default())?;
@@ -295,7 +295,7 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
                                                 StyledContainer::new(LayoutStyle::new().flex_column().width(56.0).height(56.0), { let scrub_color = scrub_color.clone(); move |_| RectStyle::default().with_fill(scrub_color.get()).with_radius(BorderRadius::all(10.0)) }, children![])?
                                             };
                                             let __col_1 = {
-                                                let __node_14 = slider(SliderProps::props().value(scrub.clone()).min(0.0).max(100.0).step(1.0).width(220.0).build(), Children::default())?;
+                                                let __node_14 = slider(SliderProps::props().value(scrub.clone()).min(::telar::Int(0)).max(::telar::Int(100)).step(::telar::Int(1)).width(::telar::Int(220)).build(), Children::default())?;
                                                 let __text_1 = {
                                                     let scrub = scrub.clone();
                                                     Text::declaring(
@@ -315,7 +315,7 @@ pub fn motion(props: MotionProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_13));
                         let __node_15 = code_line(CodeLineProps::props().code("Timeline::builder(a).then(b, …).then(c, …).build().sample(p)").build(), Children::default())?;

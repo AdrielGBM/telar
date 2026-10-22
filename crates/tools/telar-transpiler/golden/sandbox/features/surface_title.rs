@@ -84,7 +84,7 @@ pub fn surface_title(props: SurfaceTitleProps, children: Children) -> Result<Box
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_6 = code_line(CodeLineProps::props().code("impl Route for Page   ·   fn title(&self) -> Option<String>   ·   Some(t!(\"credits.title\"))").build(), Children::default())?;
@@ -135,7 +135,7 @@ pub fn surface_title(props: SurfaceTitleProps, children: Children) -> Result<Box
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_11 = code_line(CodeLineProps::props().code("set_title_format(bar_rule)   ·   compose_title(parts)   ·   use_surface_title()").build(), Children::default())?;

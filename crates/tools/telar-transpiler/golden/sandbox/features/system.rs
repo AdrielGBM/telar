@@ -147,7 +147,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(6)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_3 = code_line(CodeLineProps::props().code("use_color_scheme()   ·   use_system_reduced_motion()   ·   use_system_high_contrast()   ·   use_preferred_locales()").build(), Children::default())?;
@@ -205,7 +205,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(6.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(6)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_5));
                         let __node_6 = code_line(CodeLineProps::props().code("use_safe_area_insets()   ·   ScrollPage::new(content).keep_to_safe_area()").build(), Children::default())?;
@@ -275,7 +275,7 @@ pub fn system(props: SystemProps, children: Children) -> Result<Box<dyn LayoutIt
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(8.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(8)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_8));
                         let __node_12 = code_line(CodeLineProps::props().code("set_scheme_preference(SchemePreference::Dark)   ·   $scheme   ·   store_preference(key, value)").build(), Children::default())?;

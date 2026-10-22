@@ -193,4 +193,4 @@
 1417..1443	5209	`|| telar::set_locale("es")`
 1499..1519	5389	`ButtonVariant::Ghost`
 1530..1556	5442	`|| telar::set_locale("ar")`
-1973..2000	12869	`t!("locale_address.anchor")`
+1973..2000	12893	`t!("locale_address.anchor")`

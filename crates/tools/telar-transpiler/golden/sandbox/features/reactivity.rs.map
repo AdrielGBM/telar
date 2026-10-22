@@ -774,15 +774,15 @@
 2765..2774	7219	`remaining`
 2892..2914	7811	`ButtonVariant::Outline`
 3144..3164	8480	`ButtonVariant::Ghost`
-4163..4185	15622	`ButtonVariant::Outline`
-4304..4324	15973	`ButtonVariant::Ghost`
-4583..4593	17637	`todo.label`
-5116..5121	22844	`count`
-5843..5883	29456	`let _ = panel_builds.update(|n| *n += 1)`
-5966..5978	29948	`panel_builds`
-6832..6836	36446	`name`
-6842..6847	36458	`email`
-7273..7284	39551	`box_focused`
-7801..7804	44419	`pct`
-8708..8730	49967	`ButtonVariant::Outline`
-8429..8434	50635	`|| ()`
+4163..4185	15646	`ButtonVariant::Outline`
+4304..4324	15997	`ButtonVariant::Ghost`
+4583..4593	17661	`todo.label`
+5116..5121	22880	`count`
+5843..5883	29504	`let _ = panel_builds.update(|n| *n += 1)`
+5966..5978	29996	`panel_builds`
+6832..6836	36506	`name`
+6842..6847	36518	`email`
+7273..7284	39623	`box_focused`
+7801..7804	44503	`pct`
+8708..8730	50075	`ButtonVariant::Outline`
+8429..8434	50743	`|| ()`

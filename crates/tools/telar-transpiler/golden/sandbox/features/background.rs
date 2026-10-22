@@ -149,7 +149,7 @@ pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn 
                                                 |__cond: &bool| *__cond,
                                                 move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                     if __cond {
-                                                        let __node_4 = spinner(SpinnerProps::props().size(20.0).build(), Children::default())?;
+                                                        let __node_4 = spinner(SpinnerProps::props().size(::telar::Int(20)).build(), Children::default())?;
                                                         Ok(box_item(__node_4))
                                                     } else {
                                                         Ok(box_item(Container::column(children![])?))
@@ -187,7 +187,7 @@ pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_7 = code_line(CodeLineProps::props().code("spawn_task(|| slow_sum(n), move |sum| total.set(sum.to_string()))").build(), Children::default())?;
@@ -241,7 +241,7 @@ pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn 
                                                 |__cond: &bool| *__cond,
                                                 move |__cond: bool| -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                     if __cond {
-                                                        let __node_13 = spinner(SpinnerProps::props().size(20.0).build(), Children::default())?;
+                                                        let __node_13 = spinner(SpinnerProps::props().size(::telar::Int(20)).build(), Children::default())?;
                                                         Ok(box_item(__node_13))
                                                     } else {
                                                         Ok(box_item(Container::column(children![])?))
@@ -294,7 +294,7 @@ pub fn background(props: BackgroundProps, children: Children) -> Result<Box<dyn 
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(12.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(12)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_9));
                         let __node_15 = code_line(CodeLineProps::props().code("spawn_stream(walk_project, move |name| found.update(|v| v.push(name)))").build(), Children::default())?;

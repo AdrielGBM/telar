@@ -94,7 +94,7 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_7 = code_line(CodeLineProps::props().code("select selected:$picked / item label:'Small' / item label:'Medium'").build(), Children::default())?;
@@ -162,7 +162,7 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_9));
                         let __node_13 = code_line(CodeLineProps::props().code("menu label:'Actions'   >   item label:'Rename'").build(), Children::default())?;
@@ -241,7 +241,7 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_15));
                         let __node_25 = code_line(CodeLineProps::props().code("item label:'Redo' shortcut:'Mod+Shift+Z' disabled:$x   ·   separator   ·   group label:'…'   ·   item checked:$on").build(), Children::default())?;
@@ -371,7 +371,7 @@ pub fn menus(props: MenusProps, children: Children) -> Result<Box<dyn LayoutItem
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_27));
                         let __node_34 = code_line(CodeLineProps::props().code("submenu label:'Theme' hint:$name   >   item label:'Dark' checked:$on radio").build(), Children::default())?;

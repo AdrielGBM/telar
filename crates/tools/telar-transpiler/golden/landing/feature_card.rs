@@ -61,7 +61,7 @@ pub fn feature_card_preview_0(__preview: &::telar::preview::PreviewCtx) -> Resul
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 if __request.includes(Some("icon")) {
-                    let __node_1 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                    let __node_1 = icon(IconProps::props().name(("lucide:zap", crate::__rsx_assets::ASSET_4802B2F8.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
                     __slots.push(Some("icon"), box_item(__node_1));
                 }
                 __slots.extend_default(__children);
@@ -87,7 +87,7 @@ pub fn feature_card_preview_1(__preview: &::telar::preview::PreviewCtx) -> Resul
                 let mut __slots = Slots::new();
                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                 if __request.includes(Some("icon")) {
-                    let __node_1 = icon(IconProps::props().name(("lucide:smartphone", crate::__rsx_assets::ASSET_15E9407E.get(), true)).size(32.0).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
+                    let __node_1 = icon(IconProps::props().name(("lucide:smartphone", crate::__rsx_assets::ASSET_15E9407E.get(), true)).size(::telar::Int(32)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().accent })).build(), Children::default())?;
                     __slots.push(Some("icon"), box_item(__node_1));
                 }
                 __slots.extend_default(__children);

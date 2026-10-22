@@ -92,7 +92,7 @@ pub fn locale_address(props: LocaleAddressProps, children: Children) -> Result<B
                                 }
                                 }
                             );
-                            card(CardProps::props().gap(10.0).build(), __deferred)?
+                            card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                         };
                         __children.push(box_item(__node_2));
                         let __node_6 = code_line(CodeLineProps::props().code("follow_location_locale([\"en\", \"es\", \"ar\"], \"en\")   ·   set_locale(\"es\")").build(), Children::default())?;
@@ -162,7 +162,7 @@ pub fn locale_address(props: LocaleAddressProps, children: Children) -> Result<B
                                     }
                                     }
                                 );
-                                card(CardProps::props().gap(10.0).build(), __deferred)?
+                                card(CardProps::props().gap(::telar::Int(10)).build(), __deferred)?
                             };
                             Container::new(LayoutStyle::new().flex_column(), children![__node_8])?
                         };

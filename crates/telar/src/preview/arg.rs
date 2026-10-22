@@ -92,6 +92,30 @@ impl PreviewArg for f32 {
     }
 }
 
+impl PreviewArg for crate::Int {
+    const CONTROL: ControlKind = ControlKind::INTEGER;
+
+    fn to_arg_value(&self) -> ArgValue {
+        ArgValue::Int(i128::from(self.0))
+    }
+
+    fn from_arg_value(value: &ArgValue) -> Option<Self> {
+        i64::from_arg_value(value).map(crate::Int)
+    }
+}
+
+impl PreviewArg for crate::Float {
+    const CONTROL: ControlKind = ControlKind::FLOAT;
+
+    fn to_arg_value(&self) -> ArgValue {
+        ArgValue::Float(self.0)
+    }
+
+    fn from_arg_value(value: &ArgValue) -> Option<Self> {
+        f64::from_arg_value(value).map(crate::Float)
+    }
+}
+
 impl PreviewArg for String {
     const CONTROL: ControlKind = ControlKind::TEXT;
 
