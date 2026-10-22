@@ -48,6 +48,7 @@ pub fn run_tui_app_with_name<A: App>(
     app: A,
     app_name: &str,
 ) {
+    super::logging::install_file(&SystemPaths, app_name);
     install_cell_measure(options.cell);
     // A cell is the smallest step this surface can show, so easing across a wheel notch would repaint the screen several times to draw the same rows.
     ui_tree::set_smooth_wheel(false);

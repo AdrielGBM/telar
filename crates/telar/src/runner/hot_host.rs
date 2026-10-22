@@ -34,6 +34,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
     config: crate::app_config::AppConfig,
     app_name: &str,
 ) {
+    super::logging::install_stderr();
     let Ok(port) = hot_port.parse::<u16>() else {
         tracing::error!("invalid TELAR_HOT_PORT value: {hot_port}");
         std::process::exit(1);

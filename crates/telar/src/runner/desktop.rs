@@ -15,6 +15,7 @@ use crate::app_config::AppConfig;
 use crate::surface::{SurfaceControl, SurfaceToken};
 
 fn run_desktop_with_overlay<A: App, D: DevOverlay>(config: AppConfig, app: A, app_name: &str) {
+    super::logging::install_stderr();
     let paths: Arc<dyn AppPathsProvider> = Arc::new(DesktopPathsProvider);
     #[cfg(feature = "dialogs")]
     platform_desktop::DesktopFileDialogs::install();
@@ -117,6 +118,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
 
 /// Runs one app in a native window (like [`run_app_with_name`](crate::run_app_with_name)) but under the single-thread multi-surface runner — so the app can call [`open_window`] to move a live sub-app into a further top-level window that shares its one reactive runtime (e.g. a detached tab). The app may be `!Send`.
 pub fn run_app_windowed<A: App>(config: AppConfig, app: A, app_name: &str) {
+    super::logging::install_stderr();
     let platform = match WinitPlatform::try_new() {
         Ok(p) => p,
         Err(e) => {

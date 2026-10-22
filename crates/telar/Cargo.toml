@@ -171,6 +171,7 @@ tui = [
     "runtime",
     "dep:platform-tui",
     "dep:renderer-tui",
+    "dep:tracing-subscriber",
     "services-core/system-paths",
     "services-core/system-opener",
 ]
@@ -378,7 +379,7 @@ software = ["runtime", "dep:renderer-software", "shaper"]
 ## A desktop window with no renderer behind it, for a frontend installing its own through
 ## `run_with_platform_and_renderer`. `RendererBackend::Auto` resolves to whichever of `hardware`/`software`
 ## is present, so a build with neither draws nothing.
-desktop-bare = ["runtime", "dep:platform-desktop"]
+desktop-bare = ["runtime", "dep:platform-desktop", "dep:tracing-subscriber"]
 
 ## The same, for Android.
 android-bare = ["runtime", "dep:platform-android"]
@@ -421,6 +422,7 @@ ctor = { version = "0.10.1", default-features = false }
 renderer-record = { workspace = true, optional = true }
 tiny-skia = { workspace = true, optional = true }
 similar = { version = "3.2.0", optional = true }
+tracing-subscriber = { workspace = true, features = ["env-filter", "ansi"], optional = true }
 
 
 # Excludes wasm as well as Android: `not(target_os = "android")` is true on wasm32, which would drag winit

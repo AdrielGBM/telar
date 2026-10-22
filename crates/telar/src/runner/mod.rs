@@ -35,6 +35,15 @@ mod host;
 mod hot_host;
 mod hydration;
 mod location;
+#[cfg(any(
+    feature = "tui",
+    all(
+        feature = "desktop-bare",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    )
+))]
+mod logging;
 mod multi;
 #[cfg(all(feature = "prerender", not(target_arch = "wasm32")))]
 mod prerender;
