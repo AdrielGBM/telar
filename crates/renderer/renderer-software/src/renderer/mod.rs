@@ -403,9 +403,9 @@ where
         };
         let _present = perf::span(Phase::Present);
         self.present_log.record(op);
-        let Ok(mut buffer) = surface.buffer_mut() else {
-            return Ok(());
-        };
+        let mut buffer = surface
+            .buffer_mut()
+            .map_err(|e| RendererError::Present(e.to_string()))?;
         let plan = self.present_log.plan(buffer.age());
         {
             let _convert = perf::span(Phase::Convert);

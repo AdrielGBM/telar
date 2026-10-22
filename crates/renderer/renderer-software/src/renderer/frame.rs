@@ -768,6 +768,16 @@ where
         self.ensure_caches();
 
         if width != self.width || height != self.height {
+            // Headless has no surface to resize, and the Wayland alpha presenter sizes its buffers as it fills them. Resized first so a failure leaves the old size in force and the next frame retries.
+            if let (Some(w), Some(h), Some(surface)) = (
+                NonZeroU32::new(width),
+                NonZeroU32::new(height),
+                self.surface.as_mut(),
+            ) {
+                surface
+                    .resize(w, h)
+                    .map_err(|e| RendererError::Resize(e.to_string()))?;
+            }
             self.width = width;
             self.height = height;
             self.target.pixmap = if self.target.draws_in_place() {
@@ -786,16 +796,6 @@ where
             self.layer_bounds_cache = None;
             // The logged regions were measured at the old size, so the next present refreshes and declares everything.
             self.present_log.reset();
-            // Headless has no surface to resize, and the Wayland alpha presenter sizes its buffers as it fills them.
-            if let (Some(w), Some(h), Some(surface)) = (
-                NonZeroU32::new(width),
-                NonZeroU32::new(height),
-                self.surface.as_mut(),
-            ) {
-                surface
-                    .resize(w, h)
-                    .map_err(|e| RendererError::Resize(e.to_string()))?;
-            }
         }
         crate::caches::publish_stats();
         Ok(())

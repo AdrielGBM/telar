@@ -380,3 +380,91 @@ fn a_forget_is_handled_after_the_frames_sent_before_it_and_answered_once_done() 
     drop(tx);
     join.join().unwrap();
 }
+
+#[derive(Clone, Copy)]
+enum Fault {
+    BeginErr,
+    RenderErr,
+    RenderPanic,
+}
+
+struct FaultyBackend {
+    faults: Vec<Option<Fault>>,
+    calls: usize,
+    fault: Option<Fault>,
+    drawn: Arc<AtomicU32>,
+}
+
+impl RenderBackend for FaultyBackend {
+    fn begin_frame(
+        &mut self,
+        _width: u32,
+        _height: u32,
+        _scale_factor: f32,
+        _generation: u64,
+    ) -> Result<(), RendererError> {
+        self.fault = self.faults.get(self.calls).copied().flatten();
+        self.calls += 1;
+        match self.fault {
+            Some(Fault::BeginErr) => Err(RendererError::Resize("no".into())),
+            _ => Ok(()),
+        }
+    }
+
+    fn render_frame(
+        &mut self,
+        _commands: &[DrawCommand],
+        _clear: Option<renderer_core::Color>,
+    ) -> Result<(), RendererError> {
+        match self.fault {
+            Some(Fault::RenderErr) => Err(RendererError::Present("no".into())),
+            Some(Fault::RenderPanic) => panic!("device lost"),
+            _ => {
+                self.drawn.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+        }
+    }
+}
+
+#[test]
+fn a_failing_or_panicking_renderer_loses_its_frame_but_not_the_thread() {
+    let drawn = Arc::new(AtomicU32::new(0));
+    let backend = FaultyBackend {
+        faults: vec![
+            Some(Fault::BeginErr),
+            Some(Fault::RenderErr),
+            Some(Fault::RenderPanic),
+            None,
+        ],
+        calls: 0,
+        fault: None,
+        drawn: Arc::clone(&drawn),
+    };
+    let (tx, ret_rx, join) = spawn_render_thread(backend);
+
+    for _ in 0..4 {
+        tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
+        let recycled = ret_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(recycled.len(), 1, "every frame's buffer comes back");
+    }
+
+    assert_eq!(
+        drawn.load(Ordering::SeqCst),
+        1,
+        "only the frame after the three faults draws"
+    );
+    drop(tx);
+    join.join().expect("the thread survived every fault");
+}
+
+#[test]
+fn the_outcome_of_a_renderer_call_is_reported_alike_inline_and_threaded() {
+    assert!(frame_step_succeeded("render_frame", Ok(Ok(()))));
+    assert!(!frame_step_succeeded(
+        "render_frame",
+        Ok(Err(RendererError::Backend("lost".into())))
+    ));
+    let panicked = std::panic::catch_unwind(|| -> Result<(), RendererError> { panic!("boom") });
+    assert!(!frame_step_succeeded("render_frame", panicked));
+}

@@ -2,7 +2,7 @@
 //!
 //! Lives here rather than in `hot_host`, which is compiled only under `dev` and named for hot reload — this is the always-compiled core of the frame loop, and `handler.rs` imports it on every build.
 
-use renderer_core::RenderBackend;
+use renderer_core::{RenderBackend, RendererError};
 
 use super::FRAME_BUDGET;
 
@@ -83,7 +83,7 @@ where
                 let began = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     renderer.begin_frame(msg.width, msg.height, msg.scale_factor, msg.generation)
                 }));
-                if !matches!(began, Ok(Ok(()))) {
+                if !frame_step_succeeded("begin_frame", began) {
                     let _ = ret_tx.send(msg.commands);
                     continue;
                 }
@@ -93,7 +93,7 @@ where
                     renderer.owe_present();
                 }
                 // A wgpu validation error is fatal by default and would abort the process from this render thread, so the frame is dropped and the app recovers on the next correctly-sized one. Recovery needs `panic=unwind`, which the consuming binary's profile decides.
-                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let rendered = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     let commands: &[renderer_core::DrawCommand] =
                         if scales_itself || msg.scale_factor == 1.0 {
                             &msg.commands
@@ -102,6 +102,7 @@ where
                         };
                     renderer.render_frame(commands, msg.clear)
                 }));
+                frame_step_succeeded("render_frame", rendered);
                 #[cfg(all(feature = "android-bare", target_os = "android"))]
                 if let Some(session) = &hint_session {
                     let duration_ns = frame_start.elapsed().as_nanos() as i64;
@@ -115,6 +116,79 @@ where
         })
         .expect("failed to spawn render thread");
     (tx, ret_rx, join)
+}
+
+const MAX_CONSECUTIVE_RESTARTS: u32 = 3;
+
+pub(super) enum Recovery {
+    Restart,
+    RestartOnSoftware,
+    GiveUp,
+}
+
+/// Bounds how often a render thread that keeps dying is rebuilt: software takes over after a run of failures, and a run of failures there ends the retries.
+#[derive(Default)]
+pub(super) struct RenderRecovery {
+    restarts: u32,
+    frames_since_restart: u32,
+    software_forced: bool,
+    abandoned: bool,
+}
+
+impl RenderRecovery {
+    pub(super) fn software_forced(&self) -> bool {
+        self.software_forced
+    }
+
+    pub(super) fn abandoned(&self) -> bool {
+        self.abandoned
+    }
+
+    /// The thread accepting a second frame after a restart proves it outlived the first; one accepted frame proves nothing, since a thread can die right after taking it.
+    pub(super) fn frame_accepted(&mut self) {
+        self.frames_since_restart = self.frames_since_restart.saturating_add(1);
+        if self.frames_since_restart >= 2 {
+            self.restarts = 0;
+        }
+    }
+
+    pub(super) fn thread_lost(&mut self, running_software: bool) -> Recovery {
+        self.frames_since_restart = 0;
+        self.restarts += 1;
+        if self.restarts <= MAX_CONSECUTIVE_RESTARTS {
+            return Recovery::Restart;
+        }
+        if running_software || self.software_forced {
+            self.abandoned = true;
+            return Recovery::GiveUp;
+        }
+        self.software_forced = true;
+        self.restarts = 0;
+        Recovery::RestartOnSoftware
+    }
+}
+
+/// Logs how one renderer call ended and says whether the frame may go on. Shared by the threaded and inline paths so a failing renderer is never silent on either.
+pub(super) fn frame_step_succeeded(
+    step: &str,
+    outcome: std::thread::Result<Result<(), RendererError>>,
+) -> bool {
+    match outcome {
+        Ok(Ok(())) => true,
+        Ok(Err(e)) => {
+            tracing::error!("{step} failed: {e}");
+            false
+        }
+        Err(payload) => {
+            let reason = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("non-string panic payload");
+            tracing::error!("{step} panicked: {reason}");
+            false
+        }
+    }
 }
 
 #[derive(Clone, Copy)]

@@ -13,7 +13,7 @@ use crate::config::{self, RendererBackend};
 use crate::prefs::UserPrefs;
 
 use super::COMMAND_BUF_POOL_CAP;
-use super::frame_thread::{FrameMsg, RenderMsg};
+use super::frame_thread::{FrameMsg, Recovery, RenderMsg, RenderRecovery, frame_step_succeeded};
 use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, SurfaceRenderer};
 use super::state::{AppEnv, FramePacer, WindowTitle};
 use super::{FRAME_BUDGET, HW_KEEPALIVE_INTERVAL, IDLE_GRACE};
@@ -42,6 +42,7 @@ where
     pub(super) backend: RendererBackend,
     pub(super) env: AppEnv,
     pub(super) pending_restart: bool,
+    pub(super) recovery: RenderRecovery,
     pub(super) _flush_notify: Option<FlushNotifyHandle>,
     pub(super) scale_factor: f32,
     // Set when the app pushed `WindowCommand::Close`; polled via `take_exit_request` to leave the run loop.
@@ -136,6 +137,7 @@ where
         generation: FrameGeneration::default(),
         backend,
         pending_restart: false,
+        recovery: RenderRecovery::default(),
         _flush_notify: None,
         scale_factor: 1.0,
         exit_requested: false,
@@ -648,10 +650,12 @@ where
                 };
                 self.env.prefs.backend = Some(next);
                 self.env.save_prefs();
+                self.recovery = RenderRecovery::default();
                 match next {
                     RendererBackend::Software => self.pending_restart = true,
                     // Straight to a background build, so the running renderer keeps presenting until the new one lands.
                     _ => {
+                        self.backend = next;
                         self.start_renderer(window, RendererBackend::Hardware);
                     }
                 }
@@ -666,11 +670,14 @@ where
         }
         self.pending_restart = false;
         self.renderer_transparent = self.is_transparent();
-        self.backend = self
-            .env
-            .prefs
-            .backend
-            .unwrap_or_else(config::compile_time_backend);
+        self.backend = if self.recovery.software_forced() {
+            RendererBackend::Software
+        } else {
+            self.env
+                .prefs
+                .backend
+                .unwrap_or_else(config::compile_time_backend)
+        };
         // Before creating the new one, to avoid peak memory overlap. A restart exists to change what a renderer is baked with, so nothing is kept warm.
         drop(self.renderer.take());
         self.renderer_host.retire();
@@ -694,6 +701,9 @@ where
 
     /// Whether to submit a frame now, and whether it carries new content. The second of the pass's three clocks: the frame budget gates the whole pass, this gates submission, `about_to_wait` reports the next wake. `None` means skip this turn.
     fn frame_is_due(&self, now: web_time::Instant) -> Option<bool> {
+        if self.recovery.abandoned() {
+            return None;
+        }
         // A continuous region carries content the tree cannot report, since it repaints its own texture and the commands naming it never change. Counting only `is_dirty` drops the frame to the 1 fps keepalive.
         let has_content = self.pacer.presentation_owed
             || self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false)
@@ -742,10 +752,8 @@ where
         let Some(renderer) = &mut self.renderer else {
             return false;
         };
-        if let Err(e) =
-            renderer.begin_frame(msg.width, msg.height, msg.scale_factor, msg.generation)
-        {
-            tracing::error!("begin_frame failed: {e}");
+        let began = renderer.begin_frame(msg.width, msg.height, msg.scale_factor, msg.generation);
+        if !frame_step_succeeded("begin_frame", Ok(began)) {
             return false;
         }
         if msg.owed {
@@ -758,13 +766,10 @@ where
                 self.scale_scratch
                     .scale_into(&msg.commands, msg.scale_factor)
             };
-        let rendered = match renderer.as_mut().render_frame(commands, msg.clear) {
-            Ok(()) => true,
-            Err(e) => {
-                tracing::error!("render_frame failed: {e}");
-                false
-            }
-        };
+        let rendered = frame_step_succeeded(
+            "render_frame",
+            Ok(renderer.as_mut().render_frame(commands, msg.clear)),
+        );
         if self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP {
             self.command_buf_pool.push(msg.commands);
         }
@@ -922,19 +927,56 @@ where
         }
     }
 
+    fn recover_lost_render_thread(&mut self, window: &W) {
+        let running_software = matches!(self.backend, RendererBackend::Software);
+        match self.recovery.thread_lost(running_software) {
+            Recovery::Restart => {
+                tracing::error!("the render thread is gone, rebuilding the renderer");
+            }
+            Recovery::RestartOnSoftware => {
+                tracing::error!(
+                    "the render thread keeps dying on the {} renderer, switching to software",
+                    self.renderer_label()
+                );
+            }
+            Recovery::GiveUp => {
+                tracing::error!(
+                    "the software renderer keeps dying, giving up: the window stays on its last frame"
+                );
+                return;
+            }
+        }
+        self.pending_restart = true;
+        self.apply_pending_restart(window);
+        window.request_redraw();
+    }
+
+    fn renderer_label(&self) -> &'static str {
+        match self.backend {
+            RendererBackend::Software => "software",
+            RendererBackend::Hardware => "hardware",
+            RendererBackend::Auto => "auto",
+        }
+    }
+
     /// Hands the frame to the render thread, or rasterises it inline when this surface has no thread of its own. Returns whether a renderer took it.
-    fn submit_frame(&mut self, msg: FrameMsg) -> bool {
+    fn submit_frame(&mut self, msg: FrameMsg, window: &W) -> bool {
         // Dropped if the render thread is still busy, which keeps input handling off the rasteriser's critical path. On a dropped or disconnected send, the buffer is recovered for the free-list.
         if let Some(channels) = self.renderer_host.channels() {
             let Err(e) = channels.tx.try_send(RenderMsg::Frame(msg)) else {
+                self.recovery.frame_accepted();
                 return true;
             };
+            let disconnected = matches!(e, std::sync::mpsc::TrySendError::Disconnected(_));
             let (std::sync::mpsc::TrySendError::Full(unsent)
             | std::sync::mpsc::TrySendError::Disconnected(unsent)) = e;
             if let RenderMsg::Frame(msg) = unsent
                 && self.command_buf_pool.len() < COMMAND_BUF_POOL_CAP
             {
                 self.command_buf_pool.push(msg.commands);
+            }
+            if disconnected {
+                self.recover_lost_render_thread(window);
             }
             return false;
         }
@@ -1165,7 +1207,7 @@ where
         self.run_app_frame(window);
         if let Some(pass) = self.open_frame_pass(now, window) {
             let msg = self.build_frame(&pass);
-            if self.submit_frame(msg) {
+            if self.submit_frame(msg, window) {
                 self.pacer.presentation_owed = false;
             }
         }
@@ -1175,6 +1217,7 @@ where
     /// Releases everything that presents the surface and keeps the tree, so a later [`on_resume`](EventHandler::on_resume) shows the same UI again.
     fn on_suspend(&mut self) {
         let _surface = self.enter_surface();
+        self.recovery = RenderRecovery::default();
         // Before the host suspends, so the memory it hands back to the allocator includes this one's pixmap.
         self.renderer = None;
         // Let the host keep whatever makes the next resume cheap: for hardware, a device to rebind rather than rebuild.
