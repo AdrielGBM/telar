@@ -375,3 +375,46 @@ mod equivalence {
         assert_raster_structurally_equivalent(RASTER);
     }
 }
+
+#[test]
+fn runtime_svg_does_not_read_a_device_path_through_image_href() {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">
+        <image href="/dev/zero" width="10" height="10"/></svg>"##;
+    let data = SvgData::from_str(svg).unwrap();
+    let cmds = data.commands_for(10.0, 10.0, None, None, ObjectFit::Contain);
+    assert!(
+        !cmds.iter().any(|c| matches!(c, DrawCommand::Image { .. })),
+        "{cmds:?}"
+    );
+}
+
+#[test]
+fn runtime_svg_does_not_draw_a_local_file_through_image_href() {
+    let path = std::env::temp_dir().join(format!("telar-svg-href-{}.svg", std::process::id()));
+    std::fs::write(
+        &path,
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><rect width="10" height="10" fill="#ff0000"/></svg>"##,
+    )
+    .unwrap();
+    let svg = format!(
+        r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><image href="{}" width="10" height="10"/></svg>"##,
+        path.display()
+    );
+    let result = SvgData::from_str(&svg);
+    std::fs::remove_file(&path).unwrap();
+    let cmds = result
+        .unwrap()
+        .commands_for(10.0, 10.0, None, None, ObjectFit::Contain);
+    assert!(cmds.is_empty(), "local file was drawn: {cmds:?}");
+}
+
+#[test]
+fn runtime_svg_still_draws_a_data_url_image() {
+    let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><image href="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' width='10' height='10'%3E%3Crect width='10' height='10' fill='%23ff0000'/%3E%3C/svg%3E" width="10" height="10"/></svg>"##;
+    let data = SvgData::from_str(svg).unwrap();
+    let cmds = data.commands_for(10.0, 10.0, None, None, ObjectFit::Contain);
+    assert!(
+        cmds.iter().any(|c| matches!(c, DrawCommand::Image { .. })),
+        "data URL image was not drawn: {cmds:?}"
+    );
+}

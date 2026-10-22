@@ -11,7 +11,7 @@ mod tests;
 mod vector;
 
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use geometry_core::{ObjectFit, Point};
 use rustc_hash::{FxHashMap, FxHasher};
@@ -105,6 +105,31 @@ pub(crate) enum BakedSvg {
 #[cfg(feature = "dynamic-svg")]
 pub(crate) struct Unsupported;
 
+#[cfg(feature = "dynamic-svg")]
+const MAX_EMBEDDED_IMAGE_BYTES: usize = 8 * 1024 * 1024;
+
+// Runtime SVG comes from untrusted sources, and usvg's default string resolver would read any href that names a local file.
+#[cfg(feature = "dynamic-svg")]
+fn runtime_options() -> &'static usvg::Options<'static> {
+    static OPTIONS: OnceLock<usvg::Options<'static>> = OnceLock::new();
+    OPTIONS.get_or_init(|| {
+        let default_data = usvg::ImageHrefResolver::default_data_resolver();
+        usvg::Options {
+            image_href_resolver: usvg::ImageHrefResolver {
+                resolve_data: Box::new(move |mime, data, opts| {
+                    if data.len() > MAX_EMBEDDED_IMAGE_BYTES {
+                        None
+                    } else {
+                        default_data(mime, data, opts)
+                    }
+                }),
+                resolve_string: Box::new(|_: &str, _: &usvg::Options| None),
+            },
+            ..usvg::Options::default()
+        }
+    })
+}
+
 // SvgData is shared across threads via Arc; hold this for every feature combination.
 const _: fn() = || {
     fn assert_send_sync<T: Send + Sync>() {}
@@ -116,8 +141,8 @@ impl SvgData {
     #[cfg(feature = "dynamic-svg")]
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(svg: &str) -> Result<Self, SvgError> {
-        let opt = usvg::Options::default();
-        let tree = usvg::Tree::from_str(svg, &opt).map_err(|e| SvgError(e.to_string()))?;
+        let tree =
+            usvg::Tree::from_str(svg, runtime_options()).map_err(|e| SvgError(e.to_string()))?;
         let size = tree.size();
         let mut hasher = FxHasher::default();
         svg.as_bytes().hash(&mut hasher);
