@@ -40,6 +40,22 @@ fn rsx_line_of(out: &TranspiledSource, needle: &str) -> Option<u32> {
 }
 
 #[test]
+fn a_library_weighs_its_text_with_the_theme_strong_weight() {
+    let out = library("[view]\ntext \"x\" font_weight:$theme.font_weight_strong\n");
+    assert!(
+        out.rust_code
+            .contains(".with_font_weight(::telar::use_theme_tokens().font_weight_strong())"),
+        "{}",
+        out.rust_code
+    );
+    assert!(
+        !out.rust_code.contains("compile_error!"),
+        "{}",
+        out.rust_code
+    );
+}
+
+#[test]
 fn a_library_reads_each_token_through_the_shared_vocabulary() {
     let out = library("[view]\nbox fill:$theme.primary radius:$theme.radius\n    text \"x\"\n");
     assert!(

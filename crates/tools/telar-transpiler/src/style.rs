@@ -251,6 +251,47 @@ pub fn keyword(
     })
 }
 
+/// The Rust a keywords-or-number `value` generates under `key`: a number as written, a step's spelling as its number, and anything else (a `$` read, a constant, a parenthesised expression) as the expression it reads, the way a `Number` or a `Color` key takes one. A bare lowercase word is always taken for a spelling, so a misspelt step is refused with the list rather than reaching rustc as a name it cannot find.
+pub fn keyword_or_number(
+    key: &str,
+    value: &str,
+    table: &'static [(&'static str, &'static str)],
+    theme: ThemeAccess,
+) -> Result<String, String> {
+    let v = value.trim();
+    if v.parse::<f32>().is_ok() {
+        return Ok(v.to_string());
+    }
+    keyword_or_expression(key, v, table, theme).map(|spelled| match spelled {
+        Spelled::Keyword(rust) => rust.to_string(),
+        Spelled::Expression(expr) => expr,
+    })
+}
+
+/// What a keywords-or-expression value was written as: one of the key's spellings, as the Rust name it generates, or the author's own expression with its `$` reads substituted.
+pub enum Spelled {
+    Keyword(&'static str),
+    Expression(String),
+}
+
+/// A keywords-or-expression `value` under `key`: a bare lowercase word is a spelling, refused with the list when it is none, and anything else is an expression for rustc to judge.
+pub fn keyword_or_expression(
+    key: &str,
+    value: &str,
+    table: &'static [(&'static str, &'static str)],
+    theme: ThemeAccess,
+) -> Result<Spelled, String> {
+    let v = value.trim();
+    let bare_word = v
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-');
+    if bare_word {
+        return keyword(key, v, table).map(Spelled::Keyword);
+    }
+    let v = crate::view::redundant_parens(v).unwrap_or(v);
+    Ok(Spelled::Expression(crate::view::substitute_reads(v, theme)))
+}
+
 fn track_count(key: &str, value: &str) -> Result<u16, String> {
     value
         .parse::<u16>()

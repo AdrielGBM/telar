@@ -1119,6 +1119,69 @@ fn a_second_spelling_of_a_value_is_not_a_value() {
     }
 }
 
+/// `$props.label` reads the field, and a read in two places copies the field into each the way a plain `props.label` read does.
+#[test]
+fn a_prop_read_with_a_dollar_reaches_through_props_to_the_field() {
+    let src = "[logic]\npub struct Props {\n    #[props(into, default)]\n    pub label: Reactive<String>,\n}\n\n[view]\ncol\n    text \"{$props.label}\"\n    text \"again {$props.label}\" color:#3d78fa\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert_eq!(
+        code.matches("let __props_label = props.label.clone();")
+            .count(),
+        2,
+        "{code}"
+    );
+    assert_eq!(code.matches("__props_label.get()").count(), 2, "{code}");
+    assert!(!code.contains("__props_label.clone()"), "{code}");
+    assert!(!code.contains("props.get()"), "{code}");
+    if let Err(e) = syn::parse_file(&code) {
+        panic!("generated code does not parse: {e}\n{code}");
+    }
+}
+
+/// Only `props` reaches through to a field: anywhere else `$` binds to the identifier, and the field is taken from what it reads.
+#[test]
+fn a_dollar_on_any_other_binding_still_reads_the_binding() {
+    let src = "[logic]\nlet user = signal(User::default());\n[view]\ntext \"{$user.name}\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(code.contains("user.get().name"), "{code}");
+    assert!(!code.contains("__props_"), "{code}");
+}
+
+/// A weight is a number, so it takes what a number takes: a read, a constant, an expression. Only a bare word is held to the spellings.
+#[test]
+fn a_weight_may_be_any_expression_that_yields_one() {
+    for (src, expected) in [
+        (
+            "[logic]\nlet w = signal(700u16);\n[view]\ntext \"x\" font_weight:$w\n",
+            ".with_font_weight(w.get())",
+        ),
+        (
+            "[view]\ntext \"x\" font_weight:TITLE_WEIGHT\n",
+            ".with_font_weight(TITLE_WEIGHT)",
+        ),
+        (
+            "[view]\ntext \"x\" font_weight:(base + 100)\n",
+            ".with_font_weight(base + 100)",
+        ),
+        (
+            "[view]\ncol font_weight:$theme.font_weight_strong\n    text \"x\"\n",
+            "font_weight_strong",
+        ),
+    ] {
+        let code = crate::transpile_source(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(expected) && !code.contains("compile_error!"),
+            "expected {expected:?} for {src:?}:\n{code}"
+        );
+    }
+}
+
 /// `white` and `black` stop being colours, so the name falls through to what a bare ident means — a `[style]` constant — instead of quietly painting one.
 #[test]
 fn a_named_colour_is_only_transparent_now() {
@@ -1838,4 +1901,71 @@ fn a_quoted_values_holes_keep_their_source_spans() {
         "{}",
         out.rust_code
     );
+}
+
+/// A `text` says it is a heading by level name or, when the level is worked out, by an expression yielding the role; either only describes it.
+#[test]
+fn a_text_describes_itself_as_a_heading_by_name_or_by_expression() {
+    for (src, expected) in [
+        (
+            "[view]\ntext \"x\" role:h2\n",
+            ".a11y_role(::telar::Role::Heading(2))",
+        ),
+        (
+            "[logic]\nlet level = 3u8;\n[view]\ntext \"x\" role:(Role::Heading(level))\n",
+            ".a11y_role(Role::Heading(level))",
+        ),
+    ] {
+        let code = crate::transpile_source(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(expected) && !code.contains("compile_error!"),
+            "expected {expected:?} for {src:?}:\n{code}"
+        );
+    }
+}
+
+/// A paragraph can only describe itself, so a role it would have to be operated or hold boxes for is refused by name.
+#[test]
+fn a_text_refuses_a_role_that_is_not_a_heading() {
+    let code = crate::transpile_source("[view]\ntext \"x\" role:button\n", "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(code.contains("is not a value of `role`"), "{code}");
+}
+
+/// A box's role worked out from state only describes the box: a control's role is written by name, where the build can check what goes with it.
+#[test]
+fn a_box_role_given_as_an_expression_describes_the_box() {
+    let src =
+        "[logic]\nlet level = 2u8;\n[view]\ncol role:(Role::Heading(level))\n    text \"x\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(code.contains(".role(Role::Heading(level))"), "{code}");
+    assert!(!code.contains(".control("), "{code}");
+}
+
+/// A length's number may be worked out: written before the unit in parentheses, it means what the literal there would.
+#[test]
+fn a_text_length_takes_a_worked_out_number_before_its_unit() {
+    for (src, expected) in [
+        (
+            "[logic]\nlet scale = 1.5f32;\n[view]\ntext \"x\" font_size:(scale)em\n",
+            ".with_font_size_in(TextLength::Em(scale), Size::ZERO)",
+        ),
+        (
+            "[logic]\nlet share = signal(20.0f32);\n[view]\ntext \"x\" font_size:($share)sw\n",
+            "TextLength::SurfaceWidth((share.get()) / 100.0)",
+        ),
+    ] {
+        let code = crate::transpile_source(src, "demo", None, None)
+            .unwrap()
+            .rust_code;
+        assert!(
+            code.contains(expected) && !code.contains("compile_error!"),
+            "expected {expected:?} for {src:?}:\n{code}"
+        );
+    }
 }

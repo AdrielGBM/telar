@@ -17,14 +17,9 @@ impl ViewGen<'_> {
             if let Some(lang) = find("a11y_lang") {
                 calls.push_str(&format!(".a11y_lang({})", self.annotation_text(lang)));
             }
-            if let Some(role) = find("role").and_then(|role| {
-                crate::registry::keyword(
-                    crate::registry::COMPONENT_ROLE_VALUES,
-                    role.value.text().trim(),
-                )
-            }) {
-                calls.push_str(&format!(".a11y_role(::telar::Role::{role})"));
-            }
+            calls.push_str(
+                &self.role_annotation(find("role"), crate::registry::COMPONENT_ROLE_VALUES),
+            );
             calls.push_str(&self.a11y_keyword_call(find("a11y")));
             return self.chain_calls(emit, &calls);
         }
@@ -41,6 +36,9 @@ impl ViewGen<'_> {
             calls.push_str(&format!(".a11y_lang({})", self.annotation_text(lang)));
         }
         calls.push_str(&self.a11y_keyword_call(find("a11y")));
+        if el.tag == "text" {
+            calls.push_str(&self.role_annotation(find("role"), crate::registry::TEXT_ROLE_VALUES));
+        }
         if let Some(anchor) = find("anchor") {
             calls.push_str(&format!(".page_anchor({})", self.annotation_text(anchor)));
         }
@@ -59,6 +57,29 @@ impl ViewGen<'_> {
             ));
         }
         self.chain_calls(emit, &calls)
+    }
+
+    /// A `role:` that only describes what it is written on, by one of `table`'s names or as an expression yielding the `Role`. A value that is neither emits nothing here: the value check has already said why.
+    fn role_annotation(
+        &self,
+        attr: Option<&Attr>,
+        table: &'static [(&'static str, &'static str)],
+    ) -> String {
+        let Some(attr) = attr else {
+            return String::new();
+        };
+        match crate::style::keyword_or_expression(
+            "role",
+            attr.value.text(),
+            table,
+            self.theme_access,
+        ) {
+            Ok(crate::style::Spelled::Keyword(variant)) => {
+                format!(".a11y_role(::telar::Role::{variant})")
+            }
+            Ok(crate::style::Spelled::Expression(role)) => format!(".a11y_role({role})"),
+            Err(_) => String::new(),
+        }
     }
 
     fn a11y_keyword_call(&self, attr: Option<&Attr>) -> String {

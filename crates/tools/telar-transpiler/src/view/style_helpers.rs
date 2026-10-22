@@ -407,7 +407,9 @@ fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
             || crate::rust::is_const_expr(s)
     };
     match crate::registry::value_kind(tag, key) {
-        Some(ValueKind::Keywords(table)) => table.iter().any(|(name, _)| *name == v),
+        Some(ValueKind::Keywords(table) | ValueKind::KeywordsOrExpression(table)) => {
+            table.iter().any(|(name, _)| *name == v)
+        }
         Some(ValueKind::KeywordsOrNumber(table)) => {
             number(v) || table.iter().any(|(name, _)| *name == v)
         }

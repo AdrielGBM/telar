@@ -157,8 +157,8 @@ const COMPONENT_INSTANCE_ATTRS: &[AttrSpec] = &[
     AttrSpec::keywords("a11y", A11Y_VALUES).doc(
         "`a11y:hidden` takes the item the component returns, and everything under it, out of what assistive technology is told.",
     ),
-    AttrSpec::keywords("role", COMPONENT_ROLE_VALUES).doc(
-        "What the item the component returns is, where the component left it a plain box or a region: a landmark (`navigation`, `main`, `complementary`…), an `article`, a heading (`h1`–`h6`), a live region (`status`, `log`), an item of the list the call sits in (`listitem`), or `group`. A role a person operates, or one that promises what is inside the item, stays the component's to say; over a control the component made, this says nothing.",
+    AttrSpec::keywords_or_expression("role", COMPONENT_ROLE_VALUES).doc(
+        "What the item the component returns is, where the component left it a plain box or a region: a landmark (`navigation`, `main`, `complementary`…), an `article`, a heading (`h1`–`h6`), a live region (`status`, `log`), an item of the list the call sits in (`listitem`), or `group`, by name or as an expression yielding one of them. A role a person operates, or one that promises what is inside the item, stays the component's to say; over a control the component made, this says nothing.",
     ),
 ];
 
@@ -190,6 +190,16 @@ pub const COMPONENT_ROLE_VALUES: &[(&str, &str)] = &[
     ("item", "ListItem"),
     ("status", "Status"),
     ("log", "Log"),
+];
+
+/// The roles a `text` may say about itself by name: a heading of each level, since a paragraph can only describe itself.
+pub const TEXT_ROLE_VALUES: &[(&str, &str)] = &[
+    ("h1", "Heading(1)"),
+    ("h2", "Heading(2)"),
+    ("h3", "Heading(3)"),
+    ("h4", "Heading(4)"),
+    ("h5", "Heading(5)"),
+    ("h6", "Heading(6)"),
 ];
 
 /// Why a component call cannot say `role:{value}`, for a role the vocabulary knows that is not one of [`COMPONENT_ROLE_VALUES`]. `None` for a role a call may say, and for a word no role answers to, which the ordinary value check names.
@@ -314,8 +324,8 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
         .doc("Which other buttons may start this box's drag; the primary one always can."),
     AttrSpec::num("drag_threshold")
         .doc("How far a press must travel before it is a drag rather than a click."),
-    AttrSpec::keywords("role", ROLE_VALUES).doc(
-        "What the box is, beyond a box: a region, a list, a heading. A role a person operates (`button`, `switch`, `checkbox`, `radio`, `tab`, `slider`…) also makes the box a control: a Tab stop with the theme's focus ring, pressed by Enter and Space the way `on_press` is by a tap.",
+    AttrSpec::keywords_or_expression("role", ROLE_VALUES).doc(
+        "What the box is, beyond a box: a region, a list, a heading. A role a person operates (`button`, `switch`, `checkbox`, `radio`, `tab`, `slider`…) also makes the box a control: a Tab stop with the theme's focus ring, pressed by Enter and Space the way `on_press` is by a tap. An expression yielding a `Role` (`role:(Role::Heading(level))`) only describes the box, so a control's role is written by name.",
     ),
     AttrSpec::free("toggled").doc(
         "The on/off state of a control, re-read when what it reads changes: `toggled:$on`. Checked on `role:switch`/`checkbox`/`radio`, pressed on `role:button` (a toggle button), selected on `role:tab`.",
@@ -559,8 +569,10 @@ pub const TEXT_ALIGN_VALUES: &[(&str, &str)] = &[
 pub enum ValueKind {
     /// A closed set of spellings, each paired with the Rust name it generates. Also the completion list.
     Keywords(&'static [(&'static str, &'static str)]),
-    /// A closed set of spellings *or* a plain number, for the one axis that is genuinely both: an OpenType weight *is* a number, and the names are the nine steps of it everyone actually writes.
+    /// A closed set of spellings *or* a number, for the one axis that is genuinely both: an OpenType weight *is* a number, and the names are the nine steps of it everyone actually writes. Like a [`Number`](Self::Number), the number may be any Rust expression that yields one (`$theme.font_weight_strong`, a constant, a parenthesised expression), but a bare lowercase word is always a spelling.
     KeywordsOrNumber(&'static [(&'static str, &'static str)]),
+    /// A closed set of spellings, or any Rust expression yielding the value they name, for a value a component works out from its props: `role:(Role::Heading(level))`. A bare lowercase word is always a spelling.
+    KeywordsOrExpression(&'static [(&'static str, &'static str)]),
     /// A number: a literal, a `50%`, a fraction of the surface on a length (`50sw`, `50sh`, `50smin`, `50smax`), or any Rust expression that yields one.
     Number,
     /// A yes or a no: the bare key, `true`/`false`, or any Rust expression that yields one. Only the first three are literals — the rest is read, so a style carrying one re-resolves from what it reads.
@@ -630,6 +642,13 @@ impl AttrSpec {
         Self::of(key, Some(ValueKind::KeywordsOrNumber(table)))
     }
 
+    const fn keywords_or_expression(
+        key: &'static str,
+        table: &'static [(&'static str, &'static str)],
+    ) -> Self {
+        Self::of(key, Some(ValueKind::KeywordsOrExpression(table)))
+    }
+
     const fn doc(self, doc: &'static str) -> Self {
         Self {
             key: self.key,
@@ -692,7 +711,7 @@ pub fn keyword(
 /// The text properties that flow down the tree. See [`is_inheritable_text_attr`].
 const INHERITABLE_TEXT_ATTRS: &[AttrSpec] = &[
     AttrSpec::num("font_size").doc(
-        "The size of the text: pixels (`24`), a multiple of the inherited size (`1.5em`) or a fraction of the surface (`22sw`, `10sh`, `5smin`, `5smax`). On a `text`, `fit(60%)` instead sets its one line to a width: a percentage of the box holding it, a length (`fit(480)`, `fit(40sw)`) or an expression yielding a `FitWidth`, with an optional cap, `fit(60%, max_height:56sh)`. The line scales whole, tracking in `em` included, and never wraps; see docs/surface-size.md.",
+        "The size of the text: pixels (`24`), a multiple of the inherited size (`1.5em`) or a fraction of the surface (`22sw`, `10sh`, `5smin`, `5smax`), the number before a unit also written as a parenthesised expression (`(scale)em`). On a `text`, `fit(60%)` instead sets its one line to a width: a percentage of the box holding it, a length (`fit(480)`, `fit(40sw)`) or an expression yielding a `FitWidth`, with an optional cap, `fit(60%, max_height:56sh)`. The line scales whole, tracking in `em` included, and never wraps; see docs/surface-size.md.",
     ),
     AttrSpec::free("font_family").doc(
         "A generic (sans_serif|serif|monospace|system_ui|cursive|fantasy, bare or quoted), a quoted face (\"Inter\"), a quoted comma list for an ordered fallback (\"Inter, sans_serif\"), or any expression yielding a FontFamily.",
@@ -742,6 +761,9 @@ const TRANSFORM_ATTRS: &[AttrSpec] = &[
 
 /// What clamps one paragraph and would be nonsense applied to a subtree, which is why these are a `text`'s alone rather than [`INHERITABLE_TEXT_ATTRS`].
 const TEXT_ONLY_ATTRS: &[AttrSpec] = &[
+    AttrSpec::keywords_or_expression("role", TEXT_ROLE_VALUES).doc(
+        "What the paragraph is, beyond text: a heading (`h1`–`h6`), or an expression yielding a `Role` that describes it (`role:(Role::Heading(level))`).",
+    ),
     AttrSpec::free("lines"),
     AttrSpec::flag("ellipsis"),
     AttrSpec::free("transition").doc(

@@ -351,11 +351,15 @@ impl ViewGen<'_> {
         if let Some(family) = attrs.iter().find(|a| a.key == "font_family") {
             modifiers.push_str(&format!(".with_font_family({})", font_family_expr(family)));
         }
-        if let Some(w) = attrs
-            .iter()
-            .find(|a| a.key == "font_weight")
-            .and_then(|a| parse_weight(a.value.text()))
-        {
+        if let Some(w) = attrs.iter().find(|a| a.key == "font_weight").and_then(|a| {
+            crate::style::keyword_or_number(
+                "font_weight",
+                a.value.text(),
+                registry::FONT_WEIGHT_VALUES,
+                self.theme_access,
+            )
+            .ok()
+        }) {
             modifiers.push_str(&format!(".with_font_weight({w})"));
         }
         if let Some(variant) = attrs
@@ -494,6 +498,7 @@ impl ViewGen<'_> {
 pub(super) fn raw_reactive_values(attrs: &[Attr]) -> Vec<&str> {
     [
         "color",
+        "font_weight",
         "font_variation",
         "font_features",
         "underline",
@@ -608,15 +613,6 @@ fn font_family_stack_piece(name: &str) -> String {
     }
 }
 
-/// Maps a `font_weight:` value — a keyword (`thin`…`black`) or a numeric 100–900 — to the OpenType weight number.
-fn parse_weight(value: &str) -> Option<String> {
-    let v = value.trim();
-    if let Ok(n) = v.parse::<u16>() {
-        return Some(n.to_string());
-    }
-    registry::keyword(registry::FONT_WEIGHT_VALUES, v).map(str::to_string)
-}
-
 /// The layout a `text` asks for: the keys that place it among its siblings, and a `height:` that pins the box over what it measures. Everything that styles the glyphs is the text style's, not the box's.
 fn text_layout_style(attrs: &[Attr], theme: ThemeAccess) -> String {
     let mut extra = String::new();
@@ -672,17 +668,42 @@ pub(super) enum StyleTarget {
 }
 
 /// A `font_size:` or `letter_spacing:` value written with a unit (`22sw`, `1.5em`), as the `TextLength` it names, and whether it is a fraction of the surface.
-fn text_length(value: &str) -> Option<(String, bool)> {
+fn text_length(value: &str, theme: ThemeAccess) -> Option<(String, bool)> {
     let value = value.trim();
     if let Some((variant, n)) = crate::style::surface_fraction(value) {
         let fraction = crate::style::format_f32(n / 100.0);
         return Some((format!("TextLength::{variant}({fraction})"), true));
     }
-    let em = value.strip_suffix("em")?.trim().parse::<f32>().ok()?;
-    Some((
-        format!("TextLength::Em({})", crate::style::format_f32(em)),
-        false,
-    ))
+    if let Some(em) = value
+        .strip_suffix("em")
+        .and_then(|n| n.trim().parse::<f32>().ok())
+    {
+        return Some((
+            format!("TextLength::Em({})", crate::style::format_f32(em)),
+            false,
+        ));
+    }
+    computed_text_length(value, theme)
+}
+
+/// A length whose number is worked out, written as a parenthesised expression before its unit (`(scale)em`, `($share)sw`), the way a literal is written before one.
+fn computed_text_length(value: &str, theme: ThemeAccess) -> Option<(String, bool)> {
+    const UNITS: [(&str, &str, bool); 5] = [
+        ("smin", "SurfaceMin", true),
+        ("smax", "SurfaceMax", true),
+        ("sw", "SurfaceWidth", true),
+        ("sh", "SurfaceHeight", true),
+        ("em", "Em", false),
+    ];
+    UNITS.iter().find_map(|(unit, variant, surface)| {
+        let inner = super::redundant_parens(value.strip_suffix(unit)?)?;
+        let n = super::signals::substitute_reads(inner, theme);
+        let n = match surface {
+            true => format!("({n}) / 100.0"),
+            false => n,
+        };
+        Some((format!("TextLength::{variant}({n})"), *surface))
+    })
 }
 
 /// The inside of a `font_size:fit(…)`, or `None` when the size is not a fit.
@@ -734,7 +755,7 @@ fn fit_length(value: &str, theme: ThemeAccess) -> Result<String, String> {
     if value.is_empty() {
         return Err("`fit(…)` is missing a length".into());
     }
-    if let Some((length, _)) = text_length(value) {
+    if let Some((length, _)) = text_length(value, theme) {
         return Ok(length);
     }
     if let Ok(px) = value.parse::<f32>() {
@@ -776,7 +797,7 @@ fn length_modifier(
     target: StyleTarget,
     theme: ThemeAccess,
 ) -> String {
-    match (text_length(value), target) {
+    match (text_length(value, theme), target) {
         (Some((length, _)), StyleTarget::Declared) => format!(".{method}({length})"),
         (Some((length, surface)), StyleTarget::Text) => {
             let on = if surface {

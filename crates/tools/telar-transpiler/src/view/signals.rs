@@ -192,13 +192,21 @@ pub(super) fn substitute_handles(s: &str, theme: ThemeAccess) -> String {
     substitute_dollar(s, false, theme)
 }
 
-/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`), and each library `$theme` read to its token; everything else is copied through unchanged.
+/// Rewrites each `$ident` to `ident` (plus `.get()` when `read`), each `$props.field` to that field's binding, and each library `$theme` read to its token; everything else is copied through unchanged.
 fn substitute_dollar(s: &str, read: bool, theme: ThemeAccess) -> String {
     let mut out = String::with_capacity(s.len());
     let mut copied = 0;
     for (marker, end) in dollar_spans(s) {
         let ident = &s[marker + 1..end];
         out.push_str(&s[copied..marker]);
+        if let Some(field) = prop_read(ident, &s[end..]) {
+            let _ = write!(out, "props.{field}");
+            if read {
+                out.push_str(".get()");
+            }
+            copied = end + 1 + field.len();
+            continue;
+        }
         if let Some(tokens) = tokens_read(ident, &s[end..], theme) {
             out.push_str(&tokens.emit(""));
             copied = end + tokens.consumed();
@@ -221,6 +229,12 @@ pub(super) fn substitute_reads_spanned(s: &str, base: usize, theme: ThemeAccess)
     for (marker, end) in dollar_spans(s) {
         let ident = &s[marker + 1..end];
         out.push_str(&s[copied..marker]);
+        if let Some(field) = prop_read(ident, &s[end..]) {
+            out.push_str(&expr_marker(base + marker + 1, ident.len()));
+            let _ = write!(out, "props.{field}.get()");
+            copied = end + 1 + field.len();
+            continue;
+        }
         if let Some(tokens) = tokens_read(ident, &s[end..], theme) {
             let mark = match tokens {
                 TokensRead::Token { name, .. } => expr_marker(base + end + 1, name.len()),
@@ -244,9 +258,25 @@ fn tokens_read<'a>(ident: &str, after: &'a str, theme: ThemeAccess) -> Option<To
     (theme == ThemeAccess::Tokens && ident == "theme").then(|| TokensRead::parse(after))
 }
 
-/// Collects the identifier of every `$ident` signal reference in `s`, used to clone signals captured by a closure. A library's `$theme` is none: it reads a function, not a binding.
+/// The field a `$props` marker followed by `after` reads, or `None` when it is not a `$props.field`. `$` binds to the identifier everywhere else (`$item.name` reads `item` and then takes `name`), but `props` is not reactive: its fields are, so the read reaches through it to the field, the way a library's `$theme.primary` reaches through to its token.
+fn prop_read<'a>(ident: &str, after: &'a str) -> Option<&'a str> {
+    if ident != "props" {
+        return None;
+    }
+    let tail = after.strip_prefix('.')?;
+    let len = tail
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .unwrap_or(tail.len());
+    let field = &tail[..len];
+    field
+        .starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
+        .then_some(field)
+}
+
+/// Collects the identifier of every `$ident` signal reference in `s`, used to clone signals captured by a closure. A library's `$theme` is none: it reads a function, not a binding. Nor is a `$props.field`: it is a place in `props`, which the capture of `props` places copies in on its own.
 pub(super) fn signal_idents(s: &str, theme: ThemeAccess) -> Vec<String> {
     dollar_spans(s)
+        .filter(|&(marker, end)| prop_read(&s[marker + 1..end], &s[end..]).is_none())
         .map(|(marker, end)| s[marker + 1..end].to_string())
         .filter(|ident| !(theme == ThemeAccess::Tokens && ident == "theme"))
         .collect()

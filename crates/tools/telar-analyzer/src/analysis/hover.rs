@@ -88,6 +88,7 @@ fn value_kind_label(kind: Option<ValueKind>) -> Option<String> {
     Some(match kind? {
         ValueKind::Keywords(table) => spellings(table),
         ValueKind::KeywordsOrNumber(table) => format!("{} | a number", spellings(table)),
+        ValueKind::KeywordsOrExpression(table) => format!("{} | an expression", spellings(table)),
         ValueKind::Number => "a number".to_string(),
         ValueKind::Boolean => "true | false".to_string(),
         ValueKind::Edges => "one number, or one per edge".to_string(),

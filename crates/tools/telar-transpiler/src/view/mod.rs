@@ -719,10 +719,12 @@ pub(crate) fn value_error(tag: &str, key: &str, value: &str, theme: ThemeAccess)
     match kind {
         // Only a flag key carries the empty spelling, so a valueless `align` is caught here too.
         ValueKind::Keywords(table) => crate::style::keyword(key, value, table).err(),
-        // A number is the axis itself and the names are steps of it, so either spelling is the same value.
-        ValueKind::KeywordsOrNumber(table) => (value.parse::<f32>().is_err())
-            .then(|| crate::style::keyword(key, value, table).err())
-            .flatten(),
+        ValueKind::KeywordsOrNumber(table) => {
+            crate::style::keyword_or_number(key, value, table, theme).err()
+        }
+        ValueKind::KeywordsOrExpression(table) => {
+            crate::style::keyword_or_expression(key, value, table, theme).err()
+        }
         ValueKind::Number => crate::style::format_number(value, theme).err(),
         // A yes or a no is whatever rustc can make one of, so there is nothing here to refuse.
         ValueKind::Boolean => None,

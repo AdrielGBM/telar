@@ -206,7 +206,17 @@ impl ViewGen<'_> {
         let role_call = match role {
             Some((variant, _)) if operated => format!(".control(::telar::Role::{variant})"),
             Some((variant, _)) => format!(".role(::telar::Role::{variant})"),
-            None => String::new(),
+            None => match el.attributes.iter().find(|a| a.key == "role").map(|a| {
+                crate::style::keyword_or_expression(
+                    "role",
+                    a.value.text(),
+                    crate::registry::ROLE_VALUES,
+                    self.theme_access,
+                )
+            }) {
+                Some(Ok(crate::style::Spelled::Expression(role))) => format!(".role({role})"),
+                _ => String::new(),
+            },
         };
         let toggled = self.predicate_call(el, "toggled");
         let holds_stroke = el
