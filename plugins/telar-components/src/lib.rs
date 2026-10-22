@@ -48,7 +48,8 @@ mod edit;
 #[cfg(feature = "overlays")]
 mod fuzzy;
 mod handle;
-mod heading;
+#[cfg(test)]
+mod heading_test;
 #[cfg(feature = "workbench")]
 mod icon_button;
 mod image;

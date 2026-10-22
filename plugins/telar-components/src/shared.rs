@@ -222,8 +222,6 @@ pub fn popup_offset() -> f32 {
 
 /// A caption's share of the text it labels.
 pub(crate) const CAPTION_RATIO: f32 = 0.85;
-/// A title's share of the body text around it.
-pub(crate) const HEADING_RATIO: f32 = 1.4;
 /// What is left of a line's ink once it is only supporting the line above it: the least that still reads at 4.5:1 on the tinted rows and key caps the catalogue paints behind such a line.
 pub(crate) const QUIET_ALPHA: f32 = 0.7;
 
@@ -283,15 +281,6 @@ pub(crate) fn resolve_open(
     id: &'static str,
 ) -> Option<telar::RwSignal<bool>> {
     open.or_else(|| (!id.is_empty()).then(|| telar::overlay_state(id)))
-}
-
-/// The shared title text style, re-read every frame so it tracks the active theme. Three consumers: `heading`, `section` and `modal`'s title.
-///
-/// A ratio of the text around it, where it used to be a flat 20px — so a theme that made its body text 11px left every title at the size a 14px body wanted.
-pub(crate) fn heading_style(inherited: TextStyle) -> TextStyle {
-    control_text(inherited, HEADING_RATIO)
-        .with_color(accent())
-        .with_font_weight(strong_weight())
 }
 
 fn caption_box(text_size: f32) -> LayoutStyle {

@@ -10,7 +10,7 @@ use telar::{
     focus::Role,
 };
 
-use crate::heading::heading_style;
+use crate::heading::{HeadingProps, heading};
 use crate::scrim;
 use crate::shared;
 use crate::strings;
@@ -146,7 +146,10 @@ fn build_open_modal(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = title.clone();
     let body_name = title.clone();
-    let heading = Text::declaring(move || title.get(), LayoutStyle::new(), heading_style)?;
+    let heading = heading(
+        HeadingProps::props().text(title).build(),
+        Children::default(),
+    )?;
 
     let close_label = Text::declaring(
         move || match &close_label {
