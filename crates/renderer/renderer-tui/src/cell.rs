@@ -19,6 +19,9 @@ impl Grapheme {
     }
 
     pub fn new(s: &str) -> Self {
+        if s.chars().any(is_terminal_control) {
+            return Self::from(REPLACEMENT);
+        }
         let bytes = s.as_bytes();
         if bytes.len() <= 27 {
             let mut buf = [0u8; 27];
@@ -29,11 +32,7 @@ impl Grapheme {
             };
         }
         match s.chars().next() {
-            Some(c) => {
-                let mut buf = [0u8; 27];
-                let n = c.encode_utf8(&mut buf).len();
-                Self { buf, len: n as u8 }
-            }
+            Some(c) => Self::from(c),
             None => Self::SPACE,
         }
     }
@@ -52,10 +51,22 @@ impl Default for Grapheme {
 
 impl From<char> for Grapheme {
     fn from(c: char) -> Self {
+        let c = if is_terminal_control(c) {
+            REPLACEMENT
+        } else {
+            c
+        };
         let mut buf = [0u8; 27];
         let n = c.encode_utf8(&mut buf).len();
         Self { buf, len: n as u8 }
     }
+}
+
+const REPLACEMENT: char = '\u{FFFD}';
+
+/// Whether `c` would drive the terminal instead of being shown: C0 controls, DEL and C1 controls. A raw ESC, BEL or CSI in cell text starts a sequence the terminal acts on.
+pub(crate) fn is_terminal_control(c: char) -> bool {
+    c.is_ascii_control() || ('\u{80}'..='\u{9f}').contains(&c)
 }
 
 /// The text attributes a terminal can carry that Telar's text style can ask for. Deliberately not the terminal's full SGR vocabulary: an attribute nothing upstream can express is one nothing can test.

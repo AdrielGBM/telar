@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use unicode_width::UnicodeWidthStr;
 
-use crate::cell::{Attrs, Cell, Grapheme};
+use crate::cell::{Attrs, Cell, Grapheme, is_terminal_control};
 use crate::color::{ColorDepth, Rgb, to_ansi16, to_ansi256};
 
 /// The cell grid one frame is painted into, and diffed against the last.
@@ -171,7 +171,8 @@ fn write_hyperlink(out: &mut Vec<u8>, uri: Option<&str>) {
     out.extend_from_slice(b"\x1b]8;;");
     if let Some(uri) = uri {
         // Control characters would end the sequence early and spill the rest of the URI onto the screen.
-        out.extend(uri.bytes().filter(|byte| !byte.is_ascii_control()));
+        let safe: String = uri.chars().filter(|&c| !is_terminal_control(c)).collect();
+        out.extend_from_slice(safe.as_bytes());
     }
     out.extend_from_slice(b"\x1b\\");
 }

@@ -349,6 +349,26 @@ fn the_glyphs_of_an_external_link_are_written_as_an_osc_8_hyperlink() {
 }
 
 #[test]
+fn app_text_cannot_inject_terminal_control_sequences() {
+    for (text, shown) in [
+        ("\x1b]52;c;AAAA\x07", "\u{FFFD}]52;c;AAAA\u{FFFD}"),
+        ("\u{9b}31m", "\u{FFFD}31m"),
+    ] {
+        let mut buf = grid(30, 1);
+        paint(
+            &mut buf,
+            &[text_cmd(text, Rect::new(0.0, 0.0, 8.0 * 30.0, 16.0))],
+        );
+        let mut out = Vec::new();
+        buf.diff_into(&grid(0, 0), crate::ColorDepth::TrueColor, &mut out);
+        assert!(!out.contains(&0x07), "no BEL in {out:?}");
+        let mut model = crate::buffer::TerminalModel::new(30, 1);
+        model.apply(&out);
+        assert_eq!(model.row(0).trim_end(), shown, "{text:?}");
+    }
+}
+
+#[test]
 fn a_route_link_has_nothing_a_terminal_can_open() {
     let mut buf = grid(4, 1);
     let route = renderer_core::Destination::Route(Default::default());

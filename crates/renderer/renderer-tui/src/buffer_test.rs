@@ -74,3 +74,21 @@ fn turning_an_attribute_off_resets_the_pen() {
         "the reset must be followed by the plain text: {s}"
     );
 }
+
+#[test]
+fn a_hyperlink_uri_cannot_end_its_sequence_early_with_a_c1_control() {
+    let mut buf = buffer(2, 1);
+    let link = buf.link_id("https://a\u{9b}31m\u{9c}b\x07c");
+    buf.get_mut(0, 0).unwrap().link = link;
+    buf.put(0, 0, Grapheme::from('x'), Rgb::WHITE, Attrs::NONE);
+    buf.get_mut(0, 0).unwrap().link = link;
+    let mut out = Vec::new();
+    buf.diff_into(&buffer(0, 0), ColorDepth::TrueColor, &mut out);
+    let text = String::from_utf8(out).unwrap();
+    assert!(text.contains("\x1b]8;;https://a31mbc\x1b\\"), "{text:?}");
+    assert!(
+        !text
+            .chars()
+            .any(|c| ('\u{80}'..='\u{9f}').contains(&c) || c == '\x07')
+    );
+}
