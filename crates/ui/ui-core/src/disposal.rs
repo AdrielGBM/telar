@@ -10,9 +10,11 @@ use std::cell::Cell;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 use layout_core::NodeId;
-use reactive_core::{OwnerId, PanicPayload, SurfaceHandle, current_surface, dispose_owner};
+use reactive_core::{
+    OwnerId, PanicPayload, SurfaceHandle, current_surface, dispose_owner, owner_scope,
+};
 
-use crate::context::remove_node;
+use crate::context::{layout_generation, record_nodes, remove_node};
 
 reactive_core::dropless_thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
@@ -21,17 +23,61 @@ reactive_core::dropless_thread_local! {
 
 struct Retired {
     owner: Option<OwnerId>,
-    node: NodeId,
+    nodes: Vec<NodeId>,
     surface: SurfaceHandle,
+    generation: u64,
 }
 
 /// Frees a child's owner and its layout node, once nothing is executing inside it.
 pub(crate) fn retire(owner: Option<OwnerId>, node: NodeId) {
-    let retired = Retired {
+    schedule(Retired {
         owner,
-        node,
+        nodes: vec![node],
         surface: current_surface(),
-    };
+        generation: layout_generation(),
+    });
+}
+
+/// What a build made under an owner of its own — that owner, and the layout nodes the build created — freed together when this drops, as a retired child is. Disposing the owner frees only the reactive half: a layout node is freed by [`remove_node`] and nothing else, so a tree torn down by its owner alone leaves its nodes laid out with their rect signals freed under them, and the next pass over them panics.
+#[must_use = "dropping the build frees what it made"]
+pub struct OwnedBuild {
+    owner: OwnerId,
+    roots: Vec<NodeId>,
+    surface: SurfaceHandle,
+    generation: u64,
+}
+
+impl OwnedBuild {
+    /// Runs `build` under a fresh owner, recording the layout nodes it creates.
+    pub fn run<T>(build: impl FnOnce() -> T) -> (T, Self) {
+        let scope = owner_scope();
+        let recording = record_nodes();
+        let built = build();
+        let roots = recording.keep_roots();
+        let owner = scope.id();
+        drop(scope);
+        let owned = Self {
+            owner,
+            roots,
+            surface: current_surface(),
+            generation: layout_generation(),
+        };
+        (built, owned)
+    }
+}
+
+impl Drop for OwnedBuild {
+    fn drop(&mut self) {
+        schedule(Retired {
+            owner: Some(self.owner),
+            nodes: std::mem::take(&mut self.roots),
+            surface: self.surface,
+            generation: self.generation,
+        });
+    }
+}
+
+fn schedule(retired: Retired) {
     if DEPTH.with(Cell::get) == 0 {
         let mut panicked = None;
         free(retired, &mut panicked);
@@ -85,9 +131,11 @@ fn free(retired: Retired, panicked: &mut Option<PanicPayload>) {
     if let Some(owner) = retired.owner {
         contain(panicked, || dispose_owner(owner));
     }
-    // A surface torn down first took its tree with it, and the tree active now is another surface's.
-    if current_surface() == retired.surface {
-        contain(panicked, || remove_node(retired.node));
+    // A surface torn down first took its tree with it, and so did a reset: the ids held name nothing, or whatever the next tree gave them.
+    if current_surface() == retired.surface && layout_generation() == retired.generation {
+        for node in retired.nodes {
+            contain(panicked, || remove_node(node));
+        }
     }
 }
 

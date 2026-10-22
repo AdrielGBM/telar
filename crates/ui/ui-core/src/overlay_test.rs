@@ -665,6 +665,50 @@ fn dropping_a_portaled_overlay_leaves_its_content_for_the_placeholder_that_holds
     assert_eq!(live_node_count(), baseline);
 }
 
+/// The host is not the overlay's, and outlives the tree the overlay was declared in: still hanging from it, the content was laid out on the next pass with its rect signals freed by the owner, and the pass panicked.
+#[test]
+fn disposing_its_owner_takes_a_portaled_overlays_content_off_a_host_that_outlives_it() {
+    use crate::context::relayout_if_dirty;
+    use layout_reactive::children;
+
+    reset_layout_runtime();
+    let host = Container::new(LayoutStyle::new().width(400.0).height(400.0), vec![]).unwrap();
+    let host_node = host.layout_node();
+    compute_layout(
+        host_node,
+        AvailableSpace::Definite(400.0),
+        AvailableSpace::Definite(400.0),
+    )
+    .unwrap();
+    let scope = reactive_core::owner_scope();
+    let panel = Container::new(LayoutStyle::new().width(50.0).height(20.0), vec![]).unwrap();
+    let overlay = Overlay::new(LayoutStyle::new(), vec![Box::new(panel)]).unwrap();
+    let content = overlay.content_node();
+    let tree = ComponentList::new(
+        Container::new(LayoutStyle::new().flex_column(), vec![Box::new(overlay)]).unwrap(),
+    );
+    let owner = scope.id();
+    drop(scope);
+    relayout_if_dirty();
+    assert!(
+        children(host_node).contains(&content),
+        "portaled to the host"
+    );
+
+    drop(tree);
+    reactive_core::dispose_owner(owner);
+    assert!(
+        !children(host_node).contains(&content),
+        "taken off the host with its owner"
+    );
+    compute_layout(
+        host_node,
+        AvailableSpace::Definite(500.0),
+        AvailableSpace::Definite(500.0),
+    )
+    .expect("the host lays out without the content");
+}
+
 /// Its content is a root of its own, so a box hiding the place it was declared in has to tell it, as it tells a fixed layer: an open overlay is hidden with that box rather than closed, and back when the box is.
 #[test]
 fn a_box_hiding_where_the_overlay_was_declared_hides_the_overlay() {

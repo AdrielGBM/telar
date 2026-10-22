@@ -111,6 +111,7 @@ pub use dismiss::{
     DismissRegistration, confirm_top, dismiss_depth, dismiss_top, register_transaction,
     register_transaction_within, use_dismiss_depth,
 };
+pub use disposal::OwnedBuild;
 pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use error_boundary::{BuildFailure, ErrorBoundary};
 pub use fixed_layer::FixedLayer;

@@ -923,6 +923,30 @@ fn a_recording_frees_only_what_its_owner_built() {
     assert_eq!(live_node_count(), baseline + 1);
 }
 
+/// What a mounted tree frees its layout with: its owner frees none of it, so the roots it keeps have to reach every node it built, and naming a node something else frees would only free it twice.
+#[test]
+fn a_recording_kept_for_its_roots_names_only_the_nodes_nothing_else_frees() {
+    reset_layout_runtime();
+    let baseline = live_node_count();
+
+    let recording = record_nodes();
+    let (leaf, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let tree = new_container(LayoutStyle::new(), &[leaf]).unwrap();
+    let (scroll_content, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let scroll = new_container(LayoutStyle::new(), &[]).unwrap();
+    set_scroll_content(scroll, scroll_content).unwrap();
+    let (layer, _) = new_leaf(LayoutStyle::new()).unwrap();
+    free_with(layer, scroll);
+    let (loose, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let roots = recording.keep_roots();
+
+    assert_eq!(roots, [tree, scroll, loose]);
+    for root in roots {
+        remove_node(root);
+    }
+    assert_eq!(live_node_count(), baseline, "and they reach every node");
+}
+
 #[test]
 fn an_unwind_through_a_recording_frees_what_it_recorded() {
     reset_layout_runtime();

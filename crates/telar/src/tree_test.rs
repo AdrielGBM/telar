@@ -124,3 +124,70 @@ fn releasing_a_hot_tree_frees_the_controls_it_built() {
     unsafe { HotTree::release(tree) };
     assert!(!ui_core::focus::is_registered(button));
 }
+
+fn fill() -> layout_core::LayoutStyle {
+    layout_core::LayoutStyle::new()
+        .width(layout_core::SizeDimension::Percent(1.0))
+        .height(layout_core::SizeDimension::Percent(1.0))
+}
+
+fn swatch() -> Box<dyn ui_core::LayoutItem> {
+    Box::new(
+        ui_core::Rectangle::new(fill(), || {
+            renderer_core::RectStyle::filled(renderer_core::Color::BLACK, 0.0)
+        })
+        .expect("a rectangle builds"),
+    )
+}
+
+fn resize(tree: &mut dyn UiTree) {
+    tree.on_event(&Event::WindowResized {
+        width: 400,
+        height: 300,
+    });
+    ui_core::relayout_if_dirty();
+}
+
+/// The runner drops a tree before it builds the next. One that took only its owner with it left its nodes behind and its root the overlay host, so the next tree's overlay portaled onto a dead root and the next layout pass read rect signals its owner had freed — whether or not the first tree had an overlay of its own.
+#[test]
+fn a_remounted_tree_portals_onto_its_own_root_and_leaves_no_node_of_the_last_one() {
+    ui_core::reset_layout_runtime();
+    let baseline = ui_core::live_node_count();
+    let mut first = LocalTree::new(|| {
+        Box::new(ui_core::WindowRoot::wrapping(swatch()).expect("a root builds"))
+    });
+    resize(&mut first);
+    drop(first);
+    assert_eq!(
+        ui_core::live_node_count(),
+        baseline,
+        "the first tree took its nodes with it"
+    );
+
+    let content = std::rc::Rc::new(std::cell::Cell::new(None));
+    let mut second = LocalTree::new({
+        let content = content.clone();
+        move || {
+            let overlay =
+                ui_core::overlay::Overlay::new(fill(), vec![swatch()]).expect("an overlay builds");
+            content.set(Some(overlay.content_node()));
+            let page =
+                ui_core::Container::new(fill(), vec![Box::new(overlay)]).expect("a page builds");
+            Box::new(ui_core::WindowRoot::wrapping(Box::new(page)).expect("a root builds"))
+        }
+    });
+    resize(&mut second);
+    let content = content.get().expect("the overlay was built");
+    assert_eq!(
+        ui_core::track_layout(content).map(|rect| rect.peek()),
+        Some(geometry_core::Rect::new(0.0, 0.0, 400.0, 300.0)),
+        "the overlay fills the new tree's window"
+    );
+
+    drop(second);
+    assert_eq!(
+        ui_core::live_node_count(),
+        baseline,
+        "and so did the second"
+    );
+}

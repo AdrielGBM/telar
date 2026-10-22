@@ -1,6 +1,7 @@
 //! The layout runtime the widget tree drives: node rects as signals, dirty roots, and the overlay host.
 
 use std::rc::Rc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use geometry_core::Rect;
 use layout_core::{
@@ -38,6 +39,13 @@ pub fn reset_layout_runtime() {
     with_runtime(|rt| *rt = LayoutRuntime::new());
     with_parents(|p| p.clear());
     with_scroll_hosts(|h| h.clear());
+}
+
+static NEXT_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// Which tree the active surface's runtime holds: every fresh runtime, and so every [`reset_layout_runtime`], gets one no earlier tree had. A [`NodeId`] names a node only within one generation, since a reset restarts the ids. Whatever keeps ids past a reset checks this before freeing them, or it frees the next tree's nodes.
+pub fn layout_generation() -> u64 {
+    with_runtime_ref(|rt| rt.generation)
 }
 
 /// Creates a leaf node and returns it with the signal its laid-out rect is published through.
@@ -146,6 +154,30 @@ impl NodeRecording {
     /// Leaves the recorded nodes alive. The recording this one sits inside takes over the ones it would have recorded itself — built on its surface, under its owner — and no others.
     pub fn keep(mut self) {
         self.kept = true;
+    }
+
+    /// [`keep`](Self::keep), handing back the recorded nodes nothing else frees: those hanging from no node, held by none and showing in no scroll area. [`remove_node`] on each frees every node recorded, and whatever was attached beneath them since.
+    pub fn keep_roots(self) -> Vec<NodeId> {
+        let recorded: Vec<NodeId> = RECORDINGS.with(|stack| {
+            stack
+                .borrow()
+                .get(self.depth)
+                .map(|recording| recording.nodes.iter().map(|&(node, _)| node).collect())
+                .unwrap_or_default()
+        });
+        self.keep();
+        with_runtime_ref(|rt| {
+            let held: FxHashSet<NodeId> = rt.held_roots.values().flatten().copied().collect();
+            recorded
+                .into_iter()
+                .filter(|&node| {
+                    rt.registry.contains_key(&node)
+                        && !held.contains(&node)
+                        && !rt.engine.is_scroll_content(node)
+                        && parent(node).is_none()
+                })
+                .collect()
+        })
     }
 
     fn close(&self) -> Option<Recording> {
@@ -802,6 +834,7 @@ impl OverlayHost {
 
 struct LayoutRuntime {
     engine: LayoutEngine,
+    generation: u64,
     registry: FxHashMap<NodeId, RwSignal<Rect>>,
     // So `compute_layout` can re-run when only the space changed.
     last_space: FxHashMap<NodeId, (AvailableSpace, AvailableSpace)>,
@@ -850,6 +883,7 @@ impl LayoutRuntime {
     fn new() -> Self {
         Self {
             engine: LayoutEngine::new(),
+            generation: NEXT_GENERATION.fetch_add(1, Ordering::Relaxed),
             registry: FxHashMap::default(),
             last_space: FxHashMap::default(),
             root_auto: FxHashMap::default(),

@@ -413,6 +413,13 @@ impl Overlay {
             // An empty leaf takes no room in the flow, and left auto-sized it fills the space it is laid out in when the overlay is the root itself, which then hosts the portal.
             let (placeholder, _r) = crate::context::new_leaf(LayoutStyle::new())?;
             layout_reactive::free_with(content, placeholder);
+            let home = HomeSurface::here();
+            // Only taken off the host here, and freed with its placeholder: a cleanup registered after this one may still climb to the content, as a menu giving the keyboard back does.
+            reactive_core::on_cleanup(move || {
+                if let Some(_home) = home.enter() {
+                    layout_reactive::detach_overlay(content);
+                }
+            });
             input.link(content, placeholder, true);
             Ok(Overlay {
                 layout_node: placeholder,
@@ -422,7 +429,7 @@ impl Overlay {
                 focus_scope,
                 anchor,
                 visible,
-                home: HomeSurface::here(),
+                home,
                 _input: input,
             })
         } else {

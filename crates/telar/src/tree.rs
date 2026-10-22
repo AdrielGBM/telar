@@ -8,9 +8,8 @@ use std::cell::Ref;
 use std::ops::Deref;
 
 use platform_core::Event;
-use reactive_core::{OwnerId, dispose_owner, owner_scope};
 use renderer_core::DrawCommand;
-use ui_core::{Component, ComponentList, EventResult};
+use ui_core::{Component, ComponentList, EventResult, OwnedBuild};
 use ui_tree::SegmentNodeInfo;
 
 /// One composed frame: borrowed straight from the segment cache when the tree is in this process, owned when it had to be copied out of a dylib.
@@ -53,27 +52,19 @@ pub trait UiTree {
     fn end_frame(&self) {}
 }
 
-/// A [`ComponentList`] that owns everything its root's build made, so dropping it frees the whole tree: the effects and signals the build created, and the widgets those effects keep alive, focus registrations with them.
-///
-/// A [`ComponentList`] alone frees nothing it did not create: a mounted tree lives as long as the owner it was built under. Without an owner of its own, a remount left the previous tree running in the surface's root owner until the surface closed.
+/// A [`ComponentList`] that owns everything its root's build made, so dropping it frees the whole tree: the effects and signals the build created, the widgets those effects keep alive, focus registrations with them, and the layout nodes the tree is laid out on. A [`ComponentList`] alone frees nothing it did not create: a mounted tree lives as long as the owner it was built under. Without an owner of its own, a remount left the previous tree running in the surface's root owner until the surface closed. With only the owner, it left the previous tree's nodes behind with their rect signals freed, its root still the overlay host the next tree's overlays attached to.
 struct OwnedTree {
     list: ComponentList,
-    owner: OwnerId,
+    _build: OwnedBuild,
 }
 
 impl OwnedTree {
     fn mount(build: impl FnOnce() -> Box<dyn Component>) -> Self {
-        let scope = owner_scope();
-        let list = ComponentList::new(build());
-        let owner = scope.id();
-        drop(scope);
-        Self { list, owner }
-    }
-}
-
-impl Drop for OwnedTree {
-    fn drop(&mut self) {
-        dispose_owner(self.owner);
+        let (list, built) = OwnedBuild::run(|| ComponentList::new(build()));
+        Self {
+            list,
+            _build: built,
+        }
     }
 }
 

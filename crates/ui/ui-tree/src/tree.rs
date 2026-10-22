@@ -12,7 +12,7 @@ use crate::segment::{self, Segment, SegmentRoot};
 
 /// The mounted tree: what a runner dispatches events into and asks each frame's commands of.
 ///
-/// Dropping it frees nothing: the tree, its root's render effect included, lives as long as the owner it was built and mounted under, whose effects keep every widget alive. Build and mount under an owner of the tree's own and dispose that, as the runner does, to free a tree and the focus registrations of its controls.
+/// Dropping it frees nothing: the tree, its root's render effect included, lives as long as the owner it was built and mounted under, whose effects keep every widget alive. Build and mount under an owner of the tree's own and dispose that to free a tree and the focus registrations of its controls, then free the layout nodes the build created, which no owner frees: what `ui_core::OwnedBuild` does for the runner.
 pub struct ComponentList {
     // Shared with the root segment, which borrows it immutably to render while `on_event` borrows it mutably.
     root: Rc<RefCell<dyn Component>>,
