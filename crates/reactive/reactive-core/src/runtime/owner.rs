@@ -330,48 +330,98 @@ impl Drop for Disposing {
     }
 }
 
-/// Disposes an owner and everything below it, children first, each owner's teardown inside the surface it was created on; a panic mid-teardown resumes only once it completes, and whatever the cleanups invalidated is flushed afterward rather than dropped, since a surviving effect may still need to see it.
-pub fn dispose_owner(id: OwnerId) {
-    let mut torn = uproot(id);
-    let mut panicked = None;
+/// Raised while a teardown's body runs, so an owner disposed from inside it — by a cleanup, or by a widget dropping with an effect — waits for it instead of being freed under it: set only by the outermost [`dispose_owner`], since every one nested in it is deferred.
+struct TearingDown;
 
+impl TearingDown {
+    fn enter() -> Self {
+        RUNTIME.with(|rt| rt.borrow_mut().tearing_down = true);
+        TearingDown
+    }
+}
+
+impl Drop for TearingDown {
+    fn drop(&mut self) {
+        RUNTIME.with(|rt| rt.borrow_mut().tearing_down = false);
+    }
+}
+
+/// Disposes an owner and everything below it, children first, each owner's teardown inside the surface it was created on; a panic mid-teardown resumes only once it completes, and whatever the cleanups invalidated is flushed afterward rather than dropped, since a surviving effect may still need to see it. Called from inside another teardown, the owner is freed once that teardown's widgets are gone but before its signals are: a cleanup that lets go of state the torn tree's widgets still read as they drop, a gesture cancelled by its box going away, would otherwise free it under them.
+pub fn dispose_owner(id: OwnerId) {
+    let deferred = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        if rt.tearing_down {
+            rt.released_mid_teardown.push(id);
+        }
+        rt.tearing_down
+    });
+    if deferred {
+        return;
+    }
+    let mut panicked = None;
     {
         let _disposing = Disposing::enter();
+        let _tearing = TearingDown::enter();
+        tear_down(id, &mut panicked);
+    }
+    flush_when_settled();
+    resume_unless_unwinding(panicked);
+}
 
-        // One wave, not one per withdrawal: `undeclare` bumps the cascade's `structure` signal, which every context read subscribes to, so tearing down N nodes outside a batch is N invalidations across the tree.
-        batch(|| {
-            for owner in &mut torn {
-                let _surface = owner.surface.enter();
-                for cleanup in std::mem::take(&mut owner.cleanups) {
-                    contain(&mut panicked, cleanup);
-                }
-            }
-        });
+fn tear_down(id: OwnerId, panicked: &mut Option<PanicPayload>) {
+    let mut torn = uproot(id);
 
+    // One wave, not one per withdrawal: `undeclare` bumps the cascade's `structure` signal, which every context read subscribes to, so tearing down N nodes outside a batch is N invalidations across the tree.
+    batch(|| {
         for owner in &mut torn {
             let _surface = owner.surface.enter();
-            for effect in std::mem::take(&mut owner.effects) {
-                contain(&mut panicked, || deregister_effect(effect));
+            for cleanup in std::mem::take(&mut owner.cleanups) {
+                contain(panicked, cleanup);
             }
         }
-        for owner in torn {
-            // Taken out under the borrow and dropped after releasing it: a signal whose value owns signal handles re-enters the runtime as that value drops, which under the borrow aborts.
-            let removed: Vec<Box<dyn Any>> = RUNTIME.with(|rt| {
-                let mut rt = rt.borrow_mut();
-                owner
-                    .signals
-                    .into_iter()
-                    .filter_map(|signal| rt.signals.remove(signal))
-                    .map(|storage| storage.value)
-                    .collect()
-            });
-            let _surface = owner.surface.enter();
-            contain(&mut panicked, || drop(removed));
+    });
+
+    for owner in &mut torn {
+        let _surface = owner.surface.enter();
+        for effect in std::mem::take(&mut owner.effects) {
+            contain(panicked, || deregister_effect(effect));
         }
     }
+    free_released_mid_teardown(panicked);
+    for owner in torn {
+        // Taken out under the borrow and dropped after releasing it: a signal whose value owns signal handles re-enters the runtime as that value drops, which under the borrow aborts.
+        let removed: Vec<Box<dyn Any>> = RUNTIME.with(|rt| {
+            let mut rt = rt.borrow_mut();
+            owner
+                .signals
+                .into_iter()
+                .filter_map(|signal| rt.signals.remove(signal))
+                .map(|storage| storage.value)
+                .collect()
+        });
+        let _surface = owner.surface.enter();
+        contain(panicked, || drop(removed));
+    }
+}
 
-    flush_when_settled();
-    if let Some(payload) = panicked {
+fn free_released_mid_teardown(panicked: &mut Option<PanicPayload>) {
+    loop {
+        let released =
+            RUNTIME.with(|rt| std::mem::take(&mut rt.borrow_mut().released_mid_teardown));
+        if released.is_empty() {
+            return;
+        }
+        for id in released {
+            tear_down(id, panicked);
+        }
+    }
+}
+
+/// A second panic resumed out of a `Drop` that runs while the thread already unwinds aborts the process, hiding the first; that one is already on its way out.
+fn resume_unless_unwinding(panicked: Option<PanicPayload>) {
+    if let Some(payload) = panicked
+        && !std::thread::panicking()
+    {
         resume_unwind(payload);
     }
 }
@@ -416,9 +466,7 @@ pub fn dispose_surface(surface: SurfaceHandle) {
         }
     }
     flush_when_settled();
-    if let Some(payload) = panicked {
-        resume_unwind(payload);
-    }
+    resume_unless_unwinding(panicked);
 }
 
 /// Whether [`dispose_surface`] has already torn this surface down. [`SurfaceHandle::NONE`], the ambient surface, is never disposed.
@@ -449,9 +497,7 @@ pub fn dispose_surface_owners(surface: SurfaceHandle) {
         }
     }
     flush_when_settled();
-    if let Some(payload) = panicked {
-        resume_unwind(payload);
-    }
+    resume_unless_unwinding(panicked);
 }
 
 /// How many signals the runtime is holding — the arenas are private, so this is the only evidence a test has that disposal actually freed something rather than just re-rendering.

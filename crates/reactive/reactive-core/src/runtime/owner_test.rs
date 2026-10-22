@@ -236,3 +236,91 @@ fn find_context_may_read_a_signal_while_it_decides() {
         Some("read")
     );
 }
+
+struct ReadsOnDrop {
+    read: crate::RwSignal<String>,
+    seen: Rc<RefCell<Option<String>>>,
+}
+
+impl Drop for ReadsOnDrop {
+    fn drop(&mut self) {
+        *self.seen.borrow_mut() = Some(self.read.peek());
+    }
+}
+
+struct DisposesOnDrop(OwnerId);
+
+impl Drop for DisposesOnDrop {
+    fn drop(&mut self) {
+        dispose_owner(self.0);
+    }
+}
+
+/// A popover's lease: state a detached owner holds for a tree, let go by the tree's cleanup, while a gesture still live in that tree reads it as the tree's widgets drop.
+#[test]
+fn an_owner_a_cleanup_releases_outlives_the_widgets_its_teardown_still_drops() {
+    let lease = crate::detached(|| owner_scope().id());
+    let held = with_owner(Some(lease), || signal(String::from("held")));
+    let seen = Rc::new(RefCell::new(None));
+
+    let tree = owner_scope();
+    on_cleanup(move || dispose_owner(lease));
+    let widget = ReadsOnDrop {
+        read: held,
+        seen: Rc::clone(&seen),
+    };
+    effect(move || {
+        let _ = &widget;
+    });
+    let tree_id = tree.id();
+    drop(tree);
+
+    dispose_owner(tree_id);
+
+    assert_eq!(seen.borrow().as_deref(), Some("held"));
+    assert!(!held.is_alive(), "and is freed once the teardown is done");
+}
+
+#[test]
+fn an_owner_released_mid_teardown_is_freed_while_the_torn_owners_signals_still_stand() {
+    let seen = Rc::new(RefCell::new(None));
+    let tree = owner_scope();
+    let title = signal(String::from("title"));
+    let inner = crate::detached(|| owner_scope().id());
+    with_owner(Some(inner), || {
+        let widget = ReadsOnDrop {
+            read: title,
+            seen: Rc::clone(&seen),
+        };
+        effect(move || {
+            let _ = &widget;
+        });
+    });
+    let releasing = DisposesOnDrop(inner);
+    effect(move || {
+        let _ = &releasing;
+    });
+    let tree_id = tree.id();
+    drop(tree);
+
+    dispose_owner(tree_id);
+
+    assert_eq!(seen.borrow().as_deref(), Some("title"));
+    assert!(!title.is_alive());
+}
+
+#[test]
+fn a_teardown_that_panics_while_the_thread_unwinds_leaves_the_first_panic_to_finish() {
+    let owner = owner_scope();
+    on_cleanup(|| panic!("second"));
+    let id = owner.id();
+    drop(owner);
+
+    let unwound = catch_unwind(AssertUnwindSafe(|| {
+        let _disposes = DisposesOnDrop(id);
+        panic!("first");
+    }));
+
+    let payload = unwound.expect_err("the first panic unwinds");
+    assert_eq!(payload.downcast_ref::<&str>(), Some(&"first"));
+}

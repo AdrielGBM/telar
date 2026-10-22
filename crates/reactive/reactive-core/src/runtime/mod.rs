@@ -95,6 +95,8 @@ pub(crate) struct Runtime {
     next_flush_callback_id: u64,
     /// How many teardowns are in flight. Non-zero means the arenas are mid-surgery — see `owner::Disposing` — and `flush` stays out until it is back to zero.
     pub(crate) disposing: usize,
+    pub(crate) tearing_down: bool,
+    pub(crate) released_mid_teardown: Vec<OwnerId>,
     pub(crate) flushing: bool,
     flush_epoch: u64,
     /// The (effect, signal) pairs already reported as waking themselves, so the warning is said once rather than on every pass of a loop that has no other end.
@@ -124,6 +126,8 @@ impl Runtime {
             settle_queue: Vec::new(),
             next_flush_callback_id: 0,
             disposing: 0,
+            tearing_down: false,
+            released_mid_teardown: Vec::new(),
             flushing: false,
             flush_epoch: 0,
             #[cfg(debug_assertions)]
