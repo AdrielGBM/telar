@@ -4,9 +4,9 @@ use std::process::Command;
 
 use super::android::{android_sdk_root, installed_android_platforms, resolve_ndk_root};
 use super::config::{
-    WEB_PROFILE_TOML, backend_as_str, find_package_dir, has_web_profile, load_config,
-    manifest_has_telar, missing_devtools_note, missing_workshop_note, moved_features_hint_for,
-    resolve_package,
+    WEB_PROFILE_TOML, backend_as_str, find_package_dir, has_web_profile, missing_devtools_note,
+    missing_workshop_note, moved_features_hint_for, read_manifest_telar, resolve_package,
+    try_load_config,
 };
 
 struct Doctor {
@@ -109,23 +109,19 @@ pub(crate) fn run_doctor_cmd() -> ! {
         Some(root) => doc.info("workspace root", &root.display().to_string()),
         None => doc.info("workspace root", "none (standalone package)"),
     }
-    let config = load_config(&[]);
     let package_dir = find_package_dir(&[]);
+    let config = try_load_config(&package_dir).unwrap_or_default();
     let telar_toml = package_dir.join("telar.toml");
     if telar_toml.exists() {
         doc.ok("telar.toml", &telar_toml.display().to_string());
     } else {
         doc.info("telar.toml", "not found (using defaults)");
     }
-    let has_manifest_telar = manifest_has_telar(&package_dir);
-    doc.info(
-        "[package.metadata.telar]",
-        if has_manifest_telar {
-            "present"
-        } else {
-            "not set"
-        },
-    );
+    match read_manifest_telar(&package_dir) {
+        Ok(Some(_)) => doc.info("[package.metadata.telar]", "present"),
+        Ok(None) => doc.info("[package.metadata.telar]", "not set"),
+        Err(e) => doc.fail("[package.metadata.telar]", &e.to_string()),
+    }
     doc.info(
         "config precedence",
         "CLI flags > telar.toml > [package.metadata.telar] > defaults",

@@ -7,7 +7,7 @@ use clap::ValueEnum;
 use serde::Deserialize;
 
 pub(crate) use telar_project::{DevSection, TelarSection, WindowSection};
-use telar_project::{RendererBackend, TelarManifest};
+use telar_project::{ManifestError, RendererBackend, TelarManifest};
 
 /// The three words the `--backend` flag takes.
 ///
@@ -105,8 +105,6 @@ impl<T: Clone> Inheritable<T> {
 #[derive(Deserialize, Default)]
 pub(crate) struct CargoPackageMetadata {
     pub(crate) android: Option<AndroidMetadata>,
-    // `[package.metadata.telar]` — same schema as telar.toml's `[telar]`, but overridden by telar.toml.
-    pub(crate) telar: Option<TelarSection>,
 }
 #[derive(Deserialize, Default)]
 pub(crate) struct AndroidMetadata {
@@ -663,28 +661,34 @@ pub(crate) fn default_app_id(name: &str) -> String {
     format!("com.example.{name}")
 }
 
-// Reads `[package.metadata.telar]` from the package's Cargo.toml (the lowest-precedence file source).
-fn read_manifest_config(dir: &Path) -> TelarSection {
-    let Ok(content) = std::fs::read_to_string(dir.join("Cargo.toml")) else {
-        return TelarSection::default();
-    };
-    toml::from_str::<CargoManifest>(&content)
-        .ok()
-        .and_then(|m| m.package)
-        .and_then(|p| p.metadata)
-        .and_then(|m| m.telar)
-        .unwrap_or_default()
+#[derive(Deserialize)]
+struct ManifestTelarOnly {
+    package: Option<PackageTelarOnly>,
+}
+#[derive(Deserialize)]
+struct PackageTelarOnly {
+    metadata: Option<MetadataTelarOnly>,
+}
+#[derive(Deserialize)]
+struct MetadataTelarOnly {
+    telar: Option<TelarSection>,
 }
 
-// `read_manifest_config` erases the present/absent distinction via `unwrap_or_default`, so presence needs its own read.
-pub(crate) fn manifest_has_telar(dir: &Path) -> bool {
-    std::fs::read_to_string(dir.join("Cargo.toml"))
-        .ok()
-        .and_then(|c| toml::from_str::<CargoManifest>(&c).ok())
-        .and_then(|m| m.package)
+// Only `package.metadata.telar` is held to the telar schema; the rest of Cargo.toml is cargo's. Absent is `Ok(None)`, present but invalid is an error, as it is for telar.toml.
+pub(crate) fn read_manifest_telar(dir: &Path) -> Result<Option<TelarSection>, ManifestError> {
+    let path = dir.join("Cargo.toml");
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return Ok(None);
+    };
+    let parsed =
+        toml::from_str::<ManifestTelarOnly>(&content).map_err(|e| ManifestError::Invalid {
+            path,
+            message: e.to_string(),
+        })?;
+    Ok(parsed
+        .package
         .and_then(|p| p.metadata)
-        .and_then(|m| m.telar)
-        .is_some()
+        .and_then(|m| m.telar))
 }
 
 /// The `[profile.web]` entry `cargo telar new`/`init` writes for a web target, and what `doctor` and
@@ -709,23 +713,22 @@ pub(crate) fn has_web_profile(workspace_root: &Path) -> bool {
         .is_some()
 }
 
-// Reads `[telar]` from telar.toml, which overrides the manifest metadata.
+// Lowest to highest: built-in defaults, `[package.metadata.telar]`, `telar.toml`. The CLI flags are layered on by each command.
 //
-// Fatal rather than a warning, which is what it used to be. The schema refuses a key it does not recognise, and a project that misspelled one has configured nothing — carrying on would run the build the author did not ask for and say so in a line they have already scrolled past.
-fn read_toml_config(dir: &Path) -> TelarSection {
-    match TelarManifest::load(dir) {
-        Ok(manifest) => manifest.telar,
+// A key the schema does not recognise in either file is an error: a project that misspelled one has configured nothing, and carrying on would run a build the author did not ask for.
+pub(crate) fn try_load_config(dir: &Path) -> Result<TelarSection, ManifestError> {
+    let manifest = read_manifest_telar(dir)?.unwrap_or_default();
+    Ok(merge_config(manifest, TelarManifest::load(dir)?.telar))
+}
+
+pub(crate) fn load_config(args: &[String]) -> TelarSection {
+    match try_load_config(&find_package_dir(args)) {
+        Ok(config) => config,
         Err(e) => {
             eprintln!("[cargo-telar] {e}");
             std::process::exit(2);
         }
     }
-}
-
-// Lowest to highest: built-in defaults, `[package.metadata.telar]`, `telar.toml`, CLI flags. The flags are layered on by each command after this returns.
-pub(crate) fn load_config(args: &[String]) -> TelarSection {
-    let dir = find_package_dir(args);
-    merge_config(read_manifest_config(&dir), read_toml_config(&dir))
 }
 
 fn merge_opt<T>(base: Option<T>, over: Option<T>, merge: impl FnOnce(T, T) -> T) -> Option<T> {

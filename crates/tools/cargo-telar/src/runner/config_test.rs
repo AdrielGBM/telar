@@ -431,3 +431,56 @@ fn the_watch_feature_becomes_telar_watch_without_a_prelude_entry() {
     assert!(hint.contains("cargo add -p app telar-watch"), "{hint}");
     assert!(!hint.contains("prelude"), "{hint}");
 }
+
+fn manifest_dir(name: &str, cargo_toml: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!(
+        "telar_manifest_telar_{name}_{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Cargo.toml"), cargo_toml).unwrap();
+    dir
+}
+
+#[test]
+fn manifest_telar_with_a_misspelled_top_level_key_is_an_error_naming_it() {
+    let dir = manifest_dir(
+        "top_level",
+        "[package]\nname = \"app\"\n\n[package.metadata.telar]\nbackned = \"software\"\n",
+    );
+    let error = read_manifest_telar(&dir).unwrap_err().to_string();
+    assert!(error.contains("Cargo.toml"), "{error}");
+    assert!(error.contains("backned"), "{error}");
+    assert!(try_load_config(&dir).is_err());
+}
+
+#[test]
+fn manifest_telar_with_a_misspelled_nested_key_is_an_error_naming_it() {
+    let dir = manifest_dir(
+        "nested",
+        "[package]\nname = \"app\"\n\n[package.metadata.telar.dev.window]\nwidht = 800\n",
+    );
+    let error = read_manifest_telar(&dir).unwrap_err().to_string();
+    assert!(error.contains("widht"), "{error}");
+}
+
+#[test]
+fn manifest_without_a_telar_section_reads_as_absent() {
+    let dir = manifest_dir(
+        "absent",
+        "[package]\nname = \"app\"\n\n[package.metadata.android]\npackage = \"x\"\n\n[unrelated]\nwhatever = 1\n",
+    );
+    assert_eq!(read_manifest_telar(&dir).unwrap(), None);
+    assert_eq!(try_load_config(&dir).unwrap(), TelarSection::default());
+}
+
+#[test]
+fn a_valid_manifest_telar_section_is_parsed() {
+    let dir = manifest_dir(
+        "valid",
+        "[package]\nname = \"app\"\n\n[package.metadata.telar]\nbackend = \"software\"\n\n[package.metadata.telar.dev.window]\nwidth = 800\n",
+    );
+    let section = read_manifest_telar(&dir).unwrap().unwrap();
+    assert_eq!(section.backend, Some(RendererBackend::Software));
+    assert_eq!(section.dev.window.unwrap().width, Some(800));
+}
