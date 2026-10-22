@@ -1034,3 +1034,15 @@ pub fn key_constant(name: &str) -> Option<&'static str> {
 #[cfg(test)]
 #[path = "registry_keys_test.rs"]
 mod keys_tests;
+
+/// Callees known to keep the closure they are given instead of calling it, spelled as paths and matched by their tail; an allowlist because a callee the transpiler cannot see into may run its closure on the spot.
+pub const CLOSURE_KEEPING_CALLEES: &[&str] = &["Reactive::of", "Rc::new", "Arc::new", "Box::new"];
+
+/// Whether `callee`, the path written before a call's `(`, is one of [`CLOSURE_KEEPING_CALLEES`].
+pub fn keeps_closure(callee: &str) -> bool {
+    CLOSURE_KEEPING_CALLEES.iter().any(|known| {
+        callee
+            .strip_suffix(known)
+            .is_some_and(|head| head.is_empty() || head.ends_with("::"))
+    })
+}

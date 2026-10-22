@@ -2009,3 +2009,96 @@ fn every_branch_of_a_root_else_if_chain_is_the_root() {
         panic!("generated code does not parse: {e}\n{code}");
     }
 }
+
+fn prop_code(logic: &str, value: &str) -> String {
+    let src = format!("[logic]\n{logic}\n[view]\ncard value:{value}\n    text \"x\"\n");
+    let code = crate::transpile_source(&src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    syn::parse_file(&code).unwrap_or_else(|e| panic!("{e}:\n{code}"));
+    code
+}
+
+#[test]
+fn a_reactive_of_closure_reading_a_signal_is_not_wrapped_again() {
+    let code = prop_code(
+        "let sig = signal(0.0f32);",
+        "(Reactive::of(move || sig.get()))",
+    );
+    assert!(
+        code.contains("Reactive::of(move || sig.get())") && !code.contains("move || Reactive::of"),
+        "a closure the callee keeps reads later, so it must not be wrapped:\n{code}"
+    );
+    assert!(
+        code.contains("let sig = sig.clone();"),
+        "the closure still needs its capture cloned in:\n{code}"
+    );
+}
+
+#[test]
+fn a_reactive_of_closure_reading_a_dollar_signal_is_not_wrapped_again() {
+    let code = prop_code("let s = signal(0.0f32);", "(Reactive::of(move || $s))");
+    assert!(
+        code.contains("Reactive::of(move || s.get())") && !code.contains("move || Reactive::of"),
+        "{code}"
+    );
+    assert!(code.contains("let s = s.clone();"), "{code}");
+}
+
+#[test]
+fn an_unknown_helper_taking_a_closure_is_a_read_and_is_wrapped() {
+    let code = prop_code(
+        "let sig = signal(0.0f32);",
+        "(tweened(move || sig.get() * 2.0))",
+    );
+    assert!(
+        code.contains("Reactive::of({ let sig = sig.clone(); move || tweened("),
+        "{code}"
+    );
+}
+
+#[test]
+fn a_closure_run_by_std_on_the_spot_keeps_the_prop_reactive() {
+    let code = prop_code(
+        "let values = signal(0.0f32);",
+        "(std::array::from_fn(|i| $values[i]))",
+    );
+    assert!(code.contains("Reactive::of("), "{code}");
+}
+
+#[test]
+fn a_closure_boxed_or_shared_is_kept_for_later_and_not_wrapped() {
+    for callee in ["Rc::new", "Arc::new", "Box::new"] {
+        let code = prop_code(
+            "let x = signal(0.0f32);",
+            &format!("({callee}(move || $x))"),
+        );
+        assert!(
+            code.contains(&format!("{callee}(move || x.get())"))
+                && !code.contains("move || Rc")
+                && !code.contains("move || Arc")
+                && !code.contains("move || Box"),
+            "{code}"
+        );
+    }
+}
+
+#[test]
+fn a_closure_handed_to_a_method_is_a_read_at_the_call_site() {
+    let code = prop_code(
+        "let sig = signal(0.0f32);",
+        "(items.iter().map(|i| i + sig.get()).sum::<f32>())",
+    );
+    assert!(code.contains("Reactive::of("), "{code}");
+}
+
+#[test]
+fn a_direct_signal_read_in_a_prop_still_follows_the_signal() {
+    let code = prop_code("let sig = signal(0.0f32);", "(sig.get())");
+    assert!(
+        code.contains("Reactive::of({ let sig = sig.clone(); move || sig.get() })"),
+        "{code}"
+    );
+    let code = prop_code("let sig = signal(0.0f32);", "$sig");
+    assert!(code.contains(".value(sig.clone())"), "{code}");
+}

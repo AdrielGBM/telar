@@ -91,6 +91,94 @@ pub(crate) fn ident_positions<'a>(
     })
 }
 
+/// `expr` with every closure that a callee known to keep it (see [`crate::registry::CLOSURE_KEEPING_CALLEES`]) is handed blanked out, so what is left is what runs when the expression is evaluated; such a closure's body only runs when its owner calls it. Every other closure stays: a callee the transpiler cannot see into (`std::array::from_fn(|i| …)`, a helper, an adapter) may call it on the spot, and a read missed there freezes silently. Same length as `expr`, so offsets still line up.
+pub(crate) fn without_deferred_closures(expr: &str) -> String {
+    let bytes = expr.as_bytes();
+    let mut blanked = bytes.to_vec();
+    let mut keeps: Vec<bool> = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if let Some(end) = literal_or_comment_end(bytes, i) {
+            i = end;
+            continue;
+        }
+        match bytes[i] {
+            b'(' => {
+                let before = expr[..i].trim_end();
+                let callee =
+                    before.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_' || c == ':');
+                keeps.push(crate::registry::keeps_closure(&before[callee.len()..]));
+            }
+            b'[' | b'{' => keeps.push(false),
+            b')' | b']' | b'}' => {
+                keeps.pop();
+            }
+            _ => {}
+        }
+        let Some(params_end) = closure_params_end(expr, i) else {
+            i += 1;
+            continue;
+        };
+        if !keeps.last().copied().unwrap_or(false) {
+            i = params_end;
+            continue;
+        }
+        let end = closure_body_end(expr, params_end);
+        blanked[i..end].fill(b' ');
+        i = end;
+    }
+    String::from_utf8(blanked).unwrap_or_else(|_| expr.to_string())
+}
+
+/// The index just past the parameter list of a closure starting at `at` (`|a, b|`, `||`, `move |a|`), or `None` when `at` starts no closure; a `|` after an operand is a binary or.
+fn closure_params_end(expr: &str, at: usize) -> Option<usize> {
+    let bytes = expr.as_bytes();
+    let mut bar = at;
+    if expr[at..].starts_with("move")
+        && (at == 0 || !is_ident_byte(bytes[at - 1]))
+        && !bytes.get(at + 4).is_some_and(|&b| is_ident_byte(b))
+    {
+        let rest = &expr[at + 4..];
+        bar = at + 4 + (rest.len() - rest.trim_start().len());
+    } else if let Some(prev) = expr[..at].trim_end().chars().next_back()
+        && (prev.is_alphanumeric() || matches!(prev, '_' | ')' | ']' | '}' | '"' | '\''))
+    {
+        return None;
+    }
+    if bytes.get(bar) != Some(&b'|') {
+        return None;
+    }
+    if bytes.get(bar + 1) == Some(&b'|') {
+        return Some(bar + 2);
+    }
+    let close = expr[bar + 1..].find('|')?;
+    Some(bar + close + 2)
+}
+
+/// The index where the closure body that starts at `from` ends: at the first `,` or `;` outside brackets, or at the bracket that closes the list it sits in.
+fn closure_body_end(expr: &str, from: usize) -> usize {
+    let bytes = expr.as_bytes();
+    let mut depth = 0usize;
+    let mut i = from;
+    while i < bytes.len() {
+        if let Some(end) = literal_or_comment_end(bytes, i) {
+            i = end;
+            continue;
+        }
+        match bytes[i] {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => match depth {
+                0 => return i,
+                _ => depth -= 1,
+            },
+            b',' | b';' if depth == 0 => return i,
+            _ => {}
+        }
+        i += 1;
+    }
+    bytes.len()
+}
+
 /// Byte offset of every `ident` inside a string literal of `code` that stands where a format string names an argument — `{ident}`, `{ident:…}`, or a `ident$` width or precision. Whether the string is a format string at all is for the caller to decide; this only finds the candidates.
 pub(crate) fn format_arg_positions(code: &str, ident: &str) -> Vec<usize> {
     let bytes = code.as_bytes();

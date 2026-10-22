@@ -430,7 +430,8 @@ impl ViewGen<'_> {
             };
         }
         // A read has to be re-evaluated or it freezes at construction. A lone `$sig` took the arm above and stays a handle, which is what a two-way binding needs.
-        if v.contains('$') {
+        let evaluated_now = crate::lexer::without_deferred_closures(v);
+        if evaluated_now.contains('$') {
             return reads_state(&wrap_signal_clones(
                 &[v],
                 format!("move || {}", substitute_reads(v, self.theme_access)),
@@ -438,9 +439,21 @@ impl ViewGen<'_> {
             ));
         }
         // The same read written without the sigil: a hook read through, or a signal's `.get()`. A plain value stays one, evaluated once.
-        if self.reads_reactive_context(v) {
+        if self.reads_reactive_context(&evaluated_now) {
             let marker = expr_marker(attr.value_start + lead, v.len());
             return reads_state(&self.clone_captures(&[v], format!("move || {marker}{v}")));
+        }
+        // A closure the callee keeps (`Reactive::of(move || …)`) reads when it is called, not here: wrapping it again would nest a `Reactive` in a `Reactive`. It still needs its captures cloned in.
+        if v.contains('$') {
+            return wrap_signal_clones(
+                &[v],
+                substitute_reads(v, self.theme_access),
+                self.theme_access,
+            );
+        }
+        if self.reads_reactive_context(v) {
+            let marker = expr_marker(attr.value_start + lead, v.len());
+            return self.clone_captures(&[v], format!("{marker}{v}"));
         }
         // The delimiting parens are dropped here rather than at the call, so the span covers the expression and nothing wider.
         match super::redundant_parens(v) {

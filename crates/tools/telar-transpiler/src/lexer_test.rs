@@ -67,3 +67,20 @@ fn format_arg_positions_finds_only_names_in_argument_position_inside_strings() {
     let code = "x(\"{x} {x:?} {:x$} {xy} x\", r\"{x}\")";
     assert_eq!(format_arg_positions(code, "x"), [4, 8, 15, 31]);
 }
+
+#[test]
+fn only_a_closure_a_known_callee_keeps_is_blanked() {
+    let kept = super::without_deferred_closures("Reactive::of(move || sig.get()) + other.get()");
+    assert!(!kept.contains("sig") && kept.contains("other.get()"));
+    let run = super::without_deferred_closures("items.iter().map(|i| i + sig.get())");
+    assert!(run.contains("sig.get()"));
+    let or = super::without_deferred_closures("a.get() | b.get()");
+    assert!(or.contains("b.get()"));
+}
+
+#[test]
+fn a_closure_given_to_an_unknown_function_stays() {
+    let code =
+        super::without_deferred_closures("std::array::from_fn(|i| v[i]) + helper(|| x.get())");
+    assert!(code.contains("v[i]") && code.contains("x.get()"));
+}
