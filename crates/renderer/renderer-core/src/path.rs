@@ -1,9 +1,7 @@
 //! [`PathData`]: vector geometry as a verb list, with a lazily computed bounding box.
 
 use geometry_core::{Point, Rect};
-use std::sync::atomic::{AtomicU64, Ordering};
-
-static NEXT_PATH_ID: AtomicU64 = AtomicU64::new(1);
+use xxhash_rust::xxh3::Xxh3;
 
 #[derive(Debug, Clone, PartialEq)]
 /// One step of a path: a move, a line, a curve, or the close that returns to the subpath's start.
@@ -23,15 +21,15 @@ pub enum PathVerb {
 }
 
 #[derive(Debug, Clone)]
-/// Vector geometry as a verb list, with a content-derived id and a lazily computed bounding box.
+/// Vector geometry as a verb list, with a content-addressed id and a lazily computed bounding box.
 pub struct PathData {
-    pub id: u64,
     pub(crate) verbs: Vec<PathVerb>,
     // OnceLock is both Send and Sync, required for Arc<PathData>: Send when crossing thread boundaries.
     bounds_cache: std::sync::OnceLock<Option<Rect>>,
+    id_cache: std::sync::OnceLock<u64>,
 }
 
-// Equal when the verbs match, ignoring the per-instance id and the lazily filled bounds cache. Two structurally identical paths rebuilt across frames must compare equal, or every rebuild's fresh id would force a full-screen repaint.
+// Equal when the verbs match, ignoring the lazily filled caches.
 impl PartialEq for PathData {
     fn eq(&self, other: &Self) -> bool {
         self.verbs == other.verbs
@@ -41,9 +39,9 @@ impl PartialEq for PathData {
 impl Default for PathData {
     fn default() -> Self {
         Self {
-            id: NEXT_PATH_ID.fetch_add(1, Ordering::Relaxed),
             verbs: Vec::new(),
             bounds_cache: std::sync::OnceLock::new(),
+            id_cache: std::sync::OnceLock::new(),
         }
     }
 }
@@ -60,37 +58,61 @@ impl PathData {
         }
     }
 
+    /// A hash of the verbs: equal geometry has equal ids in every library and build, so it can key a cache shared between a host and its guests.
+    pub fn id(&self) -> u64 {
+        *self.id_cache.get_or_init(|| {
+            let mut hasher = Xxh3::new();
+            for verb in &self.verbs {
+                match verb {
+                    PathVerb::MoveTo(p) => hash_points(&mut hasher, 0, &[*p]),
+                    PathVerb::LineTo(p) => hash_points(&mut hasher, 1, &[*p]),
+                    PathVerb::QuadTo { ctrl, to } => hash_points(&mut hasher, 2, &[*ctrl, *to]),
+                    PathVerb::CubicTo { ctrl1, ctrl2, to } => {
+                        hash_points(&mut hasher, 3, &[*ctrl1, *ctrl2, *to])
+                    }
+                    PathVerb::Close => hash_points(&mut hasher, 4, &[]),
+                }
+            }
+            hasher.digest()
+        })
+    }
+
+    fn invalidate_caches(&mut self) {
+        self.bounds_cache = std::sync::OnceLock::new();
+        self.id_cache = std::sync::OnceLock::new();
+    }
+
     pub fn verbs(&self) -> &[PathVerb] {
         &self.verbs
     }
 
     pub fn move_to(mut self, p: Point) -> Self {
         self.verbs.push(PathVerb::MoveTo(p));
-        self.bounds_cache = std::sync::OnceLock::new();
+        self.invalidate_caches();
         self
     }
 
     pub fn line_to(mut self, p: Point) -> Self {
         self.verbs.push(PathVerb::LineTo(p));
-        self.bounds_cache = std::sync::OnceLock::new();
+        self.invalidate_caches();
         self
     }
 
     pub fn quad_to(mut self, ctrl: Point, to: Point) -> Self {
         self.verbs.push(PathVerb::QuadTo { ctrl, to });
-        self.bounds_cache = std::sync::OnceLock::new();
+        self.invalidate_caches();
         self
     }
 
     pub fn cubic_to(mut self, ctrl1: Point, ctrl2: Point, to: Point) -> Self {
         self.verbs.push(PathVerb::CubicTo { ctrl1, ctrl2, to });
-        self.bounds_cache = std::sync::OnceLock::new();
+        self.invalidate_caches();
         self
     }
 
     pub fn close(mut self) -> Self {
         self.verbs.push(PathVerb::Close);
-        self.bounds_cache = std::sync::OnceLock::new();
+        self.invalidate_caches();
         self
     }
 
@@ -179,6 +201,18 @@ impl PathData {
             }
         })
     }
+}
+
+fn hash_points(hasher: &mut Xxh3, tag: u8, points: &[Point]) {
+    hasher.update(&[tag]);
+    for p in points {
+        hasher.update(&canonical_bits(p.x).to_le_bytes());
+        hasher.update(&canonical_bits(p.y).to_le_bytes());
+    }
+}
+
+fn canonical_bits(value: f32) -> u32 {
+    if value == 0.0 { 0 } else { value.to_bits() }
 }
 
 #[cfg(test)]

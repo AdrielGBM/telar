@@ -42,19 +42,7 @@ pub use platform_core::Event as EmbedEvent;
 pub use renderer_core::Color as EmbedColor;
 
 /// Wrap a guest's painted [`DrawList`] into a [`RenderNode`] the host splices into its own frame: translated to `rect`'s origin (the guest paints in its own `(0,0)` space) and clipped to `rect` (so it can't draw over the host chrome). The exact idiom rsx's own scroll area uses to host a sub-tree in a viewport.
-///
-/// `image_salt` namespaces the guest's image ids into a distinct range. Each dylib allocates `ImageData` ids from its own process-local counter starting at 1, so a guest's ids would otherwise alias the host's (and other guests') in the shared renderer's texture cache; a distinct nonzero salt per guest instance keeps them apart. Pass `0` to skip (single-runtime callers).
-pub fn composite(rect: Rect, image_salt: u64, mut commands: DrawList) -> RenderNode {
-    if image_salt != 0 {
-        // Original ids are small and monotonic, so shifting the salt above them keeps `(salt, id)` unique and stable frame-to-frame and the texture cache still hits.
-        const ID_BITS: u32 = 40;
-        for cmd in &mut commands {
-            if let DrawCommand::Image { data, .. } = cmd {
-                let salted = (image_salt << ID_BITS) | (data.id & ((1u64 << ID_BITS) - 1));
-                std::sync::Arc::make_mut(data).id = salted;
-            }
-        }
-    }
+pub fn composite(rect: Rect, commands: DrawList) -> RenderNode {
     composite_surface(
         Transform::translate(rect.x, rect.y),
         Size::new(rect.width, rect.height),

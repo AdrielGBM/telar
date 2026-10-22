@@ -243,7 +243,7 @@ pub(crate) fn prepare_path(
     out_indices: &mut Vec<u32>,
     out_fill_data: &mut Vec<PathFillData>,
 ) {
-    let id = data.id;
+    let id = data.id();
 
     let mut lyon_path: Option<Path> = None;
 

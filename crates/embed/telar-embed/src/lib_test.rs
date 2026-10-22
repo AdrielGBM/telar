@@ -156,7 +156,6 @@ fn composite_translates_into_the_sub_rect_and_clips_to_it() {
     let rect = Rect::new(10.0, 20.0, 100.0, 50.0);
     let node = composite(
         rect,
-        0,
         vec![DrawCommand::Rect {
             rect: Rect::new(0.0, 0.0, 5.0, 5.0),
             style: std::sync::Arc::new(RectStyle::default()),
