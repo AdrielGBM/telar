@@ -280,3 +280,36 @@ fn a_style_amendment_reshapes_the_handle() {
     assert_eq!(painted.radius, BorderRadius::all(0.0));
     assert!(painted.fill.is_some(), "the rest of the paint is kept");
 }
+
+/// With no label there is no caption to space the value from, so the handle is the value and its padding, with no gap opened before it.
+#[test]
+fn an_unlabelled_handle_holds_only_its_value_and_its_padding() {
+    fresh();
+    let widget = scrub_field(
+        ScrubFieldProps::props().value(signal(7.0)).build(),
+        Children::default(),
+    )
+    .unwrap();
+    let node = widget.layout_node();
+    let tree = ComponentList::new(widget);
+    lay_out(node, 300.0, 40.0);
+    let commands = tree.commands();
+    let handle = commands
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Rect { rect, .. } => Some(*rect),
+            _ => None,
+        })
+        .expect("the handle is painted");
+    let value = commands
+        .iter()
+        .find_map(|command| match command {
+            telar::DrawCommand::Text { text, rect, .. } if text.as_ref() == "7" => Some(*rect),
+            _ => None,
+        })
+        .expect("the value is drawn");
+    assert_eq!(
+        handle.width,
+        value.width + 2.0 * ScrubFieldTokens::current().pad_x()
+    );
+}

@@ -181,11 +181,20 @@ pub fn scrub_field(
         });
     }
 
+    let captioned = {
+        let label = label.clone();
+        move || !label.get().is_empty()
+    };
     let caption = Text::declaring(
         move || label.get(),
         LayoutStyle::new(),
         |t| shared::quiet(t, 1.0),
     )?;
+    // Out of the row when empty, or the gap beside it still opens a space before the value.
+    style_follows(caption.layout_node(), move || match captioned() {
+        true => LayoutStyle::new(),
+        false => LayoutStyle::new().display_none(),
+    });
 
     let last_click: Rc<Cell<Option<Instant>>> = Rc::new(Cell::new(None));
     let handle = StyledContainer::new(
