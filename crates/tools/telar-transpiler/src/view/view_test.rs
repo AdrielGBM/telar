@@ -1995,3 +1995,17 @@ fn a_class_with_no_text_property_authors_no_text() {
         .rust_code;
     assert!(!code.contains(".authored_text("), "{code}");
 }
+
+/// An `else if` at the root is the root too: every branch of the chain returns its own element, where the later ones used to come back inside a column.
+#[test]
+fn every_branch_of_a_root_else_if_chain_is_the_root() {
+    let src = "[logic]\nlet level = 2u8;\n[view]\nif level == 1\n    text \"a\"\nelse if level == 2\n    text \"b\"\nelse\n    text \"c\"\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(!code.contains("Container"), "{code}");
+    assert_eq!(code.matches("Ok(Box::new(__text_").count(), 3, "{code}");
+    if let Err(e) = syn::parse_file(&code) {
+        panic!("generated code does not parse: {e}\n{code}");
+    }
+}

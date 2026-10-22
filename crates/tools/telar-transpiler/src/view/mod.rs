@@ -575,6 +575,14 @@ impl<'a> ViewGen<'a> {
         self.indent += 1;
         let ipad = self.indent_str();
         match &block.else_branch {
+            // An `else if` is the root too, so each branch of the chain returns its own element rather than the later ones a column.
+            Some(else_branch)
+                if let [ViewNode::IfBlock(chained)] = else_branch.as_slice()
+                    && !chained.condition.contains('$') =>
+            {
+                let chained = self.generate_root_if(chained);
+                let _ = writeln!(out, "{chained}");
+            }
             Some(else_branch) => {
                 let else_cell = self.emit_content_cell(else_branch, &mut out);
                 let _ = writeln!(out, "{ipad}Ok(Box::new({else_cell}))");
