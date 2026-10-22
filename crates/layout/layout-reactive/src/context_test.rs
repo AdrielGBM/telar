@@ -1436,3 +1436,77 @@ fn a_tracked_parent_is_read_again_whenever_the_node_moves() {
     set_children(second, &[sibling]).unwrap();
     assert_eq!(runs.get(), before, "a move elsewhere is not this node's");
 }
+
+fn laid_out_clean(root: NodeId) {
+    compute_layout(
+        root,
+        AvailableSpace::Definite(100.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+}
+
+fn is_dirty(node: NodeId) -> bool {
+    with_runtime_ref(|rt| rt.engine.is_dirty(node))
+}
+
+#[test]
+fn a_child_given_to_new_container_leaves_the_parent_that_held_it() {
+    reset_layout_runtime();
+    let (child, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let old = new_container(LayoutStyle::new(), &[child]).unwrap();
+    laid_out_clean(old);
+
+    let new = new_container(LayoutStyle::new(), &[child]).unwrap();
+
+    assert_eq!(children(old), Vec::<NodeId>::new());
+    assert_eq!(children(new), vec![child]);
+    assert_eq!(parent(child), Some(new));
+    assert!(is_dirty(old), "the parent that lost a child is relaid out");
+    laid_out_clean(new);
+    mark_dirty(child).unwrap();
+    assert!(
+        is_dirty(new),
+        "a change inside the child reaches its new parent"
+    );
+}
+
+#[test]
+fn a_child_given_to_set_children_leaves_the_parent_that_held_it() {
+    reset_layout_runtime();
+    let (child, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let old = new_container(LayoutStyle::new(), &[child]).unwrap();
+    let new = new_container(LayoutStyle::new(), &[]).unwrap();
+    laid_out_clean(old);
+    laid_out_clean(new);
+
+    set_children(new, &[child]).unwrap();
+
+    assert_eq!(children(old), Vec::<NodeId>::new());
+    assert_eq!(children(new), vec![child]);
+    assert_eq!(parent(child), Some(new));
+    assert!(
+        is_dirty(old) && is_dirty(new),
+        "both parents are relaid out"
+    );
+    laid_out_clean(new);
+    mark_dirty(child).unwrap();
+    assert!(
+        is_dirty(new),
+        "a change inside the child reaches its new parent"
+    );
+}
+
+#[test]
+fn a_child_attached_as_an_overlay_leaves_the_parent_that_held_it() {
+    reset_layout_runtime();
+    let (content, _) = new_leaf(LayoutStyle::new()).unwrap();
+    let old = new_container(LayoutStyle::new(), &[content]).unwrap();
+    let host = new_container(LayoutStyle::new(), &[]).unwrap();
+    set_overlay_host(host);
+
+    assert!(attach_overlay(content));
+
+    assert_eq!(children(old), Vec::<NodeId>::new());
+    assert_eq!(children(host), vec![content]);
+}

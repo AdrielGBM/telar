@@ -205,6 +205,9 @@ impl LayoutEngine {
         style: LayoutStyle,
         children: &[NodeId],
     ) -> Result<NodeId, LayoutError> {
+        for &child in children {
+            self.leave_parent(child);
+        }
         let node = self
             .tree
             .new_with_children(style.resolve(self.direction, self.surface), children)?;
@@ -253,9 +256,20 @@ impl LayoutEngine {
     pub fn add_child(&mut self, parent: NodeId, child: NodeId) -> Result<(), LayoutError> {
         self.alive(parent)?;
         self.alive(child)?;
+        self.leave_parent(child);
         self.tree
             .add_child(parent, child)
             .map_err(LayoutError::from)
+    }
+
+    /// Takes `child` out of the node that holds it, marking that node dirty, so adding it somewhere else moves it rather than leaving it in two child lists. A freed node, or one held by nothing, is left as it is.
+    fn leave_parent(&mut self, child: NodeId) {
+        if !self.live.contains(&child) {
+            return;
+        }
+        if let Some(previous) = self.tree.parent(child) {
+            self.tree.remove_child(previous, child).ok();
+        }
     }
 
     /// Detaches `child` from `parent` (does not free it — call [`remove`](Self::remove) afterwards to release the node).
