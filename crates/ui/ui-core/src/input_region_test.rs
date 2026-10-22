@@ -630,6 +630,38 @@ fn a_shortcut_table_in_a_hidden_scroll_area_hears_no_keys() {
     assert_eq!(keys.get(), 1, "and the table hears nothing all the same");
 }
 
+/// The public question asks the same chain: a box under a hidden pane reads as hidden even across a scroll area's own root, and as shown again the moment the pane is.
+#[test]
+fn a_box_in_a_scroll_area_is_hidden_with_the_pane_above_it_and_shown_with_it() {
+    reset_layout_runtime();
+    let mut content_node = None;
+    let scroll = LayoutScrollArea::new_with(LayoutStyle::new().width(300.0).height(200.0), |_| {
+        let content = boxed(LayoutStyle::new().width(300.0).height(100.0), vec![]);
+        content_node = Some(content.layout_node());
+        Ok(Box::new(content) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    let content = content_node.unwrap();
+    let pane = boxed(pane_style(), vec![Box::new(scroll)]);
+    let pane_node = pane.layout_node();
+    let root = Container::new(full(), vec![Box::new(pane)]).unwrap();
+    lay_out(&root);
+    assert!(!is_hidden(content), "shown while the pane is");
+
+    set_display(pane_node, false);
+    mark_dirty(pane_node).unwrap();
+    lay_out(&root);
+    assert!(
+        is_hidden(content),
+        "hidden by the pane, though no layout parent leads there"
+    );
+
+    set_display(pane_node, true);
+    mark_dirty(pane_node).unwrap();
+    lay_out(&root);
+    assert!(!is_hidden(content), "shown again with the pane");
+}
+
 #[test]
 fn toggling_inert_adds_and_removes_the_rect_and_the_dispatch_at_once() {
     reset_layout_runtime();

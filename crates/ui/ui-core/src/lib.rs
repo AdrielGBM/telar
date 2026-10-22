@@ -121,7 +121,7 @@ pub use inherit::{
     AuthoredText, Inherited, author, context, declare, inherited_text_style, undeclare,
 };
 pub use input::Input;
-pub use input_region::{interactive_rects, visible_rect};
+pub use input_region::{interactive_rects, is_hidden, visible_rect};
 pub use kept::kept;
 pub use keyboard::{
     chord_pressed, end_frame as end_keyboard_frame, key_held, key_pressed, modifiers,

@@ -308,8 +308,8 @@ pub(crate) fn tracks_hidden(node: NodeId) -> bool {
         .any(layout_reactive::track_display_none)
 }
 
-/// [`tracks_hidden`] without subscribing, for a key press that has to answer now.
-pub(crate) fn is_hidden(node: NodeId) -> bool {
+/// Whether `node` or any box it was declared inside is out of layout flow, read now rather than tracked as [`tracks_hidden`] does. The only way to tell a box that is hidden from one that collapsed: a `display:none` subtree still renders, every rect in it at 0x0, so its draw commands look exactly like a layout that gave a box nothing.
+pub fn is_hidden(node: NodeId) -> bool {
     std::iter::successors(Some(node), |&at| logical_parent(at)).any(layout_reactive::is_hidden)
 }
 
