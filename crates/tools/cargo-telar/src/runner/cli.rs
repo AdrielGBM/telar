@@ -43,7 +43,7 @@ pub(crate) enum TelarCommand {
     Doctor,
     /// Format every `.rsx` and `.rs` file in the project
     Fmt(FmtArgs),
-    /// Rewrite every `.rsx` file into the one value grammar
+    /// Apply the migrations a release needs; none exists yet
     Migrate(MigrateArgs),
 }
 
@@ -120,13 +120,17 @@ pub(crate) struct PublishArgs {
     pub(crate) cargo_args: Vec<String>,
 }
 
-/// Idempotent by construction: a file already in the new grammar comes out byte-identical, so running it twice is safe and `--check` is how a CI says a project is migrated.
+/// Kept so scripts calling it keep working; with no migration to run, the arguments change nothing.
 #[derive(clap::Args)]
+#[expect(
+    dead_code,
+    reason = "accepted for compatibility, read once a release ships a migration"
+)]
 pub(crate) struct MigrateArgs {
     /// Report which files would change and exit non-zero, without writing
     #[arg(long)]
     pub(crate) check: bool,
-    /// Directories or files to rewrite; defaults to the current directory
+    /// Directories or files to migrate; defaults to the current directory
     pub(crate) paths: Vec<std::path::PathBuf>,
 }
 
