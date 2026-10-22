@@ -1,7 +1,9 @@
 //! What a person chose, kept between runs: a colour scheme, a language, whatever the application declares.
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 /// Where preferences are kept, as text under keys the application and Telar name.
@@ -63,34 +65,64 @@ impl PreferenceStore for MemoryStore {
     }
 }
 
+/// Writes `contents` to `path` through a file of its own beside it renamed over it, so a run that dies mid-write leaves the previous file rather than half of one, and two writers never share the file they write through.
+pub fn write_file_atomically(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    static WRITES: AtomicU64 = AtomicU64::new(0);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut name = path.file_name().unwrap_or_default().to_owned();
+    name.push(format!(
+        ".{}.{}.tmp",
+        std::process::id(),
+        WRITES.fetch_add(1, Ordering::Relaxed)
+    ));
+    let beside = path.with_file_name(name);
+    let written = std::fs::write(&beside, contents).and_then(|()| std::fs::rename(&beside, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&beside);
+    }
+    written
+}
+
+/// The text of the file at `path`, or `None` where there is no such file. Any other failure, an unreadable or non-text file, is an `Err`: a caller that saves over the file afterwards must not, since what it could not read it cannot have kept.
+pub fn read_if_present(path: &Path) -> std::io::Result<Option<String>> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 /// Preferences kept in one file, a line per key: the key, a tab, the value, with tabs, newlines and backslashes escaped.
 ///
-/// Read once when opened and written whole on every change that changes something, through a file beside it renamed over it, so a run that dies mid-write leaves the previous file rather than half of one.
+/// Read once when opened and written whole on every change that changes something, through [`write_file_atomically`]. A file that exists but cannot be read is left alone: the store keeps what is set for the run and never writes, so the file is not replaced by what little this run knows.
 pub struct FileStore {
     path: PathBuf,
     values: Mutex<BTreeMap<String, String>>,
+    writable: bool,
 }
 
 impl FileStore {
-    /// The store kept at `path`, with what it already holds. A file that cannot be read is an empty store.
+    /// The store kept at `path`, with what it already holds. A file that does not exist is an empty store; one that cannot be read or is not text is logged and kept for the run only.
     pub fn open(path: impl Into<PathBuf>) -> Self {
         let path = path.into();
-        let values = std::fs::read_to_string(&path)
-            .map(|text| parse(&text))
-            .unwrap_or_default();
+        let (values, writable) = match read_if_present(&path) {
+            Ok(text) => (text.map_or_else(BTreeMap::new, |text| parse(&text)), true),
+            Err(error) => {
+                tracing::error!(path = %path.display(), %error, "preferences could not be read; they will not be saved over the file");
+                (BTreeMap::new(), false)
+            }
+        };
         Self {
             path,
             values: Mutex::new(values),
+            writable,
         }
     }
 
     fn write(&self, values: &BTreeMap<String, String>) -> std::io::Result<()> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        let beside = self.path.with_extension("tmp");
-        std::fs::write(&beside, render(values))?;
-        std::fs::rename(&beside, &self.path)
+        write_file_atomically(&self.path, render(values).as_bytes())
     }
 }
 
@@ -111,7 +143,10 @@ impl PreferenceStore for FileStore {
             }
             None => values.remove(key).is_some(),
         };
-        if changed && let Err(error) = self.write(&values) {
+        if changed
+            && self.writable
+            && let Err(error) = self.write(&values)
+        {
             tracing::warn!(path = %self.path.display(), %error, "preferences were not saved");
         }
     }
