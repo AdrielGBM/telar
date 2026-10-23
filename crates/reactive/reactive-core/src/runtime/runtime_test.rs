@@ -71,3 +71,44 @@ fn releasing_a_thread_frees_its_runtime_and_a_later_use_starts_a_fresh_one() {
     .join()
     .unwrap();
 }
+
+#[test]
+fn an_effect_may_dispose_its_own_owner_and_keep_using_what_it_captured() {
+    reset_runtime();
+    let trigger = crate::signal(0);
+    let scope = crate::owner_scope();
+    let id = scope.id();
+    let captured: Vec<i32> = (1..=3).collect();
+    let sum = std::rc::Rc::new(std::cell::Cell::new(0));
+    let seen = std::rc::Rc::clone(&sum);
+    crate::effect(move || {
+        if trigger.get() == 1 {
+            crate::dispose_owner(id);
+            seen.set(captured.iter().sum());
+        }
+    });
+    drop(scope);
+    trigger.set(1);
+    assert_eq!(sum.get(), 6);
+    reset_runtime();
+}
+
+#[test]
+fn resetting_the_runtime_inside_an_effect_is_refused() {
+    reset_runtime();
+    let trigger = crate::signal(0);
+    let refused = std::rc::Rc::new(std::cell::Cell::new(false));
+    let seen = std::rc::Rc::clone(&refused);
+    crate::effect(move || {
+        if trigger.get() == 1 {
+            let quiet = std::panic::take_hook();
+            std::panic::set_hook(Box::new(|_| {}));
+            let outcome = std::panic::catch_unwind(reset_runtime);
+            std::panic::set_hook(quiet);
+            seen.set(outcome.is_err());
+        }
+    });
+    trigger.set(1);
+    assert!(refused.get());
+    reset_runtime();
+}

@@ -43,7 +43,7 @@ slotmap::new_key_type! {
 }
 
 pub(crate) struct EffectEntry {
-    pub(crate) callback: Box<dyn Fn()>,
+    pub(crate) callback: Rc<dyn Fn()>,
     // The surface active when this effect was registered; the flush re-enters it before running the callback, so a cross-surface write resolves the effect against its own surface's world.
     pub(crate) surface: SurfaceHandle,
     /// The owner active at registration, re-entered for each run so a re-run creates and registers under the scope that built it rather than under whatever the flush happens to be inside.

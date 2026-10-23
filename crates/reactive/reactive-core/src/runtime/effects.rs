@@ -2,6 +2,7 @@
 
 use std::cmp::Reverse;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::rc::Rc;
 
 use super::flush::flush;
 use super::owner::deliver_panic;
@@ -32,7 +33,7 @@ pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
         // Resolved off the borrow already held: `current_owner` takes its own, which would collide.
         let owner = super::owner::owning_id(&mut rt);
         let id = rt.effects.insert(EffectEntry {
-            callback: f,
+            callback: Rc::from(f),
             surface: current_surface(),
             owner,
             is_pure: false,
@@ -54,7 +55,7 @@ pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
         // Resolved off the borrow already held: `current_owner` takes its own, which would collide.
         let owner = super::owner::owning_id(&mut rt);
         let id = rt.effects.insert(EffectEntry {
-            callback: f,
+            callback: Rc::from(f),
             surface: current_surface(),
             owner,
             is_pure: true,
@@ -164,7 +165,7 @@ pub(crate) fn force_run_effect(id: EffectId) {
 }
 
 pub(crate) fn run_effect(id: EffectId) {
-    let ptr = RUNTIME.with(|rt| {
+    let prepared = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         if !rt.effects.contains_key(id) {
             return None;
@@ -202,13 +203,12 @@ pub(crate) fn run_effect(id: EffectId) {
             }
         }
 
-        // SAFETY: the arena owns this Box, and no effect closure here captures its own `Effect` handle, so deregistration cannot happen during execution.
-        let ptr: *const dyn Fn() = &*rt.effects[id].callback;
+        let callback = Rc::clone(&rt.effects[id].callback);
         let surface = rt.effects[id].surface;
         let owner = rt.effects[id].owner;
-        Some((ptr, surface, owner)) // Don't push observer_stack yet; clean_effect must run first
+        Some((callback, surface, owner)) // Don't push observer_stack yet; clean_effect must run first
     });
-    if let Some((ptr, surface, owner)) = ptr {
+    if let Some((callback, surface, owner)) = prepared {
         // Before re-running, so fresh subscriptions are tracked. `clean_effect` acquires the runtime borrow internally, which is safe because it was released above.
         clean_effect(id);
         // After cleanup, so `clean_effect` does not re-register. The owner rides along in the same borrow: a re-run that starts declaring must attribute it to the scope that built this effect, and a borrow of its own for that cost 3-5% of a whole-tree re-run.
@@ -239,7 +239,7 @@ pub(crate) fn run_effect(id: EffectId) {
         // Re-enter this effect's surface, so its layout, overlay and focus resolve against the surface that built it even when the write that scheduled it came from another. Outside the runtime borrow, and inert for a single-surface app.
         let outcome = {
             let _surface_guard = surface.enter();
-            catch_unwind(AssertUnwindSafe(|| unsafe { (*ptr)() }))
+            catch_unwind(AssertUnwindSafe(|| callback()))
         };
         drop(_guard);
         RUNTIME.with(|rt| {

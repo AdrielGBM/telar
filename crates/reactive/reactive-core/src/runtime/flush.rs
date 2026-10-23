@@ -167,8 +167,19 @@ pub(crate) fn flush_when_settled() {
 }
 
 /// Drops every signal, effect and owner. For tests, and for a hot-reload swap.
+///
+/// # Panics
+///
+/// When called from inside a running effect, whose frame still depends on the runtime it would drop.
 pub fn reset_runtime() {
     RUNTIME.with(|cell| {
+        let current = cell.ptr.get();
+        let running = !current.is_null()
+            && unsafe { (*current).try_borrow() }.is_ok_and(|rt| rt.running_effects > 0);
+        assert!(
+            !running,
+            "reset_runtime called from inside a running effect"
+        );
         let old_ptr = cell.take_ptr();
         // Emptied BEFORE the old one drops: a re-entrant RUNTIME access from its drop glue (drop_signal, etc.) gets a fresh, empty runtime and returns early — no borrow conflict, no double-free.
         if !old_ptr.is_null() {
