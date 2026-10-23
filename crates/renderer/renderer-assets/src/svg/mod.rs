@@ -11,7 +11,7 @@ mod tests;
 mod vector;
 
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 use geometry_core::{ObjectFit, Point};
 use rustc_hash::{FxHashMap, FxHasher};
@@ -111,7 +111,7 @@ const MAX_EMBEDDED_IMAGE_BYTES: usize = 8 * 1024 * 1024;
 // Runtime SVG comes from untrusted sources, and usvg's default string resolver would read any href that names a local file.
 #[cfg(feature = "dynamic-svg")]
 fn runtime_options() -> &'static usvg::Options<'static> {
-    static OPTIONS: OnceLock<usvg::Options<'static>> = OnceLock::new();
+    static OPTIONS: std::sync::OnceLock<usvg::Options<'static>> = std::sync::OnceLock::new();
     OPTIONS.get_or_init(|| {
         let default_data = usvg::ImageHrefResolver::default_data_resolver();
         usvg::Options {
