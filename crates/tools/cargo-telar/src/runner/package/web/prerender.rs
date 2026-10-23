@@ -130,9 +130,8 @@ pub(super) fn write_pages(
     settings: &PrerenderSection,
     site: &Site,
 ) -> Result<SitePages, String> {
-    let scratch = std::env::temp_dir().join(format!("telar-prerender-{}", std::process::id()));
-    std::fs::create_dir_all(&scratch)
-        .map_err(|e| format!("could not create {}: {e}", scratch.display()))?;
+    let scratch_dir = crate::runner::scratch::scratch_dir("prerender")?;
+    let scratch = scratch_dir.path();
     let run = |page: PageRequest, index: usize| -> Result<PrerenderedPage, String> {
         let request = PrerenderRequest {
             out: scratch.join(format!("page-{index}.json")),
@@ -184,7 +183,6 @@ pub(super) fn write_pages(
     let not_found = run(PageRequest::NotFound, usize::MAX)?;
     let filled = page_for(base, &not_found, site, None, &pages);
     write_page(&out.join(NOT_FOUND_FILE), &filled, template, false)?;
-    let _ = std::fs::remove_dir_all(&scratch);
     Ok(pages)
 }
 

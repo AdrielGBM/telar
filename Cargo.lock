@@ -845,6 +845,7 @@ dependencies = [
  "telar-parser",
  "telar-project",
  "telar-transpiler",
+ "tempfile",
  "toml",
  "ureq",
 ]

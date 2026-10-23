@@ -47,3 +47,24 @@ fn the_page_for_no_page_stands_where_no_route_reads() {
     assert_eq!(location.segments().len(), 1);
     assert!(location.segments()[0].starts_with('\u{0}'));
 }
+
+#[cfg(unix)]
+#[test]
+fn a_page_is_never_written_through_something_already_at_its_path() {
+    let dir = std::env::temp_dir().join(format!("telar_prerender_new_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let victim = dir.join("victim");
+    std::fs::write(&victim, b"keep").unwrap();
+    let planted = dir.join("page-0.json");
+    std::os::unix::fs::symlink(&victim, &planted).unwrap();
+
+    let through_link = write_new(&planted, b"{}");
+    let fresh = write_new(&dir.join("page-1.json"), b"{}");
+    let kept = std::fs::read(&victim).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert!(through_link.is_err());
+    assert!(fresh.is_ok());
+    assert_eq!(kept, b"keep");
+}

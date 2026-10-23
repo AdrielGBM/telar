@@ -411,11 +411,11 @@ fn git_sees_a_committed_artifact_as_clean_and_an_edited_source_as_dirty() {
         .map(str::to_string)
         .collect();
 
-    let clean = uncommitted(&root, &listed);
+    let clean = uncommitted(&root, &listed).unwrap();
     write(&root, ".telar/build/index.json", "{\"new\":1}\n");
-    let artifact_only = uncommitted(&root, &listed);
+    let artifact_only = uncommitted(&root, &listed).unwrap();
     write(&root, "src/lib.rs", "pub fn b() {}\n");
-    let edited = uncommitted(&root, &listed);
+    let edited = uncommitted(&root, &listed).unwrap();
     let _ = std::fs::remove_dir_all(&root);
 
     assert!(clean.is_empty() && artifact_only.is_empty());
@@ -529,4 +529,55 @@ fn a_library_that_bakes_icons_has_to_ship_their_record() {
     let unrecorded = unrecorded.expect("an artifact with icons and no record is refused");
     assert!(unrecorded.contains("demo:star"), "{unrecorded}");
     assert!(unrecorded.contains("cargo telar bake"), "{unrecorded}");
+}
+
+#[test]
+fn a_directory_outside_any_repository_has_nothing_uncommitted() {
+    let root = std::env::temp_dir().join(format!("cargo_telar_norepo_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    write(&root, "src/lib.rs", "pub fn a() {}\n");
+    let listed: BTreeSet<String> = ["src/lib.rs".to_string()].into();
+
+    let result = uncommitted(&root, &listed);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert_eq!(result, Ok(Vec::new()));
+}
+
+#[test]
+fn a_missing_git_binary_is_an_error_not_a_clean_tree() {
+    let root = std::env::temp_dir().join(format!("cargo_telar_nogit_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    write(&root, "src/lib.rs", "pub fn a() {}\n");
+    let listed: BTreeSet<String> = ["src/lib.rs".to_string()].into();
+
+    let result = uncommitted_with(root.join("no-such-git"), &root, &listed);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(result.unwrap_err().contains("could not run `git`"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_git_failure_other_than_not_a_repository_is_an_error() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = std::env::temp_dir().join(format!("cargo_telar_dubious_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    write(&root, "src/lib.rs", "pub fn a() {}\n");
+    let _forking = crate::runner::workshop_channel::CHILD_PROCESSES
+        .write()
+        .unwrap();
+    let fake = root.join("fake-git");
+    std::fs::write(
+        &fake,
+        "#!/bin/sh\necho \"fatal: detected dubious ownership in repository at '/x'\" >&2\nexit 128\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let listed: BTreeSet<String> = ["src/lib.rs".to_string()].into();
+
+    let result = uncommitted_with(&fake, &root, &listed);
+    let _ = std::fs::remove_dir_all(&root);
+
+    assert!(result.unwrap_err().contains("dubious ownership"));
 }

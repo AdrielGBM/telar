@@ -45,7 +45,7 @@ pub(super) fn run<A: App>(
     let page = prerender_page(config, app, app_name, &request);
     let written = serde_json::to_vec(&page)
         .map_err(|e| e.to_string())
-        .and_then(|json| std::fs::write(&request.out, json).map_err(|e| e.to_string()));
+        .and_then(|json| write_new(&request.out, &json));
     match written {
         Ok(()) => std::process::exit(0),
         Err(e) => {
@@ -53,6 +53,17 @@ pub(super) fn run<A: App>(
             std::process::exit(1);
         }
     }
+}
+
+/// Creates `path` and fails if anything is already there, so a planted file or symlink is never written through.
+fn write_new(path: &std::path::Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .and_then(|mut file| file.write_all(bytes))
+        .map_err(|e| e.to_string())
 }
 
 /// Builds `app` at the page `request` names, lets it settle, and writes the frame it settled on as a document.

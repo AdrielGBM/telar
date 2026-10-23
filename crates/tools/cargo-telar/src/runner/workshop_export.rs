@@ -71,7 +71,8 @@ fn with_base(mut config: TelarSection, base: Option<&str>) -> Result<TelarSectio
 }
 
 fn list_previews(common: &CommonArgs) -> Result<Vec<ListedPreview>, String> {
-    let file = std::env::temp_dir().join(format!("telar-preview-list-{}.json", std::process::id()));
+    let scratch = crate::runner::scratch::scratch_dir("preview-list")?;
+    let file = scratch.path().join("previews.json");
     eprintln!("[cargo-telar] Listing the previews...");
     let status = preview_once_command(common, false, "previews")
         .env(PREVIEW_LIST_VAR, "1")
@@ -79,7 +80,6 @@ fn list_previews(common: &CommonArgs) -> Result<Vec<ListedPreview>, String> {
         .status()
         .map_err(|e| format!("failed to invoke cargo: {e}"))?;
     if !status.success() {
-        let _ = std::fs::remove_file(&file);
         return Err("listing the previews failed".to_string());
     }
     let raw = std::fs::read(&file).map_err(|e| {
@@ -88,7 +88,6 @@ fn list_previews(common: &CommonArgs) -> Result<Vec<ListedPreview>, String> {
             file.display()
         )
     })?;
-    let _ = std::fs::remove_file(&file);
     serde_json::from_slice(&raw).map_err(|e| format!("could not read the preview listing: {e}"))
 }
 

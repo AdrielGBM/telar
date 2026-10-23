@@ -23,6 +23,7 @@ mod library;
 mod migrate;
 mod new;
 mod package;
+mod scratch;
 mod test_cmd;
 mod transpile;
 mod watch;
