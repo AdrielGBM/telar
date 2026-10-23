@@ -433,6 +433,12 @@ fn parse_element_header(
                     message: "unterminated string literal".to_string(),
                     line,
                 })?;
+            if element.content.is_some() {
+                return Err(ParseError {
+                    message: "an element takes one content string, found a second".to_string(),
+                    line,
+                });
+            }
             element.content = Some(text);
             element.content_start = content_start + byte_at(&chars, content_at);
             element.content_i18n = is_key;
@@ -482,11 +488,14 @@ fn parse_element_header(
             while vs < len && chars[vs].is_whitespace() {
                 vs += 1;
             }
-            element.attributes.push(Attr {
-                key: key.trim().to_string(),
-                value: Value::Directive(value.trim().to_string()),
-                value_start: content_start + byte_at(&chars, vs),
-            });
+            push_attribute(
+                &mut element,
+                Attr {
+                    key: key.trim().to_string(),
+                    value: Value::Directive(value.trim().to_string()),
+                    value_start: content_start + byte_at(&chars, vs),
+                },
+            )?;
             i = next;
             continue;
         }
@@ -494,11 +503,14 @@ fn parse_element_header(
         if let Some(colon) = colon_at {
             let key: String = chars[token_start..colon].iter().collect();
             let (value, next, text_at) = read_colon_value(&chars, key.trim(), colon + 1, line)?;
-            element.attributes.push(Attr {
-                key: key.trim().to_string(),
-                value,
-                value_start: content_start + byte_at(&chars, text_at),
-            });
+            push_attribute(
+                &mut element,
+                Attr {
+                    key: key.trim().to_string(),
+                    value,
+                    value_start: content_start + byte_at(&chars, text_at),
+                },
+            )?;
             i = next;
             continue;
         }
@@ -515,11 +527,14 @@ fn parse_element_header(
         if let Some(class) = token.strip_prefix('@') {
             element.classes.push(class.to_string());
         } else {
-            element.attributes.push(Attr {
-                key: token,
-                value: Value::Flag,
-                value_start: content_start + byte_at(&chars, token_start),
-            });
+            push_attribute(
+                &mut element,
+                Attr {
+                    key: token,
+                    value: Value::Flag,
+                    value_start: content_start + byte_at(&chars, token_start),
+                },
+            )?;
         }
     }
 
@@ -531,6 +546,21 @@ fn parse_element_header(
     }
 
     Ok(element)
+}
+
+fn push_attribute(element: &mut Element, attr: Attr) -> Result<(), ParseError> {
+    if element
+        .attributes
+        .iter()
+        .any(|existing| existing.key == attr.key)
+    {
+        return Err(ParseError {
+            message: format!("attribute `{}` is given twice", attr.key),
+            line: element.line,
+        });
+    }
+    element.attributes.push(attr);
+    Ok(())
 }
 
 /// Reads the value of a `key:value` pair starting at `val_start`, just past the colon: a quoted string, or a Rust expression running to the next space at delimiter depth 0. Returns the value, the index past it, and the char index where its text begins. A value never runs past the end of `chars`, so a caller reading inside a delimiter passes the slice up to its closing one.

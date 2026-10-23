@@ -941,3 +941,23 @@ fn a_malformed_style_import_is_refused() {
         assert!(error.message.contains(why), "{src}: {}", error.message);
     }
 }
+
+#[test]
+fn a_second_content_string_is_an_error_on_its_line() {
+    let err = parse("[view]\nbox\n    text \"a\" \"b\"\n").unwrap_err();
+    assert_eq!(err.line, 3);
+    assert!(err.message.contains("content string"), "{}", err.message);
+}
+
+#[test]
+fn a_repeated_attribute_key_is_an_error_on_its_line() {
+    for header in [
+        "text \"a\" size:1 size:2",
+        "text \"a\" bold bold",
+        "text \"a\" transition(opacity 1s) transition(opacity 2s)",
+    ] {
+        let err = parse(&format!("[view]\nbox\n    {header}\n")).unwrap_err();
+        assert_eq!(err.line, 3, "{header}");
+        assert!(err.message.contains("given twice"), "{}", err.message);
+    }
+}

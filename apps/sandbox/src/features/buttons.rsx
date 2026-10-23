@@ -44,7 +44,7 @@ col gap:20
             row gap:10 wrap
                 box @center fill:$theme.surface_alt radius:10 pad:16 hover_style(fill:$theme.primary) width:150 height:64
                     text "Fill on hover" font_size:13 color:$theme.ink
-                box @center fill:$theme.surface_alt stroke:$theme.border radius:10 pad:16 hover_style(stroke:$theme.primary) radius:16 width:150 height:64
+                box @center fill:$theme.surface_alt stroke:$theme.border radius:10 pad:16 hover_style(stroke:$theme.primary) width:150 height:64
                     text "Stroke + radius" font_size:13 color:$theme.ink
             text "Each box carries its own hover_style(...) — different hovers in one file, no signals." font_size:12 color:$theme.muted
         code_line code:"box fill:$theme.surface_alt hover_style(fill:$theme.primary)      (swap style while hovered)"
