@@ -133,6 +133,45 @@ fn a_root_scope_opened_inside_another_belongs_to_its_surface_and_not_to_that_sco
     assert!(!alive(held), "the surface takes its root scope with it");
 }
 
+/// A process-wide cache first reached during one window's build: closing that window must not free what every other window still reads from it.
+#[test]
+fn an_owner_opened_detached_outlives_the_surface_that_was_active() {
+    let first = SurfaceHandle(43);
+    let second = SurfaceHandle(44);
+    let previous = crate::set_current_surface(first);
+    let cache = crate::detached(|| owner_scope().id());
+    let cached = with_owner(Some(cache), || signal(String::from("cached")));
+    let rooted = {
+        let _scope = owner_scope();
+        signal(0i32)
+    };
+    let opened_detached = {
+        let _scope = crate::detached(root_scope);
+        create_signal_storage(1i32)
+    };
+
+    dispose_surface(first);
+    crate::set_current_surface(second);
+
+    assert!(
+        !rooted.is_alive(),
+        "an ordinary root of the surface goes with it"
+    );
+    assert!(
+        cached.is_alive(),
+        "a detached owner's signal outlives the surface"
+    );
+    assert_eq!(cached.get(), "cached", "and reads from another surface");
+    assert!(
+        alive(opened_detached),
+        "a root scope opened detached stays too"
+    );
+
+    dispose_owner(cache);
+    assert!(!cached.is_alive(), "it is freed by whoever holds it");
+    crate::set_current_surface(previous);
+}
+
 /// The allocation shape the frame budget guards. An owner that holds nothing must cost its struct and no more, or a list render turns into thousands of allocations for owners that never hold anything.
 #[test]
 fn an_owner_that_holds_nothing_allocates_nothing() {

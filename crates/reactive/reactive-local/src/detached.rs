@@ -1,4 +1,4 @@
-//! State whose handle outlives the build that first reached for it — kept in a thread-local or a store keyed by slot — must be created here, or that build's disposal frees it and every later reader holds a dead handle; state that lives as long as one surface wants `reactive_core::in_surface_world` instead.
+//! State whose handle outlives the build that first reached for it — kept in a thread-local or a store keyed by slot — must be created here, or that build's disposal frees it and every later reader holds a dead handle; nor does the surface active then free it, owners opened here included, since such a handle is read from every surface; state that lives as long as one surface wants `reactive_core::in_surface_world` instead.
 
 use std::cell::Cell;
 

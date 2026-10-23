@@ -1,4 +1,4 @@
-//! The owner tree disposes reactive state; an owner belongs to exactly one surface, and disposing a surface disposes its owner roots, never the reverse.
+//! The owner tree disposes reactive state; an owner belongs to exactly one surface, and disposing a surface disposes its owner roots, never the reverse, and never one made inside [`detached`](reactive_local::detached).
 
 use std::any::{Any, TypeId};
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
@@ -27,6 +27,8 @@ pub(crate) struct OwnerEntry {
     context: FxHashMap<TypeId, Rc<dyn Any>>,
     catch: Option<PanicCatch>,
     surface: SurfaceHandle,
+    /// Made inside [`detached`](reactive_local::detached): a root no surface's teardown frees, because what it holds is reached for long after the surface active when it was made, which `surface` still names so its own teardown runs there.
+    detached: bool,
 }
 
 impl OwnerEntry {
@@ -41,6 +43,14 @@ impl OwnerEntry {
             context: FxHashMap::default(),
             catch: None,
             surface,
+            detached: false,
+        }
+    }
+
+    fn root(surface: SurfaceHandle) -> Self {
+        OwnerEntry {
+            detached: reactive_local::is_detached(),
+            ..OwnerEntry::new(None, surface)
         }
     }
 }
@@ -65,13 +75,17 @@ pub fn owner_within(owner: OwnerId, ancestor: OwnerId) -> bool {
     })
 }
 
-/// Opens a fresh owner as a child of the active one (the surface root if the stack is empty, matching [`provide_context`]/[`with_context`]) and makes it current until the guard drops.
+/// Opens a fresh owner as a child of the active one (the surface root if the stack is empty, matching [`provide_context`]/[`with_context`]) and makes it current until the guard drops; inside [`detached`](reactive_local::detached) it is a root no surface's teardown frees, for state a thread-local or a cache hands out long after this build.
 pub fn owner_scope() -> OwnerGuard {
     let surface = current_surface();
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let parent = owning_id(&mut rt);
-        let id = rt.owners.insert(OwnerEntry::new(parent, surface));
+        let entry = match owning_id(&mut rt) {
+            Some(parent) => OwnerEntry::new(Some(parent), surface),
+            None => OwnerEntry::root(surface),
+        };
+        let parent = entry.parent;
+        let id = rt.owners.insert(entry);
         if let Some(parent) = parent
             && let Some(entry) = rt.owners.get_mut(parent)
         {
@@ -85,12 +99,12 @@ pub fn owner_scope() -> OwnerGuard {
 
 /// Opens a fresh owner with no parent, belonging to the active surface, and makes it current until the guard drops.
 ///
-/// For what lives exactly as long as a surface, wherever the call happens: a surface nested in another tree is built from inside some component's scope, and as that scope's child its content would be freed with the component rather than with the surface, and would read the context the component's ancestors provide as though it were its own. [`dispose_surface`] frees it with the surface's other roots.
+/// For what lives exactly as long as a surface, wherever the call happens: a surface nested in another tree is built from inside some component's scope, and as that scope's child its content would be freed with the component rather than with the surface, and would read the context the component's ancestors provide as though it were its own. [`dispose_surface`] frees it with the surface's other roots, unless it was opened inside [`detached`](reactive_local::detached).
 pub fn root_scope() -> OwnerGuard {
     let surface = current_surface();
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let id = rt.owners.insert(OwnerEntry::new(None, surface));
+        let id = rt.owners.insert(OwnerEntry::root(surface));
         let depth = rt.owner_stack.len();
         rt.owner_stack.push(id);
         OwnerGuard { id, depth }
@@ -426,7 +440,7 @@ fn resume_unless_unwinding(panicked: Option<PanicPayload>) {
     }
 }
 
-/// Runs `f` with what it creates belonging to the active surface's world: state that lives exactly as long as the surface, for a surface's own worlds (its layout tree, cascade, exit count) that must outlive every scope inside it and be freed when it is, which nothing [`detached`](crate::detached) ever is.
+/// Runs `f` with what it creates belonging to the active surface's world: state that lives exactly as long as the surface, for a surface's own worlds (its layout tree, cascade, exit count) that must outlive every scope inside it and be freed when it is, which nothing [`detached`](crate::detached) ever is — owners opened there included, since their handles outlive the surface that was active.
 pub fn in_surface_world<R>(f: impl FnOnce() -> R) -> R {
     let surface = current_surface();
     let depth = RUNTIME.with(|rt| {
@@ -453,7 +467,7 @@ pub fn in_surface_world<R>(f: impl FnOnce() -> R) -> R {
     f()
 }
 
-/// Disposes everything a surface holds: its owner roots, then its world — the world goes last because the roots' cleanups still write into it.
+/// Disposes everything a surface holds: its owner roots, then its world — the world goes last because the roots' cleanups still write into it — but no owner opened inside [`detached`](crate::detached), whose handles outlive the surface that was active when it was opened.
 pub fn dispose_surface(surface: SurfaceHandle) {
     RUNTIME.with(|rt| rt.borrow_mut().disposed_surfaces.insert(surface));
     let mut panicked = None;
@@ -483,7 +497,10 @@ pub fn dispose_surface_owners(surface: SurfaceHandle) {
         rt.owners
             .iter()
             .filter(|(id, entry)| {
-                entry.parent.is_none() && entry.surface == surface && Some(*id) != world
+                entry.parent.is_none()
+                    && !entry.detached
+                    && entry.surface == surface
+                    && Some(*id) != world
             })
             .map(|(id, _)| id)
             .collect()

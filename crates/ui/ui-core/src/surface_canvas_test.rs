@@ -4,7 +4,7 @@ use std::rc::Rc;
 use geometry_core::{Insets, Rect, Size, Transform};
 use layout_core::{LayoutStyle, SizeDimension};
 use platform_core::{Event, PointerButton, PointerSource};
-use reactive_core::{dispose_owner, effect, owner_scope, signal};
+use reactive_core::{RwSignal, detached, dispose_owner, effect, owner_scope, signal, with_owner};
 use renderer_core::{Color, RectStyle, ShapeStyle};
 use ui_tree::{EventResult, RenderNode};
 
@@ -228,4 +228,34 @@ fn a_canvas_in_an_environment_is_built_in_it() {
     assert_eq!(built_in.take(), Some(env));
     assert_eq!(canvas.direction(), Some(Direction::Rtl));
     assert_eq!(canvas.safe_area(), Insets::new(44.0, 0.0, 34.0, 0.0));
+}
+
+/// A process-wide asset cache first reached during one canvas's build hands out signals every later canvas reads.
+#[test]
+fn a_cache_first_reached_in_a_canvas_outlives_it() {
+    reset_layout_runtime();
+    let cached: Rc<Cell<Option<RwSignal<u32>>>> = Rc::new(Cell::new(None));
+    let reached = Rc::clone(&cached);
+    let first = SurfaceCanvas::new(Size::new(10.0, 10.0), move || {
+        let cache = detached(owner_scope).id();
+        reached.set(Some(with_owner(Some(cache), || signal(7u32))));
+        Ok(Box::new(Container::new(fill(), vec![])?) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    let cached = cached.get().expect("the build reached the cache");
+
+    drop(first);
+
+    let read = Rc::new(Cell::new(0u32));
+    let seen = Rc::clone(&read);
+    let _second = SurfaceCanvas::new(Size::new(10.0, 10.0), move || {
+        seen.set(cached.get());
+        Ok(Box::new(Container::new(fill(), vec![])?) as Box<dyn LayoutItem>)
+    })
+    .unwrap();
+    assert_eq!(
+        read.get(),
+        7,
+        "another canvas reads what the first one's build cached"
+    );
 }
