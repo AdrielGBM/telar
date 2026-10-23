@@ -406,14 +406,6 @@ impl SurfaceCanvas {
     }
 }
 
-impl Drop for SurfaceCanvas {
-    fn drop(&mut self) {
-        // Background work and timers this canvas started must not outlive it: their callbacks close over this surface's state. Scoped to this surface so a sibling tree's are left running.
-        reactive_core::cancel_tasks_for(self.surface.handle());
-        reactive_core::cancel_timers_for(self.surface.handle());
-    }
-}
-
 /// Places a surface's content in an outer tree: drawn through `placement` and clipped to where its `size` lands, so nothing it draws — its own overlays included — spills over what is around it.
 pub fn composite_surface(
     placement: Transform,

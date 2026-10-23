@@ -215,3 +215,64 @@ fn releasing_a_thread_drops_the_callbacks_of_its_pending_tasks() {
     .join()
     .unwrap();
 }
+
+/// A surface's tasks are cancelled with it, but one that is torn down some other way still has no world to run them in, and the active one is another surface's.
+#[test]
+fn a_disposed_surfaces_task_never_runs() {
+    let _serial = serial();
+    let ran = Rc::new(std::cell::Cell::new(false));
+    let sink = Rc::clone(&ran);
+    let previous = set_current_surface(SurfaceHandle(11));
+    let task = spawn_task(|| (), move |()| sink.set(true));
+    set_current_surface(previous);
+
+    crate::dispose_surface(SurfaceHandle(11));
+    drain_until(|| !task.is_pending());
+    assert!(!ran.get(), "its callback was dropped, not run");
+}
+
+/// A stream's entry is out of the registry while its item runs, so a surface torn down from inside that item cannot be cancelled there, and putting the entry back would keep delivering into a world that is gone.
+#[test]
+fn a_stream_whose_surface_goes_away_inside_its_item_is_stopped() {
+    let _serial = serial();
+    let surface = SurfaceHandle(12);
+    let seen = Rc::new(std::cell::Cell::new(0u32));
+    let sink = Rc::clone(&seen);
+    let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+    let (stopped_tx, stopped_rx) = std::sync::mpsc::channel();
+
+    let previous = set_current_surface(surface);
+    let task = spawn_stream(
+        move |out| {
+            out.emit(1u32);
+            resume_rx.recv().ok();
+            stopped_tx.send(out.is_cancelled()).ok();
+            out.emit(2u32);
+        },
+        move |i| {
+            sink.set(sink.get() + i);
+            crate::dispose_surface(surface);
+        },
+        || unreachable!("on_end must not run for a stream whose surface is gone"),
+    );
+    set_current_surface(previous);
+
+    drain_until(|| seen.get() != 0);
+    assert!(
+        !task.is_pending(),
+        "the stream is released with its surface"
+    );
+    resume_tx.send(()).ok();
+    assert_eq!(
+        stopped_rx.recv_timeout(Duration::from_secs(5)),
+        Ok(true),
+        "its worker is told to stop"
+    );
+    std::thread::sleep(Duration::from_millis(20));
+    drain_tasks();
+    assert_eq!(
+        seen.get(),
+        1,
+        "nothing is delivered after its surface went away"
+    );
+}

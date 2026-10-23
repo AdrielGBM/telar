@@ -16,8 +16,8 @@ use layout_reactive::{
 use platform_core::{WindowCommandContext, WindowCommandGuard};
 use preferences_core::{HighContrastContext, HighContrastGuard};
 use reactive_core::{
-    SurfaceEnterGuard, SurfaceHandle, current_surface, dispose_surface, in_surface_world,
-    set_current_surface, set_surface_enter_hook,
+    SurfaceEnterGuard, SurfaceHandle, cancel_tasks_for, cancel_timers_for, current_surface,
+    dispose_surface, in_surface_world, set_current_surface, set_surface_enter_hook,
 };
 use theme_core::{ControlSizeContext, ControlSizeGuard, ModeContext, ModeGuard};
 use ui_tree::{OverlayContext, OverlayGuard};
@@ -190,6 +190,9 @@ impl Drop for Surface {
         {
             let _entered = self.enter();
             dispose_surface(self.handle);
+            // After disposal, so work a cleanup started while the surface came down is cancelled with the rest.
+            cancel_tasks_for(self.handle);
+            cancel_timers_for(self.handle);
         }
         SURFACES.with(|s| {
             s.borrow_mut().remove(&self.handle);

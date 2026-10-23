@@ -12,7 +12,7 @@ use std::time::Duration;
 use rustc_hash::FxHashMap;
 use web_time::Instant;
 
-use crate::runtime::{SurfaceHandle, current_surface};
+use crate::runtime::{SurfaceHandle, current_surface, is_surface_disposed};
 
 type TimerId = u64;
 
@@ -164,7 +164,7 @@ pub fn run_after(delay: Duration, callback: impl FnOnce() + 'static) -> Timer {
     }
 }
 
-/// Runs the callback of every timer that has come due, earliest first. The runner calls this once per frame, on the UI thread, before `App::on_frame`.
+/// Runs the callback of every timer that has come due, earliest first, dropping those of a surface already disposed rather than running them under another's world. The runner calls this once per frame, on the UI thread, before `App::on_frame`.
 ///
 /// Callbacks run inside a batch, so a frame's worth of them costs one flush. One scheduled by a callback here waits for the next call even when it is already due.
 pub fn fire_timers() {
@@ -198,6 +198,9 @@ pub fn fire_timers() {
             let Some(timer) = timer else {
                 continue;
             };
+            if is_surface_disposed(timer.surface) {
+                continue;
+            }
             let _surface = timer.surface.enter();
             (timer.callback)();
         }
@@ -230,7 +233,7 @@ pub fn advance_timer_clock(by: Duration) {
     TIMERS.with(|t| t.borrow_mut().advanced += by);
 }
 
-/// Cancels every timer scheduled while `surface` was the active one. Use it when a surface goes away, so a wait started for it cannot write into the world it left.
+/// Cancels every timer scheduled while `surface` was the active one. A surface's teardown calls this, so a wait started for it cannot write into the world it left.
 pub fn cancel_timers_for(surface: SurfaceHandle) {
     let cancelled: Vec<PendingTimer> = TIMERS.with(|t| {
         let mut registry = t.borrow_mut();

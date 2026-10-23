@@ -232,3 +232,17 @@ fn releasing_a_thread_drops_the_callbacks_of_its_pending_timers() {
     .join()
     .unwrap();
 }
+
+/// A surface's timers are cancelled with it, but one that is torn down some other way still has no world to run them in, and the active one is another surface's.
+#[test]
+fn a_disposed_surfaces_timer_never_fires() {
+    let (fired, done) = counter();
+    let previous = set_current_surface(SurfaceHandle(5));
+    let timer = run_after(DELAY, done);
+    set_current_surface(previous);
+
+    crate::dispose_surface(SurfaceHandle(5));
+    pass(DELAY);
+    assert_eq!(fired.get(), 0);
+    assert!(!timer.is_pending(), "its callback is dropped once due");
+}

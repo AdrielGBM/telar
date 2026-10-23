@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use rustc_hash::FxHashMap;
 
-use crate::runtime::{SurfaceHandle, current_surface};
+use crate::runtime::{SurfaceHandle, current_surface, is_surface_disposed};
 
 type TaskId = u64;
 type Waker = Arc<dyn Fn() + Send + Sync>;
@@ -81,6 +81,17 @@ struct PendingTask {
     callback: Callback,
     surface: SurfaceHandle,
     cancelled: Arc<AtomicBool>,
+}
+
+impl PendingTask {
+    /// Whether its callback may still run. Asked of an entry while it is out of the registry, too: a cancel or a surface teardown that happens then, inside its own callback, cannot find it there.
+    fn is_live(&self) -> bool {
+        !self.cancelled.load(Ordering::Relaxed) && !is_surface_disposed(self.surface)
+    }
+
+    fn cancel(self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
 }
 
 #[derive(Default)]
@@ -276,7 +287,7 @@ where
     }
 }
 
-/// Runs the callbacks for every value posted since the last call. The runner calls this once per frame, on the UI thread, before `App::on_frame`.
+/// Runs the callbacks for every value posted since the last call, except those of a surface already disposed: its world is gone, and running them under whichever one is active would write into a stranger's. The runner calls this once per frame, on the UI thread, before `App::on_frame`.
 ///
 /// Callbacks run inside a batch, so a frame's worth of deliveries costs one flush.
 pub fn drain_tasks() {
@@ -297,8 +308,12 @@ pub fn drain_tasks() {
         for (id, message) in posted {
             // The entry is taken out of the registry while its callback runs, so the callback may spawn or cancel tasks, and a stream cannot be re-entered by a nested drain.
             let Some(task) = TASKS.with(|t| t.borrow_mut().pending.remove(&id)) else {
-                continue; // Cancelled; the value goes with it.
+                continue;
             };
+            if !task.is_live() {
+                task.cancel();
+                continue;
+            }
             let value = match message {
                 Message::Item(value) => value,
                 Message::End => {
@@ -322,23 +337,24 @@ pub fn drain_tasks() {
                     }
                 }
             };
-            if let Some(callback) = still_open {
-                TASKS.with(|t| {
-                    t.borrow_mut().pending.insert(
-                        id,
-                        PendingTask {
-                            callback,
-                            surface: task.surface,
-                            cancelled: task.cancelled,
-                        },
-                    )
-                });
+            let Some(callback) = still_open else {
+                continue;
+            };
+            let reopened = PendingTask {
+                callback,
+                surface: task.surface,
+                cancelled: task.cancelled,
+            };
+            if reopened.is_live() {
+                TASKS.with(|t| t.borrow_mut().pending.insert(id, reopened));
+            } else {
+                reopened.cancel();
             }
         }
     });
 }
 
-/// Cancels everything spawned while `surface` was the active one, discarding their callbacks and telling stream workers to stop. Use it when a surface goes away, so work started for it cannot write into the world it left.
+/// Cancels everything spawned while `surface` was the active one, discarding their callbacks and telling stream workers to stop. A surface's teardown calls this, so work started for it cannot write into the world it left.
 pub fn cancel_tasks_for(surface: SurfaceHandle) {
     // Collected out of the registry before being dropped: a callback's captured state may spawn or cancel tasks from its own `Drop`, which would re-enter this borrow.
     let cancelled: Vec<PendingTask> = TASKS.with(|t| {

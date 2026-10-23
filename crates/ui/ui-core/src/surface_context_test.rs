@@ -558,3 +558,72 @@ fn an_owner_disposed_on_another_surfaces_turn_tears_down_inside_its_own() {
         "the owner's nodes left their own surface"
     );
 }
+
+/// A window from `open_window` or the multi-window runner is a bare `Surface`, with no canvas around it to cancel what it started: closing it has to, or its work finishes later and writes its freed state under whichever window is active then.
+#[test]
+fn dropping_a_surface_cancels_its_tasks_and_timers_and_leaves_anothers() {
+    use reactive_core::{
+        advance_timer_clock, drain_tasks, fire_timers, run_after, signal, spawn_task,
+    };
+    use std::time::Duration;
+
+    let main = Surface::new();
+    let secondary = Surface::new();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+
+    let (task, timer, written) = {
+        let _entered = secondary.enter();
+        let written = signal(0u32);
+        let task = spawn_task(
+            move || {
+                release_rx.recv().ok();
+            },
+            move |()| written.set(1),
+        );
+        let timer = run_after(Duration::from_millis(10), move || written.set(2));
+        (task, timer, written)
+    };
+    let (main_task, main_timer, main_written) = {
+        let _entered = main.enter();
+        let main_written = signal(0u32);
+        let main_task = spawn_task(|| (), move |()| main_written.update(|n| *n += 1));
+        let main_timer = run_after(Duration::from_millis(10), move || {
+            main_written.update(|n| *n += 1)
+        });
+        (main_task, main_timer, main_written)
+    };
+
+    drop(secondary);
+    assert!(!task.is_pending(), "its task is cancelled when it closes");
+    assert!(
+        !timer.is_pending(),
+        "and so is its timer, though its handle is still held"
+    );
+    assert!(
+        !written.is_alive(),
+        "what their callbacks would write is gone with it"
+    );
+
+    release_tx.send(()).ok();
+    let _entered = main.enter();
+    advance_timer_clock(Duration::from_millis(10));
+    fire_timers();
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while main_task.is_pending() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the main window's task never completed"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+        drain_tasks();
+    }
+    std::thread::sleep(Duration::from_millis(20));
+    drain_tasks();
+
+    assert!(!main_timer.is_pending());
+    assert_eq!(
+        main_written.get(),
+        2,
+        "the window still open keeps its task and its timer"
+    );
+}
