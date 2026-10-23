@@ -17,6 +17,7 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, SystemTime};
@@ -31,6 +32,8 @@ const COALESCE: Duration = Duration::from_millis(50);
 const CANCEL_POLL: Duration = Duration::from_millis(500);
 
 /// Calls `on_change` on **this** thread whenever `path` changes — a file, or a directory and everything under it. Coalesced, so one save is one call however many events the platform reported.
+///
+/// A file is watched through its parent directory, so it survives atomic saves (write a temp file, rename over it) and may not exist yet: its creation is a change. If the parent directory does not exist either, the watch cannot start and a `tracing` warning says why. A watcher error or a lost-events rescan is also reported as a change, since events may have been missed.
 ///
 /// The returned [`Task`] owns the watch: keep it for as long as the reload should happen, and drop or [`cancel`](Task::cancel) it to stop. Dropping it detaches instead — the watcher keeps running and the callback keeps firing — which is what a watch that should outlive its setup function wants.
 ///
@@ -77,30 +80,96 @@ fn fingerprint(path: &Path) -> Vec<(PathBuf, u64, Option<SystemTime>)> {
     out
 }
 
+enum Signal {
+    Touched,
+    Lost,
+}
+
+/// Where the platform watch goes: a directory is watched recursively, anything else through its parent directory, because an atomic save replaces the file's inode and a watch on the inode dies with it.
+struct Target {
+    watched: PathBuf,
+    mode: RecursiveMode,
+    file_name: Option<OsString>,
+}
+
+fn target(path: &Path) -> Result<Target, String> {
+    if path.is_dir() {
+        return Ok(Target {
+            watched: path.to_path_buf(),
+            mode: RecursiveMode::Recursive,
+            file_name: None,
+        });
+    }
+    let Some(file_name) = path.file_name() else {
+        return Err("it has no file name".to_owned());
+    };
+    let parent = match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    if !parent.is_dir() {
+        return Err(format!("its directory {} does not exist", parent.display()));
+    }
+    Ok(Target {
+        watched: parent.to_path_buf(),
+        mode: RecursiveMode::NonRecursive,
+        file_name: Some(file_name.to_owned()),
+    })
+}
+
+fn names_file(event: &Event, file_name: &OsStr) -> bool {
+    event.paths.iter().any(|p| p.file_name() == Some(file_name))
+}
+
 fn run(path: &Path, out: Emitter<()>) {
+    let target = match target(path) {
+        Ok(target) => target,
+        Err(reason) => {
+            tracing::warn!("cannot watch {}: {reason}", path.display());
+            return;
+        }
+    };
     let (tx, rx) = mpsc::channel();
-    let mut watcher: RecommendedWatcher =
-        match notify::recommended_watcher(move |result: notify::Result<Event>| {
-            if result.is_ok_and(|event| worth_checking(&event)) {
-                let _ = tx.send(());
-            }
-        }) {
-            Ok(watcher) => watcher,
-            Err(e) => {
-                tracing::warn!("cannot watch {}: {e}", path.display());
-                return;
-            }
-        };
-    // Recursive whether `path` is a directory or a file: watching a file non-recursively is the same thing, and it saves the caller a `is_dir()` that races with the change it is asking to be told about.
-    if let Err(e) = watcher.watch(path, RecursiveMode::Recursive) {
-        tracing::warn!("cannot watch {}: {e}", path.display());
+    let file_name = target.file_name.clone();
+    let watched = target.watched.clone();
+    let mut watcher: RecommendedWatcher = match notify::recommended_watcher(
+        move |result: notify::Result<Event>| {
+            let signal = match result {
+                Ok(event) if event.need_rescan() => Signal::Lost,
+                Ok(event) if !worth_checking(&event) => return,
+                Ok(event) => match &file_name {
+                    Some(name) if !names_file(&event, name) => return,
+                    _ => Signal::Touched,
+                },
+                Err(e) => {
+                    tracing::warn!(
+                        "watcher error under {}: {e}; if this is the inotify limit, raise fs.inotify.max_user_watches",
+                        watched.display()
+                    );
+                    Signal::Lost
+                }
+            };
+            let _ = tx.send(signal);
+        },
+    ) {
+        Ok(watcher) => watcher,
+        Err(e) => {
+            tracing::warn!("cannot watch {}: {e}", path.display());
+            return;
+        }
+    };
+    if let Err(e) = watcher.watch(&target.watched, target.mode) {
+        tracing::warn!(
+            "cannot watch {}: {e}; if this is the inotify limit, raise fs.inotify.max_user_watches",
+            path.display()
+        );
         return;
     }
 
     let mut seen = fingerprint(path);
     loop {
-        match rx.recv_timeout(CANCEL_POLL) {
-            Ok(()) => {}
+        let mut lost = match rx.recv_timeout(CANCEL_POLL) {
+            Ok(signal) => matches!(signal, Signal::Lost),
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 if out.is_cancelled() {
                     return;
@@ -109,14 +178,16 @@ fn run(path: &Path, out: Emitter<()>) {
             }
             // The watcher was dropped, which only happens on the way out of this function.
             Err(mpsc::RecvTimeoutError::Disconnected) => return,
-        }
+        };
         // Drain the rest of the burst before reporting, so a save that lands as four events is one reload.
-        while rx.recv_timeout(COALESCE).is_ok() {}
+        while let Ok(signal) = rx.recv_timeout(COALESCE) {
+            lost |= matches!(signal, Signal::Lost);
+        }
         if out.is_cancelled() {
             return;
         }
         let now = fingerprint(path);
-        if now == seen {
+        if now == seen && !lost {
             continue;
         }
         seen = now;

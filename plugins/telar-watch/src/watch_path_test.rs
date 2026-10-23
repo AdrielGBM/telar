@@ -101,3 +101,97 @@ fn reading_a_watched_file_is_not_a_change() {
     watch.cancel();
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+fn atomic_save(file: &std::path::Path, contents: &str) {
+    let temp = file.with_extension("tmp");
+    std::fs::write(&temp, contents).unwrap();
+    std::fs::rename(&temp, file).unwrap();
+}
+
+/// An atomic save replaces the file's inode; a watch on the inode itself ends at the first one.
+#[test]
+fn a_watched_file_survives_repeated_atomic_saves() {
+    let dir = scratch("atomic");
+    let file = dir.join("held.toml");
+    std::fs::write(&file, "a = 1\n").unwrap();
+
+    let hits = Rc::new(Cell::new(0usize));
+    let counted = Rc::clone(&hits);
+    let watch = watch_path(&file, move || counted.set(counted.get() + 1));
+    std::thread::sleep(Duration::from_millis(200));
+
+    atomic_save(&file, "a = 2\n");
+    assert!(
+        settle_until(&hits, 1, Duration::from_secs(10)) >= 1,
+        "the first atomic save was missed"
+    );
+
+    atomic_save(&file, "a = 33\n");
+    assert!(
+        settle_until(&hits, 2, Duration::from_secs(10)) >= 2,
+        "the second atomic save was missed"
+    );
+
+    watch.cancel();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_sibling_file_is_not_a_change_to_the_watched_file() {
+    let dir = scratch("sibling");
+    let file = dir.join("held.toml");
+    std::fs::write(&file, "a = 1\n").unwrap();
+
+    let hits = Rc::new(Cell::new(0usize));
+    let counted = Rc::clone(&hits);
+    let watch = watch_path(&file, move || counted.set(counted.get() + 1));
+    std::thread::sleep(Duration::from_millis(200));
+
+    std::fs::write(dir.join("other.toml"), "b = 1\n").unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+    drain_tasks();
+    assert_eq!(hits.get(), 0, "a sibling's write was reported");
+
+    watch.cancel();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_file_that_does_not_exist_yet_reports_its_creation() {
+    let dir = scratch("missing-file");
+    let file = dir.join("later.toml");
+
+    let hits = Rc::new(Cell::new(0usize));
+    let counted = Rc::clone(&hits);
+    let watch = watch_path(&file, move || counted.set(counted.get() + 1));
+    std::thread::sleep(Duration::from_millis(200));
+
+    std::fs::write(&file, "a = 1\n").unwrap();
+    assert!(
+        settle_until(&hits, 1, Duration::from_secs(10)) >= 1,
+        "the creation was missed"
+    );
+
+    watch.cancel();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_path_with_no_existing_directory_never_reports() {
+    let dir = scratch("missing-dir");
+    let file = dir.join("absent/later.toml");
+
+    let hits = Rc::new(Cell::new(0usize));
+    let counted = Rc::clone(&hits);
+    let watch = watch_path(&file, move || counted.set(counted.get() + 1));
+    std::thread::sleep(Duration::from_millis(200));
+
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "a = 1\n").unwrap();
+    std::thread::sleep(Duration::from_millis(300));
+    drain_tasks();
+    assert_eq!(hits.get(), 0);
+
+    watch.cancel();
+    let _ = std::fs::remove_dir_all(&dir);
+}
