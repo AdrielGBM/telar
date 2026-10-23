@@ -79,11 +79,18 @@ pub(crate) fn run_check_cmd(args: CheckArgs) {
         eprint!("{}", report.render(true));
     }
 
-    let code = status
-        .ok()
-        .and_then(|status| status.code())
-        .unwrap_or(if report.has_errors() { 1 } else { 0 });
-    std::process::exit(code);
+    std::process::exit(exit_code(
+        status.ok().and_then(|status| status.code()),
+        report.has_errors(),
+    ));
+}
+
+fn exit_code(cargo_code: Option<i32>, report_has_errors: bool) -> i32 {
+    match cargo_code {
+        Some(0) if !report_has_errors => 0,
+        Some(code) if code != 0 => code,
+        _ => 1,
+    }
 }
 
 impl diagnostics::Report {
@@ -162,3 +169,7 @@ fn catalog_keys(package_root: &std::path::Path) -> std::collections::HashSet<Str
         .map(|c| c.keys().cloned().collect())
         .unwrap_or_default()
 }
+
+#[cfg(test)]
+#[path = "check_test.rs"]
+mod tests;
