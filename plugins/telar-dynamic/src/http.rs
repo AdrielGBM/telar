@@ -10,6 +10,7 @@ use ui_core::{AssetError, AssetKey, AssetTransport, Reply};
 const DEFAULT_ATTEMPTS: u32 = 8;
 const DEFAULT_RETRY_DELAY: Duration = Duration::from_secs(4);
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
+const DEFAULT_MAX_BODY_BYTES: u64 = 10 * 1024 * 1024;
 
 /// An [`AssetTransport`] that resolves each id against a URL template.
 ///
@@ -27,6 +28,7 @@ pub struct HttpTransport {
     max_attempts: u32,
     retry_delay: Duration,
     timeout: Duration,
+    max_body_bytes: u64,
     #[cfg(not(target_arch = "wasm32"))]
     agent: ureq::Agent,
 }
@@ -39,6 +41,7 @@ impl HttpTransport {
             max_attempts: DEFAULT_ATTEMPTS,
             retry_delay: DEFAULT_RETRY_DELAY,
             timeout: DEFAULT_TIMEOUT,
+            max_body_bytes: DEFAULT_MAX_BODY_BYTES,
             #[cfg(not(target_arch = "wasm32"))]
             agent: agent(DEFAULT_TIMEOUT),
         }
@@ -61,9 +64,43 @@ impl HttpTransport {
         self
     }
 
-    fn url_for(&self, id: &str) -> String {
-        self.url_template.replace("{name}", id)
+    /// The largest response body accepted, 10 MiB by default. A body over it is a failure on every target: native stops reading at the cap, the browser checks `Content-Length` and the buffered length.
+    pub fn with_max_body_size(mut self, bytes: u64) -> Self {
+        self.max_body_bytes = bytes;
+        self
     }
+
+    fn url_for(&self, id: &str) -> Result<String, AssetError> {
+        Ok(self.url_template.replace("{name}", &encode_id(id)?))
+    }
+}
+
+/// Mirrors `DirTransport`'s containment rules for a URL: `.` and `..` segments are refused, and every byte outside the unreserved set is escaped, so `?`, `#`, `%` and `\` can never change which path or query the request addresses. The `/` between segments is kept.
+fn encode_id(id: &str) -> Result<String, AssetError> {
+    let mut encoded = String::with_capacity(id.len());
+    for (index, segment) in id.split('/').enumerate() {
+        if segment == "." || segment == ".." {
+            return Err(AssetError(format!(
+                "asset id `{id}` is not a path inside the endpoint"
+            )));
+        }
+        if index > 0 {
+            encoded.push('/');
+        }
+        for byte in segment.bytes() {
+            match byte {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                    encoded.push(byte as char)
+                }
+                _ => encoded.push_str(&format!("%{byte:02X}")),
+            }
+        }
+    }
+    Ok(encoded)
+}
+
+fn too_large(url: &str, limit: u64) -> AssetError {
+    AssetError(format!("{url}: response body exceeds {limit} bytes"))
 }
 
 /// Whether to try again, and the warning to leave behind when there is nothing left to try. Shared so both bodies count attempts and give up identically — the only thing that differs between them is how the wait is spent.
@@ -82,8 +119,8 @@ mod native {
     use super::*;
 
     impl HttpTransport {
-        fn fetch(&self, id: &str) -> Result<Vec<u8>, AssetError> {
-            let url = self.url_for(id);
+        pub(super) fn fetch(&self, id: &str) -> Result<Vec<u8>, AssetError> {
+            let url = self.url_for(id)?;
             let mut attempts = 1;
             loop {
                 let error = match self.get(&url) {
@@ -99,13 +136,28 @@ mod native {
         }
 
         fn get(&self, url: &str) -> Result<Vec<u8>, AssetError> {
-            self.agent
+            let limit = self.max_body_bytes;
+            let mut response = self
+                .agent
                 .get(url)
                 .call()
-                .map_err(|e| AssetError(format!("{url}: {e}")))?
-                .body_mut()
+                .map_err(|e| AssetError(format!("{url}: {e}")))?;
+            let body = response.body_mut();
+            if body.content_length().is_some_and(|length| length > limit) {
+                return Err(too_large(url, limit));
+            }
+            let bytes = body
+                .with_config()
+                .limit(limit.saturating_add(1))
                 .read_to_vec()
-                .map_err(|e| AssetError(format!("{url}: {e}")))
+                .map_err(|e| match e {
+                    ureq::Error::BodyExceedsLimit(_) => too_large(url, limit),
+                    e => AssetError(format!("{url}: {e}")),
+                })?;
+            if bytes.len() as u64 > limit {
+                return Err(too_large(url, limit));
+            }
+            Ok(bytes)
         }
     }
 
@@ -139,15 +191,19 @@ mod web {
         ///
         /// **The request is not aborted if the asset stops being wanted.** `Reply` is a one-shot `FnOnce` and carries no cancellation signal, so a transport cannot learn that the loader gave up; what it can do is finish and report into an emitter that has already been dropped, which is inert. So a cancelled asset costs the rest of one download and nothing else — wrong for a page that scrolls through hundreds of them, and the reason the seam would need a cancellation hook before that becomes a real workload.
         fn load(&self, key: &AssetKey, reply: Reply) {
-            let url = self.url_for(&key.id);
+            let url = match self.url_for(&key.id) {
+                Ok(url) => url,
+                Err(error) => return reply(Err(error)),
+            };
             let id = key.id.clone();
             let max_attempts = self.max_attempts;
             let retry_delay = self.retry_delay;
             let timeout = self.timeout;
+            let max_body_bytes = self.max_body_bytes;
             wasm_bindgen_futures::spawn_local(async move {
                 let mut attempts = 1;
                 let result = loop {
-                    let error = match get(&url, timeout).await {
+                    let error = match get(&url, timeout, max_body_bytes).await {
                         Ok(bytes) => break Ok(bytes),
                         Err(error) => error,
                     };
@@ -179,7 +235,7 @@ mod web {
     }
 
     /// The timeout is an `AbortController` fired by a timer, because `fetch` has no timeout of its own — a request left to the browser's own limits can outlive the frame that wanted it by minutes.
-    async fn get(url: &str, timeout: Duration) -> Result<Vec<u8>, AssetError> {
+    async fn get(url: &str, timeout: Duration, limit: u64) -> Result<Vec<u8>, AssetError> {
         let window = window()?;
         let controller =
             web_sys::AbortController::new().map_err(|e| js_error(url, "AbortController", &e))?;
@@ -209,6 +265,15 @@ mod web {
                 response.status_text()
             )));
         }
+        let declared = response
+            .headers()
+            .get("content-length")
+            .ok()
+            .flatten()
+            .and_then(|value| value.parse::<u64>().ok());
+        if declared.is_some_and(|length| length > limit) {
+            return Err(too_large(url, limit));
+        }
         let buffer = JsFuture::from(
             response
                 .array_buffer()
@@ -216,7 +281,11 @@ mod web {
         )
         .await
         .map_err(|e| js_error(url, "body", &e))?;
-        Ok(js_sys::Uint8Array::new(&buffer).to_vec())
+        let array = js_sys::Uint8Array::new(&buffer);
+        if u64::from(array.length()) > limit {
+            return Err(too_large(url, limit));
+        }
+        Ok(array.to_vec())
     }
 
     /// A rejected promise is whatever the page threw, and often not an `Error` at all, so it is stringified rather than downcast.

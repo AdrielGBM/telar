@@ -32,3 +32,26 @@ fn a_format_behind_a_feature_decodes_once_that_feature_is_on() {
         .expect("gif decodes with `image-gif` on");
     assert_eq!((decoded.width, decoded.height), (2, 3));
 }
+
+fn png(width: u32, height: u32) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    image::DynamicImage::ImageLuma8(image::GrayImage::new(width, height))
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Png,
+        )
+        .unwrap();
+    bytes
+}
+
+#[test]
+fn a_bitmap_wider_than_the_limit_is_rejected_before_it_is_allocated() {
+    assert!(ImageDecoder.decode(&png(MAX_DIMENSION + 1, 1)).is_err());
+    assert!(ImageDecoder.decode(&png(1, MAX_DIMENSION + 1)).is_err());
+}
+
+#[test]
+fn a_bitmap_at_the_limit_still_decodes() {
+    let decoded = ImageDecoder.decode(&png(MAX_DIMENSION, 1)).unwrap();
+    assert_eq!((decoded.width, decoded.height), (MAX_DIMENSION, 1));
+}

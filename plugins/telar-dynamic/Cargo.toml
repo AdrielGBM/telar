@@ -136,6 +136,7 @@ web-sys = { workspace = true, optional = true, features = [
     "AbortSignal",
     "Request",
     "RequestInit",
+    "Headers",
     "Response",
     "Window",
 ] }
