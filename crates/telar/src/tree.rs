@@ -106,7 +106,7 @@ impl UiTree for LocalTree {
 
 /// A tree that lives on the *app's* side of a hot-reload boundary: the dylib mounts it (so its segment effects are created in the dylib's reactive runtime, subscribed to the dylib's signals) and the host drives it through the shims the `app!` macro exports. Held by the host only as an opaque pointer — every method below runs inside the dylib.
 ///
-/// The runner must drop its tree *before* replacing the app, so this instance is freed while its dylib is still mapped; `AppHandler`'s reload path already does that for the same reason effect closures require it.
+/// The host's handle holds a share of the loaded dylib, so this instance is always released while its dylib is still mapped, before or after the app it was mounted from.
 pub struct HotTree {
     tree: OwnedTree,
 }

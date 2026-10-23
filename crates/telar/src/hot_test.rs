@@ -117,3 +117,59 @@ fn installing_the_host_services_installs_its_keyboard_convention() {
     services.install();
     assert_eq!(platform_core::keyboard_convention(), host);
 }
+
+thread_local! {
+    static CALLS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn record(call: &'static str) -> GuestResult<()> {
+    CALLS.with_borrow_mut(|calls| calls.push(call));
+    Ok(())
+}
+
+fn keep_services(_: HostServices) -> GuestResult<()> {
+    Ok(())
+}
+
+fn release_app(app: Box<dyn App>) -> GuestResult<()> {
+    drop(app);
+    record("app_release")
+}
+
+fn mount_tree(_: &dyn App) -> GuestResult<*mut HotTree> {
+    record("tree_mount")?;
+    Ok(std::ptr::NonNull::dangling().as_ptr())
+}
+
+fn paint_tree(_: *mut HotTree) -> GuestResult<Vec<renderer_core::DrawCommand>> {
+    record("tree_paint")?;
+    Ok(Vec::new())
+}
+
+fn release_tree(_: *mut HotTree) -> GuestResult<()> {
+    record("tree_release")
+}
+
+/// A tree handed out by `mount` is `'static`, so safe code can keep it past the app it came from: it keeps driving its guest, and is released into it, rather than calling code the app took with it.
+#[test]
+fn a_tree_outliving_its_app_still_drives_its_guest() {
+    use crate::app_runtime::AppRuntime;
+    CALLS.with_borrow_mut(Vec::clear);
+    let exports = GuestExports {
+        install_services: keep_services,
+        app_release: release_app,
+        tree_mount: mount_tree,
+        tree_paint: paint_tree,
+        tree_release: release_tree,
+        ..GuestExports::in_process()
+    };
+    let mut app = HotApp::start(exports, build_blank, None);
+    let tree = app.mount();
+    drop(app);
+    let _ = tree.frame();
+    drop(tree);
+    assert_eq!(
+        CALLS.take(),
+        ["tree_mount", "app_release", "tree_paint", "tree_release"]
+    );
+}

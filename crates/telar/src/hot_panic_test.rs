@@ -1,4 +1,4 @@
-//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped and none of the memory a build held; and that a face a guest adds while it runs reaches the host that draws it and outlives the guest; and that a guest shows its shortcuts for the keyboard its host matches. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
+//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped and none of the memory a build held, while a tree kept past its app keeps its guest mapped; and that a face a guest adds while it runs reaches the host that draws it and outlives the guest; and that a guest shows its shortcuts for the keyboard its host matches. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -106,6 +106,32 @@ fn a_hot_guest_that_mounted_a_tree_is_unmapped_when_dropped() {
         0,
         "building, painting and driving a tree leaves nothing that pins the library"
     );
+}
+
+/// `mount` hands out a `'static` tree, so safe code can drop the app first: the tree keeps its guest mapped, still drives and paints it, and the guest is unmapped once the tree goes too.
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+#[cfg(target_os = "linux")]
+fn a_tree_that_outlives_its_hot_app_keeps_its_guest_mapped() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    load_the_host_fonts();
+    let mut app = load_hot_app(&library).expect("the guest loads");
+    app.set_surface_size(Size::new(320.0, 200.0));
+    let mut tree = app.mount();
+    app.relayout();
+    assert_eq!(app.take_panic(), None, "precondition: the tree mounts");
+    drop(app);
+    assert_eq!(mapped_guests(), 1, "the tree keeps its guest mapped");
+    assert_eq!(
+        tree.on_event(&hover()),
+        EventResult::Handled,
+        "the tree still takes events"
+    );
+    assert!(!tree.frame().is_empty(), "the tree still paints");
+    tree.end_frame();
+    drop(tree);
+    assert_eq!(mapped_guests(), 0, "the last holder unmaps it");
 }
 
 #[test]
