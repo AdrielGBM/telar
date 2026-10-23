@@ -15,6 +15,9 @@ pub const PREVIEW_COMPONENT_VAR: &str = "TELAR_PREVIEW_COMPONENT";
 /// The env var `cargo telar preview` sets to the workspace it runs from, where a workshop keeps what it remembers between runs.
 pub const WORKSPACE_DIR_VAR: &str = "TELAR_WORKSPACE_DIR";
 
+/// The env var `cargo telar dev` hands the app the hot-reload channel's secret in. The app sends it as the channel's first line, and a connection that does not is never adopted, so no other local process can drive the app.
+pub const HOT_TOKEN_VAR: &str = "TELAR_HOT_TOKEN";
+
 /// Starts a hot-reload channel line carrying the path of a freshly built dylib.
 pub const HOT_RELOAD_PREFIX: &str = "hot:";
 

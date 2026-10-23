@@ -173,3 +173,16 @@ fn a_tree_outliving_its_app_still_drives_its_guest() {
         ["tree_mount", "app_release", "tree_paint", "tree_release"]
     );
 }
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+#[test]
+fn the_app_opens_the_hot_channel_with_its_token() {
+    use std::io::BufRead;
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let _app = connect_hot_channel(port, "s3cret").unwrap();
+    let (cli, _) = listener.accept().unwrap();
+    let mut first = String::new();
+    std::io::BufReader::new(cli).read_line(&mut first).unwrap();
+    assert_eq!(first, "s3cret\n");
+}

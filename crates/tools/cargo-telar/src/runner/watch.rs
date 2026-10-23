@@ -1,6 +1,7 @@
 //! `cargo telar dev`: the watch loop, the rebuild, and the hot-reload channel to the running app.
 
 use std::io::BufReader;
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
@@ -8,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use telar_project::protocol::{
-    BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR,
+    BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, HOT_TOKEN_VAR, TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR,
 };
 use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE};
 
@@ -150,11 +151,13 @@ impl WatchSet {
                 .collect(),
         }
     }
+}
 
-    /// Whether the event should trigger a rebuild. Assets need no special handling any more: the macro emits an `include_bytes!` per baked asset, so cargo sees the edit as a real dependency, and the bake before each rebuild refreshes the artifact it reads.
+impl WatchScope for WatchSet {
+    /// Assets need no special handling any more: the macro emits an `include_bytes!` per baked asset, so cargo sees the edit as a real dependency, and the bake before each rebuild refreshes the artifact it reads.
     ///
     /// A manifest's directory is watched only for the manifest, so anything else changing beside it — a `Cargo.lock` cargo rewrote, an editor's swap file — is not an edit to the project.
-    pub(crate) fn wants(&self, event: &notify::Event) -> bool {
+    fn wants(&self, event: &notify::Event) -> bool {
         if !matches!(
             event.kind,
             EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_)
@@ -171,8 +174,8 @@ impl WatchSet {
         })
     }
 
-    /// The directories to hand the watcher, each with how deep to watch it. A manifest is watched through its directory rather than as a file, because an editor that saves by writing a new file and renaming it over the old one would end a watch on the file itself; and not at all when a recursive watch already covers it.
-    pub(crate) fn watches(&self) -> Vec<(PathBuf, RecursiveMode)> {
+    /// A manifest is watched through its directory rather than as a file, because an editor that saves by writing a new file and renaming it over the old one would end a watch on the file itself; and not at all when a recursive watch already covers it.
+    fn watches(&self) -> Vec<(PathBuf, RecursiveMode)> {
         let mut parents: Vec<PathBuf> = self
             .manifests
             .iter()
@@ -240,29 +243,35 @@ fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
     dirs
 }
 
-// TCP loopback rather than a unix socket, so hot reload works on non-Unix hosts. cargo-telar binds and the app connects once at startup, then reads line events.
+// TCP loopback rather than a unix socket, so hot reload works on non-Unix hosts. cargo-telar binds and the app connects once at startup, opens with the token, then reads line events.
 struct HotChannel {
-    listener: std::net::TcpListener,
-    stream: Option<std::net::TcpStream>,
+    adopted: mpsc::Receiver<TcpStream>,
+    stream: Option<TcpStream>,
     port: u16,
+    /// What the app is handed in [`HOT_TOKEN_VAR`] and has to open the channel with: any local process can reach a loopback port, and only the app was told this.
+    token: String,
 }
 
 impl HotChannel {
     fn bind() -> Self {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
+        let listener = TcpListener::bind(("127.0.0.1", 0))
             .expect("[cargo-telar] failed to bind hot reload port");
         let port = listener
             .local_addr()
             .expect("[cargo-telar] failed to read hot reload port")
             .port();
-        // Non-blocking so send() can drain pending connections without stalling the watch loop.
-        listener
-            .set_nonblocking(true)
-            .expect("[cargo-telar] failed to configure hot reload listener");
+        let token = hot_token();
+        let (handed, adopted) = mpsc::channel();
+        let expected = token.clone();
+        std::thread::Builder::new()
+            .name("cargo-telar-hot-accept".to_string())
+            .spawn(move || adopt_first_authenticated(listener, &expected, &handed))
+            .expect("[cargo-telar] failed to start the hot reload listener");
         HotChannel {
-            listener,
+            adopted,
             stream: None,
             port,
+            token,
         }
     }
 
@@ -306,29 +315,204 @@ impl HotChannel {
         }
     }
 
-    // The app's connection sits in the accept backlog until the first send; a reconnect replaces the previous stream.
     fn accept_waiting(&mut self) {
-        while let Ok((stream, _)) = self.listener.accept() {
+        if let Ok(stream) = self.adopted.try_recv() {
             self.stream = Some(stream);
         }
     }
 }
 
-fn make_watcher(
-    tx: mpsc::Sender<notify::Result<notify::Event>>,
-    watched: &WatchSet,
-) -> RecommendedWatcher {
-    let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default())
-        .expect("[cargo-telar] failed to create file watcher");
-    for (dir, mode) in watched.watches() {
-        watcher.watch(&dir, mode).unwrap_or_else(|e| {
-            eprintln!(
-                "[cargo-telar] warning: could not watch {}: {e}",
-                dir.display()
-            )
-        });
+/// How long a connection has to send its token before it is dropped. The app sends it as soon as it connects.
+const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// 256 bits from the system's randomness, as hex.
+fn hot_token() -> String {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes)
+        .expect("[cargo-telar] could not draw the hot reload token from the system's randomness");
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Takes connections until one opens with `token`, hands that one on and stops listening, so nothing can connect once the app has.
+fn adopt_first_authenticated(listener: TcpListener, token: &str, handed: &mpsc::Sender<TcpStream>) {
+    for stream in listener.incoming().flatten() {
+        if opens_with(&stream, token) {
+            let _ = handed.send(stream);
+            return;
+        }
     }
-    watcher
+}
+
+fn opens_with(mut stream: &TcpStream, token: &str) -> bool {
+    use std::io::Read;
+    if stream.set_read_timeout(Some(HANDSHAKE_TIMEOUT)).is_err() {
+        return false;
+    }
+    let mut line = Vec::with_capacity(token.len());
+    let mut byte = [0u8];
+    while line.len() <= token.len() {
+        match stream.read(&mut byte) {
+            Ok(1) if byte[0] == b'\n' => break,
+            Ok(1) => line.push(byte[0]),
+            _ => return false,
+        }
+    }
+    let matches = line.len() == token.len()
+        && line
+            .iter()
+            .zip(token.as_bytes())
+            .fold(0, |differ, (a, b)| differ | (a ^ b))
+            == 0;
+    matches && stream.set_read_timeout(None).is_ok()
+}
+
+/// How long a burst of file events has to go quiet before it is acted on: an editor saving one file raises several, and a tool rewriting a directory raises one per file.
+const DEBOUNCE: Duration = Duration::from_millis(200);
+
+/// How long a loop waits on the watcher before it looks at the app again.
+const POLL: Duration = Duration::from_millis(50);
+
+/// What a watch loop watches: the directories it hands the watcher, and which of their events call for a rebuild.
+pub(crate) trait WatchScope {
+    fn watches(&self) -> Vec<(PathBuf, RecursiveMode)>;
+    fn wants(&self, event: &notify::Event) -> bool;
+}
+
+/// A watcher over a [`WatchScope`] and the messages it sends. Every loop reads them through here, so none drops a watcher failure or a notice that events were lost.
+pub(crate) struct ChangeFeed<S> {
+    scope: S,
+    messages: mpsc::Receiver<notify::Result<notify::Event>>,
+    _watcher: RecommendedWatcher,
+}
+
+impl<S: WatchScope> ChangeFeed<S> {
+    /// Fails only when no watcher can be made at all; a directory that cannot be watched is reported and left out.
+    pub(crate) fn start(scope: S) -> notify::Result<Self> {
+        let (tx, messages) = mpsc::channel();
+        let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default())?;
+        for (dir, mode) in scope.watches() {
+            if let Err(error) = watcher.watch(&dir, mode) {
+                let error = match error.paths.is_empty() {
+                    true => error.add_path(dir),
+                    false => error,
+                };
+                eprintln!("[cargo-telar] {}", watch_failure(&error));
+            }
+        }
+        Ok(Self {
+            scope,
+            messages,
+            _watcher: watcher,
+        })
+    }
+
+    /// Blocks until a change arrives.
+    pub(crate) fn wait(&self) {
+        loop {
+            match self.messages.recv() {
+                Ok(message) if self.is_change(&message) => return,
+                Ok(_) => {}
+                Err(_) => {
+                    eprintln!(
+                        "[cargo-telar] warning: the file watcher stopped; edits are no longer picked up."
+                    );
+                    idle();
+                }
+            }
+        }
+    }
+
+    /// Whether a change arrives within `timeout`.
+    pub(crate) fn changed_within(&self, timeout: Duration) -> bool {
+        let deadline = Instant::now() + timeout;
+        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+            match self.messages.recv_timeout(left) {
+                Ok(message) if self.is_change(&message) => return true,
+                Ok(_) => {}
+                Err(_) => return false,
+            }
+        }
+        false
+    }
+
+    /// Takes every message already waiting and answers whether any was a change.
+    pub(crate) fn drain(&self) -> bool {
+        let mut changed = false;
+        for message in self.messages.try_iter() {
+            changed |= self.is_change(&message);
+        }
+        changed
+    }
+
+    /// Takes messages until none has arrived for `quiet`, so one burst of edits makes one rebuild.
+    pub(crate) fn settle(&self, quiet: Duration) {
+        while let Ok(message) = self.messages.recv_timeout(quiet) {
+            self.is_change(&message);
+        }
+    }
+
+    /// A rescan notice means the platform dropped events, any of which may have been an edit, so it counts as one.
+    fn is_change(&self, message: &notify::Result<notify::Event>) -> bool {
+        match message {
+            Ok(event) if event.need_rescan() => {
+                eprintln!(
+                    "[cargo-telar] The file watcher lost events; rebuilding in case one was an edit."
+                );
+                true
+            }
+            Ok(event) => self.scope.wants(event),
+            Err(error) => {
+                eprintln!("[cargo-telar] {}", watch_failure(error));
+                false
+            }
+        }
+    }
+}
+
+/// What to tell the developer about a watcher failure: where, why, and, for the inotify limit, how to raise it.
+fn watch_failure(error: &notify::Error) -> String {
+    let reason = match &error.kind {
+        notify::ErrorKind::Generic(message) => message.clone(),
+        notify::ErrorKind::Io(io) => io.to_string(),
+        notify::ErrorKind::PathNotFound => "it does not exist".to_string(),
+        notify::ErrorKind::WatchNotFound => "it is not being watched".to_string(),
+        notify::ErrorKind::InvalidConfig(config) => {
+            format!("the watcher configuration {config:?} is invalid")
+        }
+        notify::ErrorKind::MaxFilesWatch => {
+            let limit = max_user_watches().map_or_else(String::new, |limit| format!(" ({limit})"));
+            format!(
+                "the system limit on watched directories{limit} is reached; raise `fs.inotify.max_user_watches` with sysctl"
+            )
+        }
+    };
+    let paths: Vec<String> = error
+        .paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect();
+    match paths.is_empty() {
+        true => format!(
+            "warning: the file watcher failed: {reason}. Some edits may not trigger a rebuild."
+        ),
+        false => format!(
+            "warning: could not watch {}: {reason}. Edits there will not trigger a rebuild.",
+            paths.join(", ")
+        ),
+    }
+}
+
+fn max_user_watches() -> Option<String> {
+    std::fs::read_to_string("/proc/sys/fs/inotify/max_user_watches")
+        .ok()
+        .map(|limit| limit.trim().to_string())
+}
+
+/// Parks the thread for good: what a loop does once it can never act again, leaving the process to whatever else it serves until it is interrupted.
+pub(crate) fn idle() -> ! {
+    loop {
+        std::thread::park();
+    }
 }
 
 /// The app the hot-reload loop runs: the binary and what it is started with.
@@ -344,7 +528,7 @@ fn watch_and_hot_reload(
     launch: HotLaunch,
     mut channel: HotChannel,
     workshop: Option<WorkshopChannel>,
-    workspace_root: PathBuf,
+    changes: ChangeFeed<WatchSet>,
 ) -> ! {
     let HotLaunch {
         bin_path,
@@ -352,20 +536,17 @@ fn watch_and_hot_reload(
         args,
         envs,
     } = launch;
-    let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
-    let watched = WatchSet::collect(&workspace_root);
-    let _watcher = make_watcher(tx, &watched);
 
     eprintln!("[cargo-telar] Starting with hot reload...");
     let mut child = Command::new(&bin_path)
         .args(&args)
         .env("TELAR_HOT_LIB", lib_path.to_str().unwrap_or_default())
         .env("TELAR_HOT_PORT", channel.port.to_string())
+        .env(HOT_TOKEN_VAR, &channel.token)
         .envs(envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
         .spawn()
         .expect("[cargo-telar] failed to spawn app binary");
 
-    let debounce = Duration::from_millis(200);
     let mut last_event = Instant::now();
     let mut pending_rebuild = false;
     let mut waiting = None;
@@ -393,16 +574,13 @@ fn watch_and_hot_reload(
             }
         }
 
-        while let Ok(Ok(event)) = rx.try_recv() {
-            if watched.wants(&event) {
-                last_event = Instant::now();
-                pending_rebuild = true;
-            }
+        if changes.drain() {
+            last_event = Instant::now();
+            pending_rebuild = true;
         }
 
-        if pending_rebuild && last_event.elapsed() >= debounce {
+        if pending_rebuild && last_event.elapsed() >= DEBOUNCE {
             pending_rebuild = false;
-            while rx.try_recv().is_ok() {}
             eprintln!("[cargo-telar] Change detected, rebuilding...");
             // `super::run` prepares once, before the loop starts. Every rebuild after that invokes cargo directly, so without this an edited asset compiles against the artifact from startup — and since the macro checks its hash, that is a build failure rather than a stale drawing.
             super::bake::bake_workspace();
@@ -424,9 +602,7 @@ fn watch_and_hot_reload(
             }
         }
 
-        if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50))
-            && watched.wants(&event)
-        {
+        if changes.changed_within(POLL) {
             last_event = Instant::now();
             pending_rebuild = true;
         }
@@ -436,12 +612,8 @@ fn watch_and_hot_reload(
 fn watch_and_run(
     cargo_args: Vec<String>,
     envs: Vec<(String, String)>,
-    workspace_root: PathBuf,
+    changes: ChangeFeed<WatchSet>,
 ) -> ! {
-    let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
-    let watched = WatchSet::collect(&workspace_root);
-    let _watcher = make_watcher(tx, &watched);
-
     loop {
         eprintln!("[cargo-telar] Starting...");
         super::bake::bake_workspace();
@@ -452,55 +624,42 @@ fn watch_and_run(
             .spawn()
             .expect("[cargo-telar] failed to spawn cargo");
 
-        let debounce = Duration::from_millis(200);
         let mut last_event = Instant::now();
         let mut pending_restart = false;
 
         'watch: loop {
             match child.try_wait() {
                 Ok(Some(status)) => {
-                    // Killed by signal (e.g. Ctrl+C) — propagate and exit
-                    if status.code().is_none() {
+                    // No code means a signal ended it, as Ctrl-C does, and the shell expects 130 for that.
+                    let Some(code) = status.code() else {
                         std::process::exit(130);
-                    }
-                    let code = status.code().unwrap_or(1);
+                    };
                     if code == 0 {
                         std::process::exit(0);
                     }
                     eprintln!("[cargo-telar] Process exited ({code}). Watching for changes...");
-                    loop {
-                        match rx.recv() {
-                            Ok(Ok(event)) if watched.wants(&event) => {
-                                while rx.try_recv().is_ok() {}
-                                eprintln!("[cargo-telar] Change detected, restarting...");
-                                break 'watch;
-                            }
-                            _ => {}
-                        }
-                    }
+                    changes.wait();
+                    changes.settle(DEBOUNCE);
+                    eprintln!("[cargo-telar] Change detected, restarting...");
+                    break 'watch;
                 }
                 Ok(None) => {}
                 Err(e) => eprintln!("[cargo-telar] error: {e}"),
             }
 
-            while let Ok(Ok(event)) = rx.try_recv() {
-                if watched.wants(&event) {
-                    last_event = Instant::now();
-                    pending_restart = true;
-                }
+            if changes.drain() {
+                last_event = Instant::now();
+                pending_restart = true;
             }
 
-            if pending_restart && last_event.elapsed() >= debounce {
-                while rx.try_recv().is_ok() {}
+            if pending_restart && last_event.elapsed() >= DEBOUNCE {
                 eprintln!("[cargo-telar] Change detected, restarting...");
                 child.kill().ok();
                 child.wait().ok();
                 break 'watch;
             }
 
-            if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(50))
-                && watched.wants(&event)
-            {
+            if changes.changed_within(POLL) {
                 last_event = Instant::now();
                 pending_restart = true;
             }
@@ -703,6 +862,15 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         },
     );
 
+    let changes = match ChangeFeed::start(WatchSet::collect(&workspace_root)) {
+        Ok(changes) => changes,
+        Err(e) => {
+            eprintln!("[cargo-telar] could not watch for changes: {e}");
+            drop(workshop);
+            std::process::exit(1);
+        }
+    };
+
     if hot_reload {
         let hot_features = with_tooling(mode.hot_features(), &tooling);
         let package_name = resolved.name();
@@ -715,19 +883,27 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
             inject_feature(&mut build_args, feature);
         }
         with_json_messages(&mut build_args);
+        let build_app = || {
+            let mut build_cmd = Command::new("cargo");
+            build_cmd
+                .args(&build_args)
+                // `telar`'s backend is resolved with `option_env!` and so is a tracked build input: omitting it would compile a different backend than the hot rebuilds.
+                .env("TELAR_RENDERER_BACKEND", backend_value);
+            let (succeeded, report) = build_with_diagnostics(&mut build_cmd);
+            if !report.is_empty() {
+                eprintln!();
+                eprint!("{}", report.render(true));
+            }
+            succeeded
+        };
         eprintln!("[cargo-telar] Building...");
-        let mut build_cmd = Command::new("cargo");
-        build_cmd
-            .args(&build_args)
-            // `telar`'s backend is resolved with `option_env!` and so is a tracked build input: omitting it would compile a different backend than the hot rebuilds.
-            .env("TELAR_RENDERER_BACKEND", backend_value);
-        let (succeeded, report) = build_with_diagnostics(&mut build_cmd);
-        if !report.is_empty() {
-            eprintln!();
-            eprint!("{}", report.render(true));
-        }
-        if !succeeded {
+        if !build_app() {
             eprintln!("[cargo-telar] Initial build failed. Watching for changes...");
+            rebuild_until_built(&changes, || {
+                super::bake::bake_workspace();
+                super::transpile::transpile_workspace();
+                build_app()
+            });
         }
 
         if bin_path.exists() && lib_path.exists() {
@@ -742,18 +918,32 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
                 },
                 HotChannel::bind(),
                 workshop,
-                workspace_root,
+                changes,
             );
         }
+        eprintln!(
+            "[cargo-telar] Hot reload off: the build succeeded but left no {} or no {} to load. Restarting the process on change instead.",
+            bin_path.display(),
+            lib_path.display()
+        );
     }
 
     // An app restarted on every change has no channel to hand a request on, so a later invocation is left to open a workshop of its own.
     drop(workshop);
-    watch_and_run(
-        with_app_args(cargo_args, &app_args),
-        launch_envs,
-        workspace_root,
-    );
+    watch_and_run(with_app_args(cargo_args, &app_args), launch_envs, changes);
+}
+
+/// Rebuilds on every change until `rebuild` succeeds, so a session whose first build failed starts the app with hot reload once the error is fixed, instead of falling back to restarts for good.
+fn rebuild_until_built(changes: &ChangeFeed<impl WatchScope>, mut rebuild: impl FnMut() -> bool) {
+    loop {
+        changes.wait();
+        changes.settle(DEBOUNCE);
+        eprintln!("[cargo-telar] Change detected, rebuilding...");
+        if rebuild() {
+            return;
+        }
+        eprintln!("[cargo-telar] Build failed, waiting for changes...");
+    }
 }
 
 #[cfg(test)]

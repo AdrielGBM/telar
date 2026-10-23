@@ -81,6 +81,7 @@ fn the_headers_this_server_acts_on_are_read_and_the_rest_consumed() {
             accepts_gzip: true,
             accepts_html: true,
             range: Some("bytes=0-".to_string()),
+            host: Some("localhost".to_string()),
         }
     );
     let mut rest = String::new();
@@ -322,4 +323,114 @@ fn a_port_held_by_another_listener_is_refused_for_real() {
     assert!(bind_dev_listener(Some(port), 8080).is_err());
     let fallback = bind_dev_listener(None, port).unwrap();
     assert_ne!(fallback.local_addr().unwrap().port(), port);
+}
+
+/// DNS rebinding: a page on `evil.example` re-resolves its own name to 127.0.0.1 and reads this server as same-origin. The `Host` it sends still names the page's site.
+#[test]
+fn only_a_host_naming_this_machine_is_answered() {
+    for local in [
+        "localhost",
+        "localhost:8080",
+        "LocalHost:8080",
+        "127.0.0.1",
+        "127.0.0.1:4100",
+        "[::1]",
+        "[::1]:8080",
+    ] {
+        assert!(names_this_machine(local), "{local}");
+    }
+    for foreign in [
+        "evil.example",
+        "evil.example:8080",
+        "localhost.evil.example",
+        "127.0.0.1.nip.io:8080",
+        "localhost:",
+        "localhost:80x",
+        "::1",
+        "[::2]:8080",
+        "",
+    ] {
+        assert!(!names_this_machine(foreign), "{foreign}");
+    }
+}
+
+fn ask(request: &str) -> String {
+    let listener = any_port().unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().unwrap();
+        serve(stream, Path::new("/nonexistent"), "/");
+    });
+    let mut client = TcpStream::connect(address).unwrap();
+    client.write_all(request.as_bytes()).unwrap();
+    let mut response = String::new();
+    client.read_to_string(&mut response).unwrap();
+    server.join().unwrap();
+    response
+}
+
+#[test]
+fn a_request_for_another_host_is_forbidden() {
+    let response = ask("GET /telar-build HTTP/1.1\r\nHost: evil.example:8080\r\n\r\n");
+    assert!(response.starts_with("HTTP/1.1 403"), "{response}");
+    let response = ask("GET /telar-build HTTP/1.1\r\n\r\n");
+    assert!(
+        response.starts_with("HTTP/1.1 403"),
+        "a request naming no host is refused too: {response}"
+    );
+}
+
+#[test]
+fn a_request_for_localhost_is_answered() {
+    let response = ask("GET /telar-build HTTP/1.1\r\nHost: localhost:8080\r\n\r\n");
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+}
+
+#[test]
+fn the_reload_poll_goes_before_the_body_end_tag_in_any_case() {
+    for page in [
+        "<html><body>app</body></html>",
+        "<HTML><BODY>app</BODY></HTML>",
+        "<html><body>app</Body ></html>",
+    ] {
+        let injected = with_reload_poll(page);
+        let script = injected.find(RELOAD_MARKER).expect(page);
+        let end = injected.to_ascii_lowercase().rfind("</body").unwrap();
+        assert!(script < end, "{injected}");
+        assert_eq!(injected.replace(RELOAD_SCRIPT, ""), page);
+    }
+}
+
+#[test]
+fn the_reload_poll_goes_before_the_last_body_end_tag() {
+    let page = "<body><script>const s = '</body>';</script></body>";
+    let injected = with_reload_poll(page);
+    assert!(
+        injected.ends_with(&format!("{RELOAD_SCRIPT}</body>")),
+        "{injected}"
+    );
+}
+
+/// A template is not required to close its body, and the poll used to be dropped without a word when it did not.
+#[test]
+fn a_page_without_a_body_end_tag_gets_the_poll_at_its_end() {
+    for page in ["<div id=\"telar-root\"></div>", "<bodyguard></bodyguard>"] {
+        assert_eq!(with_reload_poll(page), format!("{page}{RELOAD_SCRIPT}"));
+    }
+}
+
+#[test]
+fn the_reload_poll_is_written_once_and_a_missing_page_is_reported() {
+    let root = site("reload_poll");
+    std::fs::write(root.join("index.html"), "<p>no body tag</p>").unwrap();
+
+    inject_reload_poll(&root).unwrap();
+    inject_reload_poll(&root).unwrap();
+    let written = std::fs::read_to_string(root.join("index.html")).unwrap();
+    assert_eq!(written.matches(RELOAD_MARKER).count(), 1, "{written}");
+
+    std::fs::remove_file(root.join("index.html")).unwrap();
+    let error = inject_reload_poll(&root).unwrap_err();
+    assert!(error.contains("index.html"), "{error}");
+    let _ = std::fs::remove_dir_all(&root);
 }

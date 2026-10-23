@@ -366,3 +366,199 @@ fn the_app_is_handed_its_own_arguments_after_cargo_s() {
     );
     assert_eq!(with_app_args(vec!["run".into()], &[]), ["run"]);
 }
+
+/// A scope that wants every ordinary event or none, and watches nothing.
+struct Wanting(bool);
+
+impl WatchScope for Wanting {
+    fn watches(&self) -> Vec<(PathBuf, RecursiveMode)> {
+        Vec::new()
+    }
+
+    fn wants(&self, _: &notify::Event) -> bool {
+        self.0
+    }
+}
+
+fn feed(
+    wanting: bool,
+) -> (
+    mpsc::Sender<notify::Result<notify::Event>>,
+    ChangeFeed<Wanting>,
+) {
+    let (tx, messages) = mpsc::channel();
+    let (unused, _) = mpsc::channel();
+    let watcher = RecommendedWatcher::new(unused, NotifyConfig::default()).unwrap();
+    let feed = ChangeFeed {
+        scope: Wanting(wanting),
+        messages,
+        _watcher: watcher,
+    };
+    (tx, feed)
+}
+
+fn rescan() -> notify::Event {
+    notify::Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan)
+}
+
+/// The loops used to act on `Ok(event)` alone, so a rescan notice — the platform saying it dropped events, an edit among them maybe — was ignored and the rebuild never came.
+#[test]
+fn a_rescan_notice_is_a_change_whatever_the_scope_wants() {
+    let (tx, changes) = feed(false);
+    tx.send(Ok(rescan())).unwrap();
+    assert!(changes.drain());
+    tx.send(Ok(rescan())).unwrap();
+    assert!(changes.changed_within(Duration::from_secs(5)));
+}
+
+#[test]
+fn a_watcher_error_is_not_a_change_and_does_not_stop_the_feed() {
+    let (tx, changes) = feed(true);
+    tx.send(Err(notify::Error::generic("queue overflow")))
+        .unwrap();
+    assert!(!changes.drain());
+    tx.send(Err(notify::Error::generic("queue overflow")))
+        .unwrap();
+    tx.send(Ok(modified(Path::new("/p/src/lib.rs")))).unwrap();
+    assert!(changes.changed_within(Duration::from_secs(5)));
+}
+
+#[test]
+fn draining_takes_every_waiting_message() {
+    let (tx, changes) = feed(true);
+    tx.send(Err(notify::Error::generic("lost"))).unwrap();
+    tx.send(Ok(modified(Path::new("/p/src/a.rs")))).unwrap();
+    tx.send(Err(notify::Error::generic("lost"))).unwrap();
+    assert!(changes.drain());
+    assert!(!changes.drain(), "nothing is left for the next look");
+}
+
+#[test]
+fn an_ignored_event_is_not_a_change() {
+    let (tx, changes) = feed(false);
+    tx.send(Ok(modified(Path::new("/p/notes.txt")))).unwrap();
+    assert!(!changes.drain());
+    assert!(!changes.changed_within(Duration::from_millis(10)));
+}
+
+#[test]
+fn the_inotify_limit_is_reported_with_the_path_and_how_to_raise_it() {
+    let error = notify::Error::new(notify::ErrorKind::MaxFilesWatch).add_path("/w/app/src".into());
+    let message = watch_failure(&error);
+    assert!(message.contains("/w/app/src"), "{message}");
+    assert!(message.contains("fs.inotify.max_user_watches"), "{message}");
+}
+
+#[test]
+fn a_watcher_failure_without_a_path_still_says_why() {
+    let message = watch_failure(&notify::Error::generic("inotify read failed"));
+    assert!(message.contains("inotify read failed"), "{message}");
+}
+
+#[test]
+fn a_directory_that_cannot_be_watched_does_not_stop_the_others() {
+    struct Missing;
+    impl WatchScope for Missing {
+        fn watches(&self) -> Vec<(PathBuf, RecursiveMode)> {
+            vec![(
+                PathBuf::from("/nonexistent/cargo-telar-watch"),
+                RecursiveMode::Recursive,
+            )]
+        }
+        fn wants(&self, _: &notify::Event) -> bool {
+            false
+        }
+    }
+    assert!(ChangeFeed::start(Missing).is_ok());
+}
+
+/// The bug this replaced: a first build that failed with nothing built before dropped the session into restart mode for good, hot reload off.
+#[test]
+fn a_failed_first_build_is_retried_on_each_change_until_one_succeeds() {
+    let (tx, changes) = feed(true);
+    tx.send(Ok(modified(Path::new("/p/src/lib.rs")))).unwrap();
+    let mut attempts = 0;
+    rebuild_until_built(&changes, || {
+        attempts += 1;
+        if attempts == 1 {
+            tx.send(Ok(modified(Path::new("/p/src/lib.rs")))).unwrap();
+            return false;
+        }
+        true
+    });
+    assert_eq!(attempts, 2);
+}
+
+fn connect_to(channel: &HotChannel, opening: Option<&str>) -> TcpStream {
+    use std::io::Write;
+    let mut stream = TcpStream::connect(("127.0.0.1", channel.port)).unwrap();
+    match opening {
+        Some(line) => writeln!(stream, "{line}").unwrap(),
+        None => stream.shutdown(std::net::Shutdown::Write).unwrap(),
+    }
+    stream
+}
+
+fn adopted_within(channel: &mut HotChannel, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        channel.accept_waiting();
+        if channel.stream.is_some() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    false
+}
+
+fn first_line(stream: TcpStream) -> String {
+    use std::io::BufRead;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    let mut line = String::new();
+    let _ = BufReader::new(stream).read_line(&mut line);
+    line
+}
+
+/// Any local process can reach a loopback port, and the channel used to adopt whichever connected last: it could load a dylib of its choosing into the app.
+#[test]
+fn a_connection_without_the_token_is_never_adopted() {
+    let mut channel = HotChannel::bind();
+    let silent = connect_to(&channel, None);
+    let wrong = connect_to(&channel, Some("not-the-token"));
+    let prefixed = connect_to(&channel, Some(&format!("{}x", channel.token)));
+    assert!(!adopted_within(&mut channel, Duration::from_millis(300)));
+    for stream in [silent, wrong, prefixed] {
+        assert_eq!(first_line(stream), "", "an impostor is hung up on");
+    }
+}
+
+#[test]
+fn the_connection_opening_with_the_token_is_adopted_and_later_ones_are_not() {
+    let mut channel = HotChannel::bind();
+    let impostor = connect_to(&channel, Some("guess"));
+    let token = channel.token.clone();
+    let app = connect_to(&channel, Some(&token));
+    assert!(adopted_within(&mut channel, Duration::from_secs(5)));
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while TcpStream::connect(("127.0.0.1", channel.port)).is_ok() {
+        assert!(
+            Instant::now() < deadline,
+            "the listener closes once the app is in, so even the token cannot take the channel over"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(channel.deliver("focus"));
+    assert_eq!(first_line(app), "focus\n");
+    assert_eq!(first_line(impostor), "");
+}
+
+#[test]
+fn every_session_draws_its_own_token() {
+    let (a, b) = (hot_token(), hot_token());
+    assert_eq!(a.len(), 64);
+    assert!(a.bytes().all(|b| b.is_ascii_hexdigit()));
+    assert_ne!(a, b);
+}

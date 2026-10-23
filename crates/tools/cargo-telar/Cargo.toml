@@ -40,6 +40,7 @@ toml = { workspace = true }
 i18n-core = { workspace = true, features = ["runtime-catalog"] }
 ctrlc = { version = "3.5.2", features = ["termination"] }
 tempfile = "3.27.0"
+getrandom = "0.3.4"
 
 [dev-dependencies]
 ureq = { version = "3.4.0", default-features = false }

@@ -507,7 +507,9 @@ fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
 }
 
 #[cfg(feature = "dev")]
-use telar_project::protocol::{BUILD_ERROR_PREFIX, FOCUS_LINE, GOTO_PREFIX, HOT_RELOAD_PREFIX};
+use telar_project::protocol::{
+    BUILD_ERROR_PREFIX, FOCUS_LINE, GOTO_PREFIX, HOT_RELOAD_PREFIX, HOT_TOKEN_VAR,
+};
 
 #[cfg(feature = "dev")]
 /// What `cargo telar dev` sends the running app: a rebuild landed, a build failed, a location to open, or a request to come forward.
@@ -536,29 +538,26 @@ fn hot_event(line: &str) -> Option<HotEvent> {
     }
 }
 
-/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via `TELAR_HOT_PORT`) and forwards line-delimited hot events. TCP instead of a unix socket so the same code path works on non-Unix hosts.
+/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via `TELAR_HOT_PORT`, and its secret via [`HOT_TOKEN_VAR`]) and forwards line-delimited hot events. TCP instead of a unix socket so the same code path works on non-Unix hosts.
 #[cfg(feature = "dev")]
 pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
     use std::io::BufRead;
-    use std::net::TcpStream;
     let (tx, rx) = std::sync::mpsc::channel();
+    let Ok(token) = std::env::var(HOT_TOKEN_VAR) else {
+        tracing::error!(
+            "hot reload is off: {HOT_TOKEN_VAR} is not set, so the channel cargo-telar opened would not take this app"
+        );
+        return rx;
+    };
     std::thread::Builder::new()
         .name("telar-hot-reload".to_string())
         .spawn(move || {
-            // cargo-telar binds before spawning us, but retry briefly in case it is mid-rebuild.
-            let mut stream = None;
-            for _ in 0..20 {
-                match TcpStream::connect(("127.0.0.1", port)) {
-                    Ok(s) => {
-                        stream = Some(s);
-                        break;
-                    }
-                    Err(_) => std::thread::sleep(std::time::Duration::from_millis(250)),
+            let stream = match connect_hot_channel(port, &token) {
+                Ok(stream) => stream,
+                Err(e) => {
+                    tracing::error!("hot reload channel connect failed (port {port}): {e}");
+                    return;
                 }
-            }
-            let Some(stream) = stream else {
-                tracing::error!("hot reload channel connect failed (port {port})");
-                return;
             };
             let reader = std::io::BufReader::new(stream);
             for line in reader.lines() {
@@ -577,6 +576,26 @@ pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
         })
         .ok();
     rx
+}
+
+/// The channel, with `token` already sent as its first line: cargo-telar adopts no connection that does not open with it.
+#[cfg(feature = "dev")]
+fn connect_hot_channel(port: u16, token: &str) -> std::io::Result<std::net::TcpStream> {
+    use std::io::Write;
+    let mut attempts = 0;
+    // cargo-telar binds before spawning us, but retry briefly in case it is mid-rebuild.
+    let mut stream = loop {
+        match std::net::TcpStream::connect(("127.0.0.1", port)) {
+            Ok(stream) => break stream,
+            Err(e) if attempts >= 20 => return Err(e),
+            Err(_) => {
+                attempts += 1;
+                std::thread::sleep(std::time::Duration::from_millis(250));
+            }
+        }
+    };
+    writeln!(stream, "{token}")?;
+    Ok(stream)
 }
 
 /// Undoes the escaping `cargo-telar` applies so a multi-line build error survives a protocol of one event per line. A trailing lone backslash cannot occur (the sender doubles them) and is passed through rather than dropped, so a malformed message is still shown.

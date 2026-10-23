@@ -4,15 +4,14 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc;
 use std::time::Duration;
 
-use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{EventKind, RecursiveMode};
 
 use super::cli::WebRenderer;
 use super::config::{TelarSection, find_package_dir, resolve_package};
 use super::package::{build_web_bundle, compressible, media_type};
-use super::watch::WatchSet;
+use super::watch::{ChangeFeed, WatchScope, WatchSet, idle};
 use super::workshop_channel::ServerClaim;
 
 /// How long to let a burst of file events settle before rebuilding. An editor writing a file produces several, and a save that touches a whole directory produces one per file.
@@ -73,7 +72,7 @@ pub(crate) fn run_web_dev(
             std::process::exit(1);
         }
     };
-    inject_reload_poll(&dist);
+    report_reload_poll(&dist);
 
     let base = config.web.base_path();
     let serve_from = dist.clone();
@@ -107,31 +106,17 @@ fn watch_and_rebuild(
     dist: &Path,
     renderer: Option<WebRenderer>,
 ) -> ! {
-    let (tx, rx) = mpsc::channel();
-    let mut watcher = match RecommendedWatcher::new(tx, NotifyConfig::default()) {
-        Ok(watcher) => watcher,
+    let changes = match ChangeFeed::start(PageWatch::collect(&cargo_args, &config)) {
+        Ok(changes) => changes,
         Err(e) => {
             eprintln!("[cargo-telar] could not watch for changes: {e}");
-            loop {
-                std::thread::sleep(Duration::from_secs(3600));
-            }
+            idle();
         }
     };
-    let watched = PageWatch::collect(&cargo_args, &config);
-    for (dir, mode) in watched.watches() {
-        let _ = watcher.watch(&dir, mode);
-    }
 
     loop {
-        let Ok(event) = rx.recv() else {
-            std::thread::sleep(Duration::from_secs(1));
-            continue;
-        };
-        if !event.as_ref().is_ok_and(|event| watched.wants(event)) {
-            continue;
-        }
-        // Drain the rest of the burst rather than rebuilding once per file.
-        while rx.recv_timeout(SETTLE).is_ok() {}
+        changes.wait();
+        changes.settle(SETTLE);
 
         eprintln!("[cargo-telar] Rebuilding...");
         // As in the desktop loop: without it an edited asset compiles against the artifact baked at startup, which fails its hash check.
@@ -139,7 +124,7 @@ fn watch_and_rebuild(
         super::transpile::transpile_workspace();
         match build_web_bundle(cargo_args.clone(), config.clone(), false, renderer, false) {
             Ok(_) => {
-                inject_reload_poll(dist);
+                report_reload_poll(dist);
                 BUILD.fetch_add(1, Ordering::Relaxed);
                 eprintln!("[cargo-telar] Reloaded.");
             }
@@ -178,7 +163,9 @@ impl PageWatch {
             public: canonical(public),
         }
     }
+}
 
+impl WatchScope for PageWatch {
     /// The template through its directory, because an editor that saves by replacing the file would end a watch on the file itself.
     fn watches(&self) -> Vec<(PathBuf, RecursiveMode)> {
         let mut watches = self.members.watches();
@@ -206,19 +193,41 @@ impl PageWatch {
     }
 }
 
-/// Appends the reload poll to the served page.
+fn report_reload_poll(dist: &Path) {
+    if let Err(e) = inject_reload_poll(dist) {
+        eprintln!(
+            "[cargo-telar] warning: live reload is off until the next rebuild: {e}. Reload the page by hand to see changes."
+        );
+    }
+}
+
+/// Adds the reload poll to the served page.
 ///
 /// Added here rather than baked into the page the build writes, so what `cargo telar build` produces is the page that ships — a dev-only script has no business in it.
-fn inject_reload_poll(dist: &Path) {
+fn inject_reload_poll(dist: &Path) -> Result<(), String> {
     let page = dist.join("index.html");
-    let Ok(html) = std::fs::read_to_string(&page) else {
-        return;
-    };
+    let html = std::fs::read_to_string(&page)
+        .map_err(|e| format!("could not read {}: {e}", page.display()))?;
     if html.contains(RELOAD_MARKER) {
-        return;
+        return Ok(());
     }
-    let injected = html.replace("</body>", &format!("{RELOAD_SCRIPT}</body>"));
-    let _ = std::fs::write(&page, injected);
+    std::fs::write(&page, with_reload_poll(&html))
+        .map_err(|e| format!("could not write {}: {e}", page.display()))
+}
+
+/// `html` with the reload poll before its last `</body>`, in whatever case it is spelled, or at the end of the document when it has none: a browser runs a script found after the body all the same.
+fn with_reload_poll(html: &str) -> String {
+    let at = body_end_tag(html).unwrap_or(html.len());
+    format!("{}{RELOAD_SCRIPT}{}", &html[..at], &html[at..])
+}
+
+fn body_end_tag(html: &str) -> Option<usize> {
+    const TAG: &str = "</body";
+    let lowered = html.to_ascii_lowercase();
+    lowered.rmatch_indices(TAG).map(|(at, _)| at).find(|&at| {
+        lowered[at + TAG.len()..]
+            .starts_with(|next: char| next == '>' || next.is_ascii_whitespace())
+    })
 }
 
 const RELOAD_MARKER: &str = "telar-dev-reload";
@@ -260,6 +269,12 @@ fn serve(mut stream: TcpStream, root: &Path, base: &str) {
     let method = request.next().unwrap_or("GET");
     let target = request.next().unwrap_or("/");
     let headers = read_headers(&mut reader);
+
+    // A page on any other origin can resolve its own name to 127.0.0.1 and read this server as same-origin; the name it asks for still gives it away.
+    if !headers.host.as_deref().is_some_and(names_this_machine) {
+        respond(&mut stream, "403 Forbidden", &[], b"", false);
+        return;
+    }
 
     if target == "/telar-build" {
         let build = BUILD.load(Ordering::Relaxed).to_string();
@@ -393,6 +408,21 @@ struct RequestHeaders {
     /// Whether the browser asked for a page, as it does navigating to an address or reloading one.
     accepts_html: bool,
     range: Option<String>,
+    host: Option<String>,
+}
+
+/// Whether a `Host` header names the loopback interface the server listens on, with or without a port.
+fn names_this_machine(host: &str) -> bool {
+    let (name, port) = match host.rsplit_once(':') {
+        Some((name, port)) if !port.contains(']') => (name, Some(port)),
+        _ => (host, None),
+    };
+    let numeric_port =
+        port.is_none_or(|port| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()));
+    numeric_port
+        && ["localhost", "127.0.0.1", "[::1]"]
+            .iter()
+            .any(|local| name.eq_ignore_ascii_case(local))
 }
 
 /// The headers following the request line.
@@ -413,6 +443,8 @@ fn read_headers(reader: &mut impl BufRead) -> RequestHeaders {
                 headers.accepts_html = value.to_ascii_lowercase().contains("text/html");
             } else if name.eq_ignore_ascii_case("range") {
                 headers.range = Some(value.trim().to_string());
+            } else if name.eq_ignore_ascii_case("host") {
+                headers.host = Some(value.trim().to_string());
             }
         }
         line.clear();
