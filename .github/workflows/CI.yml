@@ -5,16 +5,20 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo fmt --all -- --check
       # Every job that compiles `apps/sandbox` runs this first: rustc no longer transpiles a `.rsx`, and the
       # macro emits an error naming this command instead. It bakes on the way through, so a `src:"…"` asset
@@ -31,9 +35,9 @@ jobs:
   check-desktop:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off
       # in the `test` job, which leaves `apps/sandbox/src/hot_tree_test.rs` — the only guard for the
       # split-runtime regression — never even type-checked.
@@ -43,10 +47,10 @@ jobs:
   msrv:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # Must match `rust-version` in [workspace.package].
-      - uses: dtolnay/rust-toolchain@1.95.0
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@035fceb3c12fb0c6a9461b52775e16473133e591 # 1.95.0
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo run -q -p cargo-telar -- transpile
       - run: cargo check --workspace --all-features --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
 
@@ -54,11 +58,11 @@ jobs:
   analyzer:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo check -p telar-analyzer -p telar-diagnostics --all-targets
       - run: cargo clippy -p telar-analyzer -p telar-diagnostics --all-targets
       - run: cargo test -p telar-analyzer -p telar-diagnostics
@@ -69,21 +73,21 @@ jobs:
   publishable:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # One cargo call for every publishable crate, because cargo verifies each package of a call against the other packages of that call and takes every other dependency from the registry: split in two, a plain crate depending on a `[telar] library` (or a library depending on a plain crate) is built against a registry version that is older than the tree or absent. `cargo telar publish --workspace` first transpiles and bakes, fails if the files cargo would ship leave part of a library's artifact out or no longer answer for its sources, and checks that every crate's packaged sources are committed; then each crate is verified once, against the in-tree versions of the others, plain or library.
       - run: cargo run -q -p cargo-telar -- publish --workspace --dry-run
 
   check-android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: aarch64-linux-android
-      - uses: Swatinem/rust-cache@v2
-      - uses: nttld/setup-ndk@v1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1
         id: setup-ndk
         with:
           ndk-version: r27c
@@ -96,11 +100,11 @@ jobs:
   check-web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # The only leg that compiles the document renderer, the WebGPU one and the web platform at all: they are
       # `cfg`'d to nothing off wasm, so every other check here passes with them broken.
       - run: cargo run -q -p cargo-telar -- transpile
@@ -112,17 +116,18 @@ jobs:
   parity-web-dom:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # The runner that serves the test module to a browser. Must be the release the pinned `wasm-bindgen`
       # crate generates glue for, which is why the version is written out here rather than resolved.
       - name: Install wasm-bindgen-test-runner
         run: |
-          curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz \
-            | tar -xz --strip-components=1 -C ~/.cargo/bin
+          curl -fsSL -o "$RUNNER_TEMP/wasm-bindgen.tar.gz" https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz
+          echo "61d4a7dc85acfa0d2354ccc0b8361928c7e52a746d17f28ebaa795ed3dc1614a  $RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check --strict
+          tar -xz --strip-components=1 -C ~/.cargo/bin -f "$RUNNER_TEMP/wasm-bindgen.tar.gz"
       # The same axe-core release the flake's devShell pins; the audits `include_str!` it at compile time.
       - name: Fetch axe-core
         run: |
@@ -149,26 +154,28 @@ jobs:
   web-size-budget:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # Pinned to the `wasm-bindgen` crate's own version (Cargo.lock), same as `parity-web-dom`: the glue
       # `wasm-bindgen` writes is rejected by a mismatched runtime, and a size gate needs the binary that
       # ships, not whatever a floating install would resolve to.
       - name: Install wasm-bindgen-cli
         run: |
-          curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz \
-            | tar -xz --strip-components=1 -C ~/.cargo/bin
+          curl -fsSL -o "$RUNNER_TEMP/wasm-bindgen.tar.gz" https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz
+          echo "61d4a7dc85acfa0d2354ccc0b8361928c7e52a746d17f28ebaa795ed3dc1614a  $RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check --strict
+          tar -xz --strip-components=1 -C ~/.cargo/bin -f "$RUNNER_TEMP/wasm-bindgen.tar.gz"
       # Pinned to the version the flake's devShell provides, for the same reason: `wasm-opt`'s output size
       # is part of what this gate measures, and a different optimiser version can shift it without the
       # source changing at all.
       - name: Install binaryen
         run: |
           mkdir -p "$HOME/.local"
-          curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-x86_64-linux.tar.gz \
-            | tar -xz --strip-components=1 -C "$HOME/.local"
+          curl -fsSL -o "$RUNNER_TEMP/binaryen.tar.gz" https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-x86_64-linux.tar.gz
+          echo "195ddc94f9bc89f45abdabb0b9eea86023d727ba90eac8b35b80f2544fc30572  $RUNNER_TEMP/binaryen.tar.gz" | sha256sum --check --strict
+          tar -xz --strip-components=1 -C "$HOME/.local" -f "$RUNNER_TEMP/binaryen.tar.gz"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - run: .github/scripts/check-web-size.sh
 
@@ -179,9 +186,9 @@ jobs:
   scaffold:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # The generated projects compile the plugins from this checkout by path, where nothing transpiles their `.rsx` or bakes their `icon!` ids: the workshop's `.telar/` has to be on disk before they do.
       - run: cargo run -q -p cargo-telar -- transpile
       - name: Generate a project per target, compile the two that need no extra toolchain
@@ -236,9 +243,9 @@ jobs:
   rsx-library:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # Every cargo the test starts runs offline, so what `Cargo.lock` names has to be on disk first.
       - run: cargo fetch --locked
       - run: cargo test -p cargo-telar --test rsx_library -- --ignored
@@ -250,9 +257,9 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # A software Vulkan adapter, so the 15 GPU tests run somewhere instead of skipping on every runner —
       # `crates/telar/src/texture_ui_test.rs` is the only in-tree proof of the seam pixel-art builds on.
       # `TELAR_REQUIRE_GPU` below turns a missing adapter into a failure on this leg, so the suite cannot go
@@ -282,14 +289,14 @@ jobs:
   previews:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo run -q -p cargo-telar -- transpile
       - run: cargo run -q -p cargo-telar -- test -p catalogue --a11y error --report junit target/telar-snapshots/catalogue.xml
       - run: cargo run -q -p cargo-telar -- test -p sandbox --a11y error --report junit target/telar-snapshots/sandbox.xml
       - run: cargo run -q -p cargo-telar -- test -p landing --a11y error --report junit target/telar-snapshots/landing.xml
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: failure()
         with:
           name: telar-snapshots
@@ -300,16 +307,17 @@ jobs:
   workshop-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       # Pinned to the `wasm-bindgen` crate's own version, as in `parity-web-dom`: the export runs it on the module it builds.
       - name: Install wasm-bindgen-cli
         run: |
-          curl -fsSL https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz \
-            | tar -xz --strip-components=1 -C ~/.cargo/bin
+          curl -fsSL -o "$RUNNER_TEMP/wasm-bindgen.tar.gz" https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz
+          echo "61d4a7dc85acfa0d2354ccc0b8361928c7e52a746d17f28ebaa795ed3dc1614a  $RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check --strict
+          tar -xz --strip-components=1 -C ~/.cargo/bin -f "$RUNNER_TEMP/wasm-bindgen.tar.gz"
       # The same axe-core release the flake's devShell pins; the audit reads it when it runs.
       - name: Fetch axe-core
         run: |
@@ -319,7 +327,7 @@ jobs:
           echo "TELAR_AXE_CORE=$RUNNER_TEMP/axe-core/axe.min.js" >> "$GITHUB_ENV"
       - run: cargo run -q -p cargo-telar -- transpile
       - run: cargo run -q -p cargo-telar -- preview -p catalogue --build target/catalogue-site --target web
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: catalogue-site
           path: target/catalogue-site/
@@ -345,13 +353,14 @@ jobs:
             formats: dir nsis
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - name: Install appimagetool
         if: runner.os == 'Linux'
         run: |
-          curl -fsSL -o /usr/local/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          curl -fsSL -o /usr/local/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  /usr/local/bin/appimagetool" | sha256sum --check --strict
           chmod +x /usr/local/bin/appimagetool
       - name: Install NSIS
         if: runner.os == 'Windows'
@@ -381,7 +390,7 @@ jobs:
             echo "::endgroup::"
           done
           ls -R target/telar-dist
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: telar-dist-${{ matrix.os }}
           path: |
