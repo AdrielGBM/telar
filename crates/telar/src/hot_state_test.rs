@@ -151,3 +151,62 @@ fn a_theme_extension_follows_the_restored_mode() {
     hot_restore_json(&blob);
     assert_eq!(theme_core::use_theme_extension::<ChipTokens>().0, 12.0);
 }
+
+#[cfg(any(feature = "dev", feature = "prerender"))]
+mod owned {
+    use super::*;
+
+    #[test]
+    fn rows_are_freed_with_their_owner() {
+        let baseline = reactive_core::live_signal_count();
+        let rows: Vec<_> = (0..5)
+            .map(|i| {
+                let scope = reactive_core::owner_scope();
+                let id = scope.id();
+                let sig = hot_signal("own::row", i);
+                (scope, id, sig)
+            })
+            .collect();
+        assert_eq!(reactive_core::live_signal_count(), baseline + 5);
+        for (scope, id, sig) in rows {
+            drop(scope);
+            reactive_core::dispose_owner(id);
+            assert!(!sig.is_alive());
+        }
+        assert_eq!(reactive_core::live_signal_count(), baseline);
+    }
+
+    #[test]
+    fn a_disposed_value_survives_a_reload() {
+        let scope = reactive_core::owner_scope();
+        let id = scope.id();
+        let sig = hot_signal("own::kept", 1i32);
+        sig.set(42);
+        drop(scope);
+        reactive_core::dispose_owner(id);
+        assert!(!sig.is_alive());
+
+        let blob = hot_snapshot_json();
+        hot_restore_json(&blob);
+        assert_eq!(hot_signal("own::kept", 0i32).peek(), 42);
+    }
+
+    #[test]
+    fn the_last_mounted_instance_wins_when_an_older_one_is_freed_later() {
+        let older = reactive_core::owner_scope();
+        let older_id = older.id();
+        let a = hot_signal("own::shared", 0i32);
+        drop(older);
+        let newer = reactive_core::owner_scope();
+        let newer_id = newer.id();
+        let b = hot_signal("own::shared", 0i32);
+        drop(newer);
+        a.set(1);
+        b.set(2);
+        reactive_core::dispose_owner(newer_id);
+        reactive_core::dispose_owner(older_id);
+
+        hot_restore_json(&hot_snapshot_json());
+        assert_eq!(hot_signal("own::shared", 0i32).peek(), 2);
+    }
+}

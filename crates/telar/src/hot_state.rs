@@ -6,19 +6,26 @@ use reactive_core::RwSignal;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-// Readable after the component unmounts because the signal is created detached, not because this closure holds anything: a `Copy` handle pins nothing.
 #[cfg(any(feature = "dev", feature = "prerender"))]
 type HotReader = Box<dyn Fn() -> Option<String>>;
+
+#[cfg(any(feature = "dev", feature = "prerender"))]
+#[derive(Default)]
+struct Registry {
+    next_instance: u64,
+    live: HashMap<String, (u64, HotReader)>,
+    kept: HashMap<String, (u64, String)>,
+}
 
 // The maps leak per reload, which is fine on a dev-only path.
 reactive_core::dropless_thread_local! {
     #[cfg(any(feature = "dev", feature = "prerender"))]
-    static REGISTRY: released HashMap<String, HotReader> = HashMap::new();
+    static REGISTRY: released Registry = Registry::default();
     // Carried over from the previous dylib or the prerendered page being taken over, consumed by `hot_signal` on mount.
     static PENDING: released HashMap<String, String> = HashMap::new();
 }
 
-/// As [`reactive_core::signal`], but keyed: the value is captured in the hot-reload snapshot and restored across dylib swaps in `cargo telar dev`. If two live instances share a key, the last one mounted wins the snapshot and both restore to the same value.
+/// As [`reactive_core::signal`], but keyed: the value is captured in the hot-reload snapshot and restored across dylib swaps in `cargo telar dev`. If two instances share a key, the last one mounted wins the snapshot and both restore to the same value. The signal belongs to the component that made it and is freed with it; its last value is kept for the snapshot when that owner is disposed.
 pub fn hot_signal<T>(key: &str, init: T) -> RwSignal<T>
 where
     T: Clone + Serialize + DeserializeOwned + 'static,
@@ -26,17 +33,47 @@ where
     let restored = PENDING
         .with(|p| p.borrow_mut().remove(key))
         .and_then(|raw| serde_json::from_str::<T>(&raw).ok());
-    // Detached, so the signal outlives the component that made it. The refcount used to do that, but a `Copy` handle pins nothing, so a snapshot taken after unmount read a freed signal.
-    let sig = reactive_core::detached(|| reactive_core::signal(restored.unwrap_or(init)));
+    let sig = reactive_core::signal(restored.unwrap_or(init));
     // A page being taken over only reads values back; snapshotting is for the two builds that write them.
     #[cfg(any(feature = "dev", feature = "prerender"))]
-    REGISTRY.with(|r| {
-        r.borrow_mut().insert(
-            key.to_string(),
-            Box::new(move || serde_json::to_string(&sig.peek()).ok()),
-        );
-    });
+    register(key, sig);
     sig
+}
+
+#[cfg(any(feature = "dev", feature = "prerender"))]
+fn register<T: Serialize + Clone + 'static>(key: &str, sig: RwSignal<T>) {
+    let instance = REGISTRY.with(|r| {
+        let mut registry = r.borrow_mut();
+        registry.next_instance += 1;
+        let instance = registry.next_instance;
+        registry.live.insert(
+            key.to_string(),
+            (
+                instance,
+                Box::new(move || sig.try_get().and_then(|v| serde_json::to_string(&v).ok())),
+            ),
+        );
+        instance
+    });
+    let key = key.to_string();
+    reactive_core::on_cleanup(move || {
+        let Some(value) = sig.try_get().and_then(|v| serde_json::to_string(&v).ok()) else {
+            return;
+        };
+        REGISTRY.with(|r| {
+            let mut registry = r.borrow_mut();
+            if registry
+                .live
+                .get(&key)
+                .is_some_and(|(id, _)| *id == instance)
+            {
+                registry.live.remove(&key);
+            }
+            if registry.kept.get(&key).is_none_or(|(id, _)| *id < instance) {
+                registry.kept.insert(key, (instance, value));
+            }
+        });
+    });
 }
 
 // Unlike a hot signal, which is consumed passively when its component remounts, this lives in another crate's thread-local and is set during `setup` — which the incoming dylib re-runs before restore — so it must be captured and actively pushed back. Keys are `@telar/`-namespaced to avoid colliding with a user's `[logic]` signal key.
@@ -49,10 +86,19 @@ const HIGH_CONTRAST_OVERRIDE_KEY: &str = "@telar/contrast.high";
 #[cfg(any(feature = "dev", feature = "prerender"))]
 pub fn hot_snapshot_json() -> String {
     let mut map: HashMap<String, String> = REGISTRY.with(|r| {
-        r.borrow()
+        let registry = r.borrow();
+        let mut map: HashMap<String, String> = registry
+            .kept
             .iter()
-            .filter_map(|(key, read)| read().map(|value| (key.clone(), value)))
-            .collect()
+            .map(|(key, (_, value))| (key.clone(), value.clone()))
+            .collect();
+        map.extend(
+            registry
+                .live
+                .iter()
+                .filter_map(|(key, (_, read))| read().map(|value| (key.clone(), value))),
+        );
+        map
     });
     if let Some(mode) = theme_core::active_mode() {
         map.insert(THEME_MODE_KEY.to_string(), mode);
