@@ -20,7 +20,7 @@ fn retries_cannot_be_set_below_one_attempt() {
 /// Both bodies count attempts through this, so the give-up point cannot drift between targets.
 #[test]
 fn the_last_attempt_is_the_one_that_gives_up() {
-    let error = AssetError("boom".to_string());
+    let error = Failure::transient(AssetError("boom".to_string()));
     assert!(
         !give_up("x", 1, 3, &error),
         "there are attempts left, so this is not the end"
@@ -30,6 +30,22 @@ fn the_last_attempt_is_the_one_that_gives_up() {
         give_up("x", 3, 3, &error),
         "the last attempt is the one that gives up"
     );
+}
+
+#[test]
+fn a_permanent_failure_gives_up_on_the_first_attempt() {
+    let error = Failure::permanent(AssetError("404".to_string()));
+    assert!(give_up("x", 1, 8, &error));
+}
+
+#[test]
+fn throttling_timeouts_and_server_errors_are_retried_and_other_statuses_settle() {
+    for status in [408, 429, 500, 502, 503, 504] {
+        assert!(Failure::status("u", status, "").transient, "{status}");
+    }
+    for status in [400, 401, 403, 404, 410, 422] {
+        assert!(!Failure::status("u", status, "").transient, "{status}");
+    }
 }
 
 fn url(id: &str) -> Result<String, AssetError> {
@@ -59,6 +75,33 @@ fn each_segment_is_encoded_and_slashes_between_them_are_kept() {
         url("..hidden/a..b").unwrap(),
         "https://h.test/..hidden/a..b.svg"
     );
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+mod native_classification {
+    use super::*;
+
+    #[test]
+    fn a_status_error_is_classified_by_its_status() {
+        assert!(!classify("u", &ureq::Error::StatusCode(404)).transient);
+        assert!(classify("u", &ureq::Error::StatusCode(503)).transient);
+        assert!(classify("u", &ureq::Error::StatusCode(408)).transient);
+        assert!(classify("u", &ureq::Error::StatusCode(429)).transient);
+    }
+
+    #[test]
+    fn network_errors_and_timeouts_are_retried() {
+        assert!(classify("u", &ureq::Error::Timeout(ureq::Timeout::Global)).transient);
+        assert!(classify("u", &ureq::Error::HostNotFound).transient);
+        assert!(classify("u", &ureq::Error::ConnectionFailed).transient);
+        let io = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
+        assert!(classify("u", &ureq::Error::Io(io)).transient);
+    }
+
+    #[test]
+    fn a_malformed_url_is_not_retried() {
+        assert!(!classify("u", &ureq::Error::BadUri("x".to_string())).transient);
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -110,6 +153,27 @@ mod body_cap {
             .fetch("x")
             .unwrap_err();
         assert!(error.0.contains("exceeds 16 bytes"), "{error}");
+    }
+
+    #[test]
+    fn a_missing_asset_settles_without_a_second_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf);
+            let _ = stream.write_all(
+                b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            );
+        });
+        let error = HttpTransport::new(format!("http://127.0.0.1:{port}/{{name}}"))
+            .with_retry(3, Duration::ZERO)
+            .fetch("x")
+            .unwrap_err();
+        assert!(error.0.contains("404"), "{error}");
     }
 
     #[test]

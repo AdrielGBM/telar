@@ -103,8 +103,51 @@ fn too_large(url: &str, limit: u64) -> AssetError {
     AssetError(format!("{url}: response body exceeds {limit} bytes"))
 }
 
-/// Whether to try again, and the warning to leave behind when there is nothing left to try. Shared so both bodies count attempts and give up identically — the only thing that differs between them is how the wait is spent.
-fn give_up(id: &str, attempts: u32, max_attempts: u32, error: &AssetError) -> bool {
+/// A request that got no answer, or a server-side or throttling one, may succeed later; a 404 or an oversized body answers the same way every time.
+#[derive(Debug)]
+struct Failure {
+    error: AssetError,
+    transient: bool,
+}
+
+impl Failure {
+    fn transient(error: AssetError) -> Self {
+        Self {
+            error,
+            transient: true,
+        }
+    }
+
+    fn permanent(error: AssetError) -> Self {
+        Self {
+            error,
+            transient: false,
+        }
+    }
+
+    fn status(url: &str, status: u16, text: &str) -> Self {
+        let error = AssetError(format!("{url}: HTTP {status} {text}"));
+        if retryable_status(status) {
+            Self::transient(error)
+        } else {
+            Self::permanent(error)
+        }
+    }
+}
+
+fn retryable_status(status: u16) -> bool {
+    status >= 500 || matches!(status, 408 | 429)
+}
+
+/// Whether to stop, and the warning to leave behind when stopping. Shared so both bodies count attempts and classify failures identically — the only thing that differs between them is how the wait is spent.
+fn give_up(id: &str, attempts: u32, max_attempts: u32, failure: &Failure) -> bool {
+    let error = &failure.error;
+    if !failure.transient {
+        tracing::warn!(
+            "asset '{id}' failed without retrying ({error}); check the name and the endpoint"
+        );
+        return true;
+    }
     let exhausted = attempts >= max_attempts;
     if exhausted {
         tracing::warn!(
@@ -128,34 +171,30 @@ mod native {
                     Err(error) => error,
                 };
                 if give_up(id, attempts, self.max_attempts, &error) {
-                    return Err(error);
+                    return Err(error.error);
                 }
                 attempts += 1;
                 std::thread::sleep(self.retry_delay);
             }
         }
 
-        fn get(&self, url: &str) -> Result<Vec<u8>, AssetError> {
+        fn get(&self, url: &str) -> Result<Vec<u8>, Failure> {
             let limit = self.max_body_bytes;
-            let mut response = self
-                .agent
-                .get(url)
-                .call()
-                .map_err(|e| AssetError(format!("{url}: {e}")))?;
+            let mut response = self.agent.get(url).call().map_err(|e| classify(url, &e))?;
             let body = response.body_mut();
             if body.content_length().is_some_and(|length| length > limit) {
-                return Err(too_large(url, limit));
+                return Err(Failure::permanent(too_large(url, limit)));
             }
             let bytes = body
                 .with_config()
                 .limit(limit.saturating_add(1))
                 .read_to_vec()
                 .map_err(|e| match e {
-                    ureq::Error::BodyExceedsLimit(_) => too_large(url, limit),
-                    e => AssetError(format!("{url}: {e}")),
+                    ureq::Error::BodyExceedsLimit(_) => Failure::permanent(too_large(url, limit)),
+                    e => classify(url, &e),
                 })?;
             if bytes.len() as u64 > limit {
-                return Err(too_large(url, limit));
+                return Err(Failure::permanent(too_large(url, limit)));
             }
             Ok(bytes)
         }
@@ -165,6 +204,20 @@ mod native {
         /// Blocking on purpose, and only safe because of where it runs: a loader calls this from a job on `reactive_core`'s task pool, which is elastic precisely so that work waiting on I/O still makes progress. Sleeping between retries parks that one pooled thread and nothing else — no timer, no second queue, and a burst of icons still costs one connection at a time.
         fn load(&self, key: &AssetKey, reply: Reply) {
             reply(self.fetch(&key.id));
+        }
+    }
+
+    /// ureq 3 reports a 4xx/5xx as `Err(StatusCode)`, so the status decides, not the `Err`.
+    pub(super) fn classify(url: &str, error: &ureq::Error) -> Failure {
+        let message = AssetError(format!("{url}: {error}"));
+        match error {
+            ureq::Error::StatusCode(status) => Failure::status(url, *status, ""),
+            ureq::Error::BadUri(_)
+            | ureq::Error::Http(_)
+            | ureq::Error::InvalidProxyUrl
+            | ureq::Error::TooManyRedirects
+            | ureq::Error::BodyExceedsLimit(_) => Failure::permanent(message),
+            _ => Failure::transient(message),
         }
     }
 
@@ -178,6 +231,8 @@ mod native {
 
 #[cfg(not(target_arch = "wasm32"))]
 use native::agent;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+use native::classify;
 
 #[cfg(target_arch = "wasm32")]
 mod web {
@@ -208,7 +263,7 @@ mod web {
                         Err(error) => error,
                     };
                     if give_up(&id, attempts, max_attempts, &error) {
-                        break Err(error);
+                        break Err(error.error);
                     }
                     attempts += 1;
                     sleep(retry_delay).await;
@@ -234,36 +289,68 @@ mod web {
         let _ = JsFuture::from(promise).await;
     }
 
+    /// Lives for the whole fetch, body read included, so a stalled body hits the same deadline as stalled headers.
+    struct Deadline {
+        window: web_sys::Window,
+        controller: web_sys::AbortController,
+        handle: Option<i32>,
+        _callback: Closure<dyn FnMut()>,
+    }
+
+    impl Deadline {
+        fn start(
+            window: web_sys::Window,
+            controller: web_sys::AbortController,
+            timeout: Duration,
+        ) -> Self {
+            let aborter = controller.clone();
+            let callback = Closure::once(move || aborter.abort());
+            let handle = window
+                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                    callback.as_ref().unchecked_ref(),
+                    timeout.as_millis().min(i32::MAX as u128) as i32,
+                )
+                .ok();
+            Self {
+                window,
+                controller,
+                handle,
+                _callback: callback,
+            }
+        }
+    }
+
+    impl Drop for Deadline {
+        fn drop(&mut self) {
+            if let Some(handle) = self.handle {
+                self.window.clear_timeout_with_handle(handle);
+            }
+            self.controller.abort();
+        }
+    }
+
     /// The timeout is an `AbortController` fired by a timer, because `fetch` has no timeout of its own — a request left to the browser's own limits can outlive the frame that wanted it by minutes.
-    async fn get(url: &str, timeout: Duration, limit: u64) -> Result<Vec<u8>, AssetError> {
-        let window = window()?;
-        let controller =
-            web_sys::AbortController::new().map_err(|e| js_error(url, "AbortController", &e))?;
+    async fn get(url: &str, timeout: Duration, limit: u64) -> Result<Vec<u8>, Failure> {
+        let window = window().map_err(Failure::permanent)?;
+        let controller = web_sys::AbortController::new()
+            .map_err(|e| Failure::permanent(js_error(url, "AbortController", &e)))?;
         let options = web_sys::RequestInit::new();
         options.set_signal(Some(&controller.signal()));
         let request = web_sys::Request::new_with_str_and_init(url, &options)
-            .map_err(|e| js_error(url, "Request", &e))?;
+            .map_err(|e| Failure::permanent(js_error(url, "Request", &e)))?;
 
-        let abort = Closure::once_into_js(move || controller.abort());
-        let timer = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-            abort.unchecked_ref(),
-            timeout.as_millis().min(i32::MAX as u128) as i32,
-        );
-        let response = JsFuture::from(window.fetch_with_request(&request)).await;
-        if let Ok(handle) = timer {
-            window.clear_timeout_with_handle(handle);
-        }
-
-        let response: web_sys::Response = response
-            .map_err(|e| js_error(url, "fetch", &e))?
+        let _deadline = Deadline::start(window.clone(), controller, timeout);
+        let response: web_sys::Response = JsFuture::from(window.fetch_with_request(&request))
+            .await
+            .map_err(|e| Failure::transient(js_error(url, "fetch", &e)))?
             .dyn_into()
-            .map_err(|e| js_error(url, "fetch", &e))?;
+            .map_err(|e| Failure::permanent(js_error(url, "fetch", &e)))?;
         if !response.ok() {
-            return Err(AssetError(format!(
-                "{url}: HTTP {} {}",
+            return Err(Failure::status(
+                url,
                 response.status(),
-                response.status_text()
-            )));
+                &response.status_text(),
+            ));
         }
         let declared = response
             .headers()
@@ -272,18 +359,17 @@ mod web {
             .flatten()
             .and_then(|value| value.parse::<u64>().ok());
         if declared.is_some_and(|length| length > limit) {
-            return Err(too_large(url, limit));
+            return Err(Failure::permanent(too_large(url, limit)));
         }
-        let buffer = JsFuture::from(
-            response
-                .array_buffer()
-                .map_err(|e| js_error(url, "body", &e))?,
-        )
-        .await
-        .map_err(|e| js_error(url, "body", &e))?;
+        let body = response
+            .array_buffer()
+            .map_err(|e| Failure::transient(js_error(url, "body", &e)))?;
+        let buffer = JsFuture::from(body)
+            .await
+            .map_err(|e| Failure::transient(js_error(url, "body", &e)))?;
         let array = js_sys::Uint8Array::new(&buffer);
         if u64::from(array.length()) > limit {
-            return Err(too_large(url, limit));
+            return Err(Failure::permanent(too_large(url, limit)));
         }
         Ok(array.to_vec())
     }
