@@ -7,7 +7,23 @@ use super::*;
 const SET: &str = r#"{"prefix":"mdi","width":24,"height":24,"icons":{"home":{"body":"<path d=\"M1 1h2v2H1z\"/>"},"account":{"body":"<circle cx=\"12\" cy=\"12\" r=\"4\"/>"}},"not_found":["nothing"]}"#;
 const COLLECTIONS: &str = r#"{"mdi":{"name":"Material Design Icons","license":{"title":"Apache 2.0","spdx":"Apache-2.0"},"category":"Material"}}"#;
 
-/// An Iconify API on a loopback port, answering the two endpoints the provider calls and recording each request path.
+fn response(status: &str, body: &str) -> String {
+    format!(
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+}
+
+fn answer(path: &str) -> String {
+    if path.starts_with("/mdi.json?icons=") {
+        response("200 OK", SET)
+    } else if path == "/collections?prefixes=mdi" {
+        response("200 OK", COLLECTIONS)
+    } else {
+        response("404 Not Found", "404")
+    }
+}
+
 struct Api {
     base: String,
     requests: Arc<Mutex<Vec<String>>>,
@@ -15,6 +31,22 @@ struct Api {
 
 impl Api {
     fn start() -> Self {
+        Self::serving(answer)
+    }
+
+    fn failing_once(path: &'static str, first: String) -> Self {
+        let first = Mutex::new(Some(first));
+        Self::serving(move |requested| match requested.starts_with(path) {
+            true => first
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap_or_else(|| answer(requested)),
+            false => answer(requested),
+        })
+    }
+
+    fn serving(respond: impl Fn(&str) -> String + Send + 'static) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
         let base = format!(
             "http://127.0.0.1:{}/",
@@ -29,23 +61,9 @@ impl Api {
                 let read = stream.read(&mut buf).unwrap_or(0);
                 let request = String::from_utf8_lossy(&buf[..read]).to_string();
                 let path = request.split_whitespace().nth(1).unwrap_or("").to_string();
-                seen.lock().unwrap().push(path.clone());
-                let body = if path.starts_with("/mdi.json?icons=") {
-                    Some(SET)
-                } else if path == "/collections?prefixes=mdi" {
-                    Some(COLLECTIONS)
-                } else {
-                    None
-                };
-                let response = match body {
-                    Some(body) => format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                        body.len()
-                    ),
-                    None => "HTTP/1.1 404 Not Found\r\nContent-Length: 3\r\nConnection: close\r\n\r\n404"
-                        .to_string(),
-                };
-                let _ = stream.write_all(response.as_bytes());
+                let reply = respond(&path);
+                seen.lock().unwrap().push(path);
+                let _ = stream.write_all(reply.as_bytes());
             }
         });
         Self { base, requests }
@@ -53,6 +71,13 @@ impl Api {
 
     fn requests(&self) -> Vec<String> {
         self.requests.lock().unwrap().clone()
+    }
+
+    fn collection_requests(&self) -> usize {
+        self.requests()
+            .iter()
+            .filter(|path| path.starts_with("/collections"))
+            .count()
     }
 }
 
@@ -101,6 +126,54 @@ fn a_set_the_provider_does_not_have_is_none() {
             .unwrap()
             .is_none()
     );
+}
+
+#[test]
+fn a_licence_the_provider_does_not_have_is_unknown_and_cached() {
+    let api = Api::serving(|path| match path.starts_with("/collections") {
+        true => response("404 Not Found", "404"),
+        false => answer(path),
+    });
+    let provider = HttpProvider::new(&api.base);
+    let first = provider.icon(&id("mdi:home")).unwrap().unwrap();
+    let second = provider.icon(&id("mdi:home")).unwrap().unwrap();
+    assert!(first.set.is_none());
+    assert!(second.set.is_none());
+    assert_eq!(api.collection_requests(), 1);
+}
+
+#[test]
+fn a_licence_lookup_that_fails_with_a_server_error_is_an_error_and_is_retried() {
+    let api = Api::failing_once(
+        "/collections",
+        response("500 Internal Server Error", "boom"),
+    );
+    let provider = HttpProvider::new(&api.base);
+    let error = provider.icon(&id("mdi:home")).unwrap_err();
+    assert!(matches!(error, IconError::Fetch { .. }), "{error}");
+    let icon = provider.icon(&id("mdi:home")).unwrap().unwrap();
+    assert!(icon.set.is_some());
+    assert_eq!(api.collection_requests(), 2);
+}
+
+#[test]
+fn a_licence_lookup_that_is_not_json_is_an_error_and_is_retried() {
+    let api = Api::failing_once("/collections", response("200 OK", "not json"));
+    let provider = HttpProvider::new(&api.base);
+    let error = provider.icon(&id("mdi:home")).unwrap_err();
+    assert!(matches!(error, IconError::Fetch { .. }), "{error}");
+    let icon = provider.icon(&id("mdi:home")).unwrap().unwrap();
+    assert!(icon.set.is_some());
+    assert_eq!(api.collection_requests(), 2);
+}
+
+#[test]
+fn a_set_that_fails_with_a_server_error_is_an_error_and_is_retried() {
+    let api = Api::failing_once("/mdi.json", response("503 Service Unavailable", "busy"));
+    let provider = HttpProvider::new(&api.base);
+    let error = provider.icon(&id("mdi:home")).unwrap_err();
+    assert!(matches!(error, IconError::Fetch { .. }), "{error}");
+    assert!(provider.icon(&id("mdi:home")).unwrap().is_some());
 }
 
 #[test]

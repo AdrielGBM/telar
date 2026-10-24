@@ -10,13 +10,22 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 
 /// An Iconify-compatible API at `base`: the public one, or the same server self-hosted.
 ///
-/// It asks for a set's icons with `GET {base}/{set}.json?icons=a,b`, one request per set however many of its icons are wanted, and for the set's licence with `GET {base}/collections?prefixes={set}`. A provider that does not answer the second is not a failure: the set's licence is then unknown, which the licence policy reports.
+/// It asks for a set's icons with `GET {base}/{set}.json?icons=a,b`, one request per set however many of its icons are wanted, and for the set's licence with `GET {base}/collections?prefixes={set}`.
+///
+/// Only a 404 from `/collections`, or no entry for the set in it, leaves the licence unknown; any other failure fails the set's icons, so a bake never proceeds on a licence it could not check.
 ///
 /// Blocking. It is meant for the baker, on the host; an application resolving ids while it runs fetches through `telar-dynamic`'s transport instead, which has a body for the browser too.
 pub struct HttpProvider {
     base: String,
     agent: ureq::Agent,
     infos: Mutex<HashMap<String, Option<SetInfo>>>,
+}
+
+fn fetch_error(url: &str, message: impl ToString) -> IconError {
+    IconError::Fetch {
+        url: url.to_string(),
+        message: message.to_string(),
+    }
 }
 
 impl HttpProvider {
@@ -38,35 +47,35 @@ impl HttpProvider {
     }
 
     fn get(&self, url: &str) -> Result<Option<String>, IconError> {
-        let failed = |message: String| IconError::Fetch {
-            url: url.to_string(),
-            message,
-        };
         match self.agent.get(url).call() {
             Ok(mut response) => response
                 .body_mut()
                 .read_to_string()
                 .map(Some)
-                .map_err(|e| failed(e.to_string())),
+                .map_err(|e| fetch_error(url, e)),
             Err(ureq::Error::StatusCode(404)) => Ok(None),
-            Err(e) => Err(failed(e.to_string())),
+            Err(e) => Err(fetch_error(url, e)),
         }
     }
 
-    fn info(&self, prefix: &str) -> Option<SetInfo> {
+    fn info(&self, prefix: &str) -> Result<Option<SetInfo>, IconError> {
         let mut infos = self.infos.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(cached) = infos.get(prefix) {
-            return cached.clone();
+            return Ok(cached.clone());
         }
         let url = format!("{}/collections?prefixes={prefix}", self.base);
-        let info = self
-            .get(&url)
-            .ok()
-            .flatten()
-            .and_then(|json| serde_json::from_str::<HashMap<String, SetInfo>>(&json).ok())
-            .and_then(|mut collections| collections.remove(prefix));
+        let info = match self.get(&url)? {
+            Some(json) => {
+                let mut collections: HashMap<String, SetInfo> = serde_json::from_str(&json)
+                    .map_err(|e| {
+                        fetch_error(&url, format!("not an Iconify collections response: {e}"))
+                    })?;
+                collections.remove(prefix)
+            }
+            None => None,
+        };
         infos.insert(prefix.to_string(), info.clone());
-        info
+        Ok(info)
     }
 
     fn set_icons(
@@ -78,10 +87,8 @@ impl HttpProvider {
         let Some(json) = self.get(&url)? else {
             return Ok(None);
         };
-        let set = IconSet::from_json(&json).map_err(|e| IconError::Fetch {
-            url: url.clone(),
-            message: format!("not an Iconify icon set: {e}"),
-        })?;
+        let set = IconSet::from_json(&json)
+            .map_err(|e| fetch_error(&url, format!("not an Iconify icon set: {e}")))?;
         Ok(Some((set, url)))
     }
 }
@@ -107,9 +114,18 @@ impl IconSource for HttpProvider {
             let mut names: Vec<&str> = wanted.iter().map(|id| id.name()).collect();
             names.sort_unstable();
             names.dedup();
-            match self.set_icons(prefix, &names) {
-                Ok(Some((set, url))) => {
-                    let info = set.info.clone().or_else(|| self.info(prefix));
+            let fetched = self.set_icons(prefix, &names).and_then(|found| {
+                let Some((set, url)) = found else {
+                    return Ok(None);
+                };
+                let info = match &set.info {
+                    Some(info) => Some(info.clone()),
+                    None => self.info(prefix)?,
+                };
+                Ok(Some((set, url, info)))
+            });
+            match fetched {
+                Ok(Some((set, url, info))) => {
                     for id in wanted {
                         let icon = set.icon(id.name()).map(|icon| SourcedIcon {
                             svg: icon.to_svg(),
