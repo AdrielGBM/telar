@@ -18,6 +18,50 @@ fn deb_architecture(arch: &str) -> &str {
     }
 }
 
+fn deb_control_field(name: &str, value: &str) -> String {
+    let mut lines = value.trim().lines();
+    let mut field = format!("{name}: {}\n", lines.next().unwrap_or_default().trim_end());
+    for line in lines {
+        let line = line.trim_end();
+        if line.is_empty() {
+            field.push_str(" .\n");
+        } else {
+            field.push_str(&format!(" {line}\n"));
+        }
+    }
+    field
+}
+
+fn validate_package_name(name: &str) -> Result<(), String> {
+    let mut chars = name.chars();
+    let valid_start = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let valid_rest =
+        chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || "+-.".contains(c));
+    if name.len() >= 2 && valid_start && valid_rest {
+        Ok(())
+    } else {
+        Err(format!(
+            "`{name}` is not a valid Debian package name: use at least two characters from lowercase letters, digits, `+`, `-` and `.`, starting with a letter or digit. Rename the package in its Cargo.toml."
+        ))
+    }
+}
+
+fn validate_description(description: &str) -> Result<(), String> {
+    let synopsis = description.trim().lines().next().unwrap_or_default();
+    if synopsis.trim().is_empty() {
+        return Err("the package `description` is empty; Debian needs a synopsis line.".into());
+    }
+    if description
+        .chars()
+        .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+    {
+        return Err("the package `description` contains control characters, which a Debian control file cannot carry.".into());
+    }
+    Ok(())
+}
+
 fn deb_control_file(
     name: &str,
     version: &str,
@@ -26,7 +70,8 @@ fn deb_control_file(
     description: &str,
 ) -> String {
     format!(
-        "Package: {name}\nVersion: {version}\nArchitecture: {arch}\nMaintainer: {maintainer}\nDescription: {description}\n"
+        "Package: {name}\nVersion: {version}\nArchitecture: {arch}\nMaintainer: {maintainer}\n{}",
+        deb_control_field("Description", description)
     )
 }
 
@@ -59,12 +104,23 @@ fn stage_deb(
 
 pub(crate) fn build_deb(cargo_args: Vec<String>, config: TelarSection) -> ! {
     // Resolved before the build: failing on a missing manifest field after a full release compile wastes the one thing the author cannot get back.
-    let Some(maintainer) = resolve_package(&cargo_args).maintainer() else {
+    let manifest = resolve_package(&cargo_args);
+    let Some(maintainer) = manifest.maintainer() else {
         eprintln!(
             "[cargo-telar] --format deb needs a maintainer. Add `authors = [\"Name <email>\"]` to the package's Cargo.toml."
         );
         std::process::exit(1);
     };
+    let manifest_description = manifest.description();
+    let checked = validate_package_name(&manifest.name()).and(
+        manifest_description
+            .as_deref()
+            .map_or(Ok(()), validate_description),
+    );
+    if let Err(message) = checked {
+        eprintln!("[cargo-telar] --format deb: {message}");
+        std::process::exit(1);
+    }
     let (bin_path, resolved) = run_release_build(cargo_args, config);
     let package_name = resolved.name();
     let version = resolved.version();

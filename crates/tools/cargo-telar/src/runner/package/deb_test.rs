@@ -58,3 +58,37 @@ fn the_icon_notice_lands_in_the_packages_doc_directory() {
     );
     assert!(!plain.out.join("usr/share/doc").exists());
 }
+
+#[test]
+fn a_multi_line_description_gets_continuation_lines() {
+    let control = deb_control_file(
+        "app",
+        "1",
+        "amd64",
+        "A <a@b.c>",
+        "Synopsis\nfirst\n\nsecond\n",
+    );
+    assert!(
+        control.ends_with("Description: Synopsis\n first\n .\n second\n"),
+        "{control}"
+    );
+}
+
+#[test]
+fn package_names_follow_debian_rules() {
+    for ok in ["my-app", "a1", "app+x.y", "7zip"] {
+        assert!(validate_package_name(ok).is_ok(), "{ok}");
+    }
+    for bad in [
+        "", "a", "My-App", "-app", ".app", "my_app", "app name", "äpp",
+    ] {
+        assert!(validate_package_name(bad).is_err(), "{bad}");
+    }
+}
+
+#[test]
+fn descriptions_need_a_synopsis_and_no_control_characters() {
+    assert!(validate_description("Fine\n\nbody").is_ok());
+    assert!(validate_description("  \n").is_err());
+    assert!(validate_description("bad\u{0}char").is_err());
+}

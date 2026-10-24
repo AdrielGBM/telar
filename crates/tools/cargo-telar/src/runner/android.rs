@@ -49,34 +49,40 @@ fn apk_path(args: &[String]) -> PathBuf {
         .join(format!("{}.apk", resolved.name()))
 }
 
-fn load_dotenv(cmd: &mut Command) {
+fn is_keystore_path_key(key: &str) -> bool {
+    key.starts_with("CARGO_APK_") && key.ends_with("_KEYSTORE")
+}
+
+fn dotenv_entries(root: &Path) -> Result<Vec<(String, String)>, String> {
+    let path = root.join(".env");
+    let entries = match dotenvy::from_path_iter(&path) {
+        Ok(entries) => entries,
+        Err(e) if e.not_found() => return Ok(Vec::new()),
+        Err(e) => return Err(format!("cannot read {}: {e}", path.display())),
+    };
+    entries
+        .map(|entry| {
+            let (key, value) = entry.map_err(|e| format!("invalid {}: {e}", path.display()))?;
+            let value = if is_keystore_path_key(&key) && !value.is_empty() {
+                root.join(&value).to_string_lossy().into_owned()
+            } else {
+                value
+            };
+            Ok((key, value))
+        })
+        .collect()
+}
+
+fn load_dotenv(cmd: &mut Command) -> Result<(), String> {
     let cwd = std::env::current_dir().unwrap_or_default();
     let root = telar_project::find_workspace_root(&cwd).unwrap_or(cwd);
-    let path = root.join(".env");
-    let Ok(content) = std::fs::read_to_string(&path) else {
-        return;
-    };
-    for line in content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Some((key, value)) = line.split_once('=') {
-            let key = key.trim();
-            let value = value.trim();
-            // Explicit env wins over .env: only set keys absent from the calling environment.
-            if std::env::var(key).is_err() {
-                // Resolve relative paths against the workspace root so values like "android-release.keystore" work regardless of the cwd at signing time.
-                let resolved = root.join(value);
-                let final_value = if resolved.exists() {
-                    resolved.to_string_lossy().into_owned()
-                } else {
-                    value.to_owned()
-                };
-                cmd.env(key, final_value);
-            }
+    for (key, value) in dotenv_entries(&root)? {
+        // Explicit env wins over .env: only set keys absent from the calling environment.
+        if std::env::var_os(&key).is_none() {
+            cmd.env(key, value);
         }
     }
+    Ok(())
 }
 
 pub(crate) fn make_android_cmd(cargo_args: Vec<String>, config: TelarSection) -> Command {
@@ -88,7 +94,10 @@ pub(crate) fn make_android_cmd(cargo_args: Vec<String>, config: TelarSection) ->
     if let Some(ndk) = ndk_root {
         cmd.env("ANDROID_NDK_ROOT", ndk);
     }
-    load_dotenv(&mut cmd);
+    if let Err(e) = load_dotenv(&mut cmd) {
+        eprintln!("[cargo-telar] {e}");
+        std::process::exit(1);
+    }
     cmd
 }
 
@@ -178,3 +187,7 @@ pub(crate) fn build_android_package(cargo_args: Vec<String>, config: TelarSectio
     }
     std::process::exit(0);
 }
+
+#[cfg(test)]
+#[path = "android_test.rs"]
+mod tests;

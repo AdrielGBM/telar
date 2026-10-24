@@ -843,6 +843,7 @@ dependencies = [
  "brotli",
  "clap",
  "ctrlc",
+ "dotenvy",
  "flate2",
  "getrandom 0.3.4",
  "notify",
@@ -1461,6 +1462,12 @@ name = "dot"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a74b6c4d4a1cff5f454164363c16b72fa12463ca6b31f4b5f2035a65fa3d5906"
+
+[[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "downcast-rs"
