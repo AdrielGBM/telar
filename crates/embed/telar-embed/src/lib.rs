@@ -324,7 +324,9 @@ pub unsafe fn __embed_on_frame(inst: *mut EmbedInstance, ctx: &mut AppCtx) -> Gu
 }
 
 #[doc(hidden)]
-pub use platform_core::guest::{loaded as __embed_loaded, unloading as __embed_unloading};
+pub use platform_core::guest::{
+    loaded as __embed_loaded, quiesce as __embed_quiesce, unloading as __embed_unloading,
+};
 
 /// Installs the convention the host matches shortcuts in as the guest's own, which left alone answers for the system the guest was compiled on.
 #[doc(hidden)]
@@ -345,8 +347,8 @@ pub fn __embed_defer_fonts(host: Option<Arc<dyn FontHost>>) -> GuestResult<()> {
     })
 }
 
-/// The version of the guest/host contract below. Bump it whenever [`EmbedVTable`] changes shape — adding a field, reordering one, or changing a signature — so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it. A type that crosses the boundary inside an event or a draw command changing layout bumps it too: 5 is for `Semantics` gaining `current`, which `Element` carries across, and `Element` gaining `arrival_margin`. 6 is for the guest reporting its timers. 7 is for every entry handing back a [`GuestResult`] instead of unwinding. 8 is for the table carrying the layout fingerprint. 9 is for `loaded` and `unloading`, which a host that unloads the guest calls first and last. 10 is for `set_keyboard_convention`, which the host calls before it creates an instance. 11 is for `defer_fonts`, which the host calls before it creates an instance too, and for `unloading` freeing the guest's reactive runtime and every slot and static that holds heap data.
-pub const TELAR_EMBED_ABI: u32 = 11;
+/// The version of the guest/host contract below: bump it whenever [`EmbedVTable`] changes shape, or a type an event or a draw command carries across changes layout, so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it.
+pub const TELAR_EMBED_ABI: u32 = 12;
 
 /// The fingerprint of the layout of what crosses by value, which a guest reports in its table beside the version: a host and a guest built with different features or dependencies disagree about the shape of an event or a draw command without the table having changed at all. `shaper` is in it because a guest without it would drop the font database a host with it hands over, and measure its text in faces other than the ones the host draws it in.
 pub const EMBED_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
@@ -400,6 +402,7 @@ pub struct EmbedVTable {
     pub on_frame: unsafe extern "Rust" fn(*mut EmbedInstance, &mut AppCtx) -> GuestResult<()>,
     pub loaded: unsafe extern "Rust" fn() -> GuestResult<()>,
     pub unloading: unsafe extern "Rust" fn() -> GuestResult<()>,
+    pub quiesce: unsafe extern "Rust" fn() -> GuestResult<()>,
     pub set_keyboard_convention: unsafe extern "Rust" fn(KeyboardConvention) -> GuestResult<()>,
     pub defer_fonts: unsafe extern "Rust" fn(Option<Arc<dyn FontHost>>) -> GuestResult<()>,
 }
@@ -449,6 +452,7 @@ macro_rules! embed {
                 on_frame: $crate::__embed_on_frame,
                 loaded: $crate::__embed_loaded,
                 unloading: $crate::__embed_unloading,
+                quiesce: $crate::__embed_quiesce,
                 set_keyboard_convention: $crate::__embed_set_keyboard_convention,
                 defer_fonts: $crate::__embed_defer_fonts,
             }
@@ -469,11 +473,12 @@ mod host {
     ///
     /// Every call goes through its [`Guest`], so once the guest has panicked none reaches it again: [`panic`](Self::panic) says what happened and where, and every method answers as an empty guest would — nothing painted, no event taken, no timer waiting. The host shows the report in the guest's place.
     pub struct LoadedEmbed {
+        /// Null until the guest builds one, so a start that fails earlier still drops through the one path that quiesces the guest before closing its library.
         inst: *mut EmbedInstance,
         vtable: EmbedVTable,
         guest: Guest,
         timer_mirror: TimerMirror,
-        // Declared last so it drops last: the instance is destroyed before the library unmaps. `None` for a table that is this process's own.
+        /// `None` for a table that is this process's own.
         lib: Option<libloading::Library>,
     }
 
@@ -538,26 +543,36 @@ mod host {
             args: &[String],
             lib: Option<libloading::Library>,
         ) -> Result<Self, GuestPanic> {
-            if lib.is_some() {
-                unsafe { (vtable.loaded)() }?;
-            }
-            unsafe { (vtable.set_keyboard_convention)(platform_core::keyboard_convention()) }?;
-            let fonts = lib.as_ref().and_then(|_| served_fonts());
-            unsafe { (vtable.defer_fonts)(fonts) }?;
-            let inst = unsafe { (vtable.create)(args) }?;
-            let embed = Self {
-                inst,
+            let mut embed = Self {
+                inst: std::ptr::null_mut(),
                 vtable,
                 guest: Guest::default(),
                 timer_mirror: TimerMirror::default(),
                 lib,
             };
-            // A guest starts with a store of its own that knows nothing, and a host only forwards changes; without this one opened mid-session would draw light on a dark desktop until the user next changed a setting.
-            embed.set_system_preferences(&preferences_core::system_preferences());
+            embed.build(args);
             match embed.guest.panic().cloned() {
                 Some(panic) => Err(panic),
                 None => Ok(embed),
             }
+        }
+
+        fn build(&mut self, args: &[String]) {
+            let vtable = self.vtable;
+            if self.lib.is_some() {
+                self.guest.call(|| unsafe { (vtable.loaded)() });
+            }
+            self.guest.call(|| unsafe {
+                (vtable.set_keyboard_convention)(platform_core::keyboard_convention())
+            });
+            let fonts = self.lib.as_ref().and_then(|_| served_fonts());
+            self.guest
+                .call(move || unsafe { (vtable.defer_fonts)(fonts) });
+            if let Some(inst) = self.guest.call(|| unsafe { (vtable.create)(args) }) {
+                self.inst = inst;
+            }
+            // A guest starts with a store of its own that knows nothing, and a host only forwards changes; without this one opened mid-session would draw light on a dark desktop until the user next changed a setting.
+            self.set_system_preferences(&preferences_core::system_preferences());
         }
 
         /// The panic that stopped this guest, if one has: what it said and where. Nothing of the guest runs after it.
@@ -693,16 +708,19 @@ mod host {
     }
 
     impl Drop for LoadedEmbed {
-        // Runs dylib code touching its thread-locals, so it must happen before `lib` unmaps. A guest that panicked keeps its instance: destroying it would run that guest's code again.
         fn drop(&mut self) {
-            if self.guest.has_panicked() {
+            let vtable = self.vtable;
+            if !self.inst.is_null() {
+                self.guest.call(|| unsafe { (vtable.destroy)(self.inst) });
+            }
+            let Some(lib) = self.lib.take() else {
                 return;
-            }
-            self.guest
-                .call(|| unsafe { (self.vtable.destroy)(self.inst) });
-            if self.lib.is_some() {
-                self.guest.call(|| unsafe { (self.vtable.unloading)() });
-            }
+            };
+            self.guest.unload(
+                lib,
+                || unsafe { (vtable.unloading)() },
+                || unsafe { (vtable.quiesce)() },
+            );
         }
     }
 }

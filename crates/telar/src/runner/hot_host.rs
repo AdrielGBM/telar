@@ -72,7 +72,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
             std::process::exit(1);
         }
     };
-    let hot_rx = crate::hot::listen_hot_reload(port);
+    let hot = crate::hot::listen_hot_reload(port);
     let prefs = UserPrefs::load(app_name, paths.as_ref());
     let backend = prefs.backend.unwrap_or_else(config::compile_time_backend);
     #[cfg(feature = "hot-reload")]
@@ -81,7 +81,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         window = custom;
     }
     let window = window.titled_or(app_name);
-    // Share the one field literal with `run_with_platform` (via build_app_handler); only the hot-reload receiver differs from a normal single-window handler.
+    // Share the one field literal with `run_with_platform` (via build_app_handler); only the hot-reload channel differs from a normal single-window handler.
     let mut handler = build_app_handler::<WinitWindow, D>(
         Box::new(initial_app),
         paths,
@@ -91,7 +91,7 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         app_name.to_owned(),
         super::host::SurfaceRenderer::builtin(),
     );
-    handler.hot_reload_rx = Some(hot_rx);
+    handler.hot = Some(hot);
     handler.title = Some(super::state::WindowTitle::opened_as(&window.title));
     handler.location = Some(super::location::LocationBinding::for_window(Box::new(
         platform_core::ArgumentLocation::from_env(),

@@ -44,8 +44,12 @@ fn lock() -> MutexGuard<'static, State> {
 }
 
 pub(in crate::task) fn submit(job: Job) {
-    static JOINED_ON_UNLOAD: Once = Once::new();
-    JOINED_ON_UNLOAD.call_once(|| crate::thread_exit::on_unload(shutdown_and_join));
+    static JOINED_BEFORE_UNMAP: Once = Once::new();
+    JOINED_BEFORE_UNMAP.call_once(|| {
+        // `on_unload` joins before `release_guest` frees the runtime and statics a running job may still reach; `on_quiesce` joins on a guest that panicked too, which is never told it is unloading.
+        crate::thread_exit::on_unload(shutdown_and_join);
+        crate::thread_exit::on_quiesce(shutdown_and_join);
+    });
     let mut state = lock();
     state.workers.retain(|handle| !handle.is_finished());
     state.queue.push_back(job);
@@ -98,23 +102,30 @@ fn run_jobs() {
     }
 }
 
-/// Stops every worker and waits for them, so no pooled thread is left parked in — or running — code that is about to be unmapped. Called before a hot-reload dylib is closed, and by the host of a guest as it unloads it, through `thread_exit::on_unload`.
-///
-/// A job already running finishes first, and that is the point: its code lives in the dylib, so unloading underneath it is exactly the crash this prevents. The cost is that a reload waits for in-flight background work, and a task that blocks forever blocks the reload with it.
+/// Stops every worker and waits for the job each is running, so no pooled thread is left in code about to be unmapped, at the cost of a reload waiting on a job that never returns; it takes only poison-tolerant locks, the pool's and each dropped job's mailbox, and wakes the host's loop, so it is safe to run on a guest that panicked.
 pub(in crate::task) fn shutdown_and_join() {
-    let (queued, handles) = {
-        let mut state = lock();
-        state.shutdown = true;
-        (
-            std::mem::take(&mut state.queue),
-            std::mem::take(&mut state.workers),
-        )
-    };
-    // Dropped outside the lock: a queued job owns a `WorkerEnd` whose `Drop` posts to the mailbox and wakes the loop, neither of which may run while this mutex is held.
-    drop(queued);
-    POOL.work_ready.notify_all();
-    for handle in handles {
-        let _ = handle.join();
+    lock().shutdown = true;
+    loop {
+        let (queued, handles) = {
+            let mut state = lock();
+            (
+                std::mem::take(&mut state.queue),
+                std::mem::take(&mut state.workers),
+            )
+        };
+        if queued.is_empty() && handles.is_empty() {
+            break;
+        }
+        // Dropped outside the lock: a queued job owns a `WorkerEnd` whose `Drop` posts to the mailbox and wakes the loop, neither of which may run while this mutex is held.
+        drop(queued);
+        POOL.work_ready.notify_all();
+        for handle in handles {
+            let _ = handle.join();
+        }
     }
     lock().shutdown = false;
 }
+
+#[cfg(test)]
+#[path = "native_test.rs"]
+mod tests;

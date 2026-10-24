@@ -15,7 +15,7 @@ use super::HostServices;
 use crate::app::App;
 use crate::tree::HotTree;
 use platform_core::guest::{GuestResult, guest_call};
-pub use platform_core::guest::{loaded, unloading};
+pub use platform_core::guest::{loaded, quiesce, unloading};
 
 /// Every export the host resolves, as `field => symbol(arguments) -> output`, handed to the macro the caller names. Each runs [`guest`](crate::hot::guest)'s function of the same field name and returns a [`GuestResult`] of its output.
 #[doc(hidden)]
@@ -63,6 +63,7 @@ macro_rules! __hot_guest_api {
             install_services => _rsx_hot_install_services(services: $crate::hot::HostServices) -> ();
             loaded => _rsx_hot_loaded() -> ();
             unloading => _rsx_hot_unloading() -> ();
+            quiesce => _rsx_hot_quiesce() -> ();
         }
     };
 }

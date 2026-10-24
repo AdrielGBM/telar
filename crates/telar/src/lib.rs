@@ -145,7 +145,7 @@ pub use runner::font_config::FontSetup;
 #[cfg(feature = "runtime")]
 pub use tree::{Frame, HotTree, LocalTree, UiTree};
 #[cfg(feature = "runtime")]
-pub use ui_tree::{DevAction, DevOverlay, OverlayResponse};
+pub use ui_tree::{BuildOutcome, DevAction, DevOverlay, OverlayResponse};
 // Named in the tree shims the `app!` macro exports, so it has to be reachable through the facade.
 #[cfg(feature = "runtime")]
 pub use ui_tree::SegmentNodeInfo;

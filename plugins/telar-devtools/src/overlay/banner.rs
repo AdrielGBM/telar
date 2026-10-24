@@ -1,8 +1,8 @@
-//! The banner over the app while it is not running what was last saved: a rebuild that failed, with the compiler's report, or a build that panicked, with what it said and where.
+//! The banner over the app while it is not running what was last saved: a rebuild that failed, with the compiler's report, a build that compiled but that the app would not load, with why, or a build that panicked, with what it said and where.
 
 use telar::{
-    Accessible, AlignItems, Border, Children, Container, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, Role, RwSignal, ShapeStyle, StyledContainer, Text, box_item, children, memo,
+    Accessible, AlignItems, Border, BuildOutcome, Children, Container, LayoutError, LayoutItem,
+    LayoutStyle, Reactive, Role, ShapeStyle, StyledContainer, Text, box_item, children, memo,
     use_theme_tokens,
 };
 use telar_components::{CodeSpan, CodeViewProps, TokenKind, code_view};
@@ -10,6 +10,7 @@ use telar_components::{CodeSpan, CodeViewProps, TokenKind, code_view};
 use super::{Model, mounted_while};
 use crate::strings::{
     self, APP_PANIC, APP_PANICKED, APP_PANICKED_HINT, BUILD_ERROR, BUILD_FAILED, BUILD_FAILED_HINT,
+    REFUSAL_REASON, RELOAD_REFUSED, RELOAD_REFUSED_HINT,
 };
 use crate::workbench::{WORKBENCH_GRID, use_workbench_tokens, workbench_card, workbench_muted};
 
@@ -19,23 +20,49 @@ const LOCATION_ARROW: &str = "--> ";
 /// One report the banner can carry, and the words that say which kind it is.
 #[derive(Clone, Copy)]
 struct Report {
-    text: RwSignal<Option<String>>,
+    model: Model,
+    read: fn(Model) -> Option<String>,
     title: &'static str,
     hint: &'static str,
     label: &'static str,
 }
 
+impl Report {
+    fn text(self) -> Option<String> {
+        (self.read)(self.model)
+    }
+}
+
 /// The panic first: while there is one, nothing of the app is running at all.
-fn reports(model: Model) -> [Report; 2] {
+fn reports(model: Model) -> [Report; 3] {
     [
         Report {
-            text: model.app_panic,
+            model,
+            read: |model| model.app_panic.get(),
             title: APP_PANICKED,
             hint: APP_PANICKED_HINT,
             label: APP_PANIC,
         },
         Report {
-            text: model.build_error,
+            model,
+            read: |model| {
+                model.build.with(|build| match build {
+                    BuildOutcome::Refused(reason) => Some(reason.clone()),
+                    _ => None,
+                })
+            },
+            title: RELOAD_REFUSED,
+            hint: RELOAD_REFUSED_HINT,
+            label: REFUSAL_REASON,
+        },
+        Report {
+            model,
+            read: |model| {
+                model.build.with(|build| match build {
+                    BuildOutcome::Failed(report) => Some(report.clone()),
+                    _ => None,
+                })
+            },
             title: BUILD_FAILED,
             hint: BUILD_FAILED_HINT,
             label: BUILD_ERROR,
@@ -66,9 +93,7 @@ pub(super) fn beside_drawer(model: Model) -> Result<Box<dyn LayoutItem>, LayoutE
 }
 
 fn failed(model: Model) -> bool {
-    reports(model)
-        .iter()
-        .any(|report| report.text.with(Option::is_some))
+    reports(model).iter().any(|report| report.text().is_some())
 }
 
 fn cards(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -77,7 +102,7 @@ fn cards(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         .map(|kind| {
             mounted_while(
                 LayoutStyle::new(),
-                move || kind.text.with(Option::is_some),
+                move || kind.text().is_some(),
                 move || card(kind),
             )
         })
@@ -106,7 +131,7 @@ fn card(kind: Report) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .gap(WORKBENCH_GRID),
         children![title, hint],
     )?;
-    let code = move || kind.text.get().unwrap_or_default();
+    let code = move || kind.text().unwrap_or_default();
     let marked = memo(move || diagnostics(&code()));
     let report = code_view(
         CodeViewProps::props()

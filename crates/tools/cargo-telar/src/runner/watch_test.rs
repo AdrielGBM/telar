@@ -562,3 +562,248 @@ fn every_session_draws_its_own_token() {
     assert!(a.bytes().all(|b| b.is_ascii_hexdigit()));
     assert_ne!(a, b);
 }
+
+const LIBRARY: &str = "/t/libapp.so";
+
+fn reloads() -> (mpsc::Sender<Heard>, Reloads) {
+    let (heard_tx, heard) = mpsc::channel();
+    (heard_tx, Reloads::new(heard))
+}
+
+fn reply(library: &str, outcome: HotOutcome) -> Heard {
+    Heard::Reply(HotReply {
+        library: library.to_owned(),
+        outcome,
+    })
+}
+
+#[test]
+fn a_reload_is_called_loaded_only_once_the_app_says_so() {
+    let (heard_tx, mut reloads) = reloads();
+    let now = Instant::now();
+    heard_tx.send(Heard::AnswersReloads).unwrap();
+    reloads.sent(LIBRARY, now);
+    assert_eq!(
+        reloads.settle(now),
+        [],
+        "nothing is claimed before the app answers"
+    );
+
+    heard_tx.send(reply(LIBRARY, HotOutcome::Loaded)).unwrap();
+    let outcomes = reloads.settle(now);
+    assert_eq!(outcomes, [ReloadOutcome::Answered(HotOutcome::Loaded)]);
+    assert_eq!(outcomes[0].message(), "Hot reloaded.");
+    assert_eq!(
+        reloads.settle(now + REPLY_TIMEOUT),
+        [],
+        "an answered reload is settled"
+    );
+}
+
+#[test]
+fn a_refused_reload_is_said_with_the_app_s_reason() {
+    let (heard_tx, mut reloads) = reloads();
+    let now = Instant::now();
+    reloads.sent(LIBRARY, now);
+    let reason =
+        "/t/libapp.so: it was built against another telar than this host: restart the session";
+    heard_tx
+        .send(reply(LIBRARY, HotOutcome::Refused(reason.to_owned())))
+        .unwrap();
+    let outcomes = reloads.settle(now);
+    let message = outcomes[0].message();
+    assert!(!message.contains("Hot reloaded"), "{message}");
+    assert!(message.contains("refused"), "{message}");
+    assert!(message.ends_with(reason), "{message}");
+}
+
+#[test]
+fn a_reload_whose_app_panicked_as_it_started_is_said_to_have_loaded_and_panicked() {
+    let (heard_tx, mut reloads) = reloads();
+    let now = Instant::now();
+    reloads.sent(LIBRARY, now);
+    let report = "panicked at src/app.rs:4:9:\nthe app's setup could not find its assets";
+    heard_tx
+        .send(reply(LIBRARY, HotOutcome::Panicked(report.to_owned())))
+        .unwrap();
+    let outcomes = reloads.settle(now);
+    assert_eq!(
+        outcomes,
+        [ReloadOutcome::Answered(HotOutcome::Panicked(
+            report.to_owned()
+        ))]
+    );
+    let message = outcomes[0].message();
+    assert!(!message.contains("Hot reloaded"), "{message}");
+    assert!(
+        message.contains("loaded, but the app panicked while starting"),
+        "{message}"
+    );
+    assert!(message.ends_with(report), "{message}");
+    assert_eq!(reloads.settle(now + REPLY_TIMEOUT), [], "it is answered");
+}
+
+#[test]
+fn a_reload_left_unanswered_is_said_to_be_once_the_wait_is_over_and_a_late_answer_still_counts() {
+    let (heard_tx, mut reloads) = reloads();
+    let now = Instant::now();
+    heard_tx.send(Heard::AnswersReloads).unwrap();
+    reloads.sent(LIBRARY, now);
+    assert_eq!(reloads.settle(now + REPLY_TIMEOUT / 2), []);
+    let outcomes = reloads.settle(now + REPLY_TIMEOUT);
+    assert_eq!(outcomes, [ReloadOutcome::Unanswered { app_answers: true }]);
+    assert!(!outcomes[0].message().contains("Hot reloaded"));
+    assert_eq!(reloads.settle(now + REPLY_TIMEOUT), [], "said once");
+
+    heard_tx.send(reply(LIBRARY, HotOutcome::Loaded)).unwrap();
+    assert_eq!(
+        reloads.settle(now + REPLY_TIMEOUT * 2),
+        [ReloadOutcome::Answered(HotOutcome::Loaded)]
+    );
+}
+
+/// A late answer settles the reload it names, so the reload sent after it is still waited on, and still said to be unanswered if it is.
+#[test]
+fn a_late_answer_settles_the_reload_it_names_and_not_the_next() {
+    let (heard_tx, mut reloads) = reloads();
+    let start = Instant::now();
+    heard_tx.send(Heard::AnswersReloads).unwrap();
+    reloads.sent("/t/first/libapp.so", start);
+    assert_eq!(
+        reloads.settle(start + REPLY_TIMEOUT),
+        [ReloadOutcome::Unanswered { app_answers: true }]
+    );
+
+    let next = start + REPLY_TIMEOUT * 2;
+    reloads.sent("/t/second/libapp.so", next);
+    heard_tx
+        .send(reply("/t/first/libapp.so", HotOutcome::Loaded))
+        .unwrap();
+    assert_eq!(
+        reloads.settle(next),
+        [ReloadOutcome::Answered(HotOutcome::Loaded)]
+    );
+    assert_eq!(
+        reloads.settle(next + REPLY_TIMEOUT),
+        [ReloadOutcome::Unanswered { app_answers: true }],
+        "the second reload is still unanswered"
+    );
+}
+
+/// Every rebuild leaves its library at the same path, so the answers to it settle the reloads in the order they were sent.
+#[test]
+fn answers_naming_the_same_library_settle_the_oldest_reload_first() {
+    let (heard_tx, mut reloads) = reloads();
+    let start = Instant::now();
+    heard_tx.send(Heard::AnswersReloads).unwrap();
+    reloads.sent(LIBRARY, start);
+    reloads.settle(start + REPLY_TIMEOUT);
+
+    let next = start + REPLY_TIMEOUT * 2;
+    reloads.sent(LIBRARY, next);
+    heard_tx.send(reply(LIBRARY, HotOutcome::Loaded)).unwrap();
+    reloads.settle(next);
+    assert_eq!(
+        reloads.settle(next + REPLY_TIMEOUT),
+        [ReloadOutcome::Unanswered { app_answers: true }],
+        "the late answer was the first reload's"
+    );
+}
+
+/// An app built before reload answers never says it answers, so its silence is not news about the reload.
+#[test]
+fn an_app_that_never_said_it_answers_is_not_waited_on_as_if_it_had() {
+    let (_heard_tx, mut reloads) = reloads();
+    let now = Instant::now();
+    reloads.sent(LIBRARY, now);
+    let outcomes = reloads.settle(now + REPLY_TIMEOUT);
+    assert_eq!(outcomes, [ReloadOutcome::Unanswered { app_answers: false }]);
+    assert!(
+        outcomes[0].message().contains("does not say"),
+        "{}",
+        outcomes[0].message()
+    );
+    assert_eq!(reloads.finish(), [], "nothing is left waiting on it");
+}
+
+#[test]
+fn a_reload_the_app_closed_on_is_said_to_be_unanswered_at_once() {
+    let (heard_tx, mut reloads) = reloads();
+    let now = Instant::now();
+    reloads.sent(LIBRARY, now);
+    drop(heard_tx);
+    let outcomes = reloads.settle(now);
+    assert_eq!(outcomes, [ReloadOutcome::ChannelClosed]);
+    assert!(!outcomes[0].message().contains("Hot reloaded"));
+}
+
+#[test]
+fn an_app_that_exits_leaves_its_unanswered_reload_unanswered() {
+    let (heard_tx, mut reloads) = reloads();
+    reloads.sent(LIBRARY, Instant::now());
+    heard_tx.send(reply(LIBRARY, HotOutcome::Loaded)).unwrap();
+    reloads.sent(LIBRARY, Instant::now());
+    assert_eq!(
+        reloads.finish(),
+        [
+            ReloadOutcome::Answered(HotOutcome::Loaded),
+            ReloadOutcome::ChannelClosed
+        ]
+    );
+    assert_eq!(reloads.finish(), [], "nothing was sent since");
+}
+
+#[test]
+fn only_the_lines_of_this_version_of_the_answers_are_heard() {
+    assert_eq!(heard_from(HOT_REPLIES_LINE), Some(Heard::AnswersReloads));
+    assert_eq!(
+        heard_from("loaded:/t/libapp.so"),
+        Some(reply(LIBRARY, HotOutcome::Loaded))
+    );
+    assert_eq!(heard_from("replies:1"), None);
+    assert_eq!(heard_from("loaded"), None);
+    assert_eq!(heard_from("hot:/t/libapp.so"), None);
+}
+
+/// What the app writes back on the adopted connection reaches the loop, framed as the app frames it, and settles the reload it names.
+#[test]
+fn the_app_s_answer_to_a_reload_comes_back_over_the_authenticated_channel() {
+    use std::io::Write;
+    let mut channel = HotChannel::bind();
+    let impostor = connect_to(&channel, Some("guess"));
+    let token = channel.token.clone();
+    let mut app = connect_to(&channel, Some(&token));
+    app.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    writeln!(app, "{HOT_REPLIES_LINE}").unwrap();
+    assert!(adopted_within(&mut channel, Duration::from_secs(5)));
+    drop(impostor);
+
+    channel.notify_hot_reload(LIBRARY);
+    let mut reader = BufReader::new(app.try_clone().unwrap());
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    assert_eq!(line, "hot:/t/libapp.so\n");
+    let report = "panicked at src/app.rs:4:9:\nthe app's setup could not find its assets";
+    let answer = HotReply {
+        library: LIBRARY.to_owned(),
+        outcome: HotOutcome::Panicked(report.to_owned()),
+    };
+    writeln!(app, "{}", answer.line()).unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let outcomes = loop {
+        let outcomes = channel.reloads.settle(Instant::now());
+        if !outcomes.is_empty() || Instant::now() >= deadline {
+            break outcomes;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(
+        outcomes,
+        [ReloadOutcome::Answered(HotOutcome::Panicked(
+            report.to_owned()
+        ))]
+    );
+    assert!(channel.reloads.app_answers);
+    assert!(channel.reloads.pending.is_empty(), "the reload is settled");
+}

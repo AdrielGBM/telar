@@ -9,9 +9,9 @@ mod stats;
 use std::cell::Ref;
 
 use telar::{
-    Container, DevAction, Direction, DrawCommand, Event, EventResult, LayoutError, LayoutItem,
-    LayoutStyle, OverlayResponse, RwSignal, Size, SizeDimension, SurfaceCanvas, box_item, focus,
-    interactive_rects, signal,
+    BuildOutcome, Container, DevAction, Direction, DrawCommand, Event, EventResult, LayoutError,
+    LayoutItem, LayoutStyle, OverlayResponse, RwSignal, Size, SizeDimension, SurfaceCanvas,
+    box_item, focus, interactive_rects, signal,
 };
 
 use crate::inspect::{InspectSource, Inspection};
@@ -34,7 +34,7 @@ pub(crate) enum DrawerTab {
 pub(crate) struct Model {
     pub reading: RwSignal<Reading>,
     pub renderer: RwSignal<Option<String>>,
-    pub build_error: RwSignal<Option<String>>,
+    pub build: RwSignal<BuildOutcome>,
     pub app_panic: RwSignal<Option<String>>,
     pub panel_open: RwSignal<bool>,
     pub inspector_open: RwSignal<bool>,
@@ -48,7 +48,7 @@ impl Model {
         Self {
             reading: signal(Reading::default()),
             renderer: signal(None),
-            build_error: signal(None),
+            build: signal(BuildOutcome::Loaded),
             app_panic: signal(None),
             panel_open: signal(false),
             inspector_open: signal(false),
@@ -109,9 +109,9 @@ impl Overlay {
             .set_if_changed(Some(renderer.to_owned()));
     }
 
-    pub fn set_build_error(&self, error: Option<String>) {
+    pub fn set_build_outcome(&self, outcome: BuildOutcome) {
         let _entered = self.canvas.enter();
-        self.model.build_error.set_if_changed(error);
+        self.model.build.set_if_changed(outcome);
     }
 
     pub fn set_app_panic(&self, panic: Option<String>) {

@@ -1,8 +1,8 @@
 use telar::inspect::a11y::Severity;
 use telar::testing::{key_with, press, release};
 use telar::{
-    AccessAudit, AccessRule, AccessViolation, Color, DevOverlay, DrawCommand, Insets, Key,
-    ModifiersState, Rect, SegmentNodeInfo, Size,
+    AccessAudit, AccessRule, AccessViolation, BuildOutcome, Color, DevOverlay, DrawCommand, Insets,
+    Key, ModifiersState, Rect, SegmentNodeInfo, Size,
 };
 
 use crate::DevTools;
@@ -120,7 +120,7 @@ fn the_overlay_passes_its_own_accessibility_checks() {
         )]);
         assert_passes(&mut dev, window, "the accessibility tab");
 
-        dev.set_build_error(Some(ERROR.to_owned()));
+        dev.set_build_outcome(BuildOutcome::Failed(ERROR.to_owned()));
         assert_passes(&mut dev, window, "the build-error banner");
     }
 }

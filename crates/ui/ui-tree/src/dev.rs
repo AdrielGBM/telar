@@ -31,6 +31,18 @@ impl OverlayResponse {
     };
 }
 
+/// What became of the last build `cargo telar dev` made; each one replaces what the one before it came to.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum BuildOutcome {
+    /// The app runs it, or nothing was built since the app started.
+    #[default]
+    Loaded,
+    /// The compiler's report, while the app keeps running the last build that compiled.
+    Failed(String),
+    /// Why the app would not load a build that compiled, while it keeps running the one before.
+    Refused(String),
+}
+
 /// The dev overlay seam: `()` in a release build, the inspector and FPS counter in a dev one.
 pub trait DevOverlay: Default + 'static {
     fn on_frame<'a>(
@@ -74,14 +86,13 @@ pub trait DevOverlay: Default + 'static {
         let _ = violations;
     }
 
-    /// Sets (or clears with `None`) the build error banner shown over the app.
-    fn set_build_error(&mut self, error: Option<String>) {
-        let _ = error;
+    fn set_build_outcome(&mut self, outcome: BuildOutcome) {
+        let _ = outcome;
     }
 
     /// Sets (or clears with `None`) the report of a panic that stopped the app, which then runs nothing until a rebuild loads. An overlay with no way of its own to say so shows it as it shows a failed build.
     fn set_app_panic(&mut self, panic: Option<String>) {
-        self.set_build_error(panic);
+        self.set_build_outcome(panic.map_or(BuildOutcome::Loaded, BuildOutcome::Failed));
     }
 
     /// Names the backend that is now drawing, so the overlay can say which one `ctrl+shift+b` just switched to.

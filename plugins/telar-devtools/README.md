@@ -1,6 +1,6 @@
 # telar-devtools
 
-The in-app devtools overlay `cargo telar dev` draws over a running Telar application: an FPS badge and panel, the inspection panels and the build-error banner.
+The in-app devtools overlay `cargo telar dev` draws over a running Telar application: an FPS badge and panel, the inspection panels and the banner that reports a failed build, a refused reload or a panic.
 
 It is built from `telar-components` in the workbench theme, on a window-sized surface of its own, so it never takes the application's theme, direction or control size, and it survives every hot reload and failed build. Ctrl+Shift+D opens the panel (frame rate, frame time, component count and the renderer drawing), Ctrl+Shift+I the inspector, and Ctrl+Shift+B switches the renderer; the application hears those chords too.
 

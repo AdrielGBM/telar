@@ -12,6 +12,8 @@ crate-type = ["cdylib"]
 telar = { path = "../../..", default-features = false, features = ["dev", "shaper"] }
 telar-components = { version = "0.2.2", path = "../../../../../plugins/telar-components" }
 telar-icons = { version = "0.2.2", path = "../../../../../plugins/telar-icons" }
+# Where a guest registers what joins its threads before its host unmaps it.
+telar-reactive-local = { version = "0.2.2", path = "../../../../reactive/reactive-local" }
 # The seam a face that arrives while the app runs goes through, as `telar-dynamic`'s font decoder does.
 telar-renderer-text = { version = "0.2.2", path = "../../../../renderer/renderer-text" }
 # A `.rsx` library whose card draws an SVG and an icon it baked into `.telar/assets.rs`, as an app's markup does.

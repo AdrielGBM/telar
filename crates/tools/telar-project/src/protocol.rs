@@ -30,6 +30,96 @@ pub const GOTO_PREFIX: &str = "goto:";
 /// A whole hot-reload channel line, and a workshop channel request, asking the running app to bring its window forward where it is.
 pub const FOCUS_LINE: &str = "focus";
 
+/// The line the app sends right after its token when it answers each [`HOT_RELOAD_PREFIX`] line with one [`HotReply`]; a `cargo telar` that does not know this version treats the app as one that does not answer.
+pub const HOT_REPLIES_LINE: &str = "replies:2";
+
+pub const HOT_LOADED_PREFIX: &str = "loaded:";
+
+pub const HOT_PANICKED_PREFIX: &str = "panicked:";
+
+pub const HOT_REFUSED_PREFIX: &str = "refused:";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HotReply {
+    /// The path exactly as the reload line named it, so `cargo telar` can tell which reload this answers.
+    pub library: String,
+    pub outcome: HotOutcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HotOutcome {
+    Loaded,
+    /// The panic's report: nothing of the app runs until a later build loads.
+    Panicked(String),
+    /// Why, while the app keeps running the build before.
+    Refused(String),
+}
+
+impl HotReply {
+    /// The prefix, then the library and any report as [`escape_lines`] fields split by a tab, which escaping leaves in neither.
+    pub fn line(&self) -> String {
+        let library = escape_lines(&self.library);
+        match &self.outcome {
+            HotOutcome::Loaded => format!("{HOT_LOADED_PREFIX}{library}"),
+            HotOutcome::Panicked(report) => {
+                format!("{HOT_PANICKED_PREFIX}{library}\t{}", escape_lines(report))
+            }
+            HotOutcome::Refused(reason) => {
+                format!("{HOT_REFUSED_PREFIX}{library}\t{}", escape_lines(reason))
+            }
+        }
+    }
+
+    pub fn parse(line: &str) -> Option<Self> {
+        let (library, outcome) = if let Some(library) = line.strip_prefix(HOT_LOADED_PREFIX) {
+            (library, HotOutcome::Loaded)
+        } else if let Some(fields) = line.strip_prefix(HOT_PANICKED_PREFIX) {
+            let (library, report) = fields.split_once('\t')?;
+            (library, HotOutcome::Panicked(unescape_lines(report)))
+        } else {
+            let (library, reason) = line.strip_prefix(HOT_REFUSED_PREFIX)?.split_once('\t')?;
+            (library, HotOutcome::Refused(unescape_lines(reason)))
+        };
+        (!library.contains('\t')).then(|| HotReply {
+            library: unescape_lines(library),
+            outcome,
+        })
+    }
+}
+
+/// `message` as one field of a channel line: backslashes doubled, line breaks and tabs written as `\n` and `\t`, carriage returns dropped. Escaped rather than replaced: a code frame is full of `|`, so a ` | ` separator would be cut apart at every gutter.
+pub fn escape_lines(message: &str) -> String {
+    // Backslashes first, or an escape already in the message would decode as a line break.
+    message
+        .replace('\\', "\\\\")
+        .replace('\n', "\\n")
+        .replace('\t', "\\t")
+        .replace('\r', "")
+}
+
+/// Undoes [`escape_lines`]. A trailing lone backslash cannot come from it and is passed through rather than dropped, so a malformed message is still shown.
+pub fn unescape_lines(message: &str) -> String {
+    let mut out = String::with_capacity(message.len());
+    let mut chars = message.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('\\') => out.push('\\'),
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
 /// The env var `cargo telar test` sets on the app it runs, which makes it test its previews instead of starting.
 pub const TEST_VAR: &str = "TELAR_TEST";
 

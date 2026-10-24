@@ -10,7 +10,7 @@ use crate::runtime::{SurfaceEnterGuard, set_current_surface, set_surface_enter_h
 // `TASK_WAKER` and the pool are process-global while the registries are per-thread, so every test here serialises on this.
 static SERIAL: Mutex<()> = Mutex::new(());
 
-fn serial() -> std::sync::MutexGuard<'static, ()> {
+pub(in crate::task) fn serial() -> std::sync::MutexGuard<'static, ()> {
     SERIAL.lock().unwrap_or_else(|e| e.into_inner())
 }
 

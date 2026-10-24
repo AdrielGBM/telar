@@ -1,4 +1,4 @@
-//! The end-to-end proof that a panic in a hot-reloaded app stops at the boundary: `tests/fixtures/hot-panic-guest`, a cdylib carrying its own copy of std whose press handler panics, is loaded with `load_hot_app` and pressed, and the host must get back what panicked and where, never call into that guest again, load the next build, and still be running to say so; and that a guest dropped after it mounted, drove and painted a tree is unmapped, so reload after reload leaves one build mapped and none of the memory a build held, while a tree kept past its app keeps its guest mapped; and that a face a guest adds while it runs reaches the host that draws it and outlives the guest; and that a guest shows its shortcuts for the keyboard its host matches. It compiles the fixture against this checkout into its own target directory under `target/tmp`, so it is ignored by default: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
+//! End-to-end tests of guests loaded from `tests/fixtures/hot-panic-guest`, a cdylib with its own copy of std, which they build under `target/tmp`: run them with `cargo test -p telar --features dev --test hot_panic -- --ignored`.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -229,6 +229,69 @@ fn a_hot_guest_shows_shortcuts_for_the_keyboard_its_host_matches() {
     }
 }
 
+/// A guest that panicked is never told it is unloading, yet a task it left running is still code of its library: the host joins it before it closes the library under it.
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+#[cfg(target_os = "linux")]
+fn a_hot_guest_that_panicked_with_a_task_running_is_unmapped_once_the_task_is_joined() {
+    const GUEST_TASK_RUNS_FOR: std::time::Duration = std::time::Duration::from_millis(300);
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    load_the_host_fonts();
+    // Driven from a thread that then ends: spawning a thread touches std's spawn-hook thread-local, whose destructor pins the guest's library to the thread that spawned until it exits.
+    let waited = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let mut app = load_hot_app(&library).expect("the guest loads");
+                let mut tree = app.mount();
+                let pressed = std::time::Instant::now();
+                tree.on_event(&auxiliary_press());
+                assert!(app.take_panic().is_some(), "precondition: it panicked");
+                drop(tree);
+                assert_eq!(mapped_guests(), 1, "precondition: it is mapped");
+                drop(app);
+                pressed.elapsed()
+            })
+            .join()
+            .expect("the host's thread runs to its end")
+    });
+    assert!(
+        waited >= GUEST_TASK_RUNS_FOR,
+        "its task ran to its end before the library was closed"
+    );
+    // glibc only unmaps a library left pinned at its `dlclose` on a later `dlclose`, which the next reload's is.
+    drop(load_hot_app(&library).expect("the next build loads"));
+    assert_eq!(mapped_guests(), 0, "and then the library is unmapped");
+}
+
+/// A guest whose threads could not be joined may still be running its code, so it stays mapped for the rest of the process, and the host keeps running.
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+#[cfg(target_os = "linux")]
+fn a_hot_guest_that_cannot_be_quiesced_stays_mapped() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    load_the_host_fonts();
+    let mut app = load_hot_app(&library).expect("the guest loads");
+    let mut tree = app.mount();
+    assert_eq!(
+        tree.on_event(&release()),
+        EventResult::Handled,
+        "precondition: the guest leaves a worker it cannot stop"
+    );
+    assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+    drop(tree);
+    drop(app);
+    assert_eq!(mapped_guests(), 1, "its library stays mapped");
+    KEPT_MAPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+    let mut next = load_hot_app(&library).expect("the next build loads");
+    assert!(
+        runs_a_frame(&mut next),
+        "the host and the next build run on"
+    );
+}
+
 /// Loads the guest, mounts and lays out its tree, hands it an event it handles, runs a frame and paints it, then drops both the way the runner does on a reload.
 #[cfg(target_os = "linux")]
 fn run_a_session(library: &Path) {
@@ -287,14 +350,25 @@ fn heap_in_use() -> usize {
     info.uordblks + info.hblkhd
 }
 
+/// Guests a test left mapped on purpose, for the rest of the process, which every other test's count leaves out.
+#[cfg(target_os = "linux")]
+static KEPT_MAPPED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 #[cfg(target_os = "linux")]
 fn mapped_guests() -> usize {
     let maps = std::fs::read_to_string("/proc/self/maps").expect("read the process maps");
-    maps.lines()
+    let mapped = maps
+        .lines()
         .filter(|line| line.contains("/.guest-"))
         .filter_map(|line| line.split_whitespace().nth(2))
         .filter(|start| *start == "00000000")
-        .count()
+        .count();
+    let kept = KEPT_MAPPED.load(std::sync::atomic::Ordering::Relaxed);
+    assert!(
+        mapped >= kept,
+        "{kept} guests were kept mapped on purpose, but only {mapped} are mapped"
+    );
+    mapped - kept
 }
 
 /// Whether the guest's frame ran: it asks for a redraw every time it does.
@@ -327,6 +401,26 @@ fn secondary_press() -> Event {
         x: 10.0,
         y: 10.0,
         button: PointerButton::Secondary,
+        source: PointerSource::Mouse,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn auxiliary_press() -> Event {
+    Event::PointerPressed {
+        x: 10.0,
+        y: 10.0,
+        button: PointerButton::Auxiliary,
+        source: PointerSource::Mouse,
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn release() -> Event {
+    Event::PointerReleased {
+        x: 10.0,
+        y: 10.0,
+        button: PointerButton::Primary,
         source: PointerSource::Mouse,
     }
 }

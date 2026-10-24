@@ -716,3 +716,66 @@ fn a_guest_of_this_process_is_handed_no_font_database_to_defer_to() {
     assert_eq!(FONTS_HANDED.get(), Some(false));
     drop(embed);
 }
+
+#[cfg(all(feature = "host", unix))]
+thread_local! {
+    static LIFE: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(all(feature = "host", unix))]
+fn live(call: &'static str) -> GuestResult<()> {
+    LIFE.with_borrow_mut(|calls| calls.push(call));
+    Ok(())
+}
+
+/// Held with this process as its library, so dropping it runs the unload path a built library's does.
+#[cfg(all(feature = "host", unix))]
+fn embedded_as_loaded(
+    create: unsafe fn(&[String]) -> GuestResult<*mut EmbedInstance>,
+) -> Result<LoadedEmbed, GuestPanic> {
+    LIFE.with_borrow_mut(Vec::clear);
+    let this_process = libloading::Library::from(libloading::os::unix::Library::this());
+    LoadedEmbed::start(
+        EmbedVTable {
+            create,
+            loaded: || live("loaded"),
+            unloading: || live("unloading"),
+            quiesce: || live("quiesce"),
+            defer_fonts: |_| Ok(()),
+            .._rsx_embed_vtable
+        },
+        &[],
+        Some(this_process),
+    )
+}
+
+#[cfg(all(feature = "host", unix))]
+#[test]
+fn a_guest_is_destroyed_released_then_quiesced_before_its_library_is_closed() {
+    APPS_DROPPED.with(|dropped| dropped.set(0));
+    drop(embedded_as_loaded(create_fixed).expect("the guest loads"));
+    assert_eq!(APPS_DROPPED.with(std::cell::Cell::get), 1);
+    assert_eq!(LIFE.take(), ["loaded", "unloading", "quiesce"]);
+}
+
+/// Its worker threads may still be running its code, so the one call a guest that panicked still gets is the one that joins them.
+#[cfg(all(feature = "host", unix))]
+#[test]
+fn a_guest_that_panicked_is_still_quiesced_before_its_library_is_closed() {
+    APPS_DROPPED.with(|dropped| dropped.set(0));
+    let broken = embedded_as_loaded(create_panicking).expect("the guest loads");
+    broken.relayout(40.0, 20.0);
+    broken.on_event(&press());
+    assert!(broken.panic().is_some(), "precondition: it panicked");
+    drop(broken);
+    assert_eq!(APPS_DROPPED.with(std::cell::Cell::get), 0);
+    assert_eq!(LIFE.take(), ["loaded", "quiesce"]);
+}
+
+#[cfg(all(feature = "host", unix))]
+#[test]
+fn a_guest_whose_build_panics_is_still_quiesced_before_its_library_is_closed() {
+    let refused = embedded_as_loaded(create_nothing);
+    assert!(refused.is_err(), "precondition: it does not load");
+    assert_eq!(LIFE.take(), ["loaded", "quiesce"]);
+}

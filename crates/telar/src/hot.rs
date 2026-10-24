@@ -65,13 +65,16 @@ impl GuestImage {
 }
 
 impl Drop for GuestImage {
-    // A guest that panicked is not told: `Guest::call` refuses it, since the unwind may have left its runtime half torn down.
     fn drop(&mut self) {
         let Some(lib) = self.lib.take() else {
             return;
         };
-        self.call(|exports| unsafe { (exports.unloading)() });
-        drop(lib);
+        let exports = self.exports;
+        self.guest.unload(
+            lib,
+            || unsafe { (exports.unloading)() },
+            || unsafe { (exports.quiesce)() },
+        );
     }
 }
 
@@ -410,8 +413,12 @@ impl crate::app_runtime::AppRuntime for HotApp {
     }
 }
 
-/// The library a build left at `path`, opened and started. An error means the library could not be driven at all; a panic while it starts is recorded in the [`HotApp`] instead.
+/// The library a build left at `path`, opened and started. An error means the library could not be driven at all, and names the library and why; a panic while it starts is recorded in the [`HotApp`] instead.
 pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error::Error>> {
+    open_hot_app(path).map_err(|why| format!("{}: {why}", path.display()).into())
+}
+
+fn open_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error::Error>> {
     let lib = platform_core::guest::open_unique(path)?;
     let abi = export::<unsafe extern "Rust" fn() -> u32>(&lib, b"_rsx_hot_abi\0")
         .map(|abi| unsafe { abi() })
@@ -419,7 +426,7 @@ pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error
     let layout = export::<unsafe extern "Rust" fn() -> u64>(&lib, b"_rsx_hot_layout\0")
         .map(|layout| BoundaryLayout(unsafe { layout() }))
         .ok();
-    check_guest(abi, layout).map_err(|why| format!("{}: {why}", path.display()))?;
+    check_guest(abi, layout)?;
     let exports = GuestExports::resolve(&lib)?;
     let create = export::<CreateApp>(&lib, b"_rsx_hot_create_app\0")?;
     Ok(HotApp::start(exports, create, Some(lib)))
@@ -506,10 +513,13 @@ fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
     None
 }
 
-#[cfg(feature = "dev")]
+#[cfg(feature = "desktop-bare")]
 use telar_project::protocol::{
-    BUILD_ERROR_PREFIX, FOCUS_LINE, GOTO_PREFIX, HOT_RELOAD_PREFIX, HOT_TOKEN_VAR,
+    BUILD_ERROR_PREFIX, FOCUS_LINE, GOTO_PREFIX, HOT_RELOAD_PREFIX, HOT_REPLIES_LINE,
+    HOT_TOKEN_VAR, unescape_lines,
 };
+#[cfg(feature = "dev")]
+pub(crate) use telar_project::protocol::{HotOutcome, HotReply};
 
 #[cfg(feature = "dev")]
 /// What `cargo telar dev` sends the running app: a rebuild landed, a build failed, a location to open, or a request to come forward.
@@ -524,7 +534,7 @@ pub enum HotEvent {
 }
 
 /// The event one line of the channel carries, or `None` for a line with a prefix this host does not know.
-#[cfg(feature = "dev")]
+#[cfg(feature = "desktop-bare")]
 fn hot_event(line: &str) -> Option<HotEvent> {
     if let Some(path) = line.strip_prefix(HOT_RELOAD_PREFIX) {
         Some(HotEvent::Reload(std::path::PathBuf::from(path)))
@@ -538,16 +548,43 @@ fn hot_event(line: &str) -> Option<HotEvent> {
     }
 }
 
-/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via `TELAR_HOT_PORT`, and its secret via [`HOT_TOKEN_VAR`]) and forwards line-delimited hot events. TCP instead of a unix socket so the same code path works on non-Unix hosts.
 #[cfg(feature = "dev")]
-pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
+pub(crate) struct HotLink {
+    pub(crate) events: std::sync::mpsc::Receiver<HotEvent>,
+    pub(crate) replies: HotReplies,
+}
+
+/// Sending never blocks, and a reply with no channel left to reach is dropped.
+#[cfg(feature = "dev")]
+pub(crate) struct HotReplies(std::sync::mpsc::Sender<HotReply>);
+
+#[cfg(feature = "dev")]
+impl HotReplies {
+    #[cfg(any(feature = "desktop-bare", test))]
+    pub(crate) fn new(sender: std::sync::mpsc::Sender<HotReply>) -> Self {
+        Self(sender)
+    }
+
+    pub(crate) fn send(&self, reply: HotReply) {
+        let _ = self.0.send(reply);
+    }
+}
+
+/// Connects to the cargo-telar TCP loopback channel (it binds the port and passes it via `TELAR_HOT_PORT`, and its secret via [`HOT_TOKEN_VAR`]), forwards line-delimited hot events and writes back what is sent through [`HotLink::replies`]. TCP instead of a unix socket so the same code path works on non-Unix hosts.
+#[cfg(feature = "desktop-bare")]
+pub(crate) fn listen_hot_reload(port: u16) -> HotLink {
     use std::io::BufRead;
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, events) = std::sync::mpsc::channel();
+    let (reply_tx, replies) = std::sync::mpsc::channel();
+    let link = HotLink {
+        events,
+        replies: HotReplies::new(reply_tx),
+    };
     let Ok(token) = std::env::var(HOT_TOKEN_VAR) else {
         tracing::error!(
             "hot reload is off: {HOT_TOKEN_VAR} is not set, so the channel cargo-telar opened would not take this app"
         );
-        return rx;
+        return link;
     };
     std::thread::Builder::new()
         .name("telar-hot-reload".to_string())
@@ -559,6 +596,12 @@ pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
                     return;
                 }
             };
+            match stream.try_clone() {
+                Ok(writer) => answer_reloads(writer, replies),
+                Err(e) => tracing::error!(
+                    "cargo-telar will not hear whether a reload loads: the hot reload channel could not be shared: {e}"
+                ),
+            }
             let reader = std::io::BufReader::new(stream);
             for line in reader.lines() {
                 let Ok(line) = line else { break };
@@ -575,11 +618,27 @@ pub fn listen_hot_reload(port: u16) -> std::sync::mpsc::Receiver<HotEvent> {
             }
         })
         .ok();
-    rx
+    link
 }
 
-/// The channel, with `token` already sent as its first line: cargo-telar adopts no connection that does not open with it.
-#[cfg(feature = "dev")]
+/// Writes each reply from a thread of its own, so a `cargo telar dev` that reads none, one built before replies, can fill the socket without ever stalling the app's loop.
+#[cfg(feature = "desktop-bare")]
+fn answer_reloads(mut stream: std::net::TcpStream, replies: std::sync::mpsc::Receiver<HotReply>) {
+    use std::io::Write;
+    std::thread::Builder::new()
+        .name("telar-hot-replies".to_string())
+        .spawn(move || {
+            for reply in replies {
+                if writeln!(stream, "{}", reply.line()).is_err() {
+                    break;
+                }
+            }
+        })
+        .ok();
+}
+
+/// The channel, opened with `token` and then [`HOT_REPLIES_LINE`]: cargo-telar adopts no connection that does not open with the token, and waits for replies only from an app that says it sends them.
+#[cfg(feature = "desktop-bare")]
 fn connect_hot_channel(port: u16, token: &str) -> std::io::Result<std::net::TcpStream> {
     use std::io::Write;
     let mut attempts = 0;
@@ -594,30 +653,8 @@ fn connect_hot_channel(port: u16, token: &str) -> std::io::Result<std::net::TcpS
             }
         }
     };
-    writeln!(stream, "{token}")?;
+    write!(stream, "{token}\n{HOT_REPLIES_LINE}\n")?;
     Ok(stream)
-}
-
-/// Undoes the escaping `cargo-telar` applies so a multi-line build error survives a protocol of one event per line. A trailing lone backslash cannot occur (the sender doubles them) and is passed through rather than dropped, so a malformed message is still shown.
-fn unescape_lines(message: &str) -> String {
-    let mut out = String::with_capacity(message.len());
-    let mut chars = message.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('\\') => out.push('\\'),
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-            None => out.push('\\'),
-        }
-    }
-    out
 }
 
 #[cfg(test)]

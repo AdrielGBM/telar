@@ -168,6 +168,57 @@ fn a_matching_layout_is_accepted_and_a_different_one_refused_with_what_to_do() {
     }
 }
 
+type Calls = std::rc::Rc<std::cell::RefCell<Vec<&'static str>>>;
+
+struct Mapping(Calls);
+
+impl Drop for Mapping {
+    fn drop(&mut self) {
+        self.0.borrow_mut().push("unmapped");
+    }
+}
+
+fn unload(guest: &Guest, quiesced: GuestResult<()>) -> Vec<&'static str> {
+    let calls = Calls::default();
+    guest.unload(
+        Mapping(calls.clone()),
+        || {
+            calls.borrow_mut().push("unloading");
+            Ok(())
+        },
+        || {
+            calls.borrow_mut().push("quiesce");
+            quiesced
+        },
+    );
+    calls.take()
+}
+
+#[test]
+fn a_guest_is_told_it_is_unloading_then_quiesced_then_unmapped() {
+    assert_eq!(
+        unload(&Guest::default(), Ok(())),
+        ["unloading", "quiesce", "unmapped"]
+    );
+}
+
+#[test]
+fn a_guest_that_panicked_is_only_quiesced_before_it_is_unmapped() {
+    let guest = Guest::default();
+    guest.call(|| guest_call(|| panic!("a press handler panicked")));
+    assert_eq!(unload(&guest, Ok(())), ["quiesce", "unmapped"]);
+}
+
+#[test]
+fn a_guest_that_cannot_be_quiesced_stays_mapped() {
+    let stuck = guest_call(|| panic!("a job would not stop"));
+    assert_eq!(
+        unload(&Guest::default(), stuck),
+        ["unloading", "quiesce"],
+        "a thread may still run its code"
+    );
+}
+
 #[cfg(all(feature = "dylib", not(target_arch = "wasm32")))]
 mod unique_copies {
     use super::super::*;

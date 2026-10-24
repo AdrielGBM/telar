@@ -16,6 +16,8 @@ static LEFT_TO_HOST: AtomicBool = AtomicBool::new(false);
 
 static UNLOADS: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
 
+static QUIESCES: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
+
 #[derive(Default)]
 struct Releases {
     state: Vec<fn()>,
@@ -112,6 +114,25 @@ pub fn release_guest() {
         }
     }
     drop(std::mem::take(&mut *unloads()));
+}
+
+/// Runs `join` when the host quiesces this copy right before unmapping it, even after a panic left the rest of the copy half torn down, so `join` may touch only poison-tolerant state and the host's waker; register a pool once here, and with [`on_unload`] too when its threads must also be joined before [`release_guest`] frees what their jobs reach. An ordinary copy is never unmapped, so there it registers nothing.
+pub fn on_quiesce(join: fn()) {
+    if LEFT_TO_HOST.load(Ordering::Relaxed) {
+        quiesces().push(join);
+    }
+}
+
+fn quiesces() -> std::sync::MutexGuard<'static, Vec<fn()>> {
+    QUIESCES.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// What a host calls last on a guest, right before it unmaps it, whether or not the guest panicked: runs every join handed to [`on_quiesce`], so no thread is left running the library's code, and frees their list, which as a static of the library would otherwise be left behind.
+pub fn quiesce() {
+    let joins = std::mem::take(&mut *quiesces());
+    for join in joins {
+        join();
+    }
 }
 
 /// Marks this copy of the runtime as a guest its host will unload: no thread-exit destructor is registered from now on, so what [`on_thread_exit`] is handed waits for [`release_guest`] instead, and what [`on_unload`] is handed is kept for it.

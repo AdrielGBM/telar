@@ -39,6 +39,9 @@ pub(crate) const PADDING: &str = "padding";
 pub(crate) const POSITION: &str = "position";
 pub(crate) const PROBLEMS: &str = "problems";
 pub(crate) const READER: &str = "reader";
+pub(crate) const REFUSAL_REASON: &str = "refusal_reason";
+pub(crate) const RELOAD_REFUSED: &str = "reload_refused";
+pub(crate) const RELOAD_REFUSED_HINT: &str = "reload_refused_hint";
 pub(crate) const RENDERER: &str = "renderer";
 pub(crate) const RENDERER_STARTING: &str = "renderer_starting";
 pub(crate) const RESIZE_DETAILS: &str = "resize_details";
@@ -100,6 +103,12 @@ static CATALOG: Catalog = Catalog {
         english!(POSITION, "Position"),
         english!(PROBLEMS, "Problems"),
         english!(READER, "Screen reader"),
+        english!(REFUSAL_REASON, "Refusal reason"),
+        english!(RELOAD_REFUSED, "Reload refused"),
+        english!(
+            RELOAD_REFUSED_HINT,
+            "The build compiled, but the app keeps running the last build it loaded."
+        ),
         english!(RENDERER, "Renderer"),
         english!(RENDERER_STARTING, "Starting"),
         english!(RESIZE_DETAILS, "Resize the details"),

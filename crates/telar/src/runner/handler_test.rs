@@ -1780,7 +1780,7 @@ fn hot_build(create: crate::hot::CreateApp) -> Box<dyn AppRuntime> {
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 #[derive(Default)]
 struct Reporting {
-    build_error: Option<String>,
+    build: ui_tree::BuildOutcome,
     app_panic: Option<String>,
 }
 
@@ -1796,13 +1796,136 @@ impl DevOverlay for Reporting {
         std::borrow::Cow::Borrowed(base)
     }
 
-    fn set_build_error(&mut self, error: Option<String>) {
-        self.build_error = error;
+    fn set_build_outcome(&mut self, outcome: ui_tree::BuildOutcome) {
+        self.build = outcome;
     }
 
     fn set_app_panic(&mut self, panic: Option<String>) {
         self.app_panic = panic;
     }
+}
+
+/// A handler running a build, wired to a `cargo telar dev` that is this test: what it sends the app, and what the app answers.
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+fn hot_session(
+    window: &HeadlessWindow,
+) -> (
+    AppHandler<HeadlessWindow, Reporting>,
+    std::sync::mpsc::Sender<crate::hot::HotEvent>,
+    std::sync::mpsc::Receiver<crate::hot::HotReply>,
+) {
+    let mut handler = overlaid::<Reporting>(hot_build(create_fixed));
+    handler.new_events();
+    assert!(handler.on_resume(window));
+    handler.about_to_wait();
+    let (events_tx, events) = std::sync::mpsc::channel();
+    let (replies_tx, replies) = std::sync::mpsc::channel();
+    handler.hot = Some(crate::hot::HotLink {
+        events,
+        replies: crate::hot::HotReplies::new(replies_tx),
+    });
+    (handler, events_tx, replies)
+}
+
+/// The window would otherwise keep showing the last build as if the edit had landed, and `cargo telar dev` would say it had.
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+#[test]
+fn a_refused_reload_is_shown_and_answered_and_the_running_build_kept() {
+    use crate::hot::{HotEvent, HotOutcome, HotReply};
+    use ui_tree::BuildOutcome;
+    let window = HeadlessWindow::new(120, 80);
+    let (mut handler, events, replies) = hot_session(&window);
+    handler.dev.build = BuildOutcome::Failed("error: expected `;`".to_owned());
+
+    let library = "/nonexistent/libapp.so";
+    events.send(HotEvent::Reload(library.into())).unwrap();
+    assert!(!handler.poll_hot_reload(&window), "no new build to draw");
+    let BuildOutcome::Refused(refusal) = handler.dev.build.clone() else {
+        panic!(
+            "the refusal replaces the failed build before it: {:?}",
+            handler.dev.build
+        );
+    };
+    assert!(
+        refusal.starts_with("/nonexistent/libapp.so: "),
+        "it names the library: {refusal}"
+    );
+    assert_eq!(
+        replies.try_recv(),
+        Ok(HotReply {
+            library: library.to_owned(),
+            outcome: HotOutcome::Refused(refusal),
+        })
+    );
+    assert!(handler.tree.is_some(), "the running build keeps going");
+
+    handler.take_build(hot_build(create_fixed), &window);
+    assert_eq!(
+        handler.dev.build,
+        BuildOutcome::Loaded,
+        "a build that loads clears it"
+    );
+}
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+#[test]
+fn a_build_that_fails_after_a_refused_reload_is_the_only_outcome_shown() {
+    use crate::hot::HotEvent;
+    use ui_tree::BuildOutcome;
+    let window = HeadlessWindow::new(120, 80);
+    let (mut handler, events, _replies) = hot_session(&window);
+    events
+        .send(HotEvent::Reload("/nonexistent/libapp.so".into()))
+        .unwrap();
+    handler.poll_hot_reload(&window);
+    assert!(matches!(handler.dev.build, BuildOutcome::Refused(_)));
+
+    events
+        .send(HotEvent::BuildError("error: expected `;`".to_owned()))
+        .unwrap();
+    handler.poll_hot_reload(&window);
+    assert_eq!(
+        handler.dev.build,
+        BuildOutcome::Failed("error: expected `;`".to_owned())
+    );
+}
+
+/// The library loaded, so it is not refused, but nothing of it runs, so it is not loaded either.
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+#[test]
+fn a_reload_whose_app_panics_as_it_starts_is_answered_as_panicked_and_shown() {
+    use crate::hot::{HotOutcome, HotReply};
+    let window = HeadlessWindow::new(120, 80);
+    let (mut handler, _events, replies) = hot_session(&window);
+    let library = std::path::Path::new("/t/libapp.so");
+
+    assert!(
+        handler.reload(library, Ok(hot_build(create_nothing)), &window),
+        "the frame showing the panic is the reload's own"
+    );
+    let report = handler
+        .dev
+        .app_panic
+        .clone()
+        .expect("the overlay is told the app panicked");
+    assert!(
+        report.contains("the app's setup could not find its assets"),
+        "{report}"
+    );
+    assert_eq!(
+        replies.try_recv(),
+        Ok(HotReply {
+            library: "/t/libapp.so".to_owned(),
+            outcome: HotOutcome::Panicked(report),
+        })
+    );
+
+    assert!(handler.reload(library, Ok(hot_build(create_fixed)), &window));
+    assert_eq!(
+        replies.try_recv().map(|reply| reply.outcome),
+        Ok(HotOutcome::Loaded)
+    );
+    assert_eq!(handler.dev.app_panic, None, "the next build clears it");
 }
 
 /// A panic in the app's event handler used to unwind out of the dylib into the host, whose copy of std can only abort on it: the window closed and the session with it. Now the window stays, says what panicked and where, runs nothing more of that build, and the next build takes over.
@@ -1845,12 +1968,12 @@ fn a_panic_in_the_app_is_shown_and_the_next_build_takes_over() {
         "nothing more of the build that panicked runs"
     );
 
-    handler.dev.build_error = Some("error: expected `;`".to_owned());
+    handler.dev.build = ui_tree::BuildOutcome::Failed("error: expected `;`".to_owned());
     handler.new_events();
     handler.take_build(hot_build(create_fixed), &window);
     handler.about_to_wait();
     assert_eq!(handler.dev.app_panic, None, "a build that loads clears it");
-    assert_eq!(handler.dev.build_error, None);
+    assert_eq!(handler.dev.build, ui_tree::BuildOutcome::Loaded);
     handler.new_events();
     handler.on_event(press_at(10.0, 10.0), &window);
     assert_eq!(

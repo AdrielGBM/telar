@@ -147,6 +147,17 @@ fn a_copy_not_left_to_its_host_keeps_its_statics() {
 }
 
 #[test]
+fn a_copy_not_left_to_its_host_keeps_no_join_to_quiesce() {
+    static JOINED: AtomicU32 = AtomicU32::new(0);
+    fn join() {
+        JOINED.fetch_add(1, Ordering::Relaxed);
+    }
+    on_quiesce(join);
+    quiesce();
+    assert_eq!(JOINED.load(Ordering::Relaxed), 0);
+}
+
+#[test]
 fn a_released_static_is_built_once_and_kept_by_a_copy_not_left_to_its_host() {
     static BUILT: AtomicU32 = AtomicU32::new(0);
     crate::released_static! {

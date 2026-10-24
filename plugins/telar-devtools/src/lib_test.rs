@@ -144,7 +144,7 @@ fn the_panel_names_the_backend_that_is_drawing_and_follows_a_switch() {
 fn the_banner_shows_the_build_error_until_a_build_lands() {
     let mut dev = devtools();
     assert!(!shows(&mut dev, "Build failed"));
-    dev.set_build_error(Some(ERROR.to_owned()));
+    dev.set_build_outcome(BuildOutcome::Failed(ERROR.to_owned()));
     assert!(shows(&mut dev, "Build failed"));
     assert!(
         shows(&mut dev, "cannot find value `count` in this scope"),
@@ -152,7 +152,7 @@ fn the_banner_shows_the_build_error_until_a_build_lands() {
     );
     assert!(shows(&mut dev, "src/app.rs:12:9"));
 
-    dev.set_build_error(None);
+    dev.set_build_outcome(BuildOutcome::Loaded);
     assert!(!shows(&mut dev, "Build failed"), "a landed build clears it");
 }
 
@@ -171,13 +171,50 @@ fn the_banner_says_the_app_panicked_and_where_until_a_build_lands() {
     );
     assert!(!shows(&mut dev, "Build failed"));
 
-    dev.set_build_error(Some(ERROR.to_owned()));
+    dev.set_build_outcome(BuildOutcome::Failed(ERROR.to_owned()));
     assert!(shows(&mut dev, "App panicked"));
     assert!(shows(&mut dev, "Build failed"));
 
-    dev.set_build_error(None);
+    dev.set_build_outcome(BuildOutcome::Loaded);
     dev.set_app_panic(None);
     assert!(!shows(&mut dev, "App panicked"), "a landed build clears it");
+}
+
+/// A build the app would not load compiled, so it is not said the way a failed build is.
+#[test]
+fn the_banner_says_why_a_build_that_compiled_was_not_loaded_until_one_lands() {
+    let mut dev = devtools();
+    dev.set_build_outcome(BuildOutcome::Refused(
+        "/t/libapp.so: it was built against another telar than this host: restart the session"
+            .to_owned(),
+    ));
+    assert!(shows(&mut dev, "Reload refused"));
+    assert!(shows(&mut dev, "restart the session"), "why it was refused");
+    assert!(!shows(&mut dev, "Build failed"));
+
+    dev.set_build_outcome(BuildOutcome::Loaded);
+    assert!(
+        !shows(&mut dev, "Reload refused"),
+        "a landed build clears it"
+    );
+}
+
+/// Each hint says what the app runs now, so a refusal and a failure shown together would contradict each other.
+#[test]
+fn the_banner_shows_only_what_the_latest_build_came_to() {
+    let mut dev = devtools();
+    dev.set_build_outcome(BuildOutcome::Refused(
+        "/t/libapp.so: restart the session".to_owned(),
+    ));
+    dev.set_build_outcome(BuildOutcome::Failed(ERROR.to_owned()));
+    assert!(shows(&mut dev, "Build failed"));
+    assert!(!shows(&mut dev, "Reload refused"), "the refusal is over");
+
+    dev.set_build_outcome(BuildOutcome::Refused(
+        "/t/libapp.so: restart the session".to_owned(),
+    ));
+    assert!(shows(&mut dev, "Reload refused"));
+    assert!(!shows(&mut dev, "Build failed"), "the failure is over");
 }
 
 #[test]
@@ -354,7 +391,7 @@ fn devtools() -> DevTools {
 fn the_banner_and_the_inspector_drawer_share_the_window_without_covering_each_other() {
     let mut dev = devtools();
     dev.on_tree(&walk());
-    dev.set_build_error(Some(ERROR.to_owned()));
+    dev.set_build_outcome(BuildOutcome::Failed(ERROR.to_owned()));
     let (alone, _) = centre_of(&mut dev, "Build failed");
 
     dev.on_event(&chord('i'));

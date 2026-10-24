@@ -73,7 +73,7 @@ where
         not(target_os = "android"),
         not(target_arch = "wasm32")
     ))]
-    pub(super) hot_reload_rx: Option<std::sync::mpsc::Receiver<crate::hot::HotEvent>>,
+    pub(super) hot: Option<crate::hot::HotLink>,
 }
 
 /// The number a renderer compares against the last one it drew, and the whole of its monotonicity.
@@ -163,7 +163,7 @@ where
             not(target_os = "android"),
             not(target_arch = "wasm32")
         ))]
-        hot_reload_rx: None,
+        hot: None,
     }
 }
 
@@ -427,22 +427,23 @@ where
         })
     }
 
-    /// Swaps in a rebuilt dylib, or shows the banner for one that failed to build. `true` means the frame is the reload's own and this pass is over.
+    /// Swaps in a rebuilt dylib, or shows the banner for one that failed to build or would not load, and tells `cargo telar dev` which a reload came to. `true` means the frame is the reload's own and this pass is over.
     #[cfg(all(
         feature = "dev",
         not(target_os = "android"),
         not(target_arch = "wasm32")
     ))]
     fn poll_hot_reload(&mut self, window: &W) -> bool {
-        let Some(rx) = &self.hot_reload_rx else {
+        let Some(hot) = &self.hot else {
             return false;
         };
-        let Ok(event) = rx.try_recv() else {
+        let Ok(event) = hot.events.try_recv() else {
             return false;
         };
         match event {
             crate::hot::HotEvent::BuildError(msg) => {
-                self.dev.set_build_error(Some(msg));
+                self.dev
+                    .set_build_outcome(ui_tree::BuildOutcome::Failed(msg));
                 window.request_redraw();
                 false
             }
@@ -454,17 +455,43 @@ where
                 window.focus_window();
                 false
             }
-            crate::hot::HotEvent::Reload(new_path) => match crate::hot::load_hot_app(&new_path) {
-                Ok(new_app) => {
-                    self.take_build(Box::new(new_app), window);
-                    tracing::info!("hot reloaded: {}", new_path.display());
-                    true
-                }
-                Err(e) => {
-                    tracing::error!("hot reload failed: {e}");
-                    false
-                }
-            },
+            crate::hot::HotEvent::Reload(library) => {
+                let loaded = crate::hot::load_hot_app(&library)
+                    .map(|app| Box::new(app) as Box<dyn AppRuntime>)
+                    .map_err(|e| e.to_string());
+                self.reload(&library, loaded, window)
+            }
+        }
+    }
+
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
+    fn reload(
+        &mut self,
+        library: &std::path::Path,
+        loaded: Result<Box<dyn AppRuntime>, String>,
+        window: &W,
+    ) -> bool {
+        match loaded {
+            Ok(new_app) => {
+                self.take_build(new_app, window);
+                let outcome = match self.show_app_panic() {
+                    Some(report) => crate::hot::HotOutcome::Panicked(report),
+                    None => {
+                        tracing::info!("hot reloaded: {}", library.display());
+                        crate::hot::HotOutcome::Loaded
+                    }
+                };
+                self.answer_reload(library, outcome);
+                true
+            }
+            Err(reason) => {
+                self.refuse_reload(library, reason, window);
+                false
+            }
         }
     }
 
@@ -476,9 +503,36 @@ where
     ))]
     fn take_build(&mut self, app: Box<dyn AppRuntime>, window: &W) {
         self.swap_app(app, window);
-        self.dev.set_build_error(None);
+        self.dev.set_build_outcome(ui_tree::BuildOutcome::Loaded);
         self.dev.set_app_panic(None);
         window.request_redraw();
+    }
+
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
+    fn refuse_reload(&mut self, library: &std::path::Path, reason: String, window: &W) {
+        tracing::error!("hot reload refused: {reason}");
+        self.dev
+            .set_build_outcome(ui_tree::BuildOutcome::Refused(reason.clone()));
+        window.request_redraw();
+        self.answer_reload(library, crate::hot::HotOutcome::Refused(reason));
+    }
+
+    #[cfg(all(
+        feature = "dev",
+        not(target_os = "android"),
+        not(target_arch = "wasm32")
+    ))]
+    fn answer_reload(&self, library: &std::path::Path, outcome: crate::hot::HotOutcome) {
+        if let Some(hot) = &self.hot {
+            hot.replies.send(crate::hot::HotReply {
+                library: library.to_string_lossy().into_owned(),
+                outcome,
+            });
+        }
     }
 
     /// Replaces the running app with a freshly loaded runtime, hands it what the outgoing one knew and mounts its tree.
@@ -504,19 +558,18 @@ where
         self.mount_tree(window);
     }
 
-    /// Shows a panic the app's runtime stopped at its boundary the way the dev overlay shows a failed build, and owes the frame that draws it.
+    /// Shows a panic the app's runtime stopped at its boundary the way the dev overlay shows a failed build, owes the frame that draws it, and hands back its report.
     ///
     /// The tree goes with it: it can no longer be asked for anything, and the next one this surface draws has to start past every generation the old one handed out.
-    fn show_app_panic(&mut self) {
-        let Some(report) = self.app.take_panic() else {
-            return;
-        };
+    fn show_app_panic(&mut self) -> Option<String> {
+        let report = self.app.take_panic()?;
         let _surface = self.enter_surface();
         self.tree = None;
         self.generation.restart();
-        self.dev.set_app_panic(Some(report));
+        self.dev.set_app_panic(Some(report.clone()));
         self.pacer.presentation_owed = true;
         self.pacer.frame_owed = true;
+        Some(report)
     }
 
     /// Drops every frame this surface keeps, on this thread and on the render thread, and waits until both have. A command can point into the image of the library that built it, so this runs before a hot-reloaded app is unloaded; the next frame is drawn in full.
@@ -566,10 +619,11 @@ where
         not(target_arch = "wasm32")
     ))]
     fn relay_hot_reload(&mut self) {
-        let Some(rx) = self.hot_reload_rx.take() else {
+        let Some(hot) = &mut self.hot else {
             return;
         };
         let (relay_tx, relay_rx) = std::sync::mpsc::channel::<crate::hot::HotEvent>();
+        let rx = std::mem::replace(&mut hot.events, relay_rx);
         let wake = self.redraw_waker.clone();
         std::thread::Builder::new()
             .name("telar-hot-relay".to_string())
@@ -584,7 +638,6 @@ where
                 }
             })
             .ok();
-        self.hot_reload_rx = Some(relay_rx);
     }
 
     /// Asks the host to start a renderer. `false` means the surface cannot present at all; a build still in flight counts as success, because the frame its own wake asks for is what installs it.

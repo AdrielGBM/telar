@@ -245,6 +245,11 @@ pub fn unloading() -> GuestResult<()> {
     guest_call(reactive_local::thread_exit::release_guest)
 }
 
+/// What a host calls on every guest it loaded from a library, after [`unloading`] and right before it unmaps it, a guest that panicked included: joins the threads that run the library's code, touching nothing a panic may have left half done. See [`Guest::unload`].
+pub fn quiesce() -> GuestResult<()> {
+    guest_call(reactive_local::thread_exit::quiesce)
+}
+
 /// The host's record of one loaded guest: whether it has panicked, what the panic said, and whether anybody has been told.
 ///
 /// A guest that panicked is never called again. The unwind left whatever it was in the middle of half done — a borrow released mid-update, a batch never closed — and the next call would run on top of that.
@@ -283,6 +288,25 @@ impl Guest {
     pub fn take_panic(&self) -> Option<GuestPanic> {
         let panic = self.panic.get()?;
         (!self.reported.replace(true)).then(|| panic.clone())
+    }
+
+    /// Unmaps a guest by dropping `library`: tells it it is `unloading` unless it panicked, has it `quiesce` its threads either way, and keeps `library` mapped for the rest of the process if they could not be joined, since unmapping code a thread may still run is never safe and leaking the mapping only costs memory.
+    pub fn unload<L>(
+        &self,
+        library: L,
+        unloading: impl FnOnce() -> GuestResult<()>,
+        quiesce: impl FnOnce() -> GuestResult<()>,
+    ) {
+        self.call(unloading);
+        match quiesce() {
+            Ok(()) => drop(library),
+            Err(panic) => {
+                tracing::error!(
+                    "a guest panicked while its threads were joined, so its library stays mapped: {panic}"
+                );
+                std::mem::forget(library);
+            }
+        }
     }
 }
 

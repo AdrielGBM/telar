@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use telar_reactive_local::thread_exit::{
-    leave_to_host, on_thread_exit, on_unload, release_guest, release_thread,
+    leave_to_host, on_quiesce, on_thread_exit, on_unload, quiesce, release_guest, release_thread,
 };
 
 static RAN: Mutex<Vec<&str>> = Mutex::new(Vec::new());
@@ -97,4 +97,25 @@ impl Drop for Counted {
 telar_reactive_local::released_static! {
     static CACHED: std::sync::Arc<Counted> =
         std::sync::Arc::new(Counted(BUILT.fetch_add(1, Ordering::Relaxed) + 1));
+}
+
+static JOINED: AtomicU32 = AtomicU32::new(0);
+
+fn join_pool() {
+    JOINED.fetch_add(1, Ordering::Relaxed);
+}
+
+// No `release_guest` here: it would race the sequence above over the process's one list of statics.
+#[test]
+fn quiescing_runs_each_join_once() {
+    leave_to_host();
+    on_quiesce(join_pool);
+    quiesce();
+    assert_eq!(JOINED.load(Ordering::Relaxed), 1, "quiescing joins them");
+    quiesce();
+    assert_eq!(
+        JOINED.load(Ordering::Relaxed),
+        1,
+        "and frees the list, as the last call before the library is unmapped"
+    );
 }

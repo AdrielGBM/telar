@@ -1,6 +1,7 @@
 //! `cargo telar dev`: the watch loop, the rebuild, and the hot-reload channel to the running app.
 
-use std::io::BufReader;
+use std::collections::VecDeque;
+use std::io::{BufRead, BufReader};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -9,7 +10,8 @@ use std::time::{Duration, Instant};
 
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use telar_project::protocol::{
-    BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, HOT_TOKEN_VAR, TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR,
+    BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, HOT_REPLIES_LINE, HOT_TOKEN_VAR, HotOutcome, HotReply,
+    TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR, escape_lines,
 };
 use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE};
 
@@ -243,13 +245,14 @@ fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
     dirs
 }
 
-// TCP loopback rather than a unix socket, so hot reload works on non-Unix hosts. cargo-telar binds and the app connects once at startup, opens with the token, then reads line events.
+// TCP loopback rather than a unix socket, so hot reload works on non-Unix hosts. cargo-telar binds and the app connects once at startup, opens with the token, then reads line events and writes back what it did with each reload.
 struct HotChannel {
     adopted: mpsc::Receiver<TcpStream>,
     stream: Option<TcpStream>,
     port: u16,
     /// What the app is handed in [`HOT_TOKEN_VAR`] and has to open the channel with: any local process can reach a loopback port, and only the app was told this.
     token: String,
+    reloads: Reloads,
 }
 
 impl HotChannel {
@@ -262,30 +265,29 @@ impl HotChannel {
             .port();
         let token = hot_token();
         let (handed, adopted) = mpsc::channel();
+        let (heard_tx, heard) = mpsc::channel();
         let expected = token.clone();
         std::thread::Builder::new()
             .name("cargo-telar-hot-accept".to_string())
-            .spawn(move || adopt_first_authenticated(listener, &expected, &handed))
+            .spawn(move || adopt_first_authenticated(listener, &expected, &handed, &heard_tx))
             .expect("[cargo-telar] failed to start the hot reload listener");
         HotChannel {
             adopted,
             stream: None,
             port,
             token,
+            reloads: Reloads::new(heard),
         }
     }
 
     fn notify_hot_reload(&mut self, lib_path: &str) {
-        self.send(&format!("{HOT_RELOAD_PREFIX}{lib_path}"));
+        if self.send(&format!("{HOT_RELOAD_PREFIX}{lib_path}")) {
+            self.reloads.sent(lib_path, Instant::now());
+        }
     }
 
     fn notify_build_error(&mut self, message: &str) {
-        // Escaped rather than replaced: a code frame is full of `|`, so a ` | ` separator would be cut apart at every gutter. Backslashes go first, or an escape in the message decodes as a line break.
-        let escaped = message
-            .replace('\\', "\\\\")
-            .replace('\n', "\\n")
-            .replace('\r', "");
-        self.send(&format!("{BUILD_ERROR_PREFIX}{escaped}"));
+        self.send(&format!("{BUILD_ERROR_PREFIX}{}", escape_lines(message)));
     }
 
     /// Answers whether the line reached the app.
@@ -333,13 +335,178 @@ fn hot_token() -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-/// Takes connections until one opens with `token`, hands that one on and stops listening, so nothing can connect once the app has.
-fn adopt_first_authenticated(listener: TcpListener, token: &str, handed: &mpsc::Sender<TcpStream>) {
-    for stream in listener.incoming().flatten() {
-        if opens_with(&stream, token) {
-            let _ = handed.send(stream);
-            return;
+/// Takes connections until one opens with `token`, hands that one on and stops listening, so nothing can connect once the app has; then hears out what the app says on that one connection, and only on it.
+fn adopt_first_authenticated(
+    listener: TcpListener,
+    token: &str,
+    handed: &mpsc::Sender<TcpStream>,
+    heard_tx: &mpsc::Sender<Heard>,
+) {
+    let Some(stream) = listener
+        .incoming()
+        .flatten()
+        .find(|stream| opens_with(stream, token))
+    else {
+        return;
+    };
+    drop(listener);
+    let reader = stream.try_clone();
+    if handed.send(stream).is_err() {
+        return;
+    }
+    match reader {
+        Ok(reader) => hear_out(reader, heard_tx),
+        Err(e) => eprintln!(
+            "[cargo-telar] warning: the app's answers to reloads cannot be read ({e}); whether a reload loads will not be known."
+        ),
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum Heard {
+    AnswersReloads,
+    Reply(HotReply),
+}
+
+/// `None` for a line of another version of the replies, which is skipped.
+fn heard_from(line: &str) -> Option<Heard> {
+    if line == HOT_REPLIES_LINE {
+        return Some(Heard::AnswersReloads);
+    }
+    HotReply::parse(line).map(Heard::Reply)
+}
+
+/// Returns once the app closes the channel, which drops `heard_tx`.
+fn hear_out(stream: TcpStream, heard_tx: &mpsc::Sender<Heard>) {
+    for line in BufReader::new(stream).lines() {
+        let Ok(line) = line else { break };
+        if let Some(heard) = heard_from(line.trim())
+            && heard_tx.send(heard).is_err()
+        {
+            break;
         }
+    }
+}
+
+/// A window that is hidden may not load a reload until it is shown, so an answer after this is still printed.
+const REPLY_TIMEOUT: Duration = Duration::from_secs(10);
+
+#[derive(Debug, PartialEq)]
+enum ReloadOutcome {
+    Answered(HotOutcome),
+    Unanswered { app_answers: bool },
+    ChannelClosed,
+}
+
+impl ReloadOutcome {
+    fn message(&self) -> String {
+        match self {
+            ReloadOutcome::Answered(HotOutcome::Loaded) => "Hot reloaded.".to_owned(),
+            ReloadOutcome::Answered(HotOutcome::Panicked(report)) => {
+                format!("The rebuilt library loaded, but the app panicked while starting: {report}")
+            }
+            ReloadOutcome::Answered(HotOutcome::Refused(reason)) => {
+                format!("Hot reload refused, the app keeps running the build before: {reason}")
+            }
+            ReloadOutcome::Unanswered { app_answers: true } => format!(
+                "The app has not said within {}s whether it loaded the rebuilt library; its answer is printed when it comes.",
+                REPLY_TIMEOUT.as_secs()
+            ),
+            ReloadOutcome::Unanswered { app_answers: false } => "Rebuilt library sent; this app does not say whether it loads one (it is built against a telar from before reload answers).".to_owned(),
+            ReloadOutcome::ChannelClosed => "The hot reload channel closed before the app said whether it loaded the rebuilt library.".to_owned(),
+        }
+    }
+}
+
+struct PendingReload {
+    library: String,
+    deadline: Instant,
+    overdue: bool,
+}
+
+/// The reloads sent that the app has not answered yet, oldest first, each settled by the first answer that names its library.
+struct Reloads {
+    heard: mpsc::Receiver<Heard>,
+    app_answers: bool,
+    pending: VecDeque<PendingReload>,
+}
+
+impl Reloads {
+    fn new(heard: mpsc::Receiver<Heard>) -> Self {
+        Self {
+            heard,
+            app_answers: false,
+            pending: VecDeque::new(),
+        }
+    }
+
+    fn sent(&mut self, library: &str, now: Instant) {
+        self.pending.push_back(PendingReload {
+            library: library.to_owned(),
+            deadline: now + REPLY_TIMEOUT,
+            overdue: false,
+        });
+    }
+
+    /// What is known by `now`: each answer in the order it came, a late one included, then each reload that went past its deadline unanswered, or all of them once the channel closed.
+    fn settle(&mut self, now: Instant) -> Vec<ReloadOutcome> {
+        let mut outcomes = Vec::new();
+        loop {
+            match self.heard.try_recv() {
+                Ok(Heard::AnswersReloads) => self.app_answers = true,
+                Ok(Heard::Reply(reply)) => {
+                    self.answered(&reply.library);
+                    outcomes.push(ReloadOutcome::Answered(reply.outcome));
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.give_up(&mut outcomes);
+                    return outcomes;
+                }
+            }
+        }
+        for reload in &mut self.pending {
+            if !reload.overdue && now >= reload.deadline {
+                reload.overdue = true;
+                outcomes.push(ReloadOutcome::Unanswered {
+                    app_answers: self.app_answers,
+                });
+            }
+        }
+        if !self.app_answers {
+            self.pending.retain(|reload| !reload.overdue);
+        }
+        outcomes
+    }
+
+    /// [`Self::settle`] for an app that has exited: whatever it left unanswered it never will answer.
+    fn finish(&mut self) -> Vec<ReloadOutcome> {
+        let mut outcomes = self.settle(Instant::now());
+        self.give_up(&mut outcomes);
+        outcomes
+    }
+
+    fn answered(&mut self, library: &str) {
+        if let Some(index) = self
+            .pending
+            .iter()
+            .position(|reload| reload.library == library)
+        {
+            self.pending.remove(index);
+        }
+    }
+
+    fn give_up(&mut self, outcomes: &mut Vec<ReloadOutcome>) {
+        if !self.pending.is_empty() {
+            outcomes.push(ReloadOutcome::ChannelClosed);
+        }
+        self.pending.clear();
+    }
+}
+
+fn report_reloads(outcomes: Vec<ReloadOutcome>) {
+    for outcome in outcomes {
+        eprintln!("[cargo-telar] {}", outcome.message());
     }
 }
 
@@ -554,6 +721,7 @@ fn watch_and_hot_reload(
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
+                report_reloads(channel.reloads.finish());
                 if status.success() {
                     eprintln!("[cargo-telar] App exited.");
                 } else {
@@ -573,6 +741,8 @@ fn watch_and_hot_reload(
                 waiting = None;
             }
         }
+
+        report_reloads(channel.reloads.settle(Instant::now()));
 
         if changes.drain() {
             last_event = Instant::now();
@@ -595,7 +765,6 @@ fn watch_and_hot_reload(
             }
             if succeeded {
                 channel.notify_hot_reload(lib_path.to_str().unwrap_or_default());
-                eprintln!("[cargo-telar] Hot reloaded.");
             } else {
                 eprintln!("[cargo-telar] Build failed, waiting for changes...");
                 channel.notify_build_error(&report.render(false));

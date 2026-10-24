@@ -211,3 +211,60 @@ fn a_server_file_that_says_nothing_usable_is_not_parsed() {
     assert_eq!(parse_server_file("\n"), None);
     assert_eq!(parse_server_file("starting soon"), None);
 }
+
+/// A rustc code frame is mostly `|`, so a separator standing in for line breaks would cut it apart at every gutter.
+#[test]
+fn a_code_frame_survives_the_hot_reload_channel() {
+    let frame =
+        "error: mismatched types\n --> src/home.rsx:4\n  |\n4 | text \"{n}\" size:no\n  |\n";
+    let escaped = escape_lines(frame);
+    assert!(
+        !escaped.contains('\n'),
+        "the wire carries one line per event"
+    );
+    assert_eq!(unescape_lines(&escaped), frame);
+}
+
+/// A backslash in the message (a Windows path, an escaped quote rustc quoted back) is not a line break.
+#[test]
+fn a_literal_backslash_is_not_read_as_an_escape() {
+    let message = "cannot find `C:\\src\\home.rsx`";
+    assert_eq!(unescape_lines(&escape_lines(message)), message);
+}
+
+fn reply(library: &str, outcome: HotOutcome) -> HotReply {
+    HotReply {
+        library: library.to_owned(),
+        outcome,
+    }
+}
+
+#[test]
+fn each_reload_reply_survives_the_channel_as_one_line_naming_its_library() {
+    let library = "C:\\target\\debug\\app:\tdev.dll";
+    let replies = [
+        reply(library, HotOutcome::Loaded),
+        reply(
+            library,
+            HotOutcome::Refused("it was built against another telar\nrestart the session".into()),
+        ),
+        reply(
+            library,
+            HotOutcome::Panicked("panicked at src/app.rs:4:9:\n\tno assets".into()),
+        ),
+    ];
+    for reply in replies {
+        let line = reply.line();
+        assert!(!line.contains('\n'), "one line per reply: {line:?}");
+        assert_eq!(HotReply::parse(&line), Some(reply));
+    }
+}
+
+#[test]
+fn a_line_that_is_no_reply_is_not_read_as_one() {
+    assert_eq!(HotReply::parse(HOT_REPLIES_LINE), None);
+    assert_eq!(HotReply::parse("loaded"), None, "a reply of version 1");
+    assert_eq!(HotReply::parse("refused:/t/libapp.so"), None, "no reason");
+    assert_eq!(HotReply::parse("loaded:/t/libapp.so\tmore"), None);
+    assert_eq!(HotReply::parse("hot:/t/libapp.so"), None);
+}

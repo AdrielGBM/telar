@@ -1,15 +1,16 @@
-//! A hot-reload guest whose press handler panics, exporting what `app!` exports under `telar/hot-reload`: the `hot_panic` test in `telar` loads it into a host with its own copy of std.
-//!
-//! Its tree is a themed panel around a line of text that counts the moves it was handed, a button, an icon nothing baked and a card written in `.rsx` that draws what its library baked, so mounting, painting and moving over it reach what an app's would: the reactive runtime, layout, the theme, the text measurer, the input registries, the slots of the plugins an app draws with, and the baked assets its markup reads. A secondary press adds a face, as a font fetched while an app runs is.
+//! A hot-reload guest the `hot_panic` test in `telar` loads into a host with its own copy of std: its tree reaches what an app's does (reactive runtime, layout, theme, text measurer, input registries, plugin slots, baked assets), and its pointer events panic, add a face, leave a task running or leave a worker that cannot be stopped, as each test needs.
 
 use telar::{
     App, AppCtx, Children, Chord, Component, Event, EventResult, FontAsset, LayoutItem,
     LayoutStyle, PointerButton, RectStyle, RenderNode, RwSignal, StyledContainer, Text, TextStyle,
-    WindowConfig, box_item, signal, use_theme_tokens,
+    WindowConfig, box_item, signal, spawn_task, use_theme_tokens,
 };
 use telar_components::{ButtonProps, button};
 use telar_icons::{IconProps, icon};
 use telar_rsx_fixture::{GreetingCardProps, greeting_card};
+
+/// How long the task an auxiliary press leaves running takes: the `hot_panic` test waits at least this long for the guest to unload.
+const TASK_RUNS_FOR: std::time::Duration = std::time::Duration::from_millis(300);
 
 const ARRIVING_FACE: &[u8] =
     include_bytes!("../../../../../renderer/renderer-text/test-fonts/TelarTest.ttf");
@@ -72,8 +73,15 @@ impl Component for PanicsOnPress {
                 ]);
                 EventResult::Handled
             }
-            Event::PointerPressed { .. } => {
+            Event::PointerPressed { button, .. } => {
+                if *button == PointerButton::Auxiliary {
+                    spawn_task(|| std::thread::sleep(TASK_RUNS_FOR), |()| {});
+                }
                 panic!("RUNTIME is already borrowed by the press handler");
+            }
+            Event::PointerReleased { .. } => {
+                telar_reactive_local::thread_exit::on_quiesce(stop_a_worker_that_will_not);
+                EventResult::Handled
             }
             Event::PointerMoved { .. } => {
                 self.moves.update(|moves| *moves += 1);
@@ -82,6 +90,10 @@ impl Component for PanicsOnPress {
             _ => EventResult::Ignored,
         }
     }
+}
+
+fn stop_a_worker_that_will_not() {
+    std::panic::panic_any("a worker that will not stop");
 }
 
 /// Asks for a redraw every frame, so the host can tell whether its frame reached the guest, and titles its window with a shortcut, so the host can read which keyboard the guest shows it for.

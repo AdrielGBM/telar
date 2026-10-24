@@ -26,8 +26,8 @@ pub use workbench::{
 use std::borrow::Cow;
 
 use telar::{
-    AccessNode, AccessViolation, Chord, DevAction, DevOverlay, DrawCommand, Event, Key,
-    ModifiersState, OverlayResponse, SegmentNodeInfo, Size,
+    AccessNode, AccessViolation, BuildOutcome, Chord, DevAction, DevOverlay, DrawCommand, Event,
+    Key, ModifiersState, OverlayResponse, SegmentNodeInfo, Size,
 };
 
 use meter::{Clock, FrameMeter};
@@ -156,9 +156,9 @@ impl DevOverlay for DevTools {
         }
     }
 
-    fn set_build_error(&mut self, error: Option<String>) {
+    fn set_build_outcome(&mut self, outcome: BuildOutcome) {
         if let Some(overlay) = self.overlay() {
-            overlay.set_build_error(error);
+            overlay.set_build_outcome(outcome);
         }
     }
 

@@ -1,30 +1,6 @@
 use super::*;
 
-/// The build error shown in the window is a rustc-shaped code frame, and a frame is mostly `|` — which is exactly what the old protocol substituted for a newline. Round-tripping one proves the frame survives instead of being cut apart at every gutter.
-#[test]
-fn a_code_frame_survives_the_hot_reload_channel() {
-    let frame =
-        "error: mismatched types\n --> src/home.rsx:4\n  |\n4 | text \"{n}\" size:no\n  |\n";
-    let escaped = frame
-        .replace('\\', "\\\\")
-        .replace('\n', "\\n")
-        .replace('\r', "");
-    assert!(
-        !escaped.contains('\n'),
-        "the wire carries one line per event"
-    );
-    assert_eq!(unescape_lines(&escaped), frame);
-}
-
-/// A backslash in the message (a Windows path, an escaped quote rustc quoted back) is not a line break.
-#[test]
-fn a_literal_backslash_is_not_read_as_an_escape() {
-    let message = "cannot find `C:\\src\\home.rsx`";
-    let escaped = message.replace('\\', "\\\\").replace('\n', "\\n");
-    assert_eq!(unescape_lines(&escaped), message);
-}
-
-#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+#[cfg(feature = "desktop-bare")]
 #[test]
 fn each_line_of_the_channel_is_the_event_its_prefix_names() {
     assert_eq!(
@@ -174,7 +150,49 @@ fn a_tree_outliving_its_app_still_drives_its_guest() {
     );
 }
 
-#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+#[cfg(unix)]
+fn build_panicking() -> GuestResult<Box<dyn App>> {
+    guest::create_app(|| panic!("the build could not find its assets"))
+}
+
+/// Held with this process as its library, so dropping it runs the unload path a built library's does.
+#[cfg(unix)]
+fn start_as_loaded(create: CreateApp) -> HotApp {
+    let exports = GuestExports {
+        install_services: keep_services,
+        app_release: release_app,
+        loaded: || record("loaded"),
+        unloading: || record("unloading"),
+        quiesce: || record("quiesce"),
+        ..GuestExports::in_process()
+    };
+    let this_process = libloading::Library::from(libloading::os::unix::Library::this());
+    HotApp::start(exports, create, Some(this_process))
+}
+
+#[cfg(unix)]
+#[test]
+fn a_guest_is_released_then_quiesced_before_its_library_is_closed() {
+    CALLS.with_borrow_mut(Vec::clear);
+    drop(start_as_loaded(build_blank));
+    assert_eq!(
+        CALLS.take(),
+        ["loaded", "app_release", "unloading", "quiesce"]
+    );
+}
+
+/// Its worker threads may still be running its code, so the one call a guest that panicked still gets is the one that joins them.
+#[cfg(unix)]
+#[test]
+fn a_guest_that_panicked_is_still_quiesced_before_its_library_is_closed() {
+    CALLS.with_borrow_mut(Vec::clear);
+    let app = start_as_loaded(build_panicking);
+    assert!(app.image.guest.has_panicked(), "precondition: it panicked");
+    drop(app);
+    assert_eq!(CALLS.take(), ["loaded", "quiesce"]);
+}
+
+#[cfg(feature = "desktop-bare")]
 #[test]
 fn the_app_opens_the_hot_channel_with_its_token() {
     use std::io::BufRead;
@@ -185,4 +203,43 @@ fn the_app_opens_the_hot_channel_with_its_token() {
     let mut first = String::new();
     std::io::BufReader::new(cli).read_line(&mut first).unwrap();
     assert_eq!(first, "s3cret\n");
+}
+
+#[cfg(feature = "desktop-bare")]
+#[test]
+fn the_app_says_it_answers_reloads_then_answers_each_one_naming_its_library() {
+    use std::io::BufRead;
+    let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let app = connect_hot_channel(port, "s3cret").unwrap();
+    let (replies_tx, replies) = std::sync::mpsc::channel();
+    answer_reloads(app, replies);
+    let sent = [
+        HotOutcome::Refused("libapp.so: line one\nline two".to_owned()),
+        HotOutcome::Panicked("panicked at src/app.rs:4:9:\nno assets".to_owned()),
+        HotOutcome::Loaded,
+    ]
+    .map(|outcome| HotReply {
+        library: "/t/libapp.so".to_owned(),
+        outcome,
+    });
+    let replies = HotReplies::new(replies_tx);
+    for reply in sent.clone() {
+        replies.send(reply);
+    }
+
+    let (cli, _) = listener.accept().unwrap();
+    cli.set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .unwrap();
+    let lines: Vec<String> = std::io::BufReader::new(cli)
+        .lines()
+        .take(5)
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(lines[..2], ["s3cret", HOT_REPLIES_LINE]);
+    let heard: Vec<_> = lines[2..]
+        .iter()
+        .map(|line| HotReply::parse(line))
+        .collect();
+    assert_eq!(heard, sent.map(Some));
 }
