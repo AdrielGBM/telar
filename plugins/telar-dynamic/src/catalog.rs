@@ -32,8 +32,8 @@ impl AssetDecoder for CatalogDecoder {
 
     fn decode(&self, bytes: &[u8]) -> Result<Self::Output, AssetError> {
         let text = std::str::from_utf8(bytes)
-            .map_err(|e| AssetError(format!("catalog is not valid utf-8: {e}")))?;
-        Catalog::from_toml(&self.locale, text).map_err(AssetError)
+            .map_err(|e| AssetError::permanent(format!("catalog is not valid utf-8: {e}")))?;
+        Catalog::from_toml(&self.locale, text).map_err(AssetError::permanent)
     }
 }
 

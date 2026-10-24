@@ -3,7 +3,7 @@ use super::*;
 struct NullTransport;
 impl AssetTransport for NullTransport {
     fn load(&self, _key: &AssetKey, reply: Reply) {
-        reply(Err(AssetError("no transport in a test".into())));
+        reply(Err(AssetError::permanent("no transport in a test")));
     }
 }
 
@@ -22,7 +22,7 @@ impl AssetDecoder for UpperDecoder {
     }
     type Output = Arc<str>;
     fn decode(&self, bytes: &[u8]) -> Result<Self::Output, AssetError> {
-        let text = std::str::from_utf8(bytes).map_err(|e| AssetError(e.to_string()))?;
+        let text = std::str::from_utf8(bytes).map_err(|e| AssetError::permanent(e.to_string()))?;
         Ok(Arc::from(text.to_uppercase()))
     }
 }

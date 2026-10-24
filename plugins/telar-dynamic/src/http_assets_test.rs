@@ -113,7 +113,7 @@ fn name_of(state: &AssetState<Arc<SvgData>>) -> &'static str {
     match state {
         AssetState::Loading => "Loading",
         AssetState::Ready(_) => "Ready",
-        AssetState::Failed => "Failed",
+        AssetState::Failed(_) => "Failed",
     }
 }
 
@@ -181,7 +181,7 @@ fn an_asset_the_endpoint_does_not_have_settles_on_failed() {
 
     let state = settle(&icons, "absent", Duration::from_secs(10));
     assert!(
-        matches!(state, AssetState::Failed),
+        matches!(state, AssetState::Failed(_)),
         "a missing asset must settle rather than spin forever, got {}",
         name_of(&state)
     );
@@ -232,7 +232,7 @@ fn a_body_that_does_not_decode_never_reaches_the_cache() {
 
     let state = settle(&icons, "known", Duration::from_secs(10));
     assert!(
-        matches!(state, AssetState::Failed),
+        matches!(state, AssetState::Failed(_)),
         "a body that is not an SVG must fail, got {}",
         name_of(&state)
     );

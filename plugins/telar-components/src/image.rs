@@ -60,7 +60,7 @@ impl From<telar::AssetState<Arc<ImageData>>> for ImageSource {
         match state {
             telar::AssetState::Loading => Self::Loading,
             telar::AssetState::Ready(data) => Self::Ready(data),
-            telar::AssetState::Failed => Self::Failed,
+            telar::AssetState::Failed(_) => Self::Failed,
         }
     }
 }

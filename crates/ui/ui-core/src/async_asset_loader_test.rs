@@ -69,7 +69,7 @@ impl AssetDecoder for EchoDecoder {
     fn decode(&self, bytes: &[u8]) -> Result<Self::Output, AssetError> {
         std::str::from_utf8(bytes)
             .map(Arc::from)
-            .map_err(|e| AssetError(e.to_string()))
+            .map_err(|e| AssetError::permanent(e.to_string()))
     }
 }
 
@@ -147,7 +147,7 @@ fn a_failed_decode_never_reaches_cache_put() {
     settle(&read, Duration::from_secs(5));
 
     assert!(
-        matches!(read.get(), AssetState::Failed),
+        matches!(read.get(), AssetState::Failed(_)),
         "a body that does not decode leaves the read Failed"
     );
     assert!(
@@ -205,4 +205,156 @@ fn a_second_distinct_id_waits_for_the_first_to_finish() {
     transport.resolve_all_ok(b"x");
     settle(&a, Duration::from_secs(5));
     wait_until(|| transport.call_count() == 2, Duration::from_secs(5));
+}
+
+struct DroppingTransport;
+
+impl AssetTransport for DroppingTransport {
+    fn load(&self, _key: &AssetKey, reply: Reply) {
+        drop(reply);
+    }
+}
+
+#[derive(Default)]
+struct FlakyTransport {
+    calls: Mutex<usize>,
+    succeed_from: usize,
+}
+
+impl AssetTransport for FlakyTransport {
+    fn load(&self, _key: &AssetKey, reply: Reply) {
+        let mut calls = self.calls.lock().unwrap();
+        *calls += 1;
+        match *calls >= self.succeed_from {
+            true => reply(Ok(b"fine".to_vec())),
+            false => reply(Err(AssetError::transient("offline"))),
+        }
+    }
+}
+
+#[test]
+fn the_transport_error_reaches_the_signal() {
+    let transport = Arc::new(FlakyTransport {
+        succeed_from: usize::MAX,
+        ..Default::default()
+    });
+    let loader: AssetLoader<Arc<str>> = AssetLoader::new(transport, None, Arc::new(EchoDecoder));
+
+    let read = loader.get("x");
+    settle(&read, Duration::from_secs(5));
+
+    match read.get() {
+        AssetState::Failed(error) => assert_eq!(error, AssetError::transient("offline")),
+        _ => panic!("expected Failed"),
+    }
+}
+
+#[test]
+fn a_dropped_reply_becomes_a_transient_failure() {
+    let loader: AssetLoader<Arc<str>> =
+        AssetLoader::new(Arc::new(DroppingTransport), None, Arc::new(EchoDecoder));
+
+    let read = loader.get("x");
+    settle(&read, Duration::from_secs(5));
+
+    assert!(matches!(read.get(), AssetState::Failed(error) if error.is_transient()));
+}
+
+#[test]
+fn a_transient_failure_is_requested_again_only_after_the_backoff() {
+    let transport = Arc::new(FlakyTransport {
+        succeed_from: 2,
+        ..Default::default()
+    });
+    let loader: AssetLoader<Arc<str>> = AssetLoader::new(
+        Arc::clone(&transport) as Arc<dyn AssetTransport>,
+        None,
+        Arc::new(EchoDecoder),
+    )
+    .with_retry_backoff(Duration::from_millis(300), Duration::from_secs(5));
+
+    let read = loader.get("x");
+    settle(&read, Duration::from_secs(5));
+    assert!(matches!(read.get(), AssetState::Failed(_)));
+
+    loader.get("x");
+    std::thread::sleep(Duration::from_millis(20));
+    drain_tasks();
+    assert_eq!(*transport.calls.lock().unwrap(), 1, "too early to retry");
+    assert!(matches!(read.get(), AssetState::Failed(_)));
+
+    std::thread::sleep(Duration::from_millis(350));
+    let again = loader.get("x");
+    assert!(matches!(again.get(), AssetState::Loading));
+    settle(&read, Duration::from_secs(5));
+
+    assert_eq!(*transport.calls.lock().unwrap(), 2);
+    assert!(matches!(read.get(), AssetState::Ready(_)));
+}
+
+#[test]
+fn the_backoff_doubles_per_consecutive_failure_up_to_the_cap() {
+    let backoff = Backoff {
+        base: Duration::from_secs(1),
+        max: Duration::from_secs(5),
+    };
+    let delays: Vec<_> = (1..=5).map(|n| backoff.delay(n).as_secs()).collect();
+    assert_eq!(delays, [1, 2, 4, 5, 5]);
+}
+
+struct MissingTransport {
+    calls: Mutex<usize>,
+}
+
+impl AssetTransport for MissingTransport {
+    fn load(&self, _key: &AssetKey, reply: Reply) {
+        *self.calls.lock().unwrap() += 1;
+        reply(Err(AssetError::permanent("404")));
+    }
+}
+
+#[test]
+fn a_permanent_failure_is_never_requested_again() {
+    let transport = Arc::new(MissingTransport {
+        calls: Mutex::new(0),
+    });
+    let loader: AssetLoader<Arc<str>> = AssetLoader::new(
+        Arc::clone(&transport) as Arc<dyn AssetTransport>,
+        None,
+        Arc::new(EchoDecoder),
+    )
+    .with_retry_backoff(Duration::from_millis(50), Duration::from_millis(50));
+
+    let read = loader.get("x");
+    settle(&read, Duration::from_secs(5));
+    std::thread::sleep(Duration::from_millis(120));
+
+    let again = loader.get("x");
+    drain_tasks();
+
+    assert!(
+        matches!(again.get(), AssetState::Failed(_)),
+        "stays Failed, no flip to Loading"
+    );
+    assert_eq!(*transport.calls.lock().unwrap(), 1);
+}
+
+#[test]
+fn a_decode_failure_is_permanent() {
+    struct Garbage;
+    impl AssetTransport for Garbage {
+        fn load(&self, _key: &AssetKey, reply: Reply) {
+            reply(Ok(vec![0xff, 0xfe]));
+        }
+    }
+    let loader: AssetLoader<Arc<str>> =
+        AssetLoader::new(Arc::new(Garbage), None, Arc::new(EchoDecoder));
+
+    let read = loader.get("x");
+    settle(&read, Duration::from_secs(5));
+
+    match read.get() {
+        AssetState::Failed(error) => assert!(!error.is_transient()),
+        _ => panic!("expected Failed"),
+    }
 }

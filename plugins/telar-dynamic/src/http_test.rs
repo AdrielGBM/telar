@@ -20,7 +20,7 @@ fn retries_cannot_be_set_below_one_attempt() {
 /// Both bodies count attempts through this, so the give-up point cannot drift between targets.
 #[test]
 fn the_last_attempt_is_the_one_that_gives_up() {
-    let error = Failure::transient(AssetError("boom".to_string()));
+    let error = AssetError::transient("boom");
     assert!(
         !give_up("x", 1, 3, &error),
         "there are attempts left, so this is not the end"
@@ -34,17 +34,17 @@ fn the_last_attempt_is_the_one_that_gives_up() {
 
 #[test]
 fn a_permanent_failure_gives_up_on_the_first_attempt() {
-    let error = Failure::permanent(AssetError("404".to_string()));
+    let error = AssetError::permanent("404");
     assert!(give_up("x", 1, 8, &error));
 }
 
 #[test]
 fn throttling_timeouts_and_server_errors_are_retried_and_other_statuses_settle() {
     for status in [408, 429, 500, 502, 503, 504] {
-        assert!(Failure::status("u", status, "").transient, "{status}");
+        assert!(status_error("u", status, "").is_transient(), "{status}");
     }
     for status in [400, 401, 403, 404, 410, 422] {
-        assert!(!Failure::status("u", status, "").transient, "{status}");
+        assert!(!status_error("u", status, "").is_transient(), "{status}");
     }
 }
 
@@ -83,24 +83,24 @@ mod native_classification {
 
     #[test]
     fn a_status_error_is_classified_by_its_status() {
-        assert!(!classify("u", &ureq::Error::StatusCode(404)).transient);
-        assert!(classify("u", &ureq::Error::StatusCode(503)).transient);
-        assert!(classify("u", &ureq::Error::StatusCode(408)).transient);
-        assert!(classify("u", &ureq::Error::StatusCode(429)).transient);
+        assert!(!classify("u", &ureq::Error::StatusCode(404)).is_transient());
+        assert!(classify("u", &ureq::Error::StatusCode(503)).is_transient());
+        assert!(classify("u", &ureq::Error::StatusCode(408)).is_transient());
+        assert!(classify("u", &ureq::Error::StatusCode(429)).is_transient());
     }
 
     #[test]
     fn network_errors_and_timeouts_are_retried() {
-        assert!(classify("u", &ureq::Error::Timeout(ureq::Timeout::Global)).transient);
-        assert!(classify("u", &ureq::Error::HostNotFound).transient);
-        assert!(classify("u", &ureq::Error::ConnectionFailed).transient);
+        assert!(classify("u", &ureq::Error::Timeout(ureq::Timeout::Global)).is_transient());
+        assert!(classify("u", &ureq::Error::HostNotFound).is_transient());
+        assert!(classify("u", &ureq::Error::ConnectionFailed).is_transient());
         let io = std::io::Error::from(std::io::ErrorKind::ConnectionReset);
-        assert!(classify("u", &ureq::Error::Io(io)).transient);
+        assert!(classify("u", &ureq::Error::Io(io)).is_transient());
     }
 
     #[test]
     fn a_malformed_url_is_not_retried() {
-        assert!(!classify("u", &ureq::Error::BadUri("x".to_string())).transient);
+        assert!(!classify("u", &ureq::Error::BadUri("x".to_string())).is_transient());
     }
 }
 
@@ -144,7 +144,8 @@ mod body_cap {
         let error = transport(serve(vec![0; 64], true), 16)
             .fetch("x")
             .unwrap_err();
-        assert!(error.0.contains("exceeds 16 bytes"), "{error}");
+        assert!(error.message().contains("exceeds 16 bytes"), "{error}");
+        assert!(!error.is_transient());
     }
 
     #[test]
@@ -152,7 +153,8 @@ mod body_cap {
         let error = transport(serve(vec![0; 64], false), 16)
             .fetch("x")
             .unwrap_err();
-        assert!(error.0.contains("exceeds 16 bytes"), "{error}");
+        assert!(error.message().contains("exceeds 16 bytes"), "{error}");
+        assert!(!error.is_transient());
     }
 
     #[test]
@@ -173,9 +175,30 @@ mod body_cap {
             .with_retry(3, Duration::ZERO)
             .fetch("x")
             .unwrap_err();
-        assert!(error.0.contains("404"), "{error}");
+        assert!(error.message().contains("404"), "{error}");
+        assert!(!error.is_transient());
     }
 
+    #[test]
+    fn a_server_error_that_outlasts_the_attempts_is_reported_as_transient() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            while let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf);
+                let _ = stream.write_all(
+                    b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                );
+            }
+        });
+        let error = HttpTransport::new(format!("http://127.0.0.1:{port}/{{name}}"))
+            .with_retry(2, Duration::ZERO)
+            .fetch("x")
+            .unwrap_err();
+        assert!(error.message().contains("503"), "{error}");
+        assert!(error.is_transient());
+    }
     #[test]
     fn a_body_within_the_cap_is_returned() {
         let bytes = transport(serve(vec![7; 16], true), 16).fetch("x").unwrap();

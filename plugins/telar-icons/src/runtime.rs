@@ -180,11 +180,9 @@ mod installed {
             Some(match installed.loader.get(&path).get() {
                 AssetState::Ready(glyph) => Some((*glyph).clone()),
                 AssetState::Loading => None,
-                AssetState::Failed => {
+                AssetState::Failed(error) => {
                     super::warn_once(id, || {
-                        format!(
-                            "icon `{id}` could not be resolved at run time, so it draws nothing"
-                        )
+                        format!("icon `{id}` could not be resolved at run time ({error}), so it draws nothing")
                     });
                     None
                 }
@@ -227,10 +225,14 @@ mod installed {
         fn load(&self, key: &AssetKey, reply: Reply) {
             let answer = IconId::from_path(&key.id)
                 .and_then(|id| self.0.icon(&id))
-                .map_err(|error| AssetError(error.to_string()))
+                .map_err(|error| AssetError::permanent(error.to_string()))
                 .and_then(|icon| {
                     let icon = icon.ok_or_else(|| {
-                        AssetError(format!("no icon `{}` in {}", key.id, self.0.describe()))
+                        AssetError::permanent(format!(
+                            "no icon `{}` in {}",
+                            key.id,
+                            self.0.describe()
+                        ))
                     })?;
                     let mark = match icon.monochrome() {
                         true => MONOCHROME_MARK,

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use ui_core::{AssetError, AssetKey, AssetTransport, Reply};
 
-/// A transient failure — the shell often starts before the network is up at login — keeps the asset on `Loading` and is retried, so it self-heals once connectivity arrives without hammering the endpoint over a genuine 404.
+/// A transient failure — the shell often starts before the network is up at login — is retried within one fetch, and once those attempts run out it is still reported as transient so the loader asks again later; a genuine 404 is permanent and is neither retried nor asked for again.
 const DEFAULT_ATTEMPTS: u32 = 8;
 const DEFAULT_RETRY_DELAY: Duration = Duration::from_secs(4);
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -16,7 +16,7 @@ const DEFAULT_MAX_BODY_BYTES: u64 = 10 * 1024 * 1024;
 ///
 /// `url_template` is the endpoint with `{name}` standing in for the id — `"https://api.iconify.design/{name}.svg"` resolves the id `"mdi/home"` to `https://api.iconify.design/mdi/home.svg`. What an id *means* stays with the application: a set-qualified icon name, a default set, a theme prefix are all decisions this cannot make for it, and all of them come out as the id it is handed.
 ///
-/// Retrying belongs here rather than in the loader because it is a property of *this* source: a directory on disk that fails once fails identically the second time, and re-reading it is only latency. A loader that retried on the transport's behalf would be guessing which it had.
+/// Retrying within a fetch belongs here because what is worth retrying is a property of *this* source. The loader repeats the whole fetch across time only for a failure the transport reports as transient, and settles on a permanent one.
 ///
 /// ```ignore
 /// let transport = HttpTransport::new("https://api.iconify.design/{name}.svg")
@@ -80,7 +80,7 @@ fn encode_id(id: &str) -> Result<String, AssetError> {
     let mut encoded = String::with_capacity(id.len());
     for (index, segment) in id.split('/').enumerate() {
         if segment == "." || segment == ".." {
-            return Err(AssetError(format!(
+            return Err(AssetError::permanent(format!(
                 "asset id `{id}` is not a path inside the endpoint"
             )));
         }
@@ -100,38 +100,16 @@ fn encode_id(id: &str) -> Result<String, AssetError> {
 }
 
 fn too_large(url: &str, limit: u64) -> AssetError {
-    AssetError(format!("{url}: response body exceeds {limit} bytes"))
+    AssetError::permanent(format!("{url}: response body exceeds {limit} bytes"))
 }
 
 /// A request that got no answer, or a server-side or throttling one, may succeed later; a 404 or an oversized body answers the same way every time.
-#[derive(Debug)]
-struct Failure {
-    error: AssetError,
-    transient: bool,
-}
-
-impl Failure {
-    fn transient(error: AssetError) -> Self {
-        Self {
-            error,
-            transient: true,
-        }
-    }
-
-    fn permanent(error: AssetError) -> Self {
-        Self {
-            error,
-            transient: false,
-        }
-    }
-
-    fn status(url: &str, status: u16, text: &str) -> Self {
-        let error = AssetError(format!("{url}: HTTP {status} {text}"));
-        if retryable_status(status) {
-            Self::transient(error)
-        } else {
-            Self::permanent(error)
-        }
+fn status_error(url: &str, status: u16, text: &str) -> AssetError {
+    let message = format!("{url}: HTTP {status} {text}");
+    if retryable_status(status) {
+        AssetError::transient(message)
+    } else {
+        AssetError::permanent(message)
     }
 }
 
@@ -140,9 +118,9 @@ fn retryable_status(status: u16) -> bool {
 }
 
 /// Whether to stop, and the warning to leave behind when stopping. Shared so both bodies count attempts and classify failures identically — the only thing that differs between them is how the wait is spent.
-fn give_up(id: &str, attempts: u32, max_attempts: u32, failure: &Failure) -> bool {
-    let error = &failure.error;
-    if !failure.transient {
+fn give_up(id: &str, attempts: u32, max_attempts: u32, failure: &AssetError) -> bool {
+    let error = failure;
+    if !failure.is_transient() {
         tracing::warn!(
             "asset '{id}' failed without retrying ({error}); check the name and the endpoint"
         );
@@ -171,30 +149,30 @@ mod native {
                     Err(error) => error,
                 };
                 if give_up(id, attempts, self.max_attempts, &error) {
-                    return Err(error.error);
+                    return Err(error);
                 }
                 attempts += 1;
                 std::thread::sleep(self.retry_delay);
             }
         }
 
-        fn get(&self, url: &str) -> Result<Vec<u8>, Failure> {
+        fn get(&self, url: &str) -> Result<Vec<u8>, AssetError> {
             let limit = self.max_body_bytes;
             let mut response = self.agent.get(url).call().map_err(|e| classify(url, &e))?;
             let body = response.body_mut();
             if body.content_length().is_some_and(|length| length > limit) {
-                return Err(Failure::permanent(too_large(url, limit)));
+                return Err(too_large(url, limit));
             }
             let bytes = body
                 .with_config()
                 .limit(limit.saturating_add(1))
                 .read_to_vec()
                 .map_err(|e| match e {
-                    ureq::Error::BodyExceedsLimit(_) => Failure::permanent(too_large(url, limit)),
+                    ureq::Error::BodyExceedsLimit(_) => too_large(url, limit),
                     e => classify(url, &e),
                 })?;
             if bytes.len() as u64 > limit {
-                return Err(Failure::permanent(too_large(url, limit)));
+                return Err(too_large(url, limit));
             }
             Ok(bytes)
         }
@@ -208,16 +186,16 @@ mod native {
     }
 
     /// ureq 3 reports a 4xx/5xx as `Err(StatusCode)`, so the status decides, not the `Err`.
-    pub(super) fn classify(url: &str, error: &ureq::Error) -> Failure {
-        let message = AssetError(format!("{url}: {error}"));
+    pub(super) fn classify(url: &str, error: &ureq::Error) -> AssetError {
+        let message = format!("{url}: {error}");
         match error {
-            ureq::Error::StatusCode(status) => Failure::status(url, *status, ""),
+            ureq::Error::StatusCode(status) => status_error(url, *status, ""),
             ureq::Error::BadUri(_)
             | ureq::Error::Http(_)
             | ureq::Error::InvalidProxyUrl
             | ureq::Error::TooManyRedirects
-            | ureq::Error::BodyExceedsLimit(_) => Failure::permanent(message),
-            _ => Failure::transient(message),
+            | ureq::Error::BodyExceedsLimit(_) => AssetError::permanent(message),
+            _ => AssetError::transient(message),
         }
     }
 
@@ -263,7 +241,7 @@ mod web {
                         Err(error) => error,
                     };
                     if give_up(&id, attempts, max_attempts, &error) {
-                        break Err(error.error);
+                        break Err(error);
                     }
                     attempts += 1;
                     sleep(retry_delay).await;
@@ -274,7 +252,7 @@ mod web {
     }
 
     fn window() -> Result<web_sys::Window, AssetError> {
-        web_sys::window().ok_or_else(|| AssetError("no browser window to fetch from".to_string()))
+        web_sys::window().ok_or_else(|| AssetError::permanent("no browser window to fetch from"))
     }
 
     /// `setTimeout` as a future. The retry delay exists so a shell that starts before the network does not hammer the endpoint, and a busy-loop here would defeat it — but there is no thread to park, so the wait has to be a timer the event loop owns.
@@ -330,23 +308,23 @@ mod web {
     }
 
     /// The timeout is an `AbortController` fired by a timer, because `fetch` has no timeout of its own — a request left to the browser's own limits can outlive the frame that wanted it by minutes.
-    async fn get(url: &str, timeout: Duration, limit: u64) -> Result<Vec<u8>, Failure> {
-        let window = window().map_err(Failure::permanent)?;
+    async fn get(url: &str, timeout: Duration, limit: u64) -> Result<Vec<u8>, AssetError> {
+        let window = window()?;
         let controller = web_sys::AbortController::new()
-            .map_err(|e| Failure::permanent(js_error(url, "AbortController", &e)))?;
+            .map_err(|e| AssetError::permanent(js_error(url, "AbortController", &e)))?;
         let options = web_sys::RequestInit::new();
         options.set_signal(Some(&controller.signal()));
         let request = web_sys::Request::new_with_str_and_init(url, &options)
-            .map_err(|e| Failure::permanent(js_error(url, "Request", &e)))?;
+            .map_err(|e| AssetError::permanent(js_error(url, "Request", &e)))?;
 
         let _deadline = Deadline::start(window.clone(), controller, timeout);
         let response: web_sys::Response = JsFuture::from(window.fetch_with_request(&request))
             .await
-            .map_err(|e| Failure::transient(js_error(url, "fetch", &e)))?
+            .map_err(|e| AssetError::transient(js_error(url, "fetch", &e)))?
             .dyn_into()
-            .map_err(|e| Failure::permanent(js_error(url, "fetch", &e)))?;
+            .map_err(|e| AssetError::permanent(js_error(url, "fetch", &e)))?;
         if !response.ok() {
-            return Err(Failure::status(
+            return Err(status_error(
                 url,
                 response.status(),
                 &response.status_text(),
@@ -359,27 +337,27 @@ mod web {
             .flatten()
             .and_then(|value| value.parse::<u64>().ok());
         if declared.is_some_and(|length| length > limit) {
-            return Err(Failure::permanent(too_large(url, limit)));
+            return Err(too_large(url, limit));
         }
         let body = response
             .array_buffer()
-            .map_err(|e| Failure::transient(js_error(url, "body", &e)))?;
+            .map_err(|e| AssetError::transient(js_error(url, "body", &e)))?;
         let buffer = JsFuture::from(body)
             .await
-            .map_err(|e| Failure::transient(js_error(url, "body", &e)))?;
+            .map_err(|e| AssetError::transient(js_error(url, "body", &e)))?;
         let array = js_sys::Uint8Array::new(&buffer);
         if u64::from(array.length()) > limit {
-            return Err(Failure::permanent(too_large(url, limit)));
+            return Err(too_large(url, limit));
         }
         Ok(array.to_vec())
     }
 
     /// A rejected promise is whatever the page threw, and often not an `Error` at all, so it is stringified rather than downcast.
-    fn js_error(url: &str, stage: &str, value: &JsValue) -> AssetError {
-        AssetError(format!(
+    fn js_error(url: &str, stage: &str, value: &JsValue) -> String {
+        format!(
             "{url}: {stage}: {}",
             value.as_string().unwrap_or_else(|| format!("{value:?}"))
-        ))
+        )
     }
 }
 

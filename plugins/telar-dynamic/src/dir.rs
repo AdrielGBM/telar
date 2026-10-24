@@ -26,7 +26,7 @@ impl DirTransport {
 
     fn read(&self, id: &str) -> Result<Vec<u8>, AssetError> {
         let path = resolve(&self.root, id)?;
-        std::fs::read(&path).map_err(|e| AssetError(format!("{}: {e}", path.display())))
+        std::fs::read(&path).map_err(|e| AssetError::transient(format!("{}: {e}", path.display())))
     }
 }
 
@@ -46,7 +46,7 @@ fn resolve(root: &Path, id: &str) -> Result<PathBuf, AssetError> {
         match component {
             Component::Normal(_) | Component::CurDir => {}
             _ => {
-                return Err(AssetError(format!(
+                return Err(AssetError::permanent(format!(
                     "asset id `{id}` is not a path inside the asset directory"
                 )));
             }
@@ -57,12 +57,12 @@ fn resolve(root: &Path, id: &str) -> Result<PathBuf, AssetError> {
     // A path that cannot be canonicalized does not exist, and reporting that is the caller's read to do — but it must not be handed back as if containment had been checked, so it fails here.
     let resolved = candidate
         .canonicalize()
-        .map_err(|e| AssetError(format!("{}: {e}", candidate.display())))?;
+        .map_err(|e| AssetError::transient(format!("{}: {e}", candidate.display())))?;
     let root = root
         .canonicalize()
-        .map_err(|e| AssetError(format!("{}: {e}", root.display())))?;
+        .map_err(|e| AssetError::transient(format!("{}: {e}", root.display())))?;
     if !resolved.starts_with(&root) {
-        return Err(AssetError(format!(
+        return Err(AssetError::permanent(format!(
             "asset id `{id}` resolves outside the asset directory"
         )));
     }

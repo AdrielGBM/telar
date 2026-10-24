@@ -33,7 +33,8 @@ fn an_id_cannot_climb_out_of_the_directory() {
     let transport = DirTransport::new(&root);
     for id in ["../secret", "icons/../../secret", "/etc/passwd"] {
         let err = transport.read(id).unwrap_err();
-        assert!(err.0.contains("not a path inside"), "{id}: {err}");
+        assert!(err.message().contains("not a path inside"), "{id}: {err}");
+        assert!(!err.is_transient());
     }
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -48,8 +49,16 @@ fn an_id_cannot_escape_through_a_symlink() {
     std::os::unix::fs::symlink(&outside, root.join("escape")).unwrap();
 
     let err = DirTransport::new(&root).read("escape").unwrap_err();
-    assert!(err.0.contains("resolves outside"), "{err}");
+    assert!(err.message().contains("resolves outside"), "{err}");
 
     let _ = std::fs::remove_file(&outside);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_missing_file_is_transient_because_the_directory_may_fill_later() {
+    let root = probe("missing");
+    let err = DirTransport::new(&root).read("absent").unwrap_err();
+    assert!(err.is_transient(), "{err}");
     let _ = std::fs::remove_dir_all(&root);
 }

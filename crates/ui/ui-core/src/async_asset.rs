@@ -6,6 +6,9 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, VecDeque};
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::Duration;
+
+use web_time::Instant;
 
 use reactive_core::{Emitter, ReadSignal, RwSignal, Task, signal, spawn_stream};
 
@@ -14,7 +17,7 @@ use reactive_core::{Emitter, ReadSignal, RwSignal, Task, signal, spawn_stream};
 pub enum AssetState<T> {
     Loading,
     Ready(T),
-    Failed,
+    Failed(AssetError),
 }
 
 /// Two resolved states are the same asset when they hold the same `Arc` — identity, not contents. Comparing a decoded asset structurally would walk every path of every glyph to answer a question the pointer already answers, and answer it differently: two identical decodes of the same file are still two arrivals.
@@ -24,7 +27,7 @@ impl<T> PartialEq for AssetState<std::sync::Arc<T>> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (AssetState::Loading, AssetState::Loading) => true,
-            (AssetState::Failed, AssetState::Failed) => true,
+            (AssetState::Failed(a), AssetState::Failed(b)) => a == b,
             (AssetState::Ready(a), AssetState::Ready(b)) => std::sync::Arc::ptr_eq(a, b),
             _ => false,
         }
@@ -36,7 +39,7 @@ impl<T> PartialEq for AssetState<&'static T> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (AssetState::Loading, AssetState::Loading) => true,
-            (AssetState::Failed, AssetState::Failed) => true,
+            (AssetState::Failed(a), AssetState::Failed(b)) => a == b,
             (AssetState::Ready(a), AssetState::Ready(b)) => std::ptr::eq(*a, *b),
             _ => false,
         }
@@ -83,13 +86,42 @@ impl AssetKey {
     }
 }
 
-/// Why an asset failed to resolve — the transport could not get the bytes, or the decoder could not make sense of them. Carries a message for logs and diagnostics; nothing in the seam matches on it structurally.
+/// Why an asset failed to resolve — the transport could not get the bytes, or the decoder could not make sense of them. Carries a message for logs and diagnostics, and whether asking again later could succeed: [`AssetLoader`] requests only a transient failure again.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AssetError(pub String);
+pub struct AssetError {
+    message: String,
+    transient: bool,
+}
+
+impl AssetError {
+    /// A failure that answers the same way every time — a missing resource, bytes that do not decode — so the loader settles on it for good.
+    pub fn permanent(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            transient: false,
+        }
+    }
+
+    /// A failure that may clear by itself — no network yet, a busy server — so the loader asks again after its backoff.
+    pub fn transient(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            transient: true,
+        }
+    }
+
+    pub fn is_transient(&self) -> bool {
+        self.transient
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
 
 impl std::fmt::Display for AssetError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(&self.message)
     }
 }
 
@@ -136,14 +168,59 @@ struct Inner<V: Clone + Send + 'static> {
     transport: Arc<dyn AssetTransport>,
     cache: Option<Arc<dyn AssetCache>>,
     decoder: Arc<dyn AssetDecoder<Output = V>>,
-    states: RefCell<HashMap<String, RwSignal<AssetState<V>>>>,
+    states: RefCell<HashMap<String, Entry<V>>>,
+    backoff: Cell<Backoff>,
     queue: RefCell<VecDeque<String>>,
     in_flight: Cell<usize>,
     max_in_flight: Cell<usize>,
     tasks: RefCell<HashMap<String, Task>>,
 }
 
+const DEFAULT_RETRY_BASE: Duration = Duration::from_secs(1);
+const DEFAULT_RETRY_MAX: Duration = Duration::from_secs(60);
+
+#[derive(Clone, Copy)]
+struct Backoff {
+    base: Duration,
+    max: Duration,
+}
+
+impl Backoff {
+    fn delay(self, failures: u32) -> Duration {
+        let doublings = failures.saturating_sub(1).min(32);
+        self.base.saturating_mul(1u32 << doublings).min(self.max)
+    }
+}
+
+struct Entry<V: Clone + Send + 'static> {
+    signal: RwSignal<AssetState<V>>,
+    failures: u32,
+    failed_at: Option<Instant>,
+}
+
 impl<V: Clone + Send + 'static> Inner<V> {
+    fn settle(&self, id: &str, outcome: Result<V, AssetError>) {
+        let mut states = self.states.borrow_mut();
+        let Some(entry) = states.get_mut(id) else {
+            return;
+        };
+        let state = match outcome {
+            Ok(value) => {
+                entry.failures = 0;
+                entry.failed_at = None;
+                AssetState::Ready(value)
+            }
+            Err(error) => {
+                entry.failures = entry.failures.saturating_add(1);
+                entry.failed_at = error.is_transient().then(Instant::now);
+                AssetState::Failed(error)
+            }
+        };
+        let signal = entry.signal;
+        drop(states);
+        signal.set(state);
+    }
+
     fn enqueue(self: &Rc<Self>, id: String) {
         if self.in_flight.get() < self.max_in_flight.get() {
             self.start(id);
@@ -165,6 +242,8 @@ impl<V: Clone + Send + 'static> Inner<V> {
 
         let store = Rc::clone(self);
         let item_id = id.clone();
+        let settled = Rc::new(Cell::new(false));
+        let item_settled = Rc::clone(&settled);
         let end_store = Rc::clone(self);
         let end_id = id.clone();
 
@@ -194,14 +273,15 @@ impl<V: Clone + Send + 'static> Inner<V> {
                 );
             },
             move |outcome: Result<V, AssetError>| {
-                if let Some(signal) = store.states.borrow().get(&item_id) {
-                    signal.set(match outcome {
-                        Ok(value) => AssetState::Ready(value),
-                        Err(_) => AssetState::Failed,
-                    });
-                }
+                item_settled.set(true);
+                store.settle(&item_id, outcome);
             },
             move || {
+                if !settled.get() {
+                    let error =
+                        AssetError::transient("the transport dropped its reply without answering");
+                    end_store.settle(&end_id, Err(error));
+                }
                 end_store.tasks.borrow_mut().remove(&end_id);
                 end_store.in_flight.set(end_store.in_flight.get() - 1);
                 if let Some(next) = end_store.queue.borrow_mut().pop_front() {
@@ -253,6 +333,10 @@ impl<V: Clone + Send + 'static> AssetLoader<V> {
                 cache,
                 decoder,
                 states: RefCell::new(HashMap::new()),
+                backoff: Cell::new(Backoff {
+                    base: DEFAULT_RETRY_BASE,
+                    max: DEFAULT_RETRY_MAX,
+                }),
                 queue: RefCell::new(VecDeque::new()),
                 in_flight: Cell::new(0),
                 max_in_flight: Cell::new(DEFAULT_MAX_IN_FLIGHT),
@@ -267,19 +351,40 @@ impl<V: Clone + Send + 'static> AssetLoader<V> {
         self
     }
 
-    /// A reactive handle to the asset named `id`. Reading it subscribes the caller and, on first ask, starts resolving it; a later call for the same id returns the same signal instead of asking the transport again.
+    /// How long an id that failed transiently waits before the next [`get`](Self::get) requests it again: `base` after the first failure, doubling with each consecutive one up to `max`. Defaults to 1 s and 60 s.
+    pub fn with_retry_backoff(self, base: Duration, max: Duration) -> Self {
+        self.inner.backoff.set(Backoff { base, max });
+        self
+    }
+
+    /// A reactive handle to the asset named `id`. Reading it subscribes the caller and, on first ask, starts resolving it; a later call for the same id returns the same signal instead of asking the transport again — unless the id failed transiently and its retry backoff has elapsed, in which case the same signal goes back to `Loading` and the request is repeated.
     pub fn get(&self, id: &str) -> ReadSignal<AssetState<V>> {
-        if let Some(existing) = self.inner.states.borrow().get(id) {
-            return existing.read_only();
+        let mut states = self.inner.states.borrow_mut();
+        if let Some(entry) = states.get_mut(id) {
+            let signal = entry.signal;
+            let due = entry
+                .failed_at
+                .is_some_and(|at| at.elapsed() >= self.inner.backoff.get().delay(entry.failures));
+            if due {
+                entry.failed_at = None;
+                drop(states);
+                signal.set(AssetState::Loading);
+                self.inner.enqueue(id.to_string());
+            }
+            return signal.read_only();
         }
         let handle = signal(AssetState::Loading);
-        let read = handle.read_only();
-        self.inner
-            .states
-            .borrow_mut()
-            .insert(id.to_string(), handle);
+        states.insert(
+            id.to_string(),
+            Entry {
+                signal: handle,
+                failures: 0,
+                failed_at: None,
+            },
+        );
+        drop(states);
         self.inner.enqueue(id.to_string());
-        read
+        handle.read_only()
     }
 
     /// The resolved asset, or `fallback()` while it is still loading or has failed. Reads reactively, so a widget calling this re-renders once the asset lands.

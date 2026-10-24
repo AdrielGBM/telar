@@ -25,7 +25,9 @@ impl AssetDecoder for ImageDecoder {
     type Output = Arc<ImageData>;
 
     fn decode(&self, bytes: &[u8]) -> Result<Self::Output, AssetError> {
-        let fail = |e: &dyn std::fmt::Display| AssetError(format!("failed to decode image: {e}"));
+        let fail = |e: &dyn std::fmt::Display| {
+            AssetError::permanent(format!("failed to decode image: {e}"))
+        };
         let mut reader = ImageReader::new(Cursor::new(bytes))
             .with_guessed_format()
             .map_err(|e| fail(&e))?;

@@ -33,12 +33,12 @@ impl AssetDecoder for FontDecoder {
 
     fn decode(&self, bytes: &[u8]) -> Result<Self::Output, AssetError> {
         let families = renderer_text::fonts::install_face(bytes.to_vec())
-            .ok_or_else(|| AssetError("not a font file this build can read".to_string()))?;
+            .ok_or_else(|| AssetError::permanent("not a font file this build can read"))?;
         families
             .into_iter()
             .next()
             .map(Arc::from)
-            .ok_or_else(|| AssetError("font declares no family name".to_string()))
+            .ok_or_else(|| AssetError::permanent("font declares no family name"))
     }
 }
 

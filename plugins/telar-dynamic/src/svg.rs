@@ -19,10 +19,10 @@ impl AssetDecoder for SvgDecoder {
 
     fn decode(&self, bytes: &[u8]) -> Result<Self::Output, AssetError> {
         let text = std::str::from_utf8(bytes)
-            .map_err(|e| AssetError(format!("svg is not valid utf-8: {e}")))?;
+            .map_err(|e| AssetError::permanent(format!("svg is not valid utf-8: {e}")))?;
         SvgData::from_str(text)
             .map(Arc::new)
-            .map_err(|e| AssetError(e.to_string()))
+            .map_err(|e| AssetError::permanent(e.to_string()))
     }
 }
 
