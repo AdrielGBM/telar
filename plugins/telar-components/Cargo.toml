@@ -62,6 +62,23 @@ telar-icons = { workspace = true, optional = true }
 
 web-time = { workspace = true }
 
+[dev-dependencies]
+telar = { workspace = true, features = ["previews", "shaper", "testing"] }
+ui-core = { workspace = true }
+ui-tree = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+telar = { workspace = true, features = ["headless"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+
+js-sys = { workspace = true }
+renderer-dom = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+wasm-bindgen-test = { workspace = true }
+web-sys = { workspace = true, features = ["CssStyleDeclaration", "Document", "Element", "HtmlElement", "HtmlHeadElement", "Node", "Window"] }
+
 [[test]]
 name = "reachable"
 path = "src/reachable_test.rs"
@@ -85,20 +102,3 @@ path = "src/theme_extension_test.rs"
 [[test]]
 name = "play"
 path = "src/play_test.rs"
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-telar = { workspace = true, features = ["headless"] }
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-js-sys.workspace = true
-renderer-dom.workspace = true
-wasm-bindgen.workspace = true
-wasm-bindgen-futures.workspace = true
-# Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin in [workspace.dependencies]. The two move together.
-wasm-bindgen-test = "=0.3.77"
-web-sys = { workspace = true, features = ["CssStyleDeclaration", "Document", "Element", "HtmlElement", "HtmlHeadElement", "Node", "Window"] }
-
-[dev-dependencies]
-telar = { workspace = true, features = ["previews", "shaper", "testing"] }
-ui-core.workspace = true
-ui-tree.workspace = true

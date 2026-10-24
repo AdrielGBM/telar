@@ -1,60 +1,60 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/platform/platform-core",
-    "crates/platform/platform-winit",
-    "crates/platform/platform-desktop",
-    "crates/platform/platform-android",
-    "crates/platform/platform-headless",
-    "crates/renderer/renderer-core",
-    "crates/renderer/renderer-assets",
-    "crates/renderer/renderer-cache",
-    "crates/renderer/renderer-record",
-    "crates/renderer/renderer-software",
-    "crates/renderer/renderer-hardware",
-    "crates/renderer/renderer-text",
-    "crates/reactive/reactive-core",
-    "crates/services/services-core",
+    "apps/catalogue",
+    "apps/landing",
+    "apps/sandbox",
+    "crates/embed/telar-embed",
     "crates/geometry/geometry-core",
-    "crates/semantics/semantics-core",
-    "crates/motion/motion-core",
+    "crates/i18n/i18n-core",
+    "crates/i18n/i18n-fixture",
+    "crates/icons/icons-core",
     "crates/layout/layout-core",
     "crates/layout/layout-reactive",
-    "crates/ui/theme-core",
-    "crates/ui/ui-core",
-    "crates/ui/ui-tree",
-    "crates/renderer/renderer-tui",
+    "crates/motion/motion-core",
+    "crates/platform/platform-android",
+    "crates/platform/platform-core",
+    "crates/platform/platform-desktop",
+    "crates/platform/platform-headless",
     "crates/platform/platform-tui",
     "crates/platform/platform-web",
-    "crates/renderer/renderer-web",
+    "crates/platform/platform-winit",
+    "crates/preferences/preferences-core",
+    "crates/reactive/reactive-core",
+    "crates/reactive/reactive-local",
+    "crates/renderer/renderer-assets",
+    "crates/renderer/renderer-cache",
+    "crates/renderer/renderer-core",
     "crates/renderer/renderer-dom",
+    "crates/renderer/renderer-hardware",
+    "crates/renderer/renderer-record",
+    "crates/renderer/renderer-software",
+    "crates/renderer/renderer-text",
+    "crates/renderer/renderer-tui",
+    "crates/renderer/renderer-web",
+    "crates/semantics/semantics-core",
+    "crates/services/services-core",
     "crates/telar",
     "crates/tools/cargo-telar",
+    "crates/tools/telar-analyzer",
+    "crates/tools/telar-baker",
+    "crates/tools/telar-diagnostics",
+    "crates/tools/telar-macros",
     "crates/tools/telar-parser",
     "crates/tools/telar-project",
     "crates/tools/telar-transpiler",
-    "crates/tools/telar-analyzer",
-    "crates/tools/telar-diagnostics",
-    "crates/tools/telar-macros",
-    "crates/tools/telar-baker",
-    "apps/sandbox",
-    "apps/landing",
-    "apps/catalogue",
+    "crates/ui/theme-core",
+    "crates/ui/ui-core",
+    "crates/ui/ui-tree",
     "plugins/telar-components",
     "plugins/telar-devtools",
-    "crates/i18n/i18n-core",
-    "plugins/telar-navigate",
-    "crates/reactive/reactive-local",
-    "crates/i18n/i18n-fixture",
     "plugins/telar-dynamic",
-    "crates/embed/telar-embed",
-    "crates/preferences/preferences-core",
     "plugins/telar-expression",
+    "plugins/telar-i18n",
+    "plugins/telar-icons",
+    "plugins/telar-navigate",
     "plugins/telar-rsx-fixture",
     "plugins/telar-watch",
-    "plugins/telar-i18n",
-    "crates/icons/icons-core",
-    "plugins/telar-icons",
     "plugins/telar-workshop",
 ]
 
@@ -113,32 +113,6 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/AdrielGBM/telar"
 authors = ["Adriel Barrientos M. <adrielgbm@gmail.com>"]
 
-[profile.dev]
-opt-level = 1
-debug = "line-tables-only"
-lto = "off"
-
-[profile.dev.package."*"]
-opt-level = 3
-# Debug info for code nobody here is stepping through, and the bulk of what a hot reload relinks.
-debug = false
-
-[profile.release]
-opt-level = 3
-lto = "fat"
-codegen-units = 1
-strip = "symbols"
-
-# What a browser build optimises for, which is not what a desktop one does: the module crosses a network
-# before it runs a single instruction, and a megabyte of extra code costs more there than the cycles
-# `opt-level = 3` bought. `panic = "abort"` goes with it because a wasm module cannot unwind out through the
-# JavaScript that called it anyway, so the landing pads are tables nothing will ever read.
-
-[profile.web]
-inherits = "release"
-opt-level = "z"
-panic = "abort"
-
 [workspace.dependencies]
 # Internal crates first, then a blank line, then everything external; alphabetical within each group.
 # Every crate publishes as `telar-*`; the keys keep the short internal names so `use ui_core::…` and `dep:ui-core` feature syntax stay unchanged.
@@ -177,14 +151,14 @@ services-core = { package = "telar-services-core", path = "crates/services/servi
 telar = { path = "crates/telar", version = "0.2.2", default-features = false }
 telar-baker = { path = "crates/tools/telar-baker", version = "0.2.2" }
 telar-components = { path = "plugins/telar-components", version = "0.2.2" }
-telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.2.2" }
 telar-devtools = { path = "plugins/telar-devtools", version = "0.2.2" }
+telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.2.2" }
 telar-dynamic = { path = "plugins/telar-dynamic", version = "0.2.2" }
 telar-icons = { path = "plugins/telar-icons", version = "0.2.2" }
-telar-project = { path = "crates/tools/telar-project", version = "0.2.2" }
 telar-macros = { path = "crates/tools/telar-macros", version = "0.2.2" }
 telar-navigate = { path = "plugins/telar-navigate", version = "0.2.2" }
 telar-parser = { path = "crates/tools/telar-parser", version = "0.2.2" }
+telar-project = { path = "crates/tools/telar-project", version = "0.2.2" }
 telar-transpiler = { path = "crates/tools/telar-transpiler", version = "0.2.2", default-features = false }
 telar-workshop = { path = "plugins/telar-workshop", version = "0.2.2" }
 theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.2.2" }
@@ -196,15 +170,16 @@ criterion = { version = "0.8.2", default-features = false, features = [
     "cargo_bench_support",
 ] }
 document-features = "0.2.12"
+icu_locale_core = "2.3.0"
 image = { version = "0.25.10", default-features = false }
 js-sys = "0.3"
 libc = "0.2.189"
+libloading = "0.8"
 lru = "0.18.0"
 lsp-types = "0.97"
 notify = "8.2.0"
 # Held at 0.4 rather than 1.x because `rfd` 0.17 pins that, and a second copy buys nothing.
 pollster = "0.4"
-prettyplease = "0.3.0"
 proc-macro2 = "1.0.107"
 raw-window-handle = "0.6"
 rustc-hash = "2.1.2"
@@ -223,12 +198,42 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
     "tracing-log",
     "std",
 ] }
+unicode-segmentation = "1.13.3"
+ureq = { version = "3.4.0", default-features = false }
 # Pinned: the generated glue must match the `wasm-bindgen` CLI, and the one in the dev shell is this version.
 wasm-bindgen = "=0.2.127"
 wasm-bindgen-futures = "0.4"
+# Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin. The two move together.
+wasm-bindgen-test = "=0.3.77"
 web-sys = "0.3"
 # std's Instant aborts on wasm32-unknown-unknown; this is the same type on every other target.
 web-time = "1.1.0"
 wide = "1.4"
 # Only `rwh_06` is common to every backend, so each platform crate names the windowing systems it actually talks to: an Android build has no business compiling X11 and Wayland.
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+lto = "off"
+
+[profile.dev.package."*"]
+opt-level = 3
+# Debug info for code nobody here is stepping through, and the bulk of what a hot reload relinks.
+debug = false
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+
+# What a browser build optimises for, which is not what a desktop one does: the module crosses a network
+# before it runs a single instruction, and a megabyte of extra code costs more there than the cycles
+# `opt-level = 3` bought. `panic = "abort"` goes with it because a wasm module cannot unwind out through the
+# JavaScript that called it anyway, so the landing pads are tables nothing will ever read.
+
+[profile.web]
+inherits = "release"
+opt-level = "z"
+panic = "abort"

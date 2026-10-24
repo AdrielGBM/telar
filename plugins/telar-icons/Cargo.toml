@@ -21,14 +21,15 @@ default = []
 runtime = ["dep:telar-dynamic", "telar/async-assets"]
 
 [dependencies]
-icons-core.workspace = true
+icons-core = { workspace = true }
 telar = { workspace = true, features = ["runtime", "svg"] }
 telar-dynamic = { workspace = true, features = ["http", "svg"], optional = true }
-tracing.workspace = true
+
+tracing = { workspace = true }
 
 [dev-dependencies]
 telar-dynamic = { workspace = true, features = ["svg"] }
-ui-core.workspace = true
+ui-core = { workspace = true }
 
 [[test]]
 name = "runtime"

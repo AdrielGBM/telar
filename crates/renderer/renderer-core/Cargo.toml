@@ -10,22 +10,22 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+[features]
+test-support = []
+
 [dependencies]
 geometry-core = { workspace = true }
-reactive-local.workspace = true
+reactive-local = { workspace = true }
 semantics-core = { workspace = true }
 
 bytemuck = { workspace = true }
+icu_casemap = "2.3.0"
+icu_locale_core = { workspace = true }
 rustc-hash = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+unicode-segmentation = { workspace = true }
 web-time = { workspace = true }
 wide = { workspace = true }
 xxhash-rust = { version = "0.8.18", features = ["xxh3"] }
-icu_casemap = "2.3.0"
-icu_locale_core = "2.3.0"
-unicode-segmentation = "1.13.3"
-
-[features]
-test-support = []

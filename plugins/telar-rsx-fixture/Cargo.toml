@@ -23,7 +23,7 @@ include = [
 
 [dependencies]
 telar = { workspace = true, features = ["runtime", "svg"] }
-telar-icons.workspace = true
+telar-icons = { workspace = true }
 
 [dev-dependencies]
 telar = { workspace = true, features = ["testing"] }

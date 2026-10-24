@@ -13,7 +13,7 @@ repository = { workspace = true }
 [dependencies]
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
-reactive-local.workspace = true
+reactive-local = { workspace = true }
 services-core = { workspace = true }
 
 tracing = { workspace = true }
@@ -64,7 +64,7 @@ web-sys = { workspace = true, features = [
 ] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = "=0.3.77"
+wasm-bindgen-test = { workspace = true }
 
 [[test]]
 name = "preferences"

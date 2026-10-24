@@ -10,11 +10,12 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
+[dependencies]
+telar = { workspace = true, features = ["runtime"] }
+
+notify = { workspace = true }
+tracing = { workspace = true }
+
 [[test]]
 name = "watch_path"
 path = "src/watch_path_test.rs"
-
-[dependencies]
-notify.workspace = true
-telar = { workspace = true, features = ["runtime"] }
-tracing.workspace = true

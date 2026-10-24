@@ -10,25 +10,6 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
-[dependencies]
-geometry-core = { workspace = true }
-layout-core = { workspace = true }
-layout-reactive = { workspace = true }
-motion-core = { workspace = true }
-platform-core = { workspace = true }
-reactive-core = { workspace = true }
-renderer-assets = { workspace = true }
-renderer-core = { workspace = true }
-services-core = { workspace = true, features = ["di"] }
-theme-core = { workspace = true }
-ui-tree = { workspace = true }
-
-rustc-hash = { workspace = true }
-web-time = { workspace = true }
-tracing.workspace = true
-i18n-core.workspace = true
-preferences-core.workspace = true
-
 [features]
 default = []
 
@@ -39,9 +20,28 @@ dynamic-svg = ["svg", "renderer-assets/dynamic-svg"]
 # Enables the `Svg` widget module only; it needs baked `SvgData` (always available), not usvg.
 svg = []
 
+[dependencies]
+geometry-core = { workspace = true }
+i18n-core = { workspace = true }
+layout-core = { workspace = true }
+layout-reactive = { workspace = true }
+motion-core = { workspace = true }
+platform-core = { workspace = true }
+preferences-core = { workspace = true }
+reactive-core = { workspace = true }
+renderer-assets = { workspace = true }
+renderer-core = { workspace = true }
+services-core = { workspace = true, features = ["di"] }
+theme-core = { workspace = true }
+ui-tree = { workspace = true }
+
+rustc-hash = { workspace = true }
+tracing = { workspace = true }
+web-time = { workspace = true }
+
 [dev-dependencies]
 renderer-text = { workspace = true }
-renderer-tui.workspace = true
+renderer-tui = { workspace = true }
 
 [[test]]
 name = "cell_focus"

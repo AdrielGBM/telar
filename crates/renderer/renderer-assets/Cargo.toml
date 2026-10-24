@@ -10,18 +10,6 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
-[dependencies]
-geometry-core = { workspace = true }
-renderer-core = { workspace = true }
-
-image = { workspace = true, features = ["png", "jpeg"], optional = true }
-# Both stripped to their cores, because their defaults are a whole text stack — see `svg-text` below for
-# what that costs and who should pay it.
-resvg = { version = "0.48", optional = true, default-features = false }
-rustc-hash = { workspace = true }
-thiserror = { workspace = true }
-usvg = { version = "0.48", optional = true, default-features = false }
-
 [features]
 default = []
 
@@ -50,3 +38,15 @@ dynamic-svg = ["dep:usvg", "dep:resvg", "resvg/raster-images"]
 # `image-*` knobs do: text in a runtime SVG is dropped rather than refusing to compile, because which
 # features an SVG uses is not knowable until the string arrives.
 svg-text = ["usvg?/text", "resvg?/text"]
+
+[dependencies]
+geometry-core = { workspace = true }
+renderer-core = { workspace = true }
+
+image = { workspace = true, features = ["png", "jpeg"], optional = true }
+# Both stripped to their cores, because their defaults are a whole text stack — see `svg-text` below for
+# what that costs and who should pay it.
+resvg = { version = "0.48", optional = true, default-features = false }
+rustc-hash = { workspace = true }
+thiserror = { workspace = true }
+usvg = { version = "0.48", optional = true, default-features = false }

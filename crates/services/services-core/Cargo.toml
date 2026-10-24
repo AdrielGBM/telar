@@ -10,15 +10,6 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
-[dependencies]
-reactive-core = { workspace = true }
-reactive-local = { workspace = true }
-
-dirs = { version = "7.0.0", optional = true }
-rustc-hash = { workspace = true, optional = true }
-thiserror = { workspace = true, optional = true }
-tracing = { workspace = true }
-
 [features]
 default = []
 # Dependency-injection scope/registry. Off by default; no runtime consumer wires it yet, so it stays opt-in to keep the default build lean.
@@ -28,3 +19,12 @@ di = ["dep:rustc-hash", "dep:thiserror"]
 system-paths = ["dep:dirs"]
 # Opening a URI by starting the system launcher (`xdg-open`, `open`, the Windows URL handler). Opt-in for the same reason: a browser has no process to start.
 system-opener = []
+
+[dependencies]
+reactive-core = { workspace = true }
+reactive-local = { workspace = true }
+
+dirs = { version = "7.0.0", optional = true }
+rustc-hash = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tracing = { workspace = true }

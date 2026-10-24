@@ -10,13 +10,6 @@ readme = "README.md"
 license = { workspace = true }
 repository = { workspace = true }
 
-# docs.rs builds with everything on, so every decoder and transport is visible from one page rather than
-# just the ones a default build happens to carry — which here is none of them.
-
-[[test]]
-name = "http_assets"
-path = "src/http_assets_test.rs"
-
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
@@ -30,7 +23,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 #! `runtime-catalog`. Nothing in here is baked or linked ahead of time, so saying so in every name would
 #! only be loud.
 default = []
-
 #! ## Formats
 
 ## SVG parsed at runtime, through `usvg`/`resvg`. Covers `<image>` inside the document too: an SVG parser
@@ -56,7 +48,6 @@ font = ["dep:renderer-text"]
 ## that already holds the TOML and calls `set_catalog` itself, this one for a catalog that arrives over a
 ## transport. An application doing both names either — they resolve to one parser.
 catalog = ["i18n-core/runtime-catalog"]
-
 #! ## Sources
 
 ## Bytes read from a directory on disk, through `DirTransport`. Adds no dependency: the whole transport is
@@ -72,12 +63,10 @@ http = [
     "dep:wasm-bindgen-futures",
     "dep:web-sys",
 ]
-
 #! ## Everything
 
 ## Every decoder and every transport, for a build that would rather not enumerate.
 all = ["svg", "svg-text", "image", "image-formats", "catalog", "font", "dir", "http"]
-
 #! ## Image formats
 #!
 #! Extra decode formats for [`image`](#image), one knob each, passed straight through to the `image` crate.
@@ -124,8 +113,9 @@ tracing = { workspace = true }
 # Target-gated rather than plain-optional: `http` is one feature with two bodies, and neither client is
 # buildable — let alone useful — on the other's target. A plain optional `ureq` fails a wasm build on a
 # `getrandom` error deep under a TLS stack nobody asked for.
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ureq = { version = "3.4.0", optional = true }
+ureq = { workspace = true, optional = true, features = ["default"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = { workspace = true, optional = true }
@@ -149,6 +139,13 @@ renderer-assets = { workspace = true }
 # `--all-features`-only extra.
 telar-dynamic = { path = ".", features = ["http", "svg"] }
 ui-core = { workspace = true }
+
+# docs.rs builds with everything on, so every decoder and transport is visible from one page rather than
+# just the ones a default build happens to carry — which here is none of them.
+
+[[test]]
+name = "http_assets"
+path = "src/http_assets_test.rs"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }

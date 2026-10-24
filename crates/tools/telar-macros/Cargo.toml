@@ -20,10 +20,10 @@ hot-reload = []
 [dependencies]
 telar-project = { workspace = true }
 
+prettyplease = "0.3.0"
 proc-macro2 = { workspace = true }
 quote = "1"
 syn = { workspace = true }
-prettyplease = { workspace = true }
 
 [[test]]
 name = "props"

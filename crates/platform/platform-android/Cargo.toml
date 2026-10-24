@@ -17,13 +17,13 @@ services-core = { workspace = true }
 raw-window-handle = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
-platform-winit = { workspace = true }
 
 android-activity = { version = "0.6", features = ["native-activity"] }
+geometry-core = { workspace = true }
+jni = { version = "0.22.4", default-features = false }
 libc = { workspace = true }
 paranoid-android = "0.2.2"
+platform-winit = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 winit = { workspace = true, features = ["android-native-activity"] }
-jni = { version = "0.22.4", default-features = false }
-geometry-core.workspace = true

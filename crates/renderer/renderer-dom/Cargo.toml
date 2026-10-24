@@ -13,7 +13,7 @@ repository = { workspace = true }
 [dependencies]
 geometry-core = { workspace = true }
 platform-core = { workspace = true }
-reactive-local.workspace = true
+reactive-local = { workspace = true }
 renderer-core = { workspace = true }
 
 rustc-hash = { workspace = true }
@@ -25,16 +25,15 @@ wasm-bindgen = { workspace = true }
 web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "HtmlCanvasElement", "ImageData", "NodeList", "TextMetrics", "CssStyleDeclaration", "Document", "DomRect", "Element", "AddEventListenerOptions", "EventTarget", "HtmlElement", "HtmlTextAreaElement", "InputEvent", "KeyboardEvent", "HtmlHeadElement", "Node", "Text", "Window", "Location", "FocusEvent", "FontFaceSet", "MouseEvent", "HtmlAnchorElement", "NamedNodeMap", "Attr", "HtmlCollection", "CompositionEvent"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-js-sys.workspace = true
-layout-core = { workspace = true }
-platform-web.workspace = true
-reactive-core.workspace = true
-ui-core.workspace = true
-ui-tree.workspace = true
-wasm-bindgen-futures.workspace = true
 
-# Pinned to the release whose glue and `wasm-bindgen-test-runner` match the `wasm-bindgen` pin in [workspace.dependencies]. The two move together.
-wasm-bindgen-test = "=0.3.77"
+js-sys = { workspace = true }
+layout-core = { workspace = true }
+platform-web = { workspace = true }
+reactive-core = { workspace = true }
+ui-core = { workspace = true }
+ui-tree = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+wasm-bindgen-test = { workspace = true }
 web-sys = { workspace = true, features = ["KeyboardEventInit", "EventInit", "NodeList", "FocusEvent", "FontFace", "FontFaceSet", "Blob", "BlobPropertyBag", "Url", "MouseEvent", "MouseEventInit", "PointerEvent", "PointerEventInit", "MutationObserver", "MutationObserverInit", "MutationRecord", "Range", "CompositionEvent", "CompositionEventInit", "InputEventInit"] }
 
 [[test]]

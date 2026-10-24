@@ -27,17 +27,18 @@ include = [
 [dependencies]
 telar = { workspace = true, features = ["previews"] }
 telar-components = { workspace = true, features = ["workbench", "overlays", "chrome"] }
-telar-devtools.workspace = true
-telar-navigate.workspace = true
-theme-core.workspace = true
-serde = { workspace = true, features = ["rc"] }
-telar-icons.workspace = true
-serde_json.workspace = true
-tiny-skia.workspace = true
-telar-project.workspace = true
+telar-devtools = { workspace = true }
+telar-icons = { workspace = true }
+telar-navigate = { workspace = true }
+telar-project = { workspace = true }
+theme-core = { workspace = true }
 
-[dev-dependencies]
-telar = { workspace = true, features = ["headless", "dev", "testing"] }
+serde = { workspace = true, features = ["rc"] }
+serde_json = { workspace = true }
+tiny-skia = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 telar = { workspace = true, features = ["web-dom"] }
+
+[dev-dependencies]
+telar = { workspace = true, features = ["headless", "dev", "testing"] }

@@ -10,6 +10,29 @@ readme = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 
+[dependencies]
+i18n-core = { workspace = true, features = ["runtime-catalog"] }
+layout-core = { workspace = true }
+telar-baker = { workspace = true }
+telar-diagnostics = { workspace = true }
+telar-parser = { workspace = true }
+telar-project = { workspace = true }
+telar-transpiler = { workspace = true, features = ["transpile"] }
+
+brotli = { version = "9.0.0", default-features = false, features = ["std"] }
+clap = { version = "4.6.1", features = ["derive"] }
+ctrlc = { version = "3.5.2", features = ["termination"] }
+flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"] }
+getrandom = "0.3.4"
+notify = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = "3.27.0"
+toml = { workspace = true }
+
+[dev-dependencies]
+ureq = { workspace = true }
+
 [[test]]
 name = "rsx_library"
 path = "src/rsx_library_test.rs"
@@ -21,27 +44,3 @@ path = "src/workshop_export_test.rs"
 [[test]]
 name = "workshop_audit"
 path = "src/workshop_audit_test.rs"
-
-[dependencies]
-telar-baker = { workspace = true }
-telar-diagnostics = { workspace = true }
-telar-parser = { workspace = true }
-telar-project = { workspace = true }
-telar-transpiler = { workspace = true, features = ["transpile"] }
-
-brotli = { version = "9.0.0", default-features = false, features = ["std"] }
-clap = { version = "4.6.1", features = ["derive"] }
-flate2 = { version = "1.1.9", default-features = false, features = ["rust_backend"] }
-layout-core = { workspace = true }
-notify = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-toml = { workspace = true }
-i18n-core = { workspace = true, features = ["runtime-catalog"] }
-ctrlc = { version = "3.5.2", features = ["termination"] }
-tempfile = "3.27.0"
-getrandom = "0.3.4"
-
-[dev-dependencies]
-ureq = { version = "3.4.0", default-features = false }
-

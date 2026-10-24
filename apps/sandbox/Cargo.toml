@@ -7,35 +7,25 @@ authors = { workspace = true }
 repository = { workspace = true }
 publish = false
 
+[package.metadata.android]
+package = "com.example.telar.sandbox"
+build_targets = ["aarch64-linux-android"]
+
+[package.metadata.android.sdk]
+min_sdk_version = 33
+target_sdk_version = 36
+
+[package.metadata.android.application.activity]
+# uiMode added so an OS dark/light change is handled in-process instead of recreating the NativeActivity,
+# which tears down the wgpu surface and hangs. The other three match cargo-apk's default configChanges.
+config_changes = "orientation|keyboardHidden|screenSize|uiMode"
+
 [lib]
 crate-type = ["cdylib", "lib"]
 
 [[bin]]
 name = "sandbox"
 path = "src/main.rs"
-
-[dependencies]
-# The frontend is this app's `default` to choose rather than telar's — the workspace turns telar's own off.
-# Everything named here is what the app needs whichever frontend it runs on; the rest is under `[features]`.
-telar = { workspace = true, features = [
-    "runtime",
-    "svg",
-] }
-# Menus, dialogs and drawers draw over the page; steppers, accordions and reorderable lists are the rest.
-telar-components = { workspace = true, features = ["overlays", "advanced"] }
-# `demo_svgs.rs` builds its icons with `SvgData::from_str`, and the runtime parser behind it lives here now
-# rather than under a `telar` feature. The demo never reaches for a name in this crate — the dependency is
-# what turns the parser on.
-telar-dynamic = { workspace = true, features = ["svg"] }
-telar-navigate = { workspace = true }
-
-serde = { workspace = true }
-telar-devtools = { workspace = true, optional = true }
-telar-icons.workspace = true
-
-# Only `main.rs` initialises a subscriber, and there is no `main.rs` on wasm — left unconditional, this pulled a terminal log formatter, `ansi` included, into every page build.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tracing-subscriber = { workspace = true, features = ["env-filter", "ansi"] }
 
 [features]
 default = ["desktop"]
@@ -53,6 +43,30 @@ web = ["telar/web"]
 # The browser drawing as a document alone: no GPU, no shaper, and no faces to carry for one.
 web-dom = ["telar/web-dom"]
 telar-devtools = ["dep:telar-devtools"]
+
+[dependencies]
+# The frontend is this app's `default` to choose rather than telar's — the workspace turns telar's own off.
+# Everything named here is what the app needs whichever frontend it runs on; the rest is under `[features]`.
+telar = { workspace = true, features = [
+    "runtime",
+    "svg",
+] }
+# Menus, dialogs and drawers draw over the page; steppers, accordions and reorderable lists are the rest.
+telar-components = { workspace = true, features = ["overlays", "advanced"] }
+telar-devtools = { workspace = true, optional = true }
+# `demo_svgs.rs` builds its icons with `SvgData::from_str`, and the runtime parser behind it lives here now
+# rather than under a `telar` feature. The demo never reaches for a name in this crate — the dependency is
+# what turns the parser on.
+telar-dynamic = { workspace = true, features = ["svg"] }
+telar-icons = { workspace = true }
+telar-navigate = { workspace = true }
+
+serde = { workspace = true }
+
+# Only `main.rs` initialises a subscriber, and there is no `main.rs` on wasm — left unconditional, this pulled a terminal log formatter, `ansi` included, into every page build.
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = { workspace = true, features = ["env-filter", "ansi"] }
 
 [dev-dependencies]
 platform-core = { workspace = true }
@@ -90,16 +104,3 @@ path = "src/hot_tree_test.rs"
 [[bench]]
 name = "frontend_frame"
 harness = false
-
-[package.metadata.android]
-package = "com.example.telar.sandbox"
-build_targets = ["aarch64-linux-android"]
-
-[package.metadata.android.sdk]
-min_sdk_version = 33
-target_sdk_version = 36
-
-[package.metadata.android.application.activity]
-# uiMode added so an OS dark/light change is handled in-process instead of recreating the NativeActivity,
-# which tears down the wgpu surface and hangs. The other three match cargo-apk's default configChanges.
-config_changes = "orientation|keyboardHidden|screenSize|uiMode"
