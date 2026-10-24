@@ -1046,7 +1046,7 @@ fn preview_shell(workshop: Option<&Ident>) -> TokenStream2 {
 
 /// The faces `[[telar.fonts]]` declares, as the `Vec<FontAsset>` a shaper loads: embedded, so a binary finds its faces wherever it is run from, and `include_bytes!` is also what makes cargo rebuild when a face changes.
 ///
-/// Empty where nothing shapes glyphs. A browser build gets its faces from the page — a document through `@font-face`, a canvas by fetching the ones the page preloads — so embedding them there would ship each twice; a terminal has no typeface to choose. WOFF files are skipped for the same reason a shaper would skip them: only a browser can unpack one.
+/// Empty where nothing shapes glyphs. A browser build gets its faces from the page — a document through `@font-face`, a canvas by fetching the ones the page preloads — so embedding them there would ship each twice; a terminal has no typeface to choose. A family declared only as WOFF is a compile error where text is shaped natively, since only a browser can unpack one.
 fn declared_fonts() -> Result<TokenStream2, TokenStream2> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
@@ -1068,7 +1068,19 @@ fn declared_fonts() -> Result<TokenStream2, TokenStream2> {
         }
         assets.push(font_asset_tokens(font, &path));
     }
+    let unshapable = families_without_sfnt_face(&manifest.telar.fonts).map(|family| {
+        let msg = format!(
+            "rsx: the font {family:?} is declared only as WOFF, which the native shaper cannot read; add a TTF or OTF face"
+        );
+        quote! {
+            #[cfg(not(target_arch = "wasm32"))]
+            const _: () = if ::telar::SHAPES_TEXT {
+                ::core::panic!("{}", #msg);
+            };
+        }
+    });
     Ok(quote! {{
+        #(#unshapable)*
         #[cfg(not(target_arch = "wasm32"))]
         let fonts: ::std::vec::Vec<::telar::FontAsset> = if ::telar::SHAPES_TEXT {
             ::std::vec![#(#assets),*]
@@ -1079,6 +1091,21 @@ fn declared_fonts() -> Result<TokenStream2, TokenStream2> {
         let fonts: ::std::vec::Vec<::telar::FontAsset> = ::std::vec::Vec::new();
         fonts
     }})
+}
+
+fn families_without_sfnt_face(
+    fonts: &[telar_project::FontDeclaration],
+) -> impl Iterator<Item = &str> {
+    let mut seen = std::collections::BTreeSet::new();
+    fonts
+        .iter()
+        .map(|font| font.family.as_str())
+        .filter(move |family| seen.insert(*family))
+        .filter(|family| {
+            !fonts
+                .iter()
+                .any(|f| f.family == *family && f.format().is_sfnt())
+        })
 }
 
 fn font_asset_tokens(font: &telar_project::FontDeclaration, path: &Path) -> TokenStream2 {

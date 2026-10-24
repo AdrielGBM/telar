@@ -40,7 +40,7 @@ pub fn load_page_fonts() {
                         wake();
                     }
                 }
-                Ok(_) => tracing::debug!(
+                Ok(_) => tracing::warn!(
                     "{href} is a WOFF file, which only a document can use; a canvas needs the face as TTF or OTF"
                 ),
                 Err(e) => tracing::warn!("could not fetch the font {href}: {e:?}"),

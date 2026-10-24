@@ -600,9 +600,9 @@ impl FaceSources {
 }
 
 fn load_asset(db: &mut fontdb::Database, asset: &FontAsset) -> Vec<fontdb::ID> {
-    let source = match &asset.source {
-        FontSource::Static(bytes) => fontdb::Source::Binary(Arc::new(*bytes)),
-        FontSource::Shared(bytes) => fontdb::Source::Binary(Arc::new(bytes.clone())),
+    let (source, file) = match &asset.source {
+        FontSource::Static(bytes) => (fontdb::Source::Binary(Arc::new(*bytes)), None),
+        FontSource::Shared(bytes) => (fontdb::Source::Binary(Arc::new(bytes.clone())), None),
         FontSource::File(_) => {
             let executable_dir = std::env::current_exe()
                 .ok()
@@ -615,10 +615,18 @@ fn load_asset(db: &mut fontdb::Database, asset: &FontAsset) -> Vec<fontdb::ID> {
                 tracing::warn!("font file {} does not exist", path.display());
                 return Vec::new();
             }
-            fontdb::Source::File(path)
+            (fontdb::Source::File(path.clone()), Some(path))
         }
     };
     let ids = db.load_font_source(source).to_vec();
+    if ids.is_empty() {
+        let name = match (&file, &asset.family) {
+            (Some(path), _) => path.display().to_string(),
+            (_, Some(family)) => format!("the embedded font {family:?}"),
+            _ => "an embedded font".to_string(),
+        };
+        tracing::warn!("{name} holds no font face a shaper can read");
+    }
     let Some(family) = &asset.family else {
         return ids;
     };

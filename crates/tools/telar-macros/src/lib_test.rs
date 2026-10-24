@@ -1,4 +1,4 @@
-use super::{font_asset_tokens, stale_cli_message};
+use super::{families_without_sfnt_face, font_asset_tokens, stale_cli_message};
 
 /// The failure this catches was silent: an installed `cargo-telar` older than the `telar` it drives asks for a hot-reload build the way it used to — an environment variable — the macro builds a plain application instead, and the only thing said about it is that the app never connected to a channel it was never compiled to open.
 #[test]
@@ -50,6 +50,33 @@ fn a_declared_face_is_embedded_as_the_manifest_declared_it() {
         tokens.contains("FontAxis::new([119u8,103u8,104u8,116u8],100f32,900f32)"),
         "{tokens}"
     );
+}
+
+fn declaration(family: &str, src: &str) -> telar_project::FontDeclaration {
+    telar_project::FontDeclaration {
+        family: family.to_string(),
+        src: src.to_string(),
+        weight: None,
+        style: telar_project::FontStyleDeclaration::Normal,
+        axes: Default::default(),
+        display: Default::default(),
+        size_adjust: None,
+    }
+}
+
+#[test]
+fn a_family_shipped_only_as_woff_is_reported_once_for_a_native_shaper() {
+    let fonts = [
+        declaration("Web", "a.woff2"),
+        declaration("Web", "b.woff"),
+        declaration("Both", "c.woff2"),
+        declaration("Both", "c.ttf"),
+        declaration("Native", "d.otf"),
+    ];
+
+    let reported: Vec<_> = families_without_sfnt_face(&fonts).collect();
+
+    assert_eq!(reported, ["Web"]);
 }
 
 fn package(name: &str) -> std::path::PathBuf {
