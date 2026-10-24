@@ -14,8 +14,8 @@ use crate::platform::{Listener, listen};
 
 const STATE_KEY: &str = "telar";
 
-/// The least time between two `replaceState` calls. A browser refuses or delays a page calling it faster — Safari throws past a hundred calls in ten seconds — and an app's address can change on every frame, as it does while a slider is dragged.
-const REPLACE_INTERVAL_MS: f64 = 200.0;
+/// The least time between two history writes, pushes included. A browser refuses or delays a page writing faster — Safari throws past a hundred `pushState` and `replaceState` calls in ten seconds — and an app's address can change on every frame, as it does while a slider is dragged.
+const WRITE_INTERVAL_MS: f64 = 200.0;
 
 /// The browser's session history, as the app's address.
 ///
@@ -32,12 +32,11 @@ struct Shared {
     format: LocationFormat,
     page_settings: Vec<(String, String)>,
     history: RefCell<Vec<Location>>,
-    replaced: RefCell<Replaced>,
+    written: RefCell<Written>,
 }
 
-/// When the browser's entry was last replaced, and the timer of the replace waiting to follow, if one is.
 #[derive(Default)]
-struct Replaced {
+struct Written {
     at: f64,
     waiting: Option<i32>,
 }
@@ -54,7 +53,7 @@ impl WebLocation {
             format,
             page_settings: page_settings(),
             history: RefCell::new(Vec::new()),
-            replaced: RefCell::default(),
+            written: RefCell::default(),
         });
         let viewport: web_sys::EventTarget = dom::window().into();
         let listeners = vec![
@@ -98,7 +97,7 @@ impl WebLocation {
 impl Drop for WebLocation {
     // The waiting replace would call a closure dropped with this, so it is made now instead.
     fn drop(&mut self) {
-        if self.shared.replaced.borrow().waiting.is_some() {
+        if self.shared.written.borrow().waiting.is_some() {
             self.shared.write_replace();
         }
     }
@@ -122,6 +121,8 @@ impl LocationSource for WebLocation {
         };
         *shared.history.borrow_mut() = history.clone();
         shared.stamp_current();
+        // Stamping the entry the page loaded on opens no window, so the first replace after it lands at once.
+        shared.written.borrow_mut().at = 0.0;
         history
     }
 
@@ -132,7 +133,17 @@ impl LocationSource for WebLocation {
             return;
         };
         let state = write_state(history, (0.0, 0.0), &shared.format);
-        let _ = browser_history().push_state_with_url(&state, "", Some(&shared.href(top)));
+        let href = shared.href(top);
+        let committed = shared.write_history(
+            "pushState refused the entry; replacing the current one",
+            |history| history.push_state_with_url(&state, "", Some(&href)),
+        ) || shared
+            .write_history("replaceState refused the entry too", |history| {
+                history.replace_state_with_url(&state, "", Some(&href))
+            });
+        if !committed {
+            return;
+        }
         *shared.history.borrow_mut() = history.to_vec();
         if top.fragment().is_none() {
             scroll_page_to(0.0, 0.0);
@@ -180,22 +191,40 @@ impl Shared {
 
     /// Writes the app's history and the current scroll position into the entry the browser is showing, so leaving it — by a push, a traversal or a reload — can come back to both. A replace still waiting is written now, address and all.
     fn stamp_current(&self) {
-        if self.replaced.borrow().waiting.is_some() {
+        if self.written.borrow().waiting.is_some() {
             self.write_replace();
             return;
         }
         let state = write_state(&self.history.borrow(), scroll_position(), &self.format);
-        let _ = browser_history().replace_state(&state, "");
+        self.write_history(
+            "replaceState refused to stamp the current entry",
+            |history| history.replace_state(&state, ""),
+        );
     }
 
-    /// Replaces the entry the browser is showing with the history now, or, when it was replaced less than [`REPLACE_INTERVAL_MS`] ago, once that much has passed: with the history as it is by then, so the last of a burst is the one that lands.
+    fn write_history(
+        &self,
+        refusal: &str,
+        write: impl FnOnce(&web_sys::History) -> Result<(), JsValue>,
+    ) -> bool {
+        self.written.borrow_mut().at = js_sys::Date::now();
+        match write(&browser_history()) {
+            Ok(()) => true,
+            Err(error) => {
+                tracing::warn!(?error, "{refusal}");
+                false
+            }
+        }
+    }
+
+    /// Replaces the entry the browser is showing with the history now, or, when it was written less than [`WRITE_INTERVAL_MS`] ago, once that much has passed: with the history as it is by then, so the last of a burst is the one that lands.
     fn replace_soon(&self, write: &Closure<dyn FnMut()>) {
         let wait = {
-            let replaced = self.replaced.borrow();
-            if replaced.waiting.is_some() {
+            let written = self.written.borrow();
+            if written.waiting.is_some() {
                 return;
             }
-            replaced.at + REPLACE_INTERVAL_MS - js_sys::Date::now()
+            written.at + WRITE_INTERVAL_MS - js_sys::Date::now()
         };
         if wait <= 0.0 {
             self.write_replace();
@@ -208,24 +237,25 @@ impl Shared {
             )
             .ok();
         match timer {
-            Some(timer) => self.replaced.borrow_mut().waiting = Some(timer),
+            Some(timer) => self.written.borrow_mut().waiting = Some(timer),
             None => self.write_replace(),
         }
     }
 
     fn write_replace(&self) {
         self.cancel_waiting_replace();
-        self.replaced.borrow_mut().at = js_sys::Date::now();
         let history = self.history.borrow();
         let Some(top) = history.last() else {
             return;
         };
         let state = write_state(&history, scroll_position(), &self.format);
-        let _ = browser_history().replace_state_with_url(&state, "", Some(&self.href(top)));
+        self.write_history("replaceState refused the history", |history| {
+            history.replace_state_with_url(&state, "", Some(&self.href(top)))
+        });
     }
 
     fn cancel_waiting_replace(&self) {
-        if let Some(timer) = self.replaced.borrow_mut().waiting.take() {
+        if let Some(timer) = self.written.borrow_mut().waiting.take() {
             dom::window().clear_timeout_with_handle(timer);
         }
     }

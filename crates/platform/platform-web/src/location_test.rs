@@ -175,3 +175,14 @@ async fn a_replace_still_waiting_is_written_when_the_source_goes() {
     wait(400).await;
     assert_eq!(path_now(), "/telar-test/last");
 }
+
+#[wasm_bindgen_test]
+async fn a_replace_right_after_a_push_waits_out_the_interval_the_push_started() {
+    let mut source = WebLocation::new(Some(LocationFormat::new("/telar-test")));
+    source.initial();
+    source.push(&[at("/"), at("/p")]);
+    source.replace(&[at("/"), at("/p2")]);
+    assert_eq!(path_now(), "/telar-test/p");
+    wait(400).await;
+    assert_eq!(path_now(), "/telar-test/p2");
+}
