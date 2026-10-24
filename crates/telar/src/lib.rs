@@ -396,9 +396,9 @@ pub fn dispatch_overlays(event: &Event) -> bool {
 #[cfg(all(feature = "preview-headless", not(target_os = "android")))]
 pub use preview::host::run_preview_png;
 #[cfg(all(feature = "headless", feature = "hardware"))]
-pub use raster::first_partial_redraw_mismatch_on_gpu;
+pub use raster::{GpuRedrawCheck, check_partial_redraw_on_gpu};
 #[cfg(feature = "headless")]
-pub use raster::{first_partial_redraw_mismatch, rasterize};
+pub use raster::{RasterError, RedrawCheckError, check_partial_redraw, rasterize};
 
 #[cfg(any(
     feature = "dev",

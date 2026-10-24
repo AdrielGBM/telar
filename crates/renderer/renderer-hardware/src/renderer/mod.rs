@@ -266,15 +266,7 @@ async fn shared_gpu(backends: wgpu::Backends) -> Result<&'static SharedGpu, Rend
         flags: instance_flags(),
         ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
-    // No `compatible_surface`: the shared adapter serves every window, and on a normal desktop any window's surface is presentable by whichever this picks. Which one belongs to the application, because only it knows whether its frame is a menu or a viewport.
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: crate::gpu::preference(),
-            compatible_surface: None,
-            ..Default::default()
-        })
-        .await
-        .map_err(|_| RendererError::Backend("no suitable GPU adapter found".to_string()))?;
+    let adapter = crate::gpu::request_adapter(&instance).await?;
 
     const BLUR_PARAMS_SIZE: u32 = std::mem::size_of::<BlurParams>() as u32;
     let pipeline_cache_feature = if adapter.features().contains(wgpu::Features::PIPELINE_CACHE) {

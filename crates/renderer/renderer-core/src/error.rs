@@ -11,4 +11,7 @@ pub enum RendererError {
     Present(String),
     #[error("backend error: {0}")]
     Backend(String),
+    /// The machine offers no GPU adapter the backend can draw with, as distinct from one that failed while opening.
+    #[error("no suitable GPU adapter found")]
+    NoAdapter,
 }

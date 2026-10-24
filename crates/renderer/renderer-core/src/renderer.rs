@@ -4,7 +4,7 @@ use crate::{Color, DrawCommand, FontConfig, RendererError};
 
 /// What every backend does with a frame: begin it, draw a command list, present it.
 pub trait RenderBackend {
-    /// Begin a new frame. Note: `scale_factor` and `generation` may be ignored by backends that receive pre-scaled commands (see `SoftwareRenderer::begin_frame`).
+    /// Begin a new frame. `generation` must change whenever the commands differ from the last frame's, because a backend that keeps its last frame reads an equal one as unchanged; a backend taking pre-scaled commands may ignore it and `scale_factor`.
     fn begin_frame(
         &mut self,
         width: u32,

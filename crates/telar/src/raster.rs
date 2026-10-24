@@ -1,15 +1,61 @@
 //! Rasterizing a widget tree into pixels off-screen, for a drag preview or an exported image.
 
 use std::cell::RefCell;
+use std::fmt;
 use std::mem::ManuallyDrop;
 
 use platform_headless::HeadlessWindow;
-use renderer_core::RenderBackend;
+use renderer_core::{RenderBackend, RendererError};
 use renderer_software::{SoftwareRenderer, SoftwareRendererConfig};
 
 use crate::{Color, DrawCommand};
 
 type Rasterizer = SoftwareRenderer<HeadlessWindow, HeadlessWindow>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RasterError {
+    EmptySize { width: u32, height: u32 },
+    Render(String),
+}
+
+impl fmt::Display for RasterError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptySize { width, height } => {
+                write!(formatter, "a {width}x{height} frame has no pixels")
+            }
+            Self::Render(message) => write!(formatter, "render failed: {message}"),
+        }
+    }
+}
+
+impl std::error::Error for RasterError {}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RedrawCheckError {
+    Mismatch { frame: usize, region: crate::Rect },
+    Raster(RasterError),
+}
+
+impl From<RasterError> for RedrawCheckError {
+    fn from(error: RasterError) -> Self {
+        Self::Raster(error)
+    }
+}
+
+impl fmt::Display for RedrawCheckError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Mismatch { frame, region } => write!(
+                formatter,
+                "frame {frame} differs from the same frame painted whole, in {region:?}"
+            ),
+            Self::Raster(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for RedrawCheckError {}
 
 reactive_core::dropless_thread_local! {
     // Freed through `reactive_core::thread_exit`, so a hot-reloaded app that rasterized can still be unloaded.
@@ -31,16 +77,7 @@ pub fn rasterize(
     scale: f32,
     clear_color: Option<Color>,
 ) -> Option<Vec<u8>> {
-    if width == 0 || height == 0 {
-        return None;
-    }
-    render(commands, width, height, scale, clear_color, |renderer| {
-        renderer
-            .read_rgba()
-            .map(<[u8]>::to_vec)
-            .ok_or_else(no_picture)
-    })
-    .ok()
+    render(commands, width, height, scale, clear_color, read_pixels).ok()
 }
 
 /// [`rasterize`] at one pixel per logical pixel, encoded as a PNG.
@@ -56,8 +93,9 @@ pub(crate) fn rasterize_png(
             .pixmap()
             .ok_or_else(no_picture)?
             .encode_png()
-            .map_err(|error| error.to_string())
+            .map_err(|error| RasterError::Render(error.to_string()))
     })
+    .map_err(|error| error.to_string())
 }
 
 fn render<T>(
@@ -66,8 +104,9 @@ fn render<T>(
     height: u32,
     scale: f32,
     clear_color: Option<Color>,
-    read: impl FnOnce(&Rasterizer) -> Result<T, String>,
-) -> Result<T, String> {
+    read: impl FnOnce(&Rasterizer) -> Result<T, RasterError>,
+) -> Result<T, RasterError> {
+    ensure_pixels(width, height)?;
     RASTERIZER.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
@@ -84,23 +123,58 @@ fn render<T>(
             )
         });
         renderer.redraw_in_full();
-        renderer
-            .begin_frame(width, height, scale, 0)
-            .and_then(|()| renderer.render_frame(commands, clear_color))
-            .map_err(|error| error.to_string())?;
+        // One generation for every call is safe only because the software rasteriser ignores it and `redraw_in_full` already drops the frame it would diff against.
+        paint(renderer, commands, width, height, scale, 0, clear_color)?;
         read(renderer)
     })
 }
 
-/// Paints `frames` one after another on one renderer, as a window does, each over what the one before left, and compares each with the same frame painted from scratch. `None` when every frame came out the same; else the first frame's index and the box of the pixels it left wrong, which is where a frame's damage missed something it changed.
-///
-/// A check for the renderer's damage, which repaints only the regions a frame changed and moves the pixels of a scroll rather than painting them again.
-pub fn first_partial_redraw_mismatch(
+fn ensure_pixels(width: u32, height: u32) -> Result<(), RasterError> {
+    if width == 0 || height == 0 {
+        return Err(RasterError::EmptySize { width, height });
+    }
+    Ok(())
+}
+
+fn paint<R: RenderBackend>(
+    renderer: &mut R,
+    commands: &[DrawCommand],
+    width: u32,
+    height: u32,
+    scale: f32,
+    generation: u64,
+    clear_color: Option<Color>,
+) -> Result<(), RasterError> {
+    renderer
+        .begin_frame(width, height, scale, generation)
+        .and_then(|()| renderer.render_frame(commands, clear_color))
+        .map_err(render_error)
+}
+
+/// One generation per frame of a check: a backend reads an equal generation as the same commands as the frame before, and keeps diffing the next frame against that older one.
+fn frame_generation(index: usize) -> u64 {
+    index as u64 + 1
+}
+
+fn read_pixels(renderer: &Rasterizer) -> Result<Vec<u8>, RasterError> {
+    renderer
+        .read_rgba()
+        .map(<[u8]>::to_vec)
+        .ok_or_else(no_picture)
+}
+
+fn render_error(error: RendererError) -> RasterError {
+    RasterError::Render(error.to_string())
+}
+
+/// Paints `frames` in turn on one renderer, each over the last as a window does, and compares each with the same frame painted whole; the first that differs is the mismatch, with the box of its wrong pixels.
+pub fn check_partial_redraw(
     frames: &[Vec<DrawCommand>],
     width: u32,
     height: u32,
     clear_color: Option<Color>,
-) -> Option<(usize, crate::Rect)> {
+) -> Result<(), RedrawCheckError> {
+    ensure_pixels(width, height)?;
     let mut renderer: Rasterizer = SoftwareRenderer::new_headless(
         width,
         height,
@@ -110,59 +184,108 @@ pub fn first_partial_redraw_mismatch(
         },
     );
     for (index, commands) in frames.iter().enumerate() {
-        renderer
-            .begin_frame(width, height, 1.0, 0)
-            .and_then(|()| renderer.render_frame(commands, clear_color))
-            .ok()?;
-        let partial = renderer.read_rgba()?.to_vec();
-        let full = rasterize(commands, width, height, 1.0, clear_color)?;
-        if let Some(wrong) = differing_box(&partial, &full, width) {
-            return Some((index, wrong));
+        let generation = frame_generation(index);
+        paint(
+            &mut renderer,
+            commands,
+            width,
+            height,
+            1.0,
+            generation,
+            clear_color,
+        )?;
+        let partial = read_pixels(&renderer)?;
+        let full = render(commands, width, height, 1.0, clear_color, read_pixels)?;
+        if let Some(region) = differing_box(&partial, &full, width) {
+            return Err(RedrawCheckError::Mismatch {
+                frame: index,
+                region,
+            });
         }
     }
-    None
+    Ok(())
 }
 
-/// [`first_partial_redraw_mismatch`] on the GPU backend at `scale` device pixels per logical one, as the backend draws logical commands onto a window that scales them: each frame painted over the last on one renderer, against the same frame painted by a renderer that has drawn nothing before it. `None` when the machine has no GPU adapter; else what the software check answers.
+/// `NoAdapter` is a skip, not a pass: no frame was compared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuRedrawCheck {
+    Passed,
+    NoAdapter,
+}
+
+/// [`check_partial_redraw`] on the GPU backend at `scale` device pixels per logical one, each frame over the last against the same frame on a fresh renderer; a machine with no GPU adapter answers `NoAdapter`.
 #[cfg(feature = "hardware")]
-pub fn first_partial_redraw_mismatch_on_gpu(
+pub fn check_partial_redraw_on_gpu(
     frames: &[Vec<DrawCommand>],
     width: u32,
     height: u32,
     scale: f32,
     clear_color: Option<Color>,
-) -> Option<Option<(usize, crate::Rect)>> {
-    use renderer_hardware::HardwareRenderer;
+) -> Result<GpuRedrawCheck, RedrawCheckError> {
     let (width, height) = (
         (width as f32 * scale).round() as u32,
         (height as f32 * scale).round() as u32,
     );
-    let fresh = || {
-        block_on(HardwareRenderer::<HeadlessWindow>::new_headless(
+    ensure_pixels(width, height)?;
+    let mut partial = match new_gpu_renderer(width, height) {
+        Ok(renderer) => renderer,
+        Err(RendererError::NoAdapter) => return Ok(GpuRedrawCheck::NoAdapter),
+        Err(error) => return Err(render_error(error).into()),
+    };
+    for (index, commands) in frames.iter().enumerate() {
+        let generation = frame_generation(index);
+        paint(
+            &mut partial,
+            commands,
+            width,
+            height,
+            scale,
+            generation,
+            clear_color,
+        )?;
+        let over = read_gpu(&partial)?;
+        let mut whole = new_gpu_renderer(width, height).map_err(render_error)?;
+        paint(
+            &mut whole,
+            commands,
+            width,
+            height,
+            scale,
+            generation,
+            clear_color,
+        )?;
+        let whole = read_gpu(&whole)?;
+        if let Some(region) = differing_box(&over, &whole, width) {
+            return Err(RedrawCheckError::Mismatch {
+                frame: index,
+                region,
+            });
+        }
+    }
+    Ok(GpuRedrawCheck::Passed)
+}
+
+#[cfg(feature = "hardware")]
+fn new_gpu_renderer(
+    width: u32,
+    height: u32,
+) -> Result<renderer_hardware::HardwareRenderer<HeadlessWindow>, renderer_core::RendererError> {
+    block_on(
+        renderer_hardware::HardwareRenderer::<HeadlessWindow>::new_headless(
             width,
             height,
             None,
             false,
             renderer_text::TextShaperConfig::default(),
-        ))
-        .ok()
-    };
-    let paint = |renderer: &mut HardwareRenderer<HeadlessWindow>, commands: &[DrawCommand]| {
-        renderer
-            .begin_frame(width, height, scale, 0)
-            .and_then(|()| renderer.render_frame(commands, clear_color))
-            .ok()?;
-        renderer.read_rgba().ok()
-    };
-    let mut partial = fresh()?;
-    for (index, commands) in frames.iter().enumerate() {
-        let over = paint(&mut partial, commands)?;
-        let whole = paint(&mut fresh()?, commands)?;
-        if let Some(wrong) = differing_box(&over, &whole, width) {
-            return Some(Some((index, wrong)));
-        }
-    }
-    Some(None)
+        ),
+    )
+}
+
+#[cfg(feature = "hardware")]
+fn read_gpu(
+    renderer: &renderer_hardware::HardwareRenderer<HeadlessWindow>,
+) -> Result<Vec<u8>, RasterError> {
+    renderer.read_rgba().map_err(render_error)
 }
 
 /// Runs `future` to its end on this thread, parking between polls: the GPU backend's constructor is async only to wait on the adapter.
@@ -218,8 +341,8 @@ fn release() {
     RASTERIZER.with(|cell| cell.borrow_mut().take());
 }
 
-fn no_picture() -> String {
-    String::from("the rasterizer kept no picture")
+fn no_picture() -> RasterError {
+    RasterError::Render(String::from("the rasterizer kept no picture"))
 }
 
 #[cfg(test)]

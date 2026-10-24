@@ -271,9 +271,50 @@ fn an_empty_frame_after_a_drawn_one_is_blank() {
 fn frames_painted_over_each_other_match_the_same_frames_painted_whole() {
     let frames = vec![red_square(10.0), red_square(20.0), red_square(14.0)];
     assert_eq!(
-        first_partial_redraw_mismatch(&frames, 32, 32, Some(Color::rgba(1.0, 1.0, 1.0, 1.0))),
-        None
+        check_partial_redraw(&frames, 32, 32, Some(Color::rgba(1.0, 1.0, 1.0, 1.0))),
+        Ok(())
     );
+}
+
+#[test]
+fn a_zero_size_redraw_check_is_an_error_not_a_pass() {
+    let frames = vec![red_square(4.0)];
+    assert_eq!(
+        check_partial_redraw(&frames, 0, 32, None),
+        Err(RedrawCheckError::Raster(RasterError::EmptySize {
+            width: 0,
+            height: 32,
+        }))
+    );
+}
+
+#[test]
+fn a_redraw_check_over_no_frames_passes() {
+    assert_eq!(check_partial_redraw(&[], 32, 32, None), Ok(()));
+}
+
+#[cfg(feature = "hardware")]
+#[test]
+fn a_zero_size_gpu_redraw_check_is_an_error_even_without_an_adapter() {
+    let frames = vec![red_square(4.0)];
+    assert_eq!(
+        check_partial_redraw_on_gpu(&frames, 32, 0, 1.0, None),
+        Err(RedrawCheckError::Raster(RasterError::EmptySize {
+            width: 32,
+            height: 0,
+        }))
+    );
+}
+
+#[cfg(feature = "hardware")]
+#[test]
+fn a_gpu_redraw_check_passes_or_skips_when_there_is_no_adapter() {
+    let frames = vec![red_square(10.0), red_square(20.0), red_square(14.0)];
+    match check_partial_redraw_on_gpu(&frames, 32, 32, 1.0, Some(Color::rgba(1.0, 1.0, 1.0, 1.0))) {
+        Ok(GpuRedrawCheck::Passed) => {}
+        Ok(GpuRedrawCheck::NoAdapter) => eprintln!("skipped: no GPU adapter on this machine"),
+        other => panic!("the GPU redraw check must pass or skip, got {other:?}"),
+    }
 }
 
 #[test]

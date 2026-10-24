@@ -8,7 +8,7 @@ use crate::renderer::open_shared_gpu;
 pub use wgpu;
 
 use crate::renderer::SHARED_GPU;
-use renderer_core::{ExternalTexture, ImageData};
+use renderer_core::{ExternalTexture, ImageData, RendererError};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
@@ -39,6 +39,24 @@ pub(crate) fn preference() -> wgpu::PowerPreference {
         2 => wgpu::PowerPreference::HighPerformance,
         _ => wgpu::PowerPreference::LowPower,
     }
+}
+
+/// The adapter `instance` offers under [`preference`], with no adapter to offer told apart from a request that failed, so a caller can fall back or skip on the one and report the other.
+pub(crate) async fn request_adapter(
+    instance: &wgpu::Instance,
+) -> Result<wgpu::Adapter, RendererError> {
+    instance
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: preference(),
+            // No surface is named: the shared adapter serves every window, and on a normal desktop any window's surface is presentable by whichever this picks; which adapter belongs to the application, because only it knows whether its frame is a menu or a viewport.
+            compatible_surface: None,
+            ..Default::default()
+        })
+        .await
+        .map_err(|error| match error {
+            wgpu::RequestAdapterError::NotFound { .. } => RendererError::NoAdapter,
+            other => RendererError::Backend(format!("GPU adapter request failed: {other}")),
+        })
 }
 
 #[derive(Debug)]
@@ -99,6 +117,10 @@ pub fn shared() -> Option<SharedGpu> {
 /// The same objects [`shared`] hands out, bringing them up if no renderer has yet.
 ///
 /// [`shared`] answers `None` until Telar has built a renderer, which is the honest answer for an application waiting on the window it asked Telar to open. It is a wall for one that opens no window — a texture has to come from this device to be shareable, and there is nothing to have created it. Same device either way: whoever asks first opens it and every later renderer takes that one.
-pub fn open() -> Result<SharedGpu, renderer_core::RendererError> {
+pub fn open() -> Result<SharedGpu, RendererError> {
     open_shared_gpu()
 }
+
+#[cfg(test)]
+#[path = "gpu_test.rs"]
+mod tests;
