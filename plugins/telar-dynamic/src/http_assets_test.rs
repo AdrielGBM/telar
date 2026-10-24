@@ -145,8 +145,10 @@ fn a_fetched_asset_lands_in_its_signal_and_then_in_the_cache() {
     );
     assert_eq!(server.hits.load(Ordering::Relaxed), 1);
     assert!(
-        dir.join("svg").join("known").exists(),
-        "download was not cached under <root>/<kind>/<name>"
+        dir.join("svg-acdb1373d1761939cb5daa3332223298")
+            .join("known-7117fff2d0fd294462b3c802b7cb8753")
+            .exists(),
+        "download was not cached under <root>/<kind>-<hash>/<name>-<hash>"
     );
 
     // A second loader over the same directory answers from disk: the server count stays where it was.
@@ -184,7 +186,9 @@ fn an_asset_the_endpoint_does_not_have_settles_on_failed() {
         name_of(&state)
     );
     assert!(
-        !dir.join("svg").join("absent").exists(),
+        !dir.join("svg-acdb1373d1761939cb5daa3332223298")
+            .join("absent-5ad38304b535c2987dbd24657c1a11b8")
+            .exists(),
         "a failed fetch must not be cached"
     );
 
@@ -237,7 +241,9 @@ fn a_body_that_does_not_decode_never_reaches_the_cache() {
         "a decode failure reached AssetCache::put"
     );
     assert!(
-        !dir.join("svg").join("known").exists(),
+        !dir.join("svg-acdb1373d1761939cb5daa3332223298")
+            .join("known-7117fff2d0fd294462b3c802b7cb8753")
+            .exists(),
         "a body that does not decode must not be cached"
     );
 
@@ -258,7 +264,11 @@ fn a_body_that_decodes_does_reach_the_cache() {
         "a body that decodes settles ready"
     );
     assert_eq!(
-        std::fs::read(dir.join("svg").join("known")).expect("the decoded body was cached"),
+        std::fs::read(
+            dir.join("svg-acdb1373d1761939cb5daa3332223298")
+                .join("known-7117fff2d0fd294462b3c802b7cb8753")
+        )
+        .expect("the decoded body was cached"),
         SVG.as_bytes()
     );
 

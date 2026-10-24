@@ -108,6 +108,7 @@ ui-core = { workspace = true, features = ["async-assets"] }
 
 document-features = { workspace = true, optional = true }
 image = { workspace = true, features = ["png", "jpeg"], optional = true }
+sha2 = "0.11.1"
 tracing = { workspace = true }
 
 # Target-gated rather than plain-optional: `http` is one feature with two bodies, and neither client is

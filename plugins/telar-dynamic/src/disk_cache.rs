@@ -50,36 +50,30 @@ impl AssetCache for DiskCache {
     }
 }
 
-/// A path segment that is a path segment: everything outside `[A-Za-z0-9_-]` becomes `_`, and anything that was not already such a name carries a hash of the original so two names cannot collapse onto one file.
-///
-/// The hash is not decoration. Ids arrive from application config (`mdi:home`, `lucide/arrow-right`), so without it `a:b` and `a/b` would share a file, and `../../x` would name a path outside the cache at all. Kinds arrive from a decoder rather than from config, but they land in the same position and go through the same rule, so a careless third-party [`ui_core::AssetDecoder`] cannot write outside the root either.
+/// The hash over the original name keeps case-distinct ids apart on case-insensitive file systems, keeps every segment off Windows device names, and stops a crafted id from landing on another id's file.
 fn file_name(name: &str) -> String {
-    let simple = !name.is_empty()
-        && name.len() <= 32
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-');
-    if simple {
-        return name.to_string();
-    }
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write;
 
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    name.hash(&mut hasher);
-    let hash = hasher.finish();
-
-    let sanitized: String = name
+    let mut file_name: String = name
         .chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
-                c
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
             } else {
                 '_'
             }
         })
-        .take(32)
+        .take(16)
         .collect();
-    format!("{sanitized}_{hash:x}")
+    if file_name.is_empty() {
+        file_name.push('_');
+    }
+    file_name.push('-');
+    for byte in &Sha256::digest(name.as_bytes())[..16] {
+        write!(file_name, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    file_name
 }
 
 #[cfg(test)]
