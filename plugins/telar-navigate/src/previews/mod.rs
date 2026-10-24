@@ -5,7 +5,7 @@ mod page;
 mod tab_host;
 
 #[cfg(test)]
-#[path = "mod_test.rs"]
+#[path = "previews_test.rs"]
 mod tests;
 
 use telar::preview::PreviewEntry;

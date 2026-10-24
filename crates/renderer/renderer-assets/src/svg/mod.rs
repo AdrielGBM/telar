@@ -6,6 +6,7 @@ mod bake;
 mod raster;
 mod refit;
 #[cfg(all(test, feature = "dynamic-svg"))]
+#[path = "svg_test.rs"]
 mod tests;
 #[cfg(feature = "dynamic-svg")]
 mod vector;

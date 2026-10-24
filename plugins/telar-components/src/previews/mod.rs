@@ -71,7 +71,7 @@ mod window_controls;
 mod window_frame;
 
 #[cfg(test)]
-#[path = "mod_test.rs"]
+#[path = "previews_test.rs"]
 mod tests;
 
 use telar::preview::PreviewEntry;

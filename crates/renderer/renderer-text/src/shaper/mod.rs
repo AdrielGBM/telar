@@ -18,6 +18,7 @@ mod layout;
 mod metrics;
 mod raster;
 #[cfg(test)]
+#[path = "shaper_test.rs"]
 mod tests;
 
 pub use atlas::{ATLAS_SIZE, GlyphAtlas, GlyphInfo};
