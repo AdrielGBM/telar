@@ -20,5 +20,5 @@ pub mod limits;
 mod policy;
 pub mod registry;
 
-pub use cache::{Cache, CacheStat};
+pub use cache::{Cache, CacheStat, Fetched};
 pub use policy::Policy;

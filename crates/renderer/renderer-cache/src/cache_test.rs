@@ -131,22 +131,6 @@ fn a_budget_with_no_idle_horizon_holds_a_cold_entry_indefinitely() {
 }
 
 #[test]
-fn contains_does_not_count_as_a_use() {
-    let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(100), Vec::len);
-    cache.insert(1, vec![0; 40]);
-    cache.insert(2, vec![0; 40]);
-
-    assert!(cache.contains(&1), "1 is there to peek at");
-    cache.insert(3, vec![0; 40]);
-
-    assert!(
-        !cache.contains(&1),
-        "peeking left 1 as the least recently used"
-    );
-    assert!(cache.contains(&2), "2 was used more recently, so it stays");
-}
-
-#[test]
 fn a_key_evicted_after_admission_has_to_earn_it_again() {
     let mut cache: Cache<u32, Vec<u8>> =
         Cache::new(Policy::new(100).admit_on_second_use(), Vec::len);
@@ -166,4 +150,62 @@ fn a_key_evicted_after_admission_has_to_earn_it_again() {
         !cache.insert(1, vec![0; 40]),
         "eviction took its admission record too, so 1 starts over"
     );
+}
+
+#[test]
+fn get_or_build_still_returns_a_value_on_the_access_that_triggers_the_sweep() {
+    let idle = Duration::from_millis(50);
+    let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(4096).idle(idle), Vec::len);
+    cache.insert(1, vec![7; 8]);
+    std::thread::sleep(idle * 3);
+
+    let rebuilt = cache.get_or_build(1, || Some(vec![9; 8]));
+
+    assert_eq!(
+        rebuilt.as_deref().map(Vec::as_slice),
+        Some([9u8; 8].as_slice()),
+        "the sweep drops the stale entry and the call builds a fresh one instead of coming back empty"
+    );
+}
+
+#[test]
+fn get_or_build_does_not_rebuild_a_resident_value() {
+    let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(100), Vec::len);
+    cache.insert(1, vec![7; 8]);
+
+    let found = cache.get_or_build(1, || panic!("a resident value must not be rebuilt"));
+
+    assert_eq!(found.as_deref().map(Vec::len), Some(8));
+}
+
+#[test]
+fn get_or_build_returns_a_value_heavier_than_the_whole_budget_without_keeping_it() {
+    let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(10), Vec::len);
+
+    let drawn = cache.get_or_build(1, || Some(vec![0; 64]));
+
+    assert_eq!(drawn.map(|value| value.len()), Some(64), "still drawn");
+    assert!(cache.is_empty(), "but never admitted");
+}
+
+#[test]
+fn get_or_build_returns_a_value_admission_held_back() {
+    let mut cache: Cache<u32, Vec<u8>> =
+        Cache::new(Policy::new(1024).admit_on_second_use(), Vec::len);
+
+    let first = cache.get_or_build(1, || Some(vec![0; 8]));
+    assert_eq!(first.map(|value| value.len()), Some(8));
+    assert!(cache.is_empty(), "the first sighting is only recorded");
+
+    let second = cache.get_or_build(1, || Some(vec![0; 8]));
+    assert_eq!(second.map(|value| value.len()), Some(8));
+    assert_eq!(cache.len(), 1, "the second sighting is kept");
+}
+
+#[test]
+fn get_or_build_passes_a_failed_build_through() {
+    let mut cache: Cache<u32, Vec<u8>> = Cache::new(Policy::new(100), Vec::len);
+
+    assert!(cache.get_or_build(1, || None).is_none());
+    assert!(cache.is_empty());
 }

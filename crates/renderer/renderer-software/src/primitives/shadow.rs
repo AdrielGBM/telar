@@ -119,15 +119,19 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
         return;
     }
 
-    if !cache.contains(&key) {
+    let paint = tiny_skia::PixmapPaint {
+        blend_mode: tiny_skia::BlendMode::SourceOver,
+        ..Default::default()
+    };
+    let landed = cache.get_or_build(key.clone(), || {
         // Either a worker is already computing it, or one needs spawning.
         if let Some(waiting) = pending.get_mut(&key) {
             // Everywhere this blur is waited on, not just the last place: a key holds a shape and not a position, so a row of identical cards shares one, and a command can move while its blur is in flight. Whatever it covers is repainted on the frame the blur lands, and a card left out of it would keep its stand-in.
             waiting.footprint = waiting.footprint.union(painted);
             match waiting.arrived() {
                 Ok((tmp, _)) => {
-                    cache.insert(key.clone(), tmp);
                     pending.remove(&key);
+                    return Some(tmp);
                 }
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     // The worker failed, so drop the entry and let a later frame retry.
@@ -145,36 +149,21 @@ pub(crate) fn blit_cached_shadow_async<K, D, A>(
                 },
             );
         }
+        None
+    });
+    if let Some(shadow) = landed {
+        pixmap.draw_pixmap(blit_x, blit_y, shadow.as_ref(), &paint, transform, clip);
+        *recent = Some((key, tmp_w, tmp_h));
+        return;
     }
 
     // A matching size is what makes the stand-in safe to blit at these coordinates.
-    let drawn = if cache.contains(&key) {
-        Some(key.clone())
-    } else {
-        recent
-            .as_ref()
-            .filter(|(_, w, h)| *w == tmp_w && *h == tmp_h)
-            .map(|(k, _, _)| k.clone())
-    };
-    let Some(draw_key) = drawn else {
-        return;
-    };
-    if let Some(cached) = cache.get(&draw_key) {
-        pixmap.draw_pixmap(
-            blit_x,
-            blit_y,
-            cached.as_ref(),
-            &tiny_skia::PixmapPaint {
-                blend_mode: tiny_skia::BlendMode::SourceOver,
-                ..Default::default()
-            },
-            transform,
-            clip,
-        );
-        // Only a real hit updates the stand-in, or a stale one would keep re-electing itself.
-        if draw_key == key {
-            *recent = Some((key, tmp_w, tmp_h));
-        }
+    let stand_in = recent
+        .as_ref()
+        .filter(|(_, w, h)| *w == tmp_w && *h == tmp_h)
+        .map(|(k, _, _)| k.clone());
+    if let Some(cached) = stand_in.and_then(|k| cache.get(&k)) {
+        pixmap.draw_pixmap(blit_x, blit_y, cached.as_ref(), &paint, transform, clip);
     }
 }
 

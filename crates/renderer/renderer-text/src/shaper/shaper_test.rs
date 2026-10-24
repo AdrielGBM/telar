@@ -481,7 +481,7 @@ fn measure_cache_keeps_hot_entry_past_cap() {
         sh.measure_text(&format!("cold entry {i}"), None, 200.0, &style);
         sh.measure_text(hot, None, 200.0, &style);
     }
-    assert!(sh.measure_cache.contains(&hot_key));
+    assert!(sh.measure_cache.get(&hot_key).is_some());
     assert!(sh.measure_cache.len() <= cap_entries);
 }
 
@@ -499,11 +499,11 @@ fn collect_colr_gating_records_and_skips() {
     };
     let flag_key = (hash_text(text), 16.0f32.to_bits(), text_style_bits(&style));
 
-    assert!(!sh.has_colr_cache.contains(&flag_key));
+    assert!(sh.has_colr_cache.get(&flag_key).is_none());
     let mut out = Vec::new();
     sh.collect_colr_glyphs(text, rect, &style, &mut out);
     assert!(
-        sh.has_colr_cache.contains(&flag_key),
+        sh.has_colr_cache.get(&flag_key).is_some(),
         "first call must record the COLR flag"
     );
 

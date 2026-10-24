@@ -253,7 +253,11 @@ pub(crate) fn prepare_path(
             even_odd: style.fill_rule == FillRule::EvenOdd,
         };
 
-        if !cache.fill.contains(&fill_key) {
+        let fill_data_entry = PathFillData::from_fill_style(fill_style);
+        out_fill_data.push(fill_data_entry);
+        let fill_index = (out_fill_data.len() - 1) as u32;
+
+        let geom = cache.fill.get_or_build(fill_key, || {
             let lyon_path = lyon_path.get_or_insert_with(|| build_lyon_path(data));
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = FillTessellator::new();
@@ -270,25 +274,18 @@ pub(crate) fn prepare_path(
                     [v.position().x, v.position().y]
                 }),
             ) {
-                Ok(_) => {
-                    cache.fill.insert(
-                        fill_key,
-                        CachedGeom {
-                            positions: geometry.vertices,
-                            indices: geometry.indices,
-                        },
-                    );
+                Ok(_) => Some(CachedGeom {
+                    positions: geometry.vertices,
+                    indices: geometry.indices,
+                }),
+                Err(e) => {
+                    tracing::warn!("path fill tessellation failed: {e}");
+                    None
                 }
-                Err(e) => tracing::warn!("path fill tessellation failed: {e}"),
             }
-        }
-
-        let fill_data_entry = PathFillData::from_fill_style(fill_style);
-        out_fill_data.push(fill_data_entry);
-        let fill_index = (out_fill_data.len() - 1) as u32;
-
-        if let Some(geom) = cache.fill.get(&fill_key) {
-            emit_cached_geom(geom, fill_index, out_vertices, out_indices);
+        });
+        if let Some(geom) = geom {
+            emit_cached_geom(&geom, fill_index, out_vertices, out_indices);
         }
     }
 
@@ -301,7 +298,7 @@ pub(crate) fn prepare_path(
             dash: s.dash,
         };
 
-        if !cache.stroke.contains(&stroke_key) {
+        let geom = cache.stroke.get_or_build(stroke_key, || {
             let mut geometry: VertexBuffers<[f32; 2], u32> = VertexBuffers::new();
             let mut tessellator = StrokeTessellator::new();
             let line_cap = to_lyon_line_cap(s.cap);
@@ -327,24 +324,21 @@ pub(crate) fn prepare_path(
                     [v.position().x, v.position().y]
                 }),
             ) {
-                Ok(_) => {
-                    cache.stroke.insert(
-                        stroke_key,
-                        CachedGeom {
-                            positions: geometry.vertices,
-                            indices: geometry.indices,
-                        },
-                    );
+                Ok(_) => Some(CachedGeom {
+                    positions: geometry.vertices,
+                    indices: geometry.indices,
+                }),
+                Err(e) => {
+                    tracing::warn!("path stroke tessellation failed: {e}");
+                    None
                 }
-                Err(e) => tracing::warn!("path stroke tessellation failed: {e}"),
             }
-        }
-
-        if let Some(geom) = cache.stroke.get(&stroke_key) {
+        });
+        if let Some(geom) = geom {
             let stroke_fill_index = out_fill_data.len() as u32;
             // The stroke gets its own fill-data entry, so it resolves paint the same way the fill does. Flattening it to `solid_color()` painted a gradient stroke in its first stop.
             out_fill_data.push(PathFillData::from_fill_style(s.paint));
-            emit_cached_geom(geom, stroke_fill_index, out_vertices, out_indices);
+            emit_cached_geom(&geom, stroke_fill_index, out_vertices, out_indices);
         }
     }
 }

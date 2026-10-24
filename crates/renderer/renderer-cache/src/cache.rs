@@ -3,6 +3,7 @@
 use std::cell::Cell;
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
+use std::ops::Deref;
 use std::time::Duration;
 use web_time::Instant;
 
@@ -26,6 +27,23 @@ pub struct CacheStat {
     pub entries: usize,
     /// The ceiling `bytes` is measured against, so a reader can tell "full" from "growing".
     pub capacity: usize,
+}
+
+/// What [`Cache::get_or_build`] hands back: the resident value, or one the cache declined to keep.
+pub enum Fetched<'a, V> {
+    Cached(&'a V),
+    Built(V),
+}
+
+impl<V> Deref for Fetched<'_, V> {
+    type Target = V;
+
+    fn deref(&self) -> &V {
+        match self {
+            Self::Cached(value) => value,
+            Self::Built(value) => value,
+        }
+    }
 }
 
 /// A value and the moment it was last handed out.
@@ -97,6 +115,30 @@ impl<K: Eq + Hash, V> Cache<K, V> {
 
     pub fn get(&mut self, key: &K) -> Option<&V> {
         self.sweep_if_due();
+        self.touch(key)
+    }
+
+    /// Sweeps once and always returns the value to draw, kept or not; checking for the key and then calling [`get`](Self::get) races the sweep inside `get`.
+    pub fn get_or_build(
+        &mut self,
+        key: K,
+        build: impl FnOnce() -> Option<V>,
+    ) -> Option<Fetched<'_, V>>
+    where
+        K: Clone,
+    {
+        self.sweep_if_due();
+        if self.entries.peek(&key).is_some() {
+            return self.touch(&key).map(Fetched::Cached);
+        }
+        let value = build()?;
+        match self.offer(key.clone(), value) {
+            Ok(()) => self.touch(&key).map(Fetched::Cached),
+            Err(value) => Some(Fetched::Built(value)),
+        }
+    }
+
+    fn touch(&mut self, key: &K) -> Option<&V> {
         let entry = self.entries.get(key)?;
         entry.last_used.set(Instant::now());
         Some(&entry.value)
@@ -107,11 +149,15 @@ impl<K: Eq + Hash, V> Cache<K, V> {
     /// `false` means either that admission held it back — the first sighting of a key under [`Policy::admit_on_second_use`] — or that the value alone weighs more than the whole budget. Callers get the value they were going to draw either way; only whether a later frame finds it again is at stake.
     pub fn insert(&mut self, key: K, value: V) -> bool {
         self.sweep_if_due();
+        self.offer(key, value).is_ok()
+    }
+
+    fn offer(&mut self, key: K, value: V) -> Result<(), V> {
         if let Some(admission) = &mut self.admission {
             let hash = key_hash(&key);
             if admission.pop(&hash).is_none() {
                 admission.put(hash, ());
-                return false;
+                return Err(value);
             }
         }
         self.entries
@@ -122,12 +168,8 @@ impl<K: Eq + Hash, V> Cache<K, V> {
                     last_used: Cell::new(Instant::now()),
                 },
             )
-            .is_ok()
-    }
-
-    /// Whether `key` is resident, without promoting it. A [`get`](Self::get) that discards its result would count as a use and reorder eviction; this does not.
-    pub fn contains(&self, key: &K) -> bool {
-        self.entries.peek(key).is_some()
+            .map(|_| ())
+            .map_err(|(_, rejected)| rejected.value)
     }
 
     pub fn remove(&mut self, key: &K) -> Option<V> {
