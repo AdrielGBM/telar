@@ -2,6 +2,11 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+#[cfg(all(target_arch = "wasm32", target_feature = "atomics"))]
+compile_error!(
+    "telar-renderer-hardware enables wgpu's `fragile-send-sync-non-atomic-wasm`, which is only sound without wasm `atomics`; drop `+atomics` from the wasm target features"
+);
+
 mod blur;
 mod caches;
 mod composite;

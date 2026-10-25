@@ -24,8 +24,15 @@ pub struct CanvasSurface {
     served: Rc<RefCell<Vec<web_sys::Node>>>,
 }
 
-// SAFETY: wasm32 without `atomics` has exactly one thread, so nothing here can be observed from another — the same argument wgpu makes for its `fragile-send-sync-non-atomic-wasm` feature. The bound exists because the renderer is generic over window types that really do cross threads elsewhere.
+#[cfg(all(target_arch = "wasm32", target_feature = "atomics"))]
+compile_error!(
+    "telar-renderer-web's CanvasSurface Send/Sync impls are only sound without wasm `atomics`; drop `+atomics` from the wasm target features"
+);
+
+// SAFETY: wasm32 without `atomics` is single-threaded, so nothing here is observed from another thread.
+#[cfg(not(target_feature = "atomics"))]
 unsafe impl Send for CanvasSurface {}
+#[cfg(not(target_feature = "atomics"))]
 unsafe impl Sync for CanvasSurface {}
 
 impl CanvasSurface {
