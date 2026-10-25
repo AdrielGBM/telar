@@ -13,6 +13,9 @@ use web_time::Instant;
 use crate::app::App;
 use crate::tree::{LocalTree, UiTree};
 
+/// The accessibility reading of a frame drawn by a tree in this process, with the colour behind it: [`crate::inspect::audit`].
+pub type AuditFn = fn(&[renderer_core::DrawCommand], Option<Color>) -> platform_core::AccessAudit;
+
 /// The application as the runner drives it: mount its tree, and reach the runtime that tree lives in.
 ///
 /// An application does not implement this — it implements [`App`], and [`LocalApp`] adapts one. Implement it directly only to host a tree the runner cannot reach any other way, which in this repository means exactly one thing: a dylib.
@@ -75,19 +78,27 @@ pub trait AppRuntime: 'static {
     }
 
     /// Describes the window to a screen reader from the commands of the last frame, read against the focus and layout registries this application's widgets live in.
+    ///
+    /// Asked only of a runtime whose type is known, never through the runner's `dyn AppRuntime`, and bounded by `Sized` so it stays out of that vtable: in it, the reading would ship in every build that links the runner.
     fn access_snapshot(
         &self,
         frame: &[renderer_core::DrawCommand],
-    ) -> Vec<platform_core::AccessNode> {
+    ) -> Vec<platform_core::AccessNode>
+    where
+        Self: Sized,
+    {
         ui_core::accessibility::snapshot(frame)
     }
 
     /// What a screen reader is told about the window that drew `frame` and what the accessibility checks find in it, read against the focus and layout registries this application's widgets live in. `None` where they cannot be read.
+    ///
+    /// `audit_here` is that reading for a tree in this process, [`crate::inspect::audit`], handed in by the caller rather than named here: every method of this trait is linked wherever an application is, and named here the checker would ship in every build, including the ones whose overlay never asks for it.
     fn access_audit(
         &self,
         frame: &[renderer_core::DrawCommand],
+        audit_here: AuditFn,
     ) -> Option<platform_core::AccessAudit> {
-        Some(crate::inspect::audit(frame, self.clear_color()))
+        Some(audit_here(frame, self.clear_color()))
     }
 
     /// Drains the window-management commands a UI closure queued during dispatch — a title bar's drag, a close button — so the runner can apply them to the OS window.

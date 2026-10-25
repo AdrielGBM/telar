@@ -117,6 +117,15 @@ impl HotApp {
     fn tell(&self, call: impl FnOnce(&GuestExports) -> GuestResult<()>) {
         self.image.call(call);
     }
+
+    fn guest_audit(
+        &self,
+        frame: &[renderer_core::DrawCommand],
+    ) -> Option<platform_core::AccessAudit> {
+        let background = crate::app_runtime::AppRuntime::clear_color(self);
+        self.image
+            .call(|exports| unsafe { (exports.access_snapshot)(frame, background) })
+    }
 }
 
 impl Drop for HotApp {
@@ -319,8 +328,11 @@ impl crate::app_runtime::AppRuntime for HotApp {
     fn access_snapshot(
         &self,
         frame: &[renderer_core::DrawCommand],
-    ) -> Vec<platform_core::AccessNode> {
-        self.access_audit(frame)
+    ) -> Vec<platform_core::AccessNode>
+    where
+        Self: Sized,
+    {
+        self.guest_audit(frame)
             .map(|audit| audit.nodes)
             .unwrap_or_default()
     }
@@ -328,10 +340,9 @@ impl crate::app_runtime::AppRuntime for HotApp {
     fn access_audit(
         &self,
         frame: &[renderer_core::DrawCommand],
+        _audit_here: crate::app_runtime::AuditFn,
     ) -> Option<platform_core::AccessAudit> {
-        let background = self.clear_color();
-        self.image
-            .call(|exports| unsafe { (exports.access_snapshot)(frame, background) })
+        self.guest_audit(frame)
     }
 
     // A title bar's `on_press` pushes into the dylib's platform-core copy, so the host drains it across this boundary.

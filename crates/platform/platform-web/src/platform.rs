@@ -61,10 +61,46 @@ impl Frame {
 pub const IDLE_ATTRIBUTE: &str = "data-telar-idle";
 
 struct App {
-    handler: Box<dyn EventHandler<WebWindow>>,
+    handler: Box<dyn PageHandler>,
     window: WebWindow,
     /// Kept alive for the life of the app: dropping a `Closure` unregisters the listener behind it.
     _listeners: Vec<Listener>,
+}
+
+/// The part of an [`EventHandler`] the browser's loop drives, boxed in its place because a trait object links every method it has: a page would otherwise carry the native accessibility tree and the rest of what only a desktop asks a handler for, though the document is already what a screen reader reads.
+trait PageHandler {
+    fn new_events(&mut self);
+    fn on_event(&mut self, event: Event, window: &WebWindow);
+    fn on_redraw(&mut self, window: &WebWindow);
+    fn about_to_wait(&mut self) -> Option<Duration>;
+    fn take_exit_request(&mut self) -> bool;
+    fn on_suspend(&mut self);
+}
+
+impl<H: EventHandler<WebWindow>> PageHandler for H {
+    fn new_events(&mut self) {
+        EventHandler::new_events(self);
+    }
+
+    fn on_event(&mut self, event: Event, window: &WebWindow) {
+        EventHandler::on_event(self, event, window);
+    }
+
+    fn on_redraw(&mut self, window: &WebWindow) {
+        EventHandler::on_redraw(self, window);
+    }
+
+    fn about_to_wait(&mut self) -> Option<Duration> {
+        EventHandler::about_to_wait(self)
+    }
+
+    fn take_exit_request(&mut self) -> bool {
+        EventHandler::take_exit_request(self)
+    }
+
+    fn on_suspend(&mut self) {
+        EventHandler::on_suspend(self);
+    }
 }
 
 /// One registered DOM listener, removed when dropped.

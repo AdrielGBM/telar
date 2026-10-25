@@ -947,7 +947,7 @@ where
         }
         // The app's own frame, before the overlay draws over it: the overlay inspects the app, not itself.
         if self.dev.wants_access()
-            && let Some(audit) = self.app.access_audit(base_slice)
+            && let Some(audit) = self.app.access_audit(base_slice, crate::inspect::audit)
         {
             self.dev.on_access(&audit.nodes);
             self.dev.on_violations(&audit.violations);

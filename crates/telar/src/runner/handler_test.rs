@@ -1423,9 +1423,10 @@ impl<A: App> AppRuntime for Counted<A> {
     fn access_audit(
         &self,
         frame: &[renderer_core::DrawCommand],
+        audit_here: crate::app_runtime::AuditFn,
     ) -> Option<platform_core::AccessAudit> {
         self.snapshots.set(self.snapshots.get() + 1);
-        self.app.access_audit(frame)
+        self.app.access_audit(frame, audit_here)
     }
 }
 

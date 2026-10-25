@@ -52,10 +52,17 @@ impl UserPrefs {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn prefs_path(app_name: &str, paths: &dyn AppPathsProvider) -> Option<PathBuf> {
     paths
         .config_dir()
         .map(|base| base.join(app_name).join("prefs.toml"))
+}
+
+/// A browser keeps no files, and asking the provider behind its `dyn` cannot show the compiler that, which then links the TOML codec into every page.
+#[cfg(target_arch = "wasm32")]
+fn prefs_path(_app_name: &str, _paths: &dyn AppPathsProvider) -> Option<PathBuf> {
+    None
 }
 
 #[cfg(test)]

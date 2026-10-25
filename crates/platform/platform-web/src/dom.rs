@@ -101,8 +101,10 @@ pub fn safe_area_insets() -> geometry_core::Insets {
         style
             .get_property_value(name)
             .ok()
-            .and_then(|value| value.trim_end_matches("px").trim().parse::<f32>().ok())
-            .unwrap_or(0.0)
+            // The browser's own parseFloat, which also reads past the `px`: `str::parse` brings Rust's float parser and its tables, some 20 KB of the module, for these four numbers.
+            .map(|value| js_sys::parse_float(&value))
+            .filter(|px| px.is_finite())
+            .map_or(0.0, |px| px as f32)
     };
     geometry_core::Insets::new(
         side("padding-top"),
