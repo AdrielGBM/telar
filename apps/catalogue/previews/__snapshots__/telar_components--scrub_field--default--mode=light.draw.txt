@@ -13,8 +13,8 @@ element group
               end
             end
             element group
-              matrix 1,0,0,1,418,292
-                text 0,0 11.39x16.8 "11" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              matrix 1,0,0,1,418,286
+                text 0,5 11.39x16.8 "11" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
               end
             end
           end

@@ -1,8 +1,8 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use telar::testing::{hold, key_with, lay_out, moved, named, press, release, route};
-use telar::{ComponentList, Key, NamedKey, RwSignal, Transaction, signal};
+use telar::testing::{hold, key_with, lay_out, moved, named, press, rect_of, release, route};
+use telar::{ComponentList, Key, NamedKey, Rect, RwSignal, TextStyle, Transaction, signal};
 
 use super::*;
 use crate::test_support::fresh_layout_runtime;
@@ -311,5 +311,35 @@ fn an_unlabelled_handle_holds_only_its_value_and_its_padding() {
     assert_eq!(
         handle.width,
         value.width + 2.0 * ScrubFieldTokens::current().pad_x()
+    );
+}
+
+fn drawn_alone_in(height: f32, text: &'static str, style: fn(TextStyle) -> TextStyle) -> Rect {
+    let lone = Text::declaring(move || text.to_string(), LayoutStyle::new(), style).unwrap();
+    let row = Container::new(LayoutStyle::row().height(height), children![lone]).unwrap();
+    let node = row.layout_node();
+    let reference = ComponentList::new(box_item(row));
+    lay_out(node, 300.0, height);
+    rect_of(&reference, text).expect("the lone leaf is drawn")
+}
+
+/// Showing or hiding the label and the value must not restyle them: as text leaves they fill the handle's height and are optically centred there, where dropped to the row's centre line they sat a pixel off.
+#[test]
+fn the_label_and_the_value_are_centred_in_the_handle_as_lone_text_leaves_of_its_height_are() {
+    let tree = mounted(
+        ScrubFieldProps::props()
+            .label("Width")
+            .value(signal(7.0))
+            .build(),
+    );
+    let height = crate::test_support::drawn(Role::SpinButton)[0].height;
+
+    assert_eq!(
+        rect_of(&tree, "Width").expect("the label is drawn"),
+        drawn_alone_in(height, "Width", |t| shared::quiet(t, 1.0)),
+    );
+    assert_eq!(
+        rect_of(&tree, "7").expect("the value is drawn"),
+        drawn_alone_in(height, "7", |t| shared::control_text(t, 1.0)),
     );
 }

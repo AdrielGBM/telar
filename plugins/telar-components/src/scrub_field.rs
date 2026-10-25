@@ -135,10 +135,7 @@ pub fn scrub_field(
         true => LayoutStyle::new().min_width(shared::control_height()),
         false => LayoutStyle::new().display_none(),
     });
-    style_follows(shown.layout_node(), move || match editing.get() {
-        true => LayoutStyle::new().display_none(),
-        false => LayoutStyle::new(),
-    });
+    shared::displayed_while(shown.layout_node(), move || !editing.get());
 
     let commit_draft = {
         let parse = parse.clone();
@@ -191,10 +188,7 @@ pub fn scrub_field(
         |t| shared::quiet(t, 1.0),
     )?;
     // Out of the row when empty, or the gap beside it still opens a space before the value.
-    style_follows(caption.layout_node(), move || match captioned() {
-        true => LayoutStyle::new(),
-        false => LayoutStyle::new().display_none(),
-    });
+    shared::displayed_while(caption.layout_node(), captioned);
 
     let last_click: Rc<Cell<Option<Instant>>> = Rc::new(Cell::new(None));
     let handle = StyledContainer::new(

@@ -4,7 +4,7 @@ use telar::{
     AlignItems, BorderRadius, Children, Clip, ClippedItem, Color, Component, Container, Effect,
     Event, EventResult, JustifyContent, LayoutError, LayoutItem, LayoutStyle, NodeId, Props,
     Reactive, RectStyle, RenderNode, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text,
-    amend_surface, box_item, children, effect, focus::Role, mark_dirty, set_display, signal,
+    amend_surface, box_item, children, focus::Role, signal,
 };
 
 #[cfg(test)]
@@ -140,11 +140,7 @@ pub fn accordion(
 
     let root = Container::column(children![header, clipped_body])?;
 
-    let display_open = open;
-    let _effect = effect(move || {
-        set_display(body_node, display_open.get());
-        let _ = mark_dirty(body_node);
-    });
+    let _effect = shared::displayed_while(body_node, move || open.get());
 
     Ok(box_item(Accordion { root, _effect }))
 }
