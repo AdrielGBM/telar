@@ -296,17 +296,17 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: ./.github/actions/wasm-bindgen
       - uses: ./.github/actions/axe-core
-      - run: cargo run -q -p cargo-telar -- preview -p catalogue --build target/catalogue-site --target web
+      - run: cargo run -q -p cargo-telar -- preview -p catalogue --build "$RUNNER_TEMP/catalogue-site" --target web
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: catalogue-site
-          path: target/catalogue-site/
+          path: ${{ runner.temp }}/catalogue-site/
       - name: Audit every preview page
         run: |
           export CHROMEDRIVER="$CHROMEWEBDRIVER/chromedriver"
           cargo test -p cargo-telar --test workshop_audit -- --ignored --nocapture
         env:
-          TELAR_WORKSHOP_SITE: target/catalogue-site
+          TELAR_WORKSHOP_SITE: ${{ runner.temp }}/catalogue-site
 
   # `cargo telar build` per host OS: the raw binary everywhere plus each platform's native installer formats.
   package:

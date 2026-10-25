@@ -118,6 +118,10 @@ macro_rules! __without_previews {
 #[path = "previews_gate_test.rs"]
 mod previews_gate_tests;
 
+#[cfg(all(test, feature = "shaper"))]
+#[path = "test_face_test.rs"]
+mod test_face;
+
 #[cfg(all(test, feature = "dev", target_os = "linux"))]
 mod hot_guest_fixture;
 
