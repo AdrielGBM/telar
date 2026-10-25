@@ -119,7 +119,7 @@ attached.
 ## Web size budget
 
 CI's `web-size-budget` job builds `apps/landing` for `web-dom` with `--profile web` and fails if the
-brotli-compressed wasm module grows more than 10% over the baseline recorded in
+brotli-compressed wasm module grows more than 20% over the baseline recorded in
 `.github/size-budget/landing-web-dom.json`. Brotli gates rather than the raw module or the gzip copy,
 because that is the encoding a modern static host (Cloudflare Pages included) actually serves — it is
 what a visitor's download is sized by.

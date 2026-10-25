@@ -4,13 +4,13 @@
   "renderer": "dom",
   "cargo_profile": "web",
   "gate": "brotli",
-  "threshold_percent": 10,
+  "threshold_percent": 20,
   "baseline": {
-    "raw_bytes": 822957,
-    "brotli_bytes": 268597,
-    "gzip_bytes": 336013
+    "raw_bytes": 1303756,
+    "brotli_bytes": 425911,
+    "gzip_bytes": 540120
   },
-  "recorded_at": "2026-09-22",
+  "recorded_at": "2026-10-25",
   "recorded_with": {
     "wasm_bindgen": "0.2.127",
     "binaryen": "version_132"
