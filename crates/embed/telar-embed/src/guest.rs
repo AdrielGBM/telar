@@ -3,10 +3,10 @@
 use std::time::Duration;
 
 use platform_core::guest::{
-    CWaker, CallOutcome, FrameCtx, Handle, HostServices, LentBytes, Timestamp, guest_entry,
-    host_epoch,
+    CWaker, CallOutcome, FrameCtx, Handle, HostServices, LentBytes, ReportsSurface, Timestamp,
+    guest_entry, host_epoch,
 };
-use platform_core::{Event, SystemPreferences};
+use platform_core::{AccessNode, ConsumedKeys, Event, SystemPreferences, TextInput};
 use renderer_core::Color;
 use services_core::guest::LentFrames;
 
@@ -283,4 +283,44 @@ pub(crate) unsafe extern "C" fn on_frame(
 /// Keeps the reference `waker` is, which this library drops, and with it hands back to the host, when it is replaced or the library unloads: the guest links its own reactive-core, so a task it spawns finishes in a runtime the host's loop cannot see.
 pub(crate) extern "C" fn install_task_waker(waker: CWaker) -> CallOutcome {
     guest_entry(move || reactive_core::set_task_waker(move || waker.wake()))
+}
+
+/// What the instance tells its host about the surface it draws, read in the guest's own world.
+impl ReportsSurface for GuestInstance {
+    fn access_snapshot(&self) -> Vec<AccessNode> {
+        self.instance.canvas.access_snapshot()
+    }
+
+    fn perform_access_action(&mut self, id: u64, activate: bool) {
+        self.instance.canvas.perform_access_action(id, activate);
+    }
+
+    fn text_input(&self) -> Option<TextInput> {
+        self.instance.canvas.text_input()
+    }
+
+    fn arrive(&mut self, backwards: bool) -> bool {
+        self.instance.canvas.arrive(backwards)
+    }
+
+    fn tab(&mut self, key: &Event) -> bool {
+        self.instance.observe(key);
+        self.instance.canvas.tab(key)
+    }
+
+    fn blur(&mut self) {
+        self.instance.canvas.blur();
+    }
+
+    fn holds_focus(&self) -> bool {
+        self.instance.canvas.holds_focus()
+    }
+
+    fn text_entry_focused(&self) -> bool {
+        self.instance.canvas.text_entry_focused()
+    }
+
+    fn keeps(&self, keys: ConsumedKeys) -> bool {
+        self.instance.canvas.keeps(keys)
+    }
 }

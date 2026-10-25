@@ -7,8 +7,9 @@
 use std::cell::Ref;
 use std::ops::Deref;
 
-use platform_core::Event;
 use platform_core::guest::LentBytes;
+use platform_core::guest::ReportsSurface;
+use platform_core::{AccessNode, ConsumedKeys, Event, TextInput};
 use renderer_core::DrawCommand;
 use services_core::guest::LentFrames;
 use ui_core::{Component, ComponentList, EventResult, OwnedBuild};
@@ -127,7 +128,14 @@ impl HotTree {
         // A dylib carries its own copy of the input registries its widgets read, so the host observing on its side would leave these reading an empty one: modifiers and held buttons are fed here.
         ui_core::observe_keyboard(event);
         ui_core::observe_pointer(event);
-        self.tree.list.on_event(event) == EventResult::Handled
+        let followed = ui_core::follow_box_event(event, |event| {
+            reactive_core::batch(|| {
+                if ui_core::dispatch_overlays(event) != EventResult::Handled {
+                    self.on_event(event);
+                }
+            })
+        });
+        followed.unwrap_or_else(|| self.tree.list.on_event(event) == EventResult::Handled)
     }
 
     /// [`on_event`](Self::on_event) for a move the overlay layer took, with everything in the tree covered; see [`ui_core::covered`].
@@ -175,12 +183,57 @@ impl HotTree {
         nodes
     }
 
-    /// What a reader is told about the frame this tree composed, and what the accessibility checks find in it; see [`crate::inspect::audit`].
+    /// What a reader is told about the frame this tree composed, and what the accessibility checks find in it, for the inspector; see [`crate::inspect::audit`].
     pub fn access_audit(
         &self,
         background: Option<renderer_core::Color>,
     ) -> platform_core::AccessAudit {
         crate::inspect::audit(&self.tree.list.commands(), background)
+    }
+}
+
+/// What the tree tells the host about the window it fills, read in the registries of the library it was mounted in, which the host's copies of them never see.
+impl ReportsSurface for HotTree {
+    fn access_snapshot(&self) -> Vec<AccessNode> {
+        ui_core::accessibility::snapshot(&self.tree.list.commands())
+    }
+
+    fn perform_access_action(&mut self, id: u64, activate: bool) {
+        self.on_event(&Event::AccessAction { id, activate });
+    }
+
+    fn text_input(&self) -> Option<TextInput> {
+        ui_core::text_input()
+    }
+
+    fn arrive(&mut self, backwards: bool) -> bool {
+        ui_core::focus::arrive(backwards)
+    }
+
+    fn tab(&mut self, key: &Event) -> bool {
+        ui_core::focus::tab(key, |key| {
+            if self.on_event(key) {
+                EventResult::Handled
+            } else {
+                EventResult::Ignored
+            }
+        })
+    }
+
+    fn blur(&mut self) {
+        ui_core::focus::clear();
+    }
+
+    fn holds_focus(&self) -> bool {
+        ui_core::focus::current().is_some()
+    }
+
+    fn text_entry_focused(&self) -> bool {
+        ui_core::focus::text_entry_focused()
+    }
+
+    fn keeps(&self, keys: ConsumedKeys) -> bool {
+        ui_core::focus::focused_keeps(keys)
     }
 }
 

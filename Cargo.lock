@@ -6449,6 +6449,7 @@ dependencies = [
  "telar-services-core",
  "telar-theme-core",
  "telar-ui-tree",
+ "telar-wire-core",
  "tracing",
  "web-time",
 ]

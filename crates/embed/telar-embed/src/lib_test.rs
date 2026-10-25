@@ -171,29 +171,74 @@ fn the_driver_forwards_metadata_from_the_embedded_app() {
     assert_eq!(inst.clear_color(), None);
 }
 
+/// A foreign surface that reports nothing, for a boundary to mark a frame with.
+struct Silent;
+
+impl ForeignSurface for Silent {
+    fn access_snapshot(&self) -> Vec<platform_core::AccessNode> {
+        Vec::new()
+    }
+    fn perform_access_action(&self, _id: u64, _activate: bool) {}
+    fn text_input(&self) -> Option<platform_core::TextInput> {
+        None
+    }
+    fn arrive(&self, _backwards: bool) -> bool {
+        false
+    }
+    fn tab(&self, _key: &Event) -> bool {
+        false
+    }
+    fn blur(&self) {}
+    fn holds_focus(&self) -> bool {
+        false
+    }
+    fn text_entry_focused(&self) -> bool {
+        false
+    }
+    fn keeps(&self, _keys: platform_core::ConsumedKeys) -> bool {
+        false
+    }
+}
+
 #[test]
-fn composite_translates_into_the_sub_rect_and_clips_to_it() {
+fn composite_translates_into_the_sub_rect_clips_to_it_and_marks_the_guests_frame() {
     let rect = Rect::new(10.0, 20.0, 100.0, 50.0);
+    let silent: Rc<dyn ForeignSurface> = Rc::new(Silent);
+    let boundary = ForeignBoundary::new(&silent);
     let node = composite(
         rect,
+        &boundary,
         vec![DrawCommand::Rect {
             rect: Rect::new(0.0, 0.0, 5.0, 5.0),
             style: std::sync::Arc::new(RectStyle::default()),
         }],
     );
-    match node {
-        RenderNode::Clip {
-            rect: clip,
-            children,
-            ..
-        } => {
-            assert_eq!(clip, rect, "clipped to the host's sub-rect");
-            assert!(
-                !children.is_empty(),
-                "the composite wraps the guest's own nodes"
-            );
-        }
-        _ => panic!("expected the guest's frame to be wrapped in a clip"),
+    let RenderNode::Clip {
+        rect: clip,
+        children,
+        ..
+    } = node
+    else {
+        panic!("expected the guest's frame to be wrapped in a clip");
+    };
+    assert_eq!(clip, rect, "clipped to the host's sub-rect");
+    let drawn = ui_tree::ComponentList::new(Drawn(RefCell::new(Some(RenderNode::group(children)))))
+        .commands()
+        .clone();
+    assert!(
+        drawn.contains(&DrawCommand::PushSurface {
+            surface: boundary.key()
+        }),
+        "the guest's frame is marked as its: {drawn:?}"
+    );
+}
+
+/// A host's tree that draws one node once.
+struct Drawn(RefCell<Option<RenderNode>>);
+
+impl Component for Drawn {
+    fn view(&self) -> RenderNode {
+        self.0.borrow_mut().take().unwrap_or(RenderNode::Empty)
     }
 }
 

@@ -197,7 +197,7 @@ pub(super) unsafe extern "C" fn tree_walk(
     })
 }
 
-/// What a reader is told and what the checks find, read from this library's registries, which the host's copies of them never see.
+/// What a reader is told and what the checks find, for the host's inspector, read from this library's registries, which the host's copies of them never see.
 pub(super) unsafe extern "C" fn tree_access_audit(
     tree: Handle<HotTree>,
     background: LentBytes,
@@ -292,13 +292,6 @@ pub(super) unsafe extern "C" fn drain_window_commands(commands: *mut LentBytes) 
     guest_entry(|| {
         let drained = crate::take_window_commands();
         unsafe { commands.write(LentBytes::answer(&drained)) };
-    })
-}
-
-pub(super) unsafe extern "C" fn text_input(input: *mut LentBytes) -> CallOutcome {
-    guest_entry(|| {
-        let field = ui_core::text_input();
-        unsafe { input.write(LentBytes::answer(&field)) };
     })
 }
 

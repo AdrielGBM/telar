@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use geometry_core::{Insets, Rect, Size, Transform};
 use layout_core::{AvailableSpace, Direction, LayoutError, LayoutStyle, NodeId, SizeDimension};
-use platform_core::{AccessNode, Event, WindowCommand};
+use platform_core::{AccessNode, ConsumedKeys, Event, TextInput, WindowCommand};
 use reactive_core::{RwSignal, in_surface_world, root_scope, signal};
 use renderer_core::{BorderRadius, DrawCommand};
 use theme_core::ControlSize;
@@ -360,28 +360,19 @@ impl SurfaceCanvas {
         if *surface != self.surface.handle().raw() {
             return self.dispatch_own(event);
         }
+        self.dispatch_box_event(inner)
+    }
+
+    /// Hands this surface a box event its window reported for one of its own boxes, or a screen reader's action on one of its controls, as [`dispatch_in_surface`](Self::dispatch_in_surface) does once it has found the surface they are for; anything else goes to its tree.
+    pub fn dispatch_box_event(&self, event: &Event) -> EventResult {
         self.with_entered(|| {
-            let followed = match &**inner {
-                Event::BoxFocused { box_id } => crate::focus::follow_box(*box_id),
-                Event::BoxActivated { box_id } => crate::activate_box(*box_id),
-                Event::RunActivated { box_id, run } => crate::activate_run(*box_id, *run),
-                Event::FocusLeftBoxes => {
-                    let held = crate::focus::current().is_some();
-                    crate::focus::clear();
-                    held
-                }
-                Event::AccessAction { id, activate } => {
-                    crate::accessibility::perform_action(*id, *activate, |event| {
-                        self.dispatch_own(event);
-                    });
-                    true
-                }
-                other => return self.tree.dispatch(other),
-            };
-            if followed {
-                EventResult::Handled
-            } else {
-                EventResult::Ignored
+            let followed = follow_box_event(event, |event| {
+                self.dispatch_own(event);
+            });
+            match followed {
+                Some(true) => EventResult::Handled,
+                Some(false) => EventResult::Ignored,
+                None => self.tree.dispatch(event),
             }
         })
     }
@@ -399,10 +390,78 @@ impl SurfaceCanvas {
         self.with_entered(|| crate::accessibility::snapshot(&commands))
     }
 
+    /// Carries out a screen reader's request to move to the control `id` names in [`access_snapshot`](Self::access_snapshot), or to activate it. See [`accessibility::perform_action`](crate::accessibility::perform_action).
+    pub fn perform_access_action(&self, id: u64, activate: bool) {
+        self.with_entered(|| {
+            crate::accessibility::perform_action(id, activate, |event| {
+                self.dispatch_own(event);
+            })
+        })
+    }
+
+    /// Where the field that holds this surface's keyboard has its caret, in its own coordinates. See [`text_input`](crate::text_input).
+    pub fn text_input(&self) -> Option<TextInput> {
+        self.with_entered(crate::text_input)
+    }
+
+    /// Marks the canvas as drawn behind one focus stop of a tree around it, whose keyboard carries on outside it: Tab past its last focusable, or Shift+Tab past its first, leaves nothing focused here instead of wrapping, and [`tab`](Self::tab) says so. A modal up inside still holds Tab within itself.
+    pub fn host_keyboard(&self) {
+        self.with_entered(crate::focus::host);
+    }
+
+    /// Focus arriving from the stop around, by the keyboard: to the first focusable, or the last when `backwards`, unless one holds it already. Answers whether one holds it now.
+    pub fn arrive(&self, backwards: bool) -> bool {
+        self.with_entered(|| crate::focus::arrive(backwards))
+    }
+
+    /// Tab, or Shift+Tab, `key`, while the stop around holds the keys: offered to the surface first, then moving among its focusables. Answers whether it stepped past the last, or the first, which leaves nothing focused here once the canvas [hosts its keyboard](Self::host_keyboard).
+    pub fn tab(&self, key: &Event) -> bool {
+        self.with_entered(|| crate::focus::tab(key, |key| self.dispatch(key)))
+    }
+
+    /// Clears focus inside, as the stop around losing it does.
+    pub fn blur(&self) {
+        self.with_entered(crate::focus::clear);
+    }
+
+    /// Whether anything inside holds focus. Reactive, like [`focus::current`](crate::focus::current).
+    pub fn holds_focus(&self) -> bool {
+        self.with_entered(|| crate::focus::current().is_some())
+    }
+
+    /// [`focus::text_entry_focused`](crate::focus::text_entry_focused) inside, which the tree around asks while its stop for the canvas holds focus.
+    pub fn text_entry_focused(&self) -> bool {
+        self.with_entered(crate::focus::text_entry_focused)
+    }
+
+    /// [`focus::focused_keeps`](crate::focus::focused_keeps) inside, which the tree around asks while its stop for the canvas holds focus.
+    pub fn keeps(&self, keys: ConsumedKeys) -> bool {
+        self.with_entered(|| crate::focus::focused_keeps(keys))
+    }
+
     /// Drains what the tree asked of the window — a pointer shape, a title bar's drag. The surface has no window of its own, so whoever holds it decides which of these reach the real one.
     pub fn take_window_commands(&self) -> Vec<WindowCommand> {
         self.with_entered(platform_core::take_window_commands)
     }
+}
+
+/// Follows a box event the window reported for a box of the surface entered now, or carries out a screen reader's action on one of its controls, handing what has to travel through its tree to `dispatch`: `None` for any other event, otherwise whether it was taken.
+pub fn follow_box_event(event: &Event, dispatch: impl FnOnce(&Event)) -> Option<bool> {
+    Some(match event {
+        Event::BoxFocused { box_id } => crate::focus::follow_box(*box_id),
+        Event::BoxActivated { box_id } => crate::activate_box(*box_id),
+        Event::RunActivated { box_id, run } => crate::activate_run(*box_id, *run),
+        Event::FocusLeftBoxes => {
+            let held = crate::focus::current().is_some();
+            crate::focus::clear();
+            held
+        }
+        Event::AccessAction { id, activate } => {
+            crate::accessibility::perform_action(*id, *activate, dispatch);
+            true
+        }
+        _ => return None,
+    })
 }
 
 /// Places a surface's content in an outer tree: drawn through `placement` and clipped to where its `size` lands, so nothing it draws — its own overlays included — spills over what is around it.

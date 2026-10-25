@@ -126,7 +126,8 @@ fn every_building_block_is_hashed() {
             "HostThread",
             "Reply",
             "HostServices",
-            "Lifecycle"
+            "Lifecycle",
+            "SurfaceReport"
         ]
     );
     assert!(
@@ -153,6 +154,40 @@ mod guest {
     }
 }
 
+impl crate::guest::ReportsSurface for u32 {
+    fn access_snapshot(&self) -> Vec<crate::AccessNode> {
+        Vec::new()
+    }
+
+    fn perform_access_action(&mut self, _: u64, _: bool) {}
+
+    fn text_input(&self) -> Option<crate::TextInput> {
+        None
+    }
+
+    fn arrive(&mut self, _: bool) -> bool {
+        false
+    }
+
+    fn tab(&mut self, _: &crate::Event) -> bool {
+        false
+    }
+
+    fn blur(&mut self) {}
+
+    fn holds_focus(&self) -> bool {
+        false
+    }
+
+    fn text_entry_focused(&self) -> bool {
+        false
+    }
+
+    fn keeps(&self, _: crate::ConsumedKeys) -> bool {
+        false
+    }
+}
+
 crate::entry_table! {
     /// A table as a boundary declares one.
     pub struct Declared {
@@ -161,6 +196,7 @@ crate::entry_table! {
         guest: guest,
         settings: ["shaper" => true],
         create: fn(LentBytes, *mut Handle<u32>) as CreateDeclared;
+        report: u32;
         release: fn(Handle<u32>);
         paint: fn(Handle<u32>, *mut LentBytes);
     }
@@ -184,6 +220,7 @@ fn a_declared_table_starts_with_its_lifecycle_and_hashes_every_entry() {
         [
             "lifecycle: Lifecycle",
             "create: fn(LentBytes, *mut Handle<u32>, )",
+            "report: SurfaceReport",
             "release: fn(Handle<u32>, )",
             "paint: fn(Handle<u32>, *mut LentBytes, )"
         ]

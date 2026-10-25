@@ -180,7 +180,7 @@ reactive_core::dropless_thread_local! {
     static HOOK_INSTALLED: Cell<bool> = const { Cell::new(false) };
 }
 
-fn next_handle() -> SurfaceHandle {
+pub(crate) fn next_handle() -> SurfaceHandle {
     NEXT_HANDLE.with(|c| {
         let id = c.get();
         c.set(id + 1);

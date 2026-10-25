@@ -34,6 +34,7 @@ renderer-core = { workspace = true }
 services-core = { workspace = true, features = ["di"] }
 theme-core = { workspace = true }
 ui-tree = { workspace = true }
+wire-core = { workspace = true }
 
 rustc-hash = { workspace = true }
 tracing = { workspace = true }

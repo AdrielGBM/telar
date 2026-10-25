@@ -1,12 +1,13 @@
-//! An embedded guest the `guest_contract` test in `telar` loads into a host with its own copy of std and an allocator marked apart from this one's: it draws text and an image, takes moves and keys, queues window commands, waits on a timer, wakes its host, and panics on a press, so every entry of the embed contract runs.
+//! An embedded guest the `guest_contract` test in `telar` loads into a host with its own copy of std and an allocator marked apart from this one's: it draws text and an image, takes moves and keys, has a text field and a button a screen reader, the keyboard and the input method reach through its host, queues window commands, waits on a timer, wakes its host, and panics on a press, so every entry of the embed contract runs.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use telar::{
-    AppCtx, Color, DrawCommand, Event, EventResult, ImageData, Key, LayoutItem, LayoutStyle,
-    NodeId, PointerButton, Rect, RenderNode, RwSignal, Text, TextStyle, Timer, WindowCommand,
-    box_item, push_window_command, run_after, signal,
+    AppCtx, Color, Container, DrawCommand, Event, EventResult, ImageData, Input, Key, LayoutItem,
+    LayoutStyle, NodeId, PointerButton, Rect, RectStyle, RenderNode, RwSignal, StyledContainer,
+    Text, TextStyle, Timer, WindowCommand, box_item, focus, push_window_command, run_after,
+    signal,
 };
 use telar_embed::EmbeddedApp;
 
@@ -50,7 +51,33 @@ impl EmbeddedApp for Fixture {
             || TextStyle::new(14.0, Color::BLACK),
         )
         .expect("the label builds");
-        self.content = Some(box_item(label));
+        let field = Input::new(
+            signal(String::from("ab")),
+            LayoutStyle::new().width(120.0).height(20.0),
+            || TextStyle::new(14.0, Color::BLACK),
+        )
+        .expect("the field builds");
+        let presses = signal(0);
+        let button = StyledContainer::new(
+            LayoutStyle::new().width(60.0).height(24.0),
+            |_| RectStyle::default(),
+            vec![],
+        )
+        .expect("the button builds")
+        .control(focus::Role::Button)
+        .on_press(move || {
+            presses.update(|presses| *presses += 1);
+            push_window_command(WindowCommand::SetTitle(format!(
+                "pressed {}",
+                presses.peek()
+            )));
+        });
+        let form = Container::new(
+            LayoutStyle::new().flex_column(),
+            vec![box_item(label), box_item(field), box_item(button)],
+        )
+        .expect("the form builds");
+        self.content = Some(box_item(form));
         self._timer = Some(run_after(TIMER_DUE_IN, || {}));
     }
 
@@ -89,7 +116,7 @@ impl EmbeddedApp for Fixture {
                 button: PointerButton::Primary,
                 ..
             } => panic!("RUNTIME is already borrowed by the press handler"),
-            _ => EventResult::Ignored,
+            _ => self.content.as_mut().expect("built").on_event(event),
         }
     }
 

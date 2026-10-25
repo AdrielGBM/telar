@@ -9,6 +9,7 @@ use super::lent::{Handle, LentBytes};
 use super::lifecycle::{Entries, LIFECYCLE_LAYOUT, Lifecycle};
 use super::outcome::CallOutcome;
 use super::services::{HOST_SERVICES_LAYOUT, REPLY_LAYOUT};
+use super::surface::{SURFACE_REPORT_LAYOUT, SurfaceReport};
 use super::threads::{HostThread, ThreadStart};
 use super::waker::CWaker;
 
@@ -41,7 +42,7 @@ macro_rules! type_layout {
 }
 
 /// The building blocks every boundary shares, hashed into every stamp.
-pub const BUILDING_BLOCKS: [TypeLayout; 12] = [
+pub const BUILDING_BLOCKS: [TypeLayout; 13] = [
     crate::type_layout!(LentBytes { ptr, len }),
     crate::type_layout!(CallOutcome {
         status,
@@ -71,6 +72,7 @@ pub const BUILDING_BLOCKS: [TypeLayout; 12] = [
     REPLY_LAYOUT,
     HOST_SERVICES_LAYOUT,
     LIFECYCLE_LAYOUT,
+    SURFACE_REPORT_LAYOUT,
 ];
 
 /// Which boundary a library was built to be loaded through. The two share every rule and building block but not their entry tables, so a loader of one kind refuses a library of the other before it reads a table that is not there.
@@ -235,7 +237,7 @@ impl fmt::Display for ContractMismatch {
 
 impl std::error::Error for ContractMismatch {}
 
-/// Declares a boundary's entry table and its [`Entries`] impl: a `repr(C)` struct of `extern "C"` entries after its [`Lifecycle`], the entry that builds an instance with a type of its own, and a `serving` constructor that takes that entry and fills every other from the function of the same name in the `guest` module, the lifecycle's `install_services` included.
+/// Declares a boundary's entry table and its [`Entries`] impl: a `repr(C)` struct of `extern "C"` entries after its [`Lifecycle`], the entry that builds an instance with a type of its own, the [`SurfaceReport`] of the instances whose surfaces it reads (`report`, a [`ReportsSurface`](super::ReportsSurface) type), and a `serving` constructor that takes that entry and fills every other from the function of the same name in the `guest` module, the lifecycle's `install_services` included.
 ///
 /// The table's layout hashes every entry with its signature as written, so an entry that changes what it takes changes the stamp as surely as one that moves, and the stamp hashes each setting, on or off, as [`ContractStamp::with_setting`] does.
 ///
@@ -248,6 +250,7 @@ impl std::error::Error for ContractMismatch {}
 ///         guest: guest,
 ///         settings: ["shaper" => cfg!(feature = "shaper")],
 ///         create: fn(LentBytes, *mut Handle<GuestInstance>) as CreateInstance;
+///         report: GuestInstance;
 ///         release: fn(Handle<GuestInstance>);
 ///     }
 /// }
@@ -262,6 +265,7 @@ macro_rules! entry_table {
             guest: $guest:ident,
             settings: [$($setting:literal => $on:expr),* $(,)?],
             $create:ident: fn($($create_arg:ty),* $(,)?) as $create_ty:ident;
+            report: $surface:ty;
             $($field:ident: fn($($arg:ty),* $(,)?);)*
         }
     ) => {
@@ -274,6 +278,7 @@ macro_rules! entry_table {
         pub struct $table {
             pub lifecycle: $crate::guest::Lifecycle,
             pub $create: $create_ty,
+            pub report: $crate::guest::SurfaceReport<$surface>,
             $(pub $field: unsafe extern "C" fn($($arg),*) -> $crate::guest::CallOutcome,)*
         }
 
@@ -283,12 +288,14 @@ macro_rules! entry_table {
                 Self {
                     lifecycle: $crate::guest::Lifecycle::serving($guest::install_services),
                     $create,
+                    report: $crate::guest::SurfaceReport::serving(),
                     $($field: $guest::$field,)*
                 }
             }
         }
 
         unsafe impl $crate::guest::Entries for $table {
+            type Surface = $surface;
             const SYMBOL: &'static [u8] = concat!($symbol, "\0").as_bytes();
             const LAYOUT: $crate::guest::TypeLayout = $crate::guest::TypeLayout {
                 name: stringify!($table),
@@ -300,6 +307,7 @@ macro_rules! entry_table {
                         concat!(stringify!($create), ": fn(", $(stringify!($create_arg), ", ",)* ")"),
                         ::std::mem::offset_of!($table, $create),
                     ),
+                    ("report: SurfaceReport", ::std::mem::offset_of!($table, report)),
                     $((
                         concat!(stringify!($field), ": fn(", $(stringify!($arg), ", ",)* ")"),
                         ::std::mem::offset_of!($table, $field),
@@ -315,11 +323,15 @@ macro_rules! entry_table {
             fn lifecycle(&self) -> &$crate::guest::Lifecycle {
                 &self.lifecycle
             }
+
+            fn report(&self) -> &$crate::guest::SurfaceReport<$surface> {
+                &self.report
+            }
         }
     };
 }
 
-/// What each boundary's tests assert of its table, `E`: its lifecycle first, one entry per field after it and nothing else, each hashed with its signature, and a library of the other kind refused as that kind.
+/// What each boundary's tests assert of its table, `E`: its lifecycle first, then the entry that builds an instance and the surface report, one entry per field after them and nothing else, each hashed with its signature, and a library of the other kind refused as that kind.
 #[doc(hidden)]
 pub fn check_entry_table<E: Entries>() {
     let layout = E::LAYOUT;
@@ -330,11 +342,21 @@ pub fn check_entry_table<E: Entries>() {
     );
     let entry = std::mem::size_of::<unsafe extern "C" fn() -> CallOutcome>();
     assert_eq!(
-        std::mem::size_of::<Lifecycle>() + (layout.fields.len() - 1) * entry,
+        layout.fields[2],
+        (
+            "report: SurfaceReport",
+            std::mem::size_of::<Lifecycle>() + entry
+        ),
+        "the surface report follows the entry that builds an instance"
+    );
+    assert_eq!(
+        std::mem::size_of::<Lifecycle>()
+            + std::mem::size_of::<SurfaceReport<()>>()
+            + (layout.fields.len() - 2) * entry,
         layout.size,
         "one field per entry, and nothing else in the table"
     );
-    for (field, _) in &layout.fields[1..] {
+    for (field, _) in layout.fields[1..2].iter().chain(&layout.fields[3..]) {
         assert!(
             field.contains(": fn("),
             "{field} is hashed with what it takes"

@@ -77,7 +77,7 @@ pub trait AppRuntime: 'static {
         ui_core::dispatch_overlays(event) == ui_core::EventResult::Handled
     }
 
-    /// Describes the window to a screen reader from the commands of the last frame, read against the focus and layout registries this application's widgets live in.
+    /// Describes the window to a screen reader from the commands of the last frame, read against the focus and layout registries this application's widgets live in; a tree behind a dylib marks its frame as a [foreign surface](ui_core::ForeignSurface), which reports itself.
     ///
     /// Asked only of a runtime whose type is known, never through the runner's `dyn AppRuntime`, and bounded by `Sized` so it stays out of that vtable: in it, the reading would ship in every build that links the runner.
     fn access_snapshot(

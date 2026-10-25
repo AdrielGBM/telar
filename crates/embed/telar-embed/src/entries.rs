@@ -7,13 +7,14 @@ use platform_core::guest::{
 use crate::guest::{self, GuestInstance};
 
 platform_core::entry_table! {
-    /// Every entry of an embedded guest after its lifecycle, each the guest's function of the same name in [`guest`] but `create`, which the [`embed!`](crate::embed) macro writes, building one instance from the launch arguments lent as a `Vec<String>`: named for the method of the host's it serves. Each returns a `CallOutcome` and writes what it answers through the pointers it is handed.
+    /// Every entry of an embedded guest after its lifecycle, each the guest's function of the same name in [`guest`] but `create`, which the [`embed!`](crate::embed) macro writes, building one instance from the launch arguments lent as a `Vec<String>`, and the `report` of what an instance tells the host about the surface it draws: named for the method of the host's it serves. Each returns a `CallOutcome` and writes what it answers through the pointers it is handed.
     pub struct EmbedEntries {
         kind: Embed,
         symbol: "telar_embed_entries",
         guest: guest,
         settings: ["shaper" => cfg!(feature = "shaper")],
         create: fn(LentBytes, *mut Handle<GuestInstance>) as CreateInstance;
+        report: GuestInstance;
         release: fn(Handle<GuestInstance>);
         relayout: fn(Handle<GuestInstance>, f32, f32);
         relayout_dirty: fn(Handle<GuestInstance>);

@@ -9,6 +9,7 @@ use super::contract::{ContractStamp, TypeLayout};
 use super::lent::release_answers;
 use super::outcome::{CallOutcome, guest_entry, release_report};
 use super::services::HostServices;
+use super::surface::SurfaceReport;
 
 /// The entries a host calls on every guest, in this order: `loaded` and `adopt_epoch`, for a library it will unmap, then `install_services`, before anything else; once every instance is released, `unloading`, unless the guest panicked, and `quiesce`, always, right before the library is unmapped. Entries a process serves itself share its epoch and are never unmapped.
 #[repr(C)]
@@ -59,12 +60,14 @@ pub(super) const LIFECYCLE_LAYOUT: TypeLayout = TypeLayout {
     ],
 };
 
-/// A boundary's table of entries, which starts with its [`Lifecycle`], as [`entry_table!`](crate::entry_table) declares one: what [`open_guest`](super::open_guest) copies out of a library, and what a host drives any guest through.
+/// A boundary's table of entries, which starts with its [`Lifecycle`] and carries the [`SurfaceReport`] of the instances it builds, as [`entry_table!`](crate::entry_table) declares one: what [`open_guest`](super::open_guest) copies out of a library, and what a host drives any guest through.
 ///
 /// # Safety
 ///
 /// `Self` is a `repr(C)` table of `extern "C"` entries that follow the contract, laid out as [`LAYOUT`](Self::LAYOUT) says, and a library that exports it as [`SYMBOL`](Self::SYMBOL) exports [`CONTRACT`](Self::CONTRACT) beside it.
 pub unsafe trait Entries: Copy + 'static {
+    /// The instance on the guest's side whose surface [`report`](Self::report) reads, behind the handles its host holds.
+    type Surface;
     /// The symbol the table is exported as, ending in a nul.
     const SYMBOL: &'static [u8];
     const LAYOUT: TypeLayout;
@@ -72,6 +75,8 @@ pub unsafe trait Entries: Copy + 'static {
     const CONTRACT: ContractStamp;
 
     fn lifecycle(&self) -> &Lifecycle;
+
+    fn report(&self) -> &SurfaceReport<Self::Surface>;
 }
 
 static HOST_EPOCH: Mutex<Option<Epoch>> = Mutex::new(None);

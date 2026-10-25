@@ -118,6 +118,48 @@ fn a_request_maps_back_to_the_control_that_claimed_it() {
     );
 }
 
+/// A control of the window and one of a surface nested in it with the same focus id, read before a label: each is a node of its own, apart from the label and the window, and a request for either comes back to the id the snapshot gave it.
+#[test]
+fn a_nested_surfaces_control_and_the_windows_own_never_share_a_node() {
+    let own = 5;
+    let nested = (1 << 32) | own;
+    let nodes = vec![
+        node(None, Role::Label, "Above"),
+        node(Some(own), Role::Button, "Own"),
+        node(Some(nested), Role::Button, "Nested"),
+    ];
+    let update = tree_update(&nodes, "Editor", None);
+    let ids: Vec<NodeId> = update.nodes.iter().map(|(id, _)| *id).collect();
+    let distinct: std::collections::HashSet<NodeId> = ids.iter().copied().collect();
+    assert_eq!(
+        distinct.len(),
+        ids.len(),
+        "every node has its own id: {ids:?}"
+    );
+    assert!(distinct.contains(&ROOT));
+
+    for (index, id) in [(1, own), (2, nested)] {
+        let request = ActionRequest {
+            action: Action::Focus,
+            target_tree: TreeId::ROOT,
+            target_node: update.nodes[index].0,
+            data: None,
+        };
+        assert_eq!(requested_focus_id(&request, &nodes), Some((id, false)));
+    }
+    let label = ActionRequest {
+        action: Action::Focus,
+        target_tree: TreeId::ROOT,
+        target_node: update.nodes[0].0,
+        data: None,
+    };
+    assert_eq!(
+        requested_focus_id(&label, &nodes),
+        None,
+        "a label is no control"
+    );
+}
+
 /// A quotation in another language is read in that language's voice, and a node the application said nothing about inherits the window's.
 #[test]
 fn a_node_in_another_language_says_which() {
@@ -1081,7 +1123,7 @@ fn each_node_is_a_child_of_the_one_it_sits_in() {
     ];
     let update = tree_update(&nodes, "Explorer", None);
     let window = update_of(&update, ROOT);
-    assert_eq!(window.children(), [NodeId(1), control_id(1)]);
+    assert_eq!(window.children(), [label_id(0), control_id(1)]);
     assert_eq!(
         update_of(&update, control_id(1)).children(),
         [control_id(2), control_id(5)]

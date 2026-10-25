@@ -2056,6 +2056,36 @@ fn the_window_is_told_where_the_focused_field_has_its_caret() {
     assert_eq!(window.text_input(), None, "no field takes text any more");
 }
 
+/// A field that goes with its tree takes the input method with it, even when the next tree focuses one the window would hear about in the same words: a composition never carries from one tree into the next, as across a hot reload.
+#[test]
+fn a_tree_that_goes_takes_the_input_method_from_its_field() {
+    let window = HeadlessWindow::new(120, 80);
+    let mut handler = build_app_handler::<HeadlessWindow, ()>(
+        Box::new(LocalApp(OneField)),
+        Arc::new(services_core::NoPaths),
+        crate::runner::font_config::FontSetup::default(),
+        RendererBackend::Software,
+        UserPrefs::default(),
+        "text-input-test".to_string(),
+        SurfaceRenderer::builtin(),
+    );
+    handler.new_events();
+    assert!(handler.on_resume(&window));
+    run_a_pass(&mut handler, &window);
+    assert!(
+        window.text_input().is_some(),
+        "precondition: a field takes text"
+    );
+
+    handler.remount(&window);
+    assert_eq!(window.text_input(), None, "told as the tree goes");
+    run_a_pass(&mut handler, &window);
+    assert!(
+        window.text_input().is_some(),
+        "and told of the next tree's field once a frame draws it"
+    );
+}
+
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 thread_local! {
     static UNLOAD_JOURNAL: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };

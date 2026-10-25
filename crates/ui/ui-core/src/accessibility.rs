@@ -5,6 +5,7 @@
 //! Almost nothing here is authored per widget, and that is the design. The set of controls is the focus registry's own tab order, so the reader and the keyboard cannot come to different conclusions about what is on screen. The name is taken from **the text the widget actually draws inside itself**, which is how it reads to everyone else and needs no second copy that can fall out of step with the first. What an application does author — a name, a language, a box a reader skips — is resolved along the frame's own element nesting, the same nesting a document backend turns into elements.
 
 use std::ops::Range;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use geometry_core::Rect;
@@ -44,19 +45,20 @@ pub fn is_read(command: &DrawCommand) -> bool {
 ///
 /// `commands` is the frame the renderer is about to draw — the same list, so what is announced and what is painted are the same picture by construction rather than by agreement.
 ///
-/// A surface drawn inside this one's frame ([`DrawCommand::PushSurface`]) is read in its own world, where its boxes' ids mean its boxes, and its nodes are placed where the frame shows them, inside the node it is drawn in: see [`NestedSurface::place`] and [`graft`].
+/// A surface drawn inside this one's frame ([`DrawCommand::PushSurface`]) is read in its own world, where its boxes' ids mean its boxes, or, for a [foreign](crate::ForeignSurface) one, taken as it reports itself; either way its nodes are placed where the frame shows them, inside the node it is drawn in: see [`NestedSurface::place`] and [`graft`].
 pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
     let SurfaceTree { nodes, nested } = surface_tree(commands);
     let grafts = nested
         .into_iter()
         .filter_map(|(surface, parent)| {
-            surface.with_entered(|| {
-                let inner = snapshot(&commands[surface.commands.clone()]);
-                (
-                    parent,
-                    inner.into_iter().map(|node| surface.place(node)).collect(),
-                )
-            })
+            let inner = match surface.foreign() {
+                Some(foreign) => foreign.access_snapshot(),
+                None => surface.with_entered(|| snapshot(&commands[surface.commands.clone()]))?,
+            };
+            Some((
+                parent,
+                inner.into_iter().map(|node| surface.place(node)).collect(),
+            ))
         })
         .collect();
     graft(nodes, grafts)
@@ -1120,28 +1122,37 @@ impl NestedSurface {
         renderer_core::transform_clip_rect(self.placement, rect)
     }
 
-    /// A node read inside the surface, as the frame around it shows it: at its place in the frame, with its id and the ones it names as its active descendant and as what it controls made distinct from every id of the frame's own.
+    /// The [`ForeignSurface`](crate::ForeignSurface) the marker names, which reports what is read of it instead of being entered; `None` for a surface of this process.
+    pub fn foreign(&self) -> Option<Rc<dyn crate::ForeignSurface>> {
+        crate::foreign_surface::source(self.surface)
+    }
+
+    /// A node read inside the surface, as the frame around it shows it: at its place in the frame, with its id and the ones it names as its active descendant and as what it controls made distinct from every id of the frame's own. An id of a foreign surface that names a surface nested in it no frame here draws any longer names nothing.
     pub fn place(&self, node: AccessNode) -> AccessNode {
         AccessNode {
             rect: self.place_rect(node.rect),
-            id: node.id.map(|id| self.qualify(id)),
-            active_descendant: node.active_descendant.map(|id| self.qualify(id)),
-            controls: node.controls.map(|id| self.qualify(id)),
+            id: node.id.and_then(|id| self.qualify(id)),
+            active_descendant: node.active_descendant.and_then(|id| self.qualify(id)),
+            controls: node.controls.and_then(|id| self.qualify(id)),
             ..node
         }
     }
 
-    // Every surface counts its focus ids from the same start, so a nested one's are moved above the frame's; ids already moved by a surface nested deeper are unique as they are, since handles are.
-    fn qualify(&self, id: u64) -> u64 {
-        if id >> NESTED_ID_SHIFT == 0 {
-            (self.surface << NESTED_ID_SHIFT) | id
-        } else {
-            id
+    // Every surface counts its focus ids from the same start, so a nested one's are moved above the frame's; ids already moved by a surface nested deeper are unique as they are, since handles are, but a foreign surface's carry handles in its own numbering, which here name other surfaces.
+    fn qualify(&self, id: u64) -> Option<u64> {
+        match id >> NESTED_ID_SHIFT {
+            0 => Some((self.surface << NESTED_ID_SHIFT) | id),
+            guest if crate::foreign_surface::is_foreign(self.surface) => {
+                crate::foreign_surface::nested_key_of(self.surface, guest)
+                    .map(|key| (key << NESTED_ID_SHIFT) | (id & NESTED_ID_MASK))
+            }
+            _ => Some(id),
         }
     }
 }
 
-const NESTED_ID_SHIFT: u32 = 32;
+pub(crate) const NESTED_ID_SHIFT: u32 = 32;
+const NESTED_ID_MASK: u64 = (1 << NESTED_ID_SHIFT) - 1;
 
 /// The control an id in [`snapshot`] names: one of the surface entered now, or one of a surface nested in its frame, which [`NestedSurface::place`] gave an id the surface's own never take.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1156,7 +1167,7 @@ impl AccessTarget {
             0 => Self::Own(id),
             surface => Self::Nested {
                 surface,
-                id: id & ((1 << NESTED_ID_SHIFT) - 1),
+                id: id & NESTED_ID_MASK,
             },
         }
     }
@@ -1164,7 +1175,7 @@ impl AccessTarget {
 
 /// Carries out a screen reader's request to move to the control `id` names in [`snapshot`] of the surface entered now, or to activate it.
 ///
-/// A control of its own takes focus, and activation goes out as the Enter it already answers, so a reader pressing a button travels the route a keyboard does. One of a nested surface is reached the way a box event for it is, as an [`Event::AccessAction`] inside [`Event::InSurface`], which the frames along the way pass on to the surface that drew it. What has to travel through the surface's tree is handed to `dispatch`.
+/// A control of its own takes focus, and activation goes out as the Enter it already answers, so a reader pressing a button travels the route a keyboard does. One of a nested surface is reached the way a box event for it is, as an [`Event::AccessAction`] inside [`Event::InSurface`], which the frames along the way pass on to the surface that drew it; one of a [foreign](crate::ForeignSurface) surface, which no frame here can enter, is handed to that surface directly, and its focus stop takes focus once focus is inside. What has to travel through the surface's tree is handed to `dispatch`.
 pub fn perform_action(id: u64, activate: bool, dispatch: impl FnOnce(&Event)) {
     match AccessTarget::of(id) {
         AccessTarget::Own(id) => {
@@ -1177,10 +1188,16 @@ pub fn perform_action(id: u64, activate: bool, dispatch: impl FnOnce(&Event)) {
                 });
             }
         }
-        AccessTarget::Nested { surface, id } => dispatch(&Event::InSurface {
-            surface,
-            event: Box::new(Event::AccessAction { id, activate }),
-        }),
+        AccessTarget::Nested { surface, id } => match crate::foreign_surface::target(surface, id) {
+            Some((foreign, own)) => {
+                foreign.perform_access_action(own, activate);
+                crate::foreign_surface::follow_focus_inside(surface);
+            }
+            None => dispatch(&Event::InSurface {
+                surface,
+                event: Box::new(Event::AccessAction { id, activate }),
+            }),
+        },
     }
 }
 

@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use platform_core::guest::{Handle, Lifecycle, guest_entry};
+use platform_core::guest::{Handle, Lifecycle, ReportsSurface, guest_entry};
 use renderer_core::{ExclusiveFontsError, FontAsset, FontConfig, FontSources};
 
 use super::*;
@@ -20,14 +20,52 @@ mod guest {
     }
 }
 
+/// A surface with nothing on it.
+pub struct Blank;
+
+impl ReportsSurface for Blank {
+    fn access_snapshot(&self) -> Vec<platform_core::AccessNode> {
+        Vec::new()
+    }
+
+    fn perform_access_action(&mut self, _id: u64, _activate: bool) {}
+
+    fn text_input(&self) -> Option<platform_core::TextInput> {
+        None
+    }
+
+    fn arrive(&mut self, _backwards: bool) -> bool {
+        false
+    }
+
+    fn tab(&mut self, _key: &platform_core::Event) -> bool {
+        false
+    }
+
+    fn blur(&mut self) {}
+
+    fn holds_focus(&self) -> bool {
+        false
+    }
+
+    fn text_entry_focused(&self) -> bool {
+        false
+    }
+
+    fn keeps(&self, _: platform_core::ConsumedKeys) -> bool {
+        false
+    }
+}
+
 platform_core::entry_table! {
-    /// A guest with nothing to it but its lifecycle.
+    /// A guest with nothing to it but its lifecycle and the report of a blank surface.
     pub struct Bare {
         kind: Embed,
         symbol: "telar_bare_entries",
         guest: guest,
         settings: [],
         create: fn(*mut Handle<()>) as CreateBare;
+        report: Blank;
     }
 }
 

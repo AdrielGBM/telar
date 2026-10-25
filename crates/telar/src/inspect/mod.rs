@@ -13,7 +13,7 @@ use ui_core::accessibility::{SurfaceTree, graft, surface_tree};
 
 use crate::{Color, DrawCommand, Rect, Size};
 
-/// What a reader is told about the surface entered now, which drew `commands`, and what [`a11y::check`] finds in it — and the same for every surface nested in its frame, each read and checked in its own world and placed where the frame shows it, inside the node it is drawn in.
+/// What a reader is told about the surface entered now, which drew `commands`, and what [`a11y::check`] finds in it — and the same for every surface nested in its frame, each read and checked in its own world and placed where the frame shows it, inside the node it is drawn in. A [foreign](ui_core::ForeignSurface) one, which has no world here, is read and checked where its world is, as [`ForeignSurface::access_audit`](ui_core::ForeignSurface::access_audit) reports it, with `background` behind it, and read unchecked as it reports itself where it cannot check itself.
 ///
 /// `background` is what shows behind everything the commands draw, where it is known. Read with the surface entered and before anything in it changes, as the checks are.
 pub fn audit(commands: &[DrawCommand], background: Option<Color>) -> AccessAudit {
@@ -36,26 +36,40 @@ fn audit_over(
     let painted = (!nested.is_empty()).then(|| a11y::Painted::of(&frame));
     let mut grafts = Vec::new();
     for (nested, parent) in nested {
-        nested.with_entered(|| {
-            let painted = painted.as_ref().expect("read once a surface is nested");
-            let under = |x: f32, y: f32| {
-                let at = nested.place_rect(Rect::new(x, y, 0.0, 0.0));
-                painted.at(at.x, at.y, behind(at.x, at.y))
-            };
-            let inner = audit_over(&commands[nested.commands.clone()], None, &under);
-            grafts.push((
-                parent,
-                inner
-                    .nodes
-                    .into_iter()
-                    .map(|node| nested.place(node))
-                    .collect(),
-            ));
-            violations.extend(inner.violations.into_iter().map(|violation| {
-                let rect = violation.rect.map(|rect| nested.place_rect(rect));
-                violation.at(rect)
-            }));
-        });
+        let inner = match nested.foreign() {
+            Some(foreign) => foreign
+                .access_audit(background)
+                .unwrap_or_else(|| AccessAudit {
+                    nodes: foreign.access_snapshot(),
+                    violations: Vec::new(),
+                }),
+            None => {
+                let audited = nested.with_entered(|| {
+                    let painted = painted.as_ref().expect("read once a surface is nested");
+                    let under = |x: f32, y: f32| {
+                        let at = nested.place_rect(Rect::new(x, y, 0.0, 0.0));
+                        painted.at(at.x, at.y, behind(at.x, at.y))
+                    };
+                    audit_over(&commands[nested.commands.clone()], None, &under)
+                });
+                let Some(audited) = audited else {
+                    continue;
+                };
+                audited
+            }
+        };
+        grafts.push((
+            parent,
+            inner
+                .nodes
+                .into_iter()
+                .map(|node| nested.place(node))
+                .collect(),
+        ));
+        violations.extend(inner.violations.into_iter().map(|violation| {
+            let rect = violation.rect.map(|rect| nested.place_rect(rect));
+            violation.at(rect)
+        }));
     }
     AccessAudit {
         nodes: graft(nodes, grafts),

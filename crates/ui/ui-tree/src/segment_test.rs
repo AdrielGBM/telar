@@ -507,6 +507,35 @@ fn a_box_model_is_taken_per_node_in_a_tree() {
     assert_eq!(nodes[1].padding, Insets::all(4.0));
 }
 
+/// Draws a box numbered as `node` inside the frame of a surface with no world on this thread, as a foreign library's tree is drawn.
+struct InWorldless {
+    node: layout_reactive::NodeId,
+}
+impl Component for InWorldless {
+    fn view(&self) -> RenderNode {
+        RenderNode::group([
+            RenderNode::Primitive(DrawCommand::PushSurface { surface: 9 }),
+            Boxed { node: self.node }.view(),
+            RenderNode::Primitive(DrawCommand::PopSurface),
+        ])
+    }
+}
+
+#[test]
+fn a_box_drawn_in_a_surface_with_no_world_here_is_not_read_as_this_ones() {
+    let root = SegmentRoot::mount(InWorldless {
+        node: laid_out_box(),
+    });
+    let mut nodes = Vec::new();
+    root.walk(&mut nodes);
+
+    assert_eq!(
+        nodes[0].padding,
+        Insets::default(),
+        "the box with that id here is not the one drawn"
+    );
+}
+
 struct Moved {
     child: Rc<Segment>,
 }

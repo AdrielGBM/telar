@@ -14,7 +14,10 @@ use platform_core::{
 };
 
 /// The window itself, which every other node hangs from. A fixed id because there is exactly one and the platform needs to name it before any of its children exist.
-const ROOT: NodeId = NodeId(0);
+const ROOT: NodeId = NodeId(OWN);
+
+/// The bit set on every id the platform gives a node of its own, the window and the labels, and clear on every id a control goes by.
+const OWN: u64 = 1 << 63;
 
 /// Turns Telar's description of the window into the tree AccessKit publishes.
 ///
@@ -27,14 +30,21 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
     }
 
     // Positional ids for the labels, which nothing addresses; a control keeps its focus id, so the same button stays the same node across frames and a reader is not told it appeared anew.
-    let ids: Vec<NodeId> = nodes
+    let controls: Vec<Option<NodeId>> = nodes
+        .iter()
+        .map(|node| node.id.filter(|&id| is_control_id(id)).map(control_id))
+        .collect();
+    let ids: Vec<NodeId> = controls
         .iter()
         .enumerate()
-        .map(|(index, node)| match node.id {
-            Some(focus_id) => control_id(focus_id),
-            None => NodeId(index as u64 + 1),
-        })
+        .map(|(index, control)| control.unwrap_or_else(|| label_id(index)))
         .collect();
+    let control_named = |id: u64| {
+        nodes
+            .iter()
+            .position(|other| other.id == Some(id))
+            .and_then(|at| controls[at])
+    };
     let mut children: Vec<Vec<usize>> = vec![Vec::new(); nodes.len()];
     let mut top = Vec::new();
     for (index, node) in nodes.iter().enumerate() {
@@ -57,7 +67,7 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
             x1: (node.rect.x + node.rect.width) as f64,
             y1: (node.rect.y + node.rect.height) as f64,
         });
-        if node.id.is_some() {
+        if controls[index].is_some() {
             // Focus and activation are the two things a reader drives, and both come back as an `ActionRequest` this node has to have claimed.
             ak.add_action(Action::Focus);
             ak.add_action(Action::Click);
@@ -112,17 +122,11 @@ pub(crate) fn tree_update(nodes: &[AccessNode], title: &str, lang: Option<&str>)
             });
         }
         // AccessKit rejects a reference to a node the update does not carry.
-        if let Some(item) = node
-            .active_descendant
-            .filter(|item| nodes.iter().any(|other| other.id == Some(*item)))
-        {
-            ak.set_active_descendant(control_id(item));
+        if let Some(item) = node.active_descendant.and_then(control_named) {
+            ak.set_active_descendant(item);
         }
-        if let Some(target) = node
-            .controls
-            .filter(|target| nodes.iter().any(|other| other.id == Some(*target)))
-        {
-            ak.set_controls(vec![control_id(target)]);
+        if let Some(target) = node.controls.and_then(control_named) {
+            ak.set_controls(vec![target]);
         }
         if matches!(node.role, Role::Status | Role::Log) {
             ak.set_live(Live::Polite);
@@ -256,9 +260,19 @@ fn row_index(nodes: &[AccessNode], children: &[Vec<usize>], row: usize) -> Optio
         .filter(|&sibling| nodes[sibling].role == Role::Row)
         .position(|sibling| sibling == row)
 }
-/// The node a control goes by, kept apart from the positional ids of labels.
+/// The node a control goes by: its id in the snapshot, which a surface nested in the window qualifies with its handle in the high half.
 fn control_id(focus_id: u64) -> NodeId {
-    NodeId(focus_id.wrapping_add(1 << 32))
+    NodeId(focus_id)
+}
+
+/// Whether a control's id is clear of the ids the platform gives its own nodes; one that is not, from a surface handle past `1 << 31`, is read as a label, which nothing addresses.
+fn is_control_id(focus_id: u64) -> bool {
+    focus_id & OWN == 0
+}
+
+/// The node of the label read at `index` in the snapshot.
+fn label_id(index: usize) -> NodeId {
+    NodeId(OWN | (index as u64 + 1))
 }
 
 /// The on/off state, in the property AccessKit reads it from for this role: `toggled` is checked on a checkbox or switch and pressed on a button, while a tab is selected and a disclosure expanded.
@@ -340,8 +354,10 @@ pub(crate) fn requested_focus_id(
     request: &ActionRequest,
     nodes: &[AccessNode],
 ) -> Option<(u64, bool)> {
-    let target = request.target_node.0;
-    let id = target.checked_sub(1 << 32)?;
+    let id = request.target_node.0;
+    if !is_control_id(id) {
+        return None;
+    }
     nodes.iter().find(|n| n.id == Some(id))?;
     let activate = matches!(request.action, Action::Click);
     Some((id, activate))

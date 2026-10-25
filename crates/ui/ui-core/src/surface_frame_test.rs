@@ -631,7 +631,7 @@ fn the_window_hears_that_a_field_inside_the_frame_has_the_caret() {
     );
     let field = canvas.with_entered(|| {
         let field = focus::next_id();
-        focus::register_as(field, FocusKind::TextEntry);
+        focus::register_as(field, focus::FocusKind::TextEntry);
         field
     });
 

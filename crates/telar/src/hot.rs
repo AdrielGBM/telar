@@ -4,8 +4,8 @@ mod entries;
 #[doc(hidden)]
 pub mod guest;
 
-use std::cell::{Cell, RefCell};
-use std::rc::Rc;
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
 
 #[doc(hidden)]
 pub use entries::{CreateApp, HOT_CONTRACT, HotEntries};
@@ -17,15 +17,16 @@ use platform_core::guest::{CWaker, FrameCtx, LentBytes};
 pub use platform_core::guest::{CallOutcome, Handle, HostServices};
 use renderer_core::wire::FrameDecoder;
 use services_core::guest::GuestLibrary;
+use ui_core::{ForeignBoundary, ForeignSurface, GuestSurface};
 use wire_core::encode;
 
 use crate::tree::{Frame, HotTree, UiTree};
 use guest::GuestApp;
 
-/// One loaded guest and the tree whose frame was read last, the frame an audit is asked of. Shared by the [`HotApp`] and every tree it mounted, so the guest is unloaded only once the last of them lets go, whichever that is.
+/// One loaded guest and the surface of the tree whose frame was read last, the window's. Shared by the [`HotApp`] and every tree it mounted, and the library with the surface of each, so the guest is unloaded only once the last of them lets go, whichever that is.
 struct HotImage {
-    library: GuestLibrary<HotEntries>,
-    painted: Cell<Option<Handle<HotTree>>>,
+    library: Rc<GuestLibrary<HotEntries>>,
+    painted: RefCell<Weak<GuestSurface<HotEntries>>>,
 }
 
 /// An application loaded from a dylib, driven through the entries it exports. Every call goes through its [`GuestLibrary`], so once the dylib has panicked none reaches it again; the panic is reported through [`AppRuntime::take_panic`](crate::AppRuntime::take_panic) and the host waits for a rebuild.
@@ -49,8 +50,8 @@ impl HotApp {
         Self {
             app,
             image: Rc::new(HotImage {
-                library,
-                painted: Cell::new(None),
+                library: Rc::new(library),
+                painted: RefCell::default(),
             }),
         }
     }
@@ -58,15 +59,18 @@ impl HotApp {
     fn library(&self) -> &GuestLibrary<HotEntries> {
         &self.image.library
     }
+}
 
-    // The frame a caller hands in is the one the guest's tree painted last, which the guest still holds: audited there, it never has to be spelled back across, pixels and all.
-    fn guest_audit(&self) -> Option<platform_core::AccessAudit> {
-        let tree = self.image.painted.get()?;
-        let background = encode(&crate::app_runtime::AppRuntime::clear_color(self));
-        self.library().read(|entries, audit| unsafe {
-            (entries.tree_access_audit)(tree, LentBytes::lend(&background), audit)
-        })
-    }
+// The frame an inspector reads is the one the tree painted last, which the guest still holds: audited there, it never has to be spelled back across, pixels and all.
+fn guest_audit(
+    library: &GuestLibrary<HotEntries>,
+    tree: Handle<HotTree>,
+    background: Option<renderer_core::Color>,
+) -> Option<platform_core::AccessAudit> {
+    let background = encode(&background);
+    library.read(|entries, audit| unsafe {
+        (entries.tree_access_audit)(tree, LentBytes::lend(&background), audit)
+    })
 }
 
 impl Drop for HotApp {
@@ -78,10 +82,14 @@ impl Drop for HotApp {
     }
 }
 
-/// The host's handle on a tree the dylib mounted and owns: an opaque handle, the decoder its frames are read back with, which keeps the payloads and images consecutive frames share, and a share of the image whose code drives it, which keeps that image mapped for as long as the handle lives.
+/// The host's handle on a tree the dylib mounted and owns: an opaque handle, the decoder its frames are read back with, which keeps the payloads and images consecutive frames share, what the tree reports of the window it fills, the boundary its frame is marked with, and a share of the image whose code drives it, which keeps that image mapped for as long as the handle lives.
+///
+/// The frame it hands the runner is marked as the guest's whole ([`ForeignBoundary::marked`]): the runner's screen reader and its inspector read the window as the tree reports it, and a reader's action on it reaches the tree.
 struct HotTreeHandle {
     tree: Handle<HotTree>,
     frames: RefCell<FrameDecoder>,
+    surface: Rc<GuestSurface<HotEntries>>,
+    boundary: ForeignBoundary,
     image: Rc<HotImage>,
 }
 
@@ -94,7 +102,13 @@ impl HotTreeHandle {
 impl UiTree for HotTreeHandle {
     fn on_event(&mut self, event: &platform_core::Event) -> ui_core::EventResult {
         let tree = self.tree;
-        let event = encode(event);
+        let event = match event {
+            platform_core::Event::InSurface { .. } => match self.boundary.foreign_event(event) {
+                Some(event) => encode(&event),
+                None => return ui_core::EventResult::Ignored,
+            },
+            event => encode(event),
+        };
         let handled = self.library().ask(|entries, handled| unsafe {
             (entries.tree_on_event)(tree, LentBytes::lend(&event), handled)
         });
@@ -114,15 +128,15 @@ impl UiTree for HotTreeHandle {
 
     fn frame(&self) -> Frame<'_> {
         let tree = self.tree;
-        self.image.painted.set(Some(tree));
-        Frame::Owned(self.library().read_frame(
+        *self.image.painted.borrow_mut() = Rc::downgrade(&self.surface);
+        Frame::Owned(self.boundary.marked(self.library().read_frame(
             &mut self.frames.borrow_mut(),
             |entries, frame| unsafe { (entries.tree_paint)(tree, frame) },
             |entries, image, pixels, found| unsafe {
                 (entries.tree_pixels)(tree, image, pixels, found)
             },
             |entries| unsafe { (entries.tree_reset_frames)(tree) },
-        ))
+        )))
     }
 
     fn end_frame(&self) {
@@ -159,9 +173,7 @@ impl Drop for HotTreeHandle {
     // A dylib that panicked keeps the tree: releasing it would run that dylib's code again.
     fn drop(&mut self) {
         let tree = self.tree;
-        if self.image.painted.get() == Some(tree) {
-            self.image.painted.set(None);
-        }
+        self.surface.forget();
         self.library()
             .call(|entries| unsafe { (entries.tree_release)(tree) });
     }
@@ -208,14 +220,20 @@ impl crate::app_runtime::AppRuntime for HotApp {
         let mounted = self.library().answer(Handle::NULL, |entries, tree| unsafe {
             (entries.mount)(app, tree)
         });
-        match mounted {
-            Some(tree) => Box::new(HotTreeHandle {
-                tree,
-                frames: RefCell::default(),
-                image: Rc::clone(&self.image),
-            }),
-            None => Box::new(NoTree),
-        }
+        let Some(tree) = mounted else {
+            return Box::new(NoTree);
+        };
+        let surface = Rc::new(
+            GuestSurface::new(Rc::clone(&self.image.library), tree).audited_by(guest_audit),
+        );
+        let source: Rc<dyn ForeignSurface> = surface.clone();
+        Box::new(HotTreeHandle {
+            tree,
+            frames: RefCell::default(),
+            boundary: ForeignBoundary::new(&source),
+            surface,
+            image: Rc::clone(&self.image),
+        })
     }
 
     fn clear_color(&self) -> Option<renderer_core::Color> {
@@ -303,27 +321,6 @@ impl crate::app_runtime::AppRuntime for HotApp {
         })
     }
 
-    // The controls, their names and their rects live in the dylib's registries, which no host-side reading can see.
-    fn access_snapshot(
-        &self,
-        _frame: &[renderer_core::DrawCommand],
-    ) -> Vec<platform_core::AccessNode>
-    where
-        Self: Sized,
-    {
-        self.guest_audit()
-            .map(|audit| audit.nodes)
-            .unwrap_or_default()
-    }
-
-    fn access_audit(
-        &self,
-        _frame: &[renderer_core::DrawCommand],
-        _audit_here: crate::app_runtime::AuditFn,
-    ) -> Option<platform_core::AccessAudit> {
-        self.guest_audit()
-    }
-
     // A title bar's `on_press` pushes into the dylib's platform-core copy, so the host drains it across this boundary.
     fn drain_window_commands(&self) -> Vec<platform_core::WindowCommand> {
         self.library()
@@ -331,11 +328,9 @@ impl crate::app_runtime::AppRuntime for HotApp {
             .unwrap_or_default()
     }
 
-    // The field and its caret live in the dylib's focus and layout registries.
+    // The field and its caret live in the dylib's focus and layout registries, which the tree that fills the window reports, in the window's coordinates.
     fn text_input(&self) -> Option<platform_core::TextInput> {
-        self.library()
-            .read(|entries, input| unsafe { (entries.text_input)(input) })
-            .flatten()
+        self.image.painted.borrow().upgrade()?.text_input()
     }
 
     // The dylib reads its own copy of the store; the host's copy is kept too, for the devtools that live on this side.

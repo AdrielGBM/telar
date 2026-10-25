@@ -289,6 +289,13 @@ where
         self.text_input = input;
     }
 
+    /// Tells the window no field takes text, when it was last told one did: that field was the tree's, which is gone, and a composition begun in it must not carry into whatever the next tree focuses, even a field it reports the same way.
+    fn release_text_input(&mut self, window: &W) {
+        if self.text_input.take().is_some() {
+            window.set_text_input(None);
+        }
+    }
+
     /// Hands `event` to the app's overlays, and to its tree where no overlay took it.
     fn dispatch_to_app(&mut self, event: &Event) -> EventResult {
         // A hot-reloaded app dylib links its own reactive-core copy, which the host's batch cannot reach; a handler's signal write would flush immediately and re-run a segment's effect while its widget is still borrowed for `on_event`, silently dropping that segment's subscriptions.
@@ -353,6 +360,7 @@ where
     fn mount_tree(&mut self, window: &W) {
         // Dropped before the new one is built: an effect from the outgoing tree re-running mid-assembly would write into widgets nothing is drawing any more.
         self.tree = None;
+        self.release_text_input(window);
         let hydration = self.hydration.take();
         let (width, height) = match &hydration {
             Some(hydration) => {

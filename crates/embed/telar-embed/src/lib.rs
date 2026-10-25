@@ -2,7 +2,7 @@
 //!
 //! Unlike hot-reload (dev-only, one dylib that *replaces* the whole window), an embedded app is a production capability: the host stays a full rsx app and embeds one or more guests, each a cdylib with its **own** reactive/layout/overlay/motion runtime (separate thread-locals, because each dylib statically links its own copy of the runtime crates). The host cannot reach into that runtime, so — exactly as hot-reload does for its single dylib — it *drives* the guest through the entries the guest exports.
 //!
-//! The novel part hot-reload never needed is **compositing two runtimes into one window**: the guest flattens its own view tree to a self-contained draw list and lends it as bytes, which the host decodes into a [`DrawList`] of its own ([`LoadedEmbed::paint`]), translates and clips into the guest's sub-rect ([`composite`]) and splices into its own frame. No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
+//! The novel part hot-reload never needed is **compositing two runtimes into one window**: the guest flattens its own view tree to a self-contained draw list and lends it as bytes, which the host decodes into a [`DrawList`] of its own ([`LoadedEmbed::paint`]), translates and clips into the guest's sub-rect, marks as the guest's ([`composite`]) and splices into its own frame. What a screen reader and the input method need of the guest, it reports itself through the same contract, and its keyboard sits behind one focus stop of the host's ([`LoadedEmbed::focus_stop`]). No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
 //!
 //! Host and guest meet on the guest contract both boundaries share ([`platform_core::guest`]): one `repr(C)` table of `extern "C"` entries ([`EmbedEntries`]), stamped with [`EMBED_CONTRACT`], through which nothing owned crosses. Each side frees only what it allocated, so a `#[global_allocator]` on either side does not matter, and a guest built against another contract, with other features, or as a hot-reload library is refused before any of its code runs but its initializers.
 //!
@@ -30,7 +30,7 @@ use std::time::Duration;
 use web_time::Instant;
 
 use geometry_core::{Rect, Size, Transform};
-use platform_core::{AppCtx, Event, SystemPreferences, WindowCommand};
+use platform_core::{AppCtx, Event, PointerButton, SystemPreferences, WindowCommand};
 use renderer_core::{Color, DrawCommand};
 use ui_core::{EventResult, NodeId, SurfaceCanvas, composite_surface};
 use ui_tree::{Component, RenderNode};
@@ -44,18 +44,19 @@ pub use platform_core::export_contract_stamp;
 pub use platform_core::guest::GuestPanic;
 #[doc(hidden)]
 pub use platform_core::guest::{CallOutcome, Handle, LentBytes};
+pub use ui_core::{ForeignBoundary, ForeignSurface, FrameFocus};
 
 /// A guest's frame as the host holds it: decoded from the bytes the guest lent into commands the host allocated and owns.
 pub type DrawList = Vec<DrawCommand>;
 /// The window-management commands drained from a guest's own queue (a title bar's drag, close and so on), decoded into the host's own.
 pub type WindowCommands = Vec<WindowCommand>;
 
-/// Wrap a guest's painted [`DrawList`] into a [`RenderNode`] the host splices into its own frame: translated to `rect`'s origin (the guest paints in its own `(0,0)` space) and clipped to `rect` (so it can't draw over the host chrome). The exact idiom rsx's own scroll area uses to host a sub-tree in a viewport.
-pub fn composite(rect: Rect, commands: DrawList) -> RenderNode {
+/// Wrap a guest's painted [`DrawList`] into a [`RenderNode`] the host splices into its own frame: translated to `rect`'s origin (the guest paints in its own `(0,0)` space), clipped to `rect` (so it can't draw over the host chrome) and marked as the guest's by its `boundary` ([`LoadedEmbed::boundary`]), so whoever reads the host's frame — a screen reader, the inspector — reads what the guest reports of it, where the host shows it.
+pub fn composite(rect: Rect, boundary: &ForeignBoundary, commands: DrawList) -> RenderNode {
     composite_surface(
         Transform::translate(rect.x, rect.y),
         Size::new(rect.width, rect.height),
-        commands.into_iter().map(RenderNode::Primitive),
+        [boundary.boundary(commands)],
     )
 }
 
@@ -136,6 +137,7 @@ impl EmbedInstance {
             Ok((EmbeddedComponent(Rc::clone(&embedded)), root))
         })
         .expect("an embedded app's build reports no layout error");
+        canvas.host_keyboard();
         Self { embedded, canvas }
     }
 
@@ -170,12 +172,37 @@ impl EmbedInstance {
     }
 
     /// Dispatch an event to the content (already in local coordinates). Self-batches in the guest's runtime.
+    ///
+    /// A box event or a screen reader's action the host's window reported for one of this guest's boxes arrives as the event itself, and one for a surface nested in the guest inside [`Event::InSurface`] under that surface's handle here, as [`ForeignBoundary::foreign_event`](ui_core::ForeignBoundary::foreign_event) names it. A press that lands on nothing focusable clears focus inside, as a window's does.
     pub fn on_event(&mut self, event: &Event) -> bool {
+        self.observe(event);
+        let result = match event {
+            Event::InSurface { .. } => self.canvas.dispatch_in_surface(event),
+            Event::BoxFocused { .. }
+            | Event::BoxActivated { .. }
+            | Event::RunActivated { .. }
+            | Event::FocusLeftBoxes
+            | Event::AccessAction { .. } => self.canvas.dispatch_box_event(event),
+            Event::PointerPressed {
+                x,
+                y,
+                button: PointerButton::Primary,
+                ..
+            } => {
+                self.canvas
+                    .with_entered(|| ui_core::focus::blur_from_pointer(*x as f32, *y as f32));
+                self.canvas.dispatch_tree(event)
+            }
+            _ => self.canvas.dispatch_tree(event),
+        };
+        result == EventResult::Handled
+    }
+
+    // A cdylib carries its own copy of every `thread_local` in ui-core, so observing on the host's side left the guest's widgets reading a permanently empty registry. `HotTree::on_event` carries these for the same reason.
+    fn observe(&self, event: &Event) {
         self.canvas.with_entered(|| {
-            // A cdylib carries its own copy of every `thread_local` in ui-core, so observing on the host's side left the guest's widgets reading a permanently empty registry. `HotTree::on_event` carries these for the same reason.
             ui_core::observe_keyboard(event);
             ui_core::observe_pointer(event);
-            self.canvas.dispatch_tree(event) == EventResult::Handled
         })
     }
 
@@ -183,9 +210,8 @@ impl EmbedInstance {
     ///
     /// The host calls this before [`on_event`](Self::on_event) and stops when it returns `true`, so the registries are fed here too — otherwise an event an overlay consumes never reaches them at all. For the same reason a move an overlay takes is handed to the content here, [`covered`](ui_core::covered), so a box hovered under the overlay hears the pointer leave it.
     pub fn dispatch_overlays(&self, event: &Event) -> bool {
+        self.observe(event);
         self.canvas.with_entered(|| {
-            ui_core::observe_keyboard(event);
-            ui_core::observe_pointer(event);
             let taken = self.canvas.dispatch_overlays(event) == EventResult::Handled;
             if taken && matches!(event, Event::PointerMoved { .. }) {
                 ui_core::covered(|| self.canvas.dispatch_tree(event));

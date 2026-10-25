@@ -8,13 +8,14 @@ use super::guest::{self, GuestApp};
 use crate::tree::HotTree;
 
 platform_core::entry_table! {
-    /// Every entry of a hot-reload library after its lifecycle, each the guest's function of the same name in [`guest`] but `create`, which the `app!` macro writes: named for the method of the host's it serves, those on a mounted tree prefixed `tree_`. Each returns a `CallOutcome` and writes what it answers through the pointers it is handed.
+    /// Every entry of a hot-reload library after its lifecycle, each the guest's function of the same name in [`guest`] but `create`, which the `app!` macro writes, and the `report` of what a mounted tree tells the host about the window it fills: named for the method of the host's it serves, those on a mounted tree prefixed `tree_`. Each returns a `CallOutcome` and writes what it answers through the pointers it is handed.
     pub struct HotEntries {
         kind: HotReload,
         symbol: "telar_hot_entries",
         guest: guest,
         settings: ["shaper" => cfg!(feature = "shaper")],
         create: fn(*mut Handle<GuestApp>) as CreateApp;
+        report: HotTree;
         release: fn(Handle<GuestApp>);
         window_config: fn(Handle<GuestApp>, *mut LentBytes);
         clear_color: fn(Handle<GuestApp>, *mut LentBytes);
@@ -45,7 +46,6 @@ platform_core::entry_table! {
         set_safe_area_insets: fn(f32, f32, f32, f32);
         set_surface_maximized: fn(bool);
         drain_window_commands: fn(*mut LentBytes);
-        text_input: fn(*mut LentBytes);
         set_location_history: fn(LentBytes);
         open_title: fn(LentBytes);
         open_font_family: fn(LentBytes);

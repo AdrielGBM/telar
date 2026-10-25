@@ -1,14 +1,19 @@
 //! The host's side of the embedding boundary: [`load_embedded`] and the [`LoadedEmbed`] it hands back, which drives one guest instance through the entries its library exports.
 
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::path::Path;
+use std::rc::Rc;
 use std::time::Duration;
 
+use geometry_core::{Size, Transform};
 use platform_core::guest::{CWaker, FrameCtx, Handle, LentBytes, Timestamp};
-use platform_core::{AppCtx, Event, SystemPreferences};
+use platform_core::{AppCtx, Event, PointerButton, SystemPreferences};
 use renderer_core::Color;
 use renderer_core::wire::FrameDecoder;
 use services_core::guest::GuestLibrary;
+use ui_core::focus::FocusId;
+use ui_core::{ForeignBoundary, ForeignSurface, FrameFocus, GuestSurface, KeyRoute, NodeId};
 use web_time::Instant;
 use wire_core::encode;
 
@@ -17,10 +22,16 @@ use crate::{DrawList, EmbedEntries, GuestPanic, WindowCommands};
 
 /// A loaded guest the host drives: one instance its library built, and the library itself, which outlives the instance. `!Send`/`!Sync`: the instance is a foreign reactive runtime, driven only on the UI thread.
 ///
-/// Every call goes through its [`GuestLibrary`], so once the guest has panicked none reaches it again: [`panic`](Self::panic) says what happened and where, and every method answers as an empty guest would — nothing painted, no event taken, no timer waiting. The host shows the report in the guest's place.
+/// Every call goes through its [`GuestLibrary`], so once the guest has panicked none reaches it again: [`panic`](Self::panic) says what happened and where, and every method answers as an empty guest would — nothing painted, no event taken, no timer waiting, nothing read. The host shows the report in the guest's place.
+///
+/// The guest's surface is a [`ForeignSurface`] of the host's: its frame is marked with its [`boundary`](Self::boundary), so a screen reader reads what the guest reports of it where the host shows it, and acts on it, and its keyboard sits behind the one [focus stop](Self::focus_stop) the host keeps for it, the only way keys reach it.
 pub struct LoadedEmbed {
     instance: Handle<GuestInstance>,
-    library: GuestLibrary<EmbedEntries>,
+    library: Rc<GuestLibrary<EmbedEntries>>,
+    surface: Rc<GuestSurface<EmbedEntries>>,
+    boundary: ForeignBoundary,
+    focus: RefCell<Option<Rc<FrameFocus>>>,
+    size: Cell<Size>,
     /// Keeps the payloads and images consecutive frames share.
     frames: RefCell<FrameDecoder>,
     timer_mirror: TimerMirror,
@@ -62,9 +73,16 @@ impl LoadedEmbed {
         let Some(instance) = instance else {
             return Err(panic_of(&library));
         };
+        let library = Rc::new(library);
+        let surface = Rc::new(GuestSurface::new(Rc::clone(&library), instance));
+        let source: Rc<dyn ForeignSurface> = surface.clone();
         let embed = Self {
             instance,
             library,
+            boundary: ForeignBoundary::new(&source),
+            surface,
+            focus: RefCell::default(),
+            size: Cell::default(),
             frames: RefCell::default(),
             timer_mirror: TimerMirror::default(),
             task_waker_installed: Cell::new(false),
@@ -82,7 +100,67 @@ impl LoadedEmbed {
         self.library.guest().panic()
     }
 
+    /// What marks the guest's frame in the host's: hand it to [`composite`](crate::composite) with what [`paint`](Self::paint) drew.
+    pub fn boundary(&self) -> &ForeignBoundary {
+        &self.boundary
+    }
+
+    /// What the guest reports of the surface it draws, in its own coordinates and ids: what [`boundary`](Self::boundary) has whoever reads the host's frame read. It reports nothing once the guest has panicked or this is dropped.
+    pub fn foreign_surface(&self) -> Rc<dyn ForeignSurface> {
+        self.surface.clone()
+    }
+
+    /// Registers the one focus stop the host keeps for the guest in the box at `node` its frame is drawn in, `placement` mapping the guest's coordinates into that box's, replacing any earlier one: keys and the input method's text reach the guest only through it, and it is withdrawn once the guest panics.
+    pub fn focus_stop(&self, node: NodeId, placement: impl Fn() -> Transform + 'static) -> FocusId {
+        drop(self.focus.take());
+        let stop = Rc::new(self.boundary.focus_stop(node, placement));
+        let id = stop.id();
+        *self.focus.borrow_mut() = Some(stop);
+        id
+    }
+
+    /// The [`focus_stop`](Self::focus_stop)'s id, while one is registered.
+    pub fn focus_stop_id(&self) -> Option<FocusId> {
+        self.stop().map(|stop| stop.id())
+    }
+
+    /// Whether the key being dispatched is the guest's: its focus stop held focus when it arrived.
+    pub fn holds_keys(&self) -> bool {
+        self.stop().is_some_and(|stop| stop.holds_keys())
+    }
+
+    // A share of the stop rather than a borrow: what it calls can reach the guest, whose panic withdraws the stop.
+    fn stop(&self) -> Option<Rc<FrameFocus>> {
+        self.focus.borrow().clone()
+    }
+
+    /// Gives the stop focus when something inside the guest took it, and withdraws it once the guest has panicked.
+    fn follow_guest_focus(&self) {
+        if self.panic().is_some() {
+            drop(self.focus.take());
+        } else if let Some(stop) = self.stop() {
+            stop.follow_inside();
+        }
+    }
+
+    fn send(&self, event: &Event) -> bool {
+        let instance = self.instance;
+        let event = encode(event);
+        self.library.ask(|entries, handled| unsafe {
+            (entries.on_event)(instance, LentBytes::lend(&event), handled)
+        })
+    }
+
+    /// `event` as the guest is to hear it: a box event of the host's window under the guest's own naming, `None` for one of another surface or one whose surface the guest no longer draws.
+    fn for_guest<'a>(&self, event: &'a Event) -> Option<Cow<'a, Event>> {
+        match event {
+            Event::InSurface { .. } => self.boundary.foreign_event(event).map(Cow::Owned),
+            _ => Some(Cow::Borrowed(event)),
+        }
+    }
+
     pub fn relayout(&self, width: f32, height: f32) {
+        self.size.set(Size::new(width, height));
         let instance = self.instance;
         self.library
             .call(|entries| unsafe { (entries.relayout)(instance, width, height) });
@@ -116,20 +194,58 @@ impl LoadedEmbed {
             .unwrap_or_default()
     }
 
+    /// Hands the guest's content `event`, in the guest's own coordinates, after [`dispatch_overlays`](Self::dispatch_overlays) left it: keys go as its [focus stop](Self::focus_stop) routes them ([`KeyRoute`]), and a primary press on the guest gives the stop focus.
     pub fn on_event(&self, event: &Event) -> bool {
-        let instance = self.instance;
-        let event = encode(event);
-        self.library.ask(|entries, handled| unsafe {
-            (entries.on_event)(instance, LentBytes::lend(&event), handled)
-        })
+        let taken = match KeyRoute::of(event, self.holds_keys()) {
+            Some(KeyRoute::Tab) => {
+                if let Some(stop) = self.stop() {
+                    stop.tab(event);
+                }
+                true
+            }
+            Some(KeyRoute::Outside) => false,
+            Some(KeyRoute::Inside) => self.send(event),
+            None => {
+                if let Event::PointerPressed {
+                    x,
+                    y,
+                    button: PointerButton::Primary,
+                    ..
+                } = event
+                    && self.covers(*x, *y)
+                    && let Some(stop) = self.stop()
+                {
+                    ui_core::focus::request_from_pointer(stop.id());
+                }
+                self.for_guest(event).is_some_and(|event| self.send(&event))
+            }
+        };
+        self.follow_guest_focus();
+        taken
     }
 
+    /// Offers `event`, in the guest's own coordinates, to the guest's overlays first; `true` means one took it and its content is not to hear it. Keys reach them as [`on_event`](Self::on_event) routes them, Tab excepted, which is left to it.
     pub fn dispatch_overlays(&self, event: &Event) -> bool {
+        let reaches = match KeyRoute::of(event, self.holds_keys()) {
+            Some(KeyRoute::Inside) => Some(Cow::Borrowed(event)),
+            Some(KeyRoute::Tab | KeyRoute::Outside) => None,
+            None => self.for_guest(event),
+        };
         let instance = self.instance;
-        let event = encode(event);
-        self.library.ask(|entries, handled| unsafe {
-            (entries.dispatch_overlays)(instance, LentBytes::lend(&event), handled)
-        })
+        let taken = reaches.is_some_and(|event| {
+            let event = encode(&*event);
+            self.library.ask(|entries, handled| unsafe {
+                (entries.dispatch_overlays)(instance, LentBytes::lend(&event), handled)
+            })
+        });
+        self.follow_guest_focus();
+        taken
+    }
+
+    // A press the host forwards for an overlay to dismiss on lands outside the guest, and is no reason to take the host's focus.
+    fn covers(&self, x: f64, y: f64) -> bool {
+        let size = self.size.get();
+        (0.0..size.width as f64).contains(&x) && (0.0..size.height as f64).contains(&y)
     }
 
     /// Call once per frame the host drove this guest through, after its events. Closes the guest's one-frame keyboard state, which `key_pressed` inside it answers from.
@@ -170,10 +286,12 @@ impl LoadedEmbed {
             });
     }
 
+    /// Tells the guest its content became visible, which may focus a field of its own: the focus stop then takes focus, so the keys reach it.
     pub fn activate(&self) {
         let instance = self.instance;
         self.library
             .call(|entries| unsafe { (entries.activate)(instance) });
+        self.follow_guest_focus();
     }
 
     pub fn clear_color(&self) -> Option<Color> {
@@ -221,6 +339,7 @@ impl LoadedEmbed {
         });
         self.timer_mirror
             .follow(self.next_timer_due(), self.until_next_timer());
+        self.follow_guest_focus();
     }
 
     /// How long until the guest's earliest timer comes due; `None` when none is waiting. [`on_frame`](Self::on_frame) already keeps the host's loop waking for it.
@@ -284,10 +403,16 @@ fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
 }
 
 impl Drop for LoadedEmbed {
-    // A guest that panicked keeps its instance: releasing it would run that guest's code again. Its library is unloaded after, as the field drops.
+    // A guest that panicked keeps its instance: releasing it would run that guest's code again. Its library is unloaded after, as the field drops, unless a share of its surface someone kept holds it until that goes.
     fn drop(&mut self) {
+        drop(self.focus.take());
+        self.surface.forget();
         let instance = self.instance;
         self.library
             .call(|entries| unsafe { (entries.release)(instance) });
     }
 }
+
+#[cfg(test)]
+#[path = "host_test.rs"]
+mod tests;

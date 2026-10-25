@@ -254,9 +254,10 @@ impl Segment {
                 }
                 DrawCommand::PushElement { element } => {
                     if box_model.is_none() {
-                        box_model = within(&surfaces, || {
+                        box_model = within_world(&surfaces, || {
                             layout_reactive::box_model(layout_reactive::NodeId::from(element.id.0))
-                        });
+                        })
+                        .flatten();
                     }
                 }
                 // The renderer's own answer to what a command paints, rather than a second list of arms: the local copy knew four commands, so a spanned paragraph contributed nothing and a notification card inspected as an empty rect.
@@ -293,6 +294,14 @@ fn within<R>(surfaces: &[reactive_core::SurfaceHandle], f: impl FnOnce() -> R) -
     match surfaces.last() {
         Some(surface) => surface.with_entered(f),
         None => f(),
+    }
+}
+
+/// [`within`] for a read of a box by its id, which means nothing outside the world that numbered it: `None` inside a surface with no world on this thread, one torn down or one drawn by a world this process cannot enter.
+fn within_world<R>(surfaces: &[reactive_core::SurfaceHandle], f: impl FnOnce() -> R) -> Option<R> {
+    match surfaces.last() {
+        Some(surface) => surface.with_entered_if_alive(f),
+        None => Some(f()),
     }
 }
 

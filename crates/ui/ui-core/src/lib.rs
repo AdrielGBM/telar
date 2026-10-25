@@ -25,6 +25,9 @@ mod error_boundary;
 mod fixed_layer;
 mod fling;
 pub mod focus;
+mod foreign_surface;
+mod frame_focus;
+mod guest_surface;
 mod height_index;
 mod image;
 mod inherit;
@@ -115,6 +118,9 @@ pub use disposal::OwnedBuild;
 pub use drag::{DragAxis, DragStart, drag_start, drag_travel};
 pub use error_boundary::{BuildFailure, ErrorBoundary};
 pub use fixed_layer::FixedLayer;
+pub use foreign_surface::{ForeignBoundary, ForeignSurface};
+pub use frame_focus::{FrameFocus, KeyRoute};
+pub use guest_surface::{GuestAudit, GuestSurface};
 pub use height_index::HeightIndex;
 pub use image::Image;
 pub use inherit::{
@@ -163,7 +169,7 @@ pub use styled_container::{
     KeyAnswer, StyledContainer, box_transform, focus_ring_border, style_follows,
 };
 pub use surface::{Edge, Scrim, SurfaceScaffold, SurfaceTransition};
-pub use surface_canvas::{SurfaceCanvas, SurfaceEnv, composite_surface};
+pub use surface_canvas::{SurfaceCanvas, SurfaceEnv, composite_surface, follow_box_event};
 pub use surface_context::Surface;
 pub use surface_font::{open_surface_font_family, set_font_family, use_font_family};
 pub use surface_frame::SurfaceFrame;

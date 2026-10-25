@@ -2,17 +2,18 @@
 //!
 //! Key events are broadcast to every widget (see `dispatch_container_event`), so focus is *self-filtering*: a widget handles a key only when [`is_key_target`] holds for its id — there is no central router. Focus is a reactive signal, so a widget that reads [`current`]/[`is_focused`] inside its `view()` re-renders when focus moves (e.g. to show or hide its caret). State is per-surface (each surface owns its own focus via [`FocusContext`], activated by the runner), so focus never crosses windows; preserving focus across a hot-reload dylib swap is out of scope.
 
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 use std::sync::Arc;
 
 use layout_core::NodeId;
 use platform_core::{
-    Chord, ConsumedKeys, Key, ModifiersState, NamedKey, NumericValue, Orientation,
+    Chord, ConsumedKeys, Event, Key, ModifiersState, NamedKey, NumericValue, Orientation,
     keyboard_convention,
 };
 use reactive_core::{Effect, RwSignal, effect, signal};
 use renderer_core::Focusable;
 use rustc_hash::FxHashSet;
+use ui_tree::EventResult;
 
 /// An opaque focus identity, one per focusable widget. Allocate with [`next_id`].
 pub type FocusId = u64;
@@ -103,8 +104,8 @@ struct Entry {
     outline: Outline,
     active_descendant: Option<Rc<dyn Fn() -> Option<FocusId>>>,
     controls: Option<Rc<dyn Fn() -> Option<FocusId>>>,
-    /// The surface that answers for this entry's keyboard while it holds focus. See [`delegate_keyboard`].
-    keyboard: Option<Weak<crate::Surface>>,
+    /// What answers for this entry's keyboard while it holds focus. See [`delegate_keyboard`].
+    keyboard: Option<Rc<dyn Keyboard>>,
     /// Where a widget that takes text has its caret, for the input method composing into it. See [`crate::text_input`].
     text_input: Option<TextInputSource>,
 }
@@ -612,19 +613,25 @@ pub(crate) fn forget_nodes() {
 /// The guard an app-level shortcut table needs: without it, typing into a field also runs the shortcuts that share its letters. Prefer [`text_entry_takes_key`], which lets through the presses no editor wants.
 pub fn text_entry_focused() -> bool {
     match key_target() {
-        Some(id) => delegated(id, text_entry_focused)
+        Some(id) => delegated(id)
+            .and_then(|keyboard| keyboard.text_entry_focused())
             .unwrap_or_else(|| with_focus_ref(|s| s.text_entries.contains(&id))),
         None => false,
     }
 }
 
-/// Hands the keyboard questions about `id` on to another surface while `id` holds focus: whether a text entry has the keys, and which keys are kept, are answered by whatever holds focus in the surface `surface` names, while it is alive.
-///
-/// A nested surface's frame is the case. It holds focus here while a field inside it has the caret, and a shortcut table here asking whether somebody is typing has to hear about that field, not about the frame.
-pub(crate) fn delegate_keyboard(id: FocusId, surface: Weak<crate::Surface>) {
+/// Whether a text entry has the keys, and whether the control holding them keeps some, inside a surface drawn behind a focus stop; `None` once that surface is gone.
+pub(crate) trait Keyboard {
+    fn text_entry_focused(&self) -> Option<bool>;
+
+    fn keeps(&self, keys: ConsumedKeys) -> Option<bool>;
+}
+
+/// Hands the keyboard questions about `id` on to `keyboard` while `id` holds focus: a frame's stop holds focus here while a field inside it has the caret, and a shortcut table or the dismiss stack asking whether somebody is typing has to hear about that field, not about the stop.
+pub(crate) fn delegate_keyboard(id: FocusId, keyboard: Rc<dyn Keyboard>) {
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
-            entry.keyboard = Some(surface);
+            entry.keyboard = Some(keyboard);
         }
     });
 }
@@ -650,9 +657,9 @@ pub(crate) fn focused_text_input() -> Option<TextInputSource> {
     })
 }
 
-fn delegated<R>(id: FocusId, ask: impl FnOnce() -> R) -> Option<R> {
-    let surface = with_focus_ref(|s| s.entry(id)?.keyboard.as_ref()?.upgrade())?;
-    Some(surface.with_entered(ask))
+// Cloned out of the slot: the answer is asked in another world, or across a library boundary.
+fn delegated(id: FocusId) -> Option<Rc<dyn Keyboard>> {
+    with_focus_ref(|s| s.entry(id)?.keyboard.clone())
 }
 
 /// Whether the focused widget — during a key's dispatch, the one the key belongs to — keeps `keys` for itself, as a control of its role uses them: a button acts on Enter, a slider on the arrows and nothing else. `false` with nothing focused. Reactive, like [`current`].
@@ -662,7 +669,7 @@ pub fn focused_keeps(keys: ConsumedKeys) -> bool {
     let Some(id) = key_target() else {
         return false;
     };
-    delegated(id, || focused_keeps(keys)) == Some(true)
+    delegated(id).and_then(|keyboard| keyboard.keeps(keys)) == Some(true)
         || with_focus_ref(|s| {
             s.entry(id)
                 .is_some_and(|entry| entry.role.consumed_keys().contains(keys))
@@ -1348,6 +1355,34 @@ pub(crate) fn host() {
 /// Which way the keyboard last stepped out of the active [hosted](host) surface, forgetting it.
 pub(crate) fn take_departure() -> Option<Travel> {
     with_focus(|s| s.departed.take())
+}
+
+/// Focus arriving at the active surface from the tree around it, by the keyboard: to the first focusable, or the last when `backwards`, unless one holds it already. Answers whether one holds it now.
+pub fn arrive(backwards: bool) -> bool {
+    if current().is_none() {
+        step_towards(backwards);
+        take_departure();
+    }
+    current().is_some()
+}
+
+/// Tab, or Shift+Tab, `key`, pressed while the active surface holds the keyboard of the tree around it: offered through `dispatch` first, then moving focus unless something took it. Answers whether focus stepped past the last focusable, or the first, which in a [hosted](host) surface leaves nothing focused for the tree around to carry on from.
+pub fn tab(key: &Event, dispatch: impl FnOnce(&Event) -> EventResult) -> bool {
+    // A step off the end that something other than this Tab made is no reason for this one to leave.
+    take_departure();
+    let backwards = matches!(key, Event::KeyPressed { modifiers, .. } if modifiers.is_shift);
+    if dispatch(key) != EventResult::Handled {
+        step_towards(backwards);
+    }
+    take_departure().is_some()
+}
+
+pub(crate) fn step_towards(backwards: bool) {
+    if backwards {
+        focus_prev();
+    } else {
+        focus_next();
+    }
 }
 
 /// Which way the step that gave `id` focus went, when the latest request for focus was such a step for `id`: what tells Shift+Tab arriving at a composite from Tab arriving at it.

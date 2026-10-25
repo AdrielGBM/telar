@@ -12,6 +12,7 @@
 //! - **Callbacks catch on the side whose code they are, and report nothing.** [`Reply`]'s `put`, a [`ThreadStart`]'s `main` and a [`CWaker`]'s functions run one side's code under the other's frames, so each catches its own panic before it returns, and one that answers with a value falls back to one that is always sound: a waker that wakes nothing.
 //! - **Instances are opaque [`Handle`]s.** The host only passes a handle back to the library that made it, never reads through it, and hands it to that library's release entry exactly once. Once the guest has panicked the host calls nothing of it but `quiesce`, and its instances go with the library.
 //! - **Every entry table starts with one [`Lifecycle`]**, declared with [`entry_table!`](crate::entry_table) as an [`Entries`] table: `loaded`, `adopt_epoch` and `install_services` run before anything else, and `unloading` then `quiesce` after every instance is released, the last calls before the library is unmapped.
+//! - **Every entry table carries one [`SurfaceReport`]** for the instances it builds, the same for both boundaries: what a screen reader and the input method are told about the surface an instance draws, in that surface's own coordinates and ids, a screen reader's action on it, and its keyboard behind the one focus stop the host keeps for it. The host places all of it where its frame shows the surface.
 //! - **Wakers cross as a [`CWaker`]**: data plus `wake`, `clone` and `release` pointing into the image that made it. Whoever holds one owns one reference and drops it before that image is unloaded.
 //! - **A frame's context crosses as a [`FrameCtx`]** in place of an `AppCtx`: the redraw the guest asks for written back, the host's loop waker borrowed for the call, and the window's raw handles as bytes.
 //! - **Time crosses as a [`Timestamp`]**, signed nanoseconds since an [`Epoch`] the host sets at load and the guest adopts through `adopt_epoch`, read back with [`host_epoch`]; durations and every other rich value cross as bytes.
@@ -30,6 +31,7 @@ mod lent;
 mod lifecycle;
 mod outcome;
 mod services;
+mod surface;
 mod threads;
 mod waker;
 
@@ -50,6 +52,7 @@ pub use outcome::{CallOutcome, guest_entry};
 pub use services::{
     EndThread, HOST_SERVICES_LAYOUT, HostServices, REPLY_LAYOUT, Reply, Service, SpawnThread, serve,
 };
+pub use surface::{ReportsSurface, SurfaceReport};
 pub use threads::{HostThread, ThreadStart, detach_thread, join_thread, spawn_thread};
 pub use waker::CWaker;
 

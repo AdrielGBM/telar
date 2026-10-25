@@ -6,11 +6,12 @@ use std::rc::{Rc, Weak};
 use geometry_core::{Point, Rect, Size, Transform};
 use layout_core::{LayoutError, LayoutStyle, NodeId};
 use layout_reactive::RelayoutHook;
-use platform_core::{Event, Key, NamedKey, PointerButton, Role, TextInput, WindowCommand};
+use platform_core::{ConsumedKeys, Event, PointerButton, TextInput, WindowCommand};
 use reactive_core::{OwnerId, dispose_owner, effect, owner_scope};
 use ui_tree::{Component, EventResult, RenderNode};
 
-use crate::focus::{self, FocusId, FocusKind, Travel};
+use crate::focus::{self, FocusId, Keyboard};
+use crate::frame_focus::{FrameFocus, Inside, KeyRoute};
 use crate::layout_item::LayoutItem;
 use crate::layout_leaf::LayoutLeaf;
 use crate::surface_canvas::{SurfaceCanvas, composite_surface};
@@ -27,7 +28,7 @@ pub struct SurfaceFrame {
     canvas: Rc<SurfaceCanvas>,
     home: HomeSurface,
     leaf: LayoutLeaf,
-    focus: FocusId,
+    focus: FrameFocus,
     hovered: Cell<bool>,
     captured: Cell<bool>,
     _relayout: RelayoutHook,
@@ -65,27 +66,10 @@ impl SurfaceFrame {
             Sizing::Filling => style.clone(),
             Sizing::Sized => sized_style(style.clone(), canvas.size_now(), canvas.scale_now()),
         })?;
-        let id = focus::next_id();
-        focus::register_with_role(id, FocusKind::Widget, leaf.node, Role::Group);
-        canvas.with_entered(|| {
-            focus::host();
-        });
+        let focus = FrameFocus::register(leaf.node, Rc::downgrade(&canvas));
+        let id = focus.id();
+        canvas.host_keyboard();
         let surface = Rc::downgrade(canvas.surface());
-        focus::delegate_keyboard(id, surface.clone());
-        focus::provide_text_input(id, {
-            let canvas = Rc::downgrade(&canvas);
-            let node = leaf.node;
-            move || {
-                let canvas = canvas.upgrade()?;
-                let inside = canvas.with_entered(crate::text_input)?;
-                let input = TextInput {
-                    field: inside.field.rotate_left(32) ^ id,
-                    caret: zoomed(canvas.scale_now(), inside.caret),
-                    secret: inside.secret,
-                };
-                crate::text_input::placed(node, input)
-            }
-        });
 
         let relayout = layout_reactive::on_relayout({
             let canvas = Rc::downgrade(&canvas);
@@ -99,7 +83,6 @@ impl SurfaceFrame {
         });
 
         let scope = owner_scope();
-        follow_outer_focus(id, surface.clone());
         follow_inner_focus(id, surface);
         if sizing == Sizing::Sized {
             follow_canvas_size(&canvas, leaf.node, style);
@@ -111,7 +94,7 @@ impl SurfaceFrame {
             canvas,
             home: HomeSurface::here(),
             leaf,
-            focus: id,
+            focus,
             hovered: Cell::new(false),
             captured: Cell::new(false),
             _relayout: relayout,
@@ -133,7 +116,7 @@ impl SurfaceFrame {
         self.captured.set(true);
         self.hovered.set(true);
         if button == PointerButton::Primary {
-            focus::request_from_pointer(self.focus);
+            focus::request_from_pointer(self.focus.id());
             let local = to_local(self.placement_now(), x, y);
             self.canvas.with_entered(|| {
                 focus::blur_from_pointer(local.x, local.y);
@@ -156,35 +139,55 @@ impl SurfaceFrame {
     /// A box event or a screen reader's action for a box drawn inside this frame, or inside a frame nested in it. Focus either moved onto a box in there brings the frame the outer focus too, so the keys that follow reach the box.
     fn in_surface(&self, event: &Event) -> EventResult {
         let result = self.canvas.dispatch_in_surface(event);
-        let holds_focus_inside = self.canvas.with_entered(|| focus::current().is_some());
-        if result == EventResult::Handled && holds_focus_inside && !focus::is_focused(self.focus) {
-            focus::request(self.focus);
+        if result == EventResult::Handled {
+            self.focus.follow_inside();
         }
         result
     }
 
     /// Tab inside the canvas, and once it steps past the canvas's last focusable or Shift+Tab past its first, on through the outer tree from the frame.
-    fn tab(&self, event: &Event, backwards: bool) -> EventResult {
-        // A step off the end that something other than Tab made is no reason for this one to leave.
-        self.canvas.with_entered(focus::take_departure);
-        let handled = self.forward(event) == EventResult::Handled;
-        let departed = self.canvas.with_entered(|| {
-            if !handled {
-                step(backwards);
-            }
-            focus::take_departure().is_some()
-        });
-        if departed {
-            step(backwards);
-            // The window wrapped round to this frame, its only stop: carry on inside it from the other end.
-            if focus::is_focused(self.focus) {
-                self.canvas.with_entered(|| {
-                    step(backwards);
-                    focus::take_departure();
-                });
-            }
-        }
+    fn tab(&self, event: &Event) -> EventResult {
+        self.focus.tab(event);
+        forward_pointer_shape(&self.canvas);
         EventResult::Handled
+    }
+}
+
+/// The canvas a frame draws, as its focus stop drives it: gone with the canvas, it holds nothing and takes nothing.
+impl Keyboard for Weak<SurfaceCanvas> {
+    fn text_entry_focused(&self) -> Option<bool> {
+        Some(self.upgrade()?.text_entry_focused())
+    }
+
+    fn keeps(&self, keys: ConsumedKeys) -> Option<bool> {
+        Some(self.upgrade()?.keeps(keys))
+    }
+}
+
+impl Inside for Weak<SurfaceCanvas> {
+    fn arrive(&self, backwards: bool) {
+        if let Some(canvas) = self.upgrade() {
+            canvas.arrive(backwards);
+        }
+    }
+
+    fn tab(&self, key: &Event) -> bool {
+        self.upgrade().is_some_and(|canvas| canvas.tab(key))
+    }
+
+    fn blur(&self) {
+        if let Some(canvas) = self.upgrade() {
+            canvas.blur();
+        }
+    }
+
+    fn holds_focus(&self) -> bool {
+        self.upgrade().is_some_and(|canvas| canvas.holds_focus())
+    }
+
+    fn text_input(&self) -> Option<(TextInput, Transform)> {
+        let canvas = self.upgrade()?;
+        Some((canvas.text_input()?, zoom(canvas.scale_now())))
     }
 }
 
@@ -207,7 +210,12 @@ impl Component for SurfaceFrame {
         let rect = self.leaf.rect.peek();
         self.canvas.set_placement(self.placement_now());
         let inside = |x: f64, y: f64| rect.contains(x as f32, y as f32);
-        let focused = || focus::is_key_target(self.focus);
+        match self.focus.key_route(event) {
+            Some(KeyRoute::Tab) => return self.tab(event),
+            Some(KeyRoute::Inside) => return self.forward(event),
+            Some(KeyRoute::Outside) => return EventResult::Ignored,
+            None => {}
+        }
         match event {
             Event::PointerPressed { x, y, button, .. } if inside(*x, *y) => {
                 self.press(event, *x as f32, *y as f32, *button)
@@ -223,14 +231,6 @@ impl Component for SurfaceFrame {
             Event::CursorLeft if self.hovered.replace(false) => {
                 self.forward(event);
                 EventResult::Ignored
-            }
-            Event::KeyPressed {
-                key: Key::Named(NamedKey::Tab),
-                modifiers,
-                ..
-            } if focused() => self.tab(event, modifiers.is_shift),
-            Event::KeyPressed { .. } | Event::KeyReleased { .. } | Event::Ime(_) if focused() => {
-                self.forward(event)
             }
             Event::InSurface { .. } => self.in_surface(event),
             // What everything in the window hears, so the frame passes it on and never keeps it from the siblings after it.
@@ -253,24 +253,12 @@ impl Component for SurfaceFrame {
 
 impl Drop for SurfaceFrame {
     fn drop(&mut self) {
-        self.home.with_entered(|| {
-            focus::unregister(self.focus);
-            dispose_owner(self.owner);
-        });
+        self.home.with_entered(|| dispose_owner(self.owner));
     }
 }
 
 fn zoom(scale: f32) -> Transform {
     Transform::scale_around(scale, scale, 0.0, 0.0)
-}
-
-fn zoomed(scale: f32, rect: Rect) -> Rect {
-    Rect::new(
-        rect.x * scale,
-        rect.y * scale,
-        rect.width * scale,
-        rect.height * scale,
-    )
 }
 
 fn placement(rect: Rect, scale: f32) -> Transform {
@@ -286,14 +274,6 @@ fn to_local(placement: Transform, x: f32, y: f32) -> Point {
 
 fn sized_style(style: LayoutStyle, size: Size, scale: f32) -> LayoutStyle {
     style.width(size.width * scale).height(size.height * scale)
-}
-
-fn step(backwards: bool) {
-    if backwards {
-        focus::focus_prev();
-    } else {
-        focus::focus_next();
-    }
 }
 
 /// Run after every layout pass of the tree around the frame, which is what gives the frame its box: places the canvas there, lays it out when its size changed and otherwise picks up what its own changes dirtied.
@@ -318,29 +298,6 @@ fn forward_pointer_shape(canvas: &SurfaceCanvas) {
             platform_core::push_window_command(command);
         }
     }
-}
-
-/// Clears focus inside when the frame loses it here, and when the keyboard arrives hands it to the first focusable inside, or the last when Shift+Tab brought it — a press brings its own target.
-fn follow_outer_focus(id: FocusId, surface: Weak<Surface>) {
-    let held_before = Cell::new(false);
-    effect(move || {
-        let held = focus::is_focused(id);
-        let by_keyboard = held && focus::is_focus_visible(id);
-        if held_before.replace(held) == held {
-            return;
-        }
-        let backwards = focus::arrived_by(id) == Some(Travel::Backward);
-        let Some(surface) = surface.upgrade() else {
-            return;
-        };
-        surface.with_entered(|| {
-            if !held {
-                focus::clear();
-            } else if by_keyboard && focus::current().is_none() {
-                step(backwards);
-            }
-        })
-    });
 }
 
 /// Brings the frame the outer focus whenever focus moves onto a box inside while it does not hold it, however it moved there — a play step, a field focusing itself — so the box that shows the focus is the one the keys reach.
