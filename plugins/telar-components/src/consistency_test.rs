@@ -1,9 +1,10 @@
 //! The guardrails that hold the catalogue to one set of proportions at every control size: every single-line control is [`metrics::control_height`] tall and rounds by `radius_control`; every selection control stands a control height tall round a box scaled to the size; every list, menu, select, tree and context menu stands its rows at [`metrics::row_height`]; and every floating panel rounds by its role, `radius_surface` for a popup, a tooltip, a toast, a context menu or a code block and `radius_dialog` for a modal, a drawer or the command palette.
 
+use telar::testing::{Scoped, scoped};
 use telar::{
     AvailableSpace, BorderRadius, Children, ComponentList, ControlSize, DrawCommand, LayoutError,
-    LayoutItem, LayoutStyle, Rect, ThemeTokens, compute_layout, dispose_owner, focus::Role,
-    owner_scope, provide_control_size, relayout_if_dirty, set_theme, track_layout,
+    LayoutItem, LayoutStyle, Rect, RwSignal, ThemeTokens, compute_layout, focus::Role,
+    provide_control_size, relayout_if_dirty, set_theme, track_layout,
 };
 
 use crate::metrics;
@@ -157,29 +158,37 @@ struct Measured {
     radius: Option<BorderRadius>,
 }
 
-/// Each probe is built under an owner of its own and disposed once measured: the next one is laid out on a fresh runtime that hands the same node ids out again, and an effect of this one left running would write into whatever now has them.
-fn measure(probe: &Probe, size: ControlSize) -> Measured {
+/// What `build` makes at `size`, alone in a row of an 800×600 window, laid out and mounted on a fresh layout runtime, with the signal its own rect is published through.
+fn in_a_row(
+    size: ControlSize,
+    build: fn() -> Result<Box<dyn LayoutItem>, LayoutError>,
+) -> Scoped<(RwSignal<Rect>, ComponentList)> {
     fresh_layout_runtime();
     set_theme(Distinct);
-    let scope = owner_scope();
-    let owner = scope.id();
-    let control = provide_control_size(size, probe.build).expect("the control builds");
-    let rect = track_layout(control.layout_node()).expect("the control has a node");
-    let row = telar::Container::new(
-        LayoutStyle::new()
-            .flex_row()
-            .align_items(telar::AlignItems::START),
-        vec![Box::new(control)],
-    )
-    .expect("the row builds");
-    compute_layout(
-        row.layout_node(),
-        AvailableSpace::Definite(800.0),
-        AvailableSpace::Definite(600.0),
-    )
-    .expect("the row lays out");
-    relayout_if_dirty();
-    let tree = ComponentList::new(telar::box_item(row));
+    scoped(|| {
+        let control = provide_control_size(size, build).expect("the control builds");
+        let rect = track_layout(control.layout_node()).expect("the control has a node");
+        let row = telar::Container::new(
+            LayoutStyle::new()
+                .flex_row()
+                .align_items(telar::AlignItems::START),
+            vec![Box::new(control)],
+        )
+        .expect("the row builds");
+        compute_layout(
+            row.layout_node(),
+            AvailableSpace::Definite(800.0),
+            AvailableSpace::Definite(600.0),
+        )
+        .expect("the row lays out");
+        relayout_if_dirty();
+        (rect, ComponentList::new(telar::box_item(row)))
+    })
+}
+
+fn measure(probe: &Probe, size: ControlSize) -> Measured {
+    let built = in_a_row(size, probe.build);
+    let (rect, tree) = &*built;
     let commands = tree.commands();
     let root = rect.get();
     let surface = match probe.surface {
@@ -197,9 +206,7 @@ fn measure(probe: &Probe, size: ControlSize) -> Measured {
         radius,
     };
     drop(commands);
-    drop(tree);
-    drop(scope);
-    dispose_owner(owner);
+    drop(built);
     measured
 }
 
@@ -326,25 +333,8 @@ fn every_selection_control_stands_a_control_height_tall_with_a_box_scaled_to_the
         for size in SIZES {
             let height = expected_height(size);
             let (width, tall) = expected_box(&selection, size);
-            fresh_layout_runtime();
-            set_theme(Distinct);
-            let control = provide_control_size(size, selection.build).expect("the control builds");
-            let row = telar::Container::new(
-                LayoutStyle::new()
-                    .flex_row()
-                    .align_items(telar::AlignItems::START),
-                vec![Box::new(control)],
-            )
-            .expect("the row builds");
-            compute_layout(
-                row.layout_node(),
-                AvailableSpace::Definite(800.0),
-                AvailableSpace::Definite(600.0),
-            )
-            .expect("the row lays out");
-            relayout_if_dirty();
-            let tree = ComponentList::new(telar::box_item(row));
-            let commands = tree.commands();
+            let built = in_a_row(size, selection.build);
+            let commands = built.1.commands();
             let Some(target) = drawn(selection.role).into_iter().next() else {
                 failures.push(format!(
                     "`{}` at {size:?} exposes no control",
@@ -573,11 +563,14 @@ fn every_row_of_every_list_is_the_one_row_height_at_every_control_size() {
             let want = expected_row_height(size);
             fresh_layout_runtime();
             set_theme(Distinct);
-            let item = provide_control_size(size, probe.build).expect("the rows build");
-            let own = track_layout(item.layout_node()).expect("the rows have a node");
-            let mut tree = mounted(Box::new(item));
-            (probe.open)(&mut tree);
-            settle(&tree);
+            let mut built = scoped(|| {
+                let item = provide_control_size(size, probe.build).expect("the rows build");
+                let own = track_layout(item.layout_node()).expect("the rows have a node");
+                (own, mounted(Box::new(item)))
+            });
+            let (own, tree) = &mut *built;
+            (probe.open)(tree);
+            settle(tree);
             let row = match probe.row {
                 Surface::Root => Some(own.get()),
                 Surface::First(role) => drawn(role).into_iter().next(),
@@ -622,11 +615,13 @@ impl Corner {
 struct Panel {
     name: &'static str,
     corner: Corner,
-    show: fn() -> ComponentList,
+    show: fn() -> Scoped<ComponentList>,
 }
 
-fn shown(build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>) -> ComponentList {
-    mounted(build().expect("the panel builds"))
+fn shown(
+    build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
+) -> Scoped<ComponentList> {
+    scoped(|| mounted(build().expect("the panel builds")))
 }
 
 fn panel_probes() -> Vec<Panel> {

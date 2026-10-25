@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use telar::preview::host::Args;
 use telar::preview::{PreviewCtx, PreviewEntry};
+use telar::testing::scoped;
 use telar::{AvailableSpace, Event, PointerButton, PointerSource, compute_layout, track_layout};
 
 use super::previews;
@@ -9,8 +10,9 @@ use super::previews;
 fn mount(entry: &PreviewEntry) {
     crate::test_support::fresh_layout_runtime();
     let ctx = PreviewCtx::from(Args::for_entry(entry));
-    let root = entry
-        .build_root(&ctx)
+    let built = scoped(|| entry.build_root(&ctx));
+    let root = built
+        .as_ref()
         .unwrap_or_else(|error| panic!("`{}` does not build: {error:?}", entry.id));
     compute_layout(
         root.layout_node(),

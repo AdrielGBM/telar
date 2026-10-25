@@ -164,7 +164,7 @@ impl<K: Clone + Default + 'static> telar::ThemeTokens for PanelTheme<K> {
 #[cfg(any(feature = "overlays", feature = "workbench"))]
 pub(crate) fn assert_panel_corner_follows_its_role<K: Clone + Default + 'static>(
     role: PanelRole,
-    mount: impl FnOnce() -> telar::ComponentList,
+    mount: impl FnOnce() -> telar::testing::Scoped<telar::ComponentList>,
     corner: impl Fn(&telar::ComponentList) -> telar::BorderRadius,
     shape: impl Fn(f32) -> telar::BorderRadius,
     with_radius: impl Fn(f32) -> K,

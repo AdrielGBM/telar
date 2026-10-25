@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use telar::preview::{ArgValue, Frame, PreviewCtx, PreviewEntry, by_role};
-use telar::testing::{centre, key_with, mount, press, release, route, texts};
+use telar::testing::{Scoped, centre, key_with, mount, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Children, ComponentList, DrawCommand, Event, Key, LayoutError,
     LayoutItem, LocalApp, ModifiersState, NamedKey, Reactive, Rect, RenderNode, Role, Size, signal,
@@ -74,7 +74,7 @@ const CLICKED: &str = "click button \"Pressed 0\"";
 
 struct Workshop {
     runtime: LocalApp<WorkshopApp>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Workshop {
@@ -86,7 +86,7 @@ impl Workshop {
         telar::install_default_text_metrics();
         telar::hot_restore_json(hot);
         let runtime = LocalApp(WorkshopApp::new(entries()).select(id));
-        let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+        let tree = mount(|| runtime.0.root(), WIDTH, HEIGHT);
         let mut workshop = Self { runtime, tree };
         workshop.settle();
         workshop.click(Role::Tab, "Interactions");
@@ -432,7 +432,7 @@ fn stepping_entries() -> Vec<PreviewEntry> {
 
 struct Stepping {
     runtime: LocalApp<crate::test_support::Shell>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Stepping {
@@ -443,7 +443,7 @@ impl Stepping {
         let request = telar::preview::host::PreviewRequest::new(Some(STEPPER), None);
         let state = crate::state::WorkshopState::new(stepping_entries().into(), &request);
         let runtime = LocalApp(crate::test_support::Shell { state });
-        let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+        let tree = mount(|| runtime.0.root(), WIDTH, HEIGHT);
         let mut stepping = Self { runtime, tree };
         stepping.next_turn();
         stepping

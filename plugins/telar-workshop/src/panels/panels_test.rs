@@ -4,7 +4,7 @@ use std::rc::Rc;
 use telar::preview::{
     ArgSpec, ArgValue, ControlKind, PreviewCtx, PreviewEntry, PropDefault, PropField, PropsSchema,
 };
-use telar::testing::{centre, key_with, mount, press, release, route, texts};
+use telar::testing::{Scoped, centre, key_with, mount, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Children, Color, ComponentList, DrawCommand, Event, Key,
     LayoutError, LayoutItem, LayoutStyle, LocalApp, ModifiersState, NamedKey, Rect, Role,
@@ -164,7 +164,7 @@ fn entries() -> Vec<PreviewEntry> {
 
 struct Workshop {
     runtime: LocalApp<WorkshopApp>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Workshop {
@@ -176,7 +176,7 @@ impl Workshop {
         telar::install_default_text_metrics();
         telar::hot_restore_json(r#"{"@workshop/panel.size":"1000.0"}"#);
         let runtime = LocalApp(WorkshopApp::new(entries).select(id));
-        let tree = mount(runtime.0.root(), width, HEIGHT);
+        let tree = mount(|| runtime.0.root(), width, HEIGHT);
         let workshop = Self { runtime, tree };
         settle(&workshop.tree);
         workshop
@@ -482,6 +482,7 @@ fn edited_args_survive_a_hot_reload() {
     let mut workshop = Workshop::open(entries(), BADGE);
     workshop.click(Role::Switch, "on");
     let snapshot = telar::hot_snapshot_json();
+    drop(workshop);
     telar::hot_restore_json(&snapshot);
     let workshop = Workshop::open(entries(), BADGE);
     assert!(workshop.draws("on=true"));
@@ -618,6 +619,7 @@ fn the_panel_shown_survives_a_hot_reload() {
     let mut workshop = Workshop::open(entries(), FIRING);
     workshop.click(Role::Tab, "Actions");
     let snapshot = telar::hot_snapshot_json();
+    drop(workshop);
     telar::hot_restore_json(&snapshot);
     let workshop = Workshop::open(entries(), FIRING);
     assert!(workshop.shows_tab("Actions"));
@@ -645,14 +647,17 @@ fn matching_lists_the_newest_first_and_ignores_case() {
     assert!(seqs("pear").is_empty());
 }
 
-fn inspected(id: &str) -> (crate::state::WorkshopState, ComponentList) {
+fn inspected(id: &str) -> (crate::state::WorkshopState, Scoped<ComponentList>) {
     telar::install_default_text_metrics();
     telar::hot_restore_json(r#"{"@workshop/panel.size":"1000.0"}"#);
     let request = telar::preview::host::PreviewRequest::new(Some(id), None);
     let state = crate::state::WorkshopState::new(entries().into(), &request);
-    let chrome = telar_devtools::workbench_scope(|| crate::shell::shell(&state, None)).unwrap();
     let tree = mount(
-        telar::WindowRoot::wrapping(box_item(chrome)).unwrap(),
+        || {
+            let chrome =
+                telar_devtools::workbench_scope(|| crate::shell::shell(&state, None)).unwrap();
+            telar::WindowRoot::wrapping(box_item(chrome)).unwrap()
+        },
         WIDTH,
         HEIGHT,
     );

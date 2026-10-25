@@ -49,10 +49,12 @@ fn a_change_to_one_box_damages_that_box_and_nothing_beside_it() {
     reset_layout_runtime();
     let left = signal(Color::BLACK);
     let tree = mount(
-        page(vec![
-            tile(0.0, move || left.get()),
-            tile(200.0, || Color::WHITE),
-        ]),
+        || {
+            page(vec![
+                tile(0.0, move || left.get()),
+                tile(200.0, || Color::WHITE),
+            ])
+        },
         300,
         80,
     );
@@ -79,13 +81,15 @@ fn a_box_whose_paint_goes_away_damages_what_it_covered() {
     reset_layout_runtime();
     let shown = signal(true);
     let tree = mount(
-        page(vec![
-            tile(0.0, || Color::WHITE),
-            tile(200.0, move || match shown.get() {
-                true => Color::BLACK,
-                false => Color::TRANSPARENT,
-            }),
-        ]),
+        || {
+            page(vec![
+                tile(0.0, || Color::WHITE),
+                tile(200.0, move || match shown.get() {
+                    true => Color::BLACK,
+                    false => Color::TRANSPARENT,
+                }),
+            ])
+        },
         300,
         80,
     );

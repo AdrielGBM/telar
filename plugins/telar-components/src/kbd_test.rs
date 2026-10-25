@@ -11,19 +11,21 @@ fn texts(chord: &'static str) -> Vec<String> {
 fn texts_in(convention: KeyboardConvention, chord: &'static str) -> Vec<String> {
     crate::test_support::fresh_layout_runtime();
     set_keyboard_convention(convention);
-    let cap = kbd(KbdProps::props().chord(chord).build(), Children::default()).unwrap();
-    let root = Container::new(
-        LayoutStyle::new().flex_column().width(300.0).height(100.0),
-        vec![cap],
-    )
-    .unwrap();
-    compute_layout(
-        root.layout_node(),
-        AvailableSpace::Definite(300.0),
-        AvailableSpace::Definite(100.0),
-    )
-    .unwrap();
-    let tree = ComponentList::new(box_item(root));
+    let tree = telar::testing::scoped(|| {
+        let cap = kbd(KbdProps::props().chord(chord).build(), Children::default()).unwrap();
+        let root = Container::new(
+            LayoutStyle::new().flex_column().width(300.0).height(100.0),
+            vec![cap],
+        )
+        .unwrap();
+        compute_layout(
+            root.layout_node(),
+            AvailableSpace::Definite(300.0),
+            AvailableSpace::Definite(100.0),
+        )
+        .unwrap();
+        ComponentList::new(box_item(root))
+    });
     tree.commands()
         .iter()
         .filter_map(|c| match c {

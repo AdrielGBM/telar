@@ -6011,6 +6011,7 @@ dependencies = [
  "telar-geometry-core",
  "telar-layout-core",
  "telar-reactive-core",
+ "tracing",
 ]
 
 [[package]]

@@ -1,3 +1,4 @@
+use telar::testing::{Scoped, scoped};
 use telar::{
     AvailableSpace, ComponentList, DrawCommand, compute_layout, for_each_with_matrix,
     new_container, transform_clip_rect,
@@ -16,27 +17,36 @@ const EXAMPLES: &[Example] = &[
     },
 ];
 
-/// Where `needle` is drawn in an empty state laid out in a panel `height` px tall.
-fn drawn_at(height: f32, needle: &str) -> telar::Rect {
+/// `state` laid out in a `width`×`height` panel on a fresh layout runtime and mounted, owning everything its build made.
+fn in_panel(state: EmptyState, width: f32, height: f32) -> Scoped<ComponentList> {
     telar::install_default_text_metrics();
     telar::reset_layout_runtime();
-    let state = EmptyState::new(crate::strings::NO_ARGS)
-        .about(crate::strings::NO_ARGS_HINT)
-        .examples(EXAMPLES)
-        .build()
+    scoped(|| {
+        let state = state.build().unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(width).height(height),
+            &[state.layout_node()],
+        )
         .unwrap();
-    let root = new_container(
-        LayoutStyle::new().flex_column().width(800.0).height(height),
-        &[state.layout_node()],
-    )
-    .unwrap();
-    compute_layout(
-        root,
-        AvailableSpace::Definite(800.0),
-        AvailableSpace::Definite(height),
-    )
-    .unwrap();
-    let tree = ComponentList::new(state);
+        compute_layout(
+            root,
+            AvailableSpace::Definite(width),
+            AvailableSpace::Definite(height),
+        )
+        .unwrap();
+        ComponentList::new(state)
+    })
+}
+
+/// Where `needle` is drawn in an empty state laid out in a panel `height` px tall.
+fn drawn_at(height: f32, needle: &str) -> telar::Rect {
+    let tree = in_panel(
+        EmptyState::new(crate::strings::NO_ARGS)
+            .about(crate::strings::NO_ARGS_HINT)
+            .examples(EXAMPLES),
+        800.0,
+        height,
+    );
     let mut found = None;
     for_each_with_matrix(&tree.commands(), |command, matrix| {
         if let DrawCommand::Text { text, rect, .. } = command
@@ -85,8 +95,6 @@ fn the_about_text_is_centred_under_the_title() {
 
 /// The drawn frames of the Rust and the `.rsx` code blocks, in a panel `width` px wide.
 fn blocks(width: f32) -> (telar::Rect, telar::Rect) {
-    telar::install_default_text_metrics();
-    telar::reset_layout_runtime();
     let examples: &'static [Example] = &[
         Example {
             language: "Rust",
@@ -97,22 +105,11 @@ fn blocks(width: f32) -> (telar::Rect, telar::Rect) {
             code: "a\nlonger\nblock",
         },
     ];
-    let state = EmptyState::new(crate::strings::NO_ARGS)
-        .examples(examples)
-        .build()
-        .unwrap();
-    let root = new_container(
-        LayoutStyle::new().flex_column().width(width).height(800.0),
-        &[state.layout_node()],
-    )
-    .unwrap();
-    compute_layout(
-        root,
-        AvailableSpace::Definite(width),
-        AvailableSpace::Definite(800.0),
-    )
-    .unwrap();
-    let tree = ComponentList::new(state);
+    let tree = in_panel(
+        EmptyState::new(crate::strings::NO_ARGS).examples(examples),
+        width,
+        800.0,
+    );
     let mut frames = Vec::new();
     for_each_with_matrix(&tree.commands(), |command, matrix| {
         if let DrawCommand::Rect { rect, style } = command
@@ -144,27 +141,14 @@ fn one_under_the_other_the_blocks_stand_as_wide_as_each_other() {
 /// Code wider than the panel scrolls inside its block, rather than standing the block out past the panel's sides.
 #[test]
 fn code_wider_than_the_panel_keeps_its_block_inside_it() {
-    telar::install_default_text_metrics();
-    telar::reset_layout_runtime();
-    let state = EmptyState::new(crate::strings::NO_PLAY)
-        .examples(&[Example {
+    let tree = in_panel(
+        EmptyState::new(crate::strings::NO_PLAY).examples(&[Example {
             language: "Rust",
             code: "canvas.click(by_role(Role::Button).named(\"Save\"))?;",
-        }])
-        .build()
-        .unwrap();
-    let root = new_container(
-        LayoutStyle::new().flex_column().width(240.0).height(400.0),
-        &[state.layout_node()],
-    )
-    .unwrap();
-    compute_layout(
-        root,
-        AvailableSpace::Definite(240.0),
-        AvailableSpace::Definite(400.0),
-    )
-    .unwrap();
-    let tree = ComponentList::new(state);
+        }]),
+        240.0,
+        400.0,
+    );
     let mut frames = Vec::new();
     for_each_with_matrix(&tree.commands(), |command, matrix| {
         if let DrawCommand::Rect { rect, style } = command

@@ -7,7 +7,12 @@ pub use layout_reactive::overlay_viewport;
 /// A replaced `LayoutRuntime` is a fresh `SlotMap` whose versions start over, so the next tree is handed the previous tree's `NodeId`s exactly. A declaration left behind therefore lands on whatever the next tree builds on that id, which never shows up as a failure: the text under a node nobody declared for simply comes out the wrong size.
 ///
 /// **What this cannot do for you: dispose the previous tree's owners.** Anything still running from the old tree — an effect styling a node, a keyboard walk reading one — names ids the new tree now owns. The surface root is not the thing to dispose here, because it holds app-lifetime state that has nothing to do with the tree being replaced. Whoever mounted the old tree scoped it, and whoever replaces it disposes that scope.
+///
+/// # Panics
+///
+/// In a debug build, when an [`OwnedBuild`](crate::OwnedBuild) built on this runtime is still alive: the tree it holds was not dropped before its replacement was started. A tree built under no owner of its own is invisible to this check.
 pub fn reset_layout_runtime() {
+    crate::disposal::assert_no_build_outlives_its_runtime();
     crate::inherit::reset_cascade();
     crate::annotation::reset();
     crate::anchor_line::reset();

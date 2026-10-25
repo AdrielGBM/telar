@@ -1,5 +1,5 @@
 use telar::preview::{Layout, PreviewCtx};
-use telar::testing::{key_with, mount, press, release, route, texts};
+use telar::testing::{Scoped, key_with, mount, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, ColorScheme, ComponentList, Container, Event, Input,
     KeyboardConvention, LayoutStyle, LocalApp, ModifiersState, NamedKey, Role, SizeDimension,
@@ -42,7 +42,7 @@ fn entries() -> Vec<PreviewEntry> {
 
 struct Workshop {
     runtime: LocalApp<Shell>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Workshop {
@@ -53,7 +53,7 @@ impl Workshop {
         telar::set_keyboard_convention(KeyboardConvention::Pc);
         let state = WorkshopState::new(entries.into(), &Default::default());
         let runtime = LocalApp(Shell { state });
-        let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+        let tree = mount(|| runtime.0.root(), WIDTH, HEIGHT);
         let workshop = Self { runtime, tree };
         settle(&workshop.tree);
         workshop

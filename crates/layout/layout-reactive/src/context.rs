@@ -1127,7 +1127,10 @@ impl LayoutRuntime {
 
     fn set_children(&mut self, parent: NodeId, children: &[NodeId]) -> Result<(), LayoutError> {
         let before = self.engine.children(parent);
-        self.engine.set_children(parent, children)?;
+        if let Err(error) = self.engine.set_children(parent, children) {
+            report_dead_child(&self.engine, parent, children);
+            return Err(error);
+        }
         for dropped in before.into_iter().filter(|old| !children.contains(old)) {
             if with_parents_ref(|p| p.get(&dropped) == Some(&parent)) {
                 unlink_parent(self, dropped);
@@ -1192,6 +1195,35 @@ impl LayoutRuntime {
         for node in orphaned {
             self.note_relinked(node);
         }
+    }
+}
+
+/// The first of `children` that is freed while `parent` is still alive; a dead `parent` is the expected stale-effect case and names nothing.
+fn dead_child_under_live_parent(
+    engine: &LayoutEngine,
+    parent: NodeId,
+    children: &[NodeId],
+) -> Option<NodeId> {
+    if !engine.is_alive(parent) {
+        return None;
+    }
+    children
+        .iter()
+        .copied()
+        .find(|&child| !engine.is_alive(child))
+}
+
+fn report_dead_child(engine: &LayoutEngine, parent: NodeId, children: &[NodeId]) {
+    if let Some(dead) = dead_child_under_live_parent(engine, parent, children) {
+        tracing::error!(
+            ?parent,
+            ?dead,
+            "set_children skipped: a child no longer exists"
+        );
+        debug_assert!(
+            false,
+            "set_children on {parent:?} skipped the whole update: child {dead:?} no longer exists"
+        );
     }
 }
 

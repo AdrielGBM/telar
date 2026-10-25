@@ -341,6 +341,10 @@ impl LayoutEngine {
         self.tree.children(node).unwrap_or_default()
     }
 
+    pub fn is_alive(&self, node: NodeId) -> bool {
+        self.live.contains(&node)
+    }
+
     pub fn node_count(&self) -> usize {
         self.live.len()
     }

@@ -40,16 +40,18 @@ impl telar::ThemeTokens for Plain {
 
 fn ring(props: SpinnerProps) -> (telar::Rect, RectStyle) {
     crate::test_support::fresh_layout_runtime();
-    let widget = spinner(props, Children::default()).unwrap();
-    lay_out(widget.layout_node());
-    telar::ComponentList::new(widget)
-        .commands()
-        .iter()
-        .find_map(|command| match command {
-            telar::DrawCommand::Rect { rect, style } => Some((*rect, **style)),
-            _ => None,
-        })
-        .expect("the ring paints")
+    telar::testing::scoped(|| {
+        let widget = spinner(props, Children::default()).unwrap();
+        lay_out(widget.layout_node());
+        telar::ComponentList::new(widget)
+    })
+    .commands()
+    .iter()
+    .find_map(|command| match command {
+        telar::DrawCommand::Rect { rect, style } => Some((*rect, **style)),
+        _ => None,
+    })
+    .expect("the ring paints")
 }
 
 #[test]

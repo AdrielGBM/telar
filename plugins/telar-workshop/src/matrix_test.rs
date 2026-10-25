@@ -5,7 +5,7 @@ use telar::preview::{
     ArgSpec, ArgValue, Axis, ControlKind, Globals, Matrices, Matrix, Play, PreviewCtx,
     PreviewEntry, PreviewEnv, ViewportPreset,
 };
-use telar::testing::{centre, mount, named as named_key, press, release, route, texts};
+use telar::testing::{Scoped, centre, mount, named as named_key, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Children, Color, ColorScheme, ComponentList, ControlSize,
     Direction, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect,
@@ -156,7 +156,7 @@ fn entries() -> Vec<PreviewEntry> {
 
 struct Workshop {
     runtime: LocalApp<Shell>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Workshop {
@@ -168,7 +168,7 @@ impl Workshop {
         let state = WorkshopState::new(entries().into(), &request);
         state.view().set(ViewMode::Matrix);
         let runtime = LocalApp(Shell { state });
-        let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+        let tree = mount(|| runtime.0.root(), WIDTH, HEIGHT);
         let workshop = Self { runtime, tree };
         settle(&workshop.tree);
         workshop.next_turn();
@@ -357,6 +357,7 @@ fn each_cell_runs_its_play_and_checks_what_the_play_left() {
             .filter(|text| text.starts_with("A11y"))
             .count();
     assert_eq!(checked, 2, "each cell's accessibility is checked");
+    drop(workshop);
 
     let failing = Workshop::open(FAILING);
     assert!(failing.draws("Play failed"), "{:?}", failing.texts());
@@ -568,7 +569,7 @@ fn a_capped_matrix_mounts_the_first_cells_and_warns() {
     let state = WorkshopState::new(entries.into(), &Default::default());
     state.view().set(ViewMode::Matrix);
     let runtime = LocalApp(Shell { state });
-    let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+    let tree = mount(|| runtime.0.root(), WIDTH, HEIGHT);
     settle(&tree);
     let cells = runtime
         .access_snapshot(&tree.commands())

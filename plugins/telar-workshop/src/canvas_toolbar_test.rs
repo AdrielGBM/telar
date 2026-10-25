@@ -1,5 +1,5 @@
 use telar::preview::{Layout, PreviewCtx, PreviewEntry};
-use telar::testing::{centre, mount, named as named_key, press, release, route, texts};
+use telar::testing::{Scoped, centre, mount, named as named_key, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Color, ColorScheme, ComponentList, Container, DrawCommand, Event,
     LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect, Role, SystemPreferences, Text,
@@ -85,7 +85,7 @@ fn entries(
 
 struct Workshop {
     runtime: LocalApp<WorkshopApp>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Workshop {
@@ -96,7 +96,7 @@ impl Workshop {
     fn open_at(entries: Vec<PreviewEntry>, width: u32) -> Self {
         telar::install_default_text_metrics();
         let runtime = LocalApp(WorkshopApp::new(entries).project_name(PROJECT));
-        let tree = mount(runtime.0.root(), width, HEIGHT);
+        let tree = mount(|| runtime.0.root(), width, HEIGHT);
         let workshop = Self { runtime, tree };
         settle(&workshop.tree);
         workshop

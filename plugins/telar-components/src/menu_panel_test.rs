@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 
-use telar::testing::{centre, key_with, lay_out, moved, named, press, release, route};
+use telar::testing::{
+    Scoped, centre, key_with, lay_out, moved, named, press, release, route, scoped,
+};
 use telar::{
     ComponentList, Container, ModifiersState, RectStyle, Slots, ThemeTokens, relayout_if_dirty,
 };
@@ -108,28 +110,30 @@ fn settle(tree: &ComponentList) {
 }
 
 /// A context menu of `lines` asked for at `at` in [`WINDOW`], laid out and drawn, over a record of what was picked and whether it asked to be closed.
-fn opened_at(at: (f32, f32), lines: Vec<Line>) -> (ComponentList, Said) {
+fn opened_at(at: (f32, f32), lines: Vec<Line>) -> (Scoped<ComponentList>, Said) {
     fresh_layout_runtime();
     focus::clear();
     let said: Said = Rc::default();
     let closing = said.clone();
-    let menu = context_menu(
-        ContextMenuProps::props()
-            .at(at)
-            .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
-            .width(120.0)
-            .within(WINDOW)
-            .build(),
-        written(lines, &said),
-    )
-    .unwrap();
-    lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
-    let tree = ComponentList::new(menu);
+    let tree = scoped(|| {
+        let menu = context_menu(
+            ContextMenuProps::props()
+                .at(at)
+                .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
+                .width(120.0)
+                .within(WINDOW)
+                .build(),
+            written(lines, &said),
+        )
+        .unwrap();
+        lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+        ComponentList::new(menu)
+    });
     settle(&tree);
     (tree, said)
 }
 
-fn opened() -> (ComponentList, Said) {
+fn opened() -> (Scoped<ComponentList>, Said) {
     opened_at((40.0, 30.0), sample())
 }
 
@@ -783,29 +787,33 @@ fn both_openers_open_the_same_panel() {
     fresh_layout_runtime();
     focus::clear();
     let said: Said = Rc::default();
-    let opened = context_menu(
-        ContextMenuProps::props()
-            .at((40.0, 30.0))
-            .within(window)
-            .build(),
-        written(lines(), &said),
-    )
-    .unwrap();
-    lay_out(opened.layout_node(), window.width, window.height);
-    let mut tree = ComponentList::new(opened);
+    let mut tree = scoped(|| {
+        let opened = context_menu(
+            ContextMenuProps::props()
+                .at((40.0, 30.0))
+                .within(window)
+                .build(),
+            written(lines(), &said),
+        )
+        .unwrap();
+        lay_out(opened.layout_node(), window.width, window.height);
+        ComponentList::new(opened)
+    });
     let at_a_point = shape(&mut tree, &said);
     drop(tree);
 
     fresh_layout_runtime();
     focus::clear();
     let said: Said = Rc::default();
-    let dropped = menu(
-        MenuProps::props().label("Abrir").build(),
-        written(lines(), &said),
-    )
-    .unwrap();
-    lay_out(dropped.layout_node(), window.width, window.height);
-    let mut tree = ComponentList::new(dropped);
+    let mut tree = scoped(|| {
+        let dropped = menu(
+            MenuProps::props().label("Abrir").build(),
+            written(lines(), &said),
+        )
+        .unwrap();
+        lay_out(dropped.layout_node(), window.width, window.height);
+        ComponentList::new(dropped)
+    });
     settle(&tree);
     focus::focus_next();
     route(&mut tree, &named(NamedKey::Enter));
@@ -1018,19 +1026,21 @@ fn a_panel_widens_to_its_widest_row() {
     fresh_layout_runtime();
     focus::clear();
     let said: Said = Rc::default();
-    let menu = context_menu(
-        ContextMenuProps::props().within(WINDOW).build(),
-        written(
-            vec![Line::Hinted(
-                "a rather long label here",
-                "and a long hint too",
-            )],
-            &said,
-        ),
-    )
-    .unwrap();
-    lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
-    let tree = ComponentList::new(menu);
+    let tree = scoped(|| {
+        let menu = context_menu(
+            ContextMenuProps::props().within(WINDOW).build(),
+            written(
+                vec![Line::Hinted(
+                    "a rather long label here",
+                    "and a long hint too",
+                )],
+                &said,
+            ),
+        )
+        .unwrap();
+        lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+        ComponentList::new(menu)
+    });
     settle(&tree);
     let width_of = |needle: &str| {
         tree.commands()
@@ -1056,6 +1066,7 @@ fn a_panel_widens_to_its_widest_row() {
         "the label is whole: {label} of {measured}"
     );
     assert!(panels()[0].width > MenuTokens::current().width());
+    drop(tree);
 
     let (_tree, _) = opened_at((40.0, 30.0), rows(2));
     assert_eq!(
@@ -1066,55 +1077,57 @@ fn a_panel_widens_to_its_widest_row() {
 }
 
 /// "Modo" (plain) · "Reducir" (a switch bound to the returned signal, flipped by its own `on_press`) · "Reglas" (ticked), as a menu with the given number of ticked rows.
-fn switching(ticked: bool) -> (ComponentList, RwSignal<bool>, Said) {
+fn switching(ticked: bool) -> (Scoped<ComponentList>, RwSignal<bool>, Said) {
     fresh_layout_runtime();
     focus::clear();
     let said: Said = Rc::default();
     let closing = said.clone();
     let on = signal(false);
-    let rows = Children::new(move || {
-        let mut slots = Slots::new();
-        slots.push(
-            None,
-            item(
-                ItemProps::props().label("Modo").build(),
-                Children::default(),
-            )?,
-        );
-        slots.push(
-            None,
-            item(
-                ItemProps::props()
-                    .label("Reducir")
-                    .switch(Reactive::of(move || on.get()))
-                    .on_press(Rc::new(move || on.update(|on| *on = !*on)) as Rc<dyn Fn()>)
-                    .build(),
-                Children::default(),
-            )?,
-        );
-        if ticked {
+    let tree = scoped(|| {
+        let rows = Children::new(move || {
+            let mut slots = Slots::new();
             slots.push(
                 None,
                 item(
-                    ItemProps::props().label("Reglas").checked(true).build(),
+                    ItemProps::props().label("Modo").build(),
                     Children::default(),
                 )?,
             );
-        }
-        Ok(slots)
+            slots.push(
+                None,
+                item(
+                    ItemProps::props()
+                        .label("Reducir")
+                        .switch(Reactive::of(move || on.get()))
+                        .on_press(Rc::new(move || on.update(|on| *on = !*on)) as Rc<dyn Fn()>)
+                        .build(),
+                    Children::default(),
+                )?,
+            );
+            if ticked {
+                slots.push(
+                    None,
+                    item(
+                        ItemProps::props().label("Reglas").checked(true).build(),
+                        Children::default(),
+                    )?,
+                );
+            }
+            Ok(slots)
+        });
+        let menu = context_menu(
+            ContextMenuProps::props()
+                .at((40.0, 30.0))
+                .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
+                .width(160.0)
+                .within(WINDOW)
+                .build(),
+            rows,
+        )
+        .unwrap();
+        lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+        ComponentList::new(menu)
     });
-    let menu = context_menu(
-        ContextMenuProps::props()
-            .at((40.0, 30.0))
-            .on_close(Rc::new(move || closing.borrow_mut().push("cerrar".into())))
-            .width(160.0)
-            .within(WINDOW)
-            .build(),
-        rows,
-    )
-    .unwrap();
-    lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
-    let tree = ComponentList::new(menu);
     settle(&tree);
     (tree, on, said)
 }
@@ -1169,6 +1182,7 @@ fn a_switch_row_leaves_the_tick_column_unclaimed() {
     let (tree, _, _) = switching(false);
     let flush = text_rect(&tree, "Modo").x;
     assert_eq!(flush, text_rect(&tree, "Reducir").x, "the labels are flush");
+    drop(tree);
     let (ticked, _, _) = switching(true);
     assert!(
         text_rect(&ticked, "Modo").x > flush,
@@ -1244,6 +1258,7 @@ fn a_switch_row_toggles_without_closing_the_panel() {
 fn a_switch_row_scales_with_the_control_size() {
     let (tree, _, _) = switching(false);
     let regular = track_rect(&tree);
+    drop(tree);
     telar::set_control_size(telar::ControlSize::Large);
     let (tree, _, _) = switching(false);
     let large = track_rect(&tree);

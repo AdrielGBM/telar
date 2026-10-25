@@ -1,5 +1,7 @@
 use telar::preview::PreviewCtx;
-use telar::testing::{centre, find_text, key_with, mount, named, press, release, route, texts};
+use telar::testing::{
+    Scoped, centre, find_text, key_with, mount, named, press, release, route, texts,
+};
 use telar::{
     AccessNode, App, AppRuntime, Component, ComponentList, Container, Event, LayoutStyle, LocalApp,
     PointerSource, Rect, WindowRoot, reset_layout_runtime,
@@ -38,7 +40,7 @@ impl App for Workshop {
 
 struct Mounted {
     runtime: LocalApp<Workshop>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Mounted {
@@ -47,7 +49,7 @@ impl Mounted {
         focus::clear();
         let state = WorkshopState::new(entries.into(), &Default::default());
         let runtime = LocalApp(Workshop { state });
-        let tree = mount(runtime.0.root(), 240, 600);
+        let tree = mount(|| runtime.0.root(), 240, 600);
         let mounted = Self { runtime, tree };
         settle(&mounted.tree);
         mounted

@@ -31,7 +31,7 @@ fn window() -> Box<dyn LayoutItem> {
 
 fn resized_by(x: f32, y: f32) -> Vec<ResizeEdge> {
     crate::test_support::fresh_layout_runtime();
-    let mut window = window();
+    let mut window = telar::testing::scoped(window);
     take_window_commands();
     window.on_event(&press(x, y));
     take_window_commands()

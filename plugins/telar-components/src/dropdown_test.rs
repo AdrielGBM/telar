@@ -1,4 +1,4 @@
-use telar::testing::{centre, named, press, release, route};
+use telar::testing::{Scoped, centre, named, press, release, route};
 use telar::{
     AvailableSpace, ComponentList, NamedKey, Slots, compute_layout, relayout_if_dirty, signal,
 };
@@ -37,22 +37,24 @@ fn settle(tree: &ComponentList) {
 }
 
 /// A select of `count` rows whose trigger stands `top` px down the window, opened from the keyboard.
-fn opened(count: u32, top: f32) -> (ComponentList, RwSignal<u32>) {
+fn opened(count: u32, top: f32) -> (Scoped<ComponentList>, RwSignal<u32>) {
     fresh_layout_runtime();
     let picked = signal(0u32);
-    let field = select(SelectProps::props().selected(picked).build(), rows(count)).unwrap();
-    let root = Container::new(
-        LayoutStyle::new().flex_column().padding_top(top),
-        vec![field],
-    )
-    .unwrap();
-    compute_layout(
-        root.layout_node(),
-        AvailableSpace::Definite(WINDOW_WIDTH),
-        AvailableSpace::Definite(WINDOW_HEIGHT),
-    )
-    .unwrap();
-    let mut tree = ComponentList::new(root);
+    let mut tree = telar::testing::scoped(|| {
+        let field = select(SelectProps::props().selected(picked).build(), rows(count)).unwrap();
+        let root = Container::new(
+            LayoutStyle::new().flex_column().padding_top(top),
+            vec![field],
+        )
+        .unwrap();
+        compute_layout(
+            root.layout_node(),
+            AvailableSpace::Definite(WINDOW_WIDTH),
+            AvailableSpace::Definite(WINDOW_HEIGHT),
+        )
+        .unwrap();
+        ComponentList::new(root)
+    });
     settle(&tree);
     telar::focus::focus_next();
     route(&mut tree, &named(NamedKey::Enter));
@@ -330,13 +332,13 @@ fn controls_of_every_kind_standing_in_a_row_are_drawn_at_one_height() {
 #[test]
 fn a_list_keeps_the_popup_offset_from_its_field_on_either_side() {
     let offset = crate::shared::popup_offset();
-    let (_tree, _) = opened(5, 220.0);
-    let flipped = list();
+    let (flipped, _) = opened(5, 220.0);
     assert_eq!(
-        bottom(flipped) + panel_pad(),
+        bottom(list()) + panel_pad(),
         220.0 - offset,
         "over the field, flipped"
     );
+    drop(flipped);
 
     fresh_layout_runtime();
     telar::set_theme(crate::test_support::TokensTheme {

@@ -251,7 +251,7 @@ fn a_tall_block_stops_at_its_max_height() {
 fn the_block_is_rounded_by_the_surface_role_until_the_tokens_name_a_radius() {
     crate::test_support::assert_panel_corner_follows_its_role(
         crate::test_support::PanelRole::Surface,
-        || Mounted::new(source_props().copyable(false).build()).tree,
+        || telar::testing::scoped(|| Mounted::new(source_props().copyable(false).build()).tree),
         |tree| crate::test_support::first_painted(tree).radius,
         BorderRadius::all,
         |radius| CodeViewTokens {

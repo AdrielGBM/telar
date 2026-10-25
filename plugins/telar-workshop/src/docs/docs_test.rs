@@ -4,7 +4,7 @@ use std::rc::Rc;
 use telar::preview::{
     ControlKind, Layout, PreviewCtx, PreviewEntry, PropDefault, PropField, PropsSchema, SourceSpan,
 };
-use telar::testing::{centre, key_with, mount, press, release, route, texts};
+use telar::testing::{Scoped, centre, key_with, mount, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Children, Color, ComponentList, Event, Key, LayoutError,
     LayoutItem, LayoutStyle, LocalApp, ModifiersState, Rect, Role, ScrollDelta, StyledContainer,
@@ -126,7 +126,7 @@ fn entries() -> Vec<PreviewEntry> {
 
 struct Docs {
     runtime: LocalApp<WorkshopApp>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Docs {
@@ -136,7 +136,7 @@ impl Docs {
             r#"{"@workshop/view":"\"Docs\"","@workshop/panel.size":"160.0","@workshop/panel.collapsed":"{\"canvas\":false,\"matrix\":true,\"docs\":false}"}"#,
         );
         let runtime = LocalApp(WorkshopApp::new(entries()).select(id));
-        let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+        let tree = mount(|| runtime.0.root(), WIDTH, HEIGHT);
         let docs = Self { runtime, tree };
         settle(&docs.tree);
         docs

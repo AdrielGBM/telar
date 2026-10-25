@@ -27,7 +27,7 @@ fn resolved(build: impl FnOnce() -> Box<dyn LayoutItem>) -> TextStyle {
     }
     // A tree measures its text as it lays out, and a test has no runner to have installed a measurer.
     telar::install_default_text_metrics();
-    let tree = mount(Root(build()), 400, 200);
+    let tree = mount(|| Root(build()), 400, 200);
     let style = tree.commands().iter().find_map(|c| match c {
         DrawCommand::Text { style, .. } => Some((**style).clone()),
         _ => None,
@@ -194,7 +194,7 @@ fn a_container_can_say_what_the_text_below_it_looks_like() {
             .with_font_weight(700),
     );
 
-    let tree = mount(Root(box_item(outer)), 400, 200);
+    let tree = mount(|| Root(box_item(outer)), 400, 200);
     let drawn = |tree: &ui_core::ComponentList| {
         tree.commands()
             .iter()

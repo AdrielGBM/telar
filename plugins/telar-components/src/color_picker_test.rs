@@ -283,18 +283,20 @@ impl telar::ThemeTokens for Plain {
 fn painted(start: Color, style: Option<SurfaceAmendment>) -> Vec<(Rect, RectStyle)> {
     crate::test_support::fresh_layout_runtime();
     telar::set_locale("en");
-    let mut props = ColorPickerProps::props().value(signal(start)).build();
-    props.style = style;
-    let picker = color_picker(props, Children::default()).unwrap();
-    telar::testing::lay_out(picker.layout_node(), 400.0, 500.0);
-    ComponentList::new(picker)
-        .commands()
-        .iter()
-        .filter_map(|command| match command {
-            telar::DrawCommand::Rect { rect, style } => Some((*rect, **style)),
-            _ => None,
-        })
-        .collect()
+    telar::testing::scoped(|| {
+        let mut props = ColorPickerProps::props().value(signal(start)).build();
+        props.style = style;
+        let picker = color_picker(props, Children::default()).unwrap();
+        telar::testing::lay_out(picker.layout_node(), 400.0, 500.0);
+        ComponentList::new(picker)
+    })
+    .commands()
+    .iter()
+    .filter_map(|command| match command {
+        telar::DrawCommand::Rect { rect, style } => Some((*rect, **style)),
+        _ => None,
+    })
+    .collect()
 }
 
 #[test]

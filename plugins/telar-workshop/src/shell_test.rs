@@ -5,7 +5,7 @@ use telar::focus;
 use telar::inspect::FrameAccess;
 use telar::inspect::a11y::Severity;
 use telar::preview::{PreviewCtx, PreviewEntry, by_role};
-use telar::testing::{centre, key_with, mount, named, press, release, route, texts};
+use telar::testing::{Scoped, centre, key_with, mount, named, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Children, ComponentList, DrawCommand, Event, Key, LayoutError,
     LayoutItem, LocalApp, ModifiersState, NamedKey, NodeId, Reactive, Rect, Role, Size,
@@ -29,7 +29,7 @@ const PROJECT: &str = "bench";
 /// The workshop as an application runs it, over [`sample_previews`].
 struct Workshop<A: App> {
     runtime: LocalApp<A>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
     width: u32,
 }
 
@@ -78,7 +78,7 @@ impl<A: App> Workshop<A> {
         telar::install_default_text_metrics();
         telar::set_surface_size(Size::new(width as f32, HEIGHT as f32));
         let runtime = LocalApp(app);
-        let tree = mount(runtime.0.root(), width, HEIGHT);
+        let tree = mount(|| runtime.0.root(), width, HEIGHT);
         settle(&tree);
         Self {
             runtime,

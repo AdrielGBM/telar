@@ -16,3 +16,4 @@ layout-core = { workspace = true }
 reactive-core = { workspace = true }
 
 rustc-hash = { workspace = true }
+tracing = { workspace = true }

@@ -4,7 +4,7 @@ use telar::preview::host::PreviewRequest;
 use telar::preview::snapshot::{SnapshotReport, SnapshotStatus};
 use telar::preview::test_run::{CellReport, CheckStatus, PreviewReport, TestReport, TestRun};
 use telar::preview::{PreviewCtx, PreviewEntry};
-use telar::testing::{centre, mount, press, release, route, texts};
+use telar::testing::{Scoped, centre, mount, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Color, ComponentList, DrawCommand, Event, LayoutError, LayoutItem,
     LayoutStyle, LocalApp, Rect, Role, Text, TextStyle, box_item, for_each_with_matrix,
@@ -196,7 +196,7 @@ impl Drop for Run {
 
 struct Workshop {
     runtime: LocalApp<WorkshopApp>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Workshop {
@@ -205,7 +205,7 @@ impl Workshop {
         telar::hot_restore_json(r#"{"@workshop/panel.size":"700.0"}"#);
         let app = WorkshopApp::new(entries()).select(id).test_report(report);
         let runtime = LocalApp(app);
-        let tree = mount(runtime.0.root(), WIDTH, HEIGHT);
+        let tree = mount(|| runtime.0.root(), WIDTH, HEIGHT);
         let mut workshop = Self { runtime, tree };
         settle(&workshop.tree);
         workshop.click(Role::Tab, "Snapshot");

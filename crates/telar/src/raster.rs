@@ -207,6 +207,7 @@ pub fn check_partial_redraw(
 }
 
 /// `NoAdapter` is a skip, not a pass: no frame was compared.
+#[cfg(feature = "hardware")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuRedrawCheck {
     Passed,

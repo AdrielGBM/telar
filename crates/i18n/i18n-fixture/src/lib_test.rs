@@ -54,13 +54,15 @@ mod plugin_override {
 
     fn drawn_close_label() -> Vec<String> {
         telar::reset_layout_runtime();
-        let label = Text::new(
-            || translate_with_override("telar_components", &COMPONENTS, "close", &[]),
-            LayoutStyle::new(),
-            || TextStyle::new(14.0, Color::BLACK),
-        )
-        .expect("the label lays out");
-        texts(&mount(WindowRoot::new(Box::new(label)), 320, 80))
+        let label = || {
+            Text::new(
+                || translate_with_override("telar_components", &COMPONENTS, "close", &[]),
+                LayoutStyle::new(),
+                || TextStyle::new(14.0, Color::BLACK),
+            )
+            .expect("the label lays out")
+        };
+        texts(&mount(|| WindowRoot::new(Box::new(label())), 320, 80))
     }
 
     // `rsx_modules!` installed the catalog it baked as this binary loaded, so the override reaches a plugin string with no call to install it.

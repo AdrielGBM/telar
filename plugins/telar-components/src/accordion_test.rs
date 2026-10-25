@@ -133,11 +133,13 @@ fn header_paint(style: Option<SurfaceAmendment>, hovered: bool) -> (telar::Rect,
     use telar::testing::{centre, moved, route};
 
     crate::test_support::fresh_layout_runtime();
-    let mut props = AccordionProps::props().title("Details").build();
-    props.style = style;
-    let item = accordion(props, Children::from(slot_with_body("Body"))).unwrap();
-    telar::testing::lay_out(item.layout_node(), 400.0, 400.0);
-    let mut tree = telar::ComponentList::new(item);
+    let mut tree = telar::testing::scoped(|| {
+        let mut props = AccordionProps::props().title("Details").build();
+        props.style = style;
+        let item = accordion(props, Children::from(slot_with_body("Body"))).unwrap();
+        telar::testing::lay_out(item.layout_node(), 400.0, 400.0);
+        telar::ComponentList::new(item)
+    });
     let header = crate::test_support::drawn(Role::Disclosure)[0];
     if hovered {
         let (x, y) = centre(header);

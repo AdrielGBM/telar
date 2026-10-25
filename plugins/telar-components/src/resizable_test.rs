@@ -15,9 +15,9 @@ fn fresh() {
     focus::clear();
 }
 
-fn mount(props: ResizableProps) -> ComponentList {
+fn mount(props: ResizableProps) -> telar::testing::Scoped<ComponentList> {
     fresh();
-    tree(resizable(props, Children::default()).unwrap())
+    telar::testing::scoped(|| tree(resizable(props, Children::default()).unwrap()))
 }
 
 fn tree(item: Box<dyn LayoutItem>) -> ComponentList {
@@ -267,7 +267,7 @@ fn right_to_left_puts_the_width_edge_on_the_left_and_mirrors_it() {
 #[test]
 fn one_edge_draws_one_splitter_and_no_corner() {
     let size = signal(Size::new(300.0, 200.0));
-    let _tree = mount(
+    let bottom = mount(
         ResizableProps::props()
             .size(size)
             .edges(ResizeEdges::Bottom)
@@ -280,6 +280,7 @@ fn one_edge_draws_one_splitter_and_no_corner() {
     assert_eq!(splitters.len(), 1);
     assert_eq!(splitters[0].orientation, Some(Orientation::Horizontal));
     assert_eq!(height_handle().width, 300.0);
+    drop(bottom);
 
     let _tree = mount(
         ResizableProps::props()
@@ -421,8 +422,9 @@ fn fills(tree: &ComponentList) -> Vec<(Rect, Color)> {
 #[test]
 fn a_handle_is_a_spacing_step_thick_until_the_tokens_say_otherwise() {
     telar::set_theme(Plain::default());
-    let _tree = mount(ResizableProps::props().build());
+    let tree = mount(ResizableProps::props().build());
     assert_eq!(width_handle().width, crate::metrics::spacing());
+    drop(tree);
 
     telar::set_theme(Plain {
         resizables: Some(ResizableTokens {

@@ -1467,6 +1467,7 @@ fn no_snapshot_is_built_unless_the_overlay_asks() {
     assert!(bare.on_resume(&window));
     run_a_pass(&mut bare, &window);
     assert_eq!(snapshots.get(), 0, "`()` costs nothing");
+    drop(bare);
 
     let mut quiet = overlaid::<Watching>(counted(&snapshots));
     quiet.new_events();
@@ -2049,14 +2050,17 @@ fn the_window_is_told_where_the_focused_field_has_its_caret() {
     assert_eq!(window.text_input(), None, "no field takes text any more");
 }
 
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 thread_local! {
     static UNLOAD_JOURNAL: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 fn note(event: &'static str) {
     UNLOAD_JOURNAL.with(|journal| journal.borrow_mut().push(event));
 }
 
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 fn unload_journal() -> Vec<&'static str> {
     UNLOAD_JOURNAL.with(|journal| journal.borrow().clone())
 }
@@ -2091,9 +2095,11 @@ impl Drop for Unloading {
     }
 }
 
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 #[derive(Default)]
 struct Forgetting;
 
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl DevOverlay for Forgetting {
     fn on_frame<'a>(
         &mut self,
@@ -2110,8 +2116,10 @@ impl DevOverlay for Forgetting {
     }
 }
 
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 struct ForgettingHost(crate::runner::host::BuiltinHost<HeadlessWindow>);
 
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 impl RendererHost<HeadlessWindow> for ForgettingHost {
     fn start(&mut self, window: &HeadlessWindow, req: &RendererRequest<'_>) -> RendererStart {
         self.0.start(window, req)

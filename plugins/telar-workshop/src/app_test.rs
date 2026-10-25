@@ -1,6 +1,6 @@
 use telar::preview::host::PreviewRequest;
 use telar::preview::{ArgValue, PreviewCtx};
-use telar::testing::{find_text, mount};
+use telar::testing::{Scoped, find_text, mount};
 use telar::{
     AppRuntime, Color, ComponentList, LayoutError, LayoutItem, LayoutStyle, LocalApp, Text,
     TextStyle, box_item, relayout_if_dirty,
@@ -36,8 +36,8 @@ fn entries() -> Vec<PreviewEntry> {
     ]
 }
 
-fn lay_out(app: &WorkshopApp) -> ComponentList {
-    let tree = mount(app.root(), WIDTH, HEIGHT);
+fn lay_out(app: &WorkshopApp) -> Scoped<ComponentList> {
+    let tree = mount(|| app.root(), WIDTH, HEIGHT);
     relayout_if_dirty();
     tree
 }
@@ -96,8 +96,11 @@ fn a_requested_preview_mounts_instead() {
 fn the_canvas_builds_with_the_args_the_state_holds() {
     reset_layout_runtime();
     let state = WorkshopState::new(entries().into(), &PreviewRequest::default());
-    let canvas = crate::canvas::canvas(&state).unwrap();
-    let tree = mount(WindowRoot::wrapping(canvas).unwrap(), WIDTH, HEIGHT);
+    let tree = mount(
+        || WindowRoot::wrapping(crate::canvas::canvas(&state).unwrap()).unwrap(),
+        WIDTH,
+        HEIGHT,
+    );
     relayout_if_dirty();
     assert!(find_text(&tree, "primary body"));
     state

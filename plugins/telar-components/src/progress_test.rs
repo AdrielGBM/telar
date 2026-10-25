@@ -65,11 +65,13 @@ fn a_derived_reading_can_drive_the_bar() {
     assert_eq!(fraction.get(), 0.25, "and keeps following its sources");
 }
 
-fn bar(props: ProgressProps) -> telar::ComponentList {
+fn bar(props: ProgressProps) -> telar::testing::Scoped<telar::ComponentList> {
     crate::test_support::fresh_layout_runtime();
-    let widget = progress(props, Children::default()).unwrap();
-    lay_out(widget.layout_node());
-    telar::ComponentList::new(widget)
+    telar::testing::scoped(|| {
+        let widget = progress(props, Children::default()).unwrap();
+        lay_out(widget.layout_node());
+        telar::ComponentList::new(widget)
+    })
 }
 
 #[test]

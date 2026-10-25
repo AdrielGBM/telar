@@ -108,21 +108,23 @@ fn a_named_drawer_is_a_dialog_to_a_reader() {
     );
 }
 
-fn open_drawer(props: DrawerProps) -> ComponentList {
+fn open_drawer(props: DrawerProps) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
-    let drawer = drawer(props, Children::from(slot_with_body("Drawer body"))).unwrap();
-    let root = new_container(
-        LayoutStyle::new().flex_column().width(400.0).height(400.0),
-        &[drawer.layout_node()],
-    )
-    .unwrap();
-    compute_layout(
-        root,
-        AvailableSpace::Definite(400.0),
-        AvailableSpace::Definite(400.0),
-    )
-    .unwrap();
-    let tree = ComponentList::new(drawer);
+    let tree = telar::testing::scoped(|| {
+        let drawer = drawer(props, Children::from(slot_with_body("Drawer body"))).unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[drawer.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        ComponentList::new(drawer)
+    });
     relayout_if_dirty();
     tree
 }
@@ -193,6 +195,7 @@ fn an_unset_width_is_the_tokens_and_a_named_one_wins() {
     });
     let tree = open_drawer(DrawerProps::props().open(signal(true)).build());
     assert_eq!(panel(&tree).0.width, 250.0);
+    drop(tree);
 
     let tree = open_drawer(DrawerProps::props().open(signal(true)).width(180.0).build());
     assert_eq!(panel(&tree).0.width, 180.0, "the drawer's own width wins");
@@ -242,24 +245,26 @@ fn open_drawer_in(
     window: (f32, f32),
     body: impl FnOnce() -> Slots,
     props: DrawerProps,
-) -> ComponentList {
+) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
-    let drawer = drawer(props, Children::from(body())).unwrap();
-    let root = new_container(
-        LayoutStyle::new()
-            .flex_column()
-            .width(window.0)
-            .height(window.1),
-        &[drawer.layout_node()],
-    )
-    .unwrap();
-    compute_layout(
-        root,
-        AvailableSpace::Definite(window.0),
-        AvailableSpace::Definite(window.1),
-    )
-    .unwrap();
-    let tree = ComponentList::new(drawer);
+    let tree = telar::testing::scoped(|| {
+        let drawer = drawer(props, Children::from(body())).unwrap();
+        let root = new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(window.0)
+                .height(window.1),
+            &[drawer.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(window.0),
+            AvailableSpace::Definite(window.1),
+        )
+        .unwrap();
+        ComponentList::new(drawer)
+    });
     relayout_if_dirty();
     tree
 }

@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use telar::preview::host::PAGE_PADDING;
 use telar::preview::{ArgValue, Layout, PreviewCtx, PreviewEntry};
-use telar::testing::{centre, damage, find_text, mount, moved, press, release, route};
+use telar::testing::{Scoped, centre, damage, find_text, mount, moved, press, release, route};
 use telar::{
     Children, Color, ComponentList, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, Rect,
     RectStyle, ShapeStyle, Size, SizeDimension, StyledContainer, Text, TextStyle, Uri, UriOpener,
@@ -41,11 +41,11 @@ fn body(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     label("preview body")
 }
 
-fn mounted(entries: Vec<PreviewEntry>) -> (WorkshopState, ComponentList) {
+fn mounted(entries: Vec<PreviewEntry>) -> (WorkshopState, Scoped<ComponentList>) {
     reset_layout_runtime();
     let state = WorkshopState::new(entries.into(), &Default::default());
     let tree = mount(
-        WindowRoot::wrapping(canvas(&state).unwrap()).unwrap(),
+        || WindowRoot::wrapping(canvas(&state).unwrap()).unwrap(),
         WIDTH,
         HEIGHT,
     );
@@ -53,12 +53,14 @@ fn mounted(entries: Vec<PreviewEntry>) -> (WorkshopState, ComponentList) {
     (state, tree)
 }
 
-fn workshop(entries: Vec<PreviewEntry>) -> (WorkshopState, ComponentList) {
+fn workshop(entries: Vec<PreviewEntry>) -> (WorkshopState, Scoped<ComponentList>) {
     reset_layout_runtime();
     let state = WorkshopState::new(entries.into(), &Default::default());
-    let chrome = workbench_scope(|| crate::shell::shell(&state, None)).unwrap();
     let tree = mount(
-        WindowRoot::wrapping(box_item(chrome)).unwrap(),
+        || {
+            let chrome = workbench_scope(|| crate::shell::shell(&state, None)).unwrap();
+            WindowRoot::wrapping(box_item(chrome)).unwrap()
+        },
         WIDTH,
         HEIGHT,
     );

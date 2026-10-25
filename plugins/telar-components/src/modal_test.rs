@@ -327,21 +327,23 @@ fn closing_leaves_the_keyboard_where_the_dialog_sent_it() {
 }
 
 /// An open modal in a 400×400 window, built after the caller installed its theme.
-fn open_modal(props: ModalProps) -> ComponentList {
+fn open_modal(props: ModalProps) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
-    let modal = modal(props, Children::from(slot_with_body("Body"))).unwrap();
-    let root = new_container(
-        LayoutStyle::new().flex_column().width(400.0).height(400.0),
-        &[modal.layout_node()],
-    )
-    .unwrap();
-    compute_layout(
-        root,
-        AvailableSpace::Definite(400.0),
-        AvailableSpace::Definite(400.0),
-    )
-    .unwrap();
-    let tree = ComponentList::new(modal);
+    let tree = telar::testing::scoped(|| {
+        let modal = modal(props, Children::from(slot_with_body("Body"))).unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[modal.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        ComponentList::new(modal)
+    });
     relayout_if_dirty();
     tree
 }
@@ -470,31 +472,36 @@ fn the_scrim_is_the_theme_overlay_and_follows_a_switch() {
     assert!(!scrim_drawn(&tree, first));
 }
 
-fn open_modal_with(body: impl FnOnce() -> Slots, window: (f32, f32)) -> ComponentList {
+fn open_modal_with(
+    body: impl FnOnce() -> Slots,
+    window: (f32, f32),
+) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
-    let modal = modal(
-        ModalProps::props()
-            .open(signal(true))
-            .title("Confirm")
-            .build(),
-        Children::from(body()),
-    )
-    .unwrap();
-    let root = new_container(
-        LayoutStyle::new()
-            .flex_column()
-            .width(window.0)
-            .height(window.1),
-        &[modal.layout_node()],
-    )
-    .unwrap();
-    compute_layout(
-        root,
-        AvailableSpace::Definite(window.0),
-        AvailableSpace::Definite(window.1),
-    )
-    .unwrap();
-    let tree = ComponentList::new(modal);
+    let tree = telar::testing::scoped(|| {
+        let modal = modal(
+            ModalProps::props()
+                .open(signal(true))
+                .title("Confirm")
+                .build(),
+            Children::from(body()),
+        )
+        .unwrap();
+        let root = new_container(
+            LayoutStyle::new()
+                .flex_column()
+                .width(window.0)
+                .height(window.1),
+            &[modal.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(window.0),
+            AvailableSpace::Definite(window.1),
+        )
+        .unwrap();
+        ComponentList::new(modal)
+    });
     relayout_if_dirty();
     tree
 }
@@ -539,6 +546,7 @@ fn an_unset_width_is_the_tokens_and_the_window_bounds_it() {
     }));
     let tree = open_modal_with(|| slot_with_body("Body"), (800.0, 400.0));
     assert_eq!(card_rect(&tree).width, 250.0, "the tokens size the card");
+    drop(tree);
 
     let tree = open_modal_with(|| slot_with_body("Body"), (240.0, 400.0));
     let card = card_rect(&tree);
@@ -632,6 +640,7 @@ fn a_body_that_scrolls_is_a_stop_named_after_the_dialog() {
         .map(|node| node.name)
         .collect();
     assert_eq!(names, ["Confirm"], "a reader hears what it is scrolling");
+    drop(tree);
 
     assert_eq!(
         body_in_document(|| tall_body(40)),

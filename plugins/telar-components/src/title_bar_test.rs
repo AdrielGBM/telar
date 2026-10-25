@@ -4,7 +4,7 @@ use std::time::Duration;
 use telar::testing::{centre, moved, press, release, route};
 use telar::{
     AvailableSpace, ComponentList, DrawCommand, PathData, WindowCommand, compute_layout,
-    dispose_owner, owner_scope, relayout_if_dirty, set_surface_maximized, take_window_commands,
+    relayout_if_dirty, set_surface_maximized, take_window_commands,
 };
 
 use super::*;
@@ -22,11 +22,11 @@ fn laid_out(item: Box<dyn LayoutItem>, (width, height): (f32, f32)) -> Component
     ComponentList::new(item)
 }
 
-fn controls(props: WindowControlsProps) -> ComponentList {
+fn controls(props: WindowControlsProps) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
     set_surface_maximized(false);
     take_window_commands();
-    laid_out(window_controls(props, Children::default()).unwrap(), BAR)
+    telar::testing::scoped(|| laid_out(window_controls(props, Children::default()).unwrap(), BAR))
 }
 
 fn nodes(tree: &ComponentList) -> Vec<telar::AccessNode> {
@@ -133,6 +133,7 @@ fn close_closes_the_window_unless_told_otherwise() {
     let mut tree = controls(WindowControlsProps::props().build());
     click(&mut tree, "Close");
     assert_eq!(asked(), [WindowCommand::Close]);
+    drop(tree);
 
     let closed = Rc::new(Cell::new(0));
     let count = closed.clone();
@@ -156,6 +157,7 @@ fn every_button_is_at_least_the_size_asked_for() {
         assert!(rect.width >= shared::MIN_TARGET, "{name} is {rect:?}");
         assert!(rect.height >= shared::MIN_TARGET, "{name} is {rect:?}");
     }
+    drop(tree);
 
     let tree = controls(WindowControlsProps::props().min_size(32.0).build());
     for (name, rect) in buttons(&tree) {
@@ -262,27 +264,20 @@ fn a_drag_from_a_window_control_in_the_bar_does_not_move_the_window() {
 
 #[test]
 fn a_bar_that_replaces_the_decorations_gives_them_back_when_it_goes() {
-    let scope = owner_scope();
-    let owner = scope.id();
-    let tree = bar(TitleBarOptions {
-        replace_decorations: true,
-        ..TitleBarOptions::default()
+    let tree = telar::testing::scoped(|| {
+        bar(TitleBarOptions {
+            replace_decorations: true,
+            ..TitleBarOptions::default()
+        })
     });
     assert_eq!(asked(), [WindowCommand::SetDecorations(false)]);
-    drop(scope);
     drop(tree);
-    dispose_owner(owner);
     assert_eq!(asked(), [WindowCommand::SetDecorations(true)]);
 }
 
 #[test]
 fn a_bar_that_leaves_the_decorations_alone_never_touches_them() {
-    let scope = owner_scope();
-    let owner = scope.id();
-    let tree = bar(TitleBarOptions::default());
-    drop(scope);
-    drop(tree);
-    dispose_owner(owner);
+    drop(telar::testing::scoped(|| bar(TitleBarOptions::default())));
     assert!(
         !take_window_commands()
             .iter()

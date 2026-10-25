@@ -393,10 +393,7 @@ fn typed_pick(typed: &str) -> Option<u32> {
     ui_core::reset_keyboard();
     let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
 
-    // Scoped and disposed, because this helper runs twice in one test and the second call replaces the layout runtime, which starts its ids over. An unscoped first tree would keep effects running against ids the second now owns.
-    let scope = telar::owner_scope();
-    let owner = scope.id();
-    let mut tree = ComponentList::new(typeahead_menu(seen.clone()));
+    let mut tree = telar::testing::scoped(|| ComponentList::new(typeahead_menu(seen.clone())));
 
     telar::focus::focus_next();
     route(&mut tree, &named(NamedKey::ArrowDown));
@@ -407,9 +404,7 @@ fn typed_pick(typed: &str) -> Option<u32> {
     }
     route(&mut tree, &named(NamedKey::Enter));
 
-    drop(scope);
     drop(tree);
-    telar::dispose_owner(owner);
     seen.get()
 }
 
@@ -656,6 +651,7 @@ fn a_trigger_without_a_caret_pads_its_label_evenly_on_both_sides() {
         "fitted: {before} {after}"
     );
     assert_eq!(after, before, "fitted: {before} {after}");
+    drop(tree);
 
     let tree = laid_out_menu(false);
     let (before, after) = insets(&tree);
@@ -889,33 +885,35 @@ fn a_caller_can_amend_the_paint_the_trigger_worked_out_for_itself() {
     );
 }
 
-fn laid_out_menu(fit: bool) -> telar::ComponentList {
+fn laid_out_menu(fit: bool) -> telar::testing::Scoped<telar::ComponentList> {
     crate::test_support::fresh_layout_runtime();
-    let item = menu(
-        MenuProps::props()
-            .label("File")
-            .caret(false)
-            .fit(fit)
-            .build(),
-        rows(&["New"]),
-    )
-    .unwrap();
-    let root = telar::new_container(
-        telar::LayoutStyle::new()
-            .flex_row()
-            .width(400.0)
-            .height(80.0),
-        &[item.layout_node()],
-    )
-    .unwrap();
-    telar::compute_layout(
-        root,
-        telar::AvailableSpace::Definite(400.0),
-        telar::AvailableSpace::Definite(80.0),
-    )
-    .unwrap();
-    telar::relayout_if_dirty();
-    telar::ComponentList::new(item)
+    telar::testing::scoped(|| {
+        let item = menu(
+            MenuProps::props()
+                .label("File")
+                .caret(false)
+                .fit(fit)
+                .build(),
+            rows(&["New"]),
+        )
+        .unwrap();
+        let root = telar::new_container(
+            telar::LayoutStyle::new()
+                .flex_row()
+                .width(400.0)
+                .height(80.0),
+            &[item.layout_node()],
+        )
+        .unwrap();
+        telar::compute_layout(
+            root,
+            telar::AvailableSpace::Definite(400.0),
+            telar::AvailableSpace::Definite(80.0),
+        )
+        .unwrap();
+        telar::relayout_if_dirty();
+        telar::ComponentList::new(item)
+    })
 }
 
 #[test]
@@ -957,27 +955,29 @@ fn opened_under(
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
     let (mut offset, mut pad) = (0.0, 0.0);
-    let item = telar::provide_control_size(size, || {
-        offset = crate::shared::popup_offset();
-        pad = panel_pad();
-        menu(
-            MenuProps::props().label("File").tokens(tokens).build(),
-            rows(&["New", "Open", "Close"]),
+    let mut tree = telar::testing::scoped(|| {
+        let item = telar::provide_control_size(size, || {
+            offset = crate::shared::popup_offset();
+            pad = panel_pad();
+            menu(
+                MenuProps::props().label("File").tokens(tokens).build(),
+                rows(&["New", "Open", "Close"]),
+            )
+        })
+        .unwrap();
+        let root = telar::Container::new(
+            LayoutStyle::new().flex_column().padding_top(top),
+            vec![telar::box_item(item)],
         )
-    })
-    .unwrap();
-    let root = telar::Container::new(
-        LayoutStyle::new().flex_column().padding_top(top),
-        vec![telar::box_item(item)],
-    )
-    .unwrap();
-    compute_layout(
-        root.layout_node(),
-        AvailableSpace::Definite(400.0),
-        AvailableSpace::Definite(300.0),
-    )
-    .unwrap();
-    let mut tree = ComponentList::new(root);
+        .unwrap();
+        compute_layout(
+            root.layout_node(),
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(300.0),
+        )
+        .unwrap();
+        ComponentList::new(root)
+    });
     settle(&tree);
     telar::focus::focus_next();
     route(&mut tree, &named(telar::NamedKey::Enter));

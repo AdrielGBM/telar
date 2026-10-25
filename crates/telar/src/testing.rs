@@ -4,13 +4,14 @@
 //!
 //! The events a test drives a tree with live here too — a press, a release, a key — with [`route`], which hands one to the tree the way the runner does, and [`advance_time`], which lets a timer's wait pass.
 
+use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
 use geometry_core::Rect;
 use renderer_core::DrawCommand;
 use renderer_core::culling::{FontMetrics, command_visual_rect};
 use renderer_core::dirty::FrameDiff;
-use ui_core::{Component, ComponentList};
+use ui_core::{Component, ComponentList, OwnedBuild};
 
 use crate::{
     Event, Key, LayoutStyle, ModifiersState, NamedKey, NodeId, PointerButton, PointerSource,
@@ -34,12 +35,46 @@ pub fn damage(new: &[DrawCommand], old: &[DrawCommand]) -> Option<Vec<Rect>> {
     }
 }
 
-/// Mounts `root` and lays it out against a `width`×`height` window on a surface that size, which is what the runner's first `WindowResized` does — a percent-sized tree resolves to nothing until something hands it a definite space.
-pub fn mount<C: Component + 'static>(root: C, width: u32, height: u32) -> ComponentList {
+/// Builds a root with `build` and mounts it, laid out against a `width`×`height` window on a surface that size, which is what the runner's first `WindowResized` does — a percent-sized tree resolves to nothing until something hands it a definite space. The tree is [`scoped`] as the runner's is: dropping it stops everything its build started and frees its layout nodes, so a test drops one tree before it resets the layout runtime for the next.
+pub fn mount<C: Component + 'static>(
+    build: impl FnOnce() -> C,
+    width: u32,
+    height: u32,
+) -> Scoped<ComponentList> {
     ui_core::set_surface_size(geometry_core::Size::new(width as f32, height as f32));
-    let mut tree = ComponentList::new(root);
+    let mut tree = scoped(|| ComponentList::new(build()));
     crate::batch(|| tree.on_event(&platform_core::Event::WindowResized { width, height }));
     tree
+}
+
+/// What [`scoped`] built, holding everything that build made: dropping it drops the value, then stops every effect the build started and frees the layout nodes it created, as the runner frees a tree it replaces.
+#[must_use = "dropping it frees what the build made"]
+pub struct Scoped<T> {
+    value: T,
+    _build: OwnedBuild,
+}
+
+/// Runs `build` under an owner of its own, recording the layout nodes it creates, for what a test builds without mounting it as a tree: a widget it lays out by hand, a preview's root. The layout runtime's ids restart at a reset, so an effect of a build left running past one writes into whatever the next build made on those ids: a list hanging nodes that no longer exist under a box that does. A debug build's [`reset_layout_runtime`](crate::reset_layout_runtime) panics while a `Scoped` built on the runtime it resets is still alive.
+pub fn scoped<T>(build: impl FnOnce() -> T) -> Scoped<T> {
+    let (value, build) = OwnedBuild::run(build);
+    Scoped {
+        value,
+        _build: build,
+    }
+}
+
+impl<T> Deref for Scoped<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> DerefMut for Scoped<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.value
+    }
 }
 
 /// Every string the tree draws, in draw order.

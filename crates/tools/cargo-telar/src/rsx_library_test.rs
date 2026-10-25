@@ -335,17 +335,16 @@ col pad:16 fill:$theme.surface
     greeting_card name:"Ada"
 "#;
 
-const CONSUMER_LIB_TEST_RS: &str = r#"use telar::testing::{mount, texts};
+const CONSUMER_LIB_TEST_RS: &str = r#"use telar::testing::{Scoped, mount, texts};
 use telar::{Children, ComponentList, DrawCommand, WindowRoot, reset_layout_runtime};
 
 use crate::theme::ConsumerTheme;
 use crate::welcome::{WelcomeProps, welcome};
 
-fn render() -> ComponentList {
+fn render() -> Scoped<ComponentList> {
     telar::install_default_text_metrics();
     reset_layout_runtime();
-    let page = welcome(WelcomeProps::props().build(), Children::default()).expect("the page lays out");
-    mount(WindowRoot::new(page), 480, 160)
+    mount(|| WindowRoot::new(welcome(WelcomeProps::props().build(), Children::default()).expect("the page lays out")), 480, 160)
 }
 
 #[test]
@@ -365,6 +364,8 @@ fn the_library_component_draws_with_the_application_catalog_and_theme() {
         commands.iter().any(|command| matches!(command, DrawCommand::Path { .. })),
         "the library's baked SVG is drawn: {commands:?}"
     );
+    drop(commands);
+    drop(tree);
 
     telar::set_locale("es");
     let drawn = texts(&render());
@@ -382,8 +383,7 @@ fn the_binary_carries_the_notice_of_the_icons_the_library_baked() {
 #[test]
 fn the_icon_the_library_names_from_rust_draws_from_its_shipped_artifact() {
     reset_layout_runtime();
-    let marker = telar_rsx_fixture::marker(Children::default()).expect("the marker lays out");
-    let tree = mount(WindowRoot::new(marker), 64, 64);
+    let tree = mount(|| WindowRoot::new(telar_rsx_fixture::marker(Children::default()).expect("the marker lays out")), 64, 64);
     let commands = tree.commands();
     assert!(commands.iter().any(|command| matches!(command, DrawCommand::Path { .. })), "{commands:?}");
 }
@@ -406,8 +406,7 @@ telar::__previews! {
         telar::install_default_text_metrics();
         reset_layout_runtime();
         let ada = previews.iter().find(|entry| entry.id == "telar_rsx_fixture--greeting_card--ada").unwrap();
-        let root = ada.build_root(&telar::preview::PreviewCtx::for_entry(ada)).expect("the preview builds");
-        let drawn = texts(&mount(WindowRoot::new(root), 480, 160));
+        let drawn = texts(&mount(|| WindowRoot::new(ada.build_root(&telar::preview::PreviewCtx::for_entry(ada)).expect("the preview builds")), 480, 160));
         assert!(drawn.iter().any(|text| text == "Welcome aboard, Ada!"), "{drawn:?}");
     }
 }

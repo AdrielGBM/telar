@@ -185,16 +185,18 @@ fn faces(style: Option<telar::SurfaceAmendment>) -> Vec<(Rect, telar::RectStyle)
         .selected(signal(Some(0u32)))
         .build();
     props.style = style;
-    let item = swatches(props, Children::default()).unwrap();
-    telar::testing::lay_out_row(item.layout_node(), 400.0, 100.0);
-    ComponentList::new(item)
-        .commands()
-        .iter()
-        .filter_map(|c| match c {
-            DrawCommand::Rect { rect, style } if style.border.is_some() => Some((*rect, **style)),
-            _ => None,
-        })
-        .collect()
+    telar::testing::scoped(|| {
+        let item = swatches(props, Children::default()).unwrap();
+        telar::testing::lay_out_row(item.layout_node(), 400.0, 100.0);
+        ComponentList::new(item)
+    })
+    .commands()
+    .iter()
+    .filter_map(|c| match c {
+        DrawCommand::Rect { rect, style } if style.border.is_some() => Some((*rect, **style)),
+        _ => None,
+    })
+    .collect()
 }
 
 #[test]

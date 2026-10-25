@@ -538,30 +538,36 @@ fn an_empty_list_says_so_until_its_rows_arrive() {
 #[test]
 fn an_empty_list_shows_its_own_words_or_its_children() {
     crate::test_support::fresh_layout_runtime();
-    let words = virtual_list(
-        VirtualListProps::props()
-            .empty_label("No fruit yet")
-            .build(),
-        Children::default(),
-    )
-    .unwrap();
-    lay_out(words.layout_node(), 240.0, 200.0);
-    let words = ComponentList::new(words);
+    let words = telar::testing::scoped(|| {
+        let words = virtual_list(
+            VirtualListProps::props()
+                .empty_label("No fruit yet")
+                .build(),
+            Children::default(),
+        )
+        .unwrap();
+        lay_out(words.layout_node(), 240.0, 200.0);
+        ComponentList::new(words)
+    });
     assert_eq!(statuses(&words), ["No fruit yet"]);
+    drop(words);
 
     crate::test_support::fresh_layout_runtime();
-    let built = virtual_list(
-        VirtualListProps::props().empty_label("Unused").build(),
-        Children::new(|| {
-            let mut slots = Slots::new();
-            let text = Text::declaring(|| "Add a fruit".to_string(), LayoutStyle::new(), |t| t)?;
-            slots.push(None, box_item(text));
-            Ok(slots)
-        }),
-    )
-    .unwrap();
-    lay_out(built.layout_node(), 240.0, 200.0);
-    let built = ComponentList::new(built);
+    let built = telar::testing::scoped(|| {
+        let built = virtual_list(
+            VirtualListProps::props().empty_label("Unused").build(),
+            Children::new(|| {
+                let mut slots = Slots::new();
+                let text =
+                    Text::declaring(|| "Add a fruit".to_string(), LayoutStyle::new(), |t| t)?;
+                slots.push(None, box_item(text));
+                Ok(slots)
+            }),
+        )
+        .unwrap();
+        lay_out(built.layout_node(), 240.0, 200.0);
+        ComponentList::new(built)
+    });
     assert_eq!(statuses(&built), ["Add a fruit"]);
 }
 

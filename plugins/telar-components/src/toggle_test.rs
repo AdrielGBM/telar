@@ -79,23 +79,26 @@ impl telar::ThemeTokens for Butter {
 }
 
 /// What a laid-out item paints as boxes, in paint order.
-fn rects(item: Box<dyn LayoutItem>) -> Vec<(telar::Rect, RectStyle)> {
-    telar::testing::lay_out(item.layout_node(), 200.0, 100.0);
-    telar::ComponentList::new(item)
-        .commands()
-        .iter()
-        .filter_map(|command| match command {
-            telar::DrawCommand::Rect { rect, style } => Some((*rect, **style)),
-            _ => None,
-        })
-        .collect()
+fn rects(build: impl FnOnce() -> Box<dyn LayoutItem>) -> Vec<(telar::Rect, RectStyle)> {
+    telar::testing::scoped(|| {
+        let item = build();
+        telar::testing::lay_out(item.layout_node(), 200.0, 100.0);
+        telar::ComponentList::new(item)
+    })
+    .commands()
+    .iter()
+    .filter_map(|command| match command {
+        telar::DrawCommand::Rect { rect, style } => Some((*rect, **style)),
+        _ => None,
+    })
+    .collect()
 }
 
 /// The track and the knob, the two filled boxes a switch paints, in that order.
 fn track_and_knob(
-    item: Box<dyn LayoutItem>,
+    build: impl FnOnce() -> Box<dyn LayoutItem>,
 ) -> ((telar::Rect, RectStyle), (telar::Rect, RectStyle)) {
-    let filled: Vec<_> = rects(item)
+    let filled: Vec<_> = rects(build)
         .into_iter()
         .filter(|(_, style)| style.fill.is_some())
         .collect();
@@ -135,7 +138,7 @@ fn the_knob_stands_out_from_its_track_in_either_scheme_and_on_a_light_primary() 
                 telar::set_theme(Plain::default());
             }
             for on in [false, true] {
-                let ((_, track), (_, knob)) = track_and_knob(switch(on));
+                let ((_, track), (_, knob)) = track_and_knob(|| switch(on));
                 let under = crate::shared::over(solid(&track), crate::shared::surface());
                 let ratio = under.contrast_ratio(solid(&knob));
                 assert!(
@@ -152,7 +155,7 @@ fn the_knob_is_the_theme_s_thumb_wherever_that_reads() {
     crate::test_support::fresh_layout_runtime();
     telar::set_scheme_preference(telar::SchemePreference::Light);
     telar::set_theme(Plain::default());
-    let (_, (_, knob)) = track_and_knob(switch(true));
+    let (_, (_, knob)) = track_and_knob(|| switch(true));
     assert_eq!(solid(&knob), telar::use_theme_tokens().thumb());
 }
 
@@ -160,7 +163,7 @@ fn the_knob_is_the_theme_s_thumb_wherever_that_reads() {
 fn the_track_is_sized_from_the_knob_and_follows_the_tokens() {
     crate::test_support::fresh_layout_runtime();
     telar::set_theme(Plain::default());
-    let ((track, style), (knob, _)) = track_and_knob(switch(false));
+    let ((track, style), (knob, _)) = track_and_knob(|| switch(false));
     let (icon, inset) = (crate::metrics::icon_size(), crate::metrics::gap_xs());
     assert_eq!((knob.width, knob.height), (icon, icon));
     assert_eq!(
@@ -180,7 +183,7 @@ fn the_track_is_sized_from_the_knob_and_follows_the_tokens() {
             radius: Some(5.0),
         }),
     });
-    let ((track, style), (knob, knob_style)) = track_and_knob(switch(false));
+    let ((track, style), (knob, knob_style)) = track_and_knob(|| switch(false));
     assert_eq!((knob.width, knob.height), (20.0, 20.0));
     assert_eq!((track.width, track.height), (46.0, 26.0));
     assert_eq!(style.radius, BorderRadius::all(5.0));
@@ -195,11 +198,13 @@ fn the_track_is_sized_from_the_knob_and_follows_the_tokens() {
 fn the_switch_scales_with_the_control_size_in_force() {
     crate::test_support::fresh_layout_runtime();
     telar::set_theme(Plain::default());
-    let ((regular, _), _) = track_and_knob(switch(false));
+    let ((regular, _), _) = track_and_knob(|| switch(false));
     crate::test_support::fresh_layout_runtime();
-    let large =
-        telar::provide_control_size(telar::ControlSize::Large, || Ok(switch(false))).unwrap();
-    let ((large, _), _) = track_and_knob(Box::new(large));
+    let ((large, _), _) = track_and_knob(|| {
+        Box::new(
+            telar::provide_control_size(telar::ControlSize::Large, || Ok(switch(false))).unwrap(),
+        )
+    });
     let scale = telar::ControlSize::Large.scale();
     assert_eq!(
         (large.width, large.height),
@@ -214,15 +219,16 @@ fn a_style_amendment_reshapes_the_track_on_and_off() {
     for on in [false, true] {
         crate::test_support::fresh_layout_runtime();
         telar::set_theme(Plain::default());
-        let item = toggle(
-            ToggleProps::props()
-                .checked(signal(on))
-                .style(square.clone())
-                .build(),
-            Children::default(),
-        )
-        .unwrap();
-        let ((_, track), (_, knob)) = track_and_knob(item);
+        let ((_, track), (_, knob)) = track_and_knob(|| {
+            toggle(
+                ToggleProps::props()
+                    .checked(signal(on))
+                    .style(square.clone())
+                    .build(),
+                Children::default(),
+            )
+            .unwrap()
+        });
         assert_eq!(track.radius, BorderRadius::all(0.0));
         assert_ne!(
             knob.radius,

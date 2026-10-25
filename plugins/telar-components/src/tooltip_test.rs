@@ -238,19 +238,21 @@ fn a_bubble_is_as_wide_as_what_it_says() {
 fn an_absent_shortcut_and_description_take_no_room() {
     crate::test_support::fresh_layout_runtime();
     let height_of = |props: TooltipProps| {
-        let tooltip = tooltip(props, Children::from(slot_with_trigger())).unwrap();
-        let root = new_container(
-            LayoutStyle::new().flex_column().width(400.0).height(400.0),
-            &[tooltip.layout_node()],
-        )
-        .unwrap();
-        compute_layout(
-            root,
-            AvailableSpace::Definite(400.0),
-            AvailableSpace::Definite(400.0),
-        )
-        .unwrap();
-        let mut tree = ComponentList::new(tooltip);
+        let mut tree = telar::testing::scoped(|| {
+            let tooltip = tooltip(props, Children::from(slot_with_trigger())).unwrap();
+            let root = new_container(
+                LayoutStyle::new().flex_column().width(400.0).height(400.0),
+                &[tooltip.layout_node()],
+            )
+            .unwrap();
+            compute_layout(
+                root,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::Definite(400.0),
+            )
+            .unwrap();
+            ComponentList::new(tooltip)
+        });
         tree.on_event(&moved(40.0, 15.0));
         relayout_if_dirty();
         tree.commands()
@@ -308,26 +310,31 @@ impl telar::ThemeTokens for Themed {
 }
 
 /// A hovered tooltip saying "Move", with `color` and `style` given.
-fn hovered(color: Color, style: Option<telar::SurfaceAmendment>) -> ComponentList {
+fn hovered(
+    color: Color,
+    style: Option<telar::SurfaceAmendment>,
+) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
     let props = TooltipProps::props().text("Move").color(color);
     let props = match style {
         Some(style) => props.style(style),
         None => props,
     };
-    let tooltip = tooltip(props.build(), Children::from(slot_with_trigger())).unwrap();
-    let root = new_container(
-        LayoutStyle::new().flex_column().width(400.0).height(400.0),
-        &[tooltip.layout_node()],
-    )
-    .unwrap();
-    compute_layout(
-        root,
-        AvailableSpace::Definite(400.0),
-        AvailableSpace::Definite(400.0),
-    )
-    .unwrap();
-    let mut tree = ComponentList::new(tooltip);
+    let mut tree = telar::testing::scoped(|| {
+        let tooltip = tooltip(props.build(), Children::from(slot_with_trigger())).unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(400.0).height(400.0),
+            &[tooltip.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(400.0),
+        )
+        .unwrap();
+        ComponentList::new(tooltip)
+    });
     let _ = tree.commands();
     tree.on_event(&moved(40.0, 15.0));
     relayout_if_dirty();
@@ -391,6 +398,7 @@ fn the_bubble_s_corner_follows_the_tooltip_tokens_and_its_caller_s_amendment() {
     });
     let tree = hovered(Color::TRANSPARENT, None);
     assert_eq!(bubble(&tree).0.radius, BorderRadius::all(1.0));
+    drop(tree);
 
     let green = Color::rgba(0.1, 0.6, 0.2, 1.0);
     let tree = hovered(

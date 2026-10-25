@@ -560,19 +560,21 @@ fn dialog(style: Option<telar::SurfaceAmendment>) -> (telar::Rect, RectStyle) {
         Some(style) => props.style(style),
         None => props,
     };
-    let palette = command_palette(props.build(), Children::default()).unwrap();
-    let root = new_container(
-        LayoutStyle::new().flex_column().width(800.0).height(600.0),
-        &[palette.layout_node()],
-    )
-    .unwrap();
-    compute_layout(
-        root,
-        AvailableSpace::Definite(800.0),
-        AvailableSpace::Definite(600.0),
-    )
-    .unwrap();
-    let tree = ComponentList::new(palette);
+    let tree = telar::testing::scoped(|| {
+        let palette = command_palette(props.build(), Children::default()).unwrap();
+        let root = new_container(
+            LayoutStyle::new().flex_column().width(800.0).height(600.0),
+            &[palette.layout_node()],
+        )
+        .unwrap();
+        compute_layout(
+            root,
+            AvailableSpace::Definite(800.0),
+            AvailableSpace::Definite(600.0),
+        )
+        .unwrap();
+        ComponentList::new(palette)
+    });
     let _ = tree.commands();
     open.set(true);
     relayout_if_dirty();

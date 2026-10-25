@@ -1,6 +1,6 @@
 use telar::focus;
 use telar::preview::{PreviewCtx, PreviewEntry};
-use telar::testing::{centre, mount, named, press, release, route};
+use telar::testing::{Scoped, centre, mount, named, press, release, route};
 use telar::{
     AccessNode, App, AppRuntime, ComponentList, Container, Event, LayoutStyle, LocalApp, NamedKey,
     Role, box_item, reset_layout_runtime,
@@ -15,7 +15,7 @@ fn blank(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 struct Workshop {
     runtime: LocalApp<Shell>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Workshop {
@@ -30,7 +30,7 @@ impl Workshop {
         )];
         let state = WorkshopState::new(entries.into(), &Default::default());
         let runtime = LocalApp(Shell { state });
-        let tree = mount(runtime.0.root(), 1200, 800);
+        let tree = mount(|| runtime.0.root(), 1200, 800);
         let workshop = Self { runtime, tree };
         settle(&workshop.tree);
         workshop

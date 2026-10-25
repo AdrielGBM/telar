@@ -46,8 +46,11 @@ fn primary() -> PreviewEntry {
 
 fn texts(entry: &PreviewEntry, ctx: &PreviewCtx) -> Vec<String> {
     reset_layout_runtime();
-    let root = entry.build_root(ctx).expect("the preview builds");
-    testing::texts(&testing::mount(root, 320, 120))
+    testing::texts(&testing::mount(
+        || entry.build_root(ctx).expect("the preview builds"),
+        320,
+        120,
+    ))
 }
 
 #[test]
@@ -286,6 +289,6 @@ fn a_surface_preview_builds_inside_its_surface() {
     let entry = primary().surface(PreviewSurface::new(200.0, 80.0));
     let ctx = PreviewCtx::default();
     reset_layout_runtime();
-    let tree = testing::mount(entry.build_root(&ctx).unwrap(), 320, 120);
+    let tree = testing::mount(|| entry.build_root(&ctx).unwrap(), 320, 120);
     assert_eq!(testing::texts(&tree), ["Apples · 3"]);
 }

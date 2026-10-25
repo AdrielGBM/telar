@@ -19,6 +19,7 @@ use crate::context::{layout_generation, record_nodes, remove_node};
 reactive_core::dropless_thread_local! {
     static DEPTH: Cell<usize> = const { Cell::new(0) };
     static RETIRED: released Vec<Retired> = const { Vec::new() };
+    static LIVE_BUILDS: released Vec<u64> = const { Vec::new() };
 }
 
 struct Retired {
@@ -62,12 +63,19 @@ impl OwnedBuild {
             surface: current_surface(),
             generation: layout_generation(),
         };
+        LIVE_BUILDS.with(|live| live.borrow_mut().push(owned.generation));
         (built, owned)
     }
 }
 
 impl Drop for OwnedBuild {
     fn drop(&mut self) {
+        LIVE_BUILDS.with(|live| {
+            let mut live = live.borrow_mut();
+            if let Some(at) = live.iter().position(|built| *built == self.generation) {
+                live.swap_remove(at);
+            }
+        });
         schedule(Retired {
             owner: Some(self.owner),
             nodes: std::mem::take(&mut self.roots),
@@ -75,6 +83,24 @@ impl Drop for OwnedBuild {
             generation: self.generation,
         });
     }
+}
+
+/// Panics, in a debug build, if a tree an [`OwnedBuild`] still holds lives on the layout runtime about to be reset. The reset hands that tree's node ids to the next tree, so whatever the old tree still runs — an effect styling a node, a list hanging its rows — lands on the new tree's nodes, and nothing fails where it goes wrong. Whoever replaces a tree drops it first, as the runner does.
+pub(crate) fn assert_no_build_outlives_its_runtime() {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+    let generation = layout_generation();
+    let live = LIVE_BUILDS.with(|live| {
+        live.borrow()
+            .iter()
+            .filter(|built| **built == generation)
+            .count()
+    });
+    assert!(
+        live == 0,
+        "the layout runtime was reset under {live} tree(s) still built on it: drop a tree before resetting the runtime it lives on, or what it still runs lands on the next tree's nodes, which reuse its ids"
+    );
 }
 
 fn schedule(retired: Retired) {

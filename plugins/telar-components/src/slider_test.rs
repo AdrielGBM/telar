@@ -183,9 +183,15 @@ impl telar::ThemeTokens for Plain {
 }
 
 /// The track and the thumb a laid-out slider paints.
-fn track_and_thumb(item: Box<dyn LayoutItem>) -> ((Rect, RectStyle), (Rect, RectStyle)) {
-    telar::testing::lay_out(item.layout_node(), 400.0, 100.0);
-    let painted: Vec<(Rect, RectStyle)> = telar::ComponentList::new(item)
+fn track_and_thumb(
+    build: impl FnOnce() -> Box<dyn LayoutItem>,
+) -> ((Rect, RectStyle), (Rect, RectStyle)) {
+    let tree = telar::testing::scoped(|| {
+        let item = build();
+        telar::testing::lay_out(item.layout_node(), 400.0, 100.0);
+        telar::ComponentList::new(item)
+    });
+    let painted: Vec<(Rect, RectStyle)> = tree
         .commands()
         .iter()
         .filter_map(|command| match command {
@@ -210,7 +216,7 @@ fn plain_slider(style: Option<telar::SurfaceAmendment>) -> Box<dyn LayoutItem> {
 fn the_track_and_thumb_follow_the_roles_until_the_slider_tokens_name_their_own() {
     crate::test_support::fresh_layout_runtime();
     telar::set_theme(Plain::default());
-    let ((track, track_style), (thumb, thumb_style)) = track_and_thumb(plain_slider(None));
+    let ((track, track_style), (thumb, thumb_style)) = track_and_thumb(|| plain_slider(None));
     assert_eq!(track.height, crate::metrics::spacing());
     assert_eq!(
         track_style.radius,
@@ -227,7 +233,7 @@ fn the_track_and_thumb_follow_the_roles_until_the_slider_tokens_name_their_own()
             ring: Some(1.0),
         }),
     });
-    let ((track, _), (thumb, thumb_style)) = track_and_thumb(plain_slider(None));
+    let ((track, _), (thumb, thumb_style)) = track_and_thumb(|| plain_slider(None));
     assert_eq!((track.width, track.height), (300.0, 4.0));
     assert_eq!(thumb.width, 20.0);
     assert_eq!(thumb_style.border.map(|b| b.widths[0]), Some(1.0));
@@ -236,11 +242,14 @@ fn the_track_and_thumb_follow_the_roles_until_the_slider_tokens_name_their_own()
 #[test]
 fn the_slider_scales_with_the_control_size_in_force() {
     crate::test_support::fresh_layout_runtime();
-    let ((regular, _), (regular_thumb, _)) = track_and_thumb(plain_slider(None));
+    let ((regular, _), (regular_thumb, _)) = track_and_thumb(|| plain_slider(None));
     crate::test_support::fresh_layout_runtime();
-    let large =
-        telar::provide_control_size(telar::ControlSize::Large, || Ok(plain_slider(None))).unwrap();
-    let ((large, _), (large_thumb, _)) = track_and_thumb(Box::new(large));
+    let ((large, _), (large_thumb, _)) = track_and_thumb(|| {
+        Box::new(
+            telar::provide_control_size(telar::ControlSize::Large, || Ok(plain_slider(None)))
+                .unwrap(),
+        )
+    });
     let scale = telar::ControlSize::Large.scale();
     assert_eq!(
         (large.width, large.height, large_thumb.width),
@@ -257,7 +266,7 @@ fn a_style_amendment_reshapes_the_track() {
     crate::test_support::fresh_layout_runtime();
     let square: telar::SurfaceAmendment =
         Rc::new(|s: RectStyle| s.with_radius(telar::BorderRadius::all(0.0)));
-    let ((_, track), (_, thumb)) = track_and_thumb(plain_slider(Some(square)));
+    let ((_, track), (_, thumb)) = track_and_thumb(|| plain_slider(Some(square)));
     assert_eq!(track.radius, telar::BorderRadius::all(0.0));
     assert_ne!(thumb.radius, telar::BorderRadius::all(0.0));
 }

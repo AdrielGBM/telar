@@ -1506,3 +1506,64 @@ fn a_child_attached_as_an_overlay_leaves_the_parent_that_held_it() {
     assert_eq!(children(old), Vec::<NodeId>::new());
     assert_eq!(children(host), vec![content]);
 }
+
+#[test]
+fn a_dead_child_under_a_live_parent_is_named() {
+    reset_layout_runtime();
+    let live = new_container(LayoutStyle::new(), &[]).unwrap();
+    let dead = new_container(LayoutStyle::new(), &[]).unwrap();
+    let parent = new_container(LayoutStyle::new(), &[]).unwrap();
+    remove_node(dead);
+
+    let named =
+        with_runtime_ref(|rt| dead_child_under_live_parent(&rt.engine, parent, &[live, dead]));
+
+    assert_eq!(named, Some(dead));
+}
+
+#[test]
+fn a_dead_parent_names_no_child() {
+    reset_layout_runtime();
+    let dead_child = new_container(LayoutStyle::new(), &[]).unwrap();
+    let dead_parent = new_container(LayoutStyle::new(), &[]).unwrap();
+    remove_node(dead_child);
+    remove_node(dead_parent);
+
+    let named =
+        with_runtime_ref(|rt| dead_child_under_live_parent(&rt.engine, dead_parent, &[dead_child]));
+
+    assert_eq!(named, None);
+}
+
+#[test]
+fn live_children_name_nothing() {
+    reset_layout_runtime();
+    let child = new_container(LayoutStyle::new(), &[]).unwrap();
+    let parent = new_container(LayoutStyle::new(), &[]).unwrap();
+
+    let named = with_runtime_ref(|rt| dead_child_under_live_parent(&rt.engine, parent, &[child]));
+
+    assert_eq!(named, None);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "no longer exists")]
+fn set_children_asserts_on_a_dead_child_under_a_live_parent() {
+    reset_layout_runtime();
+    let dead = new_container(LayoutStyle::new(), &[]).unwrap();
+    let parent = new_container(LayoutStyle::new(), &[]).unwrap();
+    remove_node(dead);
+
+    let _ = set_children(parent, &[dead]);
+}
+
+#[test]
+fn set_children_under_a_dead_parent_errs_silently() {
+    reset_layout_runtime();
+    let child = new_container(LayoutStyle::new(), &[]).unwrap();
+    let parent = new_container(LayoutStyle::new(), &[]).unwrap();
+    remove_node(parent);
+
+    assert!(set_children(parent, &[child]).is_err());
+}

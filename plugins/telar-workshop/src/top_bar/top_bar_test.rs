@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use telar::focus;
-use telar::testing::{centre, mount, moved, press, release, route, texts};
+use telar::testing::{Scoped, centre, mount, moved, press, release, route, texts};
 use telar::{
     AccessNode, App, AppRuntime, Component, ComponentList, Event, LocalApp, Rect, ResizeEdge, Role,
     Size, WindowCommand, WindowRoot, reset_layout_runtime, take_window_commands,
@@ -36,7 +36,7 @@ impl App for Framed {
 
 struct Workshop {
     runtime: LocalApp<Framed>,
-    tree: ComponentList,
+    tree: Scoped<ComponentList>,
 }
 
 impl Workshop {
@@ -57,7 +57,7 @@ impl Workshop {
             project: project.map(str::to_owned),
             frame,
         });
-        let tree = mount(runtime.0.root(), width, HEIGHT);
+        let tree = mount(|| runtime.0.root(), width, HEIGHT);
         settle(&tree);
         Self { runtime, tree }
     }
@@ -193,6 +193,7 @@ fn a_window_the_workshop_frames_has_its_controls_and_a_framed_page_has_none() {
     for name in ["Minimize", "Maximize", "Close"] {
         assert!(own.find(Role::Button, name).is_some(), "{name}");
     }
+    drop(own);
 
     let page = Workshop::open(Frame::Host, WIDE);
     for name in ["Minimize", "Maximize", "Close"] {
@@ -231,8 +232,9 @@ fn a_maximized_window_offers_to_restore_itself() {
 
 #[test]
 fn the_workshop_takes_the_decorations_off_only_a_window_it_frames() {
-    let _own = Workshop::open(Frame::Own, WIDE);
+    let own = Workshop::open(Frame::Own, WIDE);
     assert!(take_window_commands().contains(&WindowCommand::SetDecorations(false)));
+    drop(own);
 
     let _page = Workshop::open(Frame::Host, WIDE);
     assert!(
@@ -306,6 +308,7 @@ fn the_borders_of_a_window_the_workshop_frames_resize_it() {
         workshop.asked(),
         [WindowCommand::DragResize(ResizeEdge::West)]
     );
+    drop(workshop);
 
     let mut page = Workshop::open(Frame::Host, WIDE);
     page.asked();
@@ -500,6 +503,7 @@ fn the_preview_label_is_inset_and_centred_like_a_control_label() {
     assert_eq!(label.x, WORKBENCH_GRID + pad, "first in the bar");
     let (settings, _) = drawn_text(&wide, "Settings");
     assert_eq!(label.y, settings.y, "on the line the menu's label is on");
+    drop(wide);
 
     let narrow = Workshop::open(Frame::Host, 800);
     let opener = narrow.control(Role::Button, "Previews").rect;

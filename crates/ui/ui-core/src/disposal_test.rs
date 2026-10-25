@@ -99,8 +99,9 @@ fn dropping_an_owned_build_frees_its_nodes_and_lets_go_of_the_host_its_root_was(
     drop(root);
 }
 
+/// A build dropped mid-dispatch is freed only once the dispatch unwinds, and a handler may have reset the runtime and built the next tree by then.
 #[test]
-fn an_owned_build_dropped_after_a_reset_frees_nothing_of_the_next_tree() {
+fn an_owned_build_freed_after_a_reset_frees_nothing_of_the_next_tree() {
     use crate::context::reset_layout_runtime;
 
     reset_layout_runtime();
@@ -108,11 +109,13 @@ fn an_owned_build_dropped_after_a_reset_frees_nothing_of_the_next_tree() {
         crate::Container::new(LayoutStyle::new(), vec![]).unwrap();
     });
 
+    let walk = dispatching();
+    drop(stale);
     reset_layout_runtime();
     let (kept, fresh) =
         OwnedBuild::run(|| crate::Container::new(LayoutStyle::new(), vec![]).unwrap());
     let nodes = live_node_count();
-    drop(stale);
+    drop(walk);
 
     assert_eq!(live_node_count(), nodes, "the stale build freed no node");
     assert!(
@@ -121,4 +124,28 @@ fn an_owned_build_dropped_after_a_reset_frees_nothing_of_the_next_tree() {
     );
     drop(fresh);
     assert_eq!(live_node_count(), 0, "its own build still frees it");
+}
+
+#[test]
+#[cfg(debug_assertions)]
+#[should_panic(expected = "the layout runtime was reset under 1 tree(s) still built on it")]
+fn resetting_the_runtime_under_a_tree_still_built_on_it_fails_loudly() {
+    use crate::context::reset_layout_runtime;
+
+    reset_layout_runtime();
+    let (_kept, _alive) =
+        OwnedBuild::run(|| crate::Container::new(LayoutStyle::new(), vec![]).unwrap());
+    reset_layout_runtime();
+}
+
+#[test]
+fn a_tree_dropped_before_the_reset_lets_the_runtime_reset() {
+    use crate::context::reset_layout_runtime;
+
+    reset_layout_runtime();
+    let (kept, built) =
+        OwnedBuild::run(|| crate::Container::new(LayoutStyle::new(), vec![]).unwrap());
+    drop(kept);
+    drop(built);
+    reset_layout_runtime();
 }
