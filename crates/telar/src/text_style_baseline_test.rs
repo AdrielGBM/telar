@@ -25,8 +25,8 @@ fn resolved(build: impl FnOnce() -> Box<dyn LayoutItem>) -> TextStyle {
             "BaselineRoot"
         }
     }
-    // A tree measures its text as it lays out, and a test has no runner to have installed a measurer.
-    telar::install_default_text_metrics();
+    // A tree measures its text as it lays out, and a test has no runner to have installed a measurer or chosen its faces.
+    telar::testing::install_test_face();
     let tree = mount(|| Root(build()), 400, 200);
     let style = tree.commands().iter().find_map(|c| match c {
         DrawCommand::Text { style, .. } => Some((**style).clone()),
@@ -169,7 +169,7 @@ fn a_container_declares_the_text_below_it() {
 /// The headline case, and the one nothing could express before: an ancestor that draws no text of its own says what the text beneath it looks like. Asserted through a real frame rather than the cascade's own unit tests, because the thing being checked is that a `Text` built the ordinary way actually reads it — and re-reads it, since the declaration lands *after* the leaf has already rendered once, which is the order a tree is built in.
 #[test]
 fn a_container_can_say_what_the_text_below_it_looks_like() {
-    telar::install_default_text_metrics();
+    telar::testing::install_test_face();
 
     struct Root(Box<dyn LayoutItem>);
     impl Component for Root {

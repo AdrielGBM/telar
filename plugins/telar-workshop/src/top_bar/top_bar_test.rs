@@ -47,7 +47,7 @@ impl Workshop {
     fn named(frame: Frame, width: u32, project: Option<&str>) -> Self {
         reset_layout_runtime();
         focus::clear();
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         telar::set_surface_size(Size::new(width as f32, HEIGHT as f32));
         telar::set_surface_maximized(false);
         take_window_commands();

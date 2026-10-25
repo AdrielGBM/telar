@@ -45,6 +45,7 @@ struct Mounted {
 
 impl Mounted {
     fn new(entries: Vec<PreviewEntry>) -> Self {
+        telar::testing::install_test_face();
         reset_layout_runtime();
         focus::clear();
         let state = WorkshopState::new(entries.into(), &Default::default());

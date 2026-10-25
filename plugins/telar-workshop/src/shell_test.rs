@@ -75,7 +75,7 @@ impl Workshop<Shell> {
 
 impl<A: App> Workshop<A> {
     fn mount(app: A, width: u32) -> Self {
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         telar::set_surface_size(Size::new(width as f32, HEIGHT as f32));
         let runtime = LocalApp(app);
         let tree = mount(|| runtime.0.root(), width, HEIGHT);

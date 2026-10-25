@@ -163,7 +163,7 @@ impl Workshop {
     fn open(id: &str) -> Self {
         reset_layout_runtime();
         focus::clear();
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         let request = telar::preview::host::PreviewRequest::new(Some(id), None);
         let state = WorkshopState::new(entries().into(), &request);
         state.view().set(ViewMode::Matrix);
@@ -556,6 +556,7 @@ fn the_view_stops_at_the_cap_and_says_how_many_cells_it_left_out() {
 
 #[test]
 fn a_capped_matrix_mounts_the_first_cells_and_warns() {
+    telar::testing::install_test_face();
     reset_layout_runtime();
     focus::clear();
     let entries = vec![

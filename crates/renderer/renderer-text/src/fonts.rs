@@ -8,7 +8,8 @@ use std::sync::{Arc, OnceLock, RwLock, RwLockWriteGuard};
 use cosmic_text::{FontSystem, fontdb};
 pub use renderer_core::ExclusiveFontsError;
 use renderer_core::{
-    FontAsset, FontConfig, FontHost, FontSource, FontSources, FontStyle, GenericFamilies,
+    FontAsset, FontConfig, FontHost, FontSource, FontSources, FontStyle, FontWeight,
+    GenericFamilies,
 };
 
 use crate::measure::ShaperMetrics;
@@ -357,6 +358,23 @@ pub fn install_only(
         };
     }
     install_only_into(&mut installed_slot(), &FACES_GENERATION, faces, families)
+}
+
+/// Telar Test: a Basic Latin and typographic-symbol subset of Inter 4.1, renamed, under the SIL Open Font License (`test-fonts/OFL.txt` beside this crate). The face the workspace's snapshots set their text in.
+pub const TEST_FACE: &[u8] = include_bytes!("../test-fonts/TelarTest.ttf");
+
+pub const TEST_FAMILY: &str = "Telar Test";
+
+/// [`install_only`] with [`TEST_FACE`], declared as the catalogue declares it, so a test measuring text reads the same on every machine as a snapshot does; it fails once anything has measured text without it, which loads the platform's faces.
+pub fn install_test_face() -> Result<Arc<Fonts>, ExclusiveFontsError> {
+    install_only(
+        vec![
+            FontAsset::embedded(TEST_FACE)
+                .named(TEST_FAMILY)
+                .with_weight(FontWeight::range(100, 900)),
+        ],
+        vec![TEST_FAMILY.to_string()],
+    )
 }
 
 fn install_only_into(

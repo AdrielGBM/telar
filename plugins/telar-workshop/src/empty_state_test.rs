@@ -19,7 +19,7 @@ const EXAMPLES: &[Example] = &[
 
 /// `state` laid out in a `width`×`height` panel on a fresh layout runtime and mounted, owning everything its build made.
 fn in_panel(state: EmptyState, width: f32, height: f32) -> Scoped<ComponentList> {
-    telar::install_default_text_metrics();
+    telar::testing::install_test_face();
     telar::reset_layout_runtime();
     scoped(|| {
         let state = state.build().unwrap();

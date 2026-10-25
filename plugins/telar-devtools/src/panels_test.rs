@@ -111,7 +111,7 @@ fn mounted_at(
     size: Size,
     build: impl FnOnce() -> Result<Box<dyn LayoutItem>, telar::LayoutError> + 'static,
 ) -> SurfaceCanvas {
-    telar::install_default_text_metrics();
+    telar::testing::install_test_face();
     let canvas = SurfaceCanvas::new(size, || Ok(box_item(workbench_scope(build)?))).unwrap();
     canvas.resize(size);
     canvas

@@ -131,7 +131,7 @@ struct Docs {
 
 impl Docs {
     fn open(id: &str) -> Self {
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         telar::hot_restore_json(
             r#"{"@workshop/view":"\"Docs\"","@workshop/panel.size":"160.0","@workshop/panel.collapsed":"{\"canvas\":false,\"matrix\":true,\"docs\":false}"}"#,
         );

@@ -42,6 +42,7 @@ fn body(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 fn mounted(entries: Vec<PreviewEntry>) -> (WorkshopState, Scoped<ComponentList>) {
+    telar::testing::install_test_face();
     reset_layout_runtime();
     let state = WorkshopState::new(entries.into(), &Default::default());
     let tree = mount(
@@ -54,6 +55,7 @@ fn mounted(entries: Vec<PreviewEntry>) -> (WorkshopState, Scoped<ComponentList>)
 }
 
 fn workshop(entries: Vec<PreviewEntry>) -> (WorkshopState, Scoped<ComponentList>) {
+    telar::testing::install_test_face();
     reset_layout_runtime();
     let state = WorkshopState::new(entries.into(), &Default::default());
     let tree = mount(

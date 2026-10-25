@@ -18,6 +18,7 @@ a question about the width it resolved to, which is the whole reason the layout 
 
 /// The band's laid-out rect, from a page the width of a window.
 fn band(cap: Option<f32>) -> geometry_core::Rect {
+    telar::testing::install_test_face();
     telar::reset_layout_runtime();
     let text = Text::new(
         || COPY.to_string(),

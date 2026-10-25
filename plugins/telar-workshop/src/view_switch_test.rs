@@ -20,6 +20,7 @@ struct Workshop {
 
 impl Workshop {
     fn open() -> Self {
+        telar::testing::install_test_face();
         reset_layout_runtime();
         focus::clear();
         let entries = vec![PreviewEntry::new(

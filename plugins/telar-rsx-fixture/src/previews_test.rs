@@ -51,7 +51,7 @@ telar::__previews! {
         use telar::preview::host::Args;
         use telar::preview::{ArgBinding, ArgValue, Axis, ControlKind, Layout, Matrix, PreviewCtx, PreviewEntry};
         use telar::{
-            AvailableSpace, ComponentList, DrawCommand, compute_layout, install_default_text_metrics,
+            AvailableSpace, ComponentList, DrawCommand, compute_layout,
             reset_layout_runtime, testing,
         };
         use telar_rsx_fixture::telar_all_previews;
@@ -72,7 +72,7 @@ telar::__previews! {
 
         fn mounted(entry: &PreviewEntry, ctx: &PreviewCtx) -> ComponentList {
             reset_layout_runtime();
-            install_default_text_metrics();
+            testing::install_test_face();
             let root = entry.build_root(ctx).expect("the preview builds");
             compute_layout(
                 root.layout_node(),

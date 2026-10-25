@@ -83,7 +83,7 @@ impl Workshop {
     }
 
     fn open_with(id: &str, hot: &str) -> Self {
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         telar::hot_restore_json(hot);
         let runtime = LocalApp(WorkshopApp::new(entries()).select(id));
         let tree = mount(|| runtime.0.root(), WIDTH, HEIGHT);
@@ -439,7 +439,7 @@ impl Stepping {
     fn open() -> Self {
         telar::reset_layout_runtime();
         telar::focus::clear();
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         let request = telar::preview::host::PreviewRequest::new(Some(STEPPER), None);
         let state = crate::state::WorkshopState::new(stepping_entries().into(), &request);
         let runtime = LocalApp(crate::test_support::Shell { state });

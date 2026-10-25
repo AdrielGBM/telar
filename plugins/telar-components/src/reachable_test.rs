@@ -14,11 +14,6 @@ use telar::{
 };
 use telar_components::*;
 
-/// Building a control measures its label, so this runs before the first widget exists.
-fn install_metrics() {
-    telar::install_default_text_metrics();
-}
-
 /// Lays `items` out inside a window-sized root, the way a surface would, and hands back a dispatchable tree.
 ///
 /// The root *owns* them: a dropped widget unregisters its focus id, so a helper that laid out the nodes and then let the widgets go would report an empty tab order and look like the bug it was meant to catch.
@@ -42,7 +37,7 @@ fn mount(items: Vec<Box<dyn LayoutItem>>) -> ComponentList {
 /// The plain case, and the one that was false for every button in the catalogue: Tab arrives, Enter fires.
 #[test]
 fn a_button_can_be_reached_and_pressed_without_a_mouse() {
-    install_metrics();
+    telar::testing::install_test_face();
     telar::reset_layout_runtime();
     focus::clear();
     let fired: Rc<Cell<bool>> = Rc::new(Cell::new(false));
@@ -66,7 +61,7 @@ fn a_button_can_be_reached_and_pressed_without_a_mouse() {
 /// A slider is reachable *and* adjustable: arrows are the keyboard's only way to move a continuous value, and without them being a tab stop just means the keyboard can get stuck on it.
 #[test]
 fn a_slider_moves_under_the_arrow_keys() {
-    install_metrics();
+    telar::testing::install_test_face();
     telar::reset_layout_runtime();
     focus::clear();
     let value = signal(0.5f32);
@@ -88,7 +83,7 @@ fn a_slider_moves_under_the_arrow_keys() {
 /// Enter on a focused checkbox toggles it, which is the same commit a tap makes — one path, not two that drift.
 #[test]
 fn enter_toggles_a_focused_checkbox() {
-    install_metrics();
+    telar::testing::install_test_face();
     telar::reset_layout_runtime();
     focus::clear();
     let checked = signal(false);
@@ -110,7 +105,7 @@ fn enter_toggles_a_focused_checkbox() {
 /// A control with a state announces the state it is actually in. Saying "checkbox" and stopping there leaves the user to guess; defaulting to unticked is worse, because it is confidently wrong for half of them.
 #[test]
 fn a_checked_box_is_announced_as_checked() {
-    install_metrics();
+    telar::testing::install_test_face();
     telar::reset_layout_runtime();
     focus::clear();
     let checked = signal(true);
@@ -136,7 +131,7 @@ fn a_checked_box_is_announced_as_checked() {
 /// And what a reader is told. The role is the part no amount of pointer testing would have caught: a checkbox that announced itself as a button would be operable and still wrong.
 #[test]
 fn the_catalogue_says_what_each_control_is() {
-    install_metrics();
+    telar::testing::install_test_face();
     telar::reset_layout_runtime();
     focus::clear();
     let items: Vec<Box<dyn LayoutItem>> = vec![

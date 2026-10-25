@@ -9,7 +9,7 @@ use telar_components::{ModalProps, modal};
 use telar_components::{SelectProps, select};
 
 fn reset() {
-    telar::install_default_text_metrics();
+    telar::testing::install_test_face();
     telar::reset_layout_runtime();
 }
 

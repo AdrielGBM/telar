@@ -94,7 +94,7 @@ impl Workshop {
     }
 
     fn open_at(entries: Vec<PreviewEntry>, width: u32) -> Self {
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         let runtime = LocalApp(WorkshopApp::new(entries).project_name(PROJECT));
         let tree = mount(|| runtime.0.root(), width, HEIGHT);
         let workshop = Self { runtime, tree };

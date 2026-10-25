@@ -105,6 +105,10 @@ pub fn run_previews(
 #[doc(hidden)]
 pub fn __test_library(entries: Vec<PreviewEntry>, config: AppConfig) {
     let options = TestOptions::from_env().unwrap_or_else(|error| panic!("{error}"));
+    if config.fonts.is_empty() && !crate::runner::previews_measure_in_cells() {
+        // Under `cargo test` this shares a process with the library's own tests, so it sets text in their test face rather than loading the platform's over it; a process that already loaded the platform's keeps them.
+        let _ = renderer_text::fonts::install_test_face();
+    }
     let run = run_previews(entries, &config, &options);
     assert!(
         run.passed(),

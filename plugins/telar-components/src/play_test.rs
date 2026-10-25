@@ -4,6 +4,7 @@ use telar::preview::Play;
 use telar::preview::a11y::Severity;
 
 fn failures(check: impl Fn(&mut Play) -> Vec<String>) -> Vec<String> {
+    telar::testing::install_test_face();
     telar_components::telar_all_previews()
         .into_iter()
         .filter_map(|entry| {

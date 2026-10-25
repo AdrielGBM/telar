@@ -37,6 +37,7 @@ fn entries() -> Vec<PreviewEntry> {
 }
 
 fn lay_out(app: &WorkshopApp) -> Scoped<ComponentList> {
+    telar::testing::install_test_face();
     let tree = mount(|| app.root(), WIDTH, HEIGHT);
     relayout_if_dirty();
     tree
@@ -94,6 +95,7 @@ fn a_requested_preview_mounts_instead() {
 
 #[test]
 fn the_canvas_builds_with_the_args_the_state_holds() {
+    telar::testing::install_test_face();
     reset_layout_runtime();
     let state = WorkshopState::new(entries().into(), &PreviewRequest::default());
     let tree = mount(

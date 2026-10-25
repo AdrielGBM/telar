@@ -380,7 +380,7 @@ fn frozen_now() -> Instant {
 }
 
 fn devtools() -> DevTools {
-    telar::install_default_text_metrics();
+    telar::testing::install_test_face();
     DevTools {
         clock: Clock::reading(frozen_now),
         ..DevTools::default()

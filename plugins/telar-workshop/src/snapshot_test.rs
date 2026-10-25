@@ -201,7 +201,7 @@ struct Workshop {
 
 impl Workshop {
     fn open(id: &str, report: &Path) -> Self {
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         telar::hot_restore_json(r#"{"@workshop/panel.size":"700.0"}"#);
         let app = WorkshopApp::new(entries()).select(id).test_report(report);
         let runtime = LocalApp(app);

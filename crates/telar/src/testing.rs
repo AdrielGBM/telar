@@ -84,6 +84,16 @@ impl<T> DerefMut for Scoped<T> {
     }
 }
 
+/// Sets every text this process measures in Telar Test alone, the face the catalogue's snapshots use, so a label wraps the same on every machine; every test in the binary that lays out text calls it first, and it panics if one measured text before it, since the platform's fonts that loaded cannot be unloaded.
+#[cfg(feature = "shaper")]
+pub fn install_test_face() {
+    if let Err(error) = renderer_text::fonts::install_test_face() {
+        panic!(
+            "the test face cannot be the only one: {error}. Every test in this binary that measures text has to call `install_test_face` before it does"
+        );
+    }
+}
+
 /// Every string the tree draws, in draw order.
 pub fn texts(tree: &ComponentList) -> Vec<String> {
     tree.commands()

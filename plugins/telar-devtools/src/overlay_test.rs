@@ -92,7 +92,7 @@ fn assert_passes(dev: &mut DevTools, window: Size, shown: &str) {
 #[test]
 fn the_overlay_passes_its_own_accessibility_checks() {
     for window in WINDOWS {
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         let mut dev = DevTools::default();
         dev.on_tree(&[
             node(

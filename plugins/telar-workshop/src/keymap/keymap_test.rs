@@ -49,7 +49,7 @@ impl Workshop {
     fn open(entries: Vec<PreviewEntry>) -> Self {
         reset_layout_runtime();
         focus::clear();
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         telar::set_keyboard_convention(KeyboardConvention::Pc);
         let state = WorkshopState::new(entries.into(), &Default::default());
         let runtime = LocalApp(Shell { state });

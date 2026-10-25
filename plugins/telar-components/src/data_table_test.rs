@@ -959,7 +959,11 @@ fn page_down_and_up_move_a_wrapping_table_by_the_rows_its_view_shows_whole() {
         "the rows wrap"
     );
     let (top, bottom) = mounted.rows_view();
-    let page = ((bottom - top) / tall).floor() as usize;
+    let page = mounted
+        .of_role(Role::Row)
+        .iter()
+        .filter(|row| row.rect.y >= top - 0.5 && row.rect.y + row.rect.height <= bottom + 0.5)
+        .count();
     let at = |i: usize| long(100)[i].cell(0).to_string();
     mounted.key_settled(NamedKey::PageDown);
     assert_eq!(mounted.cursor_cell().name, at(page));

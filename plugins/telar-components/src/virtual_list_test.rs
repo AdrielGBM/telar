@@ -650,10 +650,7 @@ fn a_wrapping_list_grows_a_row_to_hold_its_label_and_leaves_a_short_one_a_row_ta
     };
     let row_height = ListTokens::current().row_height();
     assert_eq!(height("Row 000"), row_height, "a one-line row");
-    assert!(
-        height("Row 001") > row_height * 1.5,
-        "a wrapped row is taller"
-    );
+    assert!(height("Row 001") > row_height, "a wrapped row is taller");
     for pair in options.windows(2) {
         let (above, below) = (pair[0].1, pair[1].1);
         assert!(

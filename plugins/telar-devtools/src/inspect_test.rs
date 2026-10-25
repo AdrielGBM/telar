@@ -138,7 +138,7 @@ fn the_window_source_reports_what_the_runner_last_handed_it() {
 }
 
 fn canvas() -> Rc<SurfaceCanvas> {
-    telar::install_default_text_metrics();
+    telar::testing::install_test_face();
     let canvas = SurfaceCanvas::new(Size::new(200.0, 100.0), || {
         let unnamed = StyledContainer::new(
             LayoutStyle::new().width(40.0).height(30.0),

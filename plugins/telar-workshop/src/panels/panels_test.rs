@@ -173,7 +173,7 @@ impl Workshop {
     }
 
     fn open_at(entries: Vec<PreviewEntry>, id: &str, width: u32) -> Self {
-        telar::install_default_text_metrics();
+        telar::testing::install_test_face();
         telar::hot_restore_json(r#"{"@workshop/panel.size":"1000.0"}"#);
         let runtime = LocalApp(WorkshopApp::new(entries).select(id));
         let tree = mount(|| runtime.0.root(), width, HEIGHT);
@@ -648,7 +648,7 @@ fn matching_lists_the_newest_first_and_ignores_case() {
 }
 
 fn inspected(id: &str) -> (crate::state::WorkshopState, Scoped<ComponentList>) {
-    telar::install_default_text_metrics();
+    telar::testing::install_test_face();
     telar::hot_restore_json(r#"{"@workshop/panel.size":"1000.0"}"#);
     let request = telar::preview::host::PreviewRequest::new(Some(id), None);
     let state = crate::state::WorkshopState::new(entries().into(), &request);

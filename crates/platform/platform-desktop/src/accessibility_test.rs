@@ -507,7 +507,8 @@ mod from_a_screen {
     fn mount_with(
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> ComponentList {
-        renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+        renderer_text::fonts::install_test_face()
+            .expect("nothing in this binary measured text before the test face was installed");
         ui_core::reset_layout_runtime();
         focus::clear();
         ui_core::set_surface_size(Size::new(WIDTH as f32, HEIGHT as f32));
@@ -722,7 +723,8 @@ mod from_a_screen {
 
     /// A bar fixed over a page of two sections, each taller than the window, with a link to each; `viewport` is the page's scroll.
     fn sections() -> (ComponentList, ScrollViewport) {
-        renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
+        renderer_text::fonts::install_test_face()
+            .expect("nothing in this binary measured text before the test face was installed");
         ui_core::reset_layout_runtime();
         focus::clear();
         ui_core::set_surface_size(Size::new(WIDTH as f32, HEIGHT as f32));
