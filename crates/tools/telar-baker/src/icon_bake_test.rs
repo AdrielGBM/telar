@@ -36,6 +36,10 @@ fn package_with(name: &str, mode: &str, extra: &str, view: &str) -> PathBuf {
     root
 }
 
+fn app_rsx() -> String {
+    Path::new("src").join("app.rsx").display().to_string()
+}
+
 fn baked_icons(root: &Path) -> Vec<String> {
     read_index(&root.join(".telar"))
         .unwrap()
@@ -104,7 +108,7 @@ fn a_computed_id_is_an_error_naming_runtime_mode() {
     let report = bake_package(&root, "test", VERSION).unwrap();
     assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
     let error = &report.errors[0];
-    assert!(error.starts_with("src/app.rsx:"), "{error}");
+    assert!(error.starts_with(&format!("{}:", app_rsx())), "{error}");
     assert!(error.contains("name:$which"), "{error}");
     assert!(error.contains("mode = \"runtime\""), "{error}");
     assert_eq!(
@@ -186,7 +190,7 @@ fn a_bare_name_without_a_default_set_fails_the_bake_on_its_line() {
     let report = bake_package(&root, "test", VERSION).unwrap();
     assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
     let error = &report.errors[0];
-    assert!(error.starts_with("src/app.rsx:4:"), "{error}");
+    assert!(error.starts_with(&format!("{}:4:", app_rsx())), "{error}");
     assert!(error.contains("default_set"), "{error}");
     assert_eq!(baked_icons(&root), vec!["demo:star"]);
 }
