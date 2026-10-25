@@ -1,5 +1,6 @@
 //! The numbers a `.rsx` call writes on a component's props, before the prop says which type it wants. Markup writes `level:3` and `width:300` alike, and the transpiler cannot see the props type of a component in another file or crate. So a literal is handed over as an [`Int`] or a [`Float`], and a numeric prop's setter takes its own type or either of these through [`PropNumber`]: the prop decides, the way a Rust literal's type is decided by where it is used.
 
+#[cfg(feature = "runtime")]
 use crate::Reactive;
 
 /// A whole number as markup wrote it: `3`, `-2`.
@@ -41,6 +42,7 @@ macro_rules! integer_props {
             }
         }
 
+        #[cfg(feature = "runtime")]
         impl From<Int> for Reactive<$ty> {
             fn from(number: Int) -> Self {
                 Reactive::from(<$ty>::from(number))
@@ -81,12 +83,14 @@ macro_rules! float_props {
             }
         }
 
+        #[cfg(feature = "runtime")]
         impl From<Int> for Reactive<$ty> {
             fn from(number: Int) -> Self {
                 Reactive::from(<$ty>::from(number))
             }
         }
 
+        #[cfg(feature = "runtime")]
         impl From<Float> for Reactive<$ty> {
             fn from(number: Float) -> Self {
                 Reactive::from(<$ty>::from(number))
