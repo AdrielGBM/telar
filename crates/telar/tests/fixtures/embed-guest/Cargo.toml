@@ -1,0 +1,16 @@
+[package]
+name = "embed-guest"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# `shaper` on both, because the host test binary has it and the embed contract stamps it.
+telar = { path = "../../..", default-features = false, features = ["shaper"] }
+telar-embed = { version = "0.2.2", path = "../../../../embed/telar-embed", features = ["shaper"] }
+
+# Its own workspace root, so it is never a member of the repository's: the `guest_contract` test builds it on demand.
+[workspace]

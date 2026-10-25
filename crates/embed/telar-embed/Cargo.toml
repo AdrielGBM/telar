@@ -23,16 +23,16 @@ rustdoc-args = ["--cfg", "docsrs"]
 default = ["guest"]
 
 ## The guest's own side: [`EmbeddedApp`](crate::EmbeddedApp), the driver that runs its tree in a surface of
-## its own, and the [`embed!`](crate::embed) macro that exports the shims a host calls.
+## its own, and the [`embed!`](crate::embed) macro that exports the entries a host calls.
 guest = []
 
 ## The host's side: [`load_embedded`](crate::load_embedded) and the handle it returns. Brings a dynamic loader,
 ## which is why it is not in `default` — an application that only *is* a guest never loads one.
-host = ["guest", "platform-core/dylib", "dep:libloading"]
+host = ["guest", "platform-core/dylib", "dep:libloading", "dep:tracing"]
 
 ## For a guest that shapes its own text, as one built on `telar` with `shaper` does: the host hands the guest its font
 ## database to defer to, so the guest measures in the faces the host draws its frames in, and a face the guest adds
-## while it runs is added to the host's first. Host and guest must agree on it, which the layout fingerprint checks.
+## while it runs is added to the host's first. Host and guest must agree on it, which the contract stamp checks.
 shaper = ["dep:renderer-text"]
 
 ## Renders this feature list into the crate documentation. docs.rs only; never enable it yourself.
@@ -47,10 +47,13 @@ preferences-core = { workspace = true }
 reactive-core = { workspace = true }
 renderer-core = { workspace = true }
 renderer-text = { workspace = true, optional = true }
+services-core = { workspace = true }
 ui-core = { workspace = true }
 ui-tree = { workspace = true }
+wire-core = { workspace = true }
 
 document-features = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
 web-time = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

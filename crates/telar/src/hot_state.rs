@@ -1,4 +1,4 @@
-//! Hot-reload state preservation: a dylib-local registry of serializable signals. The host asks the outgoing dylib for a JSON snapshot (via `_rsx_hot_snapshot`), hands it to the incoming dylib (via `_rsx_hot_restore`), and `hot_signal` consumes the restored values as components remount. A prerendered page carries the same snapshot, and the browser that takes it over restores it the same way.
+//! Hot-reload state preservation: a dylib-local registry of serializable signals. The host asks the outgoing dylib for a JSON snapshot (through its `snapshot` entry), hands it to the incoming dylib (through its `restore` entry), and `hot_signal` consumes the restored values as components remount. A prerendered page carries the same snapshot, and the browser that takes it over restores it the same way.
 
 use std::collections::HashMap;
 
@@ -82,7 +82,7 @@ const SCHEME_PREFERENCE_KEY: &str = "@telar/theme.scheme";
 const REDUCED_MOTION_OVERRIDE_KEY: &str = "@telar/motion.reduced";
 const HIGH_CONTRAST_OVERRIDE_KEY: &str = "@telar/contrast.high";
 
-/// Serializes every registered hot signal into a JSON map. Runs inside the outgoing dylib via its `_rsx_hot_snapshot` export, while the old tree (and thus its signals) is still alive.
+/// Serializes every registered hot signal into a JSON map. Runs inside the outgoing dylib through its `snapshot` entry, while the old tree (and thus its signals) is still alive.
 #[cfg(any(feature = "dev", feature = "prerender"))]
 pub fn hot_snapshot_json() -> String {
     let mut map: HashMap<String, String> = REGISTRY.with(|r| {
@@ -117,7 +117,7 @@ pub fn hot_snapshot_json() -> String {
     serde_json::to_string(&map).unwrap_or_default()
 }
 
-/// Loads a snapshot produced by the previous dylib. Runs inside the incoming dylib via its `_rsx_hot_restore` export, before the new tree mounts.
+/// Loads a snapshot produced by the previous dylib. Runs inside the incoming dylib through its `restore` entry, before the new tree mounts.
 #[cfg(any(feature = "dev", feature = "prerender"))]
 pub fn hot_restore_json(blob: &str) {
     if let Ok(map) = serde_json::from_str::<HashMap<String, String>>(blob) {

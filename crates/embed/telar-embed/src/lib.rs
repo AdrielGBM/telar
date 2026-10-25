@@ -1,10 +1,12 @@
 //! Embedded apps: hosting a separately-`dlopen`'d rsx UI inside a host window.
 //!
-//! Unlike hot-reload (dev-only, one dylib that *replaces* the whole window), an embedded app is a production capability: the host stays a full rsx app and embeds one or more guests, each a cdylib with its **own** reactive/layout/overlay/motion runtime (separate thread-locals, because each dylib statically links its own copy of the runtime crates). The host cannot reach into that runtime, so — exactly as hot-reload does for its single dylib — it *drives* the guest across the FFI boundary through exported shims.
+//! Unlike hot-reload (dev-only, one dylib that *replaces* the whole window), an embedded app is a production capability: the host stays a full rsx app and embeds one or more guests, each a cdylib with its **own** reactive/layout/overlay/motion runtime (separate thread-locals, because each dylib statically links its own copy of the runtime crates). The host cannot reach into that runtime, so — exactly as hot-reload does for its single dylib — it *drives* the guest through the entries the guest exports.
 //!
-//! The novel part hot-reload never needed is **compositing two runtimes into one window**: the guest flattens its own view tree to a self-contained `Vec<DrawCommand>` ([`EmbedInstance::paint`]) and hands it back; the host translates + clips those commands into the guest's sub-rect and splices them into its own frame. No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
+//! The novel part hot-reload never needed is **compositing two runtimes into one window**: the guest flattens its own view tree to a self-contained draw list and lends it as bytes, which the host decodes into a [`DrawList`] of its own ([`LoadedEmbed::paint`]), translates and clips into the guest's sub-rect ([`composite`]) and splices into its own frame. No offscreen texture, no shared GPU device — the host's renderer paints everything in one pass.
 //!
-//! Layering: this crate is app-agnostic. A guest author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`embed!`](crate::embed) macro to export the shims. The host enables `host`, calls [`load_embedded`] and drives the returned [`LoadedEmbed`]. Nothing here knows about any particular app.
+//! Host and guest meet on the guest contract both boundaries share ([`platform_core::guest`]): one `repr(C)` table of `extern "C"` entries ([`EmbedEntries`]), stamped with [`EMBED_CONTRACT`], through which nothing owned crosses. Each side frees only what it allocated, so a `#[global_allocator]` on either side does not matter, and a guest built against another contract, with other features, or as a hot-reload library is refused before any of its code runs but its initializers.
+//!
+//! Layering: this crate is app-agnostic. A guest author implements [`EmbeddedApp`] (or an adapter to it) and calls the [`embed!`](crate::embed) macro to export the entries. The host enables `host`, calls [`load_embedded`] and drives the returned [`LoadedEmbed`]. Nothing here knows about any particular app.
 //!
 //! **A second dependency, like `telar-dynamic`.** It knows nothing of `telar` — a guest builds a `ui-core` tree and hands back draw commands, which is a layer below the facade — so it is the application that names both, and keeping them on one version is the same lockstep `telar` and `telar-macros` already have.
 //!
@@ -16,30 +18,37 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
-use std::cell::RefCell;
+mod entries;
+#[doc(hidden)]
+pub mod guest;
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+mod host;
+
+use std::cell::{Ref, RefCell};
 use std::rc::Rc;
-use std::sync::Arc;
 use std::time::Duration;
 use web_time::Instant;
 
 use geometry_core::{Rect, Size, Transform};
-use platform_core::{Event, KeyboardConvention, SystemPreferences, WindowCommand};
-use renderer_core::{Color, DrawCommand, FontHost};
+use platform_core::{AppCtx, Event, SystemPreferences, WindowCommand};
+use renderer_core::{Color, DrawCommand};
 use ui_core::{EventResult, NodeId, SurfaceCanvas, composite_surface};
 use ui_tree::{Component, RenderNode};
 
-use platform_core::AppCtx;
-use platform_core::guest::{BoundaryLayout, guest_call};
-pub use platform_core::guest::{GuestPanic, GuestResult};
+#[doc(hidden)]
+pub use entries::{CreateInstance, EMBED_CONTRACT, EmbedEntries};
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+pub use host::{LoadedEmbed, load_embedded};
+#[doc(hidden)]
+pub use platform_core::export_contract_stamp;
+pub use platform_core::guest::GuestPanic;
+#[doc(hidden)]
+pub use platform_core::guest::{CallOutcome, Handle, LentBytes};
 
-/// Owned draw-command list returned across the FFI boundary (the guest's flattened frame). Self-contained: baked geometry, `Arc`-shared styles/data — the host can render it directly (same-toolchain ABI, as with hot-reload's `Vec<WindowCommand>`).
+/// A guest's frame as the host holds it: decoded from the bytes the guest lent into commands the host allocated and owns.
 pub type DrawList = Vec<DrawCommand>;
-/// Owned window-command list drained from the guest's own queue (a title bar's drag/close etc.).
+/// The window-management commands drained from a guest's own queue (a title bar's drag, close and so on), decoded into the host's own.
 pub type WindowCommands = Vec<WindowCommand>;
-
-// Re-exported for the `embed!` macro's shim signatures, so a guest crate needs only `telar_embed::*`.
-pub use platform_core::Event as EmbedEvent;
-pub use renderer_core::Color as EmbedColor;
 
 /// Wrap a guest's painted [`DrawList`] into a [`RenderNode`] the host splices into its own frame: translated to `rect`'s origin (the guest paints in its own `(0,0)` space) and clipped to `rect` (so it can't draw over the host chrome). The exact idiom rsx's own scroll area uses to host a sub-tree in a viewport.
 pub fn composite(rect: Rect, commands: DrawList) -> RenderNode {
@@ -56,7 +65,7 @@ pub fn composite(rect: Rect, commands: DrawList) -> RenderNode {
 pub trait EmbeddedApp: 'static {
     /// Build the content's layout tree. Called once by the driver with the guest's surface active, so nodes are allocated in this surface's layout world. [`layout_root`](Self::layout_root) must be valid after it.
     ///
-    /// **Also where a guest installs what only a runner would have installed for it.** A guest is a `cdylib`: it links its own copy of every crate behind the facade, so the statics and thread-locals those keep are its own and start empty. The theme is one; `TextMetrics` is the one that bites, because nothing sets a default and the first text laid out here panics without it — call `telar::install_default_text_metrics()` (or `renderer_core::set_text_metrics` with whatever suits the surface) before building the tree. The driver cannot do it: it does not know whether the guest draws to pixels or to cells, and a trait object cannot cross the boundary to be handed over.
+    /// **Also where a guest installs what only a runner would have installed for it.** A guest is a `cdylib`: it links its own copy of every crate behind the facade, so the statics and thread-locals those keep are its own and start empty. The host's process-wide backends are installed before this runs, from the [`HostServices`](platform_core::guest::HostServices) table it serves: the clipboard, the URI opener, file dialogs, the preference store, the app's paths and name, the keyboard convention, the location format, the asset base, the layout grid, the loop wake and, for a guest with `shaper`, the font database its shaper measures in. The theme is not among them; `TextMetrics` is the one that bites, because nothing sets a default and the first text laid out here panics without it — call `telar::install_default_text_metrics()` (or `renderer_core::set_text_metrics` with whatever suits the surface) before building the tree. The driver cannot do it: a measurer is code, not a backend the table serves, and only the guest knows whether it draws to pixels or to cells.
     fn build(&mut self);
 
     /// The content's top layout node — the one the driver `compute_layout`s to the host-assigned rect size.
@@ -85,7 +94,7 @@ pub trait EmbeddedApp: 'static {
     /// The guest's display title (may read signals — the driver reads it with the surface active).
     fn title(&self) -> String;
 
-    /// The guest's icon bytes, owned so they cross the FFI boundary safely (no borrow into the dylib image).
+    /// The guest's icon bytes, which cross to the host spelled as bytes it copies into its own.
     fn icon(&self) -> Option<Vec<u8>> {
         None
     }
@@ -109,13 +118,12 @@ impl Component for EmbeddedComponent {
     }
 }
 
-/// The dylib-side guest driver: a headless single-surface runtime (no window, no renderer) that the host drives across the FFI boundary. A [`SurfaceCanvas`] over the guest's content, so every method works in this guest's thread-local worlds, not the host's.
+/// The dylib-side guest driver: a headless single-surface runtime (no window, no renderer) that the host drives through the entries its library exports. A [`SurfaceCanvas`] over the guest's content, so every method works in this guest's thread-local worlds, not the host's.
 ///
-/// The host holds this only as an opaque `*mut EmbedInstance` (it never dereferences it — every call goes through an exported shim so the code runs in the dylib). Constructed by [`__embed_create`].
+/// The host holds it only behind an opaque [`Handle`], with the frames it lends ([`guest::GuestInstance`]), and never reads through it: every call goes through an entry, so the code runs in the dylib.
 pub struct EmbedInstance {
     embedded: Rc<RefCell<Box<dyn EmbeddedApp>>>,
     canvas: SurfaceCanvas,
-    task_waker_installed: bool,
 }
 
 impl EmbedInstance {
@@ -128,11 +136,7 @@ impl EmbedInstance {
             Ok((EmbeddedComponent(Rc::clone(&embedded)), root))
         })
         .expect("an embedded app's build reports no layout error");
-        Self {
-            embedded,
-            canvas,
-            task_waker_installed: false,
-        }
+        Self { embedded, canvas }
     }
 
     /// Lay the content out to the host-assigned sub-rect size, which is this guest's surface size, then let its scroll viewports react to the new size.
@@ -150,9 +154,9 @@ impl EmbedInstance {
         self.canvas.relayout_if_dirty();
     }
 
-    /// The guest's current frame as a flat, self-contained command list. The host translates it into the guest's sub-rect and splices it into its own frame.
-    pub fn paint(&self) -> DrawList {
-        self.canvas.frame_commands().clone()
+    /// The guest's current frame as a flat, self-contained command list, which the guest's entry encodes for the host to decode, translate into the guest's sub-rect and splice into its own frame.
+    pub fn paint(&self) -> Ref<'_, Vec<DrawCommand>> {
+        self.canvas.frame_commands()
     }
 
     /// The content generation; unchanged between two reads means [`paint`](Self::paint) would return the same commands, so the host can skip re-fetching (mirrors the host renderer's idle-blit gate).
@@ -161,7 +165,7 @@ impl EmbedInstance {
     }
 
     /// Whether an animation is still in flight in this guest's motion engine.
-    pub fn motion_active(&self) -> bool {
+    pub fn motion_has_active(&self) -> bool {
         self.canvas.with_entered(motion_core::has_active)
     }
 
@@ -218,13 +222,7 @@ impl EmbedInstance {
     /// Run the guest's due timers, its finished tasks and then its per-frame background-work hook, forwarding the host's `ctx` (so a guest worker thread can wake the host loop via `ctx.redraw_waker()`, just as an in-process app does).
     pub fn on_frame(&mut self, ctx: &mut AppCtx) {
         self.canvas.with_entered(|| {
-            // The guest links its own reactive-core copy, so `spawn_task` and `run_after` inside it register in a runtime the host cannot reach: the wake is installed here, and timers and tasks are run here, in the runner's order.
-            if !self.task_waker_installed
-                && let Some(waker) = ctx.redraw_waker()
-            {
-                reactive_core::set_task_waker(move || waker.wake());
-                self.task_waker_installed = true;
-            }
+            // The guest links its own reactive-core copy, so `spawn_task` and `run_after` inside it register in a runtime the host cannot reach: they are run here, in the runner's order.
             reactive_core::fire_timers();
             reactive_core::drain_tasks();
             // So signals the hook writes flush after the `borrow_mut` releases, never re-entering `view()` mid-borrow.
@@ -266,463 +264,6 @@ impl EmbedInstance {
 
     pub fn id(&self) -> String {
         self.canvas.with_entered(|| self.embedded.borrow().id())
-    }
-}
-
-// The `embed!` macro exports one table whose entries forward to these, each running its body under `guest_call` so a panic in the guest is handed back instead of unwinding into the host's copy of std, which can only abort on it. `#[doc(hidden)]`: public only because the expansion lands in the guest crate.
-
-/// Build a guest instance and leak it to a raw pointer the host owns (freed via [`__embed_destroy`]).
-#[doc(hidden)]
-pub fn __embed_create(
-    make: impl FnOnce() -> Box<dyn EmbeddedApp>,
-) -> GuestResult<*mut EmbedInstance> {
-    guest_call(|| Box::into_raw(Box::new(EmbedInstance::new(make()))))
-}
-
-/// # Safety `inst` must be a pointer returned by [`__embed_create`] and not yet destroyed.
-#[doc(hidden)]
-pub unsafe fn __embed_destroy(inst: *mut EmbedInstance) -> GuestResult<()> {
-    guest_call(|| drop(unsafe { Box::from_raw(inst) }))
-}
-
-macro_rules! embed_shim {
-    ($(#[$m:meta])* $vis_fn:ident ($($arg:ident : $ty:ty),*) $(-> $ret:ty)? => $method:ident) => {
-        $(#[$m])*
-        #[doc(hidden)]
-        /// # Safety `inst` must be a live pointer from [`__embed_create`].
-        pub unsafe fn $vis_fn(inst: *mut EmbedInstance $(, $arg: $ty)*) -> GuestResult<embed_shim!(@ret $($ret)?)> {
-            guest_call(|| unsafe { (*inst).$method($($arg),*) })
-        }
-    };
-    (@ret) => { () };
-    (@ret $ret:ty) => { $ret };
-}
-
-embed_shim!(__embed_relayout(width: f32, height: f32) => relayout);
-embed_shim!(__embed_relayout_dirty() => relayout_dirty);
-embed_shim!(__embed_paint() -> DrawList => paint);
-embed_shim!(__embed_generation() -> u64 => generation);
-embed_shim!(__embed_on_event(event: &Event) -> bool => on_event);
-embed_shim!(__embed_dispatch_overlays(event: &Event) -> bool => dispatch_overlays);
-embed_shim!(__embed_end_frame() => end_frame);
-embed_shim!(__embed_motion_tick(now: Instant) => motion_tick);
-embed_shim!(__embed_motion_active() -> bool => motion_active);
-embed_shim!(__embed_until_next_timer() -> Option<Duration> => until_next_timer);
-embed_shim!(__embed_next_timer_due() -> Option<Instant> => next_timer_due);
-embed_shim!(__embed_drain_window_commands() -> WindowCommands => drain_window_commands);
-embed_shim!(__embed_set_system_preferences(preferences: &SystemPreferences) => set_system_preferences);
-embed_shim!(__embed_activate() => activate);
-embed_shim!(__embed_clear_color() -> Option<Color> => clear_color);
-embed_shim!(__embed_title() -> String => title);
-embed_shim!(__embed_icon() -> Option<Vec<u8>> => icon);
-embed_shim!(__embed_id() -> String => id);
-
-// `on_frame` takes `&mut AppCtx`, whose lifetime the shim macro cannot spell.
-/// # Safety `inst` must be a live pointer from [`__embed_create`].
-#[doc(hidden)]
-pub unsafe fn __embed_on_frame(inst: *mut EmbedInstance, ctx: &mut AppCtx) -> GuestResult<()> {
-    guest_call(|| unsafe { (*inst).on_frame(ctx) })
-}
-
-#[doc(hidden)]
-pub use platform_core::guest::{
-    loaded as __embed_loaded, quiesce as __embed_quiesce, unloading as __embed_unloading,
-};
-
-/// Installs the convention the host matches shortcuts in as the guest's own, which left alone answers for the system the guest was compiled on.
-#[doc(hidden)]
-pub fn __embed_set_keyboard_convention(convention: KeyboardConvention) -> GuestResult<()> {
-    guest_call(|| platform_core::set_keyboard_convention(convention))
-}
-
-/// Has the guest's copy of the shaper defer to the host's font database, so the guest measures its text in the faces the host draws it in, and a face it adds goes to the host's first. `None` for a host without a shaper, or for a table this process serves itself, which already shares the one database.
-#[doc(hidden)]
-pub fn __embed_defer_fonts(host: Option<Arc<dyn FontHost>>) -> GuestResult<()> {
-    guest_call(move || {
-        #[cfg(feature = "shaper")]
-        if let Some(host) = host {
-            renderer_text::fonts::defer_to(host);
-        }
-        #[cfg(not(feature = "shaper"))]
-        drop(host);
-    })
-}
-
-/// The version of the guest/host contract below: bump it whenever [`EmbedVTable`] changes shape, or a type an event or a draw command carries across changes layout, so a stale `.so` is refused with a version mismatch instead of being called through a table whose fields have moved under it.
-pub const TELAR_EMBED_ABI: u32 = 12;
-
-/// The fingerprint of the layout of what crosses by value, which a guest reports in its table beside the version: a host and a guest built with different features or dependencies disagree about the shape of an event or a draw command without the table having changed at all. `shaper` is in it because a guest without it would drop the font database a host with it hands over, and measure its text in faces other than the ones the host draws it in.
-pub const EMBED_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
-    EmbedVTable,
-    AppCtx<'static>,
-    Color,
-    DrawCommand,
-    Event,
-    GuestPanic,
-    KeyboardConvention,
-    SystemPreferences,
-    WindowCommand,
-    Duration,
-    Instant;
-    "shaper" => cfg!(feature = "shaper"),
-);
-
-/// Everything the host calls on a guest, as one exported symbol.
-///
-/// `#[repr(C)]` is what makes the version check sound rather than cosmetic: `abi` is guaranteed to sit at offset 0, so the host can read it out of a guest built against a different (possibly shorter) table before it reads anything else.
-///
-/// The signatures use the `extern "Rust"` ABI over Rust types, so a guest must be built with the same toolchain as its host — a first-party guest model, exactly as hot reload requires. Every entry catches a panic in the guest and returns it as the `Err` of a [`GuestResult`].
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct EmbedVTable {
-    pub abi: u32,
-    pub layout: u64,
-    pub create: unsafe extern "Rust" fn(&[String]) -> GuestResult<*mut EmbedInstance>,
-    pub destroy: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<()>,
-    pub relayout: unsafe extern "Rust" fn(*mut EmbedInstance, f32, f32) -> GuestResult<()>,
-    pub relayout_dirty: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<()>,
-    pub paint: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<DrawList>,
-    pub generation: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<u64>,
-    pub on_event: unsafe extern "Rust" fn(*mut EmbedInstance, &Event) -> GuestResult<bool>,
-    pub dispatch_overlays: unsafe extern "Rust" fn(*mut EmbedInstance, &Event) -> GuestResult<bool>,
-    pub end_frame: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<()>,
-    pub motion_tick: unsafe extern "Rust" fn(*mut EmbedInstance, Instant) -> GuestResult<()>,
-    pub motion_active: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<bool>,
-    pub until_next_timer:
-        unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<Option<Duration>>,
-    pub next_timer_due: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<Option<Instant>>,
-    pub drain_window_commands:
-        unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<WindowCommands>,
-    pub set_system_preferences:
-        unsafe extern "Rust" fn(*mut EmbedInstance, &SystemPreferences) -> GuestResult<()>,
-    pub activate: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<()>,
-    pub clear_color: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<Option<Color>>,
-    pub title: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<String>,
-    pub icon: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<Option<Vec<u8>>>,
-    pub id: unsafe extern "Rust" fn(*mut EmbedInstance) -> GuestResult<String>,
-    pub on_frame: unsafe extern "Rust" fn(*mut EmbedInstance, &mut AppCtx) -> GuestResult<()>,
-    pub loaded: unsafe extern "Rust" fn() -> GuestResult<()>,
-    pub unloading: unsafe extern "Rust" fn() -> GuestResult<()>,
-    pub quiesce: unsafe extern "Rust" fn() -> GuestResult<()>,
-    pub set_keyboard_convention: unsafe extern "Rust" fn(KeyboardConvention) -> GuestResult<()>,
-    pub defer_fonts: unsafe extern "Rust" fn(Option<Arc<dyn FontHost>>) -> GuestResult<()>,
-}
-
-/// Exports a guest cdylib's one FFI symbol, the `_rsx_embed_vtable`. `$factory` is any `Fn(&[String]) -> Box<dyn EmbeddedApp>` — invoked once per instance with the launch args.
-///
-/// ```ignore
-/// telar_embed::embed!(|args: &[String]| -> Box<dyn telar_embed::EmbeddedApp> { Box::new(MyApp::new(args)) });
-/// ```
-///
-/// One symbol rather than one per method, so adding a guest method is a field here and a wrapper on the host instead of four edits across two macros — and so a stale `.so` fails the [`TELAR_EMBED_ABI`] check with a version mismatch rather than a missing-symbol error that names whichever method happened to be added last.
-///
-/// The symbol is a plain (release) export — no `hot-reload` feature, no `dev` feature.
-#[macro_export]
-macro_rules! embed {
-    ($factory:expr) => {
-        #[unsafe(no_mangle)]
-        pub static _rsx_embed_vtable: $crate::EmbedVTable = {
-            unsafe extern "Rust" fn create(
-                args: &[::std::string::String],
-            ) -> $crate::GuestResult<*mut $crate::EmbedInstance> {
-                $crate::__embed_create(|| ($factory)(args))
-            }
-            $crate::EmbedVTable {
-                abi: $crate::TELAR_EMBED_ABI,
-                layout: $crate::EMBED_LAYOUT.0,
-                create,
-                destroy: $crate::__embed_destroy,
-                relayout: $crate::__embed_relayout,
-                relayout_dirty: $crate::__embed_relayout_dirty,
-                paint: $crate::__embed_paint,
-                generation: $crate::__embed_generation,
-                on_event: $crate::__embed_on_event,
-                dispatch_overlays: $crate::__embed_dispatch_overlays,
-                end_frame: $crate::__embed_end_frame,
-                motion_tick: $crate::__embed_motion_tick,
-                motion_active: $crate::__embed_motion_active,
-                until_next_timer: $crate::__embed_until_next_timer,
-                next_timer_due: $crate::__embed_next_timer_due,
-                drain_window_commands: $crate::__embed_drain_window_commands,
-                set_system_preferences: $crate::__embed_set_system_preferences,
-                activate: $crate::__embed_activate,
-                clear_color: $crate::__embed_clear_color,
-                title: $crate::__embed_title,
-                icon: $crate::__embed_icon,
-                id: $crate::__embed_id,
-                on_frame: $crate::__embed_on_frame,
-                loaded: $crate::__embed_loaded,
-                unloading: $crate::__embed_unloading,
-                quiesce: $crate::__embed_quiesce,
-                set_keyboard_convention: $crate::__embed_set_keyboard_convention,
-                defer_fonts: $crate::__embed_defer_fonts,
-            }
-        };
-    };
-}
-
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-pub use host::{LoadedEmbed, load_embedded};
-
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-mod host {
-    use super::*;
-    use platform_core::guest::{Guest, LayoutMismatch};
-    use std::path::Path;
-
-    /// A loaded guest the host drives. Holds the live instance (dylib-allocated) and the `Library` that must outlive it. `!Send`/`!Sync`: the instance is a foreign reactive runtime, driven only on the UI thread.
-    ///
-    /// Every call goes through its [`Guest`], so once the guest has panicked none reaches it again: [`panic`](Self::panic) says what happened and where, and every method answers as an empty guest would — nothing painted, no event taken, no timer waiting. The host shows the report in the guest's place.
-    pub struct LoadedEmbed {
-        /// Null until the guest builds one, so a start that fails earlier still drops through the one path that quiesces the guest before closing its library.
-        inst: *mut EmbedInstance,
-        vtable: EmbedVTable,
-        guest: Guest,
-        timer_mirror: TimerMirror,
-        /// `None` for a table that is this process's own.
-        lib: Option<libloading::Library>,
-    }
-
-    /// Load a guest cdylib and create one instance from it (calling its vtable's `create` with `args`).
-    ///
-    /// Each load opens a private copy of the library, so a rebuilt library at the same path never shares statics with one still mapped, a guest that panicked among them. The library is kept mapped for the guest's lifetime — the instance holds live pointers into the dylib's code and data. A panic while the guest is built comes back as the error, a [`GuestPanic`] the caller can downcast to.
-    pub fn load_embedded(
-        path: &Path,
-        args: &[String],
-    ) -> Result<LoadedEmbed, Box<dyn std::error::Error>> {
-        let lib = platform_core::guest::open_unique(path)?;
-
-        let symbol: libloading::Symbol<*const EmbedVTable> =
-            unsafe { lib.get(b"_rsx_embed_vtable\0")? };
-        let vtable = unsafe { read_vtable(*symbol) }
-            .map_err(|mismatch| format!("{mismatch} — rebuild {}", path.display()))?;
-        Ok(LoadedEmbed::start(vtable, args, Some(lib))?)
-    }
-
-    /// Copies a guest's table out after checking it was built against this one.
-    ///
-    /// # Safety
-    /// `ptr` must point at a guest's exported table, of this or any other ABI version.
-    pub(crate) unsafe fn read_vtable(ptr: *const EmbedVTable) -> Result<EmbedVTable, AbiMismatch> {
-        // A guest built against a shorter table has fewer bytes than `EmbedVTable`, so copying the whole struct before the check would read past its end. `#[repr(C)]` puts `abi` at offset 0 for every version.
-        let abi = unsafe { *ptr.cast::<u32>() };
-        if abi != TELAR_EMBED_ABI {
-            return Err(AbiMismatch::Version { guest: abi });
-        }
-        let vtable = unsafe { *ptr };
-        EMBED_LAYOUT
-            .accept(BoundaryLayout(vtable.layout))
-            .map_err(AbiMismatch::Layout)?;
-        Ok(vtable)
-    }
-
-    /// A guest that cannot be driven by this host: built against another version of [`EmbedVTable`], or laid out differently from it.
-    #[derive(Debug, PartialEq, Eq)]
-    pub(crate) enum AbiMismatch {
-        Version { guest: u32 },
-        Layout(LayoutMismatch),
-    }
-
-    impl std::fmt::Display for AbiMismatch {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                Self::Version { guest } => {
-                    write!(
-                        f,
-                        "guest built for ABI {guest}, host is ABI {TELAR_EMBED_ABI}"
-                    )
-                }
-                Self::Layout(mismatch) => mismatch.fmt(f),
-            }
-        }
-    }
-
-    impl LoadedEmbed {
-        /// Hands the guest the host's keyboard convention and, from a library, the host's font database, creates one instance through `vtable` and seeds it with the host's system preferences.
-        pub(crate) fn start(
-            vtable: EmbedVTable,
-            args: &[String],
-            lib: Option<libloading::Library>,
-        ) -> Result<Self, GuestPanic> {
-            let mut embed = Self {
-                inst: std::ptr::null_mut(),
-                vtable,
-                guest: Guest::default(),
-                timer_mirror: TimerMirror::default(),
-                lib,
-            };
-            embed.build(args);
-            match embed.guest.panic().cloned() {
-                Some(panic) => Err(panic),
-                None => Ok(embed),
-            }
-        }
-
-        fn build(&mut self, args: &[String]) {
-            let vtable = self.vtable;
-            if self.lib.is_some() {
-                self.guest.call(|| unsafe { (vtable.loaded)() });
-            }
-            self.guest.call(|| unsafe {
-                (vtable.set_keyboard_convention)(platform_core::keyboard_convention())
-            });
-            let fonts = self.lib.as_ref().and_then(|_| served_fonts());
-            self.guest
-                .call(move || unsafe { (vtable.defer_fonts)(fonts) });
-            if let Some(inst) = self.guest.call(|| unsafe { (vtable.create)(args) }) {
-                self.inst = inst;
-            }
-            // A guest starts with a store of its own that knows nothing, and a host only forwards changes; without this one opened mid-session would draw light on a dark desktop until the user next changed a setting.
-            self.set_system_preferences(&preferences_core::system_preferences());
-        }
-
-        /// The panic that stopped this guest, if one has: what it said and where. Nothing of the guest runs after it.
-        pub fn panic(&self) -> Option<&GuestPanic> {
-            self.guest.panic()
-        }
-
-        pub fn relayout(&self, width: f32, height: f32) {
-            self.guest
-                .call(|| unsafe { (self.vtable.relayout)(self.inst, width, height) });
-        }
-        pub fn relayout_dirty(&self) {
-            self.guest
-                .call(|| unsafe { (self.vtable.relayout_dirty)(self.inst) });
-        }
-        pub fn paint(&self) -> DrawList {
-            self.guest
-                .call(|| unsafe { (self.vtable.paint)(self.inst) })
-                .unwrap_or_default()
-        }
-        pub fn generation(&self) -> u64 {
-            self.guest
-                .call(|| unsafe { (self.vtable.generation)(self.inst) })
-                .unwrap_or_default()
-        }
-        pub fn on_event(&self, event: &Event) -> bool {
-            self.guest
-                .call(|| unsafe { (self.vtable.on_event)(self.inst, event) })
-                .unwrap_or(false)
-        }
-        pub fn dispatch_overlays(&self, event: &Event) -> bool {
-            self.guest
-                .call(|| unsafe { (self.vtable.dispatch_overlays)(self.inst, event) })
-                .unwrap_or(false)
-        }
-        /// Call once per frame the host drove this guest through, after its events. Closes the guest's one-frame keyboard state, which `key_pressed` inside it answers from.
-        pub fn end_frame(&self) {
-            self.guest
-                .call(|| unsafe { (self.vtable.end_frame)(self.inst) });
-        }
-        pub fn motion_tick(&self, now: Instant) {
-            self.guest
-                .call(|| unsafe { (self.vtable.motion_tick)(self.inst, now) });
-        }
-        pub fn motion_active(&self) -> bool {
-            self.guest
-                .call(|| unsafe { (self.vtable.motion_active)(self.inst) })
-                .unwrap_or(false)
-        }
-        pub fn drain_window_commands(&self) -> WindowCommands {
-            self.guest
-                .call(|| unsafe { (self.vtable.drain_window_commands)(self.inst) })
-                .unwrap_or_default()
-        }
-        /// Hands the guest a new snapshot of the user's system preferences. [`load_embedded`] seeds it with the host's own; call this from the host's `on_system_preferences` so the guest follows later changes.
-        pub fn set_system_preferences(&self, preferences: &SystemPreferences) {
-            self.guest
-                .call(|| unsafe { (self.vtable.set_system_preferences)(self.inst, preferences) });
-        }
-        pub fn activate(&self) {
-            self.guest
-                .call(|| unsafe { (self.vtable.activate)(self.inst) });
-        }
-        pub fn clear_color(&self) -> Option<Color> {
-            self.guest
-                .call(|| unsafe { (self.vtable.clear_color)(self.inst) })
-                .flatten()
-        }
-        pub fn title(&self) -> String {
-            self.guest
-                .call(|| unsafe { (self.vtable.title)(self.inst) })
-                .unwrap_or_default()
-        }
-        pub fn icon(&self) -> Option<Vec<u8>> {
-            self.guest
-                .call(|| unsafe { (self.vtable.icon)(self.inst) })
-                .flatten()
-        }
-        pub fn id(&self) -> String {
-            self.guest
-                .call(|| unsafe { (self.vtable.id)(self.inst) })
-                .unwrap_or_default()
-        }
-        /// Call once per frame. Runs the guest's due timers, its finished tasks and its own hook, then keeps the host's loop waking for the guest's next timer.
-        pub fn on_frame(&self, ctx: &mut AppCtx) {
-            platform_core::guest::with_guest_ctx(ctx, |guest_ctx| {
-                self.guest
-                    .call(|| unsafe { (self.vtable.on_frame)(self.inst, guest_ctx) })
-            });
-            self.timer_mirror
-                .follow(self.next_timer_due(), self.until_next_timer());
-        }
-        /// How long until the guest's earliest timer comes due; `None` when none is waiting. [`on_frame`](Self::on_frame) already keeps the host's loop waking for it.
-        pub fn until_next_timer(&self) -> Option<Duration> {
-            self.guest
-                .call(|| unsafe { (self.vtable.until_next_timer)(self.inst) })
-                .flatten()
-        }
-        fn next_timer_due(&self) -> Option<Instant> {
-            self.guest
-                .call(|| unsafe { (self.vtable.next_timer_due)(self.inst) })
-                .flatten()
-        }
-    }
-
-    /// The guest's earliest timer, held as a timer of the host's own. The host's loop sleeps until the earliest deadline in the host's runtime, and the guest's timers are in a copy of their own it cannot see: this one runs nothing, it only wakes the frame in which the host drives the guest's [`on_frame`](LoadedEmbed::on_frame).
-    #[derive(Default)]
-    pub(crate) struct TimerMirror(RefCell<Option<(Instant, reactive_core::Timer)>>);
-
-    impl TimerMirror {
-        /// Follows the guest's earliest deadline, `due` on its clock and `wait` from now. A deadline already followed is left alone: scheduling it again would wake the loop every frame for a timer that has not moved.
-        pub(crate) fn follow(&self, due: Option<Instant>, wait: Option<Duration>) {
-            let mut mirrored = self.0.borrow_mut();
-            let following = mirrored
-                .as_ref()
-                .is_some_and(|(at, timer)| Some(*at) == due && timer.is_pending());
-            if !following {
-                *mirrored = due
-                    .zip(wait)
-                    .map(|(due, wait)| (due, reactive_core::run_after(wait, || {})));
-            }
-        }
-    }
-
-    #[cfg(feature = "shaper")]
-    fn served_fonts() -> Option<Arc<dyn FontHost>> {
-        Some(Arc::new(renderer_text::fonts::Served))
-    }
-
-    #[cfg(not(feature = "shaper"))]
-    fn served_fonts() -> Option<Arc<dyn FontHost>> {
-        None
-    }
-
-    impl Drop for LoadedEmbed {
-        fn drop(&mut self) {
-            let vtable = self.vtable;
-            if !self.inst.is_null() {
-                self.guest.call(|| unsafe { (vtable.destroy)(self.inst) });
-            }
-            let Some(lib) = self.lib.take() else {
-                return;
-            };
-            self.guest.unload(
-                lib,
-                || unsafe { (vtable.unloading)() },
-                || unsafe { (vtable.quiesce)() },
-            );
-        }
     }
 }
 

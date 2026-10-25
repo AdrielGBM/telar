@@ -27,6 +27,7 @@ pub mod system_preferences;
 pub mod text_input;
 pub mod window;
 pub mod window_command;
+mod wire;
 
 pub use access_audit::{AccessAudit, AccessRule, AccessSeverity, AccessViolation};
 pub use accessibility::{
@@ -34,7 +35,7 @@ pub use accessibility::{
     SetPosition, SortDirection, ToggleKind,
 };
 pub use app_ctx::{AppCtx, RedrawWaker};
-pub use asset_base::{asset_url, set_asset_base};
+pub use asset_base::{asset_base, asset_url, set_asset_base};
 pub use chord::{
     Chord, ChordError, KeyboardConvention, keyboard_convention, set_keyboard_convention,
 };
@@ -57,7 +58,9 @@ pub use history::{
     rewrite_location_history, set_anchor_revealer, set_location_locale, unfollow_location_history,
 };
 pub use key_pairing::KeyPairing;
-pub use location_format::{LocationFormat, location_format, set_location_format};
+pub use location_format::{
+    LocationFormat, installed_location_format, location_format, set_location_format,
+};
 pub use location_source::{
     ArgumentLocation, FixedLocation, HistorySink, HistoryStep, HistoryUpdate, LocationSource,
 };

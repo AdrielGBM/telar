@@ -1,0 +1,16 @@
+[package]
+name = "telar-wire-core"
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+description = "The byte spelling of every value that crosses between a Telar host and a guest library built with its own allocator."
+keywords = ["telar", "ffi", "serialization", "dylib", "gui"]
+categories = ["encoding", "gui"]
+readme = "README.md"
+license = { workspace = true }
+repository = { workspace = true }
+
+[features]
+golden = []
+
+[dependencies]

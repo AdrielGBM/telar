@@ -25,7 +25,7 @@ fn chord(key: char) -> telar::Event {
 fn node(id: u64, name: &'static str, depth: usize, rect: Rect) -> SegmentNodeInfo {
     SegmentNodeInfo {
         id,
-        name,
+        name: name.into(),
         depth,
         rect,
         padding: Insets::default(),

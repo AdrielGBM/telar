@@ -65,7 +65,8 @@ fn run_hot_reload_host_with<D: ui_tree::DevOverlay>(
         }
     };
     platform_core::set_keyboard_convention(platform.keyboard_convention());
-    let initial_app = match crate::hot::load_hot_app(std::path::Path::new(lib_path)) {
+    // SAFETY: the library is the one `cargo telar dev` built from this app against this telar and named to the host it started.
+    let initial_app = match unsafe { crate::hot::load_hot_app(std::path::Path::new(lib_path)) } {
         Ok(app) => app,
         Err(e) => {
             tracing::error!("failed to load dylib: {e}");

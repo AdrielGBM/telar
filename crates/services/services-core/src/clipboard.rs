@@ -1,6 +1,6 @@
 //! The system clipboard, as the vocabulary crate sees it.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 /// Reading and writing the system selection.
 ///
@@ -14,16 +14,18 @@ pub trait Clipboard: Send + Sync + 'static {
     fn set_text(&self, text: &str);
 }
 
-static CLIPBOARD: OnceLock<Arc<dyn Clipboard>> = OnceLock::new();
+reactive_local::released_slot! {
+    static CLIPBOARD: Arc<dyn Clipboard>;
+}
 
 /// Installs the backend the app's clipboard goes through. The desktop runner calls this at startup; a shell that speaks the protocol itself installs its own, and a test can install a stub. The first call wins.
 pub fn set_clipboard(backend: Arc<dyn Clipboard>) {
-    let _ = CLIPBOARD.set(backend);
+    CLIPBOARD.set_first(backend);
 }
 
 /// The installed backend, or `None` where there is no clipboard — headless, and Android today.
 pub fn clipboard() -> Option<Arc<dyn Clipboard>> {
-    CLIPBOARD.get().cloned()
+    CLIPBOARD.get()
 }
 
 /// The clipboard's text, or `None` with no backend installed. The spelling a widget reaches for.

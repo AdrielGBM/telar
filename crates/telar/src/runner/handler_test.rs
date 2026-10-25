@@ -1747,31 +1747,36 @@ impl App for Fixed {
 }
 
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
-fn create_panicking() -> crate::hot::GuestResult<Box<dyn App>> {
-    crate::hot::guest::create_app(|| Box::new(Panicking))
+type AppHandle = crate::hot::Handle<crate::hot::guest::GuestApp>;
+
+#[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
+unsafe extern "C" fn create_panicking(app: *mut AppHandle) -> crate::hot::CallOutcome {
+    unsafe { crate::hot::guest::create(app, || Box::new(Panicking)) }
 }
 
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
-fn create_fixed() -> crate::hot::GuestResult<Box<dyn App>> {
-    crate::hot::guest::create_app(|| Box::new(Fixed))
+unsafe extern "C" fn create_fixed(app: *mut AppHandle) -> crate::hot::CallOutcome {
+    unsafe { crate::hot::guest::create(app, || Box::new(Fixed)) }
 }
 
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
-fn create_nothing() -> crate::hot::GuestResult<Box<dyn App>> {
-    crate::hot::guest::create_app(|| panic!("the app's setup could not find its assets"))
+unsafe extern "C" fn create_nothing(app: *mut AppHandle) -> crate::hot::CallOutcome {
+    unsafe {
+        crate::hot::guest::create(app, || panic!("the app's setup could not find its assets"))
+    }
 }
 
-/// A build served by this process's own exports, through the same table, the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries.
+/// A build served by this process's own entries, through the same table, the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries.
 #[cfg(all(feature = "dev", not(target_arch = "wasm32")))]
 fn hot_build(create: crate::hot::CreateApp) -> Box<dyn AppRuntime> {
-    fn keep_services(_: crate::hot::HostServices) -> crate::hot::GuestResult<()> {
-        Ok(())
+    extern "C" fn keep_services(_: crate::hot::HostServices) -> crate::hot::CallOutcome {
+        crate::hot::CallOutcome::OK
     }
-    let exports = crate::hot::GuestExports {
-        install_services: keep_services,
-        ..crate::hot::GuestExports::in_process()
+    let entries = crate::hot::HotEntries {
+        lifecycle: platform_core::guest::Lifecycle::serving(keep_services),
+        ..crate::hot::HotEntries::serving(create)
     };
-    Box::new(crate::hot::HotApp::start(exports, create, None))
+    Box::new(crate::hot::HotApp::start(entries, None))
 }
 
 /// What the overlay was told about builds and panics.

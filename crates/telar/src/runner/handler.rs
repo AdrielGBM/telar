@@ -465,7 +465,8 @@ where
                 false
             }
             crate::hot::HotEvent::Reload(library) => {
-                let loaded = crate::hot::load_hot_app(&library)
+                // SAFETY: a rebuild of this app that `cargo telar dev` announced over the channel only it holds the token to.
+                let loaded = unsafe { crate::hot::load_hot_app(&library) }
                     .map(|app| Box::new(app) as Box<dyn AppRuntime>)
                     .map_err(|e| e.to_string());
                 self.reload(&library, loaded, window)

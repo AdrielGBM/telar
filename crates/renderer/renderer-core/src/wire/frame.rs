@@ -4,11 +4,10 @@ use std::sync::Arc;
 
 use geometry_core::{BorderRadius, Point, Rect};
 use rustc_hash::FxHashMap;
+use wire_core::{Reader, Wire, WireError, Writer};
 
-use super::bytes::{Reader, Writer};
 use super::intern::{Interner, Slots};
-use super::value::Wire;
-use super::{WIRE_VERSION, WireError};
+use super::{FrameError, WIRE_VERSION};
 use crate::{
     BlendMode, DrawCommand, Element, ImageData, ImageFill, LayerMask, Linked, PathData, PathStyle,
     Raster, RectStyle, Span, Stroke, TextStyle,
@@ -37,40 +36,50 @@ const PIXELS: u8 = 0;
 const LINKED: u8 = 1;
 const EXTERNAL: u8 = 2;
 
-#[derive(Default)]
-struct Sent {
-    rect_styles: Interner<RectStyle>,
-    text_styles: Interner<TextStyle>,
-    strokes: Interner<Stroke>,
-    path_styles: Interner<PathStyle>,
-    paths: Interner<PathData>,
-    elements: Interner<Element>,
-    texts: Interner<str>,
-    spans: Interner<[Span]>,
+/// Declares one table per side of every payload a frame interns, `Sent` the encoder's and `Received` the decoder's, each kept by the frames that still use it.
+macro_rules! payloads {
+    ($($field:ident: $payload:ty,)*) => {
+        #[derive(Default)]
+        struct Sent {
+            $($field: Interner<$payload>,)*
+        }
+
+        impl Sent {
+            fn sweep(&mut self, frame: u64) {
+                $(self.$field.sweep(frame);)*
+            }
+
+            fn clear(&mut self) {
+                $(self.$field.clear();)*
+            }
+        }
+
+        #[derive(Default)]
+        struct Received {
+            $($field: Slots<$payload>,)*
+        }
+
+        impl Received {
+            fn sweep(&mut self, frame: u64) {
+                $(self.$field.sweep(frame);)*
+            }
+
+            fn clear(&mut self) {
+                $(self.$field.clear();)*
+            }
+        }
+    };
 }
 
-impl Sent {
-    fn sweep(&mut self, frame: u64) {
-        self.rect_styles.sweep(frame);
-        self.text_styles.sweep(frame);
-        self.strokes.sweep(frame);
-        self.path_styles.sweep(frame);
-        self.paths.sweep(frame);
-        self.elements.sweep(frame);
-        self.texts.sweep(frame);
-        self.spans.sweep(frame);
-    }
-
-    fn clear(&mut self) {
-        self.rect_styles.clear();
-        self.text_styles.clear();
-        self.strokes.clear();
-        self.path_styles.clear();
-        self.paths.clear();
-        self.elements.clear();
-        self.texts.clear();
-        self.spans.clear();
-    }
+payloads! {
+    rect_styles: RectStyle,
+    text_styles: TextStyle,
+    strokes: Stroke,
+    path_styles: PathStyle,
+    paths: PathData,
+    elements: Element,
+    texts: str,
+    spans: [Span],
 }
 
 /// The guest's half: encodes each frame into a buffer it owns, valid until the next [`encode`](Self::encode), and lends the pixels of the images that frame draws.
@@ -123,8 +132,8 @@ impl FrameEncoder {
         self.out.as_slice()
     }
 
-    /// The last frame [`encode`](Self::encode) built, for a caller that lends it while the host also asks for [`pixels`](Self::pixels).
-    pub fn bytes(&self) -> &[u8] {
+    #[cfg(test)]
+    pub(crate) fn bytes(&self) -> &[u8] {
         self.out.as_slice()
     }
 
@@ -256,42 +265,6 @@ fn put_image(w: &mut Writer, lent: &mut FxHashMap<u64, Arc<ImageData>>, image: &
     }
 }
 
-#[derive(Default)]
-struct Received {
-    rect_styles: Slots<RectStyle>,
-    text_styles: Slots<TextStyle>,
-    strokes: Slots<Stroke>,
-    path_styles: Slots<PathStyle>,
-    paths: Slots<PathData>,
-    elements: Slots<Element>,
-    texts: Slots<str>,
-    spans: Slots<[Span]>,
-}
-
-impl Received {
-    fn sweep(&mut self, frame: u64) {
-        self.rect_styles.sweep(frame);
-        self.text_styles.sweep(frame);
-        self.strokes.sweep(frame);
-        self.path_styles.sweep(frame);
-        self.paths.sweep(frame);
-        self.elements.sweep(frame);
-        self.texts.sweep(frame);
-        self.spans.sweep(frame);
-    }
-
-    fn clear(&mut self) {
-        self.rect_styles.clear();
-        self.text_styles.clear();
-        self.strokes.clear();
-        self.path_styles.clear();
-        self.paths.clear();
-        self.elements.clear();
-        self.texts.clear();
-        self.spans.clear();
-    }
-}
-
 /// The host's half: decodes a lent frame into commands the host allocated, keeping what consecutive frames share so an unchanged payload decodes to the same `Arc` frame after frame.
 ///
 /// Images are kept by content id and copied from the guest only the first time a frame draws one; an external texture the guest made cannot cross, and decodes as an image with no pixels.
@@ -307,15 +280,15 @@ impl FrameDecoder {
         Self::default()
     }
 
-    /// Replaces `out` with the frame in `bytes`. `lend` copies the pixels of an image the host has not seen, from [`FrameEncoder::pixels`] across the boundary. After an error `out` is empty, and the guest's encoder has to be [`reset`](FrameEncoder::reset).
+    /// Replaces `out` with the frame in `bytes`. `copy_pixels` copies the pixels of an image the host has not seen, from [`FrameEncoder::pixels`] across the boundary. After an error `out` is empty, and the guest's encoder has to be [`reset`](FrameEncoder::reset).
     pub fn decode(
         &mut self,
         bytes: &[u8],
         out: &mut Vec<DrawCommand>,
-        mut lend: impl FnMut(u64) -> Option<Vec<u8>>,
-    ) -> Result<(), WireError> {
+        mut copy_pixels: impl FnMut(u64) -> Option<Vec<u8>>,
+    ) -> Result<(), FrameError> {
         out.clear();
-        let decoded = self.decode_frame(bytes, out, &mut lend);
+        let decoded = self.decode_frame(bytes, out, &mut copy_pixels);
         if decoded.is_err() {
             out.clear();
             self.last = None;
@@ -328,25 +301,25 @@ impl FrameDecoder {
         &mut self,
         bytes: &[u8],
         out: &mut Vec<DrawCommand>,
-        lend: &mut dyn FnMut(u64) -> Option<Vec<u8>>,
-    ) -> Result<(), WireError> {
+        copy_pixels: &mut dyn FnMut(u64) -> Option<Vec<u8>>,
+    ) -> Result<(), FrameError> {
         let mut r = Reader::new(bytes);
-        if r.raw(MAGIC.len()).map_err(|_| WireError::NotAFrame)? != MAGIC {
-            return Err(WireError::NotAFrame);
+        if r.raw(MAGIC.len()).map_err(|_| FrameError::NotAFrame)? != MAGIC {
+            return Err(FrameError::NotAFrame);
         }
         let version = r.u16()?;
         if version != WIRE_VERSION {
-            return Err(WireError::Version { found: version });
+            return Err(FrameError::Version { found: version });
         }
         let flags = r.u8()?;
         if flags & !FRESH != 0 {
-            return Err(WireError::Invalid("frame flags"));
+            return Err(WireError::Invalid("frame flags").into());
         }
         let frame = r.u64()?;
         if flags & FRESH != 0 {
             self.received.clear();
         } else if self.last.and_then(|last| last.checked_add(1)) != Some(frame) {
-            return Err(WireError::OutOfStep {
+            return Err(FrameError::OutOfStep {
                 last: self.last,
                 found: frame,
             });
@@ -355,7 +328,7 @@ impl FrameDecoder {
         out.reserve(count);
         let mut images = Images {
             known: &mut self.images,
-            lend,
+            copy_pixels,
             frame,
         };
         for _ in 0..count {
@@ -367,7 +340,7 @@ impl FrameDecoder {
             )?);
         }
         if !r.is_empty() {
-            return Err(WireError::Trailing(r.remaining()));
+            return Err(WireError::Trailing(r.remaining()).into());
         }
         self.received.sweep(frame);
         self.images.retain(|_, (_, used)| *used == frame);
@@ -378,12 +351,12 @@ impl FrameDecoder {
 
 struct Images<'a> {
     known: &'a mut FxHashMap<u64, (Arc<ImageData>, u64)>,
-    lend: &'a mut dyn FnMut(u64) -> Option<Vec<u8>>,
+    copy_pixels: &'a mut dyn FnMut(u64) -> Option<Vec<u8>>,
     frame: u64,
 }
 
 impl Images<'_> {
-    fn take(&mut self, r: &mut Reader<'_>) -> Result<Arc<ImageData>, WireError> {
+    fn take(&mut self, r: &mut Reader<'_>) -> Result<Arc<ImageData>, FrameError> {
         let kind = r.u8()?;
         let id = u64::take(r)?;
         let width = u32::take(r)?;
@@ -391,7 +364,7 @@ impl Images<'_> {
         let linked = match kind {
             LINKED => Some(Linked::take(r)?),
             PIXELS | EXTERNAL => None,
-            tag => return Err(WireError::Tag { of: "image", tag }),
+            tag => return Err(WireError::Tag { of: "image", tag }.into()),
         };
         if let Some((image, used)) = self.known.get_mut(&id) {
             *used = self.frame;
@@ -407,21 +380,26 @@ impl Images<'_> {
                 ImageData::linked(&linked.url, width, height, &variants)
             }
             (EXTERNAL, _) => ImageData::without_pixels(id, width, height),
-            _ => self.borrow_pixels(id, width, height)?,
+            _ => self.image_with_pixels(id, width, height)?,
         };
         if image.id != id {
-            return Err(WireError::ImageMismatch(id));
+            return Err(FrameError::ImageMismatch(id));
         }
         let image = Arc::new(image);
         self.known.insert(id, (Arc::clone(&image), self.frame));
         Ok(image)
     }
 
-    fn borrow_pixels(&mut self, id: u64, width: u32, height: u32) -> Result<ImageData, WireError> {
-        let pixels = (self.lend)(id).ok_or(WireError::MissingImage(id))?;
+    fn image_with_pixels(
+        &mut self,
+        id: u64,
+        width: u32,
+        height: u32,
+    ) -> Result<ImageData, FrameError> {
+        let pixels = (self.copy_pixels)(id).ok_or(FrameError::MissingImage(id))?;
         let expected = u64::from(width) * u64::from(height) * 4;
         if expected > u64::from(u32::MAX) || pixels.len() as u64 != expected {
-            return Err(WireError::Invalid("lent pixels do not fill the image"));
+            return Err(WireError::Invalid("lent pixels do not fill the image").into());
         }
         Ok(ImageData::from_premultiplied(pixels, width, height))
     }
@@ -432,7 +410,7 @@ fn take_command(
     received: &mut Received,
     images: &mut Images<'_>,
     frame: u64,
-) -> Result<DrawCommand, WireError> {
+) -> Result<DrawCommand, FrameError> {
     Ok(match r.u8()? {
         RECT => {
             let rect = Rect::take(r)?;
@@ -446,7 +424,7 @@ fn take_command(
             let spans = match r.u8()? {
                 0 => None,
                 1 => Some(received.spans.take(r, frame, Wire::take)?),
-                tag => return Err(WireError::Tag { of: "spans", tag }),
+                tag => return Err(WireError::Tag { of: "spans", tag }.into()),
             };
             let rect = Rect::take(r)?;
             let style = received.text_styles.take(r, frame, Wire::take)?;
@@ -511,7 +489,7 @@ fn take_command(
             surface: u64::take(r)?,
         },
         POP_SURFACE => DrawCommand::PopSurface,
-        tag => return Err(WireError::Tag { of: "command", tag }),
+        tag => return Err(WireError::Tag { of: "command", tag }.into()),
     })
 }
 

@@ -19,6 +19,13 @@ use platform_headless::HeadlessWindow;
 // `AppRuntime` and not `App`: `mount` is a runtime concern, and what this drives is a tree that lives in a dylib.
 use telar::{AppPathsProvider, AppRuntime, NoPaths, build_surface_handler};
 
+fn load(path: &std::path::Path) -> telar::hot::HotApp {
+    // SAFETY: the library is this package built as the module docs describe, from this checkout.
+    unsafe { telar::hot::load_hot_app(path) }.unwrap_or_else(|why| {
+        panic!("{why}\nA dylib built without `telar/hot-reload` exports no guest contract: rebuild it as the module docs describe.")
+    })
+}
+
 fn dylib_path() -> PathBuf {
     let name = if cfg!(target_os = "windows") {
         "sandbox.dll"
@@ -33,13 +40,13 @@ fn dylib_path() -> PathBuf {
         .join(name)
 }
 
-/// The reload ownership order: the tree the dylib allocated has to be released *into that dylib* while it is still mapped, which is why the runner nulls its tree before it replaces the app. Getting it backwards frees dylib memory through an unmapped `release` shim — a segfault, not a test failure, so this is a crash guard.
+/// The reload ownership order: the tree the dylib allocated has to be released *into that dylib* while it is still mapped, which is why the runner nulls its tree before it replaces the app. Getting it backwards frees dylib memory through the `tree_release` entry of an unmapped library — a segfault, not a test failure, so this is a crash guard.
 #[test]
 #[ignore = "needs a hot-reload dylib built first; see the module docs"]
 fn the_dylib_tree_composes_and_is_released_before_its_library() {
     let path = dylib_path();
     assert!(path.exists(), "no dylib at {}", path.display());
-    let mut app = telar::hot::load_hot_app(&path).expect("dlopen failed");
+    let mut app = load(&path);
     let mut tree = app.mount();
     tree.on_event(&Event::WindowResized {
         width: 1200,
@@ -68,7 +75,7 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
         "no dylib at {}: build it as the module docs describe",
         path.display()
     );
-    let app = telar::hot::load_hot_app(&path).expect("dlopen failed");
+    let app = load(&path);
     let (w, h) = (1200u32, 900u32);
     let window = HeadlessWindow::new(w, h);
     let mut handler: Box<dyn EventHandler<HeadlessWindow>> = build_surface_handler(
@@ -134,8 +141,7 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
     assert!(
         distinct >= 2,
         "only {distinct} distinct frame(s) after the click with no further input: the app's tree is not \
-         re-composing on its own. If the dylib was last built without `telar/hot-reload` it exports no \
-         tree shims and the host mounted the tree itself — rebuild it as the module docs describe."
+         re-composing on its own"
     );
 }
 
@@ -145,7 +151,7 @@ fn a_click_keeps_recomposing_frames_with_the_app_in_a_dylib() {
 fn the_host_runtime_is_driven_alongside_the_dylibs() {
     let path = dylib_path();
     assert!(path.exists(), "no dylib at {}", path.display());
-    let app = telar::hot::load_hot_app(&path).expect("dlopen failed");
+    let app = load(&path);
 
     let fired = Rc::new(Cell::new(false));
     let firing = Rc::clone(&fired);

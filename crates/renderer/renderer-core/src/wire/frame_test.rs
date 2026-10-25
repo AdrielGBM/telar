@@ -303,7 +303,7 @@ fn round_trip(
     encoder: &mut FrameEncoder,
     decoder: &mut FrameDecoder,
     commands: &[DrawCommand],
-) -> Result<Vec<DrawCommand>, WireError> {
+) -> Result<Vec<DrawCommand>, FrameError> {
     let mut out = Vec::new();
     let bytes = encoder.encode(commands).to_vec();
     decoder.decode(&bytes, &mut out, |id| {
@@ -441,7 +441,7 @@ fn a_frame_the_decoder_missed_is_refused_until_the_encoder_resets() {
     let _missed = encoder.encode(&commands);
     assert!(matches!(
         round_trip(&mut encoder, &mut decoder, &commands),
-        Err(WireError::OutOfStep { .. })
+        Err(FrameError::OutOfStep { .. })
     ));
     encoder.reset();
     assert_eq!(
@@ -471,7 +471,7 @@ fn a_cut_or_corrupted_frame_is_an_error_and_never_a_panic() {
     long.push(0);
     assert_eq!(
         FrameDecoder::new().decode(&long, &mut out, lend),
-        Err(WireError::Trailing(1))
+        Err(FrameError::Malformed(WireError::Trailing(1)))
     );
 }
 
@@ -481,7 +481,7 @@ fn another_version_is_refused() {
     bytes[4..6].copy_from_slice(&(WIRE_VERSION + 1).to_le_bytes());
     assert_eq!(
         FrameDecoder::new().decode(&bytes, &mut Vec::new(), |_| None),
-        Err(WireError::Version {
+        Err(FrameError::Version {
             found: WIRE_VERSION + 1
         })
     );
@@ -493,7 +493,7 @@ fn pixels_the_guest_does_not_lend_are_an_error() {
     let bytes = FrameEncoder::new().encode(&commands).to_vec();
     assert_eq!(
         FrameDecoder::new().decode(&bytes, &mut Vec::new(), |_| None),
-        Err(WireError::MissingImage(pixels().id))
+        Err(FrameError::MissingImage(pixels().id))
     );
 }
 
@@ -532,4 +532,60 @@ fn an_equal_payload_rebuilt_in_a_new_arc_crosses_once_and_decodes_to_one_arc() {
         second_len < one_style,
         "{second_len} resends a style ({one_style} for one row)"
     );
+}
+
+#[test]
+fn a_link_to_a_scheme_the_host_refuses_is_dropped_and_the_frame_still_draws() {
+    let link = || Destination::External(Uri::parse("https://example.com").unwrap());
+    let element = Element::new(
+        ElementId(1),
+        Semantics {
+            role: Role::Link,
+            link: Some(link()),
+            ..Semantics::default()
+        },
+        "",
+        Rect::new(0.0, 0.0, 50.0, 20.0),
+    );
+    let text = DrawCommand::Text {
+        text: "visit".into(),
+        spans: Some(vec![Span::new(0..5, Declared::default()).linking_to(link())].into()),
+        rect: Rect::new(0.0, 0.0, 50.0, 20.0),
+        style: Arc::new(text_style()),
+    };
+    let commands = [
+        DrawCommand::PushElement {
+            element: Arc::new(element),
+        },
+        text,
+        DrawCommand::PopElement,
+    ];
+    let mut bytes = FrameEncoder::new().encode(&commands).to_vec();
+    let mut refused = 0;
+    while let Some(at) = bytes.windows(5).position(|window| window == b"https") {
+        bytes[at..at + 5].copy_from_slice(b"zzzzz");
+        refused += 1;
+    }
+    assert_eq!(refused, 2);
+    let mut out = Vec::new();
+    FrameDecoder::new()
+        .decode(&bytes, &mut out, |_| None)
+        .unwrap();
+    assert_eq!(out.len(), 3);
+    assert_eq!(element_of(&out[0]).semantics.link, None);
+    assert_eq!(element_of(&out[0]).semantics.role, Role::Link);
+    let DrawCommand::Text { spans, text, .. } = &out[1] else {
+        panic!("expected text, got {:?}", out[1]);
+    };
+    assert_eq!(&**text, "visit");
+    assert_eq!(spans.as_ref().unwrap()[0].link, None);
+}
+
+#[test]
+fn the_bytes_of_a_fresh_and_a_steady_frame_are_pinned_to_the_wire_version() {
+    let mut encoder = FrameEncoder::new();
+    let fresh = encoder.encode(&every_command()).to_vec();
+    wire_core::assert_golden!("src/wire/frame_golden/fresh.hex", &fresh);
+    let steady = encoder.encode(&every_command()).to_vec();
+    wire_core::assert_golden!("src/wire/frame_golden/steady.hex", &steady);
 }

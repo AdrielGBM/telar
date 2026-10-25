@@ -12,6 +12,7 @@ repository = { workspace = true }
 
 [dependencies]
 geometry-core = { workspace = true }
+reactive-local = { workspace = true }
 renderer-cache = { workspace = true }
 renderer-core = { workspace = true }
 renderer-text = { workspace = true }

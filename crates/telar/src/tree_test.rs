@@ -24,44 +24,34 @@ impl crate::app::App for Blank {
 fn the_hot_tree_feeds_the_registries_its_own_widgets_read() {
     ui_core::reset_keyboard();
     ui_core::reset_pointer();
-    let tree = HotTree::mount(&Blank);
+    let mut tree = HotTree::mount(&Blank);
 
     assert!(
         !ui_core::modifiers().is_shift,
         "shift is not down before the event"
     );
-    unsafe {
-        HotTree::on_event(
-            tree,
-            &Event::ModifiersChanged {
-                modifiers: platform_core::ModifiersState {
-                    is_shift: true,
-                    ..Default::default()
-                },
-            },
-        );
-    }
+    tree.on_event(&Event::ModifiersChanged {
+        modifiers: platform_core::ModifiersState {
+            is_shift: true,
+            ..Default::default()
+        },
+    });
     assert!(
         ui_core::modifiers().is_shift,
         "the side that dispatched has to be the side that knows"
     );
 
-    unsafe {
-        HotTree::on_event(
-            tree,
-            &Event::PointerPressed {
-                x: 5.0,
-                y: 5.0,
-                button: platform_core::PointerButton::Secondary,
-                source: platform_core::PointerSource::Mouse,
-            },
-        );
-    }
+    tree.on_event(&Event::PointerPressed {
+        x: 5.0,
+        y: 5.0,
+        button: platform_core::PointerButton::Secondary,
+        source: platform_core::PointerSource::Mouse,
+    });
     assert!(
         ui_core::pointer_buttons().secondary,
         "and the same for which button is down"
     );
-    unsafe { HotTree::release(tree) };
+    drop(tree);
     ui_core::reset_keyboard();
     ui_core::reset_pointer();
 }
@@ -121,8 +111,35 @@ fn releasing_a_hot_tree_frees_the_controls_it_built() {
     let button = id.get().expect("the button is focusable");
     assert!(ui_core::focus::is_registered(button));
 
-    unsafe { HotTree::release(tree) };
+    drop(tree);
     assert!(!ui_core::focus::is_registered(button));
+}
+
+/// What a hot tree paints is what it composed, read back on the host's side; a host that lost a frame has the tree reset, and the next frame stands alone.
+#[test]
+fn a_hot_tree_paints_what_it_composed_and_a_reset_frame_stands_alone() {
+    let mut tree = HotTree::mount(&Blank);
+    ui_core::relayout_if_dirty();
+    let composed = tree.tree.list.commands().clone();
+    assert!(!composed.is_empty(), "precondition: the tree draws");
+    let read = |decoder: &mut renderer_core::wire::FrameDecoder, frame: LentBytes| {
+        let mut commands = Vec::new();
+        decoder
+            .decode(unsafe { frame.as_slice() }, &mut commands, |_| None)
+            .map(|()| commands)
+    };
+
+    let mut decoder = renderer_core::wire::FrameDecoder::new();
+    assert_eq!(read(&mut decoder, tree.paint()), Ok(composed.clone()));
+    assert_eq!(read(&mut decoder, tree.paint()), Ok(composed.clone()));
+
+    let mut fresh = renderer_core::wire::FrameDecoder::new();
+    assert!(
+        read(&mut fresh, tree.paint()).is_err(),
+        "precondition: a frame builds on the ones before it"
+    );
+    tree.reset_frames();
+    assert_eq!(read(&mut fresh, tree.paint()), Ok(composed));
 }
 
 fn fill() -> layout_core::LayoutStyle {

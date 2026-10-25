@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 /// Where preferences are kept, as text under keys the application and Telar name.
 ///
@@ -16,31 +16,28 @@ pub trait PreferenceStore: Send + Sync + 'static {
     fn set(&self, key: &str, value: Option<&str>);
 }
 
-static STORE: RwLock<Option<Arc<dyn PreferenceStore>>> = RwLock::new(None);
+reactive_local::released_slot! {
+    static STORE: Arc<dyn PreferenceStore>;
+}
 
 /// Installs the store preferences are kept in. Each runner installs its target's; a later call replaces it.
 pub fn set_preference_store(store: Arc<dyn PreferenceStore>) {
-    *STORE.write().unwrap_or_else(|e| e.into_inner()) = Some(store);
+    STORE.replace(store);
 }
 
 /// The installed store, or one in memory where none was installed — headless, a test, a preview — so a preference still holds for the run.
-fn store() -> Arc<dyn PreferenceStore> {
-    if let Some(store) = STORE.read().unwrap_or_else(|e| e.into_inner()).clone() {
-        return store;
-    }
-    let mut slot = STORE.write().unwrap_or_else(|e| e.into_inner());
-    slot.get_or_insert_with(|| Arc::new(MemoryStore::default()))
-        .clone()
+pub fn preference_store() -> Arc<dyn PreferenceStore> {
+    STORE.get_or_insert_with(|| Arc::new(MemoryStore::default()))
 }
 
 /// The preference kept under `key`, if any.
 pub fn stored_preference(key: &str) -> Option<String> {
-    store().get(key)
+    preference_store().get(key)
 }
 
 /// Keeps `value` under `key` for the next run, or forgets it for `None`.
 pub fn store_preference(key: &str, value: Option<&str>) {
-    store().set(key, value);
+    preference_store().set(key, value);
 }
 
 /// Preferences kept for the run and no longer.

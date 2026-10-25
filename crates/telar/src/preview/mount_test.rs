@@ -61,7 +61,7 @@ fn a_mounted_preview_fills_the_box_a_row_gives_it() {
 fn segment(name: &'static str, depth: usize) -> SegmentNodeInfo {
     SegmentNodeInfo {
         id: 0,
-        name,
+        name: name.into(),
         depth,
         rect: crate::Rect::default(),
         padding: crate::Insets::default(),
@@ -84,10 +84,8 @@ fn a_preview_s_own_nodes_are_those_under_the_boundary_it_is_mounted_in() {
         segment("Text", 6),
         segment("Overlay", 1),
     ];
-    let own: Vec<(&str, usize)> = preview_nodes(&walk)
-        .iter()
-        .map(|node| (node.name, node.depth))
-        .collect();
+    let nodes = preview_nodes(&walk);
+    let own: Vec<(&str, usize)> = nodes.iter().map(|node| (&*node.name, node.depth)).collect();
     assert_eq!(
         own,
         [

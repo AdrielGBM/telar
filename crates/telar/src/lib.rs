@@ -123,7 +123,7 @@ mod previews_gate_tests;
 mod test_face;
 
 #[cfg(all(test, feature = "dev", target_os = "linux"))]
-mod hot_guest_fixture;
+mod guest_fixture;
 
 #[cfg(feature = "runtime")]
 pub use app::App;
@@ -153,7 +153,7 @@ pub use runner::font_config::FontSetup;
 pub use tree::{Frame, HotTree, LocalTree, UiTree};
 #[cfg(feature = "runtime")]
 pub use ui_tree::{BuildOutcome, DevAction, DevOverlay, OverlayResponse};
-// Named in the tree shims the `app!` macro exports, so it has to be reachable through the facade.
+// Named by `UiTree::walk`, which the runner reads a hot-reloaded tree through, so it has to be reachable through the facade.
 #[cfg(feature = "runtime")]
 pub use ui_tree::SegmentNodeInfo;
 // Always on: kernel functionality, not an opt-in module. The transpiler emits `motion::` paths against this.
@@ -204,7 +204,7 @@ pub use reactive_core::{
     Timer, Transaction, TransactionError, advance_timer_clock, after_settle, batch, current_owner,
     derive, derive_pair, detached, dispose_owner, drain_tasks, dropless_thread_local, effect,
     fire_timers, memo, on_cleanup, owner_scope, released_static, reset_runtime, reset_tasks,
-    reset_timers, run_after, set_task_waker, signal, spawn_stream, spawn_task, timer_now,
+    reset_timers, run_after, set_task_waker, signal, spawn_stream, spawn_task, threads, timer_now,
     until_next_timer, with_owner,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]

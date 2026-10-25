@@ -483,7 +483,7 @@ stale build to clear by editing a source, not a wrong one.
 ## Hot reload: what a plugin must not leave behind
 
 `cargo telar dev` builds the application as a `cdylib` and swaps it on every change. A plugin is linked into
-that dylib, so two rules follow from the old copy being unmapped (`dlclose`):
+that dylib, so these rules follow from the old copy being unmapped (`dlclose`):
 
 - **Thread-locals must not register destructors.** A thread-local holding something that drops (an `Rc`, a
   `RefCell<HashMap<…>>`) keeps the dylib mapped after it is unloaded, until its thread exits. Declare
@@ -500,6 +500,13 @@ that dylib, so two rules follow from the old copy being unmapped (`dlclose`):
 
   Anything a plugin keeps that must survive a swap is bridged through the hot-reload snapshot, as the active
   theme mode id is, rather than kept in a plugin-owned static.
+
+- **Threads start with `telar::threads::spawn`, not `std::thread::spawn`.** std runs its spawn hooks on the
+  thread that spawns, through a thread-local with a destructor, so a dylib spawning with its own std from the
+  host's UI thread, which never exits, stays mapped for the rest of the session. `telar::threads::spawn` (and
+  `telar::threads::scope`) has the host start the thread with its own std instead, and is `std`'s own spawn in
+  a build that is not hot-reloaded. A crate the plugin links that spawns threads itself pins the dylib the same
+  way when it does so from the UI thread.
 
 - **A `&Catalog` from a dylib is only valid while the dylib is loaded.** A catalog baked into the application's
   dylib lives in that dylib's data. The installed catalog is safe: the dylib links its own copy of the i18n
@@ -524,5 +531,6 @@ that dylib, so two rules follow from the old copy being unmapped (`dlclose`):
   needs from `use_theme_extension::<K>()`, with `K::default()` as the built-in answers.
 - Strings through `translate_with_override` (or `t!` in a library) under the crate name.
 - Thread-locals through `telar::dropless_thread_local!`, none with a destructor; no stored `&'static Catalog`.
+- Threads started with `telar::threads::spawn`, never `std::thread::spawn`.
 - Anything installed process-wide behind a function the application calls from `telar::app!`'s setup block.
 - For a `.rsx` library: `cargo telar package --check` passes, and `cargo telar publish --dry-run` succeeds.

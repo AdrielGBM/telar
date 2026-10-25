@@ -1,6 +1,8 @@
 # telar-reactive-local
 
-Per-surface thread-local slots for Telar: surface-scoped state, reentry guards and thread-exit release.
+Per-surface thread-local slots for Telar: surface-scoped state, reentry guards, thread-exit release and the
+`threads` hook every thread the runtime starts goes through, which a hot-reloaded or embedded build routes to
+its host.
 
 Part of [Telar](https://github.com/AdrielGBM/telar), a modular Rust UI framework with its own template
 language, reactive signals and a self-contained renderer.

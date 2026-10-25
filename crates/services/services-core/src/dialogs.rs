@@ -1,7 +1,7 @@
 //! The file-picker service: what an app asks for, and the provider a backend installs to answer.
 
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 /// One entry of a dialog's type filter: a name the user reads and the extensions it accepts.
 #[derive(Clone, Debug, Default)]
@@ -65,14 +65,16 @@ pub trait FileDialogs: Send + Sync + 'static {
     fn pick_folder(&self, request: FileDialog) -> Option<PathBuf>;
 }
 
-static DIALOGS: OnceLock<Arc<dyn FileDialogs>> = OnceLock::new();
+reactive_local::released_slot! {
+    static DIALOGS: Arc<dyn FileDialogs>;
+}
 
 /// Installs the backend the app's dialogs go through. The desktop runner calls this at startup; a test or a headless build can install a stub instead. The first call wins.
 pub fn set_file_dialogs(provider: Arc<dyn FileDialogs>) {
-    let _ = DIALOGS.set(provider);
+    DIALOGS.set_first(provider);
 }
 
 /// The installed backend, or `None` on a platform with no file chooser (headless, Android today).
 pub fn file_dialogs() -> Option<Arc<dyn FileDialogs>> {
-    DIALOGS.get().cloned()
+    DIALOGS.get()
 }

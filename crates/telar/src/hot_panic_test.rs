@@ -2,13 +2,13 @@
 
 #![cfg(not(target_arch = "wasm32"))]
 
-#[path = "hot_guest_fixture.rs"]
-mod hot_guest_fixture;
+#[path = "guest_fixture.rs"]
+mod guest_fixture;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError};
 
-use telar::hot::load_hot_app;
+use telar::hot::{HotApp, load_hot_app};
 use telar::{
     AppCtx, AppRuntime, Chord, Color, Event, EventResult, KeyboardConvention, PointerButton,
     PointerSource, Size, TextStyle, set_keyboard_convention,
@@ -26,7 +26,7 @@ fn a_panic_in_a_hot_guest_is_reported_and_the_next_build_takes_over() {
     let library = build_fixture();
     load_the_host_fonts();
 
-    let mut broken = load_hot_app(&library).expect("the guest loads");
+    let mut broken = load(&library).expect("the guest loads");
     assert_eq!(
         broken.take_panic(),
         None,
@@ -55,8 +55,7 @@ fn a_panic_in_a_hot_guest_is_reported_and_the_next_build_takes_over() {
     );
     drop(tree);
 
-    let mut next =
-        load_hot_app(&library).expect("the next build loads beside the one still mapped");
+    let mut next = load(&library).expect("the next build loads beside the one still mapped");
     assert!(runs_a_frame(&mut next), "the next build runs");
     assert_eq!(
         next.take_panic(),
@@ -83,14 +82,14 @@ fn a_panic_in_a_hot_guest_is_reported_and_the_next_build_takes_over() {
 fn a_hot_guest_that_ran_frames_is_unmapped_when_dropped() {
     let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     let library = build_fixture();
-    let mut app = load_hot_app(&library).expect("the guest loads");
+    let mut app = load(&library).expect("the guest loads");
     assert!(runs_a_frame(&mut app), "precondition: its frame runs");
     assert_eq!(mapped_guests(), 1, "precondition: it is mapped");
     drop(app);
     assert_eq!(
         mapped_guests(),
         0,
-        "calling in through `guest_call` leaves nothing that pins the library"
+        "calling in through its entries leaves nothing that pins the library"
     );
 }
 
@@ -116,7 +115,7 @@ fn a_tree_that_outlives_its_hot_app_keeps_its_guest_mapped() {
     let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     let library = build_fixture();
     load_the_host_fonts();
-    let mut app = load_hot_app(&library).expect("the guest loads");
+    let mut app = load(&library).expect("the guest loads");
     app.set_surface_size(Size::new(320.0, 200.0));
     let mut tree = app.mount();
     app.relayout();
@@ -143,7 +142,7 @@ fn reloading_a_hot_guest_again_and_again_keeps_one_mapped() {
     for _ in 0..5 {
         run_a_session(&library);
     }
-    let mut last = load_hot_app(&library).expect("the guest loads");
+    let mut last = load(&library).expect("the guest loads");
     assert!(runs_a_frame(&mut last), "precondition: its frame runs");
     assert_eq!(
         mapped_guests(),
@@ -188,7 +187,7 @@ fn a_face_a_hot_guest_adds_while_it_runs_reaches_the_host() {
         !telar::font_family_available("Arriving Face"),
         "precondition: the host has not loaded it"
     );
-    let mut app = load_hot_app(&library).expect("the guest loads");
+    let mut app = load(&library).expect("the guest loads");
     let mut tree = app.mount();
     assert_eq!(
         tree.on_event(&secondary_press()),
@@ -219,7 +218,7 @@ fn a_hot_guest_shows_shortcuts_for_the_keyboard_its_host_matches() {
     let library = build_fixture();
     for convention in [KeyboardConvention::Mac, KeyboardConvention::Pc] {
         set_keyboard_convention(convention);
-        let app = load_hot_app(&library).expect("the guest loads");
+        let app = load(&library).expect("the guest loads");
         let title = app
             .window_config()
             .expect("the guest titles its window with a shortcut")
@@ -238,29 +237,86 @@ fn a_hot_guest_that_panicked_with_a_task_running_is_unmapped_once_the_task_is_jo
     let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     let library = build_fixture();
     load_the_host_fonts();
-    // Driven from a thread that then ends: spawning a thread touches std's spawn-hook thread-local, whose destructor pins the guest's library to the thread that spawned until it exits.
-    let waited = std::thread::scope(|scope| {
+    let mut app = load(&library).expect("the guest loads");
+    let mut tree = app.mount();
+    let pressed = std::time::Instant::now();
+    tree.on_event(&auxiliary_press());
+    assert!(app.take_panic().is_some(), "precondition: it panicked");
+    drop(tree);
+    assert_eq!(mapped_guests(), 1, "precondition: it is mapped");
+    drop(app);
+    assert!(
+        pressed.elapsed() >= GUEST_TASK_RUNS_FOR,
+        "its task ran to its end before the library was closed"
+    );
+    assert_eq!(mapped_guests(), 0, "and then the library is unmapped");
+}
+
+/// A task started from the host's own thread, the UI thread of a running app, which never exits: its worker is a thread the host started, so nothing of the guest's std is left on that thread to keep the library mapped.
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+#[cfg(target_os = "linux")]
+fn a_hot_guest_that_started_a_task_from_the_host_thread_is_unmapped_when_dropped() {
+    const GUEST_TASK_RUNS_FOR: std::time::Duration = std::time::Duration::from_millis(300);
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    load_the_host_fonts();
+    let mut app = load(&library).expect("the guest loads");
+    let mut tree = app.mount();
+    let released = std::time::Instant::now();
+    assert_eq!(
+        tree.on_event(&secondary_release()),
+        EventResult::Handled,
+        "precondition: the guest starts a task"
+    );
+    assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
+    drop(tree);
+    assert_eq!(mapped_guests(), 1, "precondition: it is mapped");
+    drop(app);
+    assert!(
+        released.elapsed() >= GUEST_TASK_RUNS_FOR,
+        "its task ran to its end before the library was closed"
+    );
+    assert_eq!(
+        mapped_guests(),
+        0,
+        "the thread that started the task keeps nothing of the guest's"
+    );
+}
+
+/// The limit the contract documents: a guest that calls `std::thread::spawn` itself spawns with its own std, which keeps its library mapped for as long as the thread that spawned lives, and until the next guest is closed after that.
+#[test]
+#[ignore = "builds a cdylib against this checkout: run it with `cargo test -p telar --features dev --test hot_panic -- --ignored`"]
+#[cfg(target_os = "linux")]
+fn a_hot_guest_that_spawns_with_its_own_std_is_unmapped_only_once_the_spawning_thread_exits() {
+    let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
+    let library = build_fixture();
+    load_the_host_fonts();
+    // Driven from a thread that then ends, as the app's own spawn pins the library to the thread that spawned.
+    std::thread::scope(|scope| {
         scope
             .spawn(|| {
-                let mut app = load_hot_app(&library).expect("the guest loads");
+                let mut app = load(&library).expect("the guest loads");
                 let mut tree = app.mount();
-                let pressed = std::time::Instant::now();
-                tree.on_event(&auxiliary_press());
-                assert!(app.take_panic().is_some(), "precondition: it panicked");
+                assert_eq!(
+                    tree.on_event(&auxiliary_release()),
+                    EventResult::Handled,
+                    "precondition: the guest spawns"
+                );
+                assert_eq!(app.take_panic(), None, "precondition: nothing panicked");
                 drop(tree);
-                assert_eq!(mapped_guests(), 1, "precondition: it is mapped");
                 drop(app);
-                pressed.elapsed()
+                assert_eq!(
+                    mapped_guests(),
+                    1,
+                    "the spawning thread keeps it mapped while it lives"
+                );
             })
             .join()
             .expect("the host's thread runs to its end")
     });
-    assert!(
-        waited >= GUEST_TASK_RUNS_FOR,
-        "its task ran to its end before the library was closed"
-    );
     // glibc only unmaps a library left pinned at its `dlclose` on a later `dlclose`, which the next reload's is.
-    drop(load_hot_app(&library).expect("the next build loads"));
+    drop(load(&library).expect("the next build loads"));
     assert_eq!(mapped_guests(), 0, "and then the library is unmapped");
 }
 
@@ -272,7 +328,7 @@ fn a_hot_guest_that_cannot_be_quiesced_stays_mapped() {
     let _serial = SERIAL.lock().unwrap_or_else(PoisonError::into_inner);
     let library = build_fixture();
     load_the_host_fonts();
-    let mut app = load_hot_app(&library).expect("the guest loads");
+    let mut app = load(&library).expect("the guest loads");
     let mut tree = app.mount();
     assert_eq!(
         tree.on_event(&release()),
@@ -285,7 +341,7 @@ fn a_hot_guest_that_cannot_be_quiesced_stays_mapped() {
     assert_eq!(mapped_guests(), 1, "its library stays mapped");
     KEPT_MAPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-    let mut next = load_hot_app(&library).expect("the next build loads");
+    let mut next = load(&library).expect("the next build loads");
     assert!(
         runs_a_frame(&mut next),
         "the host and the next build run on"
@@ -296,7 +352,7 @@ fn a_hot_guest_that_cannot_be_quiesced_stays_mapped() {
 #[cfg(target_os = "linux")]
 fn run_a_session(library: &Path) {
     load_the_host_fonts();
-    let mut app = load_hot_app(library).expect("the guest loads");
+    let mut app = load(library).expect("the guest loads");
     app.set_surface_size(Size::new(320.0, 200.0));
     let mut tree = app.mount();
     app.relayout();
@@ -418,10 +474,25 @@ fn auxiliary_press() -> Event {
 
 #[cfg(target_os = "linux")]
 fn release() -> Event {
+    released(PointerButton::Primary)
+}
+
+#[cfg(target_os = "linux")]
+fn secondary_release() -> Event {
+    released(PointerButton::Secondary)
+}
+
+#[cfg(target_os = "linux")]
+fn auxiliary_release() -> Event {
+    released(PointerButton::Auxiliary)
+}
+
+#[cfg(target_os = "linux")]
+fn released(button: PointerButton) -> Event {
     Event::PointerReleased {
         x: 10.0,
         y: 10.0,
-        button: PointerButton::Primary,
+        button,
         source: PointerSource::Mouse,
     }
 }
@@ -435,5 +506,10 @@ fn panic_line() -> usize {
 }
 
 fn build_fixture() -> PathBuf {
-    hot_guest_fixture::build_hot_guest(Path::new(env!("CARGO_TARGET_TMPDIR")))
+    guest_fixture::build_guest_fixture(Path::new(env!("CARGO_TARGET_TMPDIR")), "hot-panic-guest")
+}
+
+fn load(library: &Path) -> Result<HotApp, Box<dyn std::error::Error>> {
+    // SAFETY: the fixture was just built from this checkout, against the telar this test links.
+    unsafe { load_hot_app(library) }
 }

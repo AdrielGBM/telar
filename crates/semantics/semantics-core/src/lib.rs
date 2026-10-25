@@ -22,6 +22,7 @@ mod modal;
 mod outline;
 mod reading;
 mod uri;
+pub mod wire;
 
 pub use destination::{CurrentKind, Destination};
 pub use keys::ConsumedKeys;

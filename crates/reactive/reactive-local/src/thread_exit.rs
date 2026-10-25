@@ -10,7 +10,7 @@ use std::cell::{Cell, RefCell};
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, PoisonError};
+use std::sync::{Mutex, PoisonError, RwLock};
 
 static LEFT_TO_HOST: AtomicBool = AtomicBool::new(false);
 
@@ -244,6 +244,104 @@ macro_rules! released_static {
         $(#[$attr])* $vis static $name: $crate::thread_exit::ReleasedStatic<$t> =
             $crate::thread_exit::ReleasedStatic::new(|| $init, || $name.release());
         $($crate::released_static!($($rest)*);)?
+    };
+}
+
+/// The static `released_slot!` declares for `static NAME: T;`: empty until something installs a value, handed out by clone, and emptied when a host unloads a copy loaded as a guest, through [`on_unload`]. An ordinary copy keeps it for as long as the process runs.
+///
+/// How a second install is treated is the caller's to say: [`set_first`](Self::set_first) keeps what is installed, [`replace`](Self::replace) swaps it. Every access tolerates a poisoned lock, since a panic in a clone must not take the slot with it.
+pub struct ReleasedSlot<T> {
+    value: RwLock<Option<T>>,
+    release_slot: fn(),
+}
+
+impl<T: Clone> ReleasedSlot<T> {
+    #[doc(hidden)]
+    pub const fn new(release_slot: fn()) -> Self {
+        Self {
+            value: RwLock::new(None),
+            release_slot,
+        }
+    }
+
+    /// A clone of what is installed, or `None` while nothing is.
+    pub fn get(&self) -> Option<T> {
+        self.value
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Installs `value` unless something is installed already, and reports whether it did.
+    pub fn set_first(&self, value: T) -> bool {
+        let mut slot = self.value.write().unwrap_or_else(PoisonError::into_inner);
+        if slot.is_some() {
+            return false;
+        }
+        *slot = Some(value);
+        drop(slot);
+        on_unload(self.release_slot);
+        true
+    }
+
+    /// Installs `value`, dropping what was installed outside the lock so its destructor may reach the slot again.
+    pub fn replace(&self, value: T) {
+        let previous = self
+            .value
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .replace(value);
+        if previous.is_none() {
+            on_unload(self.release_slot);
+        }
+        drop(previous);
+    }
+
+    /// A clone of what is installed, installing what `init` builds first when nothing is. `init` runs under the lock, so it must not reach the slot.
+    pub fn get_or_insert_with(&self, init: impl FnOnce() -> T) -> T {
+        if let Some(held) = self.get() {
+            return held;
+        }
+        let mut slot = self.value.write().unwrap_or_else(PoisonError::into_inner);
+        if let Some(held) = slot.as_ref() {
+            return held.clone();
+        }
+        let built = init();
+        *slot = Some(built.clone());
+        drop(slot);
+        on_unload(self.release_slot);
+        built
+    }
+
+    /// Empties the slot and drops what it held, outside the lock so its destructor may reach the slot again.
+    #[doc(hidden)]
+    pub fn release(&self) {
+        let held = self
+            .value
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        drop(held);
+    }
+}
+
+/// Declares statics a host fills and frees when it unloads the copy, each a [`ReleasedSlot`]: for a backend or a setting the process installs once at startup, which a bare `RwLock<Option<_>>` would leave behind in every build a host unloads.
+///
+/// ```
+/// telar_reactive_local::released_slot! {
+///     static NAME: std::sync::Arc<str>;
+/// }
+/// assert!(NAME.set_first("first".into()));
+/// assert!(!NAME.set_first("second".into()));
+/// assert_eq!(&*NAME.get().unwrap(), "first");
+/// ```
+#[macro_export]
+macro_rules! released_slot {
+    () => {};
+    ($(#[$attr:meta])* $vis:vis static $name:ident: $t:ty $(; $($rest:tt)*)?) => {
+        $(#[$attr])* $vis static $name: $crate::thread_exit::ReleasedSlot<$t> =
+            $crate::thread_exit::ReleasedSlot::new(|| $name.release());
+        $($crate::released_slot!($($rest)*);)?
     };
 }
 

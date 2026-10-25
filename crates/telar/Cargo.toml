@@ -190,6 +190,7 @@ dev = [
     "dep:libloading",
     "dep:serde_json",
     "dep:telar-project",
+    "dep:wire-core",
 ]
 
 ## The dylib half of that loop, which only `cargo telar dev` turns on and only for a package that can produce
@@ -307,6 +308,7 @@ telar-project = { workspace = true, optional = true }
 theme-core = { workspace = true, optional = true }
 ui-core = { workspace = true, optional = true }
 ui-tree = { workspace = true, optional = true }
+wire-core = { workspace = true, optional = true }
 
 # Always on: `app!` and `rsx_modules!` install an application's baked catalog as its binary loads, before any runner, test or hot-reload factory runs.
 ctor = { version = "0.10.1", default-features = false }
@@ -357,6 +359,7 @@ tiny-skia = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 telar = { path = ".", features = ["preview-snapshots"] }
+telar-embed = { workspace = true, features = ["host", "shaper"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 js-sys = { workspace = true }
@@ -379,6 +382,11 @@ path = "src/devtools_seam_test.rs"
 [[test]]
 name = "frame_budget"
 path = "src/frame_budget_test.rs"
+
+[[test]]
+name = "guest_contract"
+path = "src/guest_contract_test.rs"
+required-features = ["dev", "shaper"]
 
 [[test]]
 name = "headless_multi_surface"

@@ -2,6 +2,7 @@
 //!
 //! Today the whole app is one effect that re-runs `app.root().view()` — recursing every component — on any tracked signal, so a single hover/animation costs O(tree). A `Segment` instead mounts a component with its OWN effect that flattens only that component's `view()` into its own command buffer. A parent references a child via `RenderNode::Boundary` (a cheap `Rc` clone) instead of calling `child.view()`, so the parent's effect never re-runs the child, and a child's signal change re-runs only the child. The flat command list is composed lazily at collect time.
 
+use std::borrow::Cow;
 use std::cell::{Cell, OnceCell, Ref, RefCell};
 use std::rc::Rc;
 
@@ -72,7 +73,8 @@ struct Composition {
 #[derive(Clone, Debug)]
 pub struct SegmentNodeInfo {
     pub id: u64,
-    pub name: &'static str,
+    /// Borrowed from the binary that mounted the component, and owned once it has crossed from a guest library, whose image may be unloaded before the host is done with it.
+    pub name: Cow<'static, str>,
     pub depth: usize,
     pub rect: Rect,
     pub padding: Insets,
@@ -185,7 +187,7 @@ impl Segment {
         // Pushed before recursing, so the parent precedes its children and keeps the pre-order id.
         out.push(SegmentNodeInfo {
             id: idx as u64,
-            name: self.name,
+            name: Cow::Borrowed(self.name),
             depth,
             rect: Rect::default(),
             padding: Insets::default(),

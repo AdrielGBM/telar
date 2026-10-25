@@ -1,279 +1,348 @@
-//! The app's side of the hot-reload boundary: what each export runs inside the dylib, every body under [`guest_call`].
-//!
-//! The list of exports is written once, in [`__hot_guest_api`](crate::__hot_guest_api): the `app!` macro turns it into the dylib's `#[no_mangle]` symbols, and the host into the table it resolves them into, so a name or a signature cannot drift between the two.
+//! The app's side of the hot-reload boundary: what each of the [`HotEntries`](super::HotEntries) runs inside the library, every body under [`guest_entry`], every output written through a pointer the host passed in and every rich value read from or lent as bytes.
 
 use std::cell::RefCell;
 use std::mem::ManuallyDrop;
-use std::time::{Duration, Instant};
 
-use platform_core::{
-    AccessAudit, AppCtx, Event, Location, RedrawWaker, SystemPreferences, WindowCommand,
-    WindowConfig,
+use platform_core::guest::{
+    CWaker, CallOutcome, FrameCtx, Handle, HostServices, LentBytes, Timestamp, guest_entry,
+    host_epoch,
 };
-use renderer_core::{Color, DrawCommand};
-use ui_tree::SegmentNodeInfo;
+use platform_core::{Event, Location, SystemPreferences};
+use reactive_core::OpenBatch;
+use renderer_core::Color;
 
-use super::HostServices;
 use crate::app::App;
 use crate::tree::HotTree;
-use platform_core::guest::{GuestResult, guest_call};
-pub use platform_core::guest::{loaded, quiesce, unloading};
-use reactive_core::OpenBatch;
 
-/// Every export the host resolves, as `field => symbol(arguments) -> output`, handed to the macro the caller names. Each runs [`guest`](crate::hot::guest)'s function of the same field name and returns a [`GuestResult`] of its output.
+/// What a hot-reload library exports, as the `app!` macro writes it: its [`HotEntries`](crate::hot::HotEntries), whose `create` builds the app `make` returns, and the [`HOT_CONTRACT`](crate::hot::HOT_CONTRACT) its host checks before reading them.
 #[doc(hidden)]
 #[macro_export]
-macro_rules! __hot_guest_api {
-    ($($then:tt)+) => {
-        $($then)+! {
-            snapshot => _rsx_hot_snapshot() -> ::std::string::String;
-            restore => _rsx_hot_restore(blob: &str) -> ();
-            app_window_config => _rsx_hot_app_window_config(app: &dyn $crate::App) -> ::std::option::Option<$crate::WindowConfig>;
-            app_clear_color => _rsx_hot_app_clear_color(app: &dyn $crate::App) -> ::std::option::Option<$crate::Color>;
-            app_on_frame => _rsx_hot_app_on_frame(app: &mut dyn $crate::App, ctx: &mut $crate::AppCtx<'_>) -> ();
-            app_release => _rsx_hot_app_release(app: ::std::boxed::Box<dyn $crate::App>) -> ();
-            tree_mount => _rsx_hot_tree_mount(app: &dyn $crate::App) -> *mut $crate::HotTree;
-            tree_release => _rsx_hot_tree_release(tree: *mut $crate::HotTree) -> ();
-            tree_on_event => _rsx_hot_tree_on_event(tree: *mut $crate::HotTree, event: &$crate::Event) -> bool;
-            tree_on_covered_event => _rsx_hot_tree_on_covered_event(tree: *mut $crate::HotTree, event: &$crate::Event) -> ();
-            tree_end_frame => _rsx_hot_tree_end_frame(tree: *mut $crate::HotTree) -> ();
-            tree_paint => _rsx_hot_tree_paint(tree: *mut $crate::HotTree) -> ::std::vec::Vec<$crate::DrawCommand>;
-            tree_dirty => _rsx_hot_tree_dirty(tree: *mut $crate::HotTree) -> bool;
-            tree_generation => _rsx_hot_tree_generation(tree: *mut $crate::HotTree) -> u64;
-            tree_walk => _rsx_hot_tree_walk(tree: *mut $crate::HotTree) -> ::std::vec::Vec<$crate::SegmentNodeInfo>;
-            access_snapshot => _rsx_hot_access_snapshot(commands: &[$crate::DrawCommand], background: ::std::option::Option<$crate::Color>) -> $crate::AccessAudit;
-            motion_tick => _rsx_hot_motion_tick(now: ::std::time::Instant) -> ();
-            motion_active => _rsx_hot_motion_active() -> bool;
-            motion_continuous => _rsx_hot_motion_continuous() -> bool;
-            begin_batch => _rsx_hot_begin_batch() -> ();
-            end_batch => _rsx_hot_end_batch() -> ();
-            relayout => _rsx_hot_relayout() -> ();
-            dispatch_overlays => _rsx_hot_dispatch_overlays(event: &$crate::Event) -> bool;
-            set_system_preferences => _rsx_hot_set_system_preferences(preferences: &$crate::SystemPreferences) -> ();
-            set_surface_size => _rsx_hot_set_surface_size(width: f32, height: f32) -> ();
-            set_safe_area_insets => _rsx_hot_set_safe_area_insets(top: f32, right: f32, bottom: f32, left: f32) -> ();
-            set_surface_maximized => _rsx_hot_set_surface_maximized(maximized: bool) -> ();
-            drain_window_commands => _rsx_hot_drain_window_commands() -> ::std::vec::Vec<$crate::WindowCommand>;
-            text_input => _rsx_hot_text_input() -> ::std::option::Option<$crate::TextInput>;
-            set_location_history => _rsx_hot_set_location_history(history: &[$crate::Location]) -> ();
-            open_title => _rsx_hot_open_title(app: &str, showing: &str) -> ();
-            open_font_family => _rsx_hot_open_font_family(family: ::std::option::Option<&str>) -> ();
-            navigate_back => _rsx_hot_navigate_back() -> bool;
-            drain_tasks => _rsx_hot_drain_tasks() -> ();
-            fire_timers => _rsx_hot_fire_timers() -> ();
-            until_next_timer => _rsx_hot_until_next_timer() -> ::std::option::Option<::std::time::Duration>;
-            install_task_waker => _rsx_hot_install_task_waker(waker: $crate::RedrawWaker) -> ();
-            install_services => _rsx_hot_install_services(services: $crate::hot::HostServices) -> ();
-            loaded => _rsx_hot_loaded() -> ();
-            unloading => _rsx_hot_unloading() -> ();
-            quiesce => _rsx_hot_quiesce() -> ();
+macro_rules! __hot_guest {
+    ($make:expr) => {
+        #[doc(hidden)]
+        unsafe extern "C" fn __telar_hot_create(
+            app: *mut $crate::hot::Handle<$crate::hot::guest::GuestApp>,
+        ) -> $crate::hot::CallOutcome {
+            unsafe { $crate::hot::guest::create(app, $make) }
         }
+
+        #[doc(hidden)]
+        #[unsafe(export_name = "telar_hot_entries")]
+        pub static TELAR_HOT_ENTRIES: $crate::hot::HotEntries =
+            $crate::hot::HotEntries::serving(__telar_hot_create);
+
+        $crate::hot::export_contract_stamp!($crate::hot::HOT_CONTRACT);
     };
 }
 
-/// The dylib's `#[no_mangle]` symbols, from [`__hot_guest_api`](crate::__hot_guest_api), plus the three the host reads before it resolves the rest: the ABI it was built for, the layout fingerprint of what crosses, and the app factory the `app!` macro writes itself.
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __hot_guest_exports {
-    ($($field:ident => $symbol:ident($($arg:ident: $ty:ty),*) -> $output:ty;)*) => {
-        $(
-            #[unsafe(no_mangle)]
-            #[allow(unused_unsafe)]
-            pub unsafe extern "Rust" fn $symbol($($arg: $ty),*) -> $crate::hot::GuestResult<$output> {
-                unsafe { $crate::hot::guest::$field($($arg),*) }
-            }
-        )*
-
-        #[unsafe(no_mangle)]
-        pub extern "Rust" fn _rsx_hot_abi() -> u32 {
-            $crate::hot::GUEST_ABI
-        }
-
-        #[unsafe(no_mangle)]
-        pub extern "Rust" fn _rsx_hot_layout() -> u64 {
-            $crate::hot::GUEST_LAYOUT.0
-        }
-    };
-}
-
-/// Builds the app the dylib serves, with the setup its `app!` invocation names.
-pub fn create_app(make: impl FnOnce() -> Box<dyn App>) -> GuestResult<Box<dyn App>> {
-    guest_call(make)
-}
-
-pub fn snapshot() -> GuestResult<String> {
-    guest_call(crate::hot_snapshot_json)
-}
-
-pub fn restore(blob: &str) -> GuestResult<()> {
-    guest_call(|| crate::hot_restore_json(blob))
-}
-
-pub fn app_window_config(app: &dyn App) -> GuestResult<Option<WindowConfig>> {
-    guest_call(|| app.window_config())
-}
-
-pub fn app_clear_color(app: &dyn App) -> GuestResult<Option<Color>> {
-    guest_call(|| app.clear_color())
-}
-
-pub fn app_on_frame(app: &mut dyn App, ctx: &mut AppCtx<'_>) -> GuestResult<()> {
-    guest_call(|| app.on_frame(ctx))
-}
-
-/// Drops the app on the side whose code its destructor is.
-pub fn app_release(app: Box<dyn App>) -> GuestResult<()> {
-    guest_call(move || drop(app))
-}
-
-/// Mounted here, where the app's signals live, so the tree's segment effects subscribe in the same reactive runtime as the signals they read.
-pub fn tree_mount(app: &dyn App) -> GuestResult<*mut HotTree> {
-    guest_call(|| HotTree::mount(app))
-}
-
-/// # Safety `tree` must be a live pointer from [`tree_mount`], not yet released.
-pub unsafe fn tree_release(tree: *mut HotTree) -> GuestResult<()> {
-    guest_call(|| unsafe { HotTree::release(tree) })
-}
-
-/// # Safety `tree` must be a live pointer from [`tree_mount`].
-pub unsafe fn tree_on_event(tree: *mut HotTree, event: &Event) -> GuestResult<bool> {
-    guest_call(|| unsafe { HotTree::on_event(tree, event) })
-}
-
-/// # Safety `tree` must be a live pointer from [`tree_mount`].
-pub unsafe fn tree_on_covered_event(tree: *mut HotTree, event: &Event) -> GuestResult<()> {
-    guest_call(|| unsafe { HotTree::on_covered_event(tree, event) })
-}
-
-/// # Safety `tree` must be a live pointer from [`tree_mount`].
-pub unsafe fn tree_end_frame(tree: *mut HotTree) -> GuestResult<()> {
-    guest_call(|| unsafe { HotTree::end_frame(tree) })
-}
-
-/// # Safety `tree` must be a live pointer from [`tree_mount`].
-pub unsafe fn tree_paint(tree: *mut HotTree) -> GuestResult<Vec<DrawCommand>> {
-    guest_call(|| unsafe { HotTree::paint(tree) })
-}
-
-/// # Safety `tree` must be a live pointer from [`tree_mount`].
-pub unsafe fn tree_dirty(tree: *mut HotTree) -> GuestResult<bool> {
-    guest_call(|| unsafe { HotTree::is_dirty(tree) })
-}
-
-/// # Safety `tree` must be a live pointer from [`tree_mount`].
-pub unsafe fn tree_generation(tree: *mut HotTree) -> GuestResult<u64> {
-    guest_call(|| unsafe { HotTree::generation(tree) })
-}
-
-/// # Safety `tree` must be a live pointer from [`tree_mount`].
-pub unsafe fn tree_walk(tree: *mut HotTree) -> GuestResult<Vec<SegmentNodeInfo>> {
-    guest_call(|| unsafe { HotTree::walk(tree) })
-}
-
-/// What a reader is told and what the checks find, read from the dylib's registries, which the host's copies of them never see.
-pub fn access_snapshot(
-    commands: &[DrawCommand],
-    background: Option<Color>,
-) -> GuestResult<AccessAudit> {
-    guest_call(|| crate::inspect::audit(commands, background))
-}
-
-/// The `Animated` values live in the dylib's motion registry, so the host ticks this one rather than its own.
-pub fn motion_tick(now: Instant) -> GuestResult<()> {
-    guest_call(|| crate::motion::tick(now))
-}
-
-pub fn motion_active() -> GuestResult<bool> {
-    guest_call(crate::motion::has_active)
-}
-
-pub fn motion_continuous() -> GuestResult<bool> {
-    guest_call(crate::motion::has_continuous)
-}
+/// The app a library built, behind the handle its host holds.
+pub struct GuestApp(Box<dyn App>);
 
 reactive_core::dropless_thread_local! {
     // Never dropped, which costs nothing: `OpenBatch` is zero-sized, so the `Vec` never allocates.
     static HOST_BATCHES: RefCell<ManuallyDrop<Vec<OpenBatch>>> = const { RefCell::new(ManuallyDrop::new(Vec::new())) };
 }
 
-/// The host's batch cannot reach the dylib's reactive runtime: without this one a handler's write flushes mid-dispatch, and a segment loses its subscriptions while its widget is borrowed.
-pub fn begin_batch() -> GuestResult<()> {
-    guest_call(|| HOST_BATCHES.with(|held| held.borrow_mut().push(OpenBatch::open())))
+/// Builds the app the library serves, with the setup its `app!` invocation names, and hands the host a handle on it.
+///
+/// # Safety
+///
+/// `app` must be writable, and the handle written there released only through this library's `release`.
+pub unsafe fn create(
+    app: *mut Handle<GuestApp>,
+    make: impl FnOnce() -> Box<dyn App>,
+) -> CallOutcome {
+    guest_entry(|| {
+        let made = GuestApp(make());
+        unsafe { app.write(Handle::new(made)) };
+    })
 }
 
-pub fn end_batch() -> GuestResult<()> {
-    guest_call(|| {
+/// Fills this copy's stores from the host's table, and has its shaper defer to the host's font database. The table is the host's, kept until it has unloaded this copy.
+pub(super) unsafe extern "C" fn install_services(services: HostServices) -> CallOutcome {
+    guest_entry(move || {
+        let fonts = unsafe { services_core::guest::install_host_services(services) };
+        #[cfg(feature = "shaper")]
+        if let Some(fonts) = fonts {
+            renderer_text::fonts::defer_to(fonts);
+        }
+        #[cfg(not(feature = "shaper"))]
+        drop(fonts);
+    })
+}
+
+/// Drops the app on the side whose code its destructor is.
+pub(super) unsafe extern "C" fn release(app: Handle<GuestApp>) -> CallOutcome {
+    guest_entry(|| unsafe { app.release() })
+}
+
+pub(super) unsafe extern "C" fn window_config(
+    app: Handle<GuestApp>,
+    config: *mut LentBytes,
+) -> CallOutcome {
+    guest_entry(|| {
+        let configured = unsafe { app.get() }.0.window_config();
+        unsafe { config.write(LentBytes::answer(&configured)) };
+    })
+}
+
+pub(super) unsafe extern "C" fn clear_color(
+    app: Handle<GuestApp>,
+    color: *mut LentBytes,
+) -> CallOutcome {
+    guest_entry(|| {
+        let clear: Option<Color> = unsafe { app.get() }.0.clear_color();
+        unsafe { color.write(LentBytes::answer(&clear)) };
+    })
+}
+
+pub(super) unsafe extern "C" fn on_frame(app: Handle<GuestApp>, ctx: *mut FrameCtx) -> CallOutcome {
+    guest_entry(|| {
+        let app = unsafe { app.get() };
+        unsafe { FrameCtx::enter(ctx, |ctx| app.0.on_frame(ctx)) };
+    })
+}
+
+/// Mounted here, where the app's signals live, so the tree's segment effects subscribe in the same reactive runtime as the signals they read.
+pub(super) unsafe extern "C" fn mount(
+    app: Handle<GuestApp>,
+    tree: *mut Handle<HotTree>,
+) -> CallOutcome {
+    guest_entry(|| {
+        let mounted = HotTree::mount(unsafe { app.get() }.0.as_ref());
+        unsafe { tree.write(Handle::new(mounted)) };
+    })
+}
+
+pub(super) unsafe extern "C" fn tree_release(tree: Handle<HotTree>) -> CallOutcome {
+    guest_entry(|| unsafe { tree.release() })
+}
+
+pub(super) unsafe extern "C" fn tree_on_event(
+    tree: Handle<HotTree>,
+    event: LentBytes,
+    handled: *mut bool,
+) -> CallOutcome {
+    guest_entry(|| {
+        let event: Event = unsafe { event.read() };
+        let taken = unsafe { tree.get() }.on_event(&event);
+        unsafe { handled.write(taken) };
+    })
+}
+
+pub(super) unsafe extern "C" fn tree_on_covered_event(
+    tree: Handle<HotTree>,
+    event: LentBytes,
+) -> CallOutcome {
+    guest_entry(|| {
+        let event: Event = unsafe { event.read() };
+        unsafe { tree.get() }.on_covered_event(&event);
+    })
+}
+
+pub(super) unsafe extern "C" fn tree_end_frame(tree: Handle<HotTree>) -> CallOutcome {
+    guest_entry(|| unsafe { tree.get() }.end_frame())
+}
+
+pub(super) unsafe extern "C" fn tree_paint(
+    tree: Handle<HotTree>,
+    frame: *mut LentBytes,
+) -> CallOutcome {
+    guest_entry(|| {
+        let painted = unsafe { tree.get() }.paint();
+        unsafe { frame.write(painted) };
+    })
+}
+
+pub(super) unsafe extern "C" fn tree_pixels(
+    tree: Handle<HotTree>,
+    image: u64,
+    pixels: *mut LentBytes,
+    found: *mut bool,
+) -> CallOutcome {
+    guest_entry(|| unsafe { tree.get().lend_pixels(image, pixels, found) })
+}
+
+pub(super) unsafe extern "C" fn tree_reset_frames(tree: Handle<HotTree>) -> CallOutcome {
+    guest_entry(|| unsafe { tree.get() }.reset_frames())
+}
+
+pub(super) unsafe extern "C" fn tree_is_dirty(
+    tree: Handle<HotTree>,
+    dirty: *mut bool,
+) -> CallOutcome {
+    guest_entry(|| {
+        let is_dirty = unsafe { tree.get() }.is_dirty();
+        unsafe { dirty.write(is_dirty) };
+    })
+}
+
+pub(super) unsafe extern "C" fn tree_generation(
+    tree: Handle<HotTree>,
+    generation: *mut u64,
+) -> CallOutcome {
+    guest_entry(|| {
+        let current = unsafe { tree.get() }.generation();
+        unsafe { generation.write(current) };
+    })
+}
+
+pub(super) unsafe extern "C" fn tree_walk(
+    tree: Handle<HotTree>,
+    nodes: *mut LentBytes,
+) -> CallOutcome {
+    guest_entry(|| {
+        let walked = unsafe { tree.get() }.walk();
+        unsafe { nodes.write(LentBytes::answer(&walked)) };
+    })
+}
+
+/// What a reader is told and what the checks find, read from this library's registries, which the host's copies of them never see.
+pub(super) unsafe extern "C" fn tree_access_audit(
+    tree: Handle<HotTree>,
+    background: LentBytes,
+    audit: *mut LentBytes,
+) -> CallOutcome {
+    guest_entry(|| {
+        let background: Option<Color> = unsafe { background.read() };
+        let audited = unsafe { tree.get() }.access_audit(background);
+        unsafe { audit.write(LentBytes::answer(&audited)) };
+    })
+}
+
+pub(super) unsafe extern "C" fn hot_snapshot(blob: *mut LentBytes) -> CallOutcome {
+    guest_entry(|| {
+        let taken = crate::hot_snapshot_json();
+        unsafe { blob.write(LentBytes::answer(&taken)) };
+    })
+}
+
+pub(super) unsafe extern "C" fn hot_restore(blob: LentBytes) -> CallOutcome {
+    guest_entry(|| {
+        let blob: String = unsafe { blob.read() };
+        crate::hot_restore_json(&blob);
+    })
+}
+
+/// The `Animated` values live in this library's motion registry, so the host ticks this one rather than its own.
+pub(super) extern "C" fn motion_tick(now: Timestamp) -> CallOutcome {
+    guest_entry(|| crate::motion::tick(host_epoch().instant(now)))
+}
+
+pub(super) unsafe extern "C" fn motion_has_active(active: *mut bool) -> CallOutcome {
+    guest_entry(|| unsafe { active.write(crate::motion::has_active()) })
+}
+
+pub(super) unsafe extern "C" fn motion_has_continuous(continuous: *mut bool) -> CallOutcome {
+    guest_entry(|| unsafe { continuous.write(crate::motion::has_continuous()) })
+}
+
+/// The host's batch cannot reach this library's reactive runtime: without this one a handler's write flushes mid-dispatch, and a segment loses its subscriptions while its widget is borrowed.
+pub(super) extern "C" fn begin_batch() -> CallOutcome {
+    guest_entry(|| HOST_BATCHES.with(|held| held.borrow_mut().push(OpenBatch::open())))
+}
+
+pub(super) extern "C" fn end_batch() -> CallOutcome {
+    guest_entry(|| {
         if let Some(batch) = HOST_BATCHES.with(|held| held.borrow_mut().pop()) {
             batch.close();
         }
     })
 }
 
-pub fn relayout() -> GuestResult<()> {
-    guest_call(crate::relayout_if_dirty)
+pub(super) extern "C" fn relayout() -> CallOutcome {
+    guest_entry(crate::relayout_if_dirty)
 }
 
-pub fn dispatch_overlays(event: &Event) -> GuestResult<bool> {
-    guest_call(|| crate::dispatch_overlays(event))
+pub(super) unsafe extern "C" fn dispatch_overlays(
+    event: LentBytes,
+    handled: *mut bool,
+) -> CallOutcome {
+    guest_entry(|| {
+        let event: Event = unsafe { event.read() };
+        unsafe { handled.write(crate::dispatch_overlays(&event)) };
+    })
 }
 
-pub fn set_system_preferences(preferences: &SystemPreferences) -> GuestResult<()> {
-    guest_call(|| crate::set_system_preferences(preferences.clone()))
+pub(super) unsafe extern "C" fn set_system_preferences(preferences: LentBytes) -> CallOutcome {
+    guest_entry(|| {
+        let preferences: SystemPreferences = unsafe { preferences.read() };
+        crate::set_system_preferences(preferences);
+    })
 }
 
-pub fn set_surface_size(width: f32, height: f32) -> GuestResult<()> {
-    guest_call(|| crate::set_surface_size(crate::Size::new(width, height)))
+pub(super) extern "C" fn set_surface_size(width: f32, height: f32) -> CallOutcome {
+    guest_entry(|| crate::set_surface_size(crate::Size::new(width, height)))
 }
 
-pub fn set_safe_area_insets(top: f32, right: f32, bottom: f32, left: f32) -> GuestResult<()> {
-    guest_call(|| crate::set_safe_area_insets(crate::Insets::new(top, right, bottom, left)))
+pub(super) extern "C" fn set_safe_area_insets(
+    top: f32,
+    right: f32,
+    bottom: f32,
+    left: f32,
+) -> CallOutcome {
+    guest_entry(|| crate::set_safe_area_insets(crate::Insets::new(top, right, bottom, left)))
 }
 
-pub fn set_surface_maximized(maximized: bool) -> GuestResult<()> {
-    guest_call(|| crate::set_surface_maximized(maximized))
+pub(super) extern "C" fn set_surface_maximized(maximized: bool) -> CallOutcome {
+    guest_entry(|| crate::set_surface_maximized(maximized))
 }
 
-pub fn drain_window_commands() -> GuestResult<Vec<WindowCommand>> {
-    guest_call(crate::take_window_commands)
+pub(super) unsafe extern "C" fn drain_window_commands(commands: *mut LentBytes) -> CallOutcome {
+    guest_entry(|| {
+        let drained = crate::take_window_commands();
+        unsafe { commands.write(LentBytes::answer(&drained)) };
+    })
 }
 
-pub fn text_input() -> GuestResult<Option<platform_core::TextInput>> {
-    guest_call(ui_core::text_input)
+pub(super) unsafe extern "C" fn text_input(input: *mut LentBytes) -> CallOutcome {
+    guest_entry(|| {
+        let field = ui_core::text_input();
+        unsafe { input.write(LentBytes::answer(&field)) };
+    })
 }
 
-pub fn set_location_history(history: &[Location]) -> GuestResult<()> {
-    guest_call(|| crate::receive_location_history(history.to_vec()))
+pub(super) unsafe extern "C" fn set_location_history(history: LentBytes) -> CallOutcome {
+    guest_entry(|| {
+        let history: Vec<Location> = unsafe { history.read() };
+        crate::receive_location_history(history);
+    })
 }
 
-pub fn open_title(app: &str, showing: &str) -> GuestResult<()> {
-    guest_call(|| crate::open_surface_title(app, showing))
+pub(super) unsafe extern "C" fn open_title(title: LentBytes) -> CallOutcome {
+    guest_entry(|| {
+        let (app, showing): (String, String) = unsafe { title.read() };
+        crate::open_surface_title(&app, &showing);
+    })
 }
 
-pub fn open_font_family(family: Option<&str>) -> GuestResult<()> {
-    guest_call(|| crate::open_surface_font_family(family.map(crate::FontFamily::from)))
+pub(super) unsafe extern "C" fn open_font_family(family: LentBytes) -> CallOutcome {
+    guest_entry(|| {
+        let family: Option<String> = unsafe { family.read() };
+        crate::open_surface_font_family(family.as_deref().map(crate::FontFamily::from));
+    })
 }
 
-pub fn navigate_back() -> GuestResult<bool> {
-    guest_call(crate::navigate_back)
+pub(super) unsafe extern "C" fn navigate_back(handled: *mut bool) -> CallOutcome {
+    guest_entry(|| unsafe { handled.write(crate::navigate_back()) })
 }
 
-pub fn drain_tasks() -> GuestResult<()> {
-    guest_call(crate::drain_tasks)
+pub(super) extern "C" fn drain_tasks() -> CallOutcome {
+    guest_entry(crate::drain_tasks)
 }
 
-pub fn fire_timers() -> GuestResult<()> {
-    guest_call(crate::fire_timers)
+pub(super) extern "C" fn fire_timers() -> CallOutcome {
+    guest_entry(crate::fire_timers)
 }
 
-pub fn until_next_timer() -> GuestResult<Option<Duration>> {
-    guest_call(crate::until_next_timer)
+pub(super) unsafe extern "C" fn until_next_timer(after: *mut LentBytes) -> CallOutcome {
+    guest_entry(|| {
+        let due = crate::until_next_timer();
+        unsafe { after.write(LentBytes::answer(&due)) };
+    })
 }
 
-pub fn install_task_waker(waker: RedrawWaker) -> GuestResult<()> {
-    guest_call(move || crate::set_task_waker(move || waker.wake()))
-}
-
-pub fn install_services(services: HostServices) -> GuestResult<()> {
-    guest_call(move || services.install())
+/// Keeps the reference `waker` is, which this library drops, and with it hands back to the host, when it is replaced or the library unloads.
+pub(super) extern "C" fn install_task_waker(waker: CWaker) -> CallOutcome {
+    guest_entry(move || crate::set_task_waker(move || waker.wake()))
 }

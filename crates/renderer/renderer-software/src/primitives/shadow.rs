@@ -50,7 +50,8 @@ pub(crate) fn spawn_shadow_async(
     draw_fn: impl FnOnce(&mut tiny_skia::Pixmap) + Send + 'static,
 ) -> std::sync::mpsc::Receiver<tiny_skia::Pixmap> {
     let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
+    // A thread that cannot start drops `tx` unrun, which the poll reads as a failed worker and retries.
+    let _ = reactive_local::threads::spawn("telar-shadow", move || {
         let mut pixmap = match tiny_skia::Pixmap::new(tmp_w, tmp_h) {
             Some(p) => p,
             None => return,

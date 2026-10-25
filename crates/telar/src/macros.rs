@@ -1,4 +1,4 @@
-//! The macros an application writes: `app!`, `rsx_modules!` and the tree shims they expand to.
+//! The declarative macros an application writes, beside the `app!` and `rsx_modules!` that `telar-macros` provides, whose expansion exports a hot-reload build's entry table.
 
 /// Collects widgets of different types into the `Vec<Box<dyn LayoutItem>>` a container takes, boxing each one.
 #[macro_export]

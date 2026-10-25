@@ -1,46 +1,59 @@
-//! The primitives a frame is spelled in: little-endian scalars, LEB128 lengths and length-prefixed UTF-8.
+//! The primitives every value is spelled in: little-endian scalars, LEB128 lengths and length-prefixed UTF-8.
 
-use super::WireError;
+use crate::WireError;
 
+/// A growing buffer a value is spelled into, cleared and reused by a side that lends what it writes.
 #[derive(Default)]
-pub(crate) struct Writer {
+pub struct Writer {
     bytes: Vec<u8>,
 }
 
 impl Writer {
-    pub(crate) fn clear(&mut self) {
+    pub const fn new() -> Self {
+        Self { bytes: Vec::new() }
+    }
+
+    pub fn clear(&mut self) {
         self.bytes.clear();
     }
 
-    pub(crate) fn as_slice(&self) -> &[u8] {
+    pub fn as_slice(&self) -> &[u8] {
         &self.bytes
     }
 
-    pub(crate) fn u8(&mut self, value: u8) {
+    pub fn into_vec(self) -> Vec<u8> {
+        self.bytes
+    }
+
+    pub fn u8(&mut self, value: u8) {
         self.bytes.push(value);
     }
 
-    pub(crate) fn bool(&mut self, value: bool) {
+    pub fn bool(&mut self, value: bool) {
         self.u8(value as u8);
     }
 
-    pub(crate) fn u16(&mut self, value: u16) {
+    pub fn u16(&mut self, value: u16) {
         self.bytes.extend_from_slice(&value.to_le_bytes());
     }
 
-    pub(crate) fn u64(&mut self, value: u64) {
+    pub fn i32(&mut self, value: i32) {
         self.bytes.extend_from_slice(&value.to_le_bytes());
     }
 
-    pub(crate) fn f32(&mut self, value: f32) {
+    pub fn u64(&mut self, value: u64) {
         self.bytes.extend_from_slice(&value.to_le_bytes());
     }
 
-    pub(crate) fn f64(&mut self, value: f64) {
+    pub fn f32(&mut self, value: f32) {
         self.bytes.extend_from_slice(&value.to_le_bytes());
     }
 
-    pub(crate) fn varint(&mut self, mut value: u64) {
+    pub fn f64(&mut self, value: f64) {
+        self.bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    pub fn varint(&mut self, mut value: u64) {
         while value >= 0x80 {
             self.bytes.push(value as u8 | 0x80);
             value >>= 7;
@@ -48,38 +61,44 @@ impl Writer {
         self.bytes.push(value as u8);
     }
 
-    pub(crate) fn len(&mut self, len: usize) {
+    pub fn len(&mut self, len: usize) {
         self.varint(len as u64);
     }
 
-    pub(crate) fn str(&mut self, text: &str) {
-        self.len(text.len());
-        self.bytes.extend_from_slice(text.as_bytes());
+    pub fn str(&mut self, text: &str) {
+        self.bytes(text.as_bytes());
     }
 
-    pub(crate) fn raw(&mut self, bytes: &[u8]) {
+    /// `bytes` behind their length, read back whole by [`Reader::bytes`].
+    pub fn bytes(&mut self, bytes: &[u8]) {
+        self.len(bytes.len());
+        self.raw(bytes);
+    }
+
+    pub fn raw(&mut self, bytes: &[u8]) {
         self.bytes.extend_from_slice(bytes);
     }
 }
 
-pub(crate) struct Reader<'a> {
+/// Reads a value back out of bytes another side lent, refusing anything a [`Writer`] would not have written rather than trusting it.
+pub struct Reader<'a> {
     bytes: &'a [u8],
 }
 
 impl<'a> Reader<'a> {
-    pub(crate) fn new(bytes: &'a [u8]) -> Self {
+    pub fn new(bytes: &'a [u8]) -> Self {
         Self { bytes }
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.bytes.is_empty()
     }
 
-    pub(crate) fn remaining(&self) -> usize {
+    pub fn remaining(&self) -> usize {
         self.bytes.len()
     }
 
-    pub(crate) fn raw(&mut self, len: usize) -> Result<&'a [u8], WireError> {
+    pub fn raw(&mut self, len: usize) -> Result<&'a [u8], WireError> {
         let (head, rest) = self
             .bytes
             .split_at_checked(len)
@@ -97,11 +116,11 @@ impl<'a> Reader<'a> {
         Ok(*head)
     }
 
-    pub(crate) fn u8(&mut self) -> Result<u8, WireError> {
+    pub fn u8(&mut self) -> Result<u8, WireError> {
         self.array::<1>().map(|[byte]| byte)
     }
 
-    pub(crate) fn bool(&mut self) -> Result<bool, WireError> {
+    pub fn bool(&mut self) -> Result<bool, WireError> {
         match self.u8()? {
             0 => Ok(false),
             1 => Ok(true),
@@ -109,23 +128,27 @@ impl<'a> Reader<'a> {
         }
     }
 
-    pub(crate) fn u16(&mut self) -> Result<u16, WireError> {
+    pub fn u16(&mut self) -> Result<u16, WireError> {
         self.array().map(u16::from_le_bytes)
     }
 
-    pub(crate) fn u64(&mut self) -> Result<u64, WireError> {
+    pub fn i32(&mut self) -> Result<i32, WireError> {
+        self.array().map(i32::from_le_bytes)
+    }
+
+    pub fn u64(&mut self) -> Result<u64, WireError> {
         self.array().map(u64::from_le_bytes)
     }
 
-    pub(crate) fn f32(&mut self) -> Result<f32, WireError> {
+    pub fn f32(&mut self) -> Result<f32, WireError> {
         self.array().map(f32::from_le_bytes)
     }
 
-    pub(crate) fn f64(&mut self) -> Result<f64, WireError> {
+    pub fn f64(&mut self) -> Result<f64, WireError> {
         self.array().map(f64::from_le_bytes)
     }
 
-    pub(crate) fn varint(&mut self) -> Result<u64, WireError> {
+    pub fn varint(&mut self) -> Result<u64, WireError> {
         let mut value = 0u64;
         for shift in (0..64).step_by(7) {
             let byte = self.u8()?;
@@ -137,12 +160,12 @@ impl<'a> Reader<'a> {
         Err(WireError::Invalid("varint longer than 64 bits"))
     }
 
-    pub(crate) fn varint_u32(&mut self) -> Result<u32, WireError> {
+    pub fn varint_u32(&mut self) -> Result<u32, WireError> {
         u32::try_from(self.varint()?).map_err(|_| WireError::Invalid("varint wider than 32 bits"))
     }
 
     // Every element a count announces takes at least one byte, so a count beyond what is left is malformed and is refused before anything is reserved for it.
-    pub(crate) fn len(&mut self) -> Result<usize, WireError> {
+    pub fn len(&mut self) -> Result<usize, WireError> {
         let len = usize::try_from(self.varint()?).map_err(|_| WireError::Truncated)?;
         if len > self.bytes.len() {
             return Err(WireError::Truncated);
@@ -150,9 +173,13 @@ impl<'a> Reader<'a> {
         Ok(len)
     }
 
-    pub(crate) fn str(&mut self) -> Result<&'a str, WireError> {
+    pub fn bytes(&mut self) -> Result<&'a [u8], WireError> {
         let len = self.len()?;
-        std::str::from_utf8(self.raw(len)?).map_err(|_| WireError::Invalid("text is not UTF-8"))
+        self.raw(len)
+    }
+
+    pub fn str(&mut self) -> Result<&'a str, WireError> {
+        std::str::from_utf8(self.bytes()?).map_err(|_| WireError::Invalid("text is not UTF-8"))
     }
 }
 

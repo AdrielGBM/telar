@@ -1,4 +1,4 @@
-//! A hot-reload guest the `hot_panic` test in `telar` loads into a host with its own copy of std: its tree reaches what an app's does (reactive runtime, layout, theme, text measurer, input registries, plugin slots, baked assets), and its pointer events panic, add a face, leave a task running or leave a worker that cannot be stopped, as each test needs.
+//! A hot-reload guest the `hot_panic` test in `telar` loads into a host with its own copy of std: its tree reaches what an app's does (reactive runtime, layout, theme, text measurer, input registries, plugin slots, baked assets) from an allocator of its own, and its pointer events panic, add a face, leave a task running, start a thread with its own std or leave a worker that cannot be stopped, as each test needs.
 
 use telar::{
     App, AppCtx, Children, Chord, Component, Event, EventResult, FontAsset, LayoutItem,
@@ -9,7 +9,14 @@ use telar_components::{ButtonProps, button};
 use telar_icons::{IconProps, icon};
 use telar_rsx_fixture::{GreetingCardProps, greeting_card};
 
-/// How long the task an auxiliary press leaves running takes: the `hot_panic` test waits at least this long for the guest to unload.
+#[path = "../../tagged_alloc.rs"]
+mod tagged_alloc;
+
+/// An allocator of its own, marked apart from the host's, so a block that crosses the contract owned and is freed on the other side stops the process.
+#[global_allocator]
+static ALLOCATOR: tagged_alloc::Tagged = tagged_alloc::Tagged(0x686f_745f_6775_6573);
+
+/// How long the task an auxiliary press or a secondary release leaves running takes: the `hot_panic` test waits at least this long for the guest to unload.
 const TASK_RUNS_FOR: std::time::Duration = std::time::Duration::from_millis(300);
 
 const ARRIVING_FACE: &[u8] =
@@ -79,8 +86,25 @@ impl Component for PanicsOnPress {
                 }
                 panic!("RUNTIME is already borrowed by the press handler");
             }
-            Event::PointerReleased { .. } => {
+            Event::PointerReleased {
+                button: PointerButton::Primary,
+                ..
+            } => {
                 telar_reactive_local::thread_exit::on_quiesce(stop_a_worker_that_will_not);
+                EventResult::Handled
+            }
+            Event::PointerReleased {
+                button: PointerButton::Secondary,
+                ..
+            } => {
+                spawn_task(|| std::thread::sleep(TASK_RUNS_FOR), |()| {});
+                EventResult::Handled
+            }
+            Event::PointerReleased {
+                button: PointerButton::Auxiliary,
+                ..
+            } => {
+                let _ = std::thread::spawn(|| ()).join();
                 EventResult::Handled
             }
             Event::PointerMoved { .. } => {
@@ -117,11 +141,4 @@ impl App for Fixture {
     }
 }
 
-/// # Safety
-/// Called only by a host built against the same telar, through the table `load_hot_app` checks.
-#[unsafe(no_mangle)]
-pub unsafe extern "Rust" fn _rsx_hot_create_app() -> telar::hot::GuestResult<Box<dyn App>> {
-    telar::hot::guest::create_app(|| Box::new(Fixture))
-}
-
-telar::__hot_guest_api!(telar::__hot_guest_exports);
+telar::__hot_guest!(|| -> Box<dyn App> { Box::new(Fixture) });

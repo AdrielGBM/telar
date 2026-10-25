@@ -292,7 +292,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         }
     };
 
-    // Only under `telar/hot-reload`, so dlopen can find the factory and the exports the host drives the app through. Each one catches a panic in the dylib and hands it back, since one unwinding into the host's copy of std aborts the process.
+    // Only under `telar/hot-reload`, so the host can find the entry table it drives the app through and the contract stamp it checks first.
     let hot_exports = if is_hot_reload {
         let body = quote! {
             ::telar::__previews! {
@@ -304,15 +304,10 @@ pub fn app(input: TokenStream) -> TokenStream {
             }
         };
         quote! {
-            #[unsafe(no_mangle)]
-            pub unsafe extern "Rust" fn _rsx_hot_create_app()
-            -> ::telar::hot::GuestResult<::std::boxed::Box<dyn ::telar::App>> {
-                ::telar::hot::guest::create_app(|| -> ::std::boxed::Box<dyn ::telar::App> {
-                    #setup
-                    #body
-                })
-            }
-            ::telar::__hot_guest_api!(::telar::__hot_guest_exports);
+            ::telar::__hot_guest!(|| -> ::std::boxed::Box<dyn ::telar::App> {
+                #setup
+                #body
+            });
         }
     } else {
         quote! {}

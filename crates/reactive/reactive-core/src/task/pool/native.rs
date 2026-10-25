@@ -4,8 +4,9 @@
 
 use std::collections::VecDeque;
 use std::sync::{Condvar, Mutex, MutexGuard, Once};
-use std::thread::JoinHandle;
 use std::time::Duration;
+
+use crate::threads::{self, Spawned};
 
 pub(in crate::task) type Job = Box<dyn FnOnce() + Send>;
 
@@ -19,7 +20,7 @@ struct State {
     queue: VecDeque<Job>,
     idle: usize,
     // Retired threads stay here until the next `submit` reaps them, so this is an upper bound on live workers rather than an exact count — close enough for the growth decision, and it keeps `shutdown` able to join.
-    workers: Vec<JoinHandle<()>>,
+    workers: Vec<Spawned<()>>,
     shutdown: bool,
 }
 
@@ -51,14 +52,14 @@ pub(in crate::task) fn submit(job: Job) {
         crate::thread_exit::on_quiesce(shutdown_and_join);
     });
     let mut state = lock();
-    state.workers.retain(|handle| !handle.is_finished());
+    let (retired, working): (Vec<_>, Vec<_>) = std::mem::take(&mut state.workers)
+        .into_iter()
+        .partition(Spawned::is_finished);
+    state.workers = working;
     state.queue.push_back(job);
     if state.idle == 0 && state.workers.len() < MAX_WORKERS {
-        match std::thread::Builder::new()
-            .name("telar-task".to_string())
-            .spawn(worker)
-        {
-            Ok(handle) => state.workers.push(handle),
+        match threads::spawn("telar-task", worker) {
+            Ok(spawned) => state.workers.push(spawned),
             // Only fatal with nothing already running: otherwise a busy worker picks this job up when it frees.
             Err(e) => assert!(
                 !state.workers.is_empty(),
@@ -68,6 +69,10 @@ pub(in crate::task) fn submit(job: Job) {
     }
     drop(state);
     POOL.work_ready.notify_one();
+    // Joined rather than dropped: a retired worker may still be on its way out through this copy's code, which its host must not unmap under it.
+    for worker in retired {
+        let _ = worker.join();
+    }
 }
 
 fn worker() {

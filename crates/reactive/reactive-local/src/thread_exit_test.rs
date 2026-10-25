@@ -208,3 +208,40 @@ fn the_last_releases_run_after_every_other_one() {
     .unwrap();
     assert_eq!(order, ["state", "state filled by state", "cache", "store"]);
 }
+
+#[test]
+fn a_slot_keeps_its_first_value_or_takes_the_latest_as_its_caller_asks() {
+    crate::released_slot! {
+        static KEPT: std::sync::Arc<u8>;
+        static LATEST: std::sync::Arc<u8>;
+    }
+    assert_eq!(KEPT.get(), None);
+    assert!(KEPT.set_first(1.into()));
+    assert!(!KEPT.set_first(2.into()));
+    assert_eq!(KEPT.get().as_deref(), Some(&1));
+    LATEST.replace(1.into());
+    LATEST.replace(2.into());
+    assert_eq!(LATEST.get().as_deref(), Some(&2));
+}
+
+#[test]
+fn a_slot_builds_what_it_lacks_once_and_is_emptied_by_its_release() {
+    crate::released_slot! {
+        static LAZY: std::sync::Arc<u8>;
+    }
+    assert_eq!(*LAZY.get_or_insert_with(|| 7.into()), 7);
+    assert_eq!(*LAZY.get_or_insert_with(|| 8.into()), 7);
+    LAZY.release();
+    assert_eq!(LAZY.get(), None);
+}
+
+#[test]
+fn a_slot_is_usable_after_a_panic_while_it_was_locked() {
+    crate::released_slot! {
+        static POISONED: std::sync::Arc<u8>;
+    }
+    let _ = std::thread::spawn(|| POISONED.get_or_insert_with(|| panic!("while locked"))).join();
+    assert_eq!(POISONED.get(), None);
+    assert!(POISONED.set_first(3.into()));
+    assert_eq!(POISONED.get().as_deref(), Some(&3));
+}

@@ -1,18 +1,20 @@
-//! The mounted UI as the runner sees it — and the seam that lets the *app's own* runtime own it.
+//! The mounted UI as the runner sees it, and the seam that lets the *app's own* runtime own it.
 //!
-//! An app's widgets, signals, layout nodes and overlays all live in thread-locals. In a normal build there is one copy of each and it does not matter who mounts the tree. Under hot reload the app is a dylib with its own copies: a tree mounted on the host's side registers its segment effects in the *host's* reactive runtime while `view()` reads the *dylib's* signals, so no subscription is ever established and nothing re-renders on its own. The workaround was `bump_force_ticks`, which re-ran every segment and only fired on input events — so an animation, a background thread's result or a timer stayed invisible until the user moved the mouse. It is gone now, and this seam is only half of why: the other half was that a node's absolute position lived in a plain map nothing could subscribe to, so refreshing one reader meant re-running all of them. See `layout_reactive::absolute_rect`.
+//! An app's widgets, signals, layout nodes and overlays all live in thread-locals. In a normal build there is one copy of each and it does not matter who mounts the tree. Under hot reload the app is a dylib with its own copies: a tree mounted on the host's side would register its segment effects in the *host's* reactive runtime while `view()` reads the *dylib's* signals, so no subscription would ever be established and nothing would re-render on its own.
 //!
-//! So mounting belongs to the runtime the tree lives in: [`AppRuntime::mount`](crate::AppRuntime::mount) hands the runner a [`UiTree`] it drives through this trait, and a dylib-backed app mounts a [`HotTree`] inside itself. Same shape `telar-embed` uses for an embedded UI, and for the same reason. The seam is what removed the workaround: with the tree mounted where its signals live, nothing needs waking by hand.
+//! So mounting belongs to the runtime the tree lives in: [`AppRuntime::mount`](crate::AppRuntime::mount) hands the runner a [`UiTree`] it drives through this trait, and a dylib-backed app mounts a [`HotTree`] inside itself, the shape `telar-embed` uses for an embedded UI, for the same reason.
 
 use std::cell::Ref;
 use std::ops::Deref;
 
 use platform_core::Event;
+use platform_core::guest::LentBytes;
 use renderer_core::DrawCommand;
+use services_core::guest::LentFrames;
 use ui_core::{Component, ComponentList, EventResult, OwnedBuild};
 use ui_tree::SegmentNodeInfo;
 
-/// One composed frame: borrowed straight from the segment cache when the tree is in this process, owned when it had to be copied out of a dylib.
+/// One composed frame: borrowed straight from the segment cache when the tree is in this process, owned when it was decoded from what a dylib lent.
 pub enum Frame<'a> {
     Borrowed(Ref<'a, Vec<DrawCommand>>),
     Owned(Vec<DrawCommand>),
@@ -104,79 +106,81 @@ impl UiTree for LocalTree {
     }
 }
 
-/// A tree that lives on the *app's* side of a hot-reload boundary: the dylib mounts it (so its segment effects are created in the dylib's reactive runtime, subscribed to the dylib's signals) and the host drives it through the shims the `app!` macro exports. Held by the host only as an opaque pointer — every method below runs inside the dylib.
+/// A tree that lives on the *app's* side of a hot-reload boundary: the dylib mounts it (so its segment effects are created in the dylib's reactive runtime, subscribed to the dylib's signals) and the host drives it through the entries the `app!` macro exports. Held by the host only as an opaque handle: every method below runs inside the dylib.
 ///
 /// The host's handle holds a share of the loaded dylib, so this instance is always released while its dylib is still mapped, before or after the app it was mounted from.
 pub struct HotTree {
     tree: OwnedTree,
+    frames: LentFrames,
 }
 
 impl HotTree {
-    /// Mounts the app's root inside this dylib and hands the host an opaque pointer to it.
-    ///
-    /// # Safety The returned pointer must be freed with [`HotTree::release`], from this same dylib, before it is unloaded.
-    pub fn mount(app: &dyn crate::app::App) -> *mut HotTree {
-        Box::into_raw(Box::new(HotTree {
+    /// Mounts the app's root inside this dylib.
+    pub fn mount(app: &dyn crate::app::App) -> Self {
+        Self {
             tree: OwnedTree::mount(|| app.root()),
-        }))
+            frames: LentFrames::new(),
+        }
     }
 
-    /// # Safety `ptr` must be a live pointer from [`HotTree::mount`], not yet released.
-    pub unsafe fn release(ptr: *mut HotTree) {
-        drop(unsafe { Box::from_raw(ptr) });
-    }
-
-    /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
-    pub unsafe fn on_event(ptr: *mut HotTree, event: &Event) -> bool {
-        let this = unsafe { &mut *ptr };
-        // The input registries are read by widgets, and in hot mode those widgets live **here** — so this is where the reading has to be fed. The runner also observes, but on the host side of the boundary, and a `cdylib` carries its own copy of every `thread_local` in `ui-core`: the host was filling one registry while the app read another, empty one. Nothing failed loudly. `modifiers()` answered "no modifiers" and `pointer_buttons()` answered "nothing held", confidently, for the entire life of a `cargo telar dev` session — so a ⇧-click was a plain click and a right-drag was a left-drag, and every gesture built on either silently did the wrong thing while its own tests passed.
+    pub fn on_event(&mut self, event: &Event) -> bool {
+        // A dylib carries its own copy of the input registries its widgets read, so the host observing on its side would leave these reading an empty one: modifiers and held buttons are fed here.
         ui_core::observe_keyboard(event);
         ui_core::observe_pointer(event);
-        this.tree.list.on_event(event) == EventResult::Handled
+        self.tree.list.on_event(event) == EventResult::Handled
     }
 
     /// [`on_event`](Self::on_event) for a move the overlay layer took, with everything in the tree covered; see [`ui_core::covered`].
-    ///
-    /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
-    pub unsafe fn on_covered_event(ptr: *mut HotTree, event: &Event) {
-        let this = unsafe { &mut *ptr };
-        ui_core::covered(|| this.tree.list.on_event(event));
+    pub fn on_covered_event(&mut self, event: &Event) {
+        ui_core::covered(|| self.tree.list.on_event(event));
     }
 
     /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event) observes on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose widgets asked.
-    ///
-    /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
-    pub unsafe fn end_frame(ptr: *mut HotTree) {
-        let _ = ptr;
+    pub fn end_frame(&self) {
         ui_core::end_keyboard_frame();
     }
 
-    /// Copies this frame's commands out to the host: the segment cache cannot be lent across the boundary, because the borrow would outlive the call the dylib controls.
+    /// This frame's commands, lent as [`LentFrames::paint`] lends them.
+    pub fn paint(&mut self) -> LentBytes {
+        let commands = self.tree.list.commands();
+        self.frames.paint(&commands)
+    }
+
+    /// Answers the pixels entry for an image the last [`paint`](Self::paint) drew.
     ///
-    /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
-    pub unsafe fn paint(ptr: *mut HotTree) -> Vec<DrawCommand> {
-        let this = unsafe { &*ptr };
-        this.tree.list.commands().clone()
+    /// # Safety
+    ///
+    /// As [`LentFrames::lend_pixels`].
+    pub unsafe fn lend_pixels(&self, image: u64, pixels: *mut LentBytes, found: *mut bool) {
+        unsafe { self.frames.lend_pixels(image, pixels, found) }
     }
 
-    /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
-    pub unsafe fn is_dirty(ptr: *mut HotTree) -> bool {
-        let this = unsafe { &*ptr };
-        this.tree.list.is_dirty()
+    /// Has the next [`paint`](Self::paint) stand alone, for a host that could not read one of the frames before it.
+    pub fn reset_frames(&mut self) {
+        self.frames.reset();
     }
 
-    /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
-    pub unsafe fn generation(ptr: *mut HotTree) -> u64 {
-        let this = unsafe { &*ptr };
-        this.tree.list.generation()
+    pub fn is_dirty(&self) -> bool {
+        self.tree.list.is_dirty()
     }
 
-    /// # Safety `ptr` must be a live pointer from [`HotTree::mount`].
-    pub unsafe fn walk(ptr: *mut HotTree) -> Vec<SegmentNodeInfo> {
-        let this = unsafe { &*ptr };
-        let mut out = Vec::new();
-        this.tree.list.walk_tree(&mut out);
-        out
+    pub fn generation(&self) -> u64 {
+        self.tree.list.generation()
+    }
+
+    /// The tree, pre-order, as the devtools inspector reads it.
+    pub fn walk(&self) -> Vec<SegmentNodeInfo> {
+        let mut nodes = Vec::new();
+        self.tree.list.walk_tree(&mut nodes);
+        nodes
+    }
+
+    /// What a reader is told about the frame this tree composed, and what the accessibility checks find in it; see [`crate::inspect::audit`].
+    pub fn access_audit(
+        &self,
+        background: Option<renderer_core::Color>,
+    ) -> platform_core::AccessAudit {
+        crate::inspect::audit(&self.tree.list.commands(), background)
     }
 }
 

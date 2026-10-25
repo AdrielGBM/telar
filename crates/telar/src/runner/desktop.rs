@@ -88,7 +88,7 @@ pub fn open_window<A: App>(app: A) -> SurfaceToken {
     let window_config = app
         .window_config()
         .unwrap_or_default()
-        .titled_or(services_core::app_paths::name().unwrap_or_default());
+        .titled_or(&services_core::app_paths::name().unwrap_or_default());
     let paths: Arc<dyn AppPathsProvider> = Arc::new(DesktopPathsProvider);
     #[cfg(feature = "dialogs")]
     platform_desktop::DesktopFileDialogs::install();

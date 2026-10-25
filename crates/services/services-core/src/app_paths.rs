@@ -4,32 +4,39 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::Arc;
 
 use crate::paths::AppPathsProvider;
 
-struct Installed {
-    name: String,
-    provider: std::sync::Arc<dyn AppPathsProvider>,
+#[derive(Clone)]
+pub(crate) struct Installed {
+    pub(crate) name: String,
+    pub(crate) provider: Arc<dyn AppPathsProvider>,
 }
 
-static INSTALLED: OnceLock<Installed> = OnceLock::new();
+reactive_local::released_slot! {
+    static INSTALLED: Installed;
+}
 
 /// Installs the platform's provider and the name every app-scoped directory is nested under. Called by the runner; a second call is ignored, so an embedded surface cannot repoint a host's directories.
-pub fn install(name: impl Into<String>, provider: std::sync::Arc<dyn AppPathsProvider>) {
-    let _ = INSTALLED.set(Installed {
+pub fn install(name: impl Into<String>, provider: Arc<dyn AppPathsProvider>) {
+    INSTALLED.set_first(Installed {
         name: name.into(),
         provider,
     });
 }
 
+pub(crate) fn installed() -> Option<Installed> {
+    INSTALLED.get()
+}
+
 /// The name the runner installed, or `None` before one has.
-pub fn name() -> Option<&'static str> {
-    INSTALLED.get().map(|installed| installed.name.as_str())
+pub fn name() -> Option<String> {
+    installed().map(|installed| installed.name)
 }
 
 fn scoped(base: impl Fn(&dyn AppPathsProvider) -> Option<PathBuf>) -> Option<PathBuf> {
-    let installed = INSTALLED.get()?;
+    let installed = installed()?;
     Some(base(installed.provider.as_ref())?.join(&installed.name))
 }
 
@@ -101,8 +108,7 @@ pub fn user_dir(name: &str, fallback: &str) -> PathBuf {
     let Some(home) = home.clone() else {
         return default();
     };
-    let Some(config_root) = INSTALLED
-        .get()
+    let Some(config_root) = installed()
         .and_then(|i| i.provider.config_dir())
         .or_else(|| {
             std::env::var_os("XDG_CONFIG_HOME")

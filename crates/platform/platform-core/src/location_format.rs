@@ -1,7 +1,5 @@
 //! [`LocationFormat`]: a [`Location`] written as the path, query and fragment of a URI reference.
 
-use std::sync::RwLock;
-
 use crate::Location;
 
 /// How a [`Location`] is spelled as text: `/base/segment/segment?key=value#fragment`.
@@ -160,20 +158,27 @@ impl LocationFormat {
     }
 }
 
-static CURRENT: RwLock<Option<LocationFormat>> = RwLock::new(None);
+reactive_local::released_slot! {
+    static CURRENT: LocationFormat;
+}
 
 /// The spelling the running app's addresses are written in, for code that has to write one without holding the platform's [`LocationSource`](crate::LocationSource) — a document renderer's `href`, a `--location` argument. [`LocationFormat::root`] until a platform installs its own, reading the locales [`location_locales`](crate::location_locales) declares unless the installed format names its own.
 pub fn location_format() -> LocationFormat {
-    let format = CURRENT.read().unwrap().clone().unwrap_or_default();
+    let format = CURRENT.get().unwrap_or_default();
     if !format.locales.is_empty() {
         return format;
     }
     format.with_locales(crate::location_locales())
 }
 
+/// The spelling a platform installed, without the locales the app's address declares: what a host hands a guest, whose own address declares its own.
+pub fn installed_location_format() -> Option<LocationFormat> {
+    CURRENT.get()
+}
+
 /// Installs the spelling [`location_format`] answers with. Called by a platform whose addresses live under a base path.
 pub fn set_location_format(format: LocationFormat) {
-    *CURRENT.write().unwrap() = Some(format);
+    CURRENT.replace(format);
 }
 
 const SEGMENT: &[u8] = b"!$&'()*+,;=:@";

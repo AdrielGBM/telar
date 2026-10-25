@@ -55,7 +55,7 @@ fn centre_of(dev: &mut DevTools, needle: &str) -> (f32, f32) {
 fn node(id: u64, name: &'static str, depth: usize, rect: Rect) -> SegmentNodeInfo {
     SegmentNodeInfo {
         id,
-        name,
+        name: name.into(),
         depth,
         rect,
         padding: Insets::new(4.0, 8.0, 4.0, 8.0),

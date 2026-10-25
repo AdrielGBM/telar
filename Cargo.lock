@@ -5779,6 +5779,7 @@ dependencies = [
  "serde_json",
  "similar",
  "telar",
+ "telar-embed",
  "telar-geometry-core",
  "telar-i18n-core",
  "telar-icons-core",
@@ -5808,6 +5809,7 @@ dependencies = [
  "telar-theme-core",
  "telar-ui-core",
  "telar-ui-tree",
+ "telar-wire-core",
  "tiny-skia 0.12.0",
  "toml",
  "tracing",
@@ -5921,8 +5923,11 @@ dependencies = [
  "telar-reactive-core",
  "telar-renderer-core",
  "telar-renderer-text",
+ "telar-services-core",
  "telar-ui-core",
  "telar-ui-tree",
+ "telar-wire-core",
+ "tracing",
  "web-time",
 ]
 
@@ -5937,6 +5942,9 @@ dependencies = [
 [[package]]
 name = "telar-geometry-core"
 version = "0.2.2"
+dependencies = [
+ "telar-wire-core",
+]
 
 [[package]]
 name = "telar-i18n"
@@ -6069,6 +6077,7 @@ dependencies = [
  "telar-geometry-core",
  "telar-reactive-local",
  "telar-semantics-core",
+ "telar-wire-core",
  "thiserror 2.0.20",
  "tracing",
  "tracing-subscriber",
@@ -6219,6 +6228,7 @@ dependencies = [
  "telar-geometry-core",
  "telar-reactive-local",
  "telar-semantics-core",
+ "telar-wire-core",
  "thiserror 2.0.20",
  "tracing",
  "unicode-segmentation",
@@ -6264,6 +6274,7 @@ dependencies = [
  "rustc-hash 2.1.3",
  "telar-geometry-core",
  "telar-platform-headless",
+ "telar-reactive-local",
  "telar-renderer-cache",
  "telar-renderer-core",
  "telar-renderer-software",
@@ -6372,6 +6383,9 @@ dependencies = [
 [[package]]
 name = "telar-semantics-core"
 version = "0.2.2"
+dependencies = [
+ "telar-wire-core",
+]
 
 [[package]]
 name = "telar-services-core"
@@ -6379,9 +6393,13 @@ version = "0.2.2"
 dependencies = [
  "dirs 7.0.0",
  "rustc-hash 2.1.3",
+ "telar-geometry-core",
+ "telar-platform-core",
  "telar-reactive-core",
  "telar-reactive-local",
+ "telar-renderer-core",
  "telar-semantics-core",
+ "telar-wire-core",
  "thiserror 2.0.20",
  "tracing",
 ]
@@ -6446,6 +6464,7 @@ dependencies = [
  "telar-platform-core",
  "telar-reactive-core",
  "telar-renderer-core",
+ "telar-wire-core",
  "web-time",
 ]
 
@@ -6457,6 +6476,10 @@ dependencies = [
  "telar",
  "tracing",
 ]
+
+[[package]]
+name = "telar-wire-core"
+version = "0.2.2"
 
 [[package]]
 name = "telar-workshop"

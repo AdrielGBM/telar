@@ -5,10 +5,10 @@
 use std::sync::Arc;
 
 use rustc_hash::FxHashMap;
+use wire_core::{Reader, WireError, Writer};
 use xxhash_rust::xxh3::xxh3_128;
 
-use super::WireError;
-use super::bytes::{Reader, Writer};
+use super::FrameError;
 
 struct Seen<T: ?Sized> {
     slot: u32,
@@ -132,7 +132,7 @@ impl<T: ?Sized> Slots<T> {
         r: &mut Reader<'_>,
         frame: u64,
         read: impl FnOnce(&mut Reader<'_>) -> Result<Arc<T>, WireError>,
-    ) -> Result<Arc<T>, WireError> {
+    ) -> Result<Arc<T>, FrameError> {
         let tag = r.varint()?;
         let slot = usize::try_from(tag >> 1).map_err(|_| WireError::Invalid("slot"))?;
         if tag & 1 == 0 {
@@ -140,13 +140,13 @@ impl<T: ?Sized> Slots<T> {
                 .live
                 .get_mut(slot)
                 .and_then(Option::as_mut)
-                .ok_or(WireError::UnknownSlot { slot })?;
+                .ok_or(FrameError::UnknownSlot { slot })?;
             *used = frame;
             return Ok(Arc::clone(value));
         }
         // The encoder reuses a freed slot or takes the next new one, so a definition never lands further than one past the end.
         if slot > self.live.len() {
-            return Err(WireError::UnknownSlot { slot });
+            return Err(FrameError::UnknownSlot { slot });
         }
         let value = read(r)?;
         if slot == self.live.len() {

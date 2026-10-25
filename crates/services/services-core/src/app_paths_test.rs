@@ -48,7 +48,7 @@ fn the_xdg_rule_prefers_the_variable_then_home_then_the_bare_fallback() {
 /// Nothing installed is the preview/headless case, and it must answer `None` rather than guess a real path.
 #[test]
 fn an_app_directory_is_none_until_a_runner_installs_one() {
-    if INSTALLED.get().is_none() {
+    if installed().is_none() {
         assert_eq!(cache(), None);
         assert_eq!(runtime(), None);
     }

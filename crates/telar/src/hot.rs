@@ -1,159 +1,104 @@
-//! [`HotApp`]: an application loaded from a dylib, and the exports the host drives its own runtime through.
+//! [`HotApp`]: an application loaded from a dylib, and the entries the host drives its own runtime through.
 
-mod boundary;
+mod entries;
 #[doc(hidden)]
 pub mod guest;
 
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use boundary::check_guest;
-pub use boundary::{GUEST_ABI, GUEST_LAYOUT};
-use boundary::{ShieldedClipboard, ShieldedFileDialogs, ShieldedUriOpener};
-use platform_core::guest::{BoundaryLayout, Guest};
-pub use platform_core::guest::{GuestPanic, GuestResult};
+#[doc(hidden)]
+pub use entries::{CreateApp, HOT_CONTRACT, HotEntries};
+#[doc(hidden)]
+pub use platform_core::export_contract_stamp;
+pub use platform_core::guest::GuestPanic;
+use platform_core::guest::{CWaker, FrameCtx, LentBytes};
+#[doc(hidden)]
+pub use platform_core::guest::{CallOutcome, Handle, HostServices};
+use renderer_core::wire::FrameDecoder;
+use services_core::guest::GuestLibrary;
+use wire_core::encode;
 
-use crate::app::App;
 use crate::tree::{Frame, HotTree, UiTree};
+use guest::GuestApp;
 
-/// The host's half of [`__hot_guest_api`](crate::__hot_guest_api): a table of every export, resolved once when the library loads.
-macro_rules! host_exports {
-    ($($field:ident => $symbol:ident($($arg:ident: $ty:ty),*) -> $output:ty;)*) => {
-        /// Plain `fn` pointers copied out of the library, so the table borrows nothing; each is valid while the library stays mapped, which [`GuestImage`] guarantees by holding both.
-        #[derive(Clone, Copy)]
-        pub(crate) struct GuestExports {
-            $(pub(crate) $field: unsafe extern "Rust" fn($($ty),*) -> $crate::hot::GuestResult<$output>,)*
-        }
-
-        impl GuestExports {
-            fn resolve(lib: &libloading::Library) -> Result<Self, libloading::Error> {
-                Ok(Self {
-                    $($field: export(lib, concat!(stringify!($symbol), "\0").as_bytes())?,)*
-                })
-            }
-
-            #[cfg(test)]
-            pub(crate) fn in_process() -> Self {
-                Self {
-                    $($field: $crate::hot::guest::$field,)*
-                }
-            }
-        }
-    };
+/// One loaded guest and the tree whose frame was read last, the frame an audit is asked of. Shared by the [`HotApp`] and every tree it mounted, so the guest is unloaded only once the last of them lets go, whichever that is.
+struct HotImage {
+    library: GuestLibrary<HotEntries>,
+    painted: Cell<Option<Handle<HotTree>>>,
 }
 
-crate::__hot_guest_api!(host_exports);
-
-/// The factory the `app!` macro writes into each dylib.
-pub(crate) type CreateApp = unsafe extern "Rust" fn() -> GuestResult<Box<dyn App>>;
-
-fn export<F: Copy>(lib: &libloading::Library, name: &[u8]) -> Result<F, libloading::Error> {
-    unsafe { lib.get::<F>(name) }.map(|symbol| *symbol)
-}
-
-/// One loaded guest: its library, the exports resolved from it and the [`Guest`] every call goes through. Shared by the [`HotApp`] and every tree it mounted, so the guest is told it is unloading, and its library unmapped, only once the last of them lets go, whichever that is.
-struct GuestImage {
-    guest: Guest,
-    exports: GuestExports,
-    /// `None` for exports that are this process's own.
-    lib: Option<libloading::Library>,
-}
-
-impl GuestImage {
-    fn call<T>(&self, call: impl FnOnce(&GuestExports) -> GuestResult<T>) -> Option<T> {
-        self.guest.call(|| call(&self.exports))
-    }
-}
-
-impl Drop for GuestImage {
-    fn drop(&mut self) {
-        let Some(lib) = self.lib.take() else {
-            return;
-        };
-        let exports = self.exports;
-        self.guest.unload(
-            lib,
-            || unsafe { (exports.unloading)() },
-            || unsafe { (exports.quiesce)() },
-        );
-    }
-}
-
-/// An application loaded from a dylib, driven through the exports it carries. Every call goes through its [`Guest`], so once the dylib has panicked none reaches it again; the panic is reported through [`AppRuntime::take_panic`](crate::AppRuntime::take_panic) and the host waits for a rebuild.
+/// An application loaded from a dylib, driven through the entries it exports. Every call goes through its [`GuestLibrary`], so once the dylib has panicked none reaches it again; the panic is reported through [`AppRuntime::take_panic`](crate::AppRuntime::take_panic) and the host waits for a rebuild.
 pub struct HotApp {
     /// `None` once a panic has left the dylib without one to give.
-    app: Option<Box<dyn App>>,
-    image: Rc<GuestImage>,
+    app: Option<Handle<GuestApp>>,
+    image: Rc<HotImage>,
 }
 
 impl HotApp {
-    /// Tells a guest loaded from a library that it will be unloaded, hands it the host's services, then has it build its app. A panic in any of them is recorded rather than returned: the host still has a window to keep, and a rebuild to wait for.
-    pub(crate) fn start(
-        exports: GuestExports,
-        create: CreateApp,
-        lib: Option<libloading::Library>,
-    ) -> Self {
-        let services = match lib {
-            Some(_) => HostServices::installed(),
-            None => HostServices::installed().in_this_process(),
-        };
-        let image = Rc::new(GuestImage {
-            guest: Guest::default(),
-            exports,
-            lib,
+    /// Starts the guest `entries` were copied from and has it build its app; `library` is its mapping, `None` for entries this process serves itself. A panic in any of it is recorded rather than returned: the host still has a window to keep, and a rebuild to wait for.
+    pub(crate) fn start(entries: HotEntries, library: Option<libloading::Library>) -> Self {
+        let library = GuestLibrary::start(
+            entries,
+            library.map(|library| Box::new(library) as Box<dyn std::any::Any>),
+            served_fonts(),
+        );
+        let app = library.answer(Handle::NULL, |entries, app| unsafe {
+            (entries.create)(app)
         });
-        if image.lib.is_some() {
-            image.call(|exports| unsafe { (exports.loaded)() });
+        Self {
+            app,
+            image: Rc::new(HotImage {
+                library,
+                painted: Cell::new(None),
+            }),
         }
-        // Before the app is made, so whatever its setup or its first build reaches for is already there.
-        image.call(|exports| unsafe { (exports.install_services)(services) });
-        let app = image.call(|_| unsafe { create() });
-        Self { app, image }
     }
 
-    fn ask(&self, call: impl FnOnce(&GuestExports) -> GuestResult<bool>) -> bool {
-        self.image.call(call).unwrap_or(false)
+    fn library(&self) -> &GuestLibrary<HotEntries> {
+        &self.image.library
     }
 
-    fn tell(&self, call: impl FnOnce(&GuestExports) -> GuestResult<()>) {
-        self.image.call(call);
-    }
-
-    fn guest_audit(
-        &self,
-        frame: &[renderer_core::DrawCommand],
-    ) -> Option<platform_core::AccessAudit> {
-        let background = crate::app_runtime::AppRuntime::clear_color(self);
-        self.image
-            .call(|exports| unsafe { (exports.access_snapshot)(frame, background) })
+    // The frame a caller hands in is the one the guest's tree painted last, which the guest still holds: audited there, it never has to be spelled back across, pixels and all.
+    fn guest_audit(&self) -> Option<platform_core::AccessAudit> {
+        let tree = self.image.painted.get()?;
+        let background = encode(&crate::app_runtime::AppRuntime::clear_color(self));
+        self.library().read(|entries, audit| unsafe {
+            (entries.tree_access_audit)(tree, LentBytes::lend(&background), audit)
+        })
     }
 }
 
 impl Drop for HotApp {
     fn drop(&mut self) {
-        let Some(app) = self.app.take() else {
-            return;
-        };
-        if self.image.guest.has_panicked() {
-            // Leaked: its destructor is code in a dylib that is no longer called.
-            std::mem::forget(app);
-            return;
+        if let Some(app) = self.app.take() {
+            self.library()
+                .call(|entries| unsafe { (entries.release)(app) });
         }
-        self.tell(|exports| unsafe { (exports.app_release)(app) });
     }
 }
 
-/// The host's handle on a tree the dylib mounted and owns: an opaque pointer, and a share of the image whose code drives it, which keeps that image mapped for as long as the handle lives.
+/// The host's handle on a tree the dylib mounted and owns: an opaque handle, the decoder its frames are read back with, which keeps the payloads and images consecutive frames share, and a share of the image whose code drives it, which keeps that image mapped for as long as the handle lives.
 struct HotTreeHandle {
-    ptr: *mut HotTree,
-    image: Rc<GuestImage>,
+    tree: Handle<HotTree>,
+    frames: RefCell<FrameDecoder>,
+    image: Rc<HotImage>,
+}
+
+impl HotTreeHandle {
+    fn library(&self) -> &GuestLibrary<HotEntries> {
+        &self.image.library
+    }
 }
 
 impl UiTree for HotTreeHandle {
     fn on_event(&mut self, event: &platform_core::Event) -> ui_core::EventResult {
-        let handled = self
-            .image
-            .call(|exports| unsafe { (exports.tree_on_event)(self.ptr, event) });
-        if handled == Some(true) {
+        let tree = self.tree;
+        let event = encode(event);
+        let handled = self.library().ask(|entries, handled| unsafe {
+            (entries.tree_on_event)(tree, LentBytes::lend(&event), handled)
+        });
+        if handled {
             ui_core::EventResult::Handled
         } else {
             ui_core::EventResult::Ignored
@@ -161,49 +106,64 @@ impl UiTree for HotTreeHandle {
     }
 
     fn on_covered_event(&mut self, event: &platform_core::Event) {
-        self.image
-            .call(|exports| unsafe { (exports.tree_on_covered_event)(self.ptr, event) });
+        let tree = self.tree;
+        self.library().send(event, |entries, event| unsafe {
+            (entries.tree_on_covered_event)(tree, event)
+        });
     }
 
     fn frame(&self) -> Frame<'_> {
-        let commands = self
-            .image
-            .call(|exports| unsafe { (exports.tree_paint)(self.ptr) });
-        Frame::Owned(commands.unwrap_or_default())
+        let tree = self.tree;
+        self.image.painted.set(Some(tree));
+        Frame::Owned(self.library().read_frame(
+            &mut self.frames.borrow_mut(),
+            |entries, frame| unsafe { (entries.tree_paint)(tree, frame) },
+            |entries, image, pixels, found| unsafe {
+                (entries.tree_pixels)(tree, image, pixels, found)
+            },
+            |entries| unsafe { (entries.tree_reset_frames)(tree) },
+        ))
     }
 
     fn end_frame(&self) {
-        self.image
-            .call(|exports| unsafe { (exports.tree_end_frame)(self.ptr) });
+        let tree = self.tree;
+        self.library()
+            .call(|entries| unsafe { (entries.tree_end_frame)(tree) });
     }
 
     fn is_dirty(&self) -> bool {
-        self.image
-            .call(|exports| unsafe { (exports.tree_dirty)(self.ptr) })
-            .unwrap_or(false)
+        let tree = self.tree;
+        self.library()
+            .ask(|entries, dirty| unsafe { (entries.tree_is_dirty)(tree, dirty) })
     }
 
     fn generation(&self) -> u64 {
-        self.image
-            .call(|exports| unsafe { (exports.tree_generation)(self.ptr) })
+        let tree = self.tree;
+        self.library()
+            .answer(0, |entries, generation| unsafe {
+                (entries.tree_generation)(tree, generation)
+            })
             .unwrap_or_default()
     }
 
     fn walk(&self, out: &mut Vec<ui_tree::SegmentNodeInfo>) {
-        if let Some(nodes) = self
-            .image
-            .call(|exports| unsafe { (exports.tree_walk)(self.ptr) })
-        {
-            out.extend(nodes);
-        }
+        let tree = self.tree;
+        let nodes: Option<Vec<ui_tree::SegmentNodeInfo>> = self
+            .library()
+            .read(|entries, nodes| unsafe { (entries.tree_walk)(tree, nodes) });
+        out.extend(nodes.into_iter().flatten());
     }
 }
 
 impl Drop for HotTreeHandle {
     // A dylib that panicked keeps the tree: releasing it would run that dylib's code again.
     fn drop(&mut self) {
-        self.image
-            .call(|exports| unsafe { (exports.tree_release)(self.ptr) });
+        let tree = self.tree;
+        if self.image.painted.get() == Some(tree) {
+            self.image.painted.set(None);
+        }
+        self.library()
+            .call(|entries| unsafe { (entries.tree_release)(tree) });
     }
 }
 
@@ -234,23 +194,24 @@ impl UiTree for NoTree {
 
 impl crate::app_runtime::AppRuntime for HotApp {
     fn window_config(&self) -> Option<platform_core::WindowConfig> {
-        let app = self.app.as_deref()?;
-        self.image
-            .call(|exports| unsafe { (exports.app_window_config)(app) })
+        let app = self.app?;
+        self.library()
+            .read(|entries, config| unsafe { (entries.window_config)(app, config) })
             .flatten()
     }
 
     // Mounted inside the dylib, where the app's signals live: a tree mounted out here would register its segment effects in the host's runtime and never subscribe to anything the app writes.
     fn mount(&mut self) -> Box<dyn UiTree> {
-        let Some(app) = self.app.as_deref() else {
+        let Some(app) = self.app else {
             return Box::new(NoTree);
         };
-        let mounted = self
-            .image
-            .call(|exports| unsafe { (exports.tree_mount)(app) });
+        let mounted = self.library().answer(Handle::NULL, |entries, tree| unsafe {
+            (entries.mount)(app, tree)
+        });
         match mounted {
-            Some(ptr) => Box::new(HotTreeHandle {
-                ptr,
+            Some(tree) => Box::new(HotTreeHandle {
+                tree,
+                frames: RefCell::default(),
                 image: Rc::clone(&self.image),
             }),
             None => Box::new(NoTree),
@@ -258,161 +219,196 @@ impl crate::app_runtime::AppRuntime for HotApp {
     }
 
     fn clear_color(&self) -> Option<renderer_core::Color> {
-        let app = self.app.as_deref()?;
-        self.image
-            .call(|exports| unsafe { (exports.app_clear_color)(app) })
+        let app = self.app?;
+        self.library()
+            .read(|entries, color| unsafe { (entries.clear_color)(app, color) })
             .flatten()
     }
 
-    // The waker in `ctx` is host code the app may call at any time, so the app is handed one that keeps a panic on this side.
     fn on_frame(&mut self, ctx: &mut platform_core::AppCtx) {
-        let Some(app) = self.app.as_deref_mut() else {
+        let Some(app) = self.app else {
             return;
         };
-        platform_core::guest::with_guest_ctx(ctx, |guest_ctx| {
-            self.image
-                .call(|exports| unsafe { (exports.app_on_frame)(app, guest_ctx) })
+        FrameCtx::lend(ctx, |frame| {
+            self.library()
+                .call(|entries| unsafe { (entries.on_frame)(app, frame) })
         });
     }
 
     fn take_panic(&self) -> Option<String> {
-        self.image.guest.take_panic().map(|panic| panic.to_string())
+        self.library()
+            .guest()
+            .take_panic()
+            .map(|panic| panic.to_string())
     }
 
     fn hot_snapshot(&self) -> Option<String> {
-        self.image.call(|exports| unsafe { (exports.snapshot)() })
+        self.library()
+            .read(|entries, blob| unsafe { (entries.hot_snapshot)(blob) })
     }
 
     fn hot_restore(&self, blob: &str) {
-        self.tell(|exports| unsafe { (exports.restore)(blob) });
+        self.library()
+            .send(&blob.to_owned(), |entries, blob| unsafe {
+                (entries.hot_restore)(blob)
+            });
     }
 
     // The app's motion registry is the dylib's motion-core copy; the host's animates what the host draws itself, the devtools overlay.
     fn motion_tick(&self, now: web_time::Instant) {
         motion_core::tick(now);
-        self.tell(|exports| unsafe { (exports.motion_tick)(now) });
+        let now = self.library().epoch().stamp(now);
+        self.library()
+            .call(|entries| unsafe { (entries.motion_tick)(now) });
     }
 
     fn motion_has_active(&self) -> bool {
-        motion_core::has_active() || self.ask(|exports| unsafe { (exports.motion_active)() })
+        motion_core::has_active()
+            || self
+                .library()
+                .ask(|entries, active| unsafe { (entries.motion_has_active)(active) })
     }
 
     fn motion_has_continuous(&self) -> bool {
         motion_core::has_continuous()
-            || self.ask(|exports| unsafe { (exports.motion_continuous)() })
+            || self
+                .library()
+                .ask(|entries, continuous| unsafe { (entries.motion_has_continuous)(continuous) })
     }
 
     // Ended by a guard, so an unwind out of the dispatch cannot leave the dylib's batch open.
     fn in_event_batch(&self, dispatch: &mut dyn FnMut()) {
-        struct EndBatch<'a>(&'a HotApp);
+        struct EndBatch<'a>(&'a GuestLibrary<HotEntries>);
         impl Drop for EndBatch<'_> {
             fn drop(&mut self) {
-                self.0.tell(|exports| unsafe { (exports.end_batch)() });
+                self.0.call(|entries| unsafe { (entries.end_batch)() });
             }
         }
-        self.tell(|exports| unsafe { (exports.begin_batch)() });
-        let _end = EndBatch(self);
+        self.library()
+            .call(|entries| unsafe { (entries.begin_batch)() });
+        let _end = EndBatch(self.library());
         dispatch();
     }
 
     fn relayout(&self) {
-        self.tell(|exports| unsafe { (exports.relayout)() });
+        self.library()
+            .call(|entries| unsafe { (entries.relayout)() });
     }
 
     // `overlay` widgets register in the dylib where the view is built, so a modal's priority routing must be driven across this boundary.
     fn dispatch_overlays(&self, event: &platform_core::Event) -> bool {
-        self.ask(|exports| unsafe { (exports.dispatch_overlays)(event) })
+        let event = encode(event);
+        self.library().ask(|entries, handled| unsafe {
+            (entries.dispatch_overlays)(LentBytes::lend(&event), handled)
+        })
     }
 
     // The controls, their names and their rects live in the dylib's registries, which no host-side reading can see.
     fn access_snapshot(
         &self,
-        frame: &[renderer_core::DrawCommand],
+        _frame: &[renderer_core::DrawCommand],
     ) -> Vec<platform_core::AccessNode>
     where
         Self: Sized,
     {
-        self.guest_audit(frame)
+        self.guest_audit()
             .map(|audit| audit.nodes)
             .unwrap_or_default()
     }
 
     fn access_audit(
         &self,
-        frame: &[renderer_core::DrawCommand],
+        _frame: &[renderer_core::DrawCommand],
         _audit_here: crate::app_runtime::AuditFn,
     ) -> Option<platform_core::AccessAudit> {
-        self.guest_audit(frame)
+        self.guest_audit()
     }
 
     // A title bar's `on_press` pushes into the dylib's platform-core copy, so the host drains it across this boundary.
     fn drain_window_commands(&self) -> Vec<platform_core::WindowCommand> {
-        self.image
-            .call(|exports| unsafe { (exports.drain_window_commands)() })
+        self.library()
+            .read(|entries, commands| unsafe { (entries.drain_window_commands)(commands) })
             .unwrap_or_default()
     }
 
     // The field and its caret live in the dylib's focus and layout registries.
     fn text_input(&self) -> Option<platform_core::TextInput> {
-        self.image
-            .call(|exports| unsafe { (exports.text_input)() })
+        self.library()
+            .read(|entries, input| unsafe { (entries.text_input)(input) })
             .flatten()
     }
 
     // The dylib reads its own copy of the store; the host's copy is kept too, for the devtools that live on this side.
     fn set_system_preferences(&self, preferences: &platform_core::SystemPreferences) {
         preferences_core::set_system_preferences(preferences.clone());
-        self.tell(|exports| unsafe { (exports.set_system_preferences)(preferences) });
+        self.library()
+            .send(preferences, |entries, preferences| unsafe {
+                (entries.set_system_preferences)(preferences)
+            });
     }
 
     fn set_surface_size(&self, size: geometry_core::Size) {
-        self.tell(|exports| unsafe { (exports.set_surface_size)(size.width, size.height) });
+        self.library()
+            .call(|entries| unsafe { (entries.set_surface_size)(size.width, size.height) });
     }
 
     fn set_safe_area_insets(&self, insets: geometry_core::Insets) {
-        self.tell(|exports| unsafe {
-            (exports.set_safe_area_insets)(insets.top, insets.right, insets.bottom, insets.left)
+        self.library().call(|entries| unsafe {
+            (entries.set_safe_area_insets)(insets.top, insets.right, insets.bottom, insets.left)
         });
     }
 
     fn set_surface_maximized(&self, maximized: bool) {
-        self.tell(|exports| unsafe { (exports.set_surface_maximized)(maximized) });
+        self.library()
+            .call(|entries| unsafe { (entries.set_surface_maximized)(maximized) });
     }
 
     fn set_location_history(&self, history: &[platform_core::Location]) {
-        self.tell(|exports| unsafe { (exports.set_location_history)(history) });
+        self.library()
+            .send(&history.to_vec(), |entries, history| unsafe {
+                (entries.set_location_history)(history)
+            });
     }
 
     fn open_title(&self, app: &str, showing: &str) {
-        self.tell(|exports| unsafe { (exports.open_title)(app, showing) });
+        self.library().send(
+            &(app.to_owned(), showing.to_owned()),
+            |entries, title| unsafe { (entries.open_title)(title) },
+        );
     }
 
     fn open_font_family(&self, family: Option<&str>) {
-        self.tell(|exports| unsafe { (exports.open_font_family)(family) });
+        self.library()
+            .send(&family.map(str::to_owned), |entries, family| unsafe {
+                (entries.open_font_family)(family)
+            });
     }
 
     // Its dialogs and its history are the dylib's.
     fn navigate_back(&self) -> bool {
-        self.ask(|exports| unsafe { (exports.navigate_back)() })
+        self.library()
+            .ask(|entries, handled| unsafe { (entries.navigate_back)(handled) })
     }
 
     // `spawn_task` registers its callback in the reactive-core copy of whoever called it, so both sides are drained.
     fn drain_tasks(&self) {
         reactive_core::drain_tasks();
-        self.tell(|exports| unsafe { (exports.drain_tasks)() });
+        self.library()
+            .call(|entries| unsafe { (entries.drain_tasks)() });
     }
 
     fn fire_timers(&self) {
         reactive_core::fire_timers();
-        self.tell(|exports| unsafe { (exports.fire_timers)() });
+        self.library()
+            .call(|entries| unsafe { (entries.fire_timers)() });
     }
 
     // The loop wakes for whichever side's timer comes due first.
     fn until_next_timer(&self) -> Option<std::time::Duration> {
         let host = reactive_core::until_next_timer();
         let app = self
-            .image
-            .call(|exports| unsafe { (exports.until_next_timer)() })
+            .library()
+            .read(|entries, after| unsafe { (entries.until_next_timer)(after) })
             .flatten();
         match (host, app) {
             (Some(host), Some(app)) => Some(host.min(app)),
@@ -420,111 +416,34 @@ impl crate::app_runtime::AppRuntime for HotApp {
         }
     }
 
-    // The dylib wakes the loop from whatever thread finishes its task, so what it is handed keeps a panic in the wake on this side.
+    // The dylib wakes the loop from whatever thread finishes its task, through a reference to the host's waker whose wake keeps a panic on this side.
     fn install_task_waker(&self, waker: platform_core::RedrawWaker) {
         let host = waker.clone();
         reactive_core::set_task_waker(move || host.wake());
-        let waker = platform_core::guest::shielded_waker(waker);
-        self.tell(move |exports| unsafe { (exports.install_task_waker)(waker) });
+        let waker = CWaker::new(waker);
+        self.library()
+            .call(move |entries| unsafe { (entries.install_task_waker)(waker) });
     }
 }
 
-/// The library a build left at `path`, opened and started. An error means the library could not be driven at all, and names the library and why; a panic while it starts is recorded in the [`HotApp`] instead.
-pub fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error::Error>> {
-    open_hot_app(path).map_err(|why| format!("{}: {why}", path.display()).into())
-}
-
-fn open_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error::Error>> {
-    let lib = platform_core::guest::open_unique(path)?;
-    let abi = export::<unsafe extern "Rust" fn() -> u32>(&lib, b"_rsx_hot_abi\0")
-        .map(|abi| unsafe { abi() })
-        .ok();
-    let layout = export::<unsafe extern "Rust" fn() -> u64>(&lib, b"_rsx_hot_layout\0")
-        .map(|layout| BoundaryLayout(unsafe { layout() }))
-        .ok();
-    check_guest(abi, layout)?;
-    let exports = GuestExports::resolve(&lib)?;
-    let create = export::<CreateApp>(&lib, b"_rsx_hot_create_app\0")?;
-    Ok(HotApp::start(exports, create, Some(lib)))
-}
-
-/// The platform services the host installed, handed to each library it loads: the library's copies of their stores start empty, so without them a reloaded app copies to no clipboard, opens no link, shows no file dialog, lays its text out in faces other than the ones the host draws it in, and shows and matches its shortcuts for the keyboard it was compiled for rather than the one the host's platform reports.
+/// The library a build left at `path`, opened and started. An error means the library could not be driven at all, and names the library and why: one built against another telar, another kind of guest or no telar guest at all is refused before anything of it runs but its initializers. A panic while it starts is recorded in the [`HotApp`] instead.
 ///
-/// The host's backends serve both sides, so a selection the clipboard owns outlives every library swapped in under it. In a build that shapes its own text the host's font database is handed over too, for the library's copy of the shaper to defer to: two copies of the shaper cannot share one database, so the library loads what the host's was loaded from, and a face the app adds while it runs is added to the host's, which draws its text, before the library loads it as well.
-#[cfg(feature = "dev")]
-#[doc(hidden)]
-pub struct HostServices {
-    clipboard: Option<std::sync::Arc<dyn services_core::Clipboard>>,
-    uri_opener: Option<std::sync::Arc<dyn services_core::UriOpener>>,
-    file_dialogs: Option<std::sync::Arc<dyn services_core::FileDialogs>>,
-    keyboard_convention: platform_core::KeyboardConvention,
-    fonts: Option<std::sync::Arc<dyn renderer_core::FontHost>>,
+/// # Safety
+///
+/// As [`open_guest`](platform_core::guest::open_guest): `path` must name a hot-reload library built from a telar this host trusts. Loading runs its initializers, and once its [`HOT_CONTRACT`] matches, its [`HotEntries`] are called as they are, foreign code in this process.
+pub unsafe fn load_hot_app(path: &std::path::Path) -> Result<HotApp, Box<dyn std::error::Error>> {
+    let (entries, library) = unsafe { platform_core::guest::open_guest::<HotEntries>(path) }
+        .map_err(|why| format!("{}: {why}", path.display()))?;
+    Ok(HotApp::start(entries, Some(library)))
 }
 
-#[cfg(feature = "dev")]
-impl HostServices {
-    /// What this side has installed, each backend wrapped so a panic in it stays on this side of the boundary.
-    pub fn installed() -> Self {
-        Self {
-            clipboard: services_core::clipboard().map(|clipboard| {
-                std::sync::Arc::new(ShieldedClipboard(clipboard))
-                    as std::sync::Arc<dyn services_core::Clipboard>
-            }),
-            uri_opener: services_core::uri_opener().map(|opener| {
-                std::sync::Arc::new(ShieldedUriOpener(opener))
-                    as std::sync::Arc<dyn services_core::UriOpener>
-            }),
-            file_dialogs: services_core::file_dialogs().map(|dialogs| {
-                std::sync::Arc::new(ShieldedFileDialogs(dialogs))
-                    as std::sync::Arc<dyn services_core::FileDialogs>
-            }),
-            keyboard_convention: platform_core::keyboard_convention(),
-            fonts: served_fonts(),
-        }
-    }
-
-    /// These services for exports that are this process's own, which already set text in its one font database: handed it, they would defer it to itself.
-    fn in_this_process(self) -> Self {
-        Self {
-            fonts: None,
-            ..self
-        }
-    }
-
-    /// Installs each service on this side, as the host had it.
-    pub fn install(self) {
-        let Self {
-            clipboard,
-            uri_opener,
-            file_dialogs,
-            keyboard_convention,
-            fonts,
-        } = self;
-        platform_core::set_keyboard_convention(keyboard_convention);
-        #[cfg(feature = "shaper")]
-        if let Some(fonts) = fonts {
-            renderer_text::fonts::defer_to(fonts);
-        }
-        #[cfg(not(feature = "shaper"))]
-        drop(fonts);
-        if let Some(clipboard) = clipboard {
-            services_core::set_clipboard(clipboard);
-        }
-        if let Some(opener) = uri_opener {
-            services_core::set_uri_opener(opener);
-        }
-        if let Some(dialogs) = file_dialogs {
-            services_core::set_file_dialogs(dialogs);
-        }
-    }
-}
-
-#[cfg(all(feature = "dev", feature = "shaper"))]
+/// The host's font database, for a library's copy of the shaper to defer to: two copies of the shaper cannot share one database, so the library loads what the host's was loaded from, and a face the app adds while it runs is added to the host's, which draws its text, before the library loads it as well.
+#[cfg(feature = "shaper")]
 fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
     Some(std::sync::Arc::new(renderer_text::fonts::Served))
 }
 
-#[cfg(all(feature = "dev", not(feature = "shaper")))]
+#[cfg(not(feature = "shaper"))]
 fn served_fonts() -> Option<std::sync::Arc<dyn renderer_core::FontHost>> {
     None
 }

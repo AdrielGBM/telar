@@ -21,15 +21,18 @@ fn each_line_of_the_channel_is_the_event_its_prefix_names() {
     assert_eq!(hot_event("/target/debug/libapp.so"), None);
 }
 
+use platform_core::guest::{Lifecycle, Timestamp};
+
 thread_local! {
     static HANDED: std::cell::Cell<Option<platform_core::KeyboardConvention>> = const { std::cell::Cell::new(None) };
     static HANDED_BEFORE_BUILD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    static FONTS_HANDED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+    static SERVED_NOTHING: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+    static CALLS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 struct Blank;
 
-impl App for Blank {
+impl crate::app::App for Blank {
     fn root(&self) -> Box<dyn ui_tree::Component> {
         Box::new(BlankView)
     }
@@ -43,15 +46,15 @@ impl ui_tree::Component for BlankView {
     }
 }
 
-fn hand_over(services: HostServices) -> GuestResult<()> {
-    HANDED.set(Some(services.keyboard_convention));
-    FONTS_HANDED.set(Some(services.fonts.is_some()));
-    Ok(())
+unsafe extern "C" fn hand_over(services: HostServices) -> CallOutcome {
+    HANDED.set(unsafe { services.ask(services.keyboard_convention, &()) });
+    SERVED_NOTHING.set(Some(services.data.is_null()));
+    CallOutcome::OK
 }
 
-fn build_blank() -> GuestResult<Box<dyn App>> {
+unsafe extern "C" fn build_blank(app: *mut Handle<GuestApp>) -> CallOutcome {
     HANDED_BEFORE_BUILD.set(HANDED.get().is_some());
-    guest::create_app(|| Box::new(Blank))
+    unsafe { guest::create(app, || Box::new(Blank)) }
 }
 
 fn foreign_convention() -> platform_core::KeyboardConvention {
@@ -61,22 +64,50 @@ fn foreign_convention() -> platform_core::KeyboardConvention {
     }
 }
 
+fn record(call: &'static str) -> CallOutcome {
+    CALLS.with_borrow_mut(|calls| calls.push(call));
+    CallOutcome::OK
+}
+
+extern "C" fn record_loaded() -> CallOutcome {
+    record("loaded")
+}
+
+extern "C" fn record_unloading() -> CallOutcome {
+    record("unloading")
+}
+
+extern "C" fn record_quiesce() -> CallOutcome {
+    record("quiesce")
+}
+
+extern "C" fn keep_services(_: HostServices) -> CallOutcome {
+    CallOutcome::OK
+}
+
+/// The library's lifecycle with `install_services`, recording the calls that would make this test process a guest rather than running them.
+fn recorded(install_services: unsafe extern "C" fn(HostServices) -> CallOutcome) -> Lifecycle {
+    Lifecycle {
+        loaded: record_loaded,
+        unloading: record_unloading,
+        quiesce: record_quiesce,
+        ..Lifecycle::serving(install_services)
+    }
+}
+
 /// A build carries its own copy of the convention, which left alone answers for the system it was compiled on: a terminal host on a Mac matches Ctrl while the build would show ⌘.
+#[cfg(unix)]
 #[test]
-fn a_build_is_handed_the_host_keyboard_convention_before_it_is_made() {
+fn a_build_is_handed_the_host_services_before_it_is_made() {
     let host = foreign_convention();
     platform_core::set_keyboard_convention(host);
-    let exports = GuestExports {
-        install_services: hand_over,
-        ..GuestExports::in_process()
+    let entries = HotEntries {
+        lifecycle: recorded(hand_over),
+        ..HotEntries::serving(build_blank)
     };
-    let app = HotApp::start(exports, build_blank, None);
+    let this_process = libloading::Library::from(libloading::os::unix::Library::this());
+    let app = HotApp::start(entries, Some(this_process));
     assert_eq!(HANDED.get(), Some(host));
-    assert_eq!(
-        FONTS_HANDED.get(),
-        Some(false),
-        "exports this process serves itself already set text in its one font database, which handed over would defer to itself"
-    );
     assert!(
         HANDED_BEFORE_BUILD.get(),
         "the app's setup already shows shortcuts the host's way"
@@ -85,44 +116,37 @@ fn a_build_is_handed_the_host_keyboard_convention_before_it_is_made() {
 }
 
 #[test]
-fn installing_the_host_services_installs_its_keyboard_convention() {
-    let host = foreign_convention();
-    platform_core::set_keyboard_convention(host);
-    let services = HostServices::installed().in_this_process();
-    platform_core::set_keyboard_convention(platform_core::KeyboardConvention::native());
-    services.install();
-    assert_eq!(platform_core::keyboard_convention(), host);
-}
-
-thread_local! {
-    static CALLS: std::cell::RefCell<Vec<&'static str>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
-fn record(call: &'static str) -> GuestResult<()> {
-    CALLS.with_borrow_mut(|calls| calls.push(call));
-    Ok(())
-}
-
-fn keep_services(_: HostServices) -> GuestResult<()> {
-    Ok(())
-}
-
-fn release_app(app: Box<dyn App>) -> GuestResult<()> {
+fn entries_this_process_serves_itself_are_served_nothing() {
+    let entries = HotEntries {
+        lifecycle: Lifecycle::serving(hand_over),
+        ..HotEntries::serving(build_blank)
+    };
+    let app = HotApp::start(entries, None);
+    assert_eq!(
+        SERVED_NOTHING.get(),
+        Some(true),
+        "they share every store of this process already, its one font database included, which handed over would defer to itself"
+    );
     drop(app);
-    record("app_release")
 }
 
-fn mount_tree(_: &dyn App) -> GuestResult<*mut HotTree> {
-    record("tree_mount")?;
-    Ok(std::ptr::NonNull::dangling().as_ptr())
+unsafe extern "C" fn release_app(app: Handle<GuestApp>) -> CallOutcome {
+    unsafe { app.release() };
+    record("release")
 }
 
-fn paint_tree(_: *mut HotTree) -> GuestResult<Vec<renderer_core::DrawCommand>> {
-    record("tree_paint")?;
-    Ok(Vec::new())
+unsafe extern "C" fn mount_tree(app: Handle<GuestApp>, tree: *mut Handle<HotTree>) -> CallOutcome {
+    unsafe { guest::mount(app, tree) };
+    record("mount")
 }
 
-fn release_tree(_: *mut HotTree) -> GuestResult<()> {
+unsafe extern "C" fn paint_tree(tree: Handle<HotTree>, frame: *mut LentBytes) -> CallOutcome {
+    unsafe { guest::tree_paint(tree, frame) };
+    record("tree_paint")
+}
+
+unsafe extern "C" fn release_tree(tree: Handle<HotTree>) -> CallOutcome {
+    unsafe { tree.release() };
     record("tree_release")
 }
 
@@ -131,43 +155,125 @@ fn release_tree(_: *mut HotTree) -> GuestResult<()> {
 fn a_tree_outliving_its_app_still_drives_its_guest() {
     use crate::app_runtime::AppRuntime;
     CALLS.with_borrow_mut(Vec::clear);
-    let exports = GuestExports {
-        install_services: keep_services,
-        app_release: release_app,
-        tree_mount: mount_tree,
+    let entries = HotEntries {
+        lifecycle: Lifecycle::serving(keep_services),
+        release: release_app,
+        mount: mount_tree,
         tree_paint: paint_tree,
         tree_release: release_tree,
-        ..GuestExports::in_process()
+        ..HotEntries::serving(build_blank)
     };
-    let mut app = HotApp::start(exports, build_blank, None);
+    let mut app = HotApp::start(entries, None);
     let tree = app.mount();
     drop(app);
     let _ = tree.frame();
     drop(tree);
     assert_eq!(
         CALLS.take(),
-        ["tree_mount", "app_release", "tree_paint", "tree_release"]
+        ["mount", "release", "tree_paint", "tree_release"]
     );
 }
 
-#[cfg(unix)]
-fn build_panicking() -> GuestResult<Box<dyn App>> {
-    guest::create_app(|| panic!("the build could not find its assets"))
+thread_local! {
+    static SKIPPED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+unsafe extern "C" fn paint_skipping_one(
+    tree: Handle<HotTree>,
+    frame: *mut LentBytes,
+) -> CallOutcome {
+    let painted = unsafe { tree.get() };
+    if !SKIPPED.replace(true) {
+        painted.paint();
+    }
+    unsafe { frame.write(painted.paint()) };
+    record("tree_paint")
+}
+
+unsafe extern "C" fn reset_frames(tree: Handle<HotTree>) -> CallOutcome {
+    unsafe { guest::tree_reset_frames(tree) };
+    record("tree_reset_frames")
+}
+
+/// Frames build on the ones before them, so one the host never read leaves its decoder a step behind: the guest is asked for a frame that stands alone, and the host still draws what the tree composed.
+#[test]
+fn a_frame_the_host_cannot_read_is_painted_again_on_its_own() {
+    use crate::app_runtime::AppRuntime;
+    CALLS.with_borrow_mut(Vec::clear);
+    let entries = HotEntries {
+        lifecycle: Lifecycle::serving(keep_services),
+        tree_paint: paint_skipping_one,
+        tree_reset_frames: reset_frames,
+        ..HotEntries::serving(build_blank)
+    };
+    let mut app = HotApp::start(entries, None);
+    let tree = app.mount();
+    let _ = tree.frame();
+    assert_eq!(
+        CALLS.take(),
+        ["tree_paint", "tree_reset_frames", "tree_paint"]
+    );
+    assert_eq!(app.take_panic(), None);
+}
+
+unsafe extern "C" fn tick_at(now: Timestamp) -> CallOutcome {
+    TICKED.set(Some(now));
+    CallOutcome::OK
+}
+
+thread_local! {
+    static TICKED: std::cell::Cell<Option<Timestamp>> = const { std::cell::Cell::new(None) };
+}
+
+/// An `Instant` means nothing to another copy of std, so a tick crosses as the time since the epoch the guest adopted when it loaded.
+#[test]
+fn a_tick_crosses_as_the_time_since_the_epoch_the_guest_adopted() {
+    use crate::app_runtime::AppRuntime;
+    let entries = HotEntries {
+        lifecycle: Lifecycle::serving(keep_services),
+        motion_tick: tick_at,
+        ..HotEntries::serving(build_blank)
+    };
+    let app = HotApp::start(entries, None);
+    let later = app.library().epoch().instant(Timestamp { nanos: 5_000 });
+    app.motion_tick(later);
+    assert_eq!(TICKED.get(), Some(Timestamp { nanos: 5_000 }));
+}
+
+/// What the guest answers in bytes reads back on the host's side as the values it spelled.
+#[test]
+fn what_a_guest_lends_reads_back_as_what_it_spelled() {
+    use crate::app_runtime::AppRuntime;
+    let entries = HotEntries {
+        lifecycle: Lifecycle::serving(keep_services),
+        ..HotEntries::serving(build_blank)
+    };
+    let mut app = HotApp::start(entries, None);
+    assert!(app.window_config().is_none());
+    assert_eq!(app.text_input(), None);
+    assert_eq!(app.drain_window_commands(), Vec::new());
+    let tree = app.mount();
+    let mut nodes = Vec::new();
+    tree.walk(&mut nodes);
+    assert!(!nodes.is_empty(), "the tree walks");
+    assert!(app.hot_snapshot().is_some());
+    assert_eq!(app.take_panic(), None);
+}
+
+unsafe extern "C" fn build_panicking(app: *mut Handle<GuestApp>) -> CallOutcome {
+    unsafe { guest::create(app, || panic!("the build could not find its assets")) }
 }
 
 /// Held with this process as its library, so dropping it runs the unload path a built library's does.
 #[cfg(unix)]
 fn start_as_loaded(create: CreateApp) -> HotApp {
-    let exports = GuestExports {
-        install_services: keep_services,
-        app_release: release_app,
-        loaded: || record("loaded"),
-        unloading: || record("unloading"),
-        quiesce: || record("quiesce"),
-        ..GuestExports::in_process()
+    let entries = HotEntries {
+        lifecycle: recorded(keep_services),
+        release: release_app,
+        ..HotEntries::serving(create)
     };
     let this_process = libloading::Library::from(libloading::os::unix::Library::this());
-    HotApp::start(exports, create, Some(this_process))
+    HotApp::start(entries, Some(this_process))
 }
 
 #[cfg(unix)]
@@ -175,10 +281,7 @@ fn start_as_loaded(create: CreateApp) -> HotApp {
 fn a_guest_is_released_then_quiesced_before_its_library_is_closed() {
     CALLS.with_borrow_mut(Vec::clear);
     drop(start_as_loaded(build_blank));
-    assert_eq!(
-        CALLS.take(),
-        ["loaded", "app_release", "unloading", "quiesce"]
-    );
+    assert_eq!(CALLS.take(), ["loaded", "release", "unloading", "quiesce"]);
 }
 
 /// Its worker threads may still be running its code, so the one call a guest that panicked still gets is the one that joins them.
@@ -187,7 +290,13 @@ fn a_guest_is_released_then_quiesced_before_its_library_is_closed() {
 fn a_guest_that_panicked_is_still_quiesced_before_its_library_is_closed() {
     CALLS.with_borrow_mut(Vec::clear);
     let app = start_as_loaded(build_panicking);
-    assert!(app.image.guest.has_panicked(), "precondition: it panicked");
+    assert!(
+        app.library().guest().has_panicked(),
+        "precondition: it panicked"
+    );
+    let report = app.library().guest().panic().expect("the panic is kept");
+    assert_eq!(report.message, "the build could not find its assets");
+    assert!(report.location.is_some(), "it says where");
     drop(app);
     assert_eq!(CALLS.take(), ["loaded", "quiesce"]);
 }

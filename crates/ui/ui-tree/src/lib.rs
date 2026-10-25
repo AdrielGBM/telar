@@ -10,6 +10,7 @@ mod render_node;
 mod segment;
 mod tree;
 mod wheel;
+mod wire;
 
 pub use component::{Component, EventResult};
 pub use dev::{BuildOutcome, DevAction, DevOverlay, OverlayResponse};

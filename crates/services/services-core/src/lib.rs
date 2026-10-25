@@ -5,6 +5,7 @@
 pub mod app_paths;
 pub mod clipboard;
 pub mod dialogs;
+pub mod guest;
 pub mod paths;
 pub mod preferences;
 #[cfg(feature = "di")]
@@ -12,6 +13,7 @@ mod registry;
 #[cfg(feature = "di")]
 mod scope;
 pub mod uri;
+mod wire;
 
 pub use clipboard::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
 pub use dialogs::{FileDialog, FileDialogs, FileFilter, file_dialogs, set_file_dialogs};
@@ -19,8 +21,8 @@ pub use dialogs::{FileDialog, FileDialogs, FileFilter, file_dialogs, set_file_di
 pub use paths::SystemPaths;
 pub use paths::{AppPathsProvider, NoPaths};
 pub use preferences::{
-    FileStore, MemoryStore, PreferenceStore, read_if_present, set_preference_store,
-    store_preference, stored_preference, write_file_atomically,
+    FileStore, MemoryStore, PreferenceStore, preference_store, read_if_present,
+    set_preference_store, store_preference, stored_preference, write_file_atomically,
 };
 #[cfg(feature = "di")]
 pub use registry::ServiceError;

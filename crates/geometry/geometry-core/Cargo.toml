@@ -11,3 +11,7 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+wire-core = { workspace = true }
+
+[dev-dependencies]
+wire-core = { workspace = true, features = ["golden"] }

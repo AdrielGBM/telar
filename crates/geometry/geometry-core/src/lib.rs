@@ -14,6 +14,7 @@ mod point;
 mod rect;
 mod size;
 mod transform;
+mod wire;
 
 pub use border_radius::BorderRadius;
 pub use box_model::BoxModel;

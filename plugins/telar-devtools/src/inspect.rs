@@ -148,7 +148,7 @@ impl InspectedNode {
     fn of(node: &SegmentNodeInfo) -> Self {
         Self {
             id: node.id,
-            name: Arc::from(node.name),
+            name: Arc::from(&*node.name),
             depth: node.depth,
             rect: node.rect,
             padding: node.padding,

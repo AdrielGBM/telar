@@ -1,208 +1,16 @@
-//! How each value a draw command carries is spelled, field by field, with every enum's tags written out so the wire never follows declaration order.
+//! How each value a draw command carries is spelled, field by field, with every enum's tags written out so the wire never follows declaration order. Geometry and semantics are spelled beside their own types, in `geometry-core` and `semantics-core`.
 
-use std::ops::Range;
-use std::sync::Arc;
+use semantics_core::wire::{put_link, take_link};
+use wire_core::{Reader, Wire, WireError, Writer, wire_enum, wire_struct};
 
-use geometry_core::{Point, Rect};
-use semantics_core::{
-    ConsumedKeys, Destination, HasPopup, Location, Modal, NumericValue, Orientation, SetPosition,
-    SortDirection, Uri,
-};
-
-use super::WireError;
-use super::bytes::{Reader, Writer};
 use crate::{
-    BlendMode, Border, BorderRadius, Clamp, Color, Dash, Declared, DecorationLength,
-    DecorationLine, DecorationMetric, Element, ElementId, FillRule, Focusable, FontFamily,
-    FontFeatures, FontStyle, FontTag, FontVariations, Gradient, GradientKind, GradientStops,
-    ImageFill, ImageSlice, Insets, LayerMask, LineCap, LineHeight, LineJoin, Linked, Paint,
-    PathData, PathStyle, PathVerb, Picture, Raster, RectStyle, Role, Semantics, Shadow, Span,
-    Stroke, TextAlign, TextCase, TextDecoration, TextLength, TextShadow, TextStyle, TextWrap,
+    BlendMode, Border, Clamp, Color, Dash, Declared, DecorationLength, DecorationLine,
+    DecorationMetric, Element, ElementId, FillRule, FontFamily, FontFeatures, FontStyle, FontTag,
+    FontVariations, Gradient, GradientKind, GradientStops, ImageFill, ImageSlice, LayerMask,
+    LineCap, LineHeight, LineJoin, Linked, Paint, PathData, PathStyle, PathVerb, Picture, Raster,
+    RectStyle, Shadow, Span, Stroke, TextAlign, TextCase, TextDecoration, TextLength, TextShadow,
+    TextStyle, TextWrap,
 };
-
-pub(crate) trait Wire: Sized {
-    fn put(&self, w: &mut Writer);
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError>;
-}
-
-macro_rules! wire_struct {
-    ($ty:ty { $($field:ident),+ $(,)? }) => {
-        impl Wire for $ty {
-            fn put(&self, w: &mut Writer) {
-                $(self.$field.put(w);)+
-            }
-            fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-                Ok(Self { $($field: Wire::take(r)?),+ })
-            }
-        }
-    };
-}
-
-macro_rules! wire_enum {
-    ($ty:ident { $($variant:ident $(($field:ident: $field_ty:ty))? = $tag:literal),+ $(,)? }) => {
-        impl Wire for $ty {
-            fn put(&self, w: &mut Writer) {
-                match self {
-                    $($ty::$variant $(($field))? => {
-                        w.u8($tag);
-                        $($field.put(w);)?
-                    })+
-                }
-            }
-            fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-                match r.u8()? {
-                    $($tag => Ok($ty::$variant $((<$field_ty as Wire>::take(r)?))?),)+
-                    tag => Err(WireError::Tag { of: stringify!($ty), tag }),
-                }
-            }
-        }
-    };
-}
-
-macro_rules! wire_scalar {
-    ($($ty:ty => $put:ident / $take:ident),+ $(,)?) => {
-        $(impl Wire for $ty {
-            fn put(&self, w: &mut Writer) {
-                w.$put(*self);
-            }
-            fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-                r.$take()
-            }
-        })+
-    };
-}
-
-wire_scalar!(
-    bool => bool / bool,
-    u8 => u8 / u8,
-    u16 => u16 / u16,
-    u64 => u64 / u64,
-    f32 => f32 / f32,
-    f64 => f64 / f64,
-);
-
-impl Wire for u32 {
-    fn put(&self, w: &mut Writer) {
-        w.varint(u64::from(*self));
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        r.varint_u32()
-    }
-}
-
-impl Wire for Arc<str> {
-    fn put(&self, w: &mut Writer) {
-        w.str(self);
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        r.str().map(Arc::from)
-    }
-}
-
-impl Wire for Box<str> {
-    fn put(&self, w: &mut Writer) {
-        w.str(self);
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        r.str().map(Box::from)
-    }
-}
-
-impl<T: Wire> Wire for Option<T> {
-    fn put(&self, w: &mut Writer) {
-        match self {
-            None => w.u8(0),
-            Some(value) => {
-                w.u8(1);
-                value.put(w);
-            }
-        }
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        match r.u8()? {
-            0 => Ok(None),
-            1 => T::take(r).map(Some),
-            tag => Err(WireError::Tag { of: "Option", tag }),
-        }
-    }
-}
-
-impl<T: Wire> Wire for Arc<T> {
-    fn put(&self, w: &mut Writer) {
-        T::put(self, w);
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        T::take(r).map(Arc::new)
-    }
-}
-
-impl<T: Wire> Wire for Arc<[T]> {
-    fn put(&self, w: &mut Writer) {
-        w.len(self.len());
-        for item in self.iter() {
-            item.put(w);
-        }
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        let len = r.len()?;
-        (0..len).map(|_| T::take(r)).collect()
-    }
-}
-
-impl<T: Wire, const N: usize> Wire for [T; N] {
-    fn put(&self, w: &mut Writer) {
-        for item in self {
-            item.put(w);
-        }
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        let items: Vec<T> = (0..N).map(|_| T::take(r)).collect::<Result<_, _>>()?;
-        items
-            .try_into()
-            .map_err(|_| WireError::Invalid("fixed array length"))
-    }
-}
-
-impl<A: Wire, B: Wire> Wire for (A, B) {
-    fn put(&self, w: &mut Writer) {
-        self.0.put(w);
-        self.1.put(w);
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok((A::take(r)?, B::take(r)?))
-    }
-}
-
-impl Wire for Range<u32> {
-    fn put(&self, w: &mut Writer) {
-        self.start.put(w);
-        self.end.put(w);
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(u32::take(r)?..u32::take(r)?)
-    }
-}
-
-wire_struct!(Point { x, y });
-wire_struct!(Rect {
-    x,
-    y,
-    width,
-    height
-});
-wire_struct!(Color { r, g, b, a });
-wire_struct!(BorderRadius {
-    top_left,
-    top_right,
-    bottom_right,
-    bottom_left
-});
-wire_struct!(Insets {
-    top,
-    right,
-    bottom,
-    left
-});
 
 wire_enum!(TextAlign {
     Start = 0,
@@ -225,11 +33,11 @@ wire_enum!(TextWrap {
 });
 wire_enum!(LineHeight {
     Natural = 0,
-    Times(factor: f32) = 1
+    Times(factor) = 1
 });
 wire_enum!(TextShadow {
     None = 0,
-    Cast(shadow: Shadow) = 1
+    Cast(shadow) = 1
 });
 wire_enum!(TextCase {
     AsWritten = 0,
@@ -238,12 +46,12 @@ wire_enum!(TextCase {
     Capitalize = 3,
 });
 wire_enum!(TextLength {
-    Px(value: f32) = 0,
-    Em(value: f32) = 1,
-    SurfaceWidth(value: f32) = 2,
-    SurfaceHeight(value: f32) = 3,
-    SurfaceMin(value: f32) = 4,
-    SurfaceMax(value: f32) = 5,
+    Px(value) = 0,
+    Em(value) = 1,
+    SurfaceWidth(value) = 2,
+    SurfaceHeight(value) = 3,
+    SurfaceMin(value) = 4,
+    SurfaceMax(value) = 5,
 });
 wire_enum!(DecorationLine {
     None = 0,
@@ -251,11 +59,11 @@ wire_enum!(DecorationLine {
 });
 wire_enum!(DecorationMetric {
     FromFont = 0,
-    Px(px: f32) = 1
+    Px(px) = 1
 });
 wire_enum!(DecorationLength {
     FromFont = 0,
-    Length(length: TextLength) = 1
+    Length(length) = 1
 });
 wire_enum!(FontFamily {
     SansSerif = 0,
@@ -264,12 +72,12 @@ wire_enum!(FontFamily {
     SystemUi = 3,
     Cursive = 4,
     Fantasy = 5,
-    Named(name: Arc<str>) = 6,
-    Stack(families: Arc<[FontFamily]>) = 7,
+    Named(name) = 6,
+    Stack(families) = 7,
 });
 wire_enum!(Paint {
-    Solid(color: Color) = 0,
-    Gradient(gradient: Gradient) = 1
+    Solid(color) = 0,
+    Gradient(gradient) = 1
 });
 wire_enum!(LineCap {
     Butt = 0,
@@ -383,7 +191,22 @@ wire_struct!(Declared {
     decoration_thickness,
     decoration_color,
 });
-wire_struct!(Span { range, over, link });
+
+impl Wire for Span {
+    fn put(&self, w: &mut Writer) {
+        self.range.put(w);
+        self.over.put(w);
+        put_link(w, self.link.as_ref());
+    }
+    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
+        Ok(Span {
+            range: Wire::take(r)?,
+            over: Wire::take(r)?,
+            link: take_link(r)?,
+        })
+    }
+}
+
 wire_struct!(ImageSlice { insets, scale });
 
 impl Wire for GradientKind {
@@ -615,108 +438,6 @@ impl Wire for ImageFill {
     }
 }
 
-wire_enum!(Role {
-    Group = 0,
-    Banner = 1,
-    Navigation = 2,
-    Main = 3,
-    Complementary = 4,
-    ContentInfo = 5,
-    Article = 6,
-    Section = 7,
-    Form = 8,
-    Search = 9,
-    Heading(level: u8) = 10,
-    List = 11,
-    ListItem = 12,
-    ScrollArea = 13,
-    Drawing = 14,
-    Dialog = 15,
-    Button = 16,
-    Link = 17,
-    CheckBox = 18,
-    Radio = 19,
-    Switch = 20,
-    TabList = 21,
-    Tab = 22,
-    TabPanel = 23,
-    Menu = 24,
-    MenuItem = 25,
-    MenuItemCheckBox = 26,
-    MenuItemRadio = 27,
-    ListBox = 28,
-    Option = 29,
-    Slider = 30,
-    SpinButton = 31,
-    TextInput = 32,
-    MultilineTextInput = 33,
-    ComboBox = 34,
-    Disclosure = 35,
-    ProgressBar = 36,
-    Tree = 37,
-    Grid = 38,
-    Row = 39,
-    GridCell = 40,
-    ColumnHeader = 41,
-    TreeItem = 42,
-    Toolbar = 43,
-    Splitter = 44,
-    Status = 45,
-    Log = 46,
-    Label = 47,
-});
-wire_enum!(Orientation {
-    Horizontal = 0,
-    Vertical = 1
-});
-wire_enum!(SortDirection {
-    Ascending = 0,
-    Descending = 1
-});
-wire_enum!(HasPopup {
-    Menu = 0,
-    ListBox = 1
-});
-wire_enum!(Destination {
-    Route(location: Location) = 0,
-    Anchor(name: Arc<str>) = 1,
-    Locale(locale: Arc<str>) = 2,
-    External(uri: Uri) = 3,
-});
-
-wire_struct!(NumericValue { now, min, max });
-wire_struct!(SetPosition {
-    level,
-    position,
-    size
-});
-wire_struct!(Modal { layer, opened_from });
-wire_struct!(Focusable { tab_stop, consumes });
-wire_struct!(Semantics {
-    role,
-    label,
-    link,
-    focused,
-    toggled,
-    disabled,
-    click_through,
-    focusable,
-    lang,
-    hidden,
-    anchor,
-    current,
-    value,
-    orientation,
-    expanded,
-    position,
-    active_descendant,
-    controls,
-    has_popup,
-    keyboard_shortcut,
-    sort,
-    multiselectable,
-    modal,
-});
 wire_struct!(Linked { url, variants });
 wire_struct!(Element {
     id,
@@ -738,57 +459,6 @@ impl Wire for ElementId {
     }
     fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
         u64::take(r).map(ElementId)
-    }
-}
-
-impl Wire for ConsumedKeys {
-    fn put(&self, w: &mut Writer) {
-        self.bits().put(w);
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        u16::take(r).map(ConsumedKeys::from_bits)
-    }
-}
-
-// The host parses the address again rather than trusting the guest's parse, so its own scheme policy is the one that decides.
-impl Wire for Uri {
-    fn put(&self, w: &mut Writer) {
-        w.str(self.as_str());
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        Uri::parse(r.str()?).map_err(|_| WireError::Invalid("a link the host does not accept"))
-    }
-}
-
-impl Wire for Location {
-    fn put(&self, w: &mut Writer) {
-        w.len(self.segments().len());
-        for segment in self.segments() {
-            w.str(segment);
-        }
-        self.locale().map(Box::<str>::from).put(w);
-        self.fragment().map(Box::<str>::from).put(w);
-        w.len(self.params().len());
-        for (key, value) in self.params() {
-            w.str(key);
-            w.str(value);
-        }
-    }
-    fn take(r: &mut Reader<'_>) -> Result<Self, WireError> {
-        let len = r.len()?;
-        let segments: Vec<&str> = (0..len).map(|_| r.str()).collect::<Result<_, _>>()?;
-        let mut location = Location::from_segments(segments);
-        if let Some(locale) = <Option<Box<str>> as Wire>::take(r)? {
-            location = location.with_locale(locale);
-        }
-        if let Some(fragment) = <Option<Box<str>> as Wire>::take(r)? {
-            location = location.with_fragment(fragment);
-        }
-        let len = r.len()?;
-        for _ in 0..len {
-            location = location.with_param(r.str()?, r.str()?);
-        }
-        Ok(location)
     }
 }
 

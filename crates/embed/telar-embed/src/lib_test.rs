@@ -1,6 +1,10 @@
 use super::*;
+use crate::guest::GuestInstance;
 use layout_core::LayoutStyle;
-use platform_core::{Key, ModifiersState};
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+use platform_core::guest::Lifecycle;
+use platform_core::guest::{CWaker, HostServices};
+use platform_core::{Key, KeyboardConvention, ModifiersState};
 use renderer_core::RectStyle;
 
 struct Stub {
@@ -48,31 +52,46 @@ fn shift() -> ModifiersState {
     }
 }
 
-// No crate here links a guest cdylib, so this is the only place the expansion is ever compiled: without it, adding a vtable field type-checks and breaks every guest at load time.
+// Expanded here too, so a change that breaks the macro fails this crate's own tests rather than only the fixtures `telar`'s ignored `guest_contract` suite builds.
 crate::embed!(|_args: &[String]| -> Box<dyn EmbeddedApp> { Box::new(Stub::new()) });
 
+/// Builds an instance through the exported table, and hands it back with the outcome.
+fn create_through_table() -> (CallOutcome, Handle<GuestInstance>) {
+    let args = wire_core::encode(&Vec::<String>::new());
+    let mut instance = Handle::NULL;
+    let outcome = unsafe { (TELAR_EMBED_ENTRIES.create)(LentBytes::lend(&args), &mut instance) };
+    (outcome, instance)
+}
+
 #[test]
-fn the_export_macro_builds_a_vtable_at_the_current_abi() {
-    assert_eq!(_rsx_embed_vtable.abi, TELAR_EMBED_ABI);
-    let inst =
-        unsafe { (_rsx_embed_vtable.create)(&[]) }.expect("the exported vtable built an instance");
+fn the_export_macro_builds_a_table_that_answers_in_bytes() {
+    let (outcome, instance) = create_through_table();
+    assert_eq!(outcome.status(), CallOutcome::RETURNED);
+    let mut id = LentBytes::EMPTY;
+    let outcome = unsafe { (TELAR_EMBED_ENTRIES.id)(instance, &mut id) };
+    assert_eq!(outcome.status(), CallOutcome::RETURNED);
     assert_eq!(
-        unsafe { (_rsx_embed_vtable.id)(inst) },
-        Ok("stub".to_owned())
+        unsafe { id.decode::<String>() }.expect("the id is a string"),
+        "stub"
     );
     let dark = SystemPreferences {
         color_scheme: Some(platform_core::ColorScheme::Dark),
         reduced_motion: Some(true),
         ..SystemPreferences::default()
     };
-    unsafe { (_rsx_embed_vtable.set_system_preferences)(inst, &dark) }.expect("no panic");
+    let spelled = wire_core::encode(&dark);
+    let outcome = unsafe {
+        (TELAR_EMBED_ENTRIES.set_system_preferences)(instance, LentBytes::lend(&spelled))
+    };
+    assert_eq!(outcome.status(), CallOutcome::RETURNED);
     assert_eq!(
         preferences_core::system_preferences(),
         dark,
         "the whole snapshot crosses, not only the scheme"
     );
     preferences_core::set_system_preferences(SystemPreferences::default());
-    unsafe { (_rsx_embed_vtable.destroy)(inst) }.expect("no panic");
+    let outcome = unsafe { (TELAR_EMBED_ENTRIES.release)(instance) };
+    assert_eq!(outcome.status(), CallOutcome::RETURNED);
 }
 
 // These deliberately never observe on the caller's behalf, so they fail the moment either observe call leaves `EmbedInstance::on_event`.
@@ -178,35 +197,21 @@ fn composite_translates_into_the_sub_rect_and_clips_to_it() {
     }
 }
 
-// What a guest built before ABI 2 exports: a shorter table whose only field the host may read is the version at offset 0.
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-#[repr(C)]
-struct AbiOneTable {
-    abi: u32,
-    _create: usize,
-}
-
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-static ABI_ONE: AbiOneTable = AbiOneTable { abi: 1, _create: 0 };
-
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+/// A guest's frame crosses as bytes its own encoder lent, and a host decodes it into commands of its own that draw what the guest's canvas holds.
 #[test]
-fn a_guest_built_for_abi_one_is_refused_before_its_table_is_read() {
-    let refused = unsafe { crate::host::read_vtable((&raw const ABI_ONE).cast::<EmbedVTable>()) };
-    let mismatch = refused.err().expect("an ABI 1 table must not load");
-    assert_eq!(mismatch, crate::host::AbiMismatch::Version { guest: 1 });
-    assert_eq!(
-        mismatch.to_string(),
-        format!("guest built for ABI 1, host is ABI {TELAR_EMBED_ABI}")
-    );
-}
-
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-#[test]
-fn a_guest_built_for_this_abi_is_read_whole() {
-    let read = unsafe { crate::host::read_vtable(&raw const _rsx_embed_vtable) }
-        .expect("the current table loads");
-    assert_eq!(read.abi, TELAR_EMBED_ABI);
+fn a_frame_crosses_as_bytes_the_host_decodes_into_its_own_commands() {
+    let (_, instance) = create_through_table();
+    unsafe { (TELAR_EMBED_ENTRIES.relayout)(instance, 40.0, 20.0) };
+    let mut frame = LentBytes::EMPTY;
+    let outcome = unsafe { (TELAR_EMBED_ENTRIES.paint)(instance, &mut frame) };
+    assert_eq!(outcome.status(), CallOutcome::RETURNED);
+    let mut commands = Vec::new();
+    renderer_core::wire::FrameDecoder::new()
+        .decode(unsafe { frame.as_slice() }, &mut commands, |_| None)
+        .expect("the frame decodes");
+    assert_eq!(commands.len(), 1, "{commands:?}");
+    assert!(matches!(commands[0], DrawCommand::Rect { .. }));
+    unsafe { (TELAR_EMBED_ENTRIES.release)(instance) };
 }
 
 const DELAY: Duration = Duration::from_millis(500);
@@ -306,6 +311,8 @@ fn a_timer_the_guest_schedules_wakes_the_host_loop() {
             counting.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
     });
+    let outcome = unsafe { (TELAR_EMBED_ENTRIES.install_task_waker)(CWaker::new(waker.clone())) };
+    assert_eq!(outcome.status(), CallOutcome::RETURNED);
     run_frame(&mut inst, Some(&waker));
     let before = wakes.load(std::sync::atomic::Ordering::SeqCst);
 
@@ -450,11 +457,26 @@ fn press() -> Event {
     }
 }
 
+fn create_with(
+    make: impl FnOnce(&[String]) -> Box<dyn EmbeddedApp>,
+) -> (CallOutcome, Handle<GuestInstance>) {
+    let args = wire_core::encode(&Vec::<String>::new());
+    let mut instance = Handle::NULL;
+    let outcome = unsafe { guest::create(LentBytes::lend(&args), &mut instance, make) };
+    (outcome, instance)
+}
+
 /// What a panic in the guest's handler hands back instead of unwinding into the host's copy of std, which can only abort on it.
 #[test]
-fn a_panic_in_a_guest_export_comes_back_as_its_report() {
-    let inst = __embed_create(|| Box::new(BorrowsTwice::new(true))).expect("the guest builds");
-    let panic = unsafe { __embed_on_event(inst, &press()) }.expect_err("the panic is caught");
+fn a_panic_in_a_guest_entry_comes_back_as_its_report() {
+    let (built, instance) = create_with(|_| Box::new(BorrowsTwice::new(true)));
+    assert_eq!(built.status(), CallOutcome::RETURNED, "the guest builds");
+    let pressed = wire_core::encode(&press());
+    let mut handled = false;
+    let outcome = unsafe {
+        (TELAR_EMBED_ENTRIES.on_event)(instance, LentBytes::lend(&pressed), &mut handled)
+    };
+    let panic = unsafe { outcome.into_result() }.expect_err("the panic is caught");
     assert_eq!(panic.message, "RUNTIME is already borrowed");
     let location = panic.location.as_deref().expect("the hook saw where");
     assert!(location.starts_with(&format!("{}:", file!())), "{location}");
@@ -462,35 +484,47 @@ fn a_panic_in_a_guest_export_comes_back_as_its_report() {
 
 #[test]
 fn a_guest_whose_build_panics_hands_back_no_instance() {
-    let panic = __embed_create(|| panic!("the guest could not find its assets"))
-        .expect_err("the panic is caught");
+    let (outcome, instance) = create_with(|_| panic!("the guest could not find its assets"));
+    let panic = unsafe { outcome.into_result() }.expect_err("the panic is caught");
     assert_eq!(panic.message, "the guest could not find its assets");
+    assert!(instance.is_null());
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-unsafe fn create_panicking(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
-    __embed_create(|| Box::new(BorrowsTwice::new(true)))
+unsafe extern "C" fn create_panicking(
+    args: LentBytes,
+    instance: *mut Handle<GuestInstance>,
+) -> CallOutcome {
+    unsafe { guest::create(args, instance, |_| Box::new(BorrowsTwice::new(true))) }
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-unsafe fn create_fixed(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
-    __embed_create(|| Box::new(BorrowsTwice::new(false)))
+unsafe extern "C" fn create_fixed(
+    args: LentBytes,
+    instance: *mut Handle<GuestInstance>,
+) -> CallOutcome {
+    unsafe { guest::create(args, instance, |_| Box::new(BorrowsTwice::new(false))) }
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-unsafe fn create_nothing(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
-    __embed_create(|| panic!("the guest could not find its assets"))
+unsafe extern "C" fn create_nothing(
+    args: LentBytes,
+    instance: *mut Handle<GuestInstance>,
+) -> CallOutcome {
+    unsafe {
+        guest::create(args, instance, |_| {
+            panic!("the guest could not find its assets")
+        })
+    }
 }
 
-/// A guest served by this process's own table, through the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries.
+/// A guest served by this process's own table, through the same catch and the same bookkeeping a dylib's go through. What stays untested here is the second copy of std a real dylib carries, which `telar`'s `guest_contract` suite loads.
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-fn embedded(
-    create: unsafe fn(&[String]) -> GuestResult<*mut EmbedInstance>,
-) -> Result<LoadedEmbed, GuestPanic> {
+fn embedded(create: CreateInstance) -> Result<LoadedEmbed, GuestPanic> {
     LoadedEmbed::start(
-        EmbedVTable {
+        EmbedEntries {
             create,
-            .._rsx_embed_vtable
+            ..TELAR_EMBED_ENTRIES
         },
         &[],
         None,
@@ -540,7 +574,7 @@ fn a_guest_that_panics_is_reported_and_never_called_again() {
     assert_eq!(
         APPS_DROPPED.with(std::cell::Cell::get),
         0,
-        "its instance is kept rather than destroyed by code that already panicked"
+        "its instance is kept rather than released by code that already panicked"
     );
 
     let fresh = embedded(create_fixed).expect("a fresh guest loads");
@@ -555,7 +589,7 @@ fn a_guest_that_panics_is_reported_and_never_called_again() {
     assert_eq!(
         APPS_DROPPED.with(std::cell::Cell::get),
         1,
-        "and is destroyed as usual"
+        "and is released as usual"
     );
 }
 
@@ -566,6 +600,39 @@ fn a_guest_whose_build_panics_is_refused_with_the_report() {
         .err()
         .expect("a guest that cannot build does not load");
     assert_eq!(panic.message, "the guest could not find its assets");
+}
+
+/// The host reads every answer the guest lends into values of its own: its metadata, the commands its title bar queued and the timer it waits on, on the host's clock.
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+#[test]
+fn a_host_reads_what_a_guest_answers_into_its_own_values() {
+    let embed = embedded(create_waiting).expect("the guest loads");
+    assert_eq!(embed.title(), "waiting");
+    assert_eq!(embed.id(), "waiting");
+    assert_eq!(embed.icon(), None);
+    assert_eq!(embed.clear_color(), None);
+    assert!(embed.drain_window_commands().is_empty());
+    let wait = embed.until_next_timer().expect("the guest's timer crosses");
+    assert!(wait <= DELAY && wait > DELAY / 2, "{wait:?}");
+    let due = embed.next_timer_due().expect("and its deadline");
+    assert_eq!(
+        embed.next_timer_due(),
+        Some(due),
+        "the same deadline reads the same on the host's clock"
+    );
+    let from_now = due.saturating_duration_since(Instant::now());
+    assert!(from_now <= DELAY && from_now > DELAY / 2, "{from_now:?}");
+    assert_eq!(embed.panic(), None);
+}
+
+#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+unsafe extern "C" fn create_waiting(
+    args: LentBytes,
+    instance: *mut Handle<GuestInstance>,
+) -> CallOutcome {
+    let fired = Rc::new(std::cell::Cell::new(false));
+    let moves = Rc::new(std::cell::Cell::new(0));
+    unsafe { guest::create(args, instance, |_| Box::new(Waiting::new(&fired, &moves))) }
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
@@ -598,6 +665,7 @@ impl EmbeddedApp for WakesTheHost {
         if let Some(waker) = ctx.redraw_waker() {
             waker.wake();
         }
+        ctx.request_redraw();
     }
     fn title(&self) -> String {
         "wakes".into()
@@ -608,47 +676,52 @@ impl EmbeddedApp for WakesTheHost {
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-unsafe fn create_waking(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
-    __embed_create(|| Box::new(WakesTheHost(Stub::new())))
+unsafe extern "C" fn create_waking(
+    args: LentBytes,
+    instance: *mut Handle<GuestInstance>,
+) -> CallOutcome {
+    unsafe { guest::create(args, instance, |_| Box::new(WakesTheHost(Stub::new()))) }
 }
 
-/// The waker the guest is handed is host code; a panic in it stays on the host's side instead of unwinding through the guest.
+/// The waker the guest is handed is host code; a panic in it stays on the host's side instead of unwinding through the guest, and the redraw the guest asks for reaches the host's context.
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
 fn a_panic_in_the_host_waker_does_not_reach_the_guest() {
     let embed = embedded(create_waking).expect("the guest loads");
-    run_embedded_frame(&embed);
+    let waker = platform_core::RedrawWaker::new(|| panic!("the host's loop is gone"));
+    let mut redraw_requested = false;
+    let mut ctx = AppCtx::new(&mut redraw_requested, Some(&waker), None, None);
+    embed.on_frame(&mut ctx);
     assert_eq!(embed.panic(), None, "the guest kept running");
-}
-
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-#[test]
-fn a_guest_laid_out_differently_is_refused_with_what_to_do() {
-    let mut table = _rsx_embed_vtable;
-    table.layout ^= 1;
-    let refused = unsafe { crate::host::read_vtable(&raw const table) };
-    let mismatch = refused.err().expect("another layout must not load");
-    let message = mismatch.to_string();
-    assert!(message.contains("restart the session"), "{message}");
-    assert!(message.contains("matching features"), "{message}");
+    assert!(redraw_requested, "its redraw reaches the host");
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 thread_local! {
     static CONVENTION_HANDED: std::cell::Cell<Option<KeyboardConvention>> = const { std::cell::Cell::new(None) };
     static HANDED_BEFORE_BUILD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static SERVED_NOTHING: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-unsafe fn record_convention(convention: KeyboardConvention) -> GuestResult<()> {
-    CONVENTION_HANDED.set(Some(convention));
-    Ok(())
+unsafe extern "C" fn record_services(services: HostServices) -> CallOutcome {
+    CONVENTION_HANDED.set(unsafe { services.ask(services.keyboard_convention, &()) });
+    SERVED_NOTHING.set(Some(services.data.is_null()));
+    CallOutcome::OK
 }
 
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-unsafe fn create_after_convention(_args: &[String]) -> GuestResult<*mut EmbedInstance> {
+#[cfg(all(feature = "host", unix))]
+unsafe extern "C" fn create_after_services(
+    args: LentBytes,
+    instance: *mut Handle<GuestInstance>,
+) -> CallOutcome {
     HANDED_BEFORE_BUILD.set(CONVENTION_HANDED.get().is_some());
-    __embed_create(|| Box::new(Stub::new()))
+    unsafe { guest::create(args, instance, |_| Box::new(Stub::new())) }
+}
+
+#[cfg(all(feature = "host", unix))]
+extern "C" fn does_nothing() -> CallOutcome {
+    CallOutcome::OK
 }
 
 fn foreign_convention() -> KeyboardConvention {
@@ -659,19 +732,26 @@ fn foreign_convention() -> KeyboardConvention {
 }
 
 /// A guest carries its own copy of the convention, which left alone answers for the system it was compiled on: a terminal host on a Mac matches Ctrl while the guest would show ⌘.
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "host", unix))]
 #[test]
-fn a_guest_is_handed_the_host_keyboard_convention_before_it_is_built() {
+fn a_guest_is_handed_the_host_services_before_it_is_built() {
     let host = foreign_convention();
     platform_core::set_keyboard_convention(host);
+    let this_process = libloading::Library::from(libloading::os::unix::Library::this());
     let embed = LoadedEmbed::start(
-        EmbedVTable {
-            create: create_after_convention,
-            set_keyboard_convention: record_convention,
-            .._rsx_embed_vtable
+        EmbedEntries {
+            create: create_after_services,
+            lifecycle: Lifecycle {
+                install_services: record_services,
+                loaded: does_nothing,
+                unloading: does_nothing,
+                quiesce: does_nothing,
+                ..TELAR_EMBED_ENTRIES.lifecycle
+            },
+            ..TELAR_EMBED_ENTRIES
         },
         &[],
-        None,
+        Some(this_process),
     )
     .expect("the guest loads");
     assert_eq!(CONVENTION_HANDED.get(), Some(host));
@@ -682,39 +762,41 @@ fn a_guest_is_handed_the_host_keyboard_convention_before_it_is_built() {
     drop(embed);
 }
 
-#[test]
-fn the_exported_table_installs_the_convention_it_is_handed() {
-    let handed = foreign_convention();
-    unsafe { (_rsx_embed_vtable.set_keyboard_convention)(handed) }.expect("no panic");
-    assert_eq!(platform_core::keyboard_convention(), handed);
-}
-
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-thread_local! {
-    static FONTS_HANDED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
-}
-
-#[cfg(all(feature = "host", not(target_arch = "wasm32")))]
-unsafe fn record_fonts(host: Option<Arc<dyn renderer_core::FontHost>>) -> GuestResult<()> {
-    FONTS_HANDED.set(Some(host.is_some()));
-    Ok(())
-}
-
-/// A table this process serves itself already sets text in the one font database there is: handed it, its shaper would defer to itself.
+/// A table this process serves itself already shares every store there is, the one font database included: handed it, its shaper would defer to itself.
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
 #[test]
-fn a_guest_of_this_process_is_handed_no_font_database_to_defer_to() {
+fn a_guest_of_this_process_is_served_nothing() {
     let embed = LoadedEmbed::start(
-        EmbedVTable {
-            defer_fonts: record_fonts,
-            .._rsx_embed_vtable
+        EmbedEntries {
+            lifecycle: Lifecycle {
+                install_services: record_services,
+                ..TELAR_EMBED_ENTRIES.lifecycle
+            },
+            ..TELAR_EMBED_ENTRIES
         },
         &[],
         None,
     )
     .expect("the guest loads");
-    assert_eq!(FONTS_HANDED.get(), Some(false));
+    assert_eq!(SERVED_NOTHING.get(), Some(true));
     drop(embed);
+}
+
+#[test]
+fn the_exported_table_installs_the_convention_it_is_handed() {
+    let handed = foreign_convention();
+    platform_core::set_keyboard_convention(handed);
+    let served = services_core::guest::ServedServices::installed(None);
+    platform_core::set_keyboard_convention(KeyboardConvention::native());
+    let full = served.table();
+    let only_the_convention = HostServices {
+        data: full.data,
+        keyboard_convention: full.keyboard_convention,
+        ..HostServices::NONE
+    };
+    let outcome = unsafe { (TELAR_EMBED_ENTRIES.lifecycle.install_services)(only_the_convention) };
+    assert_eq!(outcome.status(), CallOutcome::RETURNED);
+    assert_eq!(platform_core::keyboard_convention(), handed);
 }
 
 #[cfg(all(feature = "host", unix))]
@@ -723,26 +805,47 @@ thread_local! {
 }
 
 #[cfg(all(feature = "host", unix))]
-fn live(call: &'static str) -> GuestResult<()> {
+fn live(call: &'static str) -> CallOutcome {
     LIFE.with_borrow_mut(|calls| calls.push(call));
-    Ok(())
+    CallOutcome::OK
+}
+
+#[cfg(all(feature = "host", unix))]
+extern "C" fn live_loaded() -> CallOutcome {
+    live("loaded")
+}
+
+#[cfg(all(feature = "host", unix))]
+extern "C" fn live_unloading() -> CallOutcome {
+    live("unloading")
+}
+
+#[cfg(all(feature = "host", unix))]
+extern "C" fn live_quiesce() -> CallOutcome {
+    live("quiesce")
+}
+
+#[cfg(all(feature = "host", unix))]
+extern "C" fn serves_nothing(_services: HostServices) -> CallOutcome {
+    CallOutcome::OK
 }
 
 /// Held with this process as its library, so dropping it runs the unload path a built library's does.
 #[cfg(all(feature = "host", unix))]
-fn embedded_as_loaded(
-    create: unsafe fn(&[String]) -> GuestResult<*mut EmbedInstance>,
-) -> Result<LoadedEmbed, GuestPanic> {
+fn embedded_as_loaded(create: CreateInstance) -> Result<LoadedEmbed, GuestPanic> {
     LIFE.with_borrow_mut(Vec::clear);
     let this_process = libloading::Library::from(libloading::os::unix::Library::this());
     LoadedEmbed::start(
-        EmbedVTable {
+        EmbedEntries {
             create,
-            loaded: || live("loaded"),
-            unloading: || live("unloading"),
-            quiesce: || live("quiesce"),
-            defer_fonts: |_| Ok(()),
-            .._rsx_embed_vtable
+            lifecycle: Lifecycle {
+                loaded: live_loaded,
+                unloading: live_unloading,
+                quiesce: live_quiesce,
+                install_services: serves_nothing,
+                ..TELAR_EMBED_ENTRIES.lifecycle
+            },
+            ..TELAR_EMBED_ENTRIES
         },
         &[],
         Some(this_process),
@@ -751,7 +854,7 @@ fn embedded_as_loaded(
 
 #[cfg(all(feature = "host", unix))]
 #[test]
-fn a_guest_is_destroyed_released_then_quiesced_before_its_library_is_closed() {
+fn a_guest_is_released_told_it_is_unloading_then_quiesced_before_its_library_is_closed() {
     APPS_DROPPED.with(|dropped| dropped.set(0));
     drop(embedded_as_loaded(create_fixed).expect("the guest loads"));
     assert_eq!(APPS_DROPPED.with(std::cell::Cell::get), 1);

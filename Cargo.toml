@@ -46,6 +46,7 @@ members = [
     "crates/ui/theme-core",
     "crates/ui/ui-core",
     "crates/ui/ui-tree",
+    "crates/wire/wire-core",
     "plugins/telar-components",
     "plugins/telar-devtools",
     "plugins/telar-dynamic",
@@ -73,6 +74,7 @@ default-members = [
     "crates/services/services-core",
     "crates/geometry/geometry-core",
     "crates/semantics/semantics-core",
+    "crates/wire/wire-core",
     "crates/motion/motion-core",
     "crates/layout/layout-core",
     "crates/layout/layout-reactive",
@@ -154,6 +156,7 @@ telar-components = { path = "plugins/telar-components", version = "0.2.2" }
 telar-devtools = { path = "plugins/telar-devtools", version = "0.2.2" }
 telar-diagnostics = { path = "crates/tools/telar-diagnostics", version = "0.2.2" }
 telar-dynamic = { path = "plugins/telar-dynamic", version = "0.2.2" }
+telar-embed = { path = "crates/embed/telar-embed", version = "0.2.2" }
 telar-icons = { path = "plugins/telar-icons", version = "0.2.2" }
 telar-macros = { path = "crates/tools/telar-macros", version = "0.2.2" }
 telar-navigate = { path = "plugins/telar-navigate", version = "0.2.2" }
@@ -164,6 +167,7 @@ telar-workshop = { path = "plugins/telar-workshop", version = "0.2.2" }
 theme-core = { package = "telar-theme-core", path = "crates/ui/theme-core", version = "0.2.2" }
 ui-core = { package = "telar-ui-core", path = "crates/ui/ui-core", version = "0.2.2" }
 ui-tree = { package = "telar-ui-tree", path = "crates/ui/ui-tree", version = "0.2.2" }
+wire-core = { package = "telar-wire-core", path = "crates/wire/wire-core", version = "0.2.2" }
 
 bytemuck = "1.25.0"
 criterion = { version = "0.8.2", default-features = false, features = [

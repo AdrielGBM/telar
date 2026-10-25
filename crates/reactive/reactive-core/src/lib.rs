@@ -5,7 +5,7 @@
 mod effect;
 mod memo;
 mod reactive;
-pub use reactive_local::{reentry, thread_exit};
+pub use reactive_local::{reentry, thread_exit, threads};
 mod runtime;
 mod signal;
 mod source;

@@ -1,6 +1,6 @@
 //! Opening what lives outside the app: a web page, a mail draft, a document another program owns.
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use semantics_core::{RouteAddress, Uri};
 
@@ -18,16 +18,18 @@ pub trait UriOpener: Send + Sync + 'static {
     }
 }
 
-static OPENER: RwLock<Option<Arc<dyn UriOpener>>> = RwLock::new(None);
+reactive_local::released_slot! {
+    static OPENER: Arc<dyn UriOpener>;
+}
 
 /// Installs the backend URIs are opened with. Each runner installs its platform's at startup; a later call replaces it, which is how a test observes what would have been opened.
 pub fn set_uri_opener(opener: Arc<dyn UriOpener>) {
-    *OPENER.write().unwrap_or_else(|e| e.into_inner()) = Some(opener);
+    OPENER.replace(opener);
 }
 
 /// The installed backend, or `None` where nothing opens URIs — headless.
 pub fn uri_opener() -> Option<Arc<dyn UriOpener>> {
-    OPENER.read().unwrap_or_else(|e| e.into_inner()).clone()
+    OPENER.get()
 }
 
 /// Opens `uri` with the system, reporting whether anything was asked to.
@@ -68,7 +70,9 @@ pub fn launch(uri: &Uri) -> std::io::Result<()> {
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
     let mut child = command.spawn()?;
-    std::thread::spawn(move || child.wait());
+    if let Err(error) = reactive_local::threads::spawn("telar-launcher", move || child.wait()) {
+        tracing::warn!(%error, "the launcher started, but no thread is left to reap it when it exits");
+    }
     Ok(())
 }
 

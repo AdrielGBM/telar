@@ -228,8 +228,13 @@ pub(crate) fn swapchain_rebuild_lock() -> std::sync::RwLockWriteGuard<'static, (
 ///
 /// A panic here is rarely a bug in the pipeline: wgpu reports a fatal device error as a panic, so a device lost by any window arrives as one on every thread that touches it afterwards. Unwrapping would carry that into the caller — the UI thread — and end the process, which is how one dead device cost a whole application rather than the one surface that failed to open.
 #[cfg(not(target_arch = "wasm32"))]
-fn built<T>(handle: std::thread::ScopedJoinHandle<'_, T>) -> Result<T, RendererError> {
+fn built<T>(
+    handle: std::io::Result<reactive_local::threads::ScopedSpawned<'_, '_, T>>,
+) -> Result<T, RendererError> {
     handle
+        .map_err(|error| {
+            RendererError::Backend(format!("no thread to build a render pipeline on: {error}"))
+        })?
         .join()
         .map_err(|_| RendererError::Backend("a render pipeline could not be built".to_string()))
 }
@@ -610,15 +615,15 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
             blur_pipeline,
             composite_pipeline,
             retained_blit_pipeline,
-        ) = std::thread::scope(|s| {
-            let t_rect = s.spawn(make_rect);
-            let t_text = s.spawn(make_text);
-            let t_line = s.spawn(make_line);
-            let t_path = s.spawn(make_path);
-            let t_layer = s.spawn(make_layer);
-            let t_blur = s.spawn(make_blur);
-            let t_composite = s.spawn(make_composite);
-            let t_retained = s.spawn(make_retained);
+        ) = reactive_local::threads::scope(|s| {
+            let t_rect = s.spawn("telar-pipeline", make_rect);
+            let t_text = s.spawn("telar-pipeline", make_text);
+            let t_line = s.spawn("telar-pipeline", make_line);
+            let t_path = s.spawn("telar-pipeline", make_path);
+            let t_layer = s.spawn("telar-pipeline", make_layer);
+            let t_blur = s.spawn("telar-pipeline", make_blur);
+            let t_composite = s.spawn("telar-pipeline", make_composite);
+            let t_retained = s.spawn("telar-pipeline", make_retained);
             Ok::<_, RendererError>((
                 built(t_rect)?,
                 built(t_text)?,
