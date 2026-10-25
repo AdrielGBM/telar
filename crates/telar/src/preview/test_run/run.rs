@@ -35,6 +35,8 @@ pub fn run_previews(
         ..TestRun::default()
     };
     speak_the_app_language();
+    // Plays read shortcuts as drawn text, so a run reads them one way whichever OS it is on, snapshots or not.
+    platform_core::set_keyboard_convention(platform_core::KeyboardConvention::Pc);
     let mut snapshots = start_snapshots(config, options, &mut run);
     if snapshots.is_none() {
         crate::runner::install_preview_text_metrics(config);
