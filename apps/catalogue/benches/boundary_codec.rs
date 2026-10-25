@@ -17,6 +17,7 @@ const WINDOW_H: u32 = 900;
 struct Codec {
     encoder: FrameEncoder,
     decoder: FrameDecoder,
+    frame: Vec<u8>,
     out: Vec<DrawCommand>,
 }
 
@@ -28,11 +29,14 @@ impl Codec {
                 self.encoder.reset();
             }
             let start = Instant::now();
-            black_box(self.encoder.encode(&frames[iter as usize % 2]));
+            let encoded = black_box(self.encoder.encode(&frames[iter as usize % 2]));
             spent[0] += start.elapsed();
+            // Copied outside the timings: the decoder reads the frame while it asks the encoder for pixels, as a host does across the boundary.
+            self.frame.clear();
+            self.frame.extend_from_slice(encoded);
             let start = Instant::now();
             self.decoder
-                .decode(self.encoder.bytes(), &mut self.out, |id| {
+                .decode(&self.frame, &mut self.out, |id| {
                     self.encoder.pixels(id).map(<[u8]>::to_vec)
                 })
                 .expect("the frame decodes");
