@@ -44,11 +44,15 @@ pub struct WinitPlatform {
 
 impl WinitPlatform {
     pub fn try_new() -> Result<Self, PlatformError> {
-        Ok(Self {
-            event_loop: EventLoop::<UserEvent>::with_user_event()
-                .build()
-                .map_err(|e| PlatformError(e.to_string()))?,
-        })
+        let event_loop = EventLoop::<UserEvent>::with_user_event()
+            .build()
+            .map_err(|e| PlatformError(e.to_string()))?;
+        // Installed with the loop, not when it runs, because a hot host hands the waker to the app it loads before the loop starts; it goes through a proxy rather than a window, so caching it cannot pin a window open, and wakeups reach every surface wherever the app's content now lives.
+        let wake_proxy = event_loop.create_proxy();
+        platform_core::set_loop_waker(std::sync::Arc::new(move || {
+            let _ = wake_proxy.send_event(UserEvent::Wake);
+        }));
+        Ok(Self { event_loop })
     }
 }
 
@@ -334,11 +338,6 @@ impl Platform for WinitPlatform {
             #[cfg(feature = "a11y")]
             a11y_nodes: Vec::new(),
         };
-        // The app-facing redraw waker wakes the loop through this proxy rather than by holding a window, so caching it cannot pin a window open.
-        let wake_proxy = self.event_loop.create_proxy();
-        platform_core::set_loop_waker(std::sync::Arc::new(move || {
-            let _ = wake_proxy.send_event(UserEvent::Wake);
-        }));
         #[cfg(all(target_os = "linux", feature = "system-theme"))]
         watch_portal(&self.event_loop);
         #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -783,11 +782,6 @@ impl MultiSurfacePlatform for WinitPlatform {
             timer_has_fired: false,
             preferences: PreferencesTracker::default(),
         };
-        // Through this proxy, which redraws every surface, rather than by holding a window: an app can cache it and, if its content later moves to another window, wakeups still reach it wherever it now lives.
-        let wake_proxy = self.event_loop.create_proxy();
-        platform_core::set_loop_waker(std::sync::Arc::new(move || {
-            let _ = wake_proxy.send_event(UserEvent::Wake);
-        }));
         #[cfg(all(target_os = "linux", feature = "system-theme"))]
         watch_portal(&self.event_loop);
         #[cfg(any(target_os = "windows", target_os = "macos"))]
