@@ -172,7 +172,10 @@ fn a_refused_source_is_named_with_its_file_and_line() {
 
     let message = error.to_string();
     assert!(
-        message.starts_with(&format!("{}:", root.join("src/broken.rsx").display())),
+        message.starts_with(&format!(
+            "{}:",
+            root.join("src").join("broken.rsx").display()
+        )),
         "{message}"
     );
     assert_eq!(error.path(), root.join("src/broken.rsx"));

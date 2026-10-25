@@ -102,7 +102,10 @@ fn an_id_no_source_has_fails_the_bake_on_its_line() {
     let report = bake_package(&root, "test", VERSION).unwrap();
     assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
     assert!(
-        report.errors[0].starts_with("src/widgets/bar.rs:3: no icon source has `demo:nope`"),
+        report.errors[0].starts_with(&format!(
+            "{}:3: no icon source has `demo:nope`",
+            Path::new("src").join("widgets").join("bar.rs").display()
+        )),
         "{}",
         report.errors[0]
     );

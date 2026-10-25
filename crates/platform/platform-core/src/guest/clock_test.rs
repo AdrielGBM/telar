@@ -3,7 +3,8 @@ use super::*;
 #[test]
 fn an_instant_reads_back_from_its_timestamp_on_either_side_of_the_epoch() {
     let epoch = Epoch::start();
-    for nanos in [0, 1, 16_666_667, -1, -5_000_000_000] {
+    // Not -1: Windows reads two instants within one performance-counter tick as the same instant.
+    for nanos in [0, 1, 16_666_667, -1_000_000, -5_000_000_000] {
         let instant = epoch.instant(Timestamp { nanos });
         assert_eq!(epoch.stamp(instant), Timestamp { nanos });
         assert_eq!(epoch.instant(epoch.stamp(instant)), instant);
