@@ -2,16 +2,18 @@
 
 use std::sync::{Arc, RwLock};
 
+use semantics_core::{RouteAddress, Uri};
+
 /// Hands a URI to whatever the system opens it with.
 ///
 /// `Send + Sync` for the same reason [`Clipboard`](crate::Clipboard) is: a backend may do the opening on a thread of its own, since asking a desktop portal or a launcher is a round trip the UI should not wait on.
 pub trait UriOpener: Send + Sync + 'static {
-    /// Opens `uri`, an absolute URI. `false` when nothing could be asked to open it.
-    fn open(&self, uri: &str) -> bool;
+    /// Opens `uri`, which the app's URI policy already allowed. `true` means handed off to the system, not opened: a backend may finish (or fail, and log it) on a thread of its own. `false` when nothing could be asked.
+    fn open(&self, uri: &Uri) -> bool;
 
-    /// Opens `reference`, an address in the app's own `LocationFormat`, as a second view of the app beside this one. `false` where there is no second view to open, which is every target but a browser.
-    fn open_beside(&self, reference: &str) -> bool {
-        let _ = reference;
+    /// Opens `address`, a route of the app in its own `LocationFormat`, as a second view of the app beside this one. `false` where there is no second view to open, which is every target but a browser.
+    fn open_beside(&self, address: &RouteAddress) -> bool {
+        let _ = address;
         false
     }
 }
@@ -29,17 +31,17 @@ pub fn uri_opener() -> Option<Arc<dyn UriOpener>> {
 }
 
 /// Opens `uri` with the system, reporting whether anything was asked to.
-pub fn open_uri(uri: &str) -> bool {
+pub fn open_uri(uri: &Uri) -> bool {
     let opened = uri_opener().is_some_and(|opener| opener.open(uri));
     if !opened {
-        tracing::warn!(uri, "nothing opened the URI");
+        tracing::warn!(%uri, "nothing opened the URI");
     }
     opened
 }
 
-/// Opens the app's own `reference` in a view beside this one, reporting whether there was one to open. See [`UriOpener::open_beside`].
-pub fn open_beside(reference: &str) -> bool {
-    uri_opener().is_some_and(|opener| opener.open_beside(reference))
+/// Opens the app's own `address` in a view beside this one, reporting whether there was one to open. See [`UriOpener::open_beside`].
+pub fn open_beside(address: &RouteAddress) -> bool {
+    uri_opener().is_some_and(|opener| opener.open_beside(address))
 }
 
 /// Opens URIs by starting the system's own launcher: `xdg-open` on Linux and the BSDs, `open` on macOS, the URL protocol handler on Windows.
@@ -50,17 +52,17 @@ pub struct SystemOpener;
 
 #[cfg(feature = "system-opener")]
 impl UriOpener for SystemOpener {
-    fn open(&self, uri: &str) -> bool {
+    fn open(&self, uri: &Uri) -> bool {
         launch(uri)
-            .inspect_err(|error| tracing::warn!(uri, %error, "the system launcher did not start"))
+            .inspect_err(|error| tracing::warn!(%uri, %error, "the system launcher did not start"))
             .is_ok()
     }
 }
 
-/// Starts the system launcher on `uri`, for a backend whose own way of opening one failed.
+/// Starts the system launcher on `uri`, for a backend that has no way of its own to open one.
 #[cfg(feature = "system-opener")]
-pub fn launch(uri: &str) -> std::io::Result<()> {
-    let mut command = launcher(uri);
+pub fn launch(uri: &Uri) -> std::io::Result<()> {
+    let mut command = launcher(uri.as_str());
     command
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

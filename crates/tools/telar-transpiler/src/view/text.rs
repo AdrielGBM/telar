@@ -142,13 +142,7 @@ impl ViewGen<'_> {
             }
             if let Some(to) = span_attrs.iter().find(|a| a.key == "to") {
                 let value = to.value.text().trim();
-                if let Some(literal) = super::container::external_literal(value)
-                    && semantics_core::Uri::parse(literal).is_none()
-                {
-                    errors.push(format!(
-                        "`to:external(\"{literal}\")` is not an absolute URI: it names no scheme (`https:`, `mailto:`…)"
-                    ));
-                }
+                errors.extend(super::container::refused_external(value));
                 let read = super::signals::substitute_reads(value, self.theme_access);
                 let _ = write!(
                     run,

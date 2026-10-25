@@ -385,3 +385,49 @@ fn a_control_that_scrolls_is_one_element_that_scrolls_and_takes_the_tab_stop() {
     assert!(tag.contains("tabindex=\"0\""), "{tag}");
     assert!(tag.contains("overflow:auto"), "{tag}");
 }
+
+#[test]
+fn a_document_writes_an_href_only_for_a_uri_the_app_allows() {
+    platform_core::allow_uri_scheme("telar-dom-test").unwrap();
+    let refused = [
+        "javascript:alert(document.cookie)",
+        "data:text/html,<script>alert(1)</script>",
+        "file:///etc/passwd",
+        "C:\\x.exe",
+        "telar-dom-unregistered:x",
+    ];
+    let mut commands = Vec::new();
+    for (id, uri) in refused
+        .into_iter()
+        .chain(["telar-dom-test://settings"])
+        .enumerate()
+    {
+        let mut semantics = Semantics::of(Role::Link);
+        if let Ok(destination) = Destination::external(uri) {
+            semantics = semantics.linking_to(destination);
+        }
+        commands.push(open(
+            id as u64 + 1,
+            semantics,
+            "",
+            Rect::new(0.0, 0.0, 10.0, 10.0),
+        ));
+        commands.push(DrawCommand::PopElement);
+    }
+    let written = prerender(&commands, None);
+    for uri in refused {
+        let scheme = uri.split_once(':').unwrap().0;
+        assert!(
+            !written.markup.contains(&format!("href=\"{scheme}:")),
+            "{uri}: {}",
+            written.markup
+        );
+    }
+    assert!(
+        written
+            .markup
+            .contains("href=\"telar-dom-test://settings\""),
+        "{}",
+        written.markup
+    );
+}

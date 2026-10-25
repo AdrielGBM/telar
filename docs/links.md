@@ -13,8 +13,36 @@ box to:external("https://github.com") // something outside the app
 StyledContainer::new(style, paint, children)?.to(move || Page::Project(slug.clone()))
 ```
 
-`to:` takes any expression; one that reads `$state` is re-read when that state changes. `external("…")` must
-name a scheme (`https:`, `mailto:`…): a literal without one is a build error on the attribute. A runtime string without one yields `None`: the box stays a link but a disabled one that goes nowhere, and a warning names the rejected string.
+`to:` takes any expression; one that reads `$state` is re-read when that state changes. `external("…")` only
+accepts a URI the app's [URI policy](#which-uris-open) allows. A runtime string it refuses yields an `Err`: the
+box stays a link but a disabled one that goes nowhere, and a warning names the rejected string and why.
+
+## Which URIs open
+
+Every external address is a `Uri`, and a `Uri` exists only once it passed one policy. Every sink reads it from
+a `Uri` (`UriOpener::open` and `open_uri` take a `&Uri`; a document's `href`, a terminal's OSC 8 hyperlink and
+an accessibility URL are written from `Destination::External`), so none of them can be handed an address the
+policy did not see.
+
+- **Allowed by default:** `http`, `https`, `mailto`, `tel`, `sms` (`DEFAULT_URI_SCHEMES`).
+- **Allowed by the app:** `allow_uri_scheme("myapp")` lets every `Uri` built afterwards use `myapp:`. Call it
+  once, in the setup block of `telar::app!`, which runs on every target and on both sides of a hot reload.
+  A plugin that owns a scheme registers it itself, where it is built: `WorkshopApp::new` allows `vscode:` for
+  its "open in editor" links, so an app that uses the workshop needs no call of its own. Schemes compare
+  ignoring case; registering one twice is harmless.
+- **Never allowed:** `javascript`, `vbscript`, `data`, `file` (`DENIED_URI_SCHEMES`) and any single-letter
+  scheme, which is a drive path (`C:\x.exe`). `allow_uri_scheme` refuses them, so nothing re-enables them.
+- **Never allowed anywhere in the text:** whitespace and control characters, which a browser drops from a
+  scheme (`java\tscript:`) and a launcher or a terminal reads as something else. Leading and trailing
+  whitespace is refused, not trimmed.
+- **ASCII only:** as RFC 3986 asks, a `Uri` holds no non-ASCII character; percent-encode it. Invisible and
+  bidirectional characters (U+202E, U+200B) would otherwise spoof the address in a terminal hyperlink, an
+  accessibility URL or a log.
+
+`Uri::parse` and `Destination::external` return a `UriError` saying which rule refused the text. A literal in
+`.rsx` meets the same policy when the transpiler reads it: `to:external("javascript:…")`, a drive path, a
+denied scheme or a stray space is a build error on the attribute. A literal in a scheme that is not a default
+one (`myapp:`) is left to run time, where the app may have allowed it.
 
 ## What a link is
 
@@ -22,11 +50,13 @@ name a scheme (`https:`, `mailto:`…): a literal without one is a build error o
 | --- | --- |
 | `Destination` | `Route(Location)`, `Anchor(name)`, `Locale(tag)` (the place being shown, in another language) or `External(Uri)`. Lives in `semantics-core`, beside `Location`, because a renderer and a platform both read it. |
 | `Semantics::link` | The destination a box's element carries. `Semantics::linking_to` sets it and the `link` role together. |
-| `IntoDestination` | What `to` accepts: a `Destination`, a `Location`, or any `Route`. `Route` lives in `platform-core` and is re-exported by `telar` (and by the `telar-navigate` plugin, as the same item), so this works without a navigator. |
+| `Uri`, `UriError`, `allow_uri_scheme` | An external address that passed the [URI policy](#which-uris-open), why text did not, and the app's registration of its own schemes. |
+| `RouteAddress` | A route's address, as `UriOpener::open_beside` takes it: parsed from the text `address_of` writes, and refused when it names a scheme or another host, so a custom `LocationFormat` cannot turn the second view into a way around the URI policy. |
+| `IntoDestination` | What `to` accepts: a `Destination`, a `Location`, or any `Route`, and an `Option` of one or the `Result` of `external`. `Route` lives in `platform-core` and is re-exported by `telar` (and by the `telar-navigate` plugin, as the same item), so this works without a navigator. |
 | `anchor`, `in_locale`, `external` | The constructors `.rsx` names. `in_locale("en")` is a language switch that keeps the page and the anchor; see [docs/location.md](location.md#the-locale-in-the-location). |
 | `address_of` | A destination as the text a target writes where an address goes: a route in the app's `location_format()` and in the locale its address carries (`/en/projects`), an anchor as the current location with that fragment, an external URI as itself. |
 | `follow`, `follow_beside`, `follow_pressed` | Going there from app code: push the route, reveal the anchor, open the URI. `follow_pressed` reads Ctrl, Cmd or Shift as a request for a view beside this one. |
-| `open_uri`, `UriOpener`, `set_uri_opener` | The `services-core` service that hands a URI to the system. Every runner installs its platform's; headless installs none, and a test installs its own. |
+| `open_uri`, `UriOpener`, `set_uri_opener` | The `services-core` service that hands a `&Uri` to the system. Every runner installs its platform's; headless installs none, and a test installs its own. |
 | `anchor:`, `PageAnchor::page_anchor` | Names a box as a place on the page; see [Anchors](#anchors). |
 | `register_anchor`, `reveal_anchor`, `has_anchor` | The lookup an anchor resolves through, which `anchor:` fills. |
 | `Event::BoxActivated` | A surface that follows links itself reporting a plain activation back to the app. |
@@ -133,7 +163,7 @@ rather than inheriting one) when the spans are found by scanning the text and th
 | --- | --- | --- | --- | --- |
 | Web, document | `<a href>` with the serialized location; a plain same-origin click is taken back from the browser and pushed | `<a href="/current#name">`, taken back and revealed | `<a href target="_blank" rel="noopener">` for a web page; other schemes (`mailto:`) open in place, still `rel="noopener"`; the browser opens them | Left to the browser: Ctrl/Cmd/Shift and middle click open a tab or window |
 | Web, canvas | `push_location` | Revealed | `window.open(uri, "_blank", "noopener")` for a web page, in place otherwise | Ctrl/Cmd/Shift open the route in a new tab |
-| Desktop | `push_location` | Revealed | The `OpenURI` portal on Linux (with `system-theme`), falling back to `xdg-open`; `ShellExecuteW` on Windows; `NSWorkspace` on macOS | Followed in place |
+| Desktop | `push_location` | Revealed | The `OpenURI` portal on Linux (with `system-theme`), and `xdg-open` only where there is no portal to ask; a portal that refuses the URI is reported, not routed around; `ShellExecuteW` on Windows; `NSWorkspace` on macOS | Followed in place |
 | Android | `push_location` | Revealed | An `ACTION_VIEW` intent | — |
 | Terminal | `push_location` (saved like any location) | Revealed | Enter opens it with the system launcher; its glyphs are an OSC 8 hyperlink the terminal can open itself | Followed in place |
 | Headless | `push_location` | Revealed | Whatever opener a test installed with `set_uri_opener`; none by default | Followed in place |

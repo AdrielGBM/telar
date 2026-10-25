@@ -86,7 +86,7 @@ fn the_arrow_follows_where_the_link_goes() {
         LinkProps::props()
             .label("Docs")
             .to(LinkTarget::of(move || match leaves.get() {
-                true => external("https://example.com/docs"),
+                true => external("https://example.com/docs").ok(),
                 false => Some(anchor("docs")),
             }))
             .build(),

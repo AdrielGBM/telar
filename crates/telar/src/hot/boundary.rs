@@ -4,10 +4,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use platform_core::guest::{BoundaryLayout, shield};
+use platform_core::{RouteAddress, Uri};
 use services_core::{Clipboard, FileDialog, FileDialogs, UriOpener};
 
 /// The shape of the exports a host can drive: a library reporting another one was built against a telar whose exports this host would misread, so it is refused rather than called.
-pub const GUEST_ABI: u32 = 7;
+pub const GUEST_ABI: u32 = 8;
 
 /// The fingerprint of what crosses by value, and of the features that shape it. A dylib built without `shaper` would drop the font database `HostServices` hands it and measure its text in something other than the faces its `shaper` host draws it in, so the two must agree there too.
 pub const GUEST_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
@@ -18,8 +19,10 @@ pub const GUEST_LAYOUT: BoundaryLayout = platform_core::boundary_layout!(
     platform_core::KeyboardConvention,
     platform_core::Location,
     platform_core::RedrawWaker,
+    platform_core::RouteAddress,
     platform_core::SystemPreferences,
     platform_core::TextInput,
+    platform_core::Uri,
     platform_core::WindowCommand,
     platform_core::WindowConfig,
     renderer_core::Color,
@@ -63,12 +66,12 @@ impl Clipboard for ShieldedClipboard {
 pub(crate) struct ShieldedUriOpener(pub(crate) Arc<dyn UriOpener>);
 
 impl UriOpener for ShieldedUriOpener {
-    fn open(&self, uri: &str) -> bool {
+    fn open(&self, uri: &Uri) -> bool {
         shield(false, || self.0.open(uri))
     }
 
-    fn open_beside(&self, reference: &str) -> bool {
-        shield(false, || self.0.open_beside(reference))
+    fn open_beside(&self, address: &RouteAddress) -> bool {
+        shield(false, || self.0.open_beside(address))
     }
 }
 

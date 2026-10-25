@@ -16,6 +16,7 @@ use telar_devtools::{
 };
 
 use crate::canvas::env::follow_reduced_motion;
+use crate::canvas::states::allow_editor_scheme;
 use crate::shell::shell;
 use crate::state::WorkshopState;
 use crate::store::Keeper;
@@ -42,6 +43,7 @@ impl WorkshopApp {
         {
             panic!("{duplicates}");
         }
+        allow_editor_scheme();
         Self {
             entries: entries.into(),
             requested: requested_preview(),

@@ -88,13 +88,22 @@ fn role_contradictions(
 }
 
 /// The string an `external("…")` destination is written with, when it is a plain literal.
-pub(super) fn external_literal(value: &str) -> Option<&str> {
+fn external_literal(value: &str) -> Option<&str> {
     value
         .strip_prefix("external(")?
         .strip_suffix(')')?
         .trim()
         .strip_prefix('"')?
         .strip_suffix('"')
+}
+
+/// Why a `to:` whose value is an `external("…")` literal can never open, when it cannot: the same policy a runtime string meets, reported at build time. A scheme that is only missing from the defaults is left to run time, where the app may have allowed it.
+pub(super) fn refused_external(value: &str) -> Option<String> {
+    let literal = external_literal(value)?;
+    match semantics_core::Uri::parse(literal) {
+        Ok(_) | Err(semantics_core::UriError::SchemeNotAllowed(_)) => None,
+        Err(error) => Some(format!("`to:external(\"{literal}\")` is refused: {error}")),
+    }
 }
 
 impl ViewGen<'_> {
@@ -391,19 +400,13 @@ impl ViewGen<'_> {
         )
     }
 
-    /// `to:` as `.to(move || …)`: a closure, so a destination built from `$state` follows it. An `external("…")` whose literal names no scheme is a build error here rather than a panic when the box is built.
+    /// `to:` as `.to(move || …)`: a closure, so a destination built from `$state` follows it. An `external("…")` literal the URI policy refuses is a build error here rather than a link that goes nowhere.
     fn destination_call(&self, el: &Element, errors: &mut Vec<String>) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "to") else {
             return String::new();
         };
         let value = attr.value.text().trim();
-        if let Some(literal) = external_literal(value)
-            && semantics_core::Uri::parse(literal).is_none()
-        {
-            errors.push(format!(
-                "`to:external(\"{literal}\")` is not an absolute URI: it names no scheme (`https:`, `mailto:`…)"
-            ));
-        }
+        errors.extend(refused_external(value));
         let read = substitute_reads(value, self.theme_access);
         format!(
             ".to({})",

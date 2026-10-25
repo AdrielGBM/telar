@@ -99,6 +99,38 @@ fn an_external_uri_without_a_scheme_is_a_build_error() {
 }
 
 #[test]
+fn an_external_uri_no_app_may_open_is_a_build_error() {
+    for (literal, reason) in [
+        (
+            "javascript:alert(1)",
+            "`javascript:` is a scheme no app may open",
+        ),
+        (
+            "JavaScript:alert(1)",
+            "`javascript:` is a scheme no app may open",
+        ),
+        (
+            "vbscript:msgbox(1)",
+            "`vbscript:` is a scheme no app may open",
+        ),
+        ("data:text/html,hi", "`data:` is a scheme no app may open"),
+        ("file:///etc/passwd", "`file:` is a scheme no app may open"),
+        ("C:/x.exe", "`c:` is a drive path"),
+        ("https://example.com/a b", "whitespace or control character"),
+    ] {
+        let code = transpiled(&format!("box to:external(\"{literal}\")\n    text \"x\"\n"));
+        assert!(code.contains("compile_error!"), "{literal}: {code}");
+        assert!(code.contains(reason), "{literal}: {code}");
+    }
+}
+
+#[test]
+fn an_external_uri_in_an_app_scheme_is_left_to_the_app_to_allow() {
+    let code = transpiled("box to:external(\"myapp://settings\")\n    text \"x\"\n");
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
 fn a_link_cannot_let_the_pointer_through() {
     let code = transpiled("box input_transparent to:anchor(\"a\")\n    text \"x\"\n");
     assert!(code.contains("compile_error!"), "{code}");

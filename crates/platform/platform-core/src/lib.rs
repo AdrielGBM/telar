@@ -39,7 +39,10 @@ pub use chord::{
     Chord, ChordError, KeyboardConvention, keyboard_convention, set_keyboard_convention,
 };
 pub use consumed_keys::{ConsumedKeys, consumes, key_member};
-pub use destination::{Destination, IntoDestination, Uri, address_of, anchor, external, in_locale};
+pub use destination::{
+    DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, Destination, IntoDestination, RouteAddress, Uri,
+    UriError, address_of, allow_uri_scheme, anchor, external, in_locale, is_uri_scheme_allowed,
+};
 pub use dom_code::unmodified_key_of_code;
 pub use error::PlatformError;
 pub use event::{

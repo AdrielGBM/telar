@@ -6,7 +6,7 @@ use telar::preview::{ArgValue, Layout, PreviewCtx, PreviewEntry};
 use telar::testing::{centre, damage, find_text, mount, moved, press, release, route};
 use telar::{
     Children, Color, ComponentList, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, Rect,
-    RectStyle, ShapeStyle, Size, SizeDimension, StyledContainer, Text, TextStyle, UriOpener,
+    RectStyle, ShapeStyle, Size, SizeDimension, StyledContainer, Text, TextStyle, Uri, UriOpener,
     WindowRoot, box_item, dismiss_depth, for_each_with_matrix, relayout_if_dirty,
     reset_layout_runtime, set_uri_opener, signal, transform_clip_rect,
 };
@@ -14,7 +14,7 @@ use telar_components::{ModalProps, modal};
 use telar_devtools::workbench_scope;
 
 use super::frame::{BORDER, HANDLE, STAGE_MARGIN, VIEWPORT_MIN, clamp_viewport};
-use super::states::editor_uri;
+use super::states::{allow_editor_scheme, editor_uri};
 use super::*;
 use crate::settings::CanvasSize;
 use crate::test_support::{Drawn, drawn};
@@ -170,14 +170,15 @@ fn a_modal_preview_stays_inside_its_canvas() {
 struct Recorder(Arc<Mutex<Vec<String>>>);
 
 impl UriOpener for Recorder {
-    fn open(&self, uri: &str) -> bool {
-        self.0.lock().unwrap().push(uri.to_owned());
+    fn open(&self, uri: &Uri) -> bool {
+        self.0.lock().unwrap().push(uri.to_string());
         true
     }
 }
 
 #[test]
 fn a_build_error_shows_a_card_naming_where_the_preview_is_written() {
+    allow_editor_scheme();
     let opened = Arc::new(Mutex::new(Vec::new()));
     set_uri_opener(Arc::new(Recorder(Arc::clone(&opened))));
     let (_state, mut tree) = mounted(vec![
@@ -204,11 +205,17 @@ fn a_build_error_shows_a_card_naming_where_the_preview_is_written() {
 
 #[test]
 fn an_editor_uri_encodes_the_path_with_forward_slashes() {
+    allow_editor_scheme();
     assert_eq!(
-        editor_uri("C:\\work\\my app\\button.rs", 7),
+        editor_uri("C:\\work\\my app\\button.rs", 7)
+            .unwrap()
+            .as_str(),
         "vscode://file/C:/work/my%20app/button.rs:7"
     );
-    assert_eq!(editor_uri("/work/#1.rs", 0), "vscode://file/work/%231.rs");
+    assert_eq!(
+        editor_uri("/work/#1.rs", 0).unwrap().as_str(),
+        "vscode://file/work/%231.rs"
+    );
 }
 
 fn fails_once(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {

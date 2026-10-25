@@ -2,11 +2,12 @@
 
 use std::sync::Arc;
 
+use platform_core::Uri;
 use services_core::UriOpener;
 
-/// The desktop's own way to open a URI, falling back to the system launcher where it is unavailable.
+/// The desktop's own way to open a URI, falling back to the system launcher only where that way does not exist.
 ///
-/// On Linux the portal is asked first, because it is what a sandboxed app (Flatpak, Snap) is allowed to use and what picks the handler the user chose; `xdg-open` answers when the portal is not running or the build has no D-Bus client. Windows hands the URI to `ShellExecuteW` and macOS to `NSWorkspace`, which is what a click on a link does in any native application there.
+/// On Linux the portal is asked first, because it is what a sandboxed app (Flatpak, Snap) is allowed to use and what picks the handler the user chose; `xdg-open` answers whenever the portal cannot be asked or does not answer (no session bus, no portal or backend running, a timeout, a dropped connection, or a build with no D-Bus client). Only an explicit refusal (access denied, invalid arguments, not allowed) is final: it is logged, never routed around. `open` returns once the request is handed to that thread. Windows hands the URI to `ShellExecuteW` and macOS to `NSWorkspace`, which is what a click on a link does in any native application there.
 pub struct DesktopUriOpener;
 
 impl DesktopUriOpener {
@@ -17,26 +18,65 @@ impl DesktopUriOpener {
 }
 
 impl UriOpener for DesktopUriOpener {
-    fn open(&self, uri: &str) -> bool {
+    fn open(&self, uri: &Uri) -> bool {
         open(uri)
     }
 }
 
 #[cfg(all(target_os = "linux", feature = "system-theme"))]
-fn open(uri: &str) -> bool {
-    let uri = uri.to_string();
-    // A portal call is a D-Bus round trip, and the UI should not wait for the desktop to answer it.
-    std::thread::spawn(move || {
-        if let Err(error) = open_through_portal(&uri) {
-            tracing::debug!(%error, "the OpenURI portal did not open the URI; trying xdg-open");
-            launch(&uri);
-        }
-    });
-    true
+fn open(uri: &Uri) -> bool {
+    let uri = uri.clone();
+    let spawned = std::thread::Builder::new()
+        .name("open-uri".into())
+        .spawn(move || match open_through_portal(&uri) {
+            Ok(()) => {}
+            Err(PortalError::Unavailable(error)) => {
+                tracing::debug!(%error, "no OpenURI portal to ask; trying xdg-open");
+                launch(&uri);
+            }
+            Err(PortalError::Refused(error)) => {
+                tracing::warn!(%uri, %error, "the OpenURI portal refused the URI");
+            }
+        });
+    spawned
+        .inspect_err(
+            |error| tracing::warn!(%error, "the thread that asks the OpenURI portal did not start"),
+        )
+        .is_ok()
 }
 
 #[cfg(all(target_os = "linux", feature = "system-theme"))]
-fn open_through_portal(uri: &str) -> zbus::Result<()> {
+enum PortalError {
+    Unavailable(zbus::Error),
+    Refused(zbus::Error),
+}
+
+#[cfg(all(target_os = "linux", feature = "system-theme"))]
+impl From<zbus::Error> for PortalError {
+    fn from(error: zbus::Error) -> Self {
+        const REFUSALS: [&str; 3] = [
+            "org.freedesktop.DBus.Error.AccessDenied",
+            "org.freedesktop.DBus.Error.InvalidArgs",
+            "org.freedesktop.portal.Error.NotAllowed",
+        ];
+        let refused = match &error {
+            zbus::Error::MethodError(name, _, _) => REFUSALS.contains(&name.as_str()),
+            zbus::Error::FDO(error) => matches!(
+                **error,
+                zbus::fdo::Error::AccessDenied(_) | zbus::fdo::Error::InvalidArgs(_)
+            ),
+            _ => false,
+        };
+        if refused {
+            Self::Refused(error)
+        } else {
+            Self::Unavailable(error)
+        }
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "system-theme"))]
+fn open_through_portal(uri: &Uri) -> Result<(), PortalError> {
     use std::collections::HashMap;
 
     use zbus::zvariant::Value;
@@ -49,17 +89,17 @@ fn open_through_portal(uri: &str) -> zbus::Result<()> {
         "org.freedesktop.portal.OpenURI",
     )?;
     let options: HashMap<&str, Value> = HashMap::new();
-    proxy.call_method("OpenURI", &("", uri, options))?;
+    proxy.call_method("OpenURI", &("", uri.as_str(), options))?;
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
-fn open(uri: &str) -> bool {
+fn open(uri: &Uri) -> bool {
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
     let wide = |text: &str| text.encode_utf16().chain([0]).collect::<Vec<u16>>();
-    let (verb, file) = (wide("open"), wide(uri));
+    let (verb, file) = (wide("open"), wide(uri.as_str()));
     // Safety: both strings are NUL-terminated UTF-16 that outlive the call, and every other pointer is null, which the API accepts.
     let result = unsafe {
         ShellExecuteW(
@@ -75,7 +115,7 @@ fn open(uri: &str) -> bool {
     let opened = result as isize > 32;
     if !opened {
         tracing::warn!(
-            uri,
+            %uri,
             code = result as isize,
             "ShellExecuteW did not open the URI"
         );
@@ -84,12 +124,12 @@ fn open(uri: &str) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-fn open(uri: &str) -> bool {
+fn open(uri: &Uri) -> bool {
     use objc2_app_kit::NSWorkspace;
     use objc2_foundation::{NSString, NSURL};
 
-    let Some(url) = NSURL::URLWithString(&NSString::from_str(uri)) else {
-        tracing::warn!(uri, "NSURL could not read the URI");
+    let Some(url) = NSURL::URLWithString(&NSString::from_str(uri.as_str())) else {
+        tracing::warn!(%uri, "NSURL could not read the URI");
         return false;
     };
     NSWorkspace::sharedWorkspace().openURL(&url)
@@ -100,13 +140,17 @@ fn open(uri: &str) -> bool {
     target_os = "macos",
     all(target_os = "linux", feature = "system-theme")
 )))]
-fn open(uri: &str) -> bool {
+fn open(uri: &Uri) -> bool {
     launch(uri)
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-fn launch(uri: &str) -> bool {
+fn launch(uri: &Uri) -> bool {
     services_core::uri::launch(uri)
-        .inspect_err(|error| tracing::warn!(uri, %error, "xdg-open did not start"))
+        .inspect_err(|error| tracing::warn!(%uri, %error, "xdg-open did not start"))
         .is_ok()
 }
+
+#[cfg(all(test, target_os = "linux", feature = "system-theme"))]
+#[path = "uri_test.rs"]
+mod tests;

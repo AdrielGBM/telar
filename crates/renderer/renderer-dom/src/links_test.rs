@@ -99,7 +99,7 @@ fn link(id: u64, destination: Destination, disabled: bool) -> Element {
 
 /// What a `to:` reads when the runtime value it built (`external(some_runtime_string)`) was rejected: still a link
 /// role, but disabled and pointed nowhere, since [`IntoDestination`](platform_core::IntoDestination) flattened
-/// its `None` rather than the box carrying a destination it does not have.
+/// the refusal rather than the box carrying a destination it does not have.
 fn link_without_a_destination(id: u64) -> Element {
     let semantics = Semantics::of(Role::Link)
         .in_state(false, None, true)

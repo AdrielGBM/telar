@@ -146,8 +146,8 @@ Notes on the less obvious cases:
 - **Web popping.** A pop becomes `history.go(-n)`, which the browser completes asynchronously. A push made
   before that traversal lands is overtaken by it.
 - **Desktop and terminal.** A dedicated flag is used instead of the first free argument, so an app that
-  takes file paths never has one read as a location. Scanning stops at `--`. There is no URI scheme
-  registration; an `https://` or `myapp:` URI is accepted as the flag's value. The saved history lives under
+  takes file paths never has one read as a location. Scanning stops at `--`. The app is not registered
+  with the system as the handler of a URI scheme; an `https://` or `myapp:` URI is accepted as the flag's value. The saved history lives under
   `history` in the app's `prefs.toml`.
 - **Android.** Declaring the intent filter (scheme, host, `autoVerify` for app links) belongs to the app's
   packaging. `NativeActivity` does not forward `onNewIntent`, so a link opened while the app is already

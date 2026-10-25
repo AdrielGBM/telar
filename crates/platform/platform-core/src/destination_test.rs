@@ -53,8 +53,12 @@ fn each_destination_is_written_as_the_address_a_target_carries() {
 }
 
 #[test]
-fn external_names_no_scheme_is_refused_without_a_panic() {
-    assert_eq!(external("no-scheme"), None);
+fn external_refuses_what_the_policy_does_not_allow_without_a_panic() {
+    assert_eq!(external("no-scheme"), Err(UriError::NotAbsolute));
+    assert_eq!(
+        external("javascript:alert(1)"),
+        Err(UriError::DeniedScheme("javascript".into()))
+    );
 }
 
 #[test]
@@ -65,4 +69,46 @@ fn an_option_of_a_destination_flattens() {
     );
     assert_eq!(None::<Destination>.into_destination(), None);
     assert_eq!(external("no-scheme").into_destination(), None);
+    assert_eq!(
+        external("https://example.com").into_destination(),
+        external("https://example.com").ok()
+    );
+}
+
+#[derive(Clone, Default)]
+struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Captured {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Captured {
+    type Writer = Self;
+
+    fn make_writer(&'a self) -> Self {
+        self.clone()
+    }
+}
+
+#[test]
+fn a_refused_external_uri_is_logged_without_raw_control_characters() {
+    let captured = Captured::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(captured.clone())
+        .with_ansi(false)
+        .finish();
+    let destination = tracing::subscriber::with_default(subscriber, || {
+        external("https://example.com/\u{1b}[31m").into_destination()
+    });
+    assert_eq!(destination, None);
+    let log = String::from_utf8(captured.0.lock().unwrap().clone()).unwrap();
+    assert!(log.contains("refused"), "{log}");
+    assert!(!log.contains('\u{1b}'), "{log:?}");
 }

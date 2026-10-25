@@ -23,6 +23,7 @@ system-opener = []
 [dependencies]
 reactive-core = { workspace = true }
 reactive-local = { workspace = true }
+semantics-core = { workspace = true }
 
 dirs = { version = "7.0.0", optional = true }
 rustc-hash = { workspace = true, optional = true }

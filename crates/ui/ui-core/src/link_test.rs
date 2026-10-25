@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use layout_core::{AvailableSpace, LayoutStyle};
+use platform_core::Uri;
 use platform_core::{
     Event, IntoDestination, Key, Location, ModifiersState, NamedKey, PointerButton, PointerSource,
     anchor, external, location_history, receive_location_history,
@@ -22,13 +23,13 @@ struct Opened {
 }
 
 impl UriOpener for Opened {
-    fn open(&self, uri: &str) -> bool {
+    fn open(&self, uri: &Uri) -> bool {
         self.uris.lock().unwrap().push(uri.to_string());
         true
     }
 
-    fn open_beside(&self, reference: &str) -> bool {
-        self.beside.lock().unwrap().push(reference.to_string());
+    fn open_beside(&self, address: &RouteAddress) -> bool {
+        self.beside.lock().unwrap().push(address.to_string());
         true
     }
 }
@@ -161,6 +162,24 @@ fn an_invalid_runtime_external_renders_a_disabled_link_that_goes_nowhere() {
     assert_eq!(element.semantics.role, Role::Link);
     assert!(element.semantics.disabled);
     assert_eq!(element.semantics.link, None);
+}
+
+#[test]
+fn a_script_uri_built_at_runtime_is_never_handed_to_the_system() {
+    let opened = opened();
+    let mut link = link_reading(|| external("javascript:alert(document.cookie)"));
+    focus::focus_next();
+    tap(&mut link);
+    assert_eq!(link.on_event(&key(NamedKey::Enter)), EventResult::Ignored);
+    assert!(
+        !opened
+            .uris
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|uri| uri.starts_with("javascript:"))
+    );
+    assert_eq!(element_of(&link, true).semantics.link, None);
 }
 
 #[test]

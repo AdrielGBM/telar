@@ -287,7 +287,9 @@ pub use platform_core::{
 };
 #[cfg(feature = "runtime")]
 pub use platform_core::{
-    CurrentKind, Destination, IntoDestination, Route, Uri, address_of, anchor, external, in_locale,
+    CurrentKind, DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, Destination, IntoDestination, Route,
+    RouteAddress, Uri, UriError, address_of, allow_uri_scheme, anchor, external, in_locale,
+    is_uri_scheme_allowed,
 };
 #[cfg(feature = "runtime")]
 pub use preferences_core::{

@@ -66,9 +66,9 @@ impl AndroidUriOpener {
 }
 
 impl services_core::UriOpener for AndroidUriOpener {
-    fn open(&self, uri: &str) -> bool {
-        start_view(&self.app, uri)
-            .inspect_err(|error| tracing::warn!(uri, %error, "no activity opened the URI"))
+    fn open(&self, uri: &platform_core::Uri) -> bool {
+        start_view(&self.app, uri.as_str())
+            .inspect_err(|error| tracing::warn!(%uri, %error, "no activity opened the URI"))
             .is_ok()
     }
 }

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use layout_core::NodeId;
-use platform_core::{Destination, ModifiersState};
+use platform_core::{Destination, ModifiersState, RouteAddress};
 use reactive_core::{SurfaceHandle, current_surface};
 use rustc_hash::FxHashMap;
 
@@ -46,16 +46,21 @@ pub fn follow(destination: &Destination) -> bool {
             let shown = platform_core::location_history().pop().unwrap_or_default();
             platform_core::push_location(shown.with_locale(locale.as_ref()))
         }
-        Destination::External(uri) => services_core::open_uri(uri.as_str()),
+        Destination::External(uri) => services_core::open_uri(uri),
     }
 }
 
 /// Goes where `destination` points in a view beside this one where the target has one — a new browser tab for a route — and in place where it does not.
 pub fn follow_beside(destination: &Destination) -> bool {
-    if matches!(destination, Destination::Route(_))
-        && services_core::open_beside(&platform_core::address_of(destination))
-    {
-        return true;
+    if matches!(destination, Destination::Route(_)) {
+        match RouteAddress::parse(&platform_core::address_of(destination)) {
+            Ok(address) => {
+                if services_core::open_beside(&address) {
+                    return true;
+                }
+            }
+            Err(error) => tracing::warn!("a route's address is not opened beside: {error}"),
+        }
     }
     follow(destination)
 }

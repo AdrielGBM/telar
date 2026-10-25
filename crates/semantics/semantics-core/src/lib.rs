@@ -21,13 +21,18 @@ mod location;
 mod modal;
 mod outline;
 mod reading;
+mod uri;
 
-pub use destination::{CurrentKind, Destination, Uri};
+pub use destination::{CurrentKind, Destination};
 pub use keys::ConsumedKeys;
 pub use location::Location;
 pub use modal::Modal;
 pub use outline::{Positioning, SetPosition};
 pub use reading::{NumericValue, Orientation, SortDirection};
+pub use uri::{
+    DEFAULT_URI_SCHEMES, DENIED_URI_SCHEMES, RouteAddress, Uri, UriError, allow_uri_scheme,
+    is_uri_scheme_allowed,
+};
 
 /// What a box is.
 ///

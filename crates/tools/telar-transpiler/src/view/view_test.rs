@@ -1510,7 +1510,7 @@ fn a_span_outside_a_text_and_a_box_inside_one_are_build_errors() {
     )
     .unwrap()
     .rust_code;
-    assert!(bad.contains("is not an absolute URI"), "{bad}");
+    assert!(bad.contains("not an absolute URI"), "{bad}");
 }
 
 /// A size or a tracking with a unit resolves where it stands: a `text` against the size it inherits and the surface it reads, a container's declaration in the tree below it.

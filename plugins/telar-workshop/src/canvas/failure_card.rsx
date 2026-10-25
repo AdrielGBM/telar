@@ -3,7 +3,7 @@ use telar::preview::PreviewEntry;
 use telar_components::{ButtonProps, ButtonVariant, button};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_theme};
 
-use super::states::{editor_uri, location};
+use super::states::{location, open_in_editor};
 use crate::state::WorkshopState;
 use crate::strings::{self, OPEN_IN_EDITOR, REMOUNT};
 
@@ -35,6 +35,6 @@ col theme:(workbench_theme()) gap:WORKBENCH_GRID pad:(WORKBENCH_GRID * 2.0) max_
     if location.is_some() || props.panicked
         row gap:WORKBENCH_GRID
             if location.is_some()
-                button label:(strings::reactive(OPEN_IN_EDITOR)) on_press:(move || { open_uri(&editor_uri(file, line)); })
+                button label:(strings::reactive(OPEN_IN_EDITOR)) on_press:(move || { open_in_editor(file, line); })
             if props.panicked
                 button label:(strings::reactive(REMOUNT)) variant:ButtonVariant::Ghost on_press:(move || state.remount())

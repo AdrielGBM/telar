@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use telar::{
     Children, Container, LayoutError, LayoutItem, LayoutStyle, ReactiveList, Rect, RwSignal, Slots,
-    box_item, open_uri,
+    box_item,
 };
 use telar_components::{
     ContextMenuProps, ItemProps, SeparatorProps, TreeContext, TreeNode, context_menu, item,
@@ -14,7 +14,7 @@ use telar_components::{
 };
 
 use super::model;
-use crate::canvas::states::editor_uri;
+use crate::canvas::states::open_in_editor;
 use crate::state::{ViewMode, WorkshopState};
 use crate::strings::{
     self, COLLAPSE_ALL, COLLAPSE_GROUP, COPY_LINK, EXPAND_ALL, EXPAND_GROUP, OPEN_IN_EDITOR,
@@ -120,7 +120,7 @@ pub(super) fn run(state: &WorkshopState, command: Command, node: Option<&TreeNod
         Command::OpenInEditor => {
             let entry = id.and_then(|id| state.entries().iter().find(|entry| *entry.id == *id));
             if let Some(entry) = entry {
-                open_uri(&editor_uri(entry.file, entry.line));
+                open_in_editor(entry.file, entry.line);
             }
         }
         Command::ExpandGroup => {
