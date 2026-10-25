@@ -71,6 +71,14 @@ impl ConsumedKeys {
         self.0 == 0
     }
 
+    pub const fn bits(self) -> u16 {
+        self.0
+    }
+
+    pub const fn from_bits(bits: u16) -> Self {
+        Self(bits)
+    }
+
     /// The set spelled as space-separated key names, the form a target that has to write it down stores it in.
     pub fn to_names(self) -> String {
         Self::NAMES

@@ -104,3 +104,7 @@ path = "src/hot_tree_test.rs"
 [[bench]]
 name = "frontend_frame"
 harness = false
+
+[[bench]]
+name = "boundary_codec"
+harness = false

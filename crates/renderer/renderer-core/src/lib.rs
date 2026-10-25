@@ -27,6 +27,7 @@ mod renderer;
 mod shadow;
 mod style;
 mod style_pool;
+pub mod wire;
 
 /// The control-point ratio that approximates a quarter circle with a cubic Bézier.
 pub const BEZIER_CIRCLE_K: f32 = 0.552_284_8;

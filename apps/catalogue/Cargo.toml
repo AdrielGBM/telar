@@ -38,3 +38,13 @@ telar-components = { workspace = true, features = ["advanced", "chrome", "overla
 telar-devtools = { workspace = true, optional = true }
 telar-navigate = { workspace = true }
 telar-workshop = { workspace = true, optional = true }
+
+[dev-dependencies]
+renderer-core = { workspace = true }
+
+criterion = { workspace = true }
+
+[[bench]]
+name = "boundary_codec"
+harness = false
+required-features = ["telar-workshop"]

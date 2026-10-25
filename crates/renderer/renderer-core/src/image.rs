@@ -100,6 +100,15 @@ impl ImageData {
         }
     }
 
+    pub(crate) fn without_pixels(id: u64, width: u32, height: u32) -> Self {
+        Self {
+            id,
+            source: ImageSource::Pixels(Vec::new()),
+            width,
+            height,
+        }
+    }
+
     /// Where the picture lives, for one that is not in the binary.
     pub fn linked_source(&self) -> Option<&Linked> {
         match &self.source {
