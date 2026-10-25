@@ -5,8 +5,8 @@ element group
     element group
       element group
         element group
-          matrix 1,0,0,1,320,288
-            text 0,0 160.8x23.52 "Account settings" size=19.6 family=sans-serif weight=600 color=#7394ffff lang=en
+          matrix 1,0,0,1,358,287
+            text 0,0 84.94x25.2 "Heading" size=21 family=sans-serif weight=600 color=#ebedf5ff lang=en
           end
         end
       end

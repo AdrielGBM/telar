@@ -17,21 +17,21 @@ element group
     element group
       element group
         matrix 1,0,0,1,32,125
-          text 0,0 77x23.52 "Confirm" size=19.6 family=sans-serif weight=600 color=#4261edff lang=en
+          text 0,0 82.34x25.2 "Confirm" size=21 family=sans-serif weight=600 color=#171a2eff lang=en
         end
       end
       element button
-        rect 173,129 35x16 border=2 border-color=#4261edff
+        rect 173,130 35x16 border=2 border-color=#4261edff
         element group
-          matrix 1,0,0,1,173,129
+          matrix 1,0,0,1,173,130
             text 0,0 35x15.62 "Close" size=13.02 family=sans-serif weight=400 color=#171a2eff lang=en
           end
         end
       end
     end
     element scrollarea
-      clip 32,161 176x34
-        matrix 1,0,0,1,32,161
+      clip 32,162 176x33
+        matrix 1,0,0,1,32,162
           element group
             element group
               matrix 1,0,0,1,0,0

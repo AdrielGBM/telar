@@ -17,21 +17,21 @@ element group
     element group
       element group
         matrix 1,0,0,1,81,32
-          text 0,0 59.39x23.52 "Terms" size=19.6 family=sans-serif weight=600 color=#7394ffff lang=en
+          text 0,0 63.64x25.2 "Terms" size=21 family=sans-serif weight=600 color=#ebedf5ff lang=en
         end
       end
       element button
-        rect 365,36 35x16 border=2 border-color=#7394ffff
+        rect 365,37 35x15 border=2 border-color=#7394ffff
         element group
-          matrix 1,0,0,1,365,36
+          matrix 1,0,0,1,365,37
             text 0,0 35x15.62 "Close" size=13.02 family=sans-serif weight=400 color=#ebedf5ff lang=en
           end
         end
       end
     end
     element scrollarea
-      clip 81,68 319x260
-        matrix 1,0,0,1,81,68
+      clip 81,69 319x259
+        matrix 1,0,0,1,81,69
           element group
             element group
               matrix 1,0,0,1,0,0

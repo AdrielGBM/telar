@@ -1,0 +1,42 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            matrix 1,0,0,1,334,218
+              text 0,0 132.13x33.6 "Heading 1" size=28 family=sans-serif weight=600 color=#171a2eff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,334,260
+              text 0,0 132.13x25.2 "Heading 2" size=21 family=sans-serif weight=600 color=#171a2eff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,334,293
+              text 0,0 132.13x21 "Heading 3" size=17.5 family=sans-serif weight=600 color=#171a2eff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,334,322
+              text 0,0 132.13x16.8 "Heading 4" size=14 family=sans-serif weight=600 color=#171a2eff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,334,347
+              text 0,0 132.13x14.7 "Heading 5" size=12.25 family=sans-serif weight=600 color=#171a2eff lang=en
+            end
+          end
+          element group
+            matrix 1,0,0,1,334,369
+              text 0,0 132.13x12.6 "Heading 6" size=10.5 family=sans-serif weight=600 color=#171a2eff lang=en
+            end
+          end
+        end
+      end
+    end
+  end
+end

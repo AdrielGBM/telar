@@ -23,11 +23,11 @@ end
 element group
   rect 0,0 800x600 fill=#00000080
   element dialog
-    rect 232,256 336x88 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
+    rect 232,255 336x90 fill=#ffffffff border=1 border-color=#dbdeedff radius=16
     element group
       element group
-        matrix 1,0,0,1,248,272
-          text 0,0 77x23.52 "Confirm" size=19.6 family=sans-serif weight=600 color=#4261edff lang=en
+        matrix 1,0,0,1,248,271
+          text 0,0 82.34x25.2 "Confirm" size=21 family=sans-serif weight=600 color=#171a2eff lang=en
         end
       end
       element button
