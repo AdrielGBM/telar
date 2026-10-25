@@ -15,6 +15,10 @@ pub(crate) use empty::with_empty_state;
 #[cfg(any(feature = "advanced", feature = "workbench"))]
 pub(crate) use paint::{RowState, cursor_row_paint};
 
+/// How far past the view's edge a row may end and still count as shown whole when paging: rows are drawn snapped to whole pixels, and the offsets a page is worked out from are sums of fractional heights, so a run of rows that exactly fills the view would otherwise fit or not by rounding noise.
+#[cfg(any(feature = "advanced", feature = "workbench"))]
+const WHOLE_SLACK: f32 = 0.5;
+
 /// The presented control of each row that is built, by the key the list names its rows by: what a cursor resting on a row names to a reader, and nothing for a row scrolled out of the built window.
 pub(crate) struct BuiltRows<K: 'static>(RwSignal<HashMap<K, FocusId>>);
 
@@ -183,7 +187,7 @@ impl RowPlaces {
         if forward {
             let reach = from.map_or(self.header, |at| self.top(at) + self.height_of(at)) + view;
             let at = self.row_at(reach, count);
-            let at = match self.top(at) + self.height_of(at) > reach {
+            let at = match self.top(at) + self.height_of(at) > reach + WHOLE_SLACK {
                 true => at.checked_sub(1),
                 false => Some(at),
             };
@@ -196,7 +200,7 @@ impl RowPlaces {
             return (self.header <= 0.0).then_some(0);
         }
         let at = self.row_at(reach, count);
-        let at = match self.top(at) < reach {
+        let at = match self.top(at) < reach - WHOLE_SLACK {
             true => at + 1,
             false => at,
         };
