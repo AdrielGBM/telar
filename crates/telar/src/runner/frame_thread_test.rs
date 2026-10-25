@@ -26,6 +26,14 @@ struct StubBackend {
     drawn_at_each_forget: Arc<std::sync::Mutex<Vec<u32>>>,
 }
 
+fn eventually(what: &str, done: impl Fn() -> bool) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !done() {
+        assert!(Instant::now() < deadline, "{what} never happened");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
 impl RenderBackend for StubBackend {
     fn applies_scale_factor(&self) -> bool {
         self.scales_itself
@@ -302,7 +310,8 @@ fn an_idle_render_thread_releases_its_buffers_before_it_sweeps_and_each_once() {
 
     tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
     seen.recv_timeout(Duration::from_secs(5)).unwrap();
-    std::thread::sleep(Duration::from_millis(400));
+    eventually("the idle sweep", || sweeps.load(Ordering::SeqCst) == 1);
+    std::thread::sleep(Duration::from_millis(300));
     assert_eq!(
         *releases.lock().unwrap(),
         [0],
@@ -312,7 +321,9 @@ fn an_idle_render_thread_releases_its_buffers_before_it_sweeps_and_each_once() {
 
     tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
     seen.recv_timeout(Duration::from_secs(5)).unwrap();
-    std::thread::sleep(Duration::from_millis(60));
+    eventually("the second idle release", || {
+        releases.lock().unwrap().len() == 2
+    });
     assert_eq!(
         *releases.lock().unwrap(),
         [0, 1],
