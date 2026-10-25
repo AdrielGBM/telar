@@ -256,7 +256,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
       - uses: ./.github/actions/rust
-      - run: cargo test --workspace --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
+      # Every failing crate in one run: a platform-only failure is otherwise found one crate per round, since nothing past the first failing test binary runs.
+      - run: cargo test --no-fail-fast --workspace --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
       # No workspace member enables `headless` or `dev`, so the offscreen rasteriser and the `cargo telar dev` host compile nowhere else.
       - run: cargo test -p telar --features headless,dev
       # The workspace run has `telar/previews` on through `telar`'s dev-dependencies; built alone, the fixture proves Rust previews compile to nothing without it.
