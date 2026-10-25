@@ -48,7 +48,7 @@ fn the_keystore_path_is_resolved_against_the_workspace_root() {
     std::fs::write(
         dir.path().join(".env"),
         format!(
-            "CARGO_APK_RELEASE_KEYSTORE=release.keystore\nCARGO_APK_DEV_KEYSTORE={}\n",
+            "CARGO_APK_RELEASE_KEYSTORE=release.keystore\nCARGO_APK_DEV_KEYSTORE='{}'\n",
             absolute.display()
         ),
     )
