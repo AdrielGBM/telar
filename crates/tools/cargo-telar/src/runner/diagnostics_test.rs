@@ -546,3 +546,16 @@ fn a_prelude_path_that_does_not_resolve_is_reported_on_its_telar_toml_line() {
     );
     assert!(points_at(&text, "telar.toml:2"), "{text}");
 }
+
+/// The map `cargo telar check` projects through is the transpiler's, beside the build file; the analyzer keeps its live map in memory, so nothing else on disk is consulted.
+#[test]
+fn origin_reads_the_transpilers_map_beside_the_build_file() {
+    let built = SourceMap::new(vec![Some(0), Some(1)], Vec::new());
+    let root = fake_package("origin_map", "a\nb\n", "x\ny\n", built.clone());
+
+    let origin = Origin::read(&root.join(".telar/build-hot/home.rs")).unwrap();
+
+    assert_eq!(origin.map.to_json(), built.to_json());
+    assert!(!root.join(".telar/live").exists());
+    let _ = std::fs::remove_dir_all(&root);
+}

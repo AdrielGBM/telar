@@ -1,6 +1,6 @@
 //! The transpiled view of the buffer being typed: computed on every successful parse, handed to the embedded analyzer in memory, and left on disk only where something other than the analyzer has to read it.
 //!
-//! What is live is the overlay ([`generated_target`] into `ra::vfs`), not the file. The generated `.rs` is written once, to give a newly created `.rsx` something the loaded workspace graph can carry, and never rewritten — `.telar/build/` is what a build compiles, and a second writer putting unsaved text there is how a build comes to compile something nobody saved. The `.rs.map` beside it is rewritten every time, because reverse-mapping a position has to follow the buffer and no build reads it.
+//! What is live is the overlay ([`generated_target`] into `ra::vfs`), not the file. The generated `.rs` is written once, to give a newly created `.rsx` something the loaded workspace graph can carry, and never rewritten — `.telar/build/` is what a build compiles, and a second writer putting unsaved text there is how a build comes to compile something nobody saved. The map follows the buffer too, because reverse-mapping a position has to, but only in the analyzer's memory ([`crate::store::Store`]): the `.rs.map` beside the build file is the transpiler's alone, and is what `cargo telar check` reads.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -117,22 +117,19 @@ fn bake_if_unanswered(package_dir: &Path, document: &RsxDocument) {
     telar_baker::bake_package(package_dir, &producer, &version);
 }
 
-/// Bakes what the buffer references if the artifact cannot answer for it, then leaves the map beside the generated file — and the file itself if nothing has produced one yet. `theme_type` matches the analyzer's project discovery. A no-op when the file is outside a crate's `src/` or transpilation fails, so IntelliSense keeps working against the last parseable state.
+/// Bakes what the buffer references if the artifact cannot answer for it, then leaves the generated file if nothing has produced one yet, and returns the build path with the buffer's map. `theme_type` matches the analyzer's project discovery. A no-op when the file is outside a crate's `src/` or transpilation fails, so IntelliSense keeps working against the last parseable state.
 pub fn sync_build_file(
     rsx_path: &Path,
     source: &str,
     document: &RsxDocument,
     theme_type: Option<&str>,
-) {
+) -> Option<(PathBuf, SourceMap)> {
     if let Some(root) = crate_root(rsx_path) {
         bake_if_unanswered(&root, document);
     }
-    let Some(GeneratedTarget {
+    let GeneratedTarget {
         path, code, map, ..
-    }) = generated_target(rsx_path, source, theme_type)
-    else {
-        return;
-    };
+    } = generated_target(rsx_path, source, theme_type)?;
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -140,18 +137,25 @@ pub fn sync_build_file(
     if !path.exists() {
         let _ = telar_project::write_if_changed_atomic(&path, &code);
     }
-    // The map does track the live buffer: it is what turns a position in the overlaid Rust back into one in the `.rsx` being typed, and it is not what the build artifact attests to.
-    let _ = telar_project::write_if_changed_atomic(&path.with_extension("rs.map"), &map.to_json());
+    Some((path, map))
 }
 
 /// Whether `path` is generated output, which the backend has to know before it reverse-maps a definition target onto a `.rsx`.
 pub use telar_project::is_generated_output as is_generated_build_file;
 
-/// The `.rsx` a generated file came from, plus the source map read from its sibling `.rs.map`. `None` outside a build directory, or without a readable map.
-pub fn rsx_source_and_map(build_path: &Path) -> Option<(PathBuf, SourceMap)> {
+/// The `.rsx` a generated file came from, plus its source map: `live`, the map of a buffer the editor has open, else the transpiler's beside the build file. `None` outside a build directory, or without a readable map.
+pub fn rsx_source_and_map(
+    build_path: &Path,
+    live: Option<&SourceMap>,
+) -> Option<(PathBuf, SourceMap)> {
     let source = telar_project::source_for_generated(build_path)?;
-    let map_json = std::fs::read_to_string(build_path.with_extension("rs.map")).ok()?;
-    Some((source, SourceMap::from_json(&map_json)?))
+    let map = match live {
+        Some(live) => live.clone(),
+        None => SourceMap::from_json(
+            &std::fs::read_to_string(build_path.with_extension("rs.map")).ok()?,
+        )?,
+    };
+    Some((source, map))
 }
 
 #[cfg(test)]

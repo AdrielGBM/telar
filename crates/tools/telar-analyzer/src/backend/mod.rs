@@ -706,7 +706,7 @@ impl Backend {
                 |a, path, text, offset| async move { a.definition(&path, &text, offset).await },
             )
             .await?;
-        let locations = map_definition_targets(targets);
+        let locations = map_definition_targets(targets, &*self.store.read().await);
         if locations.is_empty() {
             return None;
         }

@@ -286,17 +286,7 @@ function projectGeneratedDiagnostics(
 ): void {
   const source = generatedToSource(genUri.fsPath);
   if (!source) return;
-
-  // While the `.rsx` has unsaved edits, the `cargo check` errors are still pinned to the last *saved*
-  // generated code, but `build_sync` already rewrote the `.rs.map` for the live buffer — re-projecting
-  // the stale errors through the now-mismatched map jumps the markers to the wrong line. Freeze instead:
-  // keep the existing markers (VS Code shifts them as the user types) and let the next save's flycheck
-  // refresh them against a matching map.
   const rsxUri = vscode.Uri.file(source);
-  const openDoc = vscode.workspace.textDocuments.find(
-    (d) => d.uri.fsPath === rsxUri.fsPath,
-  );
-  if (openDoc?.isDirty) return;
 
   const lineMap = readLineMap(genUri.fsPath);
   if (!lineMap) return;

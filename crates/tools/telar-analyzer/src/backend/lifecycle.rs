@@ -118,15 +118,20 @@ impl Backend {
             let semantic = semantic_diagnostics(&parsed.document, catalog_view.as_ref(), &names);
             // A new `.rsx` needs something on disk for the crate graph to load; the live buffer itself travels as an overlay, never through the build directory.
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
+            let mut live_map = None;
             if let Some(rsx_path) = file_path.as_deref() {
-                crate::build_sync::sync_build_file(
+                live_map = crate::build_sync::sync_build_file(
                     rsx_path,
                     &parsed.source,
                     &parsed.document,
                     theme.as_deref(),
                 );
             }
-            (semantic, parsed.source.clone(), theme)
+            let source = parsed.source.clone();
+            if let Some((build_path, map)) = live_map {
+                store.set_live_map(uri.clone(), build_path, map);
+            }
+            (semantic, source, theme)
         };
 
         // So `workspace/symbol` and component references see in-flight edits. A no-op until the index is built.

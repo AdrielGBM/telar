@@ -2,8 +2,10 @@
 
 use lsp_types::Uri;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use telar_diagnostics::Diagnostic;
 use telar_parser::{RsxDocument, parse};
+use telar_transpiler::SourceMap;
 
 /// The last version of a document that parsed, kept so completion survives a mid-edit buffer.
 pub struct ParsedDocument {
@@ -16,6 +18,7 @@ pub struct Store {
     docs: HashMap<Uri, ParsedDocument>,
     // The current buffer text, updated on every edit even when it fails to parse. `docs` only holds the last good parse (so completion/hover keep working mid-edit), but formatting must operate on the live text — otherwise it could reformat a stale version and clobber the user's edits.
     latest_source: HashMap<Uri, String>,
+    live_maps: HashMap<PathBuf, (Uri, SourceMap)>,
 }
 
 impl Store {
@@ -23,12 +26,23 @@ impl Store {
         Self {
             docs: HashMap::new(),
             latest_source: HashMap::new(),
+            live_maps: HashMap::new(),
         }
     }
 
     pub fn close(&mut self, uri: &Uri) {
         self.docs.remove(uri);
         self.latest_source.remove(uri);
+        self.live_maps.retain(|_, (owner, _)| owner != uri);
+    }
+
+    pub fn set_live_map(&mut self, uri: Uri, build_path: PathBuf, map: SourceMap) {
+        self.live_maps.insert(build_path, (uri, map));
+    }
+
+    /// The source map of the open buffer that generated `build_path`.
+    pub fn live_map(&self, build_path: &std::path::Path) -> Option<&SourceMap> {
+        self.live_maps.get(build_path).map(|(_, map)| map)
     }
 
     pub fn get(&self, uri: &Uri) -> Option<&ParsedDocument> {
@@ -73,3 +87,7 @@ impl Store {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "store_test.rs"]
+mod tests;

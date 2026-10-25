@@ -3,16 +3,22 @@
 use lsp_types::*;
 
 use crate::ra::{DefinitionTarget, RefTarget};
+use crate::store::Store;
 use crate::text::offset_to_position;
 use telar_transpiler::{RsxSpan, SourceMap};
 
 /// Maps rust-analyzer definition targets to `.rsx` `Location`s, handling three cases per target: (1) the generated `.rs` for *this* `.rsx` and (2) *another* component's `.telar/build/*.rs` are both reverse-mapped through that build file's line map (`generated line → .rsx line`) onto its `.rsx` source — a generated line with no originating `.rsx` line is dropped; (3) any other path (a dependency, std, or a hand-written `.rs`) is returned verbatim in its own coordinates.
-pub(crate) fn map_definition_targets(targets: Vec<DefinitionTarget>) -> Vec<Location> {
+pub(crate) fn map_definition_targets(
+    targets: Vec<DefinitionTarget>,
+    store: &Store,
+) -> Vec<Location> {
     let mut locations = Vec::new();
     for target in targets {
         if crate::build_sync::is_generated_build_file(&target.path) {
-            // Cases 1 & 2: a generated build file → walk back to its `.rsx` via the sibling `.rs.map`.
-            let Some((rsx_path, map)) = crate::build_sync::rsx_source_and_map(&target.path) else {
+            // Cases 1 & 2: a generated build file → walk back to its `.rsx` through the open buffer's live map, else the transpiler's `.rs.map` beside it.
+            let Some((rsx_path, map)) =
+                crate::build_sync::rsx_source_and_map(&target.path, store.live_map(&target.path))
+            else {
                 continue;
             };
             let Some(Some(rsx_line)) = map.lines.get(target.range.start.line as usize) else {

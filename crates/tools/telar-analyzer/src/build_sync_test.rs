@@ -110,52 +110,51 @@ fn an_asset_edited_since_the_bake_is_rebaked() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// The single-writer rule `.telar/build/` rests on: a build compiles what is on disk, and the editor typing into a buffer nobody has saved must not put that text where a build will find it. The overlay is what carries the live view; the file is only bootstrapped once so a newly created `.rsx` has something the workspace graph can load.
+/// The single-writer rule for the map `cargo telar check` reads: the transpiler's `.rs.map` pins diagnostics to the Rust it compiled, so a keystroke must not replace it, and the buffer's own map is returned for the analyzer to keep in memory rather than written anywhere.
 #[test]
-fn an_existing_generated_file_is_never_rewritten() {
-    let root = unbaked_crate("single_writer");
+fn an_open_buffers_map_is_returned_and_never_written_to_disk() {
+    let root = unbaked_crate("live_map");
     let rsx = root.join("src/view.rsx");
     let built = "[view]\ntext \"what a build produced\"\n";
     std::fs::write(&rsx, built).unwrap();
     sync_build_file(&rsx, built, &telar_parser::parse(built).unwrap(), None);
-    let on_disk = std::fs::read_to_string(root.join(".telar/build/view.rs")).unwrap();
+    let transpilers = root.join(".telar/build/view.rs.map");
+    std::fs::write(&transpilers, "what the transpiler wrote").unwrap();
 
-    let unsaved = "[view]\ntext \"what the editor is showing\"\n";
-    sync_build_file(&rsx, unsaved, &telar_parser::parse(unsaved).unwrap(), None);
+    let unsaved = "[view]\ntext \"what the editor is showing\"\n\ntext \"more\"\n";
+    let (build_path, live) =
+        sync_build_file(&rsx, unsaved, &telar_parser::parse(unsaved).unwrap(), None).unwrap();
 
+    assert_eq!(build_path, root.join(".telar/build/view.rs"));
     assert_eq!(
-        std::fs::read_to_string(root.join(".telar/build/view.rs")).unwrap(),
-        on_disk,
-        "an unsaved buffer reached the file a build compiles"
+        std::fs::read_to_string(&transpilers).unwrap(),
+        "what the transpiler wrote"
     );
-    assert!(
-        generated_target(&rsx, unsaved, None)
-            .unwrap()
-            .code
-            .contains("what the editor is showing"),
-        "the overlay still has to carry the live view"
-    );
+    assert!(!root.join(".telar/live").exists());
+    let expected = generated_target(&rsx, unsaved, None).unwrap().map.to_json();
+    assert_eq!(live.to_json(), expected);
+    let (source, map) = rsx_source_and_map(&build_path, Some(&live)).unwrap();
+    assert_eq!(source, rsx);
+    assert_eq!(map.to_json(), expected);
 
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// The mirror reads `[telar] prelude` the way the CLI does, so the buffer being typed resolves the same tags the build will.
+/// A component with no open buffer has no live map; reverse-mapping it falls back to the transpiler's, so a map left stale by a closed buffer is never consulted.
 #[test]
-fn the_mirror_imports_the_declared_prelude() {
-    let root = unbaked_crate("prelude");
-    std::fs::write(
-        root.join("telar.toml"),
-        "[telar]\nprelude = [\"telar-components\"]\n",
-    )
-    .unwrap();
-    let source = "[view]\ntext \"a\"\n";
+fn a_component_never_opened_maps_through_the_transpilers_map() {
+    let root = unbaked_crate("fallback_map");
     let rsx = root.join("src/view.rsx");
+    let source = "[view]\ntext \"a\"\n";
     std::fs::write(&rsx, source).unwrap();
+    let map = generated_target(&rsx, source, None).unwrap().map;
+    let build = root.join(".telar/build");
+    std::fs::create_dir_all(&build).unwrap();
+    std::fs::write(build.join("view.rs.map"), map.to_json()).unwrap();
 
-    let mirrored = generated_target(&rsx, source, None).unwrap().code;
+    let (found, read) = rsx_source_and_map(&build.join("view.rs"), None).unwrap();
+
+    assert_eq!(found, rsx);
+    assert_eq!(read.to_json(), map.to_json());
     let _ = std::fs::remove_dir_all(&root);
-    assert!(
-        mirrored.contains("#[allow(unused_imports)] use telar_components::*;\n"),
-        "{mirrored}"
-    );
 }
