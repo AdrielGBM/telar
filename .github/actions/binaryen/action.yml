@@ -1,0 +1,14 @@
+name: binaryen
+description: Installs `wasm-opt` at the release the flake's devShell provides.
+
+runs:
+  using: composite
+  steps:
+    # Pinned because `wasm-opt`'s output size is part of what the size budget measures, and another optimiser release can move it with no source change.
+    - run: |
+        mkdir -p "$HOME/.local"
+        curl -fsSL -o "$RUNNER_TEMP/binaryen.tar.gz" https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-x86_64-linux.tar.gz
+        echo "195ddc94f9bc89f45abdabb0b9eea86023d727ba90eac8b35b80f2544fc30572  $RUNNER_TEMP/binaryen.tar.gz" | sha256sum --check --strict
+        tar -xz --strip-components=1 -C "$HOME/.local" -f "$RUNNER_TEMP/binaryen.tar.gz"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      shell: bash

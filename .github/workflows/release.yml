@@ -21,19 +21,19 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04
             binary: telar-analyzer
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-15
             binary: telar-analyzer
           # Cross-compiled from the Apple Silicon runner rather than a native Intel one: GitHub retired
           # macos-13, so that label now queues until the 24h limit and takes the whole release with it.
           # Apple's SDK targets both architectures and this crate pulls no native dependencies.
           - target: x86_64-apple-darwin
-            os: macos-latest
+            os: macos-15
             binary: telar-analyzer
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: windows-2025
             binary: telar-analyzer.exe
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -56,7 +56,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: [ci, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -89,7 +89,7 @@ jobs:
   publish-crates:
     name: Publish crates to crates.io
     needs: [ci, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: crates-io
     env:
       HAS_CARGO_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
@@ -116,7 +116,7 @@ jobs:
   publish-vsix:
     name: Publish VSIX (${{ matrix.vsce-target }})
     needs: [ci, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       HAS_OVSX_PAT: ${{ secrets.OVSX_PAT != '' }}
     strategy:

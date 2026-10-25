@@ -1,0 +1,30 @@
+name: Rust
+description: Installs the toolchain, restores cargo's cache and, unless told not to, transpiles the workspace's `.rsx` so the apps compile.
+
+inputs:
+  toolchain:
+    description: Toolchain to install
+    default: stable
+  targets:
+    description: Extra targets, comma-separated
+    default: ""
+  components:
+    description: Extra components, comma-separated
+    default: ""
+  transpile:
+    description: Run `cargo telar transpile` once the toolchain is ready
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        targets: ${{ inputs.targets }}
+        components: ${{ inputs.components }}
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+    # rustc no longer transpiles a `.rsx`, and the macro emits an error naming this command instead; it bakes on the way through, so a `src:"…"` asset resolves against an artifact that is already there.
+    - if: inputs.transpile == 'true'
+      run: cargo run -q -p cargo-telar -- transpile
+      shell: bash

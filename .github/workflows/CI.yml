@@ -1,201 +1,184 @@
 name: CI
 
+# Every job runs on every trigger: the repository is public, so GitHub's runners cost nothing here and nothing is held back for a manual run.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
   workflow_call:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
         with:
           components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - run: cargo fmt --all -- --check
-      # Every job that compiles `apps/sandbox` runs this first: rustc no longer transpiles a `.rsx`, and the
-      # macro emits an error naming this command instead. It bakes on the way through, so a `src:"…"` asset
-      # still resolves against an artifact that is there before anything reads it.
-      - run: cargo run -q -p cargo-telar -- transpile
       - run: .github/scripts/check-layering.sh
       - name: No outside tool names
         run: "! git grep -il 'story[b]ook' -- ':!docs/plans'"
-      # Not `-D warnings`: the tree carries 247 of them today. This catches the `deny`-level lints, which is
-      # what went unnoticed for two days when a `never_loop` in `telar-macros` stopped clippy reaching
-      # anything downstream of it.
-      - run: cargo clippy --workspace --all-targets --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
+      - run: cargo clippy --workspace --all-targets --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics -- -D warnings
 
+  # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off in `test`, which would leave `apps/sandbox/src/hot_tree_test.rs`, the only guard for the split-runtime regression, never type-checked.
   check-desktop:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off
-      # in the `test` job, which leaves `apps/sandbox/src/hot_tree_test.rs` — the only guard for the
-      # split-runtime regression — never even type-checked.
-      - run: cargo run -q -p cargo-telar -- transpile
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
       - run: cargo check --workspace --all-features --all-targets --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
 
   msrv:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # Must match `rust-version` in [workspace.package].
-      - uses: dtolnay/rust-toolchain@035fceb3c12fb0c6a9461b52775e16473133e591 # 1.95.0
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - run: cargo run -q -p cargo-telar -- transpile
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
+        with:
+          # Must match `rust-version` in [workspace.package].
+          toolchain: 1.95.0
       - run: cargo check --workspace --all-features --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
 
-  # The IDE server embeds rust-analyzer: 133 crates every other job here excludes, because no application links them. It still has to compile — a rename in `telar-transpiler` breaks the language server — so it compiles once, alone.
+  # The IDE server embeds rust-analyzer, 133 crates no application links and every other job excludes; a rename in `telar-transpiler` still breaks it, so it compiles once, alone.
   analyzer:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - run: cargo check -p telar-analyzer -p telar-diagnostics --all-targets
-      - run: cargo clippy -p telar-analyzer -p telar-diagnostics --all-targets
+          transpile: "false"
+      - run: cargo clippy -p telar-analyzer -p telar-diagnostics --all-targets -- -D warnings
       - run: cargo test -p telar-analyzer -p telar-diagnostics
 
-  # Every other job builds the workspace as one unit, where feature unification hands a crate flags its own manifest never asked for. `cargo publish` verifies each package alone, so a crate that only ever compiled with a sibling's features is unbuildable the moment it leaves the tree — and nothing said so until a release had put 36 of 42 crates on a registry that cannot take them back.
-  #
-  # Never `--no-verify`: skipping the build skips the whole of what this job is for. And deliberately a bare runner, matching the one that publishes — a crate that links a system library at build time has to fail here rather than there.
+  # `cargo publish` verifies each package alone, without the features its workspace siblings unify onto it, so this is the only job that sees a crate the way the registry will; never `--no-verify`, and a bare runner like the one that publishes, so a crate linking a system library fails here rather than there.
   publishable:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      # One cargo call for every publishable crate, because cargo verifies each package of a call against the other packages of that call and takes every other dependency from the registry: split in two, a plain crate depending on a `[telar] library` (or a library depending on a plain crate) is built against a registry version that is older than the tree or absent. `cargo telar publish --workspace` first transpiles and bakes, fails if the files cargo would ship leave part of a library's artifact out or no longer answer for its sources, and checks that every crate's packaged sources are committed; then each crate is verified once, against the in-tree versions of the others, plain or library.
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
+        with:
+          transpile: "false"
+      # One call for every crate, because cargo verifies each package against the others of the same call and takes everything else from the registry; it transpiles, bakes and checks the packaged sources are committed first.
       - run: cargo run -q -p cargo-telar -- publish --workspace --dry-run
 
   check-android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
         with:
           targets: aarch64-linux-android
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1
         id: setup-ndk
         with:
           ndk-version: r27c
-      - run: cargo run -q -p cargo-telar -- transpile
-      # `sandbox`'s own default is `desktop`, so without this the job cross-compiled a winit build to Android and never touched the frontend it is named after.
+      # `sandbox` defaults to `desktop`, so without these features this would cross-compile a winit build and never touch the Android frontend.
       - run: cargo check -p sandbox --no-default-features --features sandbox/android -p telar-platform-android --target aarch64-linux-android --lib
         env:
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
 
+  # The only job that compiles the document renderer, the WebGPU one and the web platform at all: they are `cfg`'d to nothing off wasm.
   check-web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      # The only leg that compiles the document renderer, the WebGPU one and the web platform at all: they are
-      # `cfg`'d to nothing off wasm, so every other check here passes with them broken.
-      - run: cargo run -q -p cargo-telar -- transpile
       - run: cargo check -p sandbox --lib --target wasm32-unknown-unknown --features telar/web
 
-  # The document renderer is the one backend that positions nothing itself: CSS does, from what each box asked
-  # layout for. Nothing but a browser can say whether that lands where Taffy computed, so this leg is where the
-  # claim is actually checked — see `crates/renderer/renderer-dom/src/layout_parity_test.rs`.
+  # Only a browser can say whether CSS lands boxes where Taffy computed them, so this is where that claim is checked; see `crates/renderer/renderer-dom/src/layout_parity_test.rs`.
   parity-web-dom:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      # The runner that serves the test module to a browser. Must be the release the pinned `wasm-bindgen`
-      # crate generates glue for, which is why the version is written out here rather than resolved.
-      - name: Install wasm-bindgen-test-runner
-        run: |
-          curl -fsSL -o "$RUNNER_TEMP/wasm-bindgen.tar.gz" https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz
-          echo "61d4a7dc85acfa0d2354ccc0b8361928c7e52a746d17f28ebaa795ed3dc1614a  $RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check --strict
-          tar -xz --strip-components=1 -C ~/.cargo/bin -f "$RUNNER_TEMP/wasm-bindgen.tar.gz"
-      # The same axe-core release the flake's devShell pins; the audits `include_str!` it at compile time.
-      - name: Fetch axe-core
-        run: |
-          mkdir -p "$RUNNER_TEMP/axe-core"
-          curl -fsSL https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz \
-            | tar -xz --strip-components=1 -C "$RUNNER_TEMP/axe-core" package/axe.min.js
-          echo "TELAR_AXE_CORE=$RUNNER_TEMP/axe-core/axe.min.js" >> "$GITHUB_ENV"
-      - name: Taffy against the browser
-        # Chrome and its driver are already on the runner; `CHROMEWEBDRIVER` is where the image puts the latter.
+      - uses: ./.github/actions/wasm-bindgen
+      - uses: ./.github/actions/axe-core
+      - name: Taffy against Chrome
+        # Chrome and its driver come with the runner image, which puts the driver at `CHROMEWEBDRIVER`.
         run: |
           export CHROMEDRIVER="$CHROMEWEBDRIVER/chromedriver"
           cargo test -p telar-renderer-dom --target wasm32-unknown-unknown
           cargo test -p telar-components --target wasm32-unknown-unknown --test audit
       - name: Page Down against Firefox
-        # Page Down can only be driven from wasm through Firefox's `scrollByPages`, so Chrome skips that test and this run enforces it. The runner prefers `CHROMEDRIVER` when both are set, so only `GECKODRIVER` is exported here.
+        # Page Down can only be driven from wasm through Firefox's `scrollByPages`; the test runner prefers Chrome when both drivers are set, so only `GECKODRIVER` is exported.
         run: |
           export GECKODRIVER="$GECKOWEBDRIVER/geckodriver"
           cargo test -p telar-renderer-dom --target wasm32-unknown-unknown --test arrival_margin
 
-  # `apps/landing` is what ships to production, and the module a visitor downloads is what `--profile web`
-  # plus `wasm-opt` produce, not what `cargo check` sees. This is the only leg that builds it release-mode
-  # and holds its compressed size to a budget — see `.github/size-budget/landing-web-dom.json` and
-  # `docs/build-tuning.md` for what the gate measures and how to move it on purpose.
+  # `apps/landing` ships to production as what `--profile web` plus `wasm-opt` produce, so this job builds it that way and holds its compressed size to `.github/size-budget/landing-web-dom.json`; see `docs/build-tuning.md`.
   web-size-budget:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      # Pinned to the `wasm-bindgen` crate's own version (Cargo.lock), same as `parity-web-dom`: the glue
-      # `wasm-bindgen` writes is rejected by a mismatched runtime, and a size gate needs the binary that
-      # ships, not whatever a floating install would resolve to.
-      - name: Install wasm-bindgen-cli
-        run: |
-          curl -fsSL -o "$RUNNER_TEMP/wasm-bindgen.tar.gz" https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz
-          echo "61d4a7dc85acfa0d2354ccc0b8361928c7e52a746d17f28ebaa795ed3dc1614a  $RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check --strict
-          tar -xz --strip-components=1 -C ~/.cargo/bin -f "$RUNNER_TEMP/wasm-bindgen.tar.gz"
-      # Pinned to the version the flake's devShell provides, for the same reason: `wasm-opt`'s output size
-      # is part of what this gate measures, and a different optimiser version can shift it without the
-      # source changing at all.
-      - name: Install binaryen
-        run: |
-          mkdir -p "$HOME/.local"
-          curl -fsSL -o "$RUNNER_TEMP/binaryen.tar.gz" https://github.com/WebAssembly/binaryen/releases/download/version_132/binaryen-version_132-x86_64-linux.tar.gz
-          echo "195ddc94f9bc89f45abdabb0b9eea86023d727ba90eac8b35b80f2544fc30572  $RUNNER_TEMP/binaryen.tar.gz" | sha256sum --check --strict
-          tar -xz --strip-components=1 -C "$HOME/.local" -f "$RUNNER_TEMP/binaryen.tar.gz"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          transpile: "false"
+      - uses: ./.github/actions/wasm-bindgen
+      - uses: ./.github/actions/binaryen
       - run: .github/scripts/check-web-size.sh
 
-  # `cargo telar new` is the first command a new user runs, and nothing else in this file compiles what it
-  # writes: the `.rsx`, the theme derive and the app root live as string constants inside `cargo-telar`,
-  # where a rename in the facade breaks them with nothing to notice. The generated projects are patched onto
-  # this checkout rather than the published crate, so a break lands here instead of on the next person.
+  # `cargo telar new` is the first command a new user runs, and what it writes lives as string constants inside `cargo-telar`, so nothing else compiles it; the generated projects are patched onto this checkout so a break lands here.
   scaffold:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      # The generated projects compile the plugins from this checkout by path, where nothing transpiles their `.rsx` or bakes their `icon!` ids: the workshop's `.telar/` has to be on disk before they do.
-      - run: cargo run -q -p cargo-telar -- transpile
+        with:
+          persist-credentials: false
+      # The generated projects compile the plugins from this checkout by path, so their `.rsx` and `icon!` ids have to be transpiled and baked first.
+      - uses: ./.github/actions/rust
       - name: Generate a project per target, compile the two that need no extra toolchain
         run: |
-          # Outside the repo so a generated project cannot pick up the workspace's lockfile, and shared
-          # between them so the second compile reuses the first one's dependencies. Scoped to the scaffold's
-          # own builds rather than exported, or building `cargo-telar` itself would leave the cached dir too.
+          # Outside the repo so a generated project cannot pick up the workspace's lockfile, and shared so the second compile reuses the first one's dependencies.
           scaffold_target="$RUNNER_TEMP/scaffold-target"
           for target in desktop tui web android; do
             dir="$RUNNER_TEMP/scaffold-$target"
@@ -210,8 +193,7 @@ jobs:
               echo "telar-devtools = { path = \"$GITHUB_WORKSPACE/plugins/telar-devtools\" }"
               echo "telar-workshop = { path = \"$GITHUB_WORKSPACE/plugins/telar-workshop\" }"
             } >> "$dir/Cargo.toml"
-            # Resolving alone validates every `telar/<feature>` the manifest names, including the three
-            # targets this project did not start on — a renamed feature fails here, compiling nothing.
+            # Resolving validates every `telar/<feature>` the manifest names, the other targets' included, so a renamed feature fails here.
             cargo metadata --format-version 1 --manifest-path "$dir/Cargo.toml" > /dev/null
             case "$target" in
               desktop | tui)
@@ -225,7 +207,7 @@ jobs:
             fi
             echo "::endgroup::"
           done
-      # The library scaffold's `include` is what decides whether its published crate carries the artifact a dependency is compiled from, so the scaffold has to pass the same check a library member does.
+      # The library scaffold's `include` decides whether its published crate carries the artifact a dependency compiles from, so it passes the same check a library member does.
       - name: Generate a library, check what it would package, compile it
         run: |
           dir="$RUNNER_TEMP/scaffold-lib"
@@ -239,13 +221,17 @@ jobs:
           (cd "$dir" && cargo run -q --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" -p cargo-telar -- package --check)
           CARGO_TARGET_DIR="$RUNNER_TEMP/scaffold-target" cargo check --manifest-path "$dir/Cargo.toml"
 
-  # A `[telar] library` is compiled by its consumers from the package cargo publishes, read-only and without the CLI. `plugins/telar-rsx-fixture` is packaged, unpacked and built as a dependency of a generated application, Plain and with the dev features; the test compiles that application into its own target directory, which is why it is ignored in the `test` job and run here.
+  # A `[telar] library` is compiled by its consumers from the published package, read-only and without the CLI: `plugins/telar-rsx-fixture` is packaged, unpacked and built into a generated app in a target dir of its own, which is why `test` ignores it.
   rsx-library:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
+        with:
+          transpile: "false"
       # Every cargo the test starts runs offline, so what `Cargo.lock` names has to be on disk first.
       - run: cargo fetch --locked
       - run: cargo test -p cargo-telar --test rsx_library -- --ignored
@@ -254,45 +240,39 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-15, windows-2025]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      # Linux gets a software Vulkan adapter below, so a missing one there is a failure rather than a silent skip of the GPU tests.
+      TELAR_REQUIRE_GPU: ${{ startsWith(matrix.os, 'ubuntu') && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      # A software Vulkan adapter, so the 15 GPU tests run somewhere instead of skipping on every runner —
-      # `crates/telar/src/texture_ui_test.rs` is the only in-tree proof of the seam pixel-art builds on.
-      # `TELAR_REQUIRE_GPU` below turns a missing adapter into a failure on this leg, so the suite cannot go
-      # back to skipping silently.
+        with:
+          persist-credentials: false
       - name: Install lavapipe
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers
-      - run: cargo run -q -p cargo-telar -- transpile
+      - uses: ./.github/actions/rust
       - run: cargo test --workspace --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics
-        env:
-          TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
-      # `headless` and `dev` are enabled by no workspace member, so the offscreen rasteriser and the dev host
-      # are never compiled by the line above — while the first ships in out-of-tree apps and the second is
-      # what every `cargo telar dev` session runs, with the overlay seam it installs `telar-devtools` through.
+      # No workspace member enables `headless` or `dev`, so the offscreen rasteriser and the `cargo telar dev` host compile nowhere else.
       - run: cargo test -p telar --features headless,dev
-        env:
-          TELAR_REQUIRE_GPU: ${{ matrix.os == 'ubuntu-latest' && '1' || '' }}
-      # The workspace run has `telar/previews` on through `telar`'s own dev-dependencies, so it only ever sees a library's Rust previews present; built alone, the fixture proves they compile to nothing without the feature.
+      # The workspace run has `telar/previews` on through `telar`'s dev-dependencies; built alone, the fixture proves Rust previews compile to nothing without it.
       - run: cargo test -p telar-rsx-fixture --test previews
-      # Same reason, for the half of `telar-embed` only a host enables: nothing in this workspace loads a
-      # plugin, so the loader compiles nowhere else.
+      # Nothing in the workspace loads a plugin, so the host half of `telar-embed` compiles nowhere else.
       - run: cargo test -p telar-embed --all-features
 
-  # Every preview of the three sample apps, built, played, audited and compared with its golden. Snapshots are drawn on the CPU rasteriser in each app's declared fonts, so one runner decides and no GPU adapter is needed.
+  # Every preview of the three sample apps, built, played, audited and compared with its golden, drawn on the CPU rasteriser in each app's declared fonts so one runner decides.
   previews:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      - run: cargo run -q -p cargo-telar -- transpile
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
       - run: cargo run -q -p cargo-telar -- test -p catalogue --a11y error --report junit target/telar-snapshots/catalogue.xml
       - run: cargo run -q -p cargo-telar -- test -p sandbox --a11y error --report junit target/telar-snapshots/sandbox.xml
       - run: cargo run -q -p cargo-telar -- test -p landing --a11y error --report junit target/telar-snapshots/landing.xml
@@ -303,69 +283,62 @@ jobs:
           path: target/telar-snapshots/
           if-no-files-found: ignore
 
-  # The catalogue's workshop exported as the static site `cargo telar preview --build` writes, kept as an artifact, and audited in Chrome with axe-core: the canvas of every preview and matrix page, and the workshop's own chrome on one. See `crates/tools/cargo-telar/src/workshop_audit_test.rs`.
+  # The catalogue's workshop exported as the static site `cargo telar preview --build` writes, kept as an artifact and audited page by page in Chrome with axe-core; see `crates/tools/cargo-telar/src/workshop_audit_test.rs`.
   workshop-audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
         with:
           targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
-      # Pinned to the `wasm-bindgen` crate's own version, as in `parity-web-dom`: the export runs it on the module it builds.
-      - name: Install wasm-bindgen-cli
-        run: |
-          curl -fsSL -o "$RUNNER_TEMP/wasm-bindgen.tar.gz" https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz
-          echo "61d4a7dc85acfa0d2354ccc0b8361928c7e52a746d17f28ebaa795ed3dc1614a  $RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check --strict
-          tar -xz --strip-components=1 -C ~/.cargo/bin -f "$RUNNER_TEMP/wasm-bindgen.tar.gz"
-      # The same axe-core release the flake's devShell pins; the audit reads it when it runs.
-      - name: Fetch axe-core
-        run: |
-          mkdir -p "$RUNNER_TEMP/axe-core"
-          curl -fsSL https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz \
-            | tar -xz --strip-components=1 -C "$RUNNER_TEMP/axe-core" package/axe.min.js
-          echo "TELAR_AXE_CORE=$RUNNER_TEMP/axe-core/axe.min.js" >> "$GITHUB_ENV"
-      - run: cargo run -q -p cargo-telar -- transpile
+      - uses: ./.github/actions/wasm-bindgen
+      - uses: ./.github/actions/axe-core
       - run: cargo run -q -p cargo-telar -- preview -p catalogue --build target/catalogue-site --target web
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: catalogue-site
           path: target/catalogue-site/
       - name: Audit every preview page
-        # Chrome and its driver are already on the runner; `CHROMEWEBDRIVER` is where the image puts the latter.
         run: |
           export CHROMEDRIVER="$CHROMEWEBDRIVER/chromedriver"
           cargo test -p cargo-telar --test workshop_audit -- --ignored --nocapture
         env:
           TELAR_WORKSHOP_SITE: target/catalogue-site
 
-  # Exercises `cargo telar build` per host OS: the raw binary everywhere plus each platform's native installer formats.
+  # `cargo telar build` per host OS: the raw binary everywhere plus each platform's native installer formats.
   package:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             formats: dir deb appimage
-          - os: macos-latest
+          - os: macos-15
             formats: dir dmg
-          - os: windows-latest
+          - os: windows-2025
             formats: dir nsis
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
+        with:
+          transpile: "false"
       - name: Install appimagetool
         if: runner.os == 'Linux'
         run: |
-          curl -fsSL -o /usr/local/bin/appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  /usr/local/bin/appimagetool" | sha256sum --check --strict
-          chmod +x /usr/local/bin/appimagetool
+          curl -fsSL -o "$RUNNER_TEMP/appimagetool" https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  $RUNNER_TEMP/appimagetool" | sha256sum --check --strict
+          sudo install -m 755 "$RUNNER_TEMP/appimagetool" /usr/local/bin/appimagetool
       - name: Install NSIS
         if: runner.os == 'Windows'
-        # The choco nsis package does not shim makensis, so its install dir must be appended to PATH by hand.
-        # Chocolatey exits 0 having installed nothing when its feed 503s, so the binary is what decides, not the exit code.
+        shell: pwsh
+        # The choco package does not shim makensis, and Chocolatey exits 0 having installed nothing when its feed 503s, so the binary on disk decides.
         run: |
           $nsis = "C:\Program Files (x86)\NSIS"
           foreach ($attempt in 1..3) {
@@ -379,12 +352,12 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $nsis
           Add-Content -Path $env:GITHUB_PATH -Value "$nsis\Bin"
       - name: Package sandbox
-        shell: bash
-        # APPIMAGE_EXTRACT_AND_RUN lets appimagetool run without FUSE on the runner.
         env:
+          # Lets appimagetool run without FUSE on the runner.
           APPIMAGE_EXTRACT_AND_RUN: "1"
+          FORMATS: ${{ matrix.formats }}
         run: |
-          for format in ${{ matrix.formats }}; do
+          for format in $FORMATS; do
             echo "::group::cargo telar build --format $format"
             cargo run -p cargo-telar -- build --format "$format" --package sandbox
             echo "::endgroup::"
@@ -399,3 +372,34 @@ jobs:
             target/telar-dist/*.dmg
             target/telar-dist/*_setup.exe
           if-no-files-found: ignore
+
+  # The one check branch protection and the release gate need to name: it fails when any job above failed, was cancelled or was skipped.
+  ci-ok:
+    if: ${{ !cancelled() }}
+    needs:
+      - lint
+      - check-desktop
+      - msrv
+      - analyzer
+      - publishable
+      - check-android
+      - check-web
+      - parity-web-dom
+      - web-size-budget
+      - scaffold
+      - rsx-library
+      - test
+      - previews
+      - workshop-audit
+      - package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          unsuccessful=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<< "$NEEDS")
+          if [ -n "$unsuccessful" ]; then
+            echo "$unsuccessful"
+            exit 1
+          fi

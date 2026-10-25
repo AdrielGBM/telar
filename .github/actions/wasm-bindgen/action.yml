@@ -1,0 +1,12 @@
+name: wasm-bindgen
+description: Installs `wasm-bindgen` and `wasm-bindgen-test-runner` at the release the pinned `wasm-bindgen` crate generates glue for.
+
+runs:
+  using: composite
+  steps:
+    # Written out rather than resolved: a CLI that differs from the crate in `Cargo.lock` rejects the glue it generated.
+    - run: |
+        curl -fsSL -o "$RUNNER_TEMP/wasm-bindgen.tar.gz" https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.127/wasm-bindgen-0.2.127-x86_64-unknown-linux-musl.tar.gz
+        echo "61d4a7dc85acfa0d2354ccc0b8361928c7e52a746d17f28ebaa795ed3dc1614a  $RUNNER_TEMP/wasm-bindgen.tar.gz" | sha256sum --check --strict
+        tar -xz --strip-components=1 -C ~/.cargo/bin -f "$RUNNER_TEMP/wasm-bindgen.tar.gz"
+      shell: bash

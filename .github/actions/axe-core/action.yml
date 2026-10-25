@@ -1,0 +1,14 @@
+name: axe-core
+description: Fetches the axe-core release the flake's devShell pins and points `TELAR_AXE_CORE` at it for the browser audits.
+
+runs:
+  using: composite
+  steps:
+    # Checked against the same npm integrity `flake.nix` fetches it by.
+    - run: |
+        curl -fsSL -o "$RUNNER_TEMP/axe-core.tgz" https://registry.npmjs.org/axe-core/-/axe-core-4.13.0.tgz
+        echo "5331adf3383b372f1d8db60c871976cee11ebd56bbaf68098d86392f0af5c4cefe5d4da777a0a421615355c0886c03fadef4b3ef535a572cae4a4f651ca732d0  $RUNNER_TEMP/axe-core.tgz" | sha512sum --check --strict
+        mkdir -p "$RUNNER_TEMP/axe-core"
+        tar -xz --strip-components=1 -C "$RUNNER_TEMP/axe-core" -f "$RUNNER_TEMP/axe-core.tgz" package/axe.min.js
+        echo "TELAR_AXE_CORE=$RUNNER_TEMP/axe-core/axe.min.js" >> "$GITHUB_ENV"
+      shell: bash
