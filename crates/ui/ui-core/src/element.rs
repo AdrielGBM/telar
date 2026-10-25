@@ -7,12 +7,12 @@ use std::sync::Arc;
 
 /// What a box is: what it was told, or what it does.
 ///
-/// A box that answers a press *is* a button whether or not anybody said so, and the derivation is what keeps most of an interface meaningful without a word of markup. It stays a derivation and not a default, so a box that says it is a menu item is one, press or no press.
+/// A box a primary press or the keyboard activates *is* a button whether or not anybody said so; one answering only an alt or a long press is not, or a reader would offer an activation that does nothing over the controls it wraps. The derivation is what keeps most of an interface meaningful without a word of markup. It stays a derivation and not a default, so a box that says it is a menu item is one, press or no press.
 pub(crate) fn role_of(
     declared: Option<renderer_core::Role>,
-    pressable: bool,
+    activates: bool,
 ) -> renderer_core::Role {
-    match (declared, pressable) {
+    match (declared, activates) {
         (Some(role), _) => role,
         (None, true) => renderer_core::Role::Button,
         (None, false) => renderer_core::Role::Group,

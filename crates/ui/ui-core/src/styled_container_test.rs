@@ -844,6 +844,39 @@ fn maybe_on_alt_press_of_none_lets_a_secondary_press_fall_through() {
     );
 }
 
+fn derived_role(card: &StyledContainer) -> renderer_core::Role {
+    let RenderNode::Element { element, .. } = card.view() else {
+        panic!("expected the box's element")
+    };
+    element.semantics.role
+}
+
+fn roles_on_every_target(card: StyledContainer) -> [renderer_core::Role; 2] {
+    let drawn = derived_role(&card);
+    let was = ui_tree::set_element_capture(true);
+    let document = derived_role(&card);
+    ui_tree::set_element_capture(was);
+    [drawn, document]
+}
+
+// The workshop's stage answers a right-click with a menu around a preview full of controls; as a button it nested every one of them inside it (axe's nested-interactive).
+#[test]
+fn a_box_answering_only_alt_or_long_presses_is_no_button() {
+    use renderer_core::Role;
+    assert_eq!(
+        roles_on_every_target(laid_out_box().on_alt_press(|_| ())),
+        [Role::Group; 2]
+    );
+    assert_eq!(
+        roles_on_every_target(laid_out_box().on_long_press(|| ())),
+        [Role::Group; 2]
+    );
+    assert_eq!(
+        roles_on_every_target(laid_out_box().on_press(|| ()).on_alt_press(|_| ())),
+        [Role::Button; 2]
+    );
+}
+
 #[test]
 fn a_document_backend_does_not_cost_a_box_its_press() {
     let tapped = Rc::new(Cell::new(false));

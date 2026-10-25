@@ -272,10 +272,12 @@ impl StyledContainer {
 
     /// This box, for a backend whose output is a document: what it is, and what it asked layout for.
     ///
-    /// The role is derived rather than declared — a box that answers a press *is* a button whether or not anybody said so, and one that declines pointer events is one the document should let events through.
+    /// The role is derived rather than declared — a box a press activates *is* a button whether or not anybody said so, and one that declines pointer events is one the document should let events through.
     fn element(&self) -> std::sync::Arc<renderer_core::Element> {
-        let mut semantics =
-            renderer_core::Semantics::of(crate::element::role_of(self.role, self.press.is_set()));
+        let mut semantics = renderer_core::Semantics::of(crate::element::role_of(
+            self.role,
+            self.press.activates(),
+        ));
         semantics.click_through = !self.occludes();
         // Read inside `view()`, so what a reader is told and what is drawn are the same frame.
         if let Some(id) = self.focusable.id {
@@ -1238,7 +1240,7 @@ impl StyledContainer {
             },
             _ => crate::element::for_placed_target(
                 self.node,
-                crate::element::role_of(self.role, self.press.is_set()),
+                crate::element::role_of(self.role, self.press.activates()),
                 || self.position.as_ref().map(|read| read()),
                 || self.element(),
             ),

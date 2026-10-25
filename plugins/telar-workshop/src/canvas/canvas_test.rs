@@ -6,8 +6,8 @@ use telar::preview::{ArgValue, Layout, PreviewCtx, PreviewEntry};
 use telar::testing::{Scoped, centre, damage, find_text, mount, moved, press, release, route};
 use telar::{
     Children, Color, ComponentList, DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, Rect,
-    RectStyle, ShapeStyle, Size, SizeDimension, StyledContainer, Text, TextStyle, Uri, UriOpener,
-    WindowRoot, box_item, dismiss_depth, for_each_with_matrix, relayout_if_dirty,
+    RectStyle, Role, ShapeStyle, Size, SizeDimension, StyledContainer, Text, TextStyle, Uri,
+    UriOpener, WindowRoot, box_item, dismiss_depth, for_each_with_matrix, relayout_if_dirty,
     reset_layout_runtime, set_uri_opener, signal, transform_clip_rect,
 };
 use telar_components::{ModalProps, modal};
@@ -561,4 +561,36 @@ fn every_grid_line_has_a_ruler_tick_at_every_zoom() {
             }
         }
     }
+}
+
+/// Each control drawn inside another control, as the roles of the two: what axe calls nested-interactive on the web.
+fn nested_controls(tree: &ComponentList) -> Vec<(Role, Role)> {
+    let mut open: Vec<Role> = Vec::new();
+    let mut nested = Vec::new();
+    for command in tree.commands().iter() {
+        match command {
+            DrawCommand::PushElement { element } => {
+                let role = element.semantics.role;
+                if role.is_control()
+                    && let Some(outer) = open.iter().rev().find(|outer| outer.is_control())
+                {
+                    nested.push((*outer, role));
+                }
+                open.push(role);
+            }
+            DrawCommand::PopElement => {
+                open.pop();
+            }
+            _ => {}
+        }
+    }
+    nested
+}
+
+/// The stage opens its menu on a right-click and zooms on the wheel, around a preview full of controls and the viewport's handles; none of that makes it a button they sit in.
+#[test]
+fn no_control_on_the_stage_sits_inside_another() {
+    let (_state, tree) = mounted(button_previews());
+    find(&tree, "Save");
+    assert_eq!(nested_controls(&tree), []);
 }

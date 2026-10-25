@@ -47,6 +47,11 @@ impl PressGesture {
         if let Some(follow) = &self.follow {
             follow();
         }
+        self.activates()
+    }
+
+    /// Whether a primary press or the keyboard does something here: what makes a box a button, where an alt or a long press alone only adds a gesture to it.
+    pub(crate) fn activates(&self) -> bool {
         self.on_press.is_some() || self.follow.is_some()
     }
 
