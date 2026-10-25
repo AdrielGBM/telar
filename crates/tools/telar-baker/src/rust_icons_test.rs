@@ -29,8 +29,8 @@ fn library(name: &str, telar_toml: &str) -> PathBuf {
         &root,
         "telar.toml",
         &format!(
-            "[telar]\nlibrary = true\n\n[telar.icons]\niconify = \"{}\"\n{telar_toml}",
-            fixtures().display()
+            "[telar]\nlibrary = true\n\n[telar.icons]\niconify = {}\n{telar_toml}",
+            toml::Value::String(fixtures().display().to_string())
         ),
     );
     root

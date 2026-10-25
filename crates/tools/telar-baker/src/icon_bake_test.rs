@@ -27,8 +27,8 @@ fn package_with(name: &str, mode: &str, extra: &str, view: &str) -> PathBuf {
     std::fs::write(
         root.join("telar.toml"),
         format!(
-            "[telar.icons]\nmode = \"{mode}\"\niconify = \"{}\"\n{extra}",
-            fixtures().display()
+            "[telar.icons]\nmode = \"{mode}\"\niconify = {}\n{extra}",
+            toml::Value::String(fixtures().display().to_string())
         ),
     )
     .unwrap();
@@ -228,5 +228,22 @@ fn the_tint_decision_is_carried_into_the_artifact() {
             .resolve_id(kind, "brand:acme")
             .unwrap()
             .ends_with(", false)")
+    );
+}
+
+#[test]
+fn a_manifest_that_does_not_parse_fails_the_bake_instead_of_baking_with_defaults() {
+    let root = package_with(
+        "bad_manifest",
+        "baked",
+        "iconify = \"C:\\a\\b\"\n",
+        "[view]\ncol\n    icon name:\"demo:home\"\n",
+    );
+    let report = bake_package(&root, "test", VERSION).expect("a broken manifest is reported");
+    assert_eq!(report.errors.len(), 1, "{:?}", report.errors);
+    assert!(
+        report.errors[0].contains("telar.toml"),
+        "{}",
+        report.errors[0]
     );
 }

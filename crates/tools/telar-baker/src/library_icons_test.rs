@@ -40,8 +40,8 @@ fn library(name: &str) -> PathBuf {
         &root,
         "telar.toml",
         &format!(
-            "[telar]\nlibrary = true\nprelude = []\n\n[telar.icons]\niconify = \"{}\"\n\n[telar.icons.licenses]\nallow = [\"attrib\"]\n",
-            fixtures().display()
+            "[telar]\nlibrary = true\nprelude = []\n\n[telar.icons]\niconify = {}\n\n[telar.icons.licenses]\nallow = [\"attrib\"]\n",
+            toml::Value::String(fixtures().display().to_string())
         ),
     );
     write(
@@ -101,7 +101,10 @@ fn a_library_ships_the_record_of_its_own_icons_and_an_application_does_not() {
 
     let app = application(
         "not_a_library",
-        &format!("[telar.icons]\niconify = \"{}\"\n", fixtures().display()),
+        &format!(
+            "[telar.icons]\niconify = {}\n",
+            toml::Value::String(fixtures().display().to_string())
+        ),
         Some("[view]\nicon name:\"demo:home\"\n"),
     );
     bake_package(&app, "test", VERSION).unwrap();
@@ -118,8 +121,8 @@ fn the_application_notice_lists_its_own_icons_then_each_librarys() {
     let app = application(
         "merged",
         &format!(
-            "[telar.icons]\niconify = \"{}\"\n\n[telar.icons.licenses]\nallow = [\"CC-BY-4.0\"]\n",
-            fixtures().display()
+            "[telar.icons]\niconify = {}\n\n[telar.icons.licenses]\nallow = [\"CC-BY-4.0\"]\n",
+            toml::Value::String(fixtures().display().to_string())
         ),
         Some("[view]\nicon name:\"demo:home\"\n"),
     );

@@ -25,7 +25,7 @@ pub struct BakeReport {
     /// Whether the index differs from what was already on disk. `false` means nothing was rewritten, which is what keeps a bake from retriggering rustc or the editor's file watcher.
     pub changed: bool,
     pub warnings: Vec<String>,
-    /// What a build must not go on from: an id that has to be baked and is not a literal, one no source has, a set the licence policy refuses. Everything else is still baked, so an editor keeps answering for the rest.
+    /// What a build must not go on from: a `telar.toml` that does not parse, an id that has to be baked and is not a literal, one no source has, a set the licence policy refuses. Everything else is still baked, so an editor keeps answering for the rest.
     pub errors: Vec<String>,
 }
 
@@ -50,7 +50,15 @@ pub fn bake_package_with(
     dependencies: Option<&[IconDependency]>,
 ) -> Option<BakeReport> {
     let rsx_files = telar_project::find_rsx_files_in_tree(package_dir);
-    let manifest = TelarManifest::load_or_default(package_dir);
+    let manifest = match TelarManifest::load(package_dir) {
+        Ok(manifest) => manifest,
+        Err(e) => {
+            return Some(BakeReport {
+                errors: vec![e.to_string()],
+                ..BakeReport::default()
+            });
+        }
+    };
     let recording = Recording {
         library: manifest.telar.library,
         dependencies,
