@@ -79,17 +79,17 @@ fn the_export_macro_builds_a_vtable_at_the_current_abi() {
 #[test]
 fn a_guest_records_the_modifiers_it_is_handed() {
     let mut inst = EmbedInstance::new(Box::new(Stub::new()));
-    let _g = inst.canvas.enter();
-    assert_eq!(ui_core::modifiers(), ModifiersState::default());
-    drop(_g);
+    inst.canvas
+        .with_entered(|| assert_eq!(ui_core::modifiers(), ModifiersState::default()));
 
     inst.on_event(&Event::ModifiersChanged { modifiers: shift() });
 
-    let _g = inst.canvas.enter();
-    assert!(
-        ui_core::modifiers().is_shift,
-        "a shift-drag inside a guest is indistinguishable from a plain one without this"
-    );
+    inst.canvas.with_entered(|| {
+        assert!(
+            ui_core::modifiers().is_shift,
+            "a shift-drag inside a guest is indistinguishable from a plain one without this"
+        );
+    });
 }
 
 #[test]
@@ -97,11 +97,12 @@ fn an_overlay_event_reaches_the_registry_too() {
     let inst = EmbedInstance::new(Box::new(Stub::new()));
     inst.dispatch_overlays(&Event::ModifiersChanged { modifiers: shift() });
 
-    let _g = inst.canvas.enter();
-    assert!(
-        ui_core::modifiers().is_shift,
-        "an overlay event reaches the shared registry"
-    );
+    inst.canvas.with_entered(|| {
+        assert!(
+            ui_core::modifiers().is_shift,
+            "an overlay event reaches the shared registry"
+        );
+    })
 }
 
 #[test]
@@ -113,23 +114,23 @@ fn a_press_answers_for_one_frame_and_end_frame_closes_it() {
         unmodified: None,
     });
 
-    {
-        let _g = inst.canvas.enter();
+    inst.canvas.with_entered(|| {
         assert!(
             ui_core::key_pressed(&Key::Char('c')),
             "the press answers for the frame it arrived in"
         );
-    }
+    });
     inst.end_frame();
-    let _g = inst.canvas.enter();
-    assert!(
-        !ui_core::key_pressed(&Key::Char('c')),
-        "without end_frame the press answers forever, not for its frame"
-    );
-    assert!(
-        ui_core::key_held(&Key::Char('c')),
-        "held is not what end_frame clears"
-    );
+    inst.canvas.with_entered(|| {
+        assert!(
+            !ui_core::key_pressed(&Key::Char('c')),
+            "without end_frame the press answers forever, not for its frame"
+        );
+        assert!(
+            ui_core::key_held(&Key::Char('c')),
+            "held is not what end_frame clears"
+        );
+    })
 }
 
 #[test]
@@ -308,10 +309,9 @@ fn a_timer_the_guest_schedules_wakes_the_host_loop() {
     run_frame(&mut inst, Some(&waker));
     let before = wakes.load(std::sync::atomic::Ordering::SeqCst);
 
-    let _sooner = {
-        let _g = inst.canvas.enter();
-        reactive_core::run_after(DELAY / 10, || {})
-    };
+    let _sooner = inst
+        .canvas
+        .with_entered(|| reactive_core::run_after(DELAY / 10, || {}));
     assert!(
         wakes.load(std::sync::atomic::Ordering::SeqCst) > before,
         "a timer due before the one the host sleeps for wakes it"
@@ -333,10 +333,9 @@ impl ui_tree::OverlaySink for Blanket {
 #[test]
 fn a_move_an_overlay_takes_still_reaches_the_content_under_it() {
     let (inst, _, moves) = waiting();
-    let overlay = {
-        let _g = inst.canvas.enter();
-        ui_tree::register_overlay(Rc::new(Blanket))
-    };
+    let overlay = inst
+        .canvas
+        .with_entered(|| ui_tree::register_overlay(Rc::new(Blanket)));
     let moved = Event::PointerMoved {
         x: 10.0,
         y: 10.0,
@@ -354,8 +353,9 @@ fn a_move_an_overlay_takes_still_reaches_the_content_under_it() {
     assert!(inst.dispatch_overlays(&pressed));
     assert_eq!(moves.get(), 1, "what else it takes stays its own");
 
-    let _g = inst.canvas.enter();
-    ui_tree::unregister_overlay(overlay);
+    inst.canvas.with_entered(|| {
+        ui_tree::unregister_overlay(overlay);
+    })
 }
 
 #[cfg(all(feature = "host", not(target_arch = "wasm32")))]
@@ -778,4 +778,41 @@ fn a_guest_whose_build_panics_is_still_quiesced_before_its_library_is_closed() {
     let refused = embedded_as_loaded(create_nothing);
     assert!(refused.is_err(), "precondition: it does not load");
     assert_eq!(LIFE.take(), ["loaded", "quiesce"]);
+}
+
+struct PanicsWhenTicked;
+
+impl motion_core::Tickable for PanicsWhenTicked {
+    fn tick(&self, _now: Instant, _scale: f32) {
+        panic!("an animation callback panicked");
+    }
+    fn is_settled(&self) -> bool {
+        false
+    }
+}
+
+#[test]
+fn an_animation_that_panics_mid_tick_leaves_later_flushes_working() {
+    let inst = EmbedInstance::new(Box::new(Stub::new()));
+    let animation: std::rc::Rc<dyn motion_core::Tickable> = std::rc::Rc::new(PanicsWhenTicked);
+    inst.canvas.with_entered(|| {
+        motion_core::register(motion_core::next_id(), std::rc::Rc::downgrade(&animation))
+    });
+
+    let ticked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        inst.motion_tick(Instant::now())
+    }));
+    assert!(ticked.is_err(), "precondition: the tick panicked");
+    drop(animation);
+
+    let count = reactive_core::signal(0);
+    let seen = std::rc::Rc::new(std::cell::Cell::new(0));
+    let into = std::rc::Rc::clone(&seen);
+    let _effect = reactive_core::effect(move || into.set(count.get()));
+    count.set(3);
+    assert_eq!(
+        seen.get(),
+        3,
+        "the batch the tick opened ended with the unwind, so the write flushed"
+    );
 }

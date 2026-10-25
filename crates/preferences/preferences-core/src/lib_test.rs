@@ -200,14 +200,13 @@ fn a_surface_high_contrast_shadows_the_application_and_the_system() {
     set_system_preferences(contrast(Some(false)));
     set_high_contrast_override(None);
     let surface = HighContrastContext::new();
-    {
-        let _entered = surface.enter();
+    surface.with_entered(|| {
         set_surface_high_contrast(Some(true));
         assert_eq!(use_high_contrast(), Some(true));
         assert_eq!(high_contrast(), Some(true));
         assert_eq!(use_surface_high_contrast(), Some(true));
         assert_eq!(high_contrast_override(), None);
-    }
+    });
     assert_eq!(
         use_high_contrast(),
         Some(false),
@@ -215,8 +214,7 @@ fn a_surface_high_contrast_shadows_the_application_and_the_system() {
     );
 
     set_high_contrast_override(Some(false));
-    {
-        let _entered = surface.enter();
+    surface.with_entered(|| {
         assert_eq!(use_high_contrast(), Some(true), "and the application's");
         set_surface_high_contrast(None);
         assert_eq!(
@@ -224,7 +222,7 @@ fn a_surface_high_contrast_shadows_the_application_and_the_system() {
             Some(false),
             "cleared, the surface follows the application again"
         );
-    }
+    });
     set_high_contrast_override(None);
 }
 

@@ -79,3 +79,36 @@ impl WindowTitle {
         }
     }
 }
+
+/// The reactive batch a platform holds open across one turn of its loop, from `new_events` to `about_to_wait`, which a phase that must see its writes' effects inside the turn lifts for a moment.
+#[derive(Default)]
+pub(super) struct LoopBatch(Option<reactive_core::OpenBatch>);
+
+impl LoopBatch {
+    /// Opens the turn's batch, keeping the one already open when the platform starts a turn without ending the last.
+    pub(super) fn open(&mut self) {
+        self.0.get_or_insert_with(reactive_core::OpenBatch::open);
+    }
+
+    pub(super) fn close(&mut self) {
+        if let Some(batch) = self.0.take() {
+            batch.close();
+        }
+    }
+
+    /// Flushes what the turn has written so far, keeping the batch open for the rest of it.
+    pub(super) fn flush(&mut self) {
+        self.lift(|| ());
+    }
+
+    /// Runs `f` with the turn's batch closed, so what it writes flushes as it writes, and opens it again afterwards if it was open.
+    pub(super) fn lift<R>(&mut self, f: impl FnOnce() -> R) -> R {
+        let Some(batch) = self.0.take() else {
+            return f();
+        };
+        batch.close();
+        let result = f();
+        self.0 = Some(reactive_core::OpenBatch::open());
+        result
+    }
+}

@@ -84,7 +84,7 @@ where
     }
 }
 
-/// Declares a [`SurfaceScoped`] value: a thread-wide signal starting at `init`, a per-surface override, the `Context`/`Guard` pair a surface swaps the override with, and a private `fn name() -> SurfaceScoped<..>` the module's public functions go through.
+/// Declares a [`SurfaceScoped`] value: a thread-wide signal starting at `init`, a per-surface override, the `Context` a surface swaps the override with, and a private `fn name() -> SurfaceScoped<..>` the module's public functions go through.
 ///
 /// `as Value` gives the thread a different type from the override, which converts into it; see [`SurfaceScoped`]. The doc comment documents the `Context`.
 ///
@@ -92,7 +92,7 @@ where
 /// reactive_core::surface_scoped! {
 ///     /// The active surface's own locale, in place of the thread's while it has one.
 ///     scoped locale: String as Option<String> = None;
-///     context LocaleContext, LocaleGuard;
+///     context LocaleContext;
 /// }
 ///
 /// pub fn current_locale() -> Option<String> {
@@ -104,10 +104,10 @@ macro_rules! surface_scoped {
     (
         $(#[$ctx_meta:meta])*
         scoped $name:ident : $ty:ty as $value:ty = $init:expr;
-        context $ctx:ident, $guard:ident;
+        context $ctx:ident;
     ) => {
         #[allow(unused_imports)]
-        pub use self::$name::{$ctx, $guard};
+        pub use self::$name::$ctx;
 
         fn $name() -> $crate::SurfaceScoped<$ty, $value> {
             self::$name::handle()
@@ -129,7 +129,7 @@ macro_rules! surface_scoped {
                 slot OVERRIDE: $crate::RwSignal<::std::option::Option<$ty>> =
                     $crate::signal(::std::option::Option::None);
                 access with_override, with_override_ref;
-                context $ctx, $guard;
+                context $ctx;
             }
 
             pub(super) fn handle() -> $crate::SurfaceScoped<$ty, $value> {
@@ -143,12 +143,12 @@ macro_rules! surface_scoped {
     (
         $(#[$ctx_meta:meta])*
         scoped $name:ident : $ty:ty = $init:expr;
-        context $ctx:ident, $guard:ident;
+        context $ctx:ident;
     ) => {
         $crate::surface_scoped! {
             $(#[$ctx_meta])*
             scoped $name: $ty as $ty = $init;
-            context $ctx, $guard;
+            context $ctx;
         }
     };
 }

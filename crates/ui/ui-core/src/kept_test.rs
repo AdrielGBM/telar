@@ -30,22 +30,22 @@ fn a_second_build_reads_back_what_the_first_one_kept() {
 #[test]
 fn a_dropped_build_takes_neither_the_store_nor_what_it_kept() {
     let surface = Surface::new();
-    let _entered = surface.enter();
+    surface.with_entered(|| {
+        let (first, build) = OwnedBuild::run(|| kept("test.offset", || signal(0.0f32)));
+        first.set(120.0);
+        drop(build);
+        assert!(
+            first.is_alive(),
+            "the kept signal outlives the build that made it"
+        );
 
-    let (first, build) = OwnedBuild::run(|| kept("test.offset", || signal(0.0f32)));
-    first.set(120.0);
-    drop(build);
-    assert!(
-        first.is_alive(),
-        "the kept signal outlives the build that made it"
-    );
-
-    let (second, _build) = OwnedBuild::run(|| kept("test.offset", || signal(0.0f32)));
-    assert_eq!(
-        second.peek(),
-        120.0,
-        "the rebuilt tree reads the offset the dropped one left"
-    );
+        let (second, _build) = OwnedBuild::run(|| kept("test.offset", || signal(0.0f32)));
+        assert_eq!(
+            second.peek(),
+            120.0,
+            "the rebuilt tree reads the offset the dropped one left"
+        );
+    })
 }
 
 /// Two surfaces are two stores, or the second window to open would inherit the first one's search box.
@@ -54,8 +54,7 @@ fn one_surfaces_state_is_not_another_surfaces() {
     let first = Surface::new();
     let second = Surface::new();
     let read = |surface: &Surface, init: usize| {
-        let _entered = surface.enter();
-        Scope::with(|| kept("test.page", || signal(init)).peek())
+        surface.with_entered(|| Scope::with(|| kept("test.page", || signal(init)).peek()))
     };
     assert_eq!((read(&first, 3), read(&second, 0)), (3, 0));
     assert_eq!(read(&first, 0), 3, "and each keeps its own across builds");
@@ -65,10 +64,8 @@ fn one_surfaces_state_is_not_another_surfaces() {
 #[test]
 fn a_closed_surface_frees_what_it_kept() {
     let surface = Surface::new();
-    let value = {
-        let _entered = surface.enter();
-        Scope::with(|| kept("test.query", || signal(String::new())))
-    };
+    let value =
+        surface.with_entered(|| Scope::with(|| kept("test.query", || signal(String::new()))));
     drop(surface);
     assert!(!value.is_alive());
 }

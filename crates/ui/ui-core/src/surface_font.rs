@@ -16,7 +16,7 @@ reactive_core::surface_local! {
     /// The active surface's default family, created with the first call that needs it.
     slot DEFAULT_FAMILY: Option<DefaultFamily> = None;
     access with_default_family, with_default_family_ref;
-    context SurfaceFontContext, SurfaceFontGuard;
+    context SurfaceFontContext;
 }
 
 fn existing() -> Option<DefaultFamily> {

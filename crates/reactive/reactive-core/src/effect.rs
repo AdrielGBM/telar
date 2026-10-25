@@ -1,5 +1,7 @@
 //! [`Effect`]: a closure re-run whenever a signal it read changes.
 
+use std::marker::PhantomData;
+
 use crate::runtime;
 
 /// A live subscription.
@@ -9,11 +11,15 @@ use crate::runtime;
 pub struct Effect {
     #[allow(dead_code)]
     id: runtime::EffectId,
+    _ui_thread_only: PhantomData<*const ()>,
 }
 
 /// Runs `f` now, and again whenever a signal it read changes. The returned handle owns the subscription.
 pub fn effect(f: impl Fn() + 'static) -> Effect {
     let id = runtime::register_effect(Box::new(f));
     runtime::run_effect(id);
-    Effect { id }
+    Effect {
+        id,
+        _ui_thread_only: PhantomData,
+    }
 }

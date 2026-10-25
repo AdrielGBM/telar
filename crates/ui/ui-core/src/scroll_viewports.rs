@@ -11,7 +11,7 @@ use crate::scroll_area::ScrollViewport;
 reactive_core::surface_local! {
     slot VIEWPORTS: Viewports = Viewports::default();
     access with_viewports, with_viewports_ref;
-    context ViewportsContext, ViewportsGuard;
+    context ViewportsContext;
 }
 
 struct Viewports {

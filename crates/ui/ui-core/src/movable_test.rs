@@ -580,44 +580,38 @@ fn what_the_layout_tree_cascades_follows_the_outlet_and_is_resolved_again_on_a_m
 fn an_outlet_on_another_surface_is_refused() {
     let home = Surface::new();
     let away = Surface::new();
-    let movable = {
-        let _home = home.enter();
-        Movable::new(|| block(10.0, 10.0)).unwrap()
-    };
-    let _away = away.enter();
-    assert!(movable.outlet(fill()).is_err());
+    let movable = home.with_entered(|| Movable::new(|| block(10.0, 10.0)).unwrap());
+    away.with_entered(|| {
+        assert!(movable.outlet(fill()).is_err());
+    })
 }
 
 #[test]
 fn an_outlet_released_on_another_surfaces_turn_moves_the_subtree_in_its_own_tree() {
     let home = Surface::new();
     let away = Surface::new();
-    let (movable, first, second, second_scope) = {
-        let _home = home.enter();
+    let (movable, first, second, second_scope) = home.with_entered(|| {
         let movable = Movable::new(|| block(10.0, 10.0)).unwrap();
         let first = movable.outlet(fill()).unwrap();
         let (second, scope) = scoped(|| movable.outlet(fill()).unwrap());
         (movable, first, second, scope)
-    };
-    let content = {
-        let _home = home.enter();
-        movable.layout_node().unwrap()
-    };
+    });
+    let content = home.with_entered(|| movable.layout_node().unwrap());
 
-    {
-        let _away = away.enter();
+    away.with_entered(|| {
         dispose_owner(second_scope);
         assert_eq!(
             live_node_count(),
             0,
             "the other surface's tree is untouched"
         );
-    }
+    });
 
-    let _home = home.enter();
-    assert!(first.is_showing());
-    drop(second);
-    assert_eq!(layout_reactive::parent(content), Some(first.layout_node()));
+    home.with_entered(|| {
+        assert!(first.is_showing());
+        drop(second);
+        assert_eq!(layout_reactive::parent(content), Some(first.layout_node()));
+    })
 }
 
 #[test]
@@ -664,25 +658,25 @@ fn a_handler_inside_that_drops_the_last_handle_finishes_before_the_subtree_is_fr
 fn a_handle_outliving_its_surface_touches_no_other_tree_when_it_drops() {
     let home = Surface::new();
     let away = Surface::new();
-    let (movable, outlet) = {
-        let _home = home.enter();
+    let (movable, outlet) = home.with_entered(|| {
         let movable = Movable::new(|| block(10.0, 10.0)).unwrap();
         let outlet = movable.outlet(fill()).unwrap();
         (movable, outlet)
-    };
+    });
     drop(home);
 
-    let _away = away.enter();
-    let namesakes = (0..4)
-        .map(|_| layout_reactive::new_container(LayoutStyle::new(), &[]).unwrap())
-        .collect::<Vec<_>>();
-    drop(outlet);
-    drop(movable);
+    away.with_entered(|| {
+        let namesakes = (0..4)
+            .map(|_| layout_reactive::new_container(LayoutStyle::new(), &[]).unwrap())
+            .collect::<Vec<_>>();
+        drop(outlet);
+        drop(movable);
 
-    assert!(
-        namesakes.iter().all(|&node| track_layout(node).is_some()),
-        "the nodes another surface minted under the same ids are left alone"
-    );
+        assert!(
+            namesakes.iter().all(|&node| track_layout(node).is_some()),
+            "the nodes another surface minted under the same ids are left alone"
+        );
+    })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

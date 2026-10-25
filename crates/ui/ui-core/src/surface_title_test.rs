@@ -129,26 +129,23 @@ fn clearing_a_page_title_nobody_set_creates_nothing() {
 fn every_surface_has_its_own_title_and_announces_it_to_its_own_queue() {
     let a = Surface::new();
     let b = Surface::new();
-    {
-        let _a = a.enter();
+    a.with_entered(|| {
         open_surface_title("Editor", "Editor");
-    }
-    {
-        let _b = b.enter();
+    });
+    b.with_entered(|| {
         open_surface_title("Inspector", "Inspector");
-    }
+    });
     let page = signal(None::<String>);
-    {
-        let _a = a.enter();
+    a.with_entered(|| {
         effect(move || set_page_title(page.get()));
-    }
+    });
     page.set(Some("notes.txt".into()));
-    {
-        let _b = b.enter();
+    b.with_entered(|| {
         assert_eq!(surface_title(), "Inspector");
         assert!(titles_announced().is_empty());
-    }
-    let _a = a.enter();
-    assert_eq!(surface_title(), "notes.txt — Editor");
-    assert_eq!(titles_announced(), ["notes.txt — Editor"]);
+    });
+    a.with_entered(|| {
+        assert_eq!(surface_title(), "notes.txt — Editor");
+        assert_eq!(titles_announced(), ["notes.txt — Editor"]);
+    })
 }

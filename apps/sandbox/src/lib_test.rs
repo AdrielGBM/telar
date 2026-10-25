@@ -153,9 +153,9 @@ fn nav_tracks_theme_after_navigation() {
         }
 
         let feed = move |tree: &mut telar::ComponentList, ev: &Event| {
-            telar::begin_batch();
-            let _ = tree.on_event(ev);
-            telar::end_batch();
+            telar::batch(|| {
+                let _ = tree.on_event(ev);
+            });
         };
         let mv = |x: f32, y: f32| Event::PointerMoved {
             x: x as f64,

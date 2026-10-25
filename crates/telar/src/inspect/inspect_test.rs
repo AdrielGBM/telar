@@ -108,8 +108,7 @@ fn the_window_and_the_canvas_agree_on_what_a_reader_is_told_inside_the_canvas() 
 
     let own = {
         let commands = canvas.frame_commands().clone();
-        let _entered = canvas.enter();
-        audit(&commands, None)
+        canvas.with_entered(|| audit(&commands, None))
     };
     assert!(
         own.nodes.iter().any(|node| node.name == "Inside"),

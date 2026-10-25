@@ -114,30 +114,29 @@ fn a_live_drag_is_cancelled_only_from_its_own_surface() {
     let cancelled = Rc::new(std::cell::Cell::new(false));
     let here = crate::Surface::new();
     let there = crate::Surface::new();
-    let mut drag = {
-        let _entered = there.enter();
+    let mut drag = there.with_entered(|| {
         let (mut drag, _log) = logging(0.0);
         drag.transact(Rc::new(Transaction::new(reactive_core::signal(0.0_f32))));
         let seen = cancelled.clone();
         drag.set_cancel(move || seen.set(true));
         drag.press(&press_at(10.0, 10.0), RECT, RECT);
         drag
-    };
+    });
 
-    {
-        let _entered = here.enter();
+    here.with_entered(|| {
         assert!(!cancel_live(), "Escape here has no stroke to cancel");
         assert!(!cancel_live_by(&PointerButton::Secondary));
-    }
+    });
     assert!(!cancelled.get());
 
-    let _entered = there.enter();
-    assert!(
-        cancel_live_by(&PointerButton::Secondary),
-        "a second button there does"
-    );
-    assert!(cancelled.get());
-    assert!(drag.settle());
+    there.with_entered(|| {
+        assert!(
+            cancel_live_by(&PointerButton::Secondary),
+            "a second button there does"
+        );
+        assert!(cancelled.get());
+        assert!(drag.settle());
+    })
 }
 
 /// A drag that waits for its threshold starts reporting where it crossed it, so where the press itself landed is what it says armed it — in the box's own coordinates and in the ones the box is laid out in.

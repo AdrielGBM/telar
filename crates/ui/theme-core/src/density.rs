@@ -37,7 +37,7 @@ impl ControlSize {
 reactive_core::surface_scoped! {
     /// The active surface's own control size, in place of the thread's while it has one.
     scoped control_size: ControlSize = ControlSize::Regular;
-    context ControlSizeContext, ControlSizeGuard;
+    context ControlSizeContext;
 }
 
 /// Sets the ambient control size of every surface without one of its own. Reactive: everything that read it re-runs, so a switch re-spaces the controls already on screen rather than waiting for whatever rebuilds them.

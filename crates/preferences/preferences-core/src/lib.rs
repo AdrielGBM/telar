@@ -20,7 +20,7 @@ reactive_core::dropless_thread_local! {
 reactive_core::surface_scoped! {
     /// The active surface's own high-contrast choice, in place of the application's and the system's while it has one.
     scoped contrast: bool as Option<bool> = None;
-    context HighContrastContext, HighContrastGuard;
+    context HighContrastContext;
 }
 
 /// Replaces the preferences everything reads, notifying only the fields that changed. The runner calls this; a test or a tool without one can call it to stand in for the platform.
@@ -31,12 +31,12 @@ pub fn set_system_preferences(preferences: SystemPreferences) {
         high_contrast,
         locales,
     } = preferences;
-    reactive_core::begin_batch();
-    replace(&COLOR_SCHEME, color_scheme);
-    replace(&REDUCED_MOTION, reduced_motion);
-    replace(&HIGH_CONTRAST, high_contrast);
-    replace(&LOCALES, locales);
-    reactive_core::end_batch();
+    reactive_core::batch(|| {
+        replace(&COLOR_SCHEME, color_scheme);
+        replace(&REDUCED_MOTION, reduced_motion);
+        replace(&HIGH_CONTRAST, high_contrast);
+        replace(&LOCALES, locales);
+    });
 }
 
 fn replace<T: Clone + PartialEq + 'static>(

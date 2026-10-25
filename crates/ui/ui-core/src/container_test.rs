@@ -166,7 +166,7 @@ fn a_click_that_rerenders_the_widget_it_landed_on_does_not_panic() {
     use crate::context::track_layout;
     use crate::styled_container::StyledContainer;
     use platform_core::PointerButton;
-    use reactive_core::{begin_batch, end_batch, signal};
+    use reactive_core::{OpenBatch, signal};
 
     reset_layout_runtime();
     let s = signal(0i32);
@@ -206,7 +206,7 @@ fn a_click_that_rerenders_the_widget_it_landed_on_does_not_panic() {
     let cx = (br.x + br.width / 2.0) as f64;
     let cy = (br.y + br.height / 2.0) as f64;
     for phase in [true, false] {
-        begin_batch();
+        let mut held = OpenBatch::open();
         let ev = if phase {
             Event::PointerPressed {
                 x: cx,
@@ -223,11 +223,11 @@ fn a_click_that_rerenders_the_widget_it_landed_on_does_not_panic() {
             }
         };
         if tree.on_event(&ev) == EventResult::Handled {
-            end_batch();
-            begin_batch();
+            held.close();
+            held = OpenBatch::open();
         }
         let _ = tree.commands();
-        end_batch();
+        held.close();
     }
 
     assert_eq!(s.get(), 1, "click should have incremented the signal");

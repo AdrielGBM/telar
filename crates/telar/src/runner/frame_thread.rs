@@ -31,7 +31,7 @@ pub(super) enum RenderMsg {
 ///
 /// **Frames here are droppable.** Anything added to this loop has to tolerate a frame never arriving: the stale-frame gate below skips whole frames whenever the UI thread outruns the renderer, so no step may leave a side effect half-applied for the next one to finish.
 ///
-/// Only the UI-thread side of the boundary is `!Send`-constrained; nothing reactive crosses. What arrives is flat data plus `Arc`s, and the proof of that is simply that this compiles.
+/// Nothing reactive crosses: every runtime handle is `!Send`, so the `Send` bounds on `R` and the channels are the proof that only flat data and `Arc`s arrive.
 pub(super) fn spawn_render_thread<R>(
     renderer: R,
 ) -> (

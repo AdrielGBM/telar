@@ -201,8 +201,7 @@ pub fn fire_timers() {
             if is_surface_disposed(timer.surface) {
                 continue;
             }
-            let _surface = timer.surface.enter();
-            (timer.callback)();
+            timer.surface.with_entered(timer.callback);
         }
     });
 }

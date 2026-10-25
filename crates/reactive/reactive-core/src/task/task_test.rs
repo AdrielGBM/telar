@@ -5,7 +5,7 @@ use std::time::Duration;
 use web_time::Instant;
 
 use super::*;
-use crate::runtime::{SurfaceEnterGuard, set_current_surface, set_surface_enter_hook};
+use crate::runtime::{set_current_surface, set_surface_enter_hook};
 
 // `TASK_WAKER` and the pool are process-global while the registries are per-thread, so every test here serialises on this.
 static SERIAL: Mutex<()> = Mutex::new(());
@@ -67,23 +67,19 @@ fn a_panicking_worker_abandons_its_callback() {
 #[test]
 fn completion_reenters_the_spawning_surface() {
     let _serial = serial();
-    set_surface_enter_hook(|handle| {
+    set_surface_enter_hook(|handle, run| {
         let prev = set_current_surface(handle);
-        SurfaceEnterGuard::new(move || {
-            set_current_surface(prev);
-        })
+        run();
+        set_current_surface(prev);
     });
 
     let seen = Rc::new(std::cell::Cell::new(SurfaceHandle::NONE));
     let sink = Rc::clone(&seen);
-    {
-        let _surface_a = SurfaceHandle(7).enter();
-        spawn_task(|| (), move |()| sink.set(current_surface()));
-    }
+    SurfaceHandle::from_raw(7)
+        .with_entered(|| spawn_task(|| (), move |()| sink.set(current_surface())));
 
-    let _surface_b = SurfaceHandle(9).enter();
-    drain_until(|| !seen.get().is_none());
-    assert_eq!(seen.get(), SurfaceHandle(7));
+    SurfaceHandle::from_raw(9).with_entered(|| drain_until(|| !seen.get().is_none()));
+    assert_eq!(seen.get(), SurfaceHandle::from_raw(7));
 }
 
 #[test]
@@ -222,11 +218,11 @@ fn a_disposed_surfaces_task_never_runs() {
     let _serial = serial();
     let ran = Rc::new(std::cell::Cell::new(false));
     let sink = Rc::clone(&ran);
-    let previous = set_current_surface(SurfaceHandle(11));
+    let previous = set_current_surface(SurfaceHandle::from_raw(11));
     let task = spawn_task(|| (), move |()| sink.set(true));
     set_current_surface(previous);
 
-    crate::dispose_surface(SurfaceHandle(11));
+    crate::dispose_surface(SurfaceHandle::from_raw(11));
     drain_until(|| !task.is_pending());
     assert!(!ran.get(), "its callback was dropped, not run");
 }
@@ -235,7 +231,7 @@ fn a_disposed_surfaces_task_never_runs() {
 #[test]
 fn a_stream_whose_surface_goes_away_inside_its_item_is_stopped() {
     let _serial = serial();
-    let surface = SurfaceHandle(12);
+    let surface = SurfaceHandle::from_raw(12);
     let seen = Rc::new(std::cell::Cell::new(0u32));
     let sink = Rc::clone(&seen);
     let (resume_tx, resume_rx) = std::sync::mpsc::channel();

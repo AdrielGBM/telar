@@ -164,7 +164,7 @@ pub use styled_container::{
 };
 pub use surface::{Edge, Scrim, SurfaceScaffold, SurfaceTransition};
 pub use surface_canvas::{SurfaceCanvas, SurfaceEnv, composite_surface};
-pub use surface_context::{Surface, SurfaceGuard};
+pub use surface_context::Surface;
 pub use surface_font::{open_surface_font_family, set_font_family, use_font_family};
 pub use surface_frame::SurfaceFrame;
 pub use surface_style::{SurfaceAmendment, SurfaceStyle, amend_surface};

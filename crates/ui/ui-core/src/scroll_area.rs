@@ -1448,10 +1448,8 @@ impl Component for LayoutScrollArea {
 impl Drop for LayoutScrollArea {
     fn drop(&mut self) {
         self.host.take();
-        if let Some(id) = self.focus
-            && let Some(_home) = self.home.enter()
-        {
-            focus::unregister(id);
+        if let Some(id) = self.focus {
+            self.home.with_entered(|| focus::unregister(id));
         }
     }
 }

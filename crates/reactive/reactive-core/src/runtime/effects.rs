@@ -110,6 +110,24 @@ pub(crate) fn schedule(id: EffectId) {
     }
 }
 
+/// Queues again a memo recompute that could not run, flushing at once when `now` and nothing holds the flush back; `now` is false during an unwind, where running effects could panic again.
+pub(crate) fn reschedule_memo(id: EffectId, now: bool) {
+    let should_flush = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let Some(entry) = rt.effects.get(id) else {
+            return false;
+        };
+        let height = entry.height;
+        // Pushed whether or not the set already names it: the run that could not happen was drained from the queue, and the set keeps it until the user-effect drain clears it.
+        rt.pending_set.insert(id);
+        rt.memo_pending.push((Reverse(height), id));
+        now && rt.batch_depth == 0 && !rt.flushing
+    });
+    if should_flush {
+        flush();
+    }
+}
+
 pub(crate) fn clean_effect(id: EffectId) {
     let (sources, source_slots) = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
@@ -237,10 +255,7 @@ pub(crate) fn run_effect(id: EffectId) {
         }
         let _guard = PopGuard(owner_depth);
         // Re-enter this effect's surface, so its layout, overlay and focus resolve against the surface that built it even when the write that scheduled it came from another. Outside the runtime borrow, and inert for a single-surface app.
-        let outcome = {
-            let _surface_guard = surface.enter();
-            catch_unwind(AssertUnwindSafe(|| callback()))
-        };
+        let outcome = surface.with_entered(|| catch_unwind(AssertUnwindSafe(|| callback())));
         drop(_guard);
         RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();

@@ -2,6 +2,8 @@
 //!
 //! The list of exports is written once, in [`__hot_guest_api`](crate::__hot_guest_api): the `app!` macro turns it into the dylib's `#[no_mangle]` symbols, and the host into the table it resolves them into, so a name or a signature cannot drift between the two.
 
+use std::cell::RefCell;
+use std::mem::ManuallyDrop;
 use std::time::{Duration, Instant};
 
 use platform_core::{
@@ -16,6 +18,7 @@ use crate::app::App;
 use crate::tree::HotTree;
 use platform_core::guest::{GuestResult, guest_call};
 pub use platform_core::guest::{loaded, quiesce, unloading};
+use reactive_core::OpenBatch;
 
 /// Every export the host resolves, as `field => symbol(arguments) -> output`, handed to the macro the caller names. Each runs [`guest`](crate::hot::guest)'s function of the same field name and returns a [`GuestResult`] of its output.
 #[doc(hidden)]
@@ -189,13 +192,22 @@ pub fn motion_continuous() -> GuestResult<bool> {
     guest_call(crate::motion::has_continuous)
 }
 
+reactive_core::dropless_thread_local! {
+    // Never dropped, which costs nothing: `OpenBatch` is zero-sized, so the `Vec` never allocates.
+    static HOST_BATCHES: RefCell<ManuallyDrop<Vec<OpenBatch>>> = const { RefCell::new(ManuallyDrop::new(Vec::new())) };
+}
+
 /// The host's batch cannot reach the dylib's reactive runtime: without this one a handler's write flushes mid-dispatch, and a segment loses its subscriptions while its widget is borrowed.
 pub fn begin_batch() -> GuestResult<()> {
-    guest_call(crate::begin_batch)
+    guest_call(|| HOST_BATCHES.with(|held| held.borrow_mut().push(OpenBatch::open())))
 }
 
 pub fn end_batch() -> GuestResult<()> {
-    guest_call(crate::end_batch)
+    guest_call(|| {
+        if let Some(batch) = HOST_BATCHES.with(|held| held.borrow_mut().pop()) {
+            batch.close();
+        }
+    })
 }
 
 pub fn relayout() -> GuestResult<()> {

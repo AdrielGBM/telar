@@ -1381,15 +1381,14 @@ impl Drop for StyledContainer {
         }
         // Before releasing focus below, so `on_focus` does not fire during teardown.
         self.focusable._effect.take();
-        let Some(_home) = self.home.enter() else {
-            return;
-        };
-        if let Some(id) = self.focusable.id {
-            focus::unregister(id);
-        }
-        if let Some(scope) = self.focusable.scope {
-            focus::unregister_scope(scope);
-        }
+        self.home.with_entered(|| {
+            if let Some(id) = self.focusable.id {
+                focus::unregister(id);
+            }
+            if let Some(scope) = self.focusable.scope {
+                focus::unregister_scope(scope);
+            }
+        });
     }
 }
 

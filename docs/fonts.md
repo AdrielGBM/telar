@@ -148,7 +148,7 @@ in the new family on the next frame. Nothing is reopened or rebuilt. `use_font_f
 | Item | What it is |
 | --- | --- |
 | `AppConfig::font_family` | What a surface opens in. A surface opened later carries its own configuration. |
-| `set_font_family(Option<FontFamily>)` | Moves the active surface's family. Call it inside the surface: from its tree, an effect it owns, or with the surface entered (`TextureUi::enter`). A tree built again on the surface keeps it. |
+| `set_font_family(Option<FontFamily>)` | Moves the active surface's family. Call it inside the surface: from its tree, an effect it owns, or with the surface entered (`TextureUi::with_entered`). A tree built again on the surface keeps it. |
 | `use_font_family()` | Reactive read of the active surface's family, `None` while it is the platform's. |
 | `open_surface_font_family(Option<FontFamily>)` | What the runner tells a surface before it builds the tree. A host with no runner calls it to stand in for one. |
 

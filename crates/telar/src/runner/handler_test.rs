@@ -201,8 +201,7 @@ fn a_clean_tree_with_a_continuous_region_is_still_worth_a_frame() {
     let mut handler = handler();
     let window = HeadlessWindow::new(120, 80);
     assert!(handler.on_resume(&window), "a headless resume builds one");
-    // The platform opens a batch before dispatching and `on_redraw` closes and reopens it, so without one open it would close a batch never begun.
-    begin_batch();
+    handler.new_events();
 
     // Forced open before each pass: this is about what counts as content, not about the frame clock.
     let opened = || web_time::Instant::now() - FRAME_BUDGET * 2;
@@ -969,10 +968,7 @@ fn a_dropped_handler_drops_its_tree_inside_its_surface() {
     let surface = ui_core::Surface::new();
     let handle = surface.handle();
     handler.surface = Some(surface);
-    {
-        let _surface = handler.enter_surface();
-        handler.tree = Some(handler.app.mount());
-    }
+    handler.entered(|handler| handler.tree = Some(handler.app.mount()));
 
     drop(handler);
 

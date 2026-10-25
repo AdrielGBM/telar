@@ -9,17 +9,58 @@
 //! **Tracking is silent.** Subscribing to a dead signal is bookkeeping with nothing to record; no value is involved, so nothing can be got wrong by doing nothing.
 //!
 //! A caller that legitimately holds a handle longer than its owner — one kept in a store the tree does not own — should not be finding this out by crashing. [`crate::RwSignal::is_alive`] and the `try_*` reads are there to be asked first, and [`crate::detached`] is there so the question does not arise.
+//!
+//! **A value is borrowed on its own, never with the runtime**, so the closure given to `.with` / `.update` may read and write any other signal, while touching the same one in a way that would alias panics naming its type and both call sites.
 
+use std::any::Any;
+use std::cell::{Ref, RefMut};
 use std::cmp::Reverse;
+use std::panic::Location;
+use std::rc::Rc;
 
 use super::flush::flush;
+use super::site_cell::{HeldAt, SiteCell};
 use super::{EffectId, RUNTIME, SignalId, SignalStorage};
 
-pub(crate) fn create_signal_storage<T: 'static>(value: T) -> SignalId {
+struct SignalCell<T>(SiteCell<T>);
+
+impl<T: 'static> SignalCell<T> {
+    #[track_caller]
+    fn read(&self) -> Ref<'_, T> {
+        match self.0.try_read() {
+            Ok(value) => value,
+            Err(held) => reentered::<T>("read", &held),
+        }
+    }
+
+    #[track_caller]
+    fn write(&self) -> RefMut<'_, T> {
+        match self.0.try_write() {
+            Ok(value) => value,
+            Err(held) => reentered::<T>("written", &held),
+        }
+    }
+}
+
+#[cold]
+#[track_caller]
+fn reentered<T>(action: &str, held: &HeldAt) -> ! {
+    let type_name = std::any::type_name::<T>();
+    let here = Location::caller();
+    panic!(
+        "signal of type {type_name} {action} inside its own `.with` / `.update`.\n  \
+         wanted by:  {here}\n  \
+         last taken: {held}\n\
+         A signal cannot be written while one of its own `.with` / `.update` closures is running, nor read while \
+         its own `.update` is: copy what you need out of the closure and touch the signal after it returns."
+    )
+}
+
+fn insert_storage(value: Rc<dyn Any>) -> SignalId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         let id = rt.signals.insert(SignalStorage {
-            value: Box::new(value),
+            value,
             version: 0,
             subscribers: Vec::new(),
             observer_slots: Vec::new(),
@@ -29,90 +70,99 @@ pub(crate) fn create_signal_storage<T: 'static>(value: T) -> SignalId {
     })
 }
 
+pub(crate) fn create_signal_storage<T: 'static>(value: T) -> SignalId {
+    insert_storage(Rc::new(SignalCell(SiteCell::new(value))))
+}
+
+/// A slot holding `value` as it is, for a node that keeps its state behind a cell of its own and only needs the arena to own it.
+pub(crate) fn create_shared_storage<V: 'static>(value: Rc<V>) -> SignalId {
+    insert_storage(value)
+}
+
 /// Names the type the handle expected, because the id alone identifies nothing a reader can act on.
 fn dead(action: &str, type_name: &'static str) -> String {
     format!("signal of type {type_name} {action} after its storage was freed")
+}
+
+fn downcast<V: 'static>(value: Rc<dyn Any>) -> Rc<V> {
+    value.downcast::<V>().expect("signal type mismatch")
+}
+
+fn stored<V: 'static>(id: SignalId) -> Option<Rc<V>> {
+    RUNTIME
+        .with(|rt| rt.borrow().signals.get(id).map(|s| Rc::clone(&s.value)))
+        .map(downcast)
+}
+
+/// [`stored`] for a write, answering `None` for storage a teardown in flight has freed.
+fn stored_for_write<T: 'static>(id: SignalId, action: &str) -> Option<Rc<SignalCell<T>>> {
+    let found = RUNTIME.with(|rt| {
+        let rt = rt.borrow();
+        match rt.signals.get(id) {
+            Some(storage) => Ok(Rc::clone(&storage.value)),
+            None => Err(rt.disposing > 0),
+        }
+    });
+    match found {
+        Ok(value) => Some(downcast(value)),
+        // A teardown destroying what a cleanup then writes to is the shape of the pass, not a mistake in it.
+        Err(true) => None,
+        Err(false) => panic!("{}", dead(action, std::any::type_name::<T>())),
+    }
+}
+
+/// The value [`create_shared_storage`] stored.
+pub(crate) fn shared_storage<V: 'static>(id: SignalId) -> Rc<V> {
+    stored(id).unwrap_or_else(|| panic!("{}", dead("read", std::any::type_name::<V>())))
 }
 
 pub(crate) fn signal_is_alive(id: SignalId) -> bool {
     RUNTIME.with(|rt| rt.borrow().signals.contains_key(id))
 }
 
+#[track_caller]
 pub(crate) fn with_signal_value<T: 'static, R>(id: SignalId, f: impl FnOnce(&T) -> R) -> R {
-    RUNTIME.with(|rt| {
-        let rt = rt.borrow();
-        let storage = rt
-            .signals
-            .get(id)
-            .unwrap_or_else(|| panic!("{}", dead("read", std::any::type_name::<T>())));
-        f(storage
-            .value
-            .downcast_ref::<T>()
-            .expect("signal type mismatch"))
-    })
+    let Some(cell) = stored::<SignalCell<T>>(id) else {
+        panic!("{}", dead("read", std::any::type_name::<T>()));
+    };
+    f(&cell.read())
 }
 
 /// [`with_signal_value`] for a caller that would rather ask than crash.
+#[track_caller]
 pub(crate) fn try_with_signal_value<T: 'static, R>(
     id: SignalId,
     f: impl FnOnce(&T) -> R,
 ) -> Option<R> {
-    RUNTIME.with(|rt| {
-        let rt = rt.borrow();
-        let storage = rt.signals.get(id)?;
-        Some(f(storage
-            .value
-            .downcast_ref::<T>()
-            .expect("signal type mismatch")))
-    })
+    let cell = stored::<SignalCell<T>>(id)?;
+    Some(f(&cell.read()))
 }
 
+#[track_caller]
 pub(crate) fn set_signal_value<T: 'static>(id: SignalId, value: T) {
-    RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        if !rt.signals.contains_key(id) {
-            // A teardown destroying what a cleanup then writes to is the shape of the pass, not a mistake in it.
-            if rt.disposing > 0 {
-                return;
-            }
-            panic!("{}", dead("written", std::any::type_name::<T>()));
-        }
-        *rt.signals[id]
-            .value
-            .downcast_mut::<T>()
-            .expect("signal type mismatch") = value;
-    });
+    let Some(cell) = stored_for_write::<T>(id, "written") else {
+        return;
+    };
+    // Dropped once the borrow has ended, so a drop that reaches this signal finds it settled rather than collides.
+    let previous = std::mem::replace(&mut *cell.write(), value);
+    drop(previous);
 }
 
+#[track_caller]
 pub(crate) fn update_signal_value<T: 'static>(id: SignalId, f: impl FnOnce(&mut T)) {
-    RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        if !rt.signals.contains_key(id) {
-            if rt.disposing > 0 {
-                return;
-            }
-            panic!("{}", dead("updated", std::any::type_name::<T>()));
-        }
-        f(rt.signals[id]
-            .value
-            .downcast_mut::<T>()
-            .expect("signal type mismatch"));
-    });
+    if let Some(cell) = stored_for_write::<T>(id, "updated") {
+        f(&mut cell.write());
+    }
 }
 
 /// [`update_signal_value`] that answers `None` for freed storage and never notifies, for state a signal's subscribers must not hear about.
+#[track_caller]
 pub(crate) fn try_update_signal_value<T: 'static, R>(
     id: SignalId,
     f: impl FnOnce(&mut T) -> R,
 ) -> Option<R> {
-    RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        let storage = rt.signals.get_mut(id)?;
-        Some(f(storage
-            .value
-            .downcast_mut::<T>()
-            .expect("signal type mismatch")))
-    })
+    let cell = stored::<SignalCell<T>>(id)?;
+    Some(f(&mut cell.write()))
 }
 
 /// How many writes the signal has seen, or `None` once its storage is gone.
@@ -141,11 +191,10 @@ pub(crate) fn release_transaction(id: SignalId) {
 
 pub(crate) fn track_signal(id: SignalId) {
     RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        let observer_id = match rt.observer_stack.last().copied() {
-            Some(id) => id,
-            None => return,
+        let Some(observer_id) = rt.borrow().observer_stack.last().copied() else {
+            return;
         };
+        let mut rt = rt.borrow_mut();
         if !rt.effects.contains_key(observer_id) {
             return;
         }

@@ -105,7 +105,7 @@ fn mount() {
         })
         .expect("the canvas builds"),
     );
-    let handle = canvas.surface().handle().0;
+    let handle = canvas.surface().handle().raw();
     let inside = {
         let built = built.borrow();
         [0, 1].map(|at| Stop {
@@ -259,10 +259,9 @@ fn app_focus() -> (Vec<String>, bool) {
             .filter(|stop| stop.focused.get())
             .map(|stop| stop.written.clone())
             .collect();
-        let inner = {
-            let _inside = page.canvas.enter();
-            ui_core::focus::current().is_some()
-        };
+        let inner = page
+            .canvas
+            .with_entered(|| ui_core::focus::current().is_some());
         (focused, inner && ui_core::focus::current().is_some())
     })
 }

@@ -1,6 +1,7 @@
 //! Batching and the flush: draining scheduled effects in topological order, once per drain.
 
 use std::cmp::Reverse;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use super::effects::run_effect;
@@ -120,38 +121,52 @@ impl<I: Iterator<Item = EffectId>> Drop for Unrun<I> {
 
 /// Defers every effect scheduled inside `f` until it returns, so a run of writes flushes once.
 pub fn batch<R>(f: impl FnOnce() -> R) -> R {
-    // A panic inside `f` must not leave `batch_depth` unbalanced (it would suppress every future flush on the shared runtime). The guard decrements on any exit, including an unwind.
-    struct DepthGuard;
-    impl Drop for DepthGuard {
-        fn drop(&mut self) {
-            RUNTIME.with(|rt| {
-                let mut rt = rt.borrow_mut();
-                rt.batch_depth = rt.batch_depth.saturating_sub(1);
-            });
-        }
-    }
-    RUNTIME.with(|rt| rt.borrow_mut().batch_depth += 1);
-    let result = {
-        let _depth_guard = DepthGuard;
-        f()
-    };
-    flush_when_settled();
+    let open = OpenBatch::open();
+    let result = f();
+    open.close();
     result
 }
 
-/// Opens a batch. Pair with [`end_batch`]; nesting is counted.
-pub fn begin_batch() {
-    RUNTIME.with(|rt| rt.borrow_mut().batch_depth += 1);
+/// [`batch`] held by a value instead of a closure, for a batch spanning calls or a `#[track_caller]` body; [`close`](Self::close) ends it and flushes when it was the outermost, while dropping it unclosed, as an unwind does, only ends it, so a panic cannot leave every later flush suppressed.
+#[must_use = "dropping an `OpenBatch` ends it without flushing; call `close`"]
+pub struct OpenBatch {
+    _ui_thread_only: PhantomData<*const ()>,
 }
 
-/// Closes a batch, flushing when the outermost one closes.
-pub fn end_batch() {
+impl OpenBatch {
+    pub fn open() -> Self {
+        RUNTIME.with(|rt| rt.borrow_mut().batch_depth += 1);
+        OpenBatch {
+            _ui_thread_only: PhantomData,
+        }
+    }
+
+    pub fn close(self) {
+        std::mem::forget(self);
+        if close_batch() {
+            flush_when_settled();
+        }
+    }
+}
+
+impl Drop for OpenBatch {
+    fn drop(&mut self) {
+        close_batch();
+    }
+}
+
+/// Ends one level of batching, answering whether [`flush_when_settled`] has anything to do, so a batch that scheduled nothing costs one borrow to close.
+fn close_batch() -> bool {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        debug_assert!(rt.batch_depth > 0, "end_batch without begin_batch");
         rt.batch_depth = rt.batch_depth.saturating_sub(1);
-    });
-    flush_when_settled();
+        rt.batch_depth == 0
+            && !rt.flushing
+            && rt.disposing == 0
+            && (!rt.pending.is_empty()
+                || !rt.memo_pending.is_empty()
+                || !rt.settle_queue.is_empty())
+    })
 }
 
 /// Flushes what is pending and then runs the settle queue, unless a batch, a flush or a teardown is still open; whichever of those closes last does it instead.
@@ -195,7 +210,10 @@ pub fn set_flush_notify(f: impl Fn() + 'static) -> FlushNotifyHandle {
         let id = rt.next_flush_callback_id;
         rt.next_flush_callback_id += 1;
         rt.flush_callbacks.push((id, Rc::new(f)));
-        FlushNotifyHandle { id }
+        FlushNotifyHandle {
+            id,
+            _ui_thread_only: PhantomData,
+        }
     })
 }
 
@@ -228,8 +246,7 @@ pub(crate) fn run_settled() {
             if super::is_surface_disposed(surface) {
                 continue;
             }
-            let _entered = surface.enter();
-            f();
+            surface.with_entered(f);
         }
     }
 }

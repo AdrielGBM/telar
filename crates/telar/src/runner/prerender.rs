@@ -152,10 +152,10 @@ fn settle(app: &mut LocalApp<impl App>, tree: &dyn crate::tree::UiTree) -> bool 
     let start = Instant::now();
     let mut last = None;
     for frame in 0..MAX_FRAMES {
-        reactive_core::begin_batch();
-        app.drain_tasks();
-        app.motion_tick(start + super::FRAME_BUDGET * frame);
-        reactive_core::end_batch();
+        reactive_core::batch(|| {
+            app.drain_tasks();
+            app.motion_tick(start + super::FRAME_BUDGET * frame);
+        });
         app.relayout();
         let mut redraw_requested = false;
         app.on_frame(&mut platform_core::AppCtx::new(

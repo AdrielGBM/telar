@@ -176,16 +176,14 @@ fn a_claim_dropped_under_another_surface_is_withdrawn_from_its_own() {
     use crate::surface_context::Surface;
 
     let (first, second) = (Surface::new(), Surface::new());
-    let mut card = {
-        let _in_first = first.enter();
+    let mut card = first.with_entered(|| {
         reset_layout_runtime();
         let mut card = card_with_grip();
         card.on_event(&moved(120.0, 20.0));
         assert_eq!(requested_cursor(), Cursor::Grab);
         card
-    };
-    {
-        let _in_second = second.enter();
+    });
+    second.with_entered(|| {
         let mut other = card_with_grip();
         other.on_event(&moved(20.0, 20.0));
         assert_eq!(requested_cursor(), Cursor::EwResize);
@@ -197,13 +195,14 @@ fn a_claim_dropped_under_another_surface_is_withdrawn_from_its_own() {
         );
         drop(card);
         drop(other);
-    }
-    let _in_first = first.enter();
-    assert_eq!(
-        requested_cursor(),
-        Cursor::Default,
-        "the first window's shape went with its box"
-    );
+    });
+    first.with_entered(|| {
+        assert_eq!(
+            requested_cursor(),
+            Cursor::Default,
+            "the first window's shape went with its box"
+        );
+    })
 }
 
 #[test]
@@ -212,10 +211,7 @@ fn a_claim_that_outlives_its_surface_leaves_other_surfaces_alone() {
 
     reset_layout_runtime();
     let surface = crate::Surface::new();
-    let orphan = {
-        let _entered = surface.enter();
-        CursorClaim::new(Cursor::Grab)
-    };
+    let orphan = surface.with_entered(|| CursorClaim::new(Cursor::Grab));
     drop(surface);
     let here = CursorClaim::new(Cursor::Text);
     here.hover(1, true);

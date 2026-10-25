@@ -32,7 +32,7 @@ reactive_core::surface_local! {
     /// Per-surface dismiss stack: Escape, Back and Enter answer to the overlays of the surface they were pressed in.
     slot STACK: Stack = Stack { entries: Vec::new(), depth: signal(0) };
     access with_stack, with_stack_ref;
-    context DismissContext, DismissGuard;
+    context DismissContext;
 }
 
 reactive_core::dropless_thread_local! {
@@ -121,10 +121,9 @@ impl DismissRegistration {
 
 impl Drop for DismissRegistration {
     fn drop(&mut self) {
-        let Some(_home) = self.home.enter() else {
-            return;
-        };
-        unregister_dismiss(self.id);
+        self.home.with_entered(|| {
+            unregister_dismiss(self.id);
+        });
     }
 }
 

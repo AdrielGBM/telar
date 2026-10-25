@@ -1,7 +1,7 @@
 //! The frame loop: one surface's [`EventHandler`](platform_core::EventHandler), from resume to teardown.
 
 use platform_core::{Event, EventHandler, PointerButton, SystemPreferences, Window, WindowCommand};
-use reactive_core::{FlushNotifyHandle, begin_batch, end_batch, set_flush_notify};
+use reactive_core::{FlushNotifyHandle, set_flush_notify};
 use renderer_core::RenderBackend;
 use services_core::AppPathsProvider;
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use crate::prefs::UserPrefs;
 use super::COMMAND_BUF_POOL_CAP;
 use super::frame_thread::{FrameMsg, Recovery, RenderMsg, RenderRecovery, frame_step_succeeded};
 use super::host::{RawHandles, RendererHost, RendererRequest, RendererStart, SurfaceRenderer};
-use super::state::{AppEnv, FramePacer, WindowTitle};
+use super::state::{AppEnv, FramePacer, LoopBatch, WindowTitle};
 use super::{FRAME_BUDGET, HW_KEEPALIVE_INTERVAL, IDLE_GRACE};
 
 pub(super) struct AppHandler<W, D: DevOverlay>
@@ -26,7 +26,7 @@ where
     // Activated around every lifecycle call so build, event and frame resolve against the right surface. `None` for a single-window app, whose ambient thread-local world is its one surface.
     pub(super) surface: Option<std::rc::Rc<ui_core::Surface>>,
     // Entered alongside `surface`, so a title-bar action pushed by one window's widgets targets that window and never a sibling sharing the UI thread. A single-window app keeps the ambient queue.
-    pub(super) window_commands: platform_core::WindowCommandContext,
+    pub(super) window_commands: std::rc::Rc<platform_core::WindowCommandContext>,
     // From the app rather than built here: under hot reload the tree has to live in the dylib's runtime for its segments to subscribe to anything.
     pub(super) tree: Option<Box<dyn crate::tree::UiTree>>,
     // Driven inline on this thread. `None` for an on-screen surface, whose renderer lives on the render thread.
@@ -44,6 +44,7 @@ where
     pub(super) pending_restart: bool,
     pub(super) recovery: RenderRecovery,
     pub(super) _flush_notify: Option<FlushNotifyHandle>,
+    pub(super) loop_batch: LoopBatch,
     pub(super) scale_factor: f32,
     // Set when the app pushed `WindowCommand::Close`; polled via `take_exit_request` to leave the run loop.
     pub(super) exit_requested: bool,
@@ -127,7 +128,7 @@ where
     AppHandler::<W, D> {
         app,
         surface: None,
-        window_commands: platform_core::WindowCommandContext::new(),
+        window_commands: std::rc::Rc::new(platform_core::WindowCommandContext::new()),
         tree: None,
         renderer: None,
         renderer_host: host,
@@ -139,6 +140,7 @@ where
         pending_restart: false,
         recovery: RenderRecovery::default(),
         _flush_notify: None,
+        loop_batch: LoopBatch::default(),
         scale_factor: 1.0,
         exit_requested: false,
         redraw_waker: None,
@@ -174,16 +176,11 @@ where
     D: DevOverlay,
 {
     fn drop(&mut self) {
-        let _surface = self.enter_surface();
-        self.tree = None;
-        self.forget_frames();
+        self.entered(|this| {
+            this.tree = None;
+            this.forget_frames();
+        });
     }
-}
-
-// Dropped fields restore the previous surface and queue; the two restores are independent, so drop order is irrelevant.
-struct LifecycleGuard {
-    _surface: ui_core::SurfaceGuard,
-    _commands: platform_core::WindowCommandGuard,
 }
 
 /// One frame's pass through `on_redraw`, opened once the frame is known to be due.
@@ -295,21 +292,20 @@ where
     /// Hands `event` to the app's overlays, and to its tree where no overlay took it.
     fn dispatch_to_app(&mut self, event: &Event) -> EventResult {
         // A hot-reloaded app dylib links its own reactive-core copy, which the host's batch cannot reach; a handler's signal write would flush immediately and re-run a segment's effect while its widget is still borrowed for `on_event`, silently dropping that segment's subscriptions.
-        self.app.begin_event_batch();
-        // Overlays paint on top, so positioned events must reach them first; registry is consulted via the bridge before tree dispatch.
-        let handled = if self.app.dispatch_overlays(event) {
-            if let (Event::PointerMoved { .. }, Some(tree)) = (event, self.tree.as_mut()) {
-                tree.on_covered_event(event);
+        let (app, tree) = (&self.app, &mut self.tree);
+        app.event_batch(|| {
+            // Overlays paint on top, so positioned events must reach them first; registry is consulted via the bridge before tree dispatch.
+            if app.dispatch_overlays(event) {
+                if let (Event::PointerMoved { .. }, Some(tree)) = (event, tree.as_mut()) {
+                    tree.on_covered_event(event);
+                }
+                EventResult::Handled
+            } else {
+                tree.as_mut()
+                    .map(|tree| tree.on_event(event))
+                    .unwrap_or(EventResult::Ignored)
             }
-            EventResult::Handled
-        } else {
-            self.tree
-                .as_mut()
-                .map(|tree| tree.on_event(event))
-                .unwrap_or(EventResult::Ignored)
-        };
-        self.app.end_event_batch();
-        handled
+        })
     }
 
     /// Gives the app's runtime the history this surface's platform stands on, before a tree is built from it. A surface with no address of its own leaves the app's alone.
@@ -328,18 +324,16 @@ where
         if location.follow(history.clone(), &mut self.env.prefs) {
             self.env.save_prefs();
         }
-        self.app.begin_event_batch();
-        self.app.set_location_history(&history);
-        self.app.end_event_batch();
+        let app = &self.app;
+        app.event_batch(|| app.set_location_history(&history));
         self.apply_window_commands(window);
         window.request_redraw();
     }
 
     /// Writes a snapshot into the app's runtime, batched so the effects it drives — the theme's `follow_system` among them — re-render once across the hot-reload boundary.
     fn apply_system_preferences(&mut self, preferences: SystemPreferences) {
-        self.app.begin_event_batch();
-        self.app.set_system_preferences(&preferences);
-        self.app.end_event_batch();
+        let app = &self.app;
+        app.event_batch(|| app.set_system_preferences(&preferences));
         self.system_preferences = Some(preferences);
     }
 
@@ -387,7 +381,7 @@ where
             self.apply_system_preferences(reported);
         }
         crate::user_preferences::follow_stored_choices();
-        super::hydration::settle_motion(self.app.as_ref());
+        super::hydration::settle_motion(self.app.as_ref(), &mut self.loop_batch);
     }
 
     /// Readies the tree for a presentation that has retained nothing of it: past every generation already drawn (see [`FrameGeneration`]), and at the surface's real size. Callers must have `scale_factor` and `renderer_transparent` current before calling.
@@ -419,12 +413,27 @@ where
             .set_surface_size(geometry_core::Size::new(width as f32, height as f32));
     }
 
-    /// Enters this handler's surface world for the duration of a lifecycle call, so its build/event/frame resolve layout/overlay/focus (and the reactive current-surface) against the right surface. Returns `None` for a single-window app — its ambient world is its one surface — making this a zero-cost no-op. The returned guard owns the restore state and does not borrow `self`, so callers can mutate `self` while it is held (`let _surface = self.enter_surface();`).
-    fn enter_surface(&self) -> Option<LifecycleGuard> {
-        self.surface.as_ref().map(|s| LifecycleGuard {
-            _surface: s.enter(),
-            _commands: self.window_commands.enter(),
-        })
+    /// Runs a lifecycle call with this handler's surface world entered, so its build/event/frame resolve layout/overlay/focus (and the reactive current-surface) against the right surface. A single-window app has no surface — its ambient world is its one surface — so `f` just runs. The surface and the command queue are held for the whole call, so `f` may replace either on `self` while their worlds are live.
+    fn entered<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let surface = self.surface.clone();
+        let commands = std::rc::Rc::clone(&self.window_commands);
+        Self::enter_world(surface.as_deref(), &commands, || f(self))
+    }
+
+    /// [`entered`](Self::entered) for a call that only reads.
+    fn entered_ref<R>(&self, f: impl FnOnce(&Self) -> R) -> R {
+        Self::enter_world(self.surface.as_deref(), &self.window_commands, || f(self))
+    }
+
+    fn enter_world<R>(
+        surface: Option<&ui_core::Surface>,
+        commands: &platform_core::WindowCommandContext,
+        f: impl FnOnce() -> R,
+    ) -> R {
+        match surface {
+            Some(surface) => surface.with_entered(|| commands.with_entered(f)),
+            None => f(),
+        }
     }
 
     /// Swaps in a rebuilt dylib, or shows the banner for one that failed to build or would not load, and tells `cargo telar dev` which a reload came to. `true` means the frame is the reload's own and this pass is over.
@@ -563,12 +572,13 @@ where
     /// The tree goes with it: it can no longer be asked for anything, and the next one this surface draws has to start past every generation the old one handed out.
     fn show_app_panic(&mut self) -> Option<String> {
         let report = self.app.take_panic()?;
-        let _surface = self.enter_surface();
-        self.tree = None;
-        self.generation.restart();
-        self.dev.set_app_panic(Some(report.clone()));
-        self.pacer.presentation_owed = true;
-        self.pacer.frame_owed = true;
+        self.entered(|this| {
+            this.tree = None;
+            this.generation.restart();
+            this.dev.set_app_panic(Some(report.clone()));
+            this.pacer.presentation_owed = true;
+            this.pacer.frame_owed = true;
+        });
         Some(report)
     }
 
@@ -847,14 +857,13 @@ where
     ///
     /// Ahead of the dirtiness [`frame_is_due`](Self::frame_is_due) reads: `motion_tick`'s writes only enqueue effects while a batch is open, so flushing here re-runs any segment reading an animated value in this frame rather than the next.
     fn advance_reactive_state(&mut self, now: web_time::Instant) {
-        // Before the tick: the batch open here defers its flush to the `end_batch` below, so a timer or task that dirties layout is picked up by the `relayout` that follows instead of waiting a frame.
+        // Before the tick: the loop's batch defers their flush to the lift below, so a timer or task that dirties layout is picked up by the `relayout` that follows instead of waiting a frame.
         self.app.fire_timers();
         self.app.drain_tasks();
         self.app.motion_tick(now);
-        end_batch();
         // A reactive change may mutate the layout tree during the flush above while the app shell only recomputes on resize or route change. Outside a batch, so the rect updates flush their segment effects before the frame is composed. Routed through the app, so a dylib-backed tree relayouts its own runtime.
-        self.app.relayout();
-        begin_batch();
+        let app = &self.app;
+        self.loop_batch.lift(|| app.relayout());
     }
 
     /// Gives the app its frame: `on_frame`, then the end-of-frame registries, the window commands it queued, and whatever the renderer host has pending.
@@ -908,8 +917,7 @@ where
             self.scale_factor,
             has_content
         );
-        end_batch();
-        begin_batch();
+        self.loop_batch.flush();
         Some(FramePass {
             size,
             has_content,
@@ -1035,105 +1043,8 @@ where
         }
         self.render_inline(msg)
     }
-}
 
-impl<W, D> EventHandler<W> for AppHandler<W, D>
-where
-    W: Window + Clone + 'static,
-    D: DevOverlay,
-{
-    fn accessibility(&self) -> Vec<platform_core::AccessNode> {
-        let _surface = self.enter_surface();
-        ui_core::accessibility::snapshot(&self.frame_text)
-    }
-
-    fn root_language(&self) -> Option<String> {
-        let _surface = self.enter_surface();
-        i18n_core::use_locale()
-    }
-
-    fn on_accessibility_action(&mut self, id: u64, activate: bool) {
-        let _surface = self.enter_surface();
-        let (app, tree) = (&self.app, &mut self.tree);
-        ui_core::accessibility::perform_action(id, activate, |event| {
-            app.begin_event_batch();
-            if !app.dispatch_overlays(event)
-                && let Some(tree) = tree
-            {
-                tree.on_event(event);
-            }
-            app.end_event_batch();
-        });
-    }
-
-    /// Starts a renderer and presents the tree: the one a previous [`on_suspend`](EventHandler::on_suspend) kept, or one built from the app on the first resume. Either way the renderer has retained nothing, so the first frame is drawn whole.
-    fn on_resume(&mut self, window: &W) -> bool {
-        let _surface = self.enter_surface();
-        // Before the tree measures a word of text. Building a renderer loads them too — which is what makes measure and draw agree — but a hardware renderer builds on its own thread, so the first layout would be sized in the platform's fonts. A renderer that does not shape glyphs skips the scan, keeping its own measurer.
-        #[cfg(feature = "shaper")]
-        if self.renderer_host.shapes_text() {
-            super::font_config::install_window_fonts(&self.fonts, self.env.paths.as_ref());
-        }
-        // Offscreen windows have no surface for a windowed renderer to create, so they rasterize into a CPU pixmap regardless of the configured backend and need no GPU adapter.
-        let renderer_ok = if window.is_offscreen() {
-            let transparent = self.is_transparent();
-            let request = RendererRequest {
-                backend: self.backend,
-                transparent,
-                fonts: &self.fonts,
-                paths: self.env.paths.as_ref(),
-                app_name: &self.env.app_name,
-            };
-            self.renderer = self.renderer_host.build_offscreen(window, &request);
-            self.renderer.is_some()
-        } else {
-            self.start_renderer(window, self.backend)
-        };
-        if !renderer_ok {
-            return false;
-        }
-        self.renderer_transparent = self.is_transparent();
-        let sf = window.scale_factor() as f32;
-        self.scale_factor = sf;
-        // The process-global loop wake redraws every surface without holding any window, so an app can cache it or hand it to a worker and it still reaches content later moved to another window. Falls back to the window's own waker, and to none where a window cannot hand one out.
-        self.redraw_waker = platform_core::loop_waker()
-            .or_else(|| window.redraw_waker())
-            .map(|wake| platform_core::RedrawWaker::new(move || wake()));
-        // The same wake reaches the app's reactive runtime, so `spawn_task` needs no waker ceremony. Under the per-window fallback this points at whichever surface resumed last, which is enough: every frame drains the whole task queue.
-        self.install_task_waker();
-        if self.tree.is_some() {
-            self.fit_tree_to(window);
-        } else {
-            #[cfg(all(
-                feature = "dev",
-                not(target_os = "android"),
-                not(target_arch = "wasm32")
-            ))]
-            self.relay_hot_reload();
-            self.mount_tree(window);
-        }
-        // Before the platform first shows the window, so a tree that asked for no decorations is never seen with them.
-        self.apply_window_commands(window);
-        self.text_input = None;
-        self.pacer.presentation_owed = true;
-
-        let w = window.clone();
-        self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
-        window.request_redraw();
-        true
-    }
-
-    /// Builds the app's UI again on the surface it is already running on, dropping the previous tree first so its effects and their subscriptions go with it.
-    ///
-    /// The window, the renderer and the surface's place on screen are untouched — this is a re-render, not a restart. The one exception is transparency, which a renderer is *built* with: an app that now asks for the other kind gets its renderer rebuilt on the next frame, which is the same path a backend switch takes.
-    fn remount(&mut self, window: &W) {
-        let _surface = self.enter_surface();
-        self.mount_tree(window);
-        window.request_redraw();
-    }
-
-    fn on_event(&mut self, event: Event, window: &W) {
-        let _surface = self.enter_surface();
+    fn handle_event(&mut self, event: Event, window: &W) {
         // Before dispatch, so a handler running on this very event sees the state it establishes: a Shift-click must read the modifiers the click arrived under.
         ui_core::observe_keyboard(&event);
         ui_core::observe_pointer(&event);
@@ -1223,28 +1134,12 @@ where
         }
         if handled == EventResult::Handled || applied.any {
             // Immediately, so `on_redraw` in the same cycle finds the tree dirty rather than deferring a cycle.
-            end_batch();
-            begin_batch();
+            self.loop_batch.flush();
             window.request_redraw();
         }
     }
 
-    fn on_back(&mut self, window: &W) -> bool {
-        let _surface = self.enter_surface();
-        self.app.begin_event_batch();
-        let went_back = self.app.navigate_back();
-        self.app.end_event_batch();
-        self.apply_window_commands(window);
-        if went_back {
-            end_batch();
-            begin_batch();
-            window.request_redraw();
-        }
-        went_back
-    }
-
-    fn on_redraw(&mut self, window: &W) {
-        let _surface = self.enter_surface();
+    fn redraw(&mut self, window: &W) {
         #[cfg(all(
             feature = "dev",
             not(target_os = "android"),
@@ -1267,9 +1162,7 @@ where
         self.report_text_input(window);
     }
 
-    /// Releases everything that presents the surface and keeps the tree, so a later [`on_resume`](EventHandler::on_resume) shows the same UI again.
-    fn on_suspend(&mut self) {
-        let _surface = self.enter_surface();
+    fn suspend(&mut self) {
         self.recovery = RenderRecovery::default();
         // Before the host suspends, so the memory it hands back to the allocator includes this one's pixmap.
         self.renderer = None;
@@ -1281,12 +1174,135 @@ where
         self.pacer.frame_owed = false;
     }
 
+    fn resume(&mut self, window: &W) -> bool {
+        // Before the tree measures a word of text. Building a renderer loads them too — which is what makes measure and draw agree — but a hardware renderer builds on its own thread, so the first layout would be sized in the platform's fonts. A renderer that does not shape glyphs skips the scan, keeping its own measurer.
+        #[cfg(feature = "shaper")]
+        if self.renderer_host.shapes_text() {
+            super::font_config::install_window_fonts(&self.fonts, self.env.paths.as_ref());
+        }
+        // Offscreen windows have no surface for a windowed renderer to create, so they rasterize into a CPU pixmap regardless of the configured backend and need no GPU adapter.
+        let renderer_ok = if window.is_offscreen() {
+            let transparent = self.is_transparent();
+            let request = RendererRequest {
+                backend: self.backend,
+                transparent,
+                fonts: &self.fonts,
+                paths: self.env.paths.as_ref(),
+                app_name: &self.env.app_name,
+            };
+            self.renderer = self.renderer_host.build_offscreen(window, &request);
+            self.renderer.is_some()
+        } else {
+            self.start_renderer(window, self.backend)
+        };
+        if !renderer_ok {
+            return false;
+        }
+        self.renderer_transparent = self.is_transparent();
+        let sf = window.scale_factor() as f32;
+        self.scale_factor = sf;
+        // The process-global loop wake redraws every surface without holding any window, so an app can cache it or hand it to a worker and it still reaches content later moved to another window. Falls back to the window's own waker, and to none where a window cannot hand one out.
+        self.redraw_waker = platform_core::loop_waker()
+            .or_else(|| window.redraw_waker())
+            .map(|wake| platform_core::RedrawWaker::new(move || wake()));
+        // The same wake reaches the app's reactive runtime, so `spawn_task` needs no waker ceremony. Under the per-window fallback this points at whichever surface resumed last, which is enough: every frame drains the whole task queue.
+        self.install_task_waker();
+        if self.tree.is_some() {
+            self.fit_tree_to(window);
+        } else {
+            #[cfg(all(
+                feature = "dev",
+                not(target_os = "android"),
+                not(target_arch = "wasm32")
+            ))]
+            self.relay_hot_reload();
+            self.mount_tree(window);
+        }
+        // Before the platform first shows the window, so a tree that asked for no decorations is never seen with them.
+        self.apply_window_commands(window);
+        self.text_input = None;
+        self.pacer.presentation_owed = true;
+
+        let w = window.clone();
+        self._flush_notify = Some(set_flush_notify(move || w.request_redraw()));
+        window.request_redraw();
+        true
+    }
+}
+
+impl<W, D> EventHandler<W> for AppHandler<W, D>
+where
+    W: Window + Clone + 'static,
+    D: DevOverlay,
+{
+    fn accessibility(&self) -> Vec<platform_core::AccessNode> {
+        self.entered_ref(|this| ui_core::accessibility::snapshot(&this.frame_text))
+    }
+
+    fn root_language(&self) -> Option<String> {
+        self.entered_ref(|_| i18n_core::use_locale())
+    }
+
+    fn on_accessibility_action(&mut self, id: u64, activate: bool) {
+        self.entered(|this| {
+            let (app, tree) = (&this.app, &mut this.tree);
+            ui_core::accessibility::perform_action(id, activate, |event| {
+                app.event_batch(|| {
+                    if !app.dispatch_overlays(event)
+                        && let Some(tree) = tree
+                    {
+                        tree.on_event(event);
+                    }
+                });
+            });
+        });
+    }
+
+    /// Starts a renderer and presents the tree: the one a previous [`on_suspend`](EventHandler::on_suspend) kept, or one built from the app on the first resume. Either way the renderer has retained nothing, so the first frame is drawn whole.
+    fn on_resume(&mut self, window: &W) -> bool {
+        self.entered(|this| this.resume(window))
+    }
+
+    /// Builds the app's UI again on the surface it is already running on, dropping the previous tree first so its effects and their subscriptions go with it. The window, the renderer and the surface's place on screen are untouched — this is a re-render, not a restart. The one exception is transparency, which a renderer is *built* with: an app that now asks for the other kind gets its renderer rebuilt on the next frame, which is the same path a backend switch takes.
+    fn remount(&mut self, window: &W) {
+        self.entered(|this| {
+            this.mount_tree(window);
+            window.request_redraw();
+        });
+    }
+
+    fn on_event(&mut self, event: Event, window: &W) {
+        self.entered(|this| this.handle_event(event, window));
+    }
+
+    fn on_back(&mut self, window: &W) -> bool {
+        self.entered(|this| {
+            let app = &this.app;
+            let went_back = app.event_batch(|| app.navigate_back());
+            this.apply_window_commands(window);
+            if went_back {
+                this.loop_batch.flush();
+                window.request_redraw();
+            }
+            went_back
+        })
+    }
+
+    fn on_redraw(&mut self, window: &W) {
+        self.entered(|this| this.redraw(window));
+    }
+
+    /// Releases everything that presents the surface and keeps the tree, so a later [`on_resume`](EventHandler::on_resume) shows the same UI again.
+    fn on_suspend(&mut self) {
+        self.entered(Self::suspend);
+    }
+
     fn owe_presentation(&mut self) {
         self.pacer.presentation_owed = true;
     }
 
     fn new_events(&mut self) {
-        begin_batch();
+        self.loop_batch.open();
     }
 
     fn take_exit_request(&mut self) -> bool {
@@ -1295,7 +1311,7 @@ where
 
     fn about_to_wait(&mut self) -> Option<std::time::Duration> {
         self.show_app_panic();
-        end_batch();
+        self.loop_batch.close();
         let tree_dirty = self.tree.as_ref().map(|t| t.is_dirty()).unwrap_or(false);
         // Against `last_tick`, the clock `on_redraw` gates on: reporting a deadline the pass would decline wakes the loop early and it spins re-asking.
         let budget_left = FRAME_BUDGET.saturating_sub(self.pacer.last_tick.elapsed());
@@ -1329,8 +1345,7 @@ where
 
     // Entering the surface is the point: the registry is one of its per-surface worlds, so a caller outside this handler would read the ambient, always empty one.
     fn interactive_rects(&self) -> Vec<geometry_core::Rect> {
-        let _surface = self.enter_surface();
-        ui_core::interactive_rects()
+        self.entered_ref(|_| ui_core::interactive_rects())
     }
 }
 

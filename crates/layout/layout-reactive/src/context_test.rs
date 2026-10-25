@@ -996,52 +996,48 @@ fn a_kept_inner_recording_hands_its_nodes_only_to_an_enclosing_recording_that_ow
 /// Node ids are per surface, so a recording opened on one surface must not free an id minted on another — it names a different node there.
 #[test]
 fn a_recording_never_frees_a_node_built_on_another_surface() {
-    use reactive_core::{SurfaceEnterGuard, SurfaceHandle, set_current_surface};
+    use reactive_core::{SurfaceHandle, with_current_surface};
 
     type Worlds = (LayoutContext, ParentsContext);
-    fn enter(handle: SurfaceHandle, worlds: &'static Worlds) -> SurfaceEnterGuard {
-        let prev = set_current_surface(handle);
-        let layout = worlds.0.enter();
-        let parents = worlds.1.enter();
-        SurfaceEnterGuard::new(move || {
-            drop(parents);
-            drop(layout);
-            set_current_surface(prev);
-        })
+    fn enter(handle: SurfaceHandle, worlds: &Worlds, run: &mut dyn FnMut()) {
+        with_current_surface(handle, || {
+            worlds.0.with_entered(|| worlds.1.with_entered(run))
+        });
     }
-    let (a, b) = (SurfaceHandle(1), SurfaceHandle(2));
+    let (a, b) = (SurfaceHandle::from_raw(1), SurfaceHandle::from_raw(2));
     let a_worlds: &'static Worlds =
         Box::leak(Box::new((LayoutContext::new(), ParentsContext::new())));
     let b_worlds: &'static Worlds =
         Box::leak(Box::new((LayoutContext::new(), ParentsContext::new())));
-    reactive_core::set_surface_enter_hook(move |handle| match handle {
-        h if h == a => enter(a, a_worlds),
-        h if h == b => enter(b, b_worlds),
-        _ => SurfaceEnterGuard::noop(),
+    reactive_core::set_surface_enter_hook(move |handle, run| match handle {
+        h if h == a => enter(a, a_worlds, run),
+        h if h == b => enter(b, b_worlds, run),
+        _ => run(),
     });
 
-    let on_a = a.enter();
-    let (a_survivor, _) = new_leaf(LayoutStyle::new()).unwrap();
-    let recording = record_nodes();
-    let (b_loose, b_kept) = {
-        let _on_b = b.enter();
-        let (loose, _) = new_leaf(LayoutStyle::new()).unwrap();
-        let inner = record_nodes();
-        let (kept, _) = new_leaf(LayoutStyle::new()).unwrap();
-        inner.keep();
-        (loose, kept)
-    };
-    let (a_failed, _) = new_leaf(LayoutStyle::new()).unwrap();
-    drop(recording);
+    let (b_loose, b_kept) = a.with_entered(|| {
+        let (a_survivor, _) = new_leaf(LayoutStyle::new()).unwrap();
+        let recording = record_nodes();
+        let (b_loose, b_kept) = b.with_entered(|| {
+            let (loose, _) = new_leaf(LayoutStyle::new()).unwrap();
+            let inner = record_nodes();
+            let (kept, _) = new_leaf(LayoutStyle::new()).unwrap();
+            inner.keep();
+            (loose, kept)
+        });
+        let (a_failed, _) = new_leaf(LayoutStyle::new()).unwrap();
+        drop(recording);
 
-    assert!(track_layout(a_survivor).is_some());
-    assert!(track_layout(a_failed).is_none());
-    assert_eq!(live_node_count(), 1);
-    drop(on_a);
-    let _on_b = b.enter();
-    assert!(track_layout(b_loose).is_some());
-    assert!(track_layout(b_kept).is_some());
-    assert_eq!(live_node_count(), 2);
+        assert!(track_layout(a_survivor).is_some());
+        assert!(track_layout(a_failed).is_none());
+        assert_eq!(live_node_count(), 1);
+        (b_loose, b_kept)
+    });
+    b.with_entered(|| {
+        assert!(track_layout(b_loose).is_some());
+        assert!(track_layout(b_kept).is_some());
+        assert_eq!(live_node_count(), 2);
+    });
 }
 
 #[test]

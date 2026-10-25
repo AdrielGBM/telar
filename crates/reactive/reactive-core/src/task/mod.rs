@@ -168,7 +168,7 @@ fn register(surface: SurfaceHandle, callback: Callback) -> (TaskId, Arc<Mailbox>
 
 /// Runs `work` on a background thread and `on_done` with its result **on this thread**, during a later frame's [`drain_tasks`].
 ///
-/// This is the supported way to get a background result into a signal: `on_done` stays here, so it may close over `!Send` state and write signals directly, while `work` and the value it produces cross the thread boundary and must be `Send`.
+/// This is the only sanctioned way to move a result from another thread into a signal: `on_done` stays here, so it may close over `!Send` state such as signal handles and write them directly, while `work` and the value it produces cross the thread boundary and must be `Send`.
 ///
 /// ```ignore
 /// spawn_task(
@@ -318,25 +318,21 @@ pub fn drain_tasks() {
                 Message::Item(value) => value,
                 Message::End => {
                     if let Callback::Stream { end, .. } = task.callback {
-                        let _surface = task.surface.enter();
-                        end();
+                        task.surface.with_entered(end);
                     }
                     continue;
                 }
             };
-            let still_open = {
-                let _surface = task.surface.enter();
-                match task.callback {
-                    Callback::Once(run) => {
-                        run(value);
-                        None
-                    }
-                    Callback::Stream { mut item, end } => {
-                        item(value);
-                        Some(Callback::Stream { item, end })
-                    }
+            let still_open = task.surface.with_entered(|| match task.callback {
+                Callback::Once(run) => {
+                    run(value);
+                    None
                 }
-            };
+                Callback::Stream { mut item, end } => {
+                    item(value);
+                    Some(Callback::Stream { item, end })
+                }
+            });
             let Some(callback) = still_open else {
                 continue;
             };

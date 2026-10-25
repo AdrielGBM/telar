@@ -1,19 +1,37 @@
 //! `surface_local!` — declares a thread-local whose contents can be swapped per surface.
 //!
-//! A per-surface "world" (the layout tree, the overlay registry, focus, ...) is a thread-local singleton. Under M3 several surfaces share one UI thread, so each such world must be swappable: the runner activates a surface's instance around that surface's build/event/frame, and the reactive flush re-enters the instance that owns each effect. This macro generates that swap once — the live instance sits behind a `Cell<*mut RefCell<T>>` (like the reactive runtime's own cell), a private accessor derefs it, and a `Context`/`Guard` pair allocates and activates per-surface instances.
+//! A per-surface "world" (the layout tree, the overlay registry, focus, ...) is a thread-local singleton. Under M3 several surfaces share one UI thread, so each such world must be swappable: the runner activates a surface's instance around that surface's build/event/frame, and the reactive flush re-enters the instance that owns each effect. This macro generates that swap once — the live instance sits behind a `Cell<*mut RefCell<T>>` (like the reactive runtime's own cell), a private accessor derefs it, and a `Context` allocates per-surface instances and makes one live for the duration of a closure, which borrows the `Context` for as long as its instance is live and restores the previous one on return and on unwind alike (a guard could be forgotten or dropped out of order, leaving the slot on an instance already freed).
 //!
 //! The cell holds raw pointers, as [`dropless_thread_local!`](crate::dropless_thread_local) requires. The ambient instance is made the first time the slot is reached and freed through [`thread_exit`](crate::thread_exit), so a guest's is gone once its host unloads it; per-surface instances are freed when their `Context` drops.
 //!
 //! Both instances build their contents inside [`detached`](crate::detached), because a slot initialises on first access and that access is somebody's build. Without it a surface's world is adopted by whichever reactive owner happened to be running — see that module.
 
-/// Generates a swappable per-surface thread-local plus its `Context`/`Guard`. See the module docs.
+/// Generates a swappable per-surface thread-local plus its `Context`. See the module docs.
 ///
-/// ```ignore
-/// telar_reactive_core::surface_local! {
-///     slot LAYOUT: LayoutRuntime = LayoutRuntime::new();
-///     access with_layout, with_layout_ref;
-///     context LayoutContext, LayoutGuard;
+/// ```
+/// telar_reactive_local::surface_local! {
+///     slot DEPTH: u32 = 0;
+///     access with_depth, with_depth_ref;
+///     context DepthContext;
 /// }
+///
+/// let surface = DepthContext::new();
+/// surface.with_entered(|| with_depth(|depth| *depth = 1));
+/// assert_eq!(with_depth_ref(|depth| *depth), 0);
+/// assert_eq!(surface.with_entered(|| with_depth_ref(|depth| *depth)), 1);
+/// ```
+///
+/// A context cannot go while its world is live, because the entry borrows it:
+///
+/// ```compile_fail,E0505
+/// telar_reactive_local::surface_local! {
+///     slot DEPTH: u32 = 0;
+///     access with_depth, with_depth_ref;
+///     context DepthContext;
+/// }
+///
+/// let surface = DepthContext::new();
+/// surface.with_entered(|| drop(surface));
 /// ```
 #[macro_export]
 macro_rules! surface_local {
@@ -21,7 +39,7 @@ macro_rules! surface_local {
         $(#[$ctx_meta:meta])*
         slot $slot:ident : $ty:ty = $init:expr;
         access $with:ident, $with_ref:ident;
-        context $ctx:ident, $guard:ident;
+        context $ctx:ident;
     ) => {
         $crate::dropless_thread_local! {
             static $slot: ::std::cell::Cell<$crate::SurfaceSlot<$ty>> = const {
@@ -33,7 +51,7 @@ macro_rules! surface_local {
         #[allow(dead_code)]
         #[track_caller]
         fn $with<R>(f: impl ::std::ops::FnOnce(&mut $ty) -> R) -> R {
-            // SAFETY: the pointer always addresses a live, heap-allocated `RefCell` — the ambient instance, which is only freed while nothing holds or enters it, or a per-surface box that outlives every guard pointing the slot at it. The borrow is released before the closure returns, so swaps never race a borrow.
+            // SAFETY: the pointer always addresses a live, heap-allocated `RefCell` — the ambient instance, which is only freed while nothing holds or enters it, or a per-surface box whose `Context` is borrowed by the `with_entered` call that made it live. The borrow is released before the closure returns, so swaps never race a borrow.
             $slot.with(|cell| {
                 let live = $crate::SurfaceSlot::live(cell, || $crate::detached(|| $init), || $slot.with($crate::SurfaceSlot::release));
                 let borrowed = unsafe { (*live).try_borrow_mut() };
@@ -92,25 +110,35 @@ macro_rules! surface_local {
                 }
             }
 
-            /// Makes this instance the live one until the returned guard drops, which restores the previously-active instance. Nest by keeping guards in scope; they restore in reverse order.
-            #[must_use = "the surface context is only active while this guard is alive"]
-            pub fn enter(&self) -> $guard {
-                $guard {
-                    prev: $slot.with(|cell| $crate::SurfaceSlot::enter(cell, self.ptr)),
-                }
+            /// Makes this instance the live one while `f` runs, and restores whichever was live before once `f` returns or unwinds. Entries nest: an inner one restores the outer.
+            pub fn with_entered<R>(&self, f: impl ::std::ops::FnOnce() -> R) -> R {
+                Self::entered(self.ptr, f)
             }
 
-            /// Makes the *ambient* instance — the one that exists before any surface is built, and the only world a single-surface app ever has — live until the returned guard drops.
+            /// Makes the *ambient* instance — the one that exists before any surface is built, and the only world a single-surface app ever has — live while `f` runs, as [`with_entered`](Self::with_entered) does a surface's.
             ///
             /// What the reactive flush needs for an effect owned by [`SurfaceHandle::NONE`](crate::SurfaceHandle::NONE): it was registered outside any surface, so its world is this one, and running it against whichever surface happened to be entered when the signal fired would resolve its layout, overlays and focus in somebody else's. Reachable as soon as one app has both — a window tree that never built a surface and a second tree that did.
-            #[must_use = "the surface context is only active while this guard is alive"]
-            pub fn enter_ambient() -> $guard {
-                $guard {
-                    prev: $slot.with(|cell| {
-                        let ambient = $crate::SurfaceSlot::ambient(cell, || $crate::detached(|| $init), || $slot.with($crate::SurfaceSlot::release));
-                        $crate::SurfaceSlot::enter(cell, ambient)
-                    }),
+            pub fn with_ambient_entered<R>(f: impl ::std::ops::FnOnce() -> R) -> R {
+                let ambient = $slot.with(|cell| {
+                    $crate::SurfaceSlot::ambient(cell, || $crate::detached(|| $init), || $slot.with($crate::SurfaceSlot::release))
+                });
+                Self::entered(ambient, f)
+            }
+
+            fn entered<R>(
+                instance: *mut ::std::cell::RefCell<$ty>,
+                f: impl ::std::ops::FnOnce() -> R,
+            ) -> R {
+                struct Restore(*mut ::std::cell::RefCell<$ty>);
+
+                impl ::std::ops::Drop for Restore {
+                    fn drop(&mut self) {
+                        $slot.with(|cell| $crate::SurfaceSlot::leave(cell, self.0));
+                    }
                 }
+
+                let _restore = Restore($slot.with(|cell| $crate::SurfaceSlot::enter(cell, instance)));
+                f()
             }
         }
 
@@ -122,20 +150,17 @@ macro_rules! surface_local {
 
         impl ::std::ops::Drop for $ctx {
             fn drop(&mut self) {
-                // A matching guard has restored the previous instance, so this box is not the live pointer.
+                let live = $slot.with(|cell| cell.get().live);
+                ::std::assert!(
+                    live != self.ptr,
+                    ::std::concat!(
+                        "a `",
+                        ::std::stringify!($ctx),
+                        "` was dropped while its world was live"
+                    ),
+                );
+                // SAFETY: the slot points at this box only during a `with_entered` call, which borrows `self` and so cannot be under way, as the assert above checks; nothing else holds the pointer.
                 unsafe { drop(::std::boxed::Box::from_raw(self.ptr)) };
-            }
-        }
-
-        /// Keeps its surface's instance live. Dropping it restores whichever instance was active before.
-        #[must_use = "the surface context is only active while this guard is alive"]
-        pub struct $guard {
-            prev: *mut ::std::cell::RefCell<$ty>,
-        }
-
-        impl ::std::ops::Drop for $guard {
-            fn drop(&mut self) {
-                $slot.with(|cell| $crate::SurfaceSlot::leave(cell, self.prev));
             }
         }
     };
@@ -143,7 +168,7 @@ macro_rules! surface_local {
 
 /// The live instance of a [`surface_local!`] world plus the ambient one it started as.
 ///
-/// Both are kept because "restore what was active before" and "activate the world of an effect that belongs to no surface" are different questions, and only the second one can be answered from a saved pointer that no guard is holding.
+/// Both are kept because "restore what was active before" and "activate the world of an effect that belongs to no surface" are different questions, and only the second one can be answered from a saved pointer that no entry is holding.
 ///
 /// `#[doc(hidden)]` — public only because macro expansion lands in the calling crate, which has to be able to name it. Nothing outside the macro should construct one: the fields are raw pointers the expansion dereferences under a SAFETY note that only holds for the ones it makes itself.
 #[doc(hidden)]
@@ -151,7 +176,7 @@ pub struct SurfaceSlot<T> {
     /// Null until the slot is first reached, and again once the ambient instance it pointed at is released.
     pub live: *mut std::cell::RefCell<T>,
     pub ambient: *mut std::cell::RefCell<T>,
-    /// How many guards are alive, each holding a pointer it restores: while any is, the ambient instance may be one of them and is not released.
+    /// How many entries are under way, each holding a pointer it restores: while any is, the ambient instance may be one of them and is not released.
     pub entered: usize,
     /// Whether the ambient instance outlived the release registered for it, held when it ran, so the next access registers another.
     pub kept: bool,
@@ -195,7 +220,7 @@ impl<T> SurfaceSlot<T> {
         ambient
     }
 
-    /// The live instance: the one a guard entered, or the ambient one, made first if nothing has.
+    /// The live instance: the one an entry made live, or the ambient one, made first if nothing has.
     #[doc(hidden)]
     pub fn live(
         cell: &std::cell::Cell<Self>,
@@ -223,7 +248,7 @@ impl<T> SurfaceSlot<T> {
         }
     }
 
-    /// Makes `instance` live and hands back what was, for the guard to restore.
+    /// Makes `instance` live and hands back what was, for the entry to restore.
     #[doc(hidden)]
     pub fn enter(
         cell: &std::cell::Cell<Self>,
@@ -244,7 +269,7 @@ impl<T> SurfaceSlot<T> {
         cell.set(slot);
     }
 
-    /// Frees the ambient instance, leaving the slot to make a fresh one should it be reached again. One a guard or a borrow still holds is kept, and released once it is reached again and its thread released after that.
+    /// Frees the ambient instance, leaving the slot to make a fresh one should it be reached again. One an entry or a borrow still holds is kept, and released once it is reached again and its thread released after that.
     #[doc(hidden)]
     pub fn release(cell: &std::cell::Cell<Self>) {
         let mut slot = cell.get();
@@ -261,7 +286,7 @@ impl<T> SurfaceSlot<T> {
         slot.ambient = std::ptr::null_mut();
         slot.last_borrow = None;
         cell.set(slot);
-        // SAFETY: no guard or borrow holds it, and the slot no longer points at it, so this was the last pointer to the box `ambient` made.
+        // SAFETY: no entry or borrow holds it, and the slot no longer points at it, so this was the last pointer to the box `ambient` made.
         drop(unsafe { Box::from_raw(ambient) });
     }
 }
@@ -276,7 +301,7 @@ impl<T> Clone for SurfaceSlot<T> {
 impl<T> Copy for SurfaceSlot<T> {}
 
 #[cfg(test)]
-// The macro generates a whole Context/Guard API; this probe exercises the borrow paths and not all of it.
+// The macro generates a whole Context API; this probe exercises the borrow paths and not all of it.
 #[allow(dead_code)]
 #[path = "surface_local_test.rs"]
 mod tests;

@@ -129,11 +129,12 @@ fn a_tree_mounted_before_the_flush_still_takes_the_theme_the_flush_installs() {
     set_system_dark(false);
     following_the_system();
 
-    telar::begin_batch();
-    set_system_dark(true);
-    let tree = a_themed_box();
-    let during = drawn_fill(&tree);
-    telar::end_batch();
+    let (tree, during) = telar::batch(|| {
+        set_system_dark(true);
+        let tree = a_themed_box();
+        let during = drawn_fill(&tree);
+        (tree, during)
+    });
     telar::relayout_if_dirty();
     let after = drawn_fill(&tree);
 

@@ -5,7 +5,7 @@
 reactive_core::surface_scoped! {
     /// The active surface's own locale, in place of the thread's while it has one.
     scoped locale: String as Option<String> = None;
-    context LocaleContext, LocaleGuard;
+    context LocaleContext;
 }
 
 /// Sets the active locale (a BCP-47 tag such as `"en"` or `"es"`), re-rendering every translated string that reads it on a surface without a locale of its own. The tag should be one of the baked catalog's locales; an unknown tag simply falls back to the catalog's default locale at lookup time.

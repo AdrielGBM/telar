@@ -288,24 +288,26 @@ fn a_declaring_area_is_sized_by_the_tree_above_it() {
 fn a_declaring_area_follows_the_surfaces_family_and_a_complete_one_does_not() {
     use renderer_core::FontFamily;
     let surface = crate::Surface::new();
-    let _entered = surface.enter();
-    reset_layout_runtime();
-    let declaring = TextArea::declaring(signal(String::new()), LayoutStyle::new(), |t| t).unwrap();
-    let complete = TextArea::new(signal(String::new()), LayoutStyle::new(), || {
-        TextStyle::new(14.0, Color::BLACK)
+    surface.with_entered(|| {
+        reset_layout_runtime();
+        let declaring =
+            TextArea::declaring(signal(String::new()), LayoutStyle::new(), |t| t).unwrap();
+        let complete = TextArea::new(signal(String::new()), LayoutStyle::new(), || {
+            TextStyle::new(14.0, Color::BLACK)
+        })
+        .unwrap();
+        crate::set_font_family(Some(FontFamily::Monospace));
+        assert_eq!(
+            (declaring.editor.style)().font_family,
+            FontFamily::Monospace
+        );
+        assert_eq!((complete.editor.style)().font_family, FontFamily::SansSerif);
+        crate::set_font_family(None);
+        assert_eq!(
+            (declaring.editor.style)().font_family,
+            FontFamily::SansSerif
+        );
     })
-    .unwrap();
-    crate::set_font_family(Some(FontFamily::Monospace));
-    assert_eq!(
-        (declaring.editor.style)().font_family,
-        FontFamily::Monospace
-    );
-    assert_eq!((complete.editor.style)().font_family, FontFamily::SansSerif);
-    crate::set_font_family(None);
-    assert_eq!(
-        (declaring.editor.style)().font_family,
-        FontFamily::SansSerif
-    );
 }
 
 /// Like a field, an area shows what was typed: its caret and selection index the value, so a case inherited from above would put them between the wrong letters.

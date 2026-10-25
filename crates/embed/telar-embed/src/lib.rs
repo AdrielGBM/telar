@@ -138,10 +138,11 @@ impl EmbedInstance {
     /// Lay the content out to the host-assigned sub-rect size, which is this guest's surface size, then let its scroll viewports react to the new size.
     pub fn relayout(&mut self, width: f32, height: f32) {
         self.canvas.lay_out(Size::new(width, height));
-        let _g = self.canvas.enter();
-        // So a signal the content writes flushes after the `borrow_mut` is released; a synchronous flush would re-run the segment's `view()`, which borrows the same `RefCell`.
-        let embedded = &self.embedded;
-        reactive_core::batch(|| embedded.borrow_mut().relayout_viewports());
+        self.canvas.with_entered(|| {
+            // So a signal the content writes flushes after the `borrow_mut` is released; a synchronous flush would re-run the segment's `view()`, which borrows the same `RefCell`.
+            let embedded = &self.embedded;
+            reactive_core::batch(|| embedded.borrow_mut().relayout_viewports());
+        })
     }
 
     /// Re-lay-out only what the guest's own reactive changes dirtied (a list grew, a panel toggled), at the last size given to [`relayout`](Self::relayout). Driven every frame by the host — the analog of the runner calling `App::relayout` (`ui_core::relayout_if_dirty`) on an in-process app.
@@ -161,45 +162,45 @@ impl EmbedInstance {
 
     /// Whether an animation is still in flight in this guest's motion engine.
     pub fn motion_active(&self) -> bool {
-        let _g = self.canvas.enter();
-        motion_core::has_active()
+        self.canvas.with_entered(motion_core::has_active)
     }
 
     /// Dispatch an event to the content (already in local coordinates). Self-batches in the guest's runtime.
     pub fn on_event(&mut self, event: &Event) -> bool {
-        let _g = self.canvas.enter();
-        // A cdylib carries its own copy of every `thread_local` in ui-core, so observing on the host's side left the guest's widgets reading a permanently empty registry. `HotTree::on_event` carries these for the same reason.
-        ui_core::observe_keyboard(event);
-        ui_core::observe_pointer(event);
-        self.canvas.dispatch_tree(event) == EventResult::Handled
+        self.canvas.with_entered(|| {
+            // A cdylib carries its own copy of every `thread_local` in ui-core, so observing on the host's side left the guest's widgets reading a permanently empty registry. `HotTree::on_event` carries these for the same reason.
+            ui_core::observe_keyboard(event);
+            ui_core::observe_pointer(event);
+            self.canvas.dispatch_tree(event) == EventResult::Handled
+        })
     }
 
     /// Route a positioned event to the guest's overlay layer (modals/dropdowns) with priority; `true` means an overlay consumed it and the host should not fall through to the content.
     ///
     /// The host calls this before [`on_event`](Self::on_event) and stops when it returns `true`, so the registries are fed here too — otherwise an event an overlay consumes never reaches them at all. For the same reason a move an overlay takes is handed to the content here, [`covered`](ui_core::covered), so a box hovered under the overlay hears the pointer leave it.
     pub fn dispatch_overlays(&self, event: &Event) -> bool {
-        let _g = self.canvas.enter();
-        ui_core::observe_keyboard(event);
-        ui_core::observe_pointer(event);
-        let taken = self.canvas.dispatch_overlays(event) == EventResult::Handled;
-        if taken && matches!(event, Event::PointerMoved { .. }) {
-            ui_core::covered(|| self.canvas.dispatch_tree(event));
-        }
-        taken
+        self.canvas.with_entered(|| {
+            ui_core::observe_keyboard(event);
+            ui_core::observe_pointer(event);
+            let taken = self.canvas.dispatch_overlays(event) == EventResult::Handled;
+            if taken && matches!(event, Event::PointerMoved { .. }) {
+                ui_core::covered(|| self.canvas.dispatch_tree(event));
+            }
+            taken
+        })
     }
 
     /// Closes the frame on this side of the boundary, for the same reason [`on_event`](Self::on_event) observes on it: `key_pressed` answers for one frame, and the frame it answers for is the one whose widgets asked.
     pub fn end_frame(&self) {
-        let _g = self.canvas.enter();
-        ui_core::end_keyboard_frame();
+        self.canvas.with_entered(|| {
+            ui_core::end_keyboard_frame();
+        })
     }
 
     /// Advance the guest's motion engine and flush its runtime so animations progress and re-render.
     pub fn motion_tick(&self, now: Instant) {
-        let _g = self.canvas.enter();
-        reactive_core::begin_batch();
-        motion_core::tick(now);
-        reactive_core::end_batch();
+        self.canvas
+            .with_entered(|| reactive_core::batch(|| motion_core::tick(now)))
     }
 
     /// Drain window-management commands the guest's UI enqueued (its title bar drag/minimize/close).
@@ -209,25 +210,27 @@ impl EmbedInstance {
 
     /// Write the user's system preferences into the guest's own copy of the store, which its views, its theme's `follow_system` and its motion engine read.
     pub fn set_system_preferences(&self, preferences: &SystemPreferences) {
-        let _g = self.canvas.enter();
-        preferences_core::set_system_preferences(preferences.clone());
+        self.canvas.with_entered(|| {
+            preferences_core::set_system_preferences(preferences.clone());
+        })
     }
 
     /// Run the guest's due timers, its finished tasks and then its per-frame background-work hook, forwarding the host's `ctx` (so a guest worker thread can wake the host loop via `ctx.redraw_waker()`, just as an in-process app does).
     pub fn on_frame(&mut self, ctx: &mut AppCtx) {
-        let _g = self.canvas.enter();
-        // The guest links its own reactive-core copy, so `spawn_task` and `run_after` inside it register in a runtime the host cannot reach: the wake is installed here, and timers and tasks are run here, in the runner's order.
-        if !self.task_waker_installed
-            && let Some(waker) = ctx.redraw_waker()
-        {
-            reactive_core::set_task_waker(move || waker.wake());
-            self.task_waker_installed = true;
-        }
-        reactive_core::fire_timers();
-        reactive_core::drain_tasks();
-        // So signals the hook writes flush after the `borrow_mut` releases, never re-entering `view()` mid-borrow.
-        let embedded = &self.embedded;
-        reactive_core::batch(|| embedded.borrow_mut().on_frame(ctx));
+        self.canvas.with_entered(|| {
+            // The guest links its own reactive-core copy, so `spawn_task` and `run_after` inside it register in a runtime the host cannot reach: the wake is installed here, and timers and tasks are run here, in the runner's order.
+            if !self.task_waker_installed
+                && let Some(waker) = ctx.redraw_waker()
+            {
+                reactive_core::set_task_waker(move || waker.wake());
+                self.task_waker_installed = true;
+            }
+            reactive_core::fire_timers();
+            reactive_core::drain_tasks();
+            // So signals the hook writes flush after the `borrow_mut` releases, never re-entering `view()` mid-borrow.
+            let embedded = &self.embedded;
+            reactive_core::batch(|| embedded.borrow_mut().on_frame(ctx));
+        })
     }
 
     /// How long until the guest's earliest [`run_after`](reactive_core::run_after) timer comes due, which [`on_frame`](Self::on_frame) fires; `None` when none is waiting.
@@ -242,29 +245,27 @@ impl EmbedInstance {
 
     /// Autofocus/announce the content becoming visible; re-render so a focus change shows this frame.
     pub fn activate(&mut self) {
-        let _g = self.canvas.enter();
-        let embedded = &self.embedded;
-        reactive_core::batch(|| embedded.borrow_mut().activate());
+        self.canvas.with_entered(|| {
+            let embedded = &self.embedded;
+            reactive_core::batch(|| embedded.borrow_mut().activate());
+        })
     }
 
     pub fn clear_color(&self) -> Option<Color> {
-        let _g = self.canvas.enter();
-        self.embedded.borrow().clear_color()
+        self.canvas
+            .with_entered(|| self.embedded.borrow().clear_color())
     }
 
     pub fn title(&self) -> String {
-        let _g = self.canvas.enter();
-        self.embedded.borrow().title()
+        self.canvas.with_entered(|| self.embedded.borrow().title())
     }
 
     pub fn icon(&self) -> Option<Vec<u8>> {
-        let _g = self.canvas.enter();
-        self.embedded.borrow().icon()
+        self.canvas.with_entered(|| self.embedded.borrow().icon())
     }
 
     pub fn id(&self) -> String {
-        let _g = self.canvas.enter();
-        self.embedded.borrow().id()
+        self.canvas.with_entered(|| self.embedded.borrow().id())
     }
 }
 

@@ -17,21 +17,21 @@ reactive_core::surface_local! {
     /// It sits apart because of who has to read it and when: a measure closure runs *inside* the layout runtime's own borrow, and anything it reaches for that lives in that borrow is a re-entry. Text measured against a style its ancestors declared is exactly that reach, and the links it needs are structure, not layout state — nothing in a layout pass moves them.
     slot PARENTS: FxHashMap<NodeId, NodeId> = FxHashMap::default();
     access with_parents, with_parents_ref;
-    context ParentsContext, ParentsGuard;
+    context ParentsContext;
 }
 
 reactive_core::surface_local! {
     /// Which scroll area shows each scroll content, kept apart from [`PARENTS`] because a climb up the layout tree stops at a scroll's content, and kept apart from [`LAYOUT_RUNTIME`] for the reason [`PARENTS`] is: inheritance reads it while text is measured.
     slot SCROLL_HOSTS: FxHashMap<NodeId, NodeId> = FxHashMap::default();
     access with_scroll_hosts, with_scroll_hosts_ref;
-    context ScrollHostsContext, ScrollHostsGuard;
+    context ScrollHostsContext;
 }
 
 reactive_core::surface_local! {
     /// A per-surface layout tree: the taffy engine plus the node→rect-signal registry. The layout tree is a per-surface world so nodes can be created and laid out from anywhere — including reactive effects (reactive lists) that fire from an effect body. Under M3 several surfaces share one UI thread, so the runner activates each surface's [`LayoutContext`] around its build/event/frame; app code just calls the free functions, which operate on whichever surface is currently active.
     slot LAYOUT_RUNTIME: LayoutRuntime = LayoutRuntime::new();
     access with_runtime, with_runtime_ref;
-    context LayoutContext, LayoutGuard;
+    context LayoutContext;
 }
 
 /// Resets the active surface's layout runtime to a fresh, empty tree. The single-window app/preview harness calls this at construction; a multi-surface runner instead gives each surface its own [`LayoutContext`].
@@ -212,14 +212,12 @@ impl Drop for NodeRecording {
         if recording.nodes.is_empty() {
             return;
         }
-        let _entered = recording.surface.enter();
         // A surface torn down while this was open took its tree with it, and its ids now name nodes in whichever tree is active.
-        if reactive_core::current_surface() != recording.surface {
-            return;
-        }
-        for (node, _) in recording.nodes {
-            remove_node(node);
-        }
+        recording.surface.with_entered_if_alive(|| {
+            for (node, _) in recording.nodes {
+                remove_node(node);
+            }
+        });
     }
 }
 
@@ -354,13 +352,11 @@ pub struct RelayoutHook {
 
 impl Drop for RelayoutHook {
     fn drop(&mut self) {
-        let _entered = self.surface.enter();
-        // A surface torn down first took its hooks with it, and the world active now is not this hook's.
-        if reactive_core::current_surface() != self.surface {
-            return;
-        }
         let id = self.id;
-        with_runtime(|rt| rt.relayout_hooks.retain(|(hook, _)| *hook != id));
+        // A surface torn down first took its hooks with it, and the world active now is not this hook's.
+        self.surface.with_entered_if_alive(|| {
+            with_runtime(|rt| rt.relayout_hooks.retain(|(hook, _)| *hook != id));
+        });
     }
 }
 

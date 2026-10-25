@@ -186,10 +186,9 @@ fn the_accessibility_panel_lists_what_the_checks_found_over_what_a_reader_is_tol
         audit: Some(audit()),
         placement: Transform::IDENTITY,
     };
-    {
-        let _entered = canvas.enter();
+    canvas.with_entered(|| {
         refreshed(inspection, &source);
-    }
+    });
     let shown = texts(&canvas);
     for expected in [
         "1 errors · 0 warnings",
@@ -212,8 +211,7 @@ fn a_clean_audit_says_there_is_nothing_to_fix() {
     let inspection = Inspection::new();
     let shown = {
         let canvas = mounted(move || accessibility_panel(inspection));
-        {
-            let _entered = canvas.enter();
+        canvas.with_entered(|| {
             refreshed(
                 inspection,
                 &Given {
@@ -222,7 +220,7 @@ fn a_clean_audit_says_there_is_nothing_to_fix() {
                     placement: Transform::IDENTITY,
                 },
             );
-        }
+        });
         texts(&canvas)
     };
     assert!(
@@ -269,8 +267,7 @@ fn the_summary_wraps_in_its_pane_and_the_pane_closes_cleanly_once_the_audit_is_i
         "the sentence stays inside its pane: {waiting:?}"
     );
 
-    {
-        let _entered = canvas.enter();
+    canvas.with_entered(|| {
         refreshed(
             inspection,
             &Given {
@@ -279,7 +276,7 @@ fn the_summary_wraps_in_its_pane_and_the_pane_closes_cleanly_once_the_audit_is_i
                 placement: Transform::IDENTITY,
             },
         );
-    }
+    });
     // A second frame here would settle the rows and hide the failure: the unmount has to follow the very pass that grew their viewport.
     let counts = text_rect(&frame(&canvas), "1 errors · 0 warnings");
     assert!(
@@ -287,10 +284,9 @@ fn the_summary_wraps_in_its_pane_and_the_pane_closes_cleanly_once_the_audit_is_i
         "it wraps onto more lines to do it, where the counts fit on one: {waiting:?} against {counts:?}"
     );
 
-    {
-        let _entered = canvas.enter();
+    canvas.with_entered(|| {
         shown.set(false);
-    }
+    });
     assert!(
         !texts(&canvas).iter().any(|text| text == "Problems"),
         "the pane is gone"
@@ -317,11 +313,10 @@ fn the_selected_component_is_marked_with_its_box_model_where_the_source_is_shown
         audit: None,
         placement: Transform::translate(50.0, 60.0),
     };
-    {
-        let _entered = canvas.enter();
+    canvas.with_entered(|| {
         refreshed(inspection, &source);
         inspection.selected.set(Some(Arc::from("1")));
-    }
+    });
     let drawn = rects(&canvas);
     let shown = |rect: Rect| Rect::new(rect.x + 50.0, rect.y + 60.0, rect.width, rect.height);
     assert!(
@@ -346,8 +341,7 @@ fn the_selected_component_is_marked_with_its_box_model_where_the_source_is_shown
 fn the_outline_and_the_measure_follow_their_toggles() {
     let inspection = Inspection::new();
     let canvas = mounted(move || inspection_marks(inspection));
-    {
-        let _entered = canvas.enter();
+    canvas.with_entered(|| {
         refreshed(
             inspection,
             &Given {
@@ -357,7 +351,7 @@ fn the_outline_and_the_measure_follow_their_toggles() {
             },
         );
         inspection.selected.set(Some(Arc::from("1")));
-    }
+    });
     assert!(rects(&canvas).is_empty(), "nothing is marked unasked");
 
     inspection.outline().set(true);
@@ -397,8 +391,7 @@ fn the_row_chosen_in_the_accessibility_panel_is_marked() {
             ],
         )?))
     });
-    {
-        let _entered = canvas.enter();
+    canvas.with_entered(|| {
         refreshed(
             inspection,
             &Given {
@@ -410,7 +403,7 @@ fn the_row_chosen_in_the_accessibility_panel_is_marked() {
         inspection
             .access_selected
             .set(Some(Arc::from(format!("{VIOLATIONS_ROW}/0").as_str())));
-    }
+    });
     assert!(rects(&canvas).contains(&Rect::new(30.0, 40.0, 60.0, 16.0)));
 }
 
@@ -472,8 +465,7 @@ fn details_at(size: Size) -> Rect {
             vec![inspector_panel(inspection)?],
         )?))
     });
-    {
-        let _entered = canvas.enter();
+    canvas.with_entered(|| {
         refreshed(
             inspection,
             &Given {
@@ -483,7 +475,7 @@ fn details_at(size: Size) -> Rect {
             },
         );
         inspection.selected.set(Some(Arc::from("1")));
-    }
+    });
     for _ in 0..3 {
         let _ = frame(&canvas);
     }

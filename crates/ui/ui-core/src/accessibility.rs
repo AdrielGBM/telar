@@ -19,7 +19,6 @@ use reactive_core::SurfaceHandle;
 
 use crate::focus;
 use crate::input_region::{hit_rect, visible_rect};
-use crate::surface_context::{Surface, SurfaceGuard};
 
 /// Whether the snapshot reads `command`, for a runner that keeps the last frame's reading between frames rather than the whole frame.
 ///
@@ -51,12 +50,13 @@ pub fn snapshot(commands: &[DrawCommand]) -> Vec<AccessNode> {
     let grafts = nested
         .into_iter()
         .filter_map(|(surface, parent)| {
-            let _entered = surface.enter()?;
-            let inner = snapshot(&commands[surface.commands.clone()]);
-            Some((
-                parent,
-                inner.into_iter().map(|node| surface.place(node)).collect(),
-            ))
+            surface.with_entered(|| {
+                let inner = snapshot(&commands[surface.commands.clone()]);
+                (
+                    parent,
+                    inner.into_iter().map(|node| surface.place(node)).collect(),
+                )
+            })
         })
         .collect();
     graft(nodes, grafts)
@@ -1110,9 +1110,9 @@ pub struct NestedSurface {
 }
 
 impl NestedSurface {
-    /// Activates the surface's world for as long as the guard lives, as reading what it drew needs; `None` once the surface is gone, when its boxes mean nothing on this thread.
-    pub fn enter(&self) -> Option<SurfaceGuard> {
-        Surface::find(SurfaceHandle(self.surface)).map(|surface| surface.enter())
+    /// Runs `f` with the surface's world active, as reading what it drew needs; `None` without running it once the surface is gone, when its boxes mean nothing on this thread.
+    pub fn with_entered<R>(&self, f: impl FnOnce() -> R) -> Option<R> {
+        SurfaceHandle::from_raw(self.surface).with_entered_if_alive(f)
     }
 
     /// Where the frame shows `rect`, given in the surface's coordinates.

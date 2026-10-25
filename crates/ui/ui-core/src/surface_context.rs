@@ -1,43 +1,70 @@
 //! `Surface` — one RSX surface's complete per-surface world.
 //!
-//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale, control size, theme mode and high contrast it overrides the thread's with. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::enter`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
+//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale, control size, theme mode and high contrast it overrides the thread's with. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::with_entered`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
-//! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and `enter` is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
+//! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and entering it is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
 
-use i18n_core::{LocaleContext, LocaleGuard};
+use i18n_core::LocaleContext;
 use layout_reactive::{
-    DirectionContext, DirectionGuard, LayoutContext, LayoutGuard, ParentsContext, ParentsGuard,
-    ScrollHostsContext, ScrollHostsGuard, SurfaceSizeContext, SurfaceSizeGuard,
+    DirectionContext, LayoutContext, ParentsContext, ScrollHostsContext, SurfaceSizeContext,
 };
-use platform_core::{WindowCommandContext, WindowCommandGuard};
-use preferences_core::{HighContrastContext, HighContrastGuard};
+use platform_core::WindowCommandContext;
+use preferences_core::HighContrastContext;
 use reactive_core::{
-    SurfaceEnterGuard, SurfaceHandle, cancel_tasks_for, cancel_timers_for, current_surface,
-    dispose_surface, in_surface_world, set_current_surface, set_surface_enter_hook,
+    SurfaceHandle, cancel_tasks_for, cancel_timers_for, current_surface, dispose_surface,
+    in_surface_world, set_surface_enter_hook, with_current_surface,
 };
-use theme_core::{ControlSizeContext, ControlSizeGuard, ModeContext, ModeGuard};
-use ui_tree::{OverlayContext, OverlayGuard};
+use theme_core::{ControlSizeContext, ModeContext};
+use ui_tree::OverlayContext;
 
-use crate::anchor_line::{PlacesContext, PlacesGuard};
-use crate::annotation::{AnnotationsContext, AnnotationsGuard};
-use crate::cursor::{CursorContext, CursorGuard};
-use crate::dismiss::{DismissContext, DismissGuard};
-use crate::focus::{FocusContext, FocusGuard};
-use crate::inherit::{CascadeContext, CascadeGuard};
-use crate::input_region::{InputRegionContext, InputRegionGuard};
-use crate::named_overlay::{NamedOverlaysContext, NamedOverlaysGuard};
-use crate::presence::{ExitsContext, ExitsGuard};
-use crate::scroll_viewports::{ViewportsContext, ViewportsGuard};
-use crate::surface_font::{SurfaceFontContext, SurfaceFontGuard};
-use crate::surface_title::{SurfaceTitleContext, SurfaceTitleGuard};
+use crate::anchor_line::PlacesContext;
+use crate::annotation::AnnotationsContext;
+use crate::cursor::CursorContext;
+use crate::dismiss::DismissContext;
+use crate::focus::FocusContext;
+use crate::inherit::CascadeContext;
+use crate::input_region::InputRegionContext;
+use crate::named_overlay::NamedOverlaysContext;
+use crate::presence::ExitsContext;
+use crate::scroll_viewports::ViewportsContext;
+use crate::surface_font::SurfaceFontContext;
+use crate::surface_title::SurfaceTitleContext;
 
-/// The complete per-surface world plus its reactive [`SurfaceHandle`]. Build one per window/layer-surface with [`Surface::new`]; activate it with [`Surface::enter`].
-pub struct Surface {
-    handle: SurfaceHandle,
+macro_rules! surface_worlds {
+    ($( $(#[$field_meta:meta])* $field:ident: $ty:ty, )*) => {
+        /// The complete per-surface world plus its reactive [`SurfaceHandle`]. Build one per window/layer-surface with [`Surface::new`]; activate it with [`Surface::with_entered`].
+        pub struct Surface {
+            handle: SurfaceHandle,
+            $( $(#[$field_meta])* $field: $ty, )*
+        }
+
+        impl Surface {
+            fn fresh_worlds(handle: SurfaceHandle) -> Self {
+                Self {
+                    handle,
+                    $( $field: <$ty>::new_owned(), )*
+                }
+            }
+
+            // Non-generic, so the chain of entries is compiled once rather than once per closure handed to `with_entered`.
+            fn enter_worlds(&self, run: &mut dyn FnMut()) {
+                $( let run: &mut dyn FnMut() = &mut || self.$field.with_entered(&mut *run); )*
+                run()
+            }
+
+            fn enter_ambient_worlds(run: &mut dyn FnMut()) {
+                $( let run: &mut dyn FnMut() = &mut || <$ty>::with_ambient_entered(&mut *run); )*
+                run()
+            }
+        }
+    };
+}
+
+surface_worlds! {
     layout: LayoutContext,
     /// Which node hangs from which, swapped with `layout` and never apart from it. Each surface's layout tree mints its node ids from its own counter, so the same `NodeId` names a different node in every surface — one shared map would have them overwrite each other's links, and a climb would leave the surface it started in. It is a separate world only because a measure closure runs inside the layout runtime's borrow and reaching back into it would re-enter.
     parents: ParentsContext,
@@ -70,35 +97,8 @@ impl Surface {
         install_enter_hook();
         let handle = next_handle();
         // Built in the surface's own world rather than detached, so what the worlds hold is freed when the surface drops instead of never.
-        let world = {
-            let _active = RestoreSurface(set_current_surface(handle));
-            in_surface_world(|| Self {
-                handle,
-                layout: LayoutContext::new_owned(),
-                parents: ParentsContext::new_owned(),
-                scroll_hosts: ScrollHostsContext::new_owned(),
-                size: SurfaceSizeContext::new_owned(),
-                overlay: OverlayContext::new_owned(),
-                dismiss: DismissContext::new_owned(),
-                named_overlays: NamedOverlaysContext::new_owned(),
-                focus: FocusContext::new_owned(),
-                input_region: InputRegionContext::new_owned(),
-                exits: ExitsContext::new_owned(),
-                cascade: CascadeContext::new_owned(),
-                cursor: CursorContext::new_owned(),
-                annotations: AnnotationsContext::new_owned(),
-                viewports: ViewportsContext::new_owned(),
-                places: PlacesContext::new_owned(),
-                title: SurfaceTitleContext::new_owned(),
-                font: SurfaceFontContext::new_owned(),
-                window_commands: WindowCommandContext::new_owned(),
-                direction: DirectionContext::new_owned(),
-                locale: LocaleContext::new_owned(),
-                control_size: ControlSizeContext::new_owned(),
-                mode: ModeContext::new_owned(),
-                high_contrast: HighContrastContext::new_owned(),
-            })
-        };
+        let world =
+            with_current_surface(handle, || in_surface_world(|| Self::fresh_worlds(handle)));
         let surface = Rc::new(world);
         SURFACES.with(|s| s.borrow_mut().insert(handle, Rc::downgrade(&surface)));
         surface
@@ -114,119 +114,41 @@ impl Surface {
         SURFACES.with(|s| s.borrow().get(&handle).and_then(Weak::upgrade))
     }
 
-    /// Activates this surface's world until the returned guard drops, which restores the previously-active world. The swapped worlds are independent thread-locals, so restore order among them is irrelevant; nesting `enter`s is fine.
-    #[must_use = "the surface is only active while this guard is alive"]
-    pub fn enter(&self) -> SurfaceGuard {
-        // Set first, so any effect registered while active captures this handle.
-        let prev_surface = set_current_surface(self.handle);
-        SurfaceGuard {
-            _layout: self.layout.enter(),
-            _parents: self.parents.enter(),
-            _scroll_hosts: self.scroll_hosts.enter(),
-            _size: self.size.enter(),
-            _overlay: self.overlay.enter(),
-            _dismiss: self.dismiss.enter(),
-            _named_overlays: self.named_overlays.enter(),
-            _focus: self.focus.enter(),
-            _input_region: self.input_region.enter(),
-            _exits: self.exits.enter(),
-            _cascade: self.cascade.enter(),
-            _window_commands: self.window_commands.enter(),
-            _cursor: self.cursor.enter(),
-            _annotations: self.annotations.enter(),
-            _viewports: self.viewports.enter(),
-            _places: self.places.enter(),
-            _title: self.title.enter(),
-            _font: self.font.enter(),
-            _direction: self.direction.enter(),
-            _locale: self.locale.enter(),
-            _control_size: self.control_size.enter(),
-            _mode: self.mode.enter(),
-            _high_contrast: self.high_contrast.enter(),
-            _prev_surface: RestoreSurface(prev_surface),
-        }
+    /// Runs `f` with this surface's world active, and restores the previously-active world once `f` returns or unwinds. The swapped worlds are independent thread-locals, so restore order among them is irrelevant; entries nest.
+    pub fn with_entered<R>(&self, f: impl FnOnce() -> R) -> R {
+        let mut f = Some(f);
+        let mut out = None;
+        self.enter(&mut || out = f.take().map(|f| f()));
+        out.expect("entering a surface runs the closure it was handed")
     }
 
-    /// Activates the ambient world — the one that exists before any [`Surface`] is built.
+    fn enter(&self, run: &mut dyn FnMut()) {
+        with_current_surface(self.handle, || self.enter_worlds(run));
+    }
+
+    /// Runs `run` with the ambient world active — the one that exists before any [`Surface`] is built.
     ///
     /// A single-window app never builds a surface, so its whole tree is owned by [`SurfaceHandle::NONE`] and its effects have to re-enter *this*. Without it they run against whichever surface happened to be entered when the signal fired, which is a live case as soon as one app has both — a window tree that never built a surface and a [`TextureUi`] that did.
     ///
     /// [`TextureUi`]: https://docs.rs/telar/latest/telar/struct.TextureUi.html
-    #[must_use = "the ambient world is only active while this guard is alive"]
-    fn enter_ambient() -> SurfaceGuard {
-        let prev_surface = set_current_surface(SurfaceHandle::NONE);
-        SurfaceGuard {
-            _layout: LayoutContext::enter_ambient(),
-            _parents: ParentsContext::enter_ambient(),
-            _scroll_hosts: ScrollHostsContext::enter_ambient(),
-            _size: SurfaceSizeContext::enter_ambient(),
-            _overlay: OverlayContext::enter_ambient(),
-            _dismiss: DismissContext::enter_ambient(),
-            _named_overlays: NamedOverlaysContext::enter_ambient(),
-            _focus: FocusContext::enter_ambient(),
-            _input_region: InputRegionContext::enter_ambient(),
-            _exits: ExitsContext::enter_ambient(),
-            _cascade: CascadeContext::enter_ambient(),
-            _window_commands: WindowCommandContext::enter_ambient(),
-            _cursor: CursorContext::enter_ambient(),
-            _annotations: AnnotationsContext::enter_ambient(),
-            _viewports: ViewportsContext::enter_ambient(),
-            _places: PlacesContext::enter_ambient(),
-            _title: SurfaceTitleContext::enter_ambient(),
-            _font: SurfaceFontContext::enter_ambient(),
-            _direction: DirectionContext::enter_ambient(),
-            _locale: LocaleContext::enter_ambient(),
-            _control_size: ControlSizeContext::enter_ambient(),
-            _mode: ModeContext::enter_ambient(),
-            _high_contrast: HighContrastContext::enter_ambient(),
-            _prev_surface: RestoreSurface(prev_surface),
-        }
+    fn enter_ambient(run: &mut dyn FnMut()) {
+        with_current_surface(SurfaceHandle::NONE, || Self::enter_ambient_worlds(run));
     }
 }
 
 impl Drop for Surface {
     fn drop(&mut self) {
         // Entered while disposing: an owner's teardown reaches into the surface-local worlds about to be dropped, and a withdrawal against whichever surface happened to be active would land on another's layout tree.
-        {
-            let _entered = self.enter();
+        self.with_entered(|| {
             dispose_surface(self.handle);
             // After disposal, so work a cleanup started while the surface came down is cancelled with the rest.
             cancel_tasks_for(self.handle);
             cancel_timers_for(self.handle);
-        }
+        });
         SURFACES.with(|s| {
             s.borrow_mut().remove(&self.handle);
         });
     }
-}
-
-/// Restores the previously-active surface world when dropped. The per-world guards each restore their own (independent) thread-local; `_prev_surface` restores the reactive current-surface.
-#[must_use = "the surface is only active while this guard is alive"]
-pub struct SurfaceGuard {
-    _layout: LayoutGuard,
-    _parents: ParentsGuard,
-    _scroll_hosts: ScrollHostsGuard,
-    _size: SurfaceSizeGuard,
-    _overlay: OverlayGuard,
-    _dismiss: DismissGuard,
-    _named_overlays: NamedOverlaysGuard,
-    _focus: FocusGuard,
-    _input_region: InputRegionGuard,
-    _exits: ExitsGuard,
-    _cascade: CascadeGuard,
-    _window_commands: WindowCommandGuard,
-    _cursor: CursorGuard,
-    _annotations: AnnotationsGuard,
-    _viewports: ViewportsGuard,
-    _places: PlacesGuard,
-    _title: SurfaceTitleGuard,
-    _font: SurfaceFontGuard,
-    _direction: DirectionGuard,
-    _locale: LocaleGuard,
-    _control_size: ControlSizeGuard,
-    _mode: ModeGuard,
-    _high_contrast: HighContrastGuard,
-    _prev_surface: RestoreSurface,
 }
 
 /// The surface something was registered on, for withdrawing it there whichever surface is active when it goes.
@@ -240,22 +162,13 @@ impl HomeSurface {
         Self(current_surface())
     }
 
-    /// Enters the surface until the guard drops, or `None` once it is torn down: it took its worlds with it, and the one active now is another's.
-    pub(crate) fn enter(self) -> Option<SurfaceEnterGuard> {
-        let entered = self.0.enter();
-        (current_surface() == self.0).then_some(entered)
+    /// Runs `f` with the surface entered, or returns `None` without running it once the surface is torn down. See [`SurfaceHandle::with_entered_if_alive`].
+    pub(crate) fn with_entered<R>(self, f: impl FnOnce() -> R) -> Option<R> {
+        self.0.with_entered_if_alive(f)
     }
 
     pub(crate) fn handle(self) -> SurfaceHandle {
         self.0
-    }
-}
-
-struct RestoreSurface(SurfaceHandle);
-
-impl Drop for RestoreSurface {
-    fn drop(&mut self) {
-        set_current_surface(self.0);
     }
 }
 
@@ -271,29 +184,24 @@ fn next_handle() -> SurfaceHandle {
     NEXT_HANDLE.with(|c| {
         let id = c.get();
         c.set(id + 1);
-        SurfaceHandle(id)
+        SurfaceHandle::from_raw(id)
     })
 }
 
-/// Installs (once per thread) the reactive-core enter-hook: given the handle an effect captured, look up its surface and activate its full world for the duration of the effect. Returns a no-op when the surface is gone (e.g. torn down while a stale effect was still scheduled).
+/// Installs (once per thread) the reactive-core enter-hook: given the handle an effect captured, look up its surface and run the effect with its full world active, holding the surface alive until the effect returns. Runs the effect where it is when the surface is gone (e.g. torn down while a stale effect was still scheduled).
 fn install_enter_hook() {
     HOOK_INSTALLED.with(|installed| {
         if installed.replace(true) {
             return;
         }
-        set_surface_enter_hook(|handle| {
+        set_surface_enter_hook(|handle, run| {
             if handle.is_none() {
-                let guard = Surface::enter_ambient();
-                return SurfaceEnterGuard::new(move || drop(guard));
+                return Surface::enter_ambient(run);
             }
-            let surface = SURFACES.with(|s| s.borrow().get(&handle).and_then(Weak::upgrade));
-            match surface {
-                Some(surface) => {
-                    let guard = surface.enter();
-                    SurfaceEnterGuard::new(move || drop(guard))
-                }
+            match Surface::find(handle) {
+                Some(surface) => surface.enter(run),
                 // Torn down while a stale effect was still scheduled: there is no world to enter, and guessing one would run it against a stranger's.
-                None => SurfaceEnterGuard::noop(),
+                None => run(),
             }
         });
     });

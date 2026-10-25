@@ -64,15 +64,9 @@ pub trait AppRuntime: 'static {
         ui_core::relayout_if_dirty();
     }
 
-    /// Opens a reactive batch for the duration of event dispatch, paired with [`end_event_batch`](Self::end_event_batch).
-    ///
-    /// Without one, a signal written by an event handler flushes immediately and re-runs a segment's effect while its widget is still borrowed for `on_event`: that render is skipped and the segment silently loses its reactive subscriptions. Deferring the flush until every borrow is released keeps them.
-    fn begin_event_batch(&self) {
-        reactive_core::begin_batch();
-    }
-
-    fn end_event_batch(&self) {
-        reactive_core::end_batch();
+    /// Runs `dispatch` inside a reactive batch of the runtime this application's tree lives in, so a handler's write flushes once every borrow taken for `on_event` is released rather than re-running a segment's effect under one, which skips that render and silently drops the segment's subscriptions.
+    fn in_event_batch(&self, dispatch: &mut dyn FnMut()) {
+        reactive_core::batch(dispatch);
     }
 
     /// Offers a positioned event to the overlay layer before the widget tree sees it, reporting whether an overlay consumed it.
@@ -164,6 +158,16 @@ pub trait AppRuntime: 'static {
     /// Gives the reactive runtime the wake a finishing worker, or a timer due sooner than the loop meant to sleep, uses to run a frame. Without it a task delivers its result into a runtime whose waker slot is empty, and nothing runs until the next input event.
     fn install_task_waker(&self, waker: RedrawWaker) {
         reactive_core::set_task_waker(move || waker.wake());
+    }
+}
+
+impl dyn AppRuntime {
+    /// [`in_event_batch`](AppRuntime::in_event_batch) for a dispatch that answers something.
+    pub(crate) fn event_batch<R>(&self, dispatch: impl FnOnce() -> R) -> R {
+        let mut dispatch = Some(dispatch);
+        let mut answer = None;
+        self.in_event_batch(&mut || answer = dispatch.take().map(|dispatch| dispatch()));
+        answer.expect("`in_event_batch` runs its dispatch exactly once")
     }
 }
 

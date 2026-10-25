@@ -93,16 +93,17 @@ impl Hydration {
 }
 
 /// Runs every animation the first tree started to its end, so the first frame shows what the page was written showing: it was written once the app had settled, so an entrance has already played for the reader.
-pub(crate) fn settle_motion(app: &dyn crate::app_runtime::AppRuntime) {
+pub(super) fn settle_motion(
+    app: &dyn crate::app_runtime::AppRuntime,
+    loop_batch: &mut super::state::LoopBatch,
+) {
     let scale = motion_core::scale();
     motion_core::set_scale(0.0);
     let now = web_time::Instant::now();
     for _ in 0..SETTLE_ROUNDS {
         app.drain_tasks();
         app.motion_tick(now);
-        reactive_core::end_batch();
-        app.relayout();
-        reactive_core::begin_batch();
+        loop_batch.lift(|| app.relayout());
         if !app.motion_has_active() {
             break;
         }

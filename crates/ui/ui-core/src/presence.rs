@@ -21,7 +21,7 @@ reactive_core::surface_local! {
     /// Per surface, because what a host waits on before unmapping is its own window's exits.
     slot EXITS: RwSignal<usize> = signal(0);
     access with_exits, with_exits_ref;
-    context ExitsContext, ExitsGuard;
+    context ExitsContext;
 }
 
 /// How many nodes on the active surface are still playing their exit; a window may unmap once this reads 0.

@@ -1,35 +1,96 @@
 //! [`Memo`]: a derived value recomputed on demand and only notified onward when it actually changed.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::rc::Rc;
 
 use smallvec::SmallVec;
 
-use crate::runtime::{self, EffectId, SignalId};
+use crate::runtime::{self, EffectId, HeldAt, SignalId, SiteCell};
 
 enum MemoState<T> {
-    Computing, // reading while Computing means the closure re-entered itself: a cycle
+    /// Reading it means the computation re-entered itself: a cycle.
+    Computing,
     Clean(T),
     /// No value: before the first computation, and after one that panicked.
     Dirty,
 }
 
-struct MemoInner<T> {
-    state: MemoState<T>,
-    subscribers: SmallVec<[EffectId; 4]>,
-    recompute: Option<EffectId>,
+struct MemoNode<T> {
+    state: SiteCell<MemoState<T>>,
+    /// A recompute found the value lent to a read and could not run, so the value is stale until the next one does.
+    missed: Cell<bool>,
+    subscribers: RefCell<SmallVec<[EffectId; 4]>>,
+    recompute: Cell<Option<EffectId>>,
 }
 
-/// A derived value, recomputed when what it reads moves.
-///
-/// `Copy`, like the signal handles, and for the same reason: the handle is an id into the runtime's arena and the *owner* is what disposes it. It used to be `Rc`-backed and kept alive by whoever read it, which is why it was the one handle a `.rsx` view still had to clone by hand.
-///
-/// The `Rc<RefCell<…>>` did not disappear so much as move: it is the *value* the arena slot holds, reached through the id, so the memo's own state still has one owner while the handle has none.
+impl<T: 'static> MemoNode<T> {
+    fn track(&self) {
+        if let Some(id) = runtime::current_observer() {
+            let mut subscribers = self.subscribers.borrow_mut();
+            if !subscribers.contains(&id) {
+                subscribers.push(id);
+            }
+        }
+    }
+
+    /// Recomputes a memo that has no current value, unless the value is still lent to an outer read, which recomputes it once it returns.
+    fn catch_up(&self) {
+        let Some(recompute) = self.recompute.get() else {
+            return;
+        };
+        let behind = if self.missed.get() {
+            self.state.is_free()
+        } else {
+            self.state
+                .try_read()
+                .is_ok_and(|state| matches!(*state, MemoState::Dirty))
+        };
+        if behind {
+            runtime::force_run_effect(recompute);
+        }
+    }
+
+    fn set_state(&self, state: MemoState<T>) {
+        match self.state.try_write() {
+            Ok(mut slot) => *slot = state,
+            Err(held) => recomputed_while_read::<T>(&held),
+        }
+    }
+}
+
+/// Queues the recompute a read made miss once that read lets go of the value.
+struct RecomputeMissed<'a, T>(&'a MemoNode<T>);
+
+impl<T> Drop for RecomputeMissed<'_, T> {
+    fn drop(&mut self) {
+        let node = self.0;
+        if node.missed.get()
+            && node.state.is_free()
+            && let Some(recompute) = node.recompute.get()
+        {
+            runtime::reschedule_memo(recompute, !std::thread::panicking());
+        }
+    }
+}
+
+#[cold]
+fn recomputed_while_read<T>(held: &HeldAt) -> ! {
+    let type_name = std::any::type_name::<T>();
+    panic!(
+        "memo of type {type_name} recomputed inside one of its own reads.\n  \
+         read at: {held}\n\
+         A memo's sources cannot change and flush while its value is lent out — a `Clone` or a `.with` closure that \
+         writes them, say. It keeps the value that read is using and recomputes once the read returns."
+    )
+}
+
+/// A derived value, recomputed when what it reads moves; `Copy` and `!Send` like the signal handles, since the handle is an id into this thread's arena and the owner is what disposes it.
 pub struct Memo<T: 'static> {
     id: SignalId,
     _marker: PhantomData<T>,
+    _ui_thread_only: PhantomData<*const ()>,
 }
 
 impl<T: 'static> Clone for Memo<T> {
@@ -41,32 +102,18 @@ impl<T: 'static> Clone for Memo<T> {
 // Hand-written rather than derived: `#[derive(Copy)]` would demand `T: Copy`, and the parameter only names what the memo computes, never what the handle stores.
 impl<T: 'static> Copy for Memo<T> {}
 
-type Shared<T> = Rc<RefCell<MemoInner<T>>>;
-
 impl<T: 'static> Memo<T> {
-    fn shared(&self) -> Shared<T> {
-        runtime::with_signal_value::<Shared<T>, _>(self.id, Rc::clone)
+    fn node(&self) -> Rc<MemoNode<T>> {
+        runtime::shared_storage(self.id)
     }
 
+    /// Lends the value to `f`, which may read anything and write any signal, this memo's own sources included, and the effects those writes wake run after it returns.
+    #[track_caller]
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
-        let inner = self.shared();
-        self.track(&inner);
-        // A computation that panicked left nothing to read, and nothing reschedules it until a source moves: the read computes it again, so it either answers or panics with the real cause.
-        let recompute = {
-            let borrow = inner.borrow();
-            matches!(borrow.state, MemoState::Dirty)
-                .then_some(borrow.recompute)
-                .flatten()
-        };
-        if let Some(recompute) = recompute {
-            runtime::force_run_effect(recompute);
-        }
-        let borrow = inner.borrow();
-        match &borrow.state {
-            MemoState::Clean(v) => f(v),
-            MemoState::Dirty => panic!("memo has no value: its computation panicked"),
-            MemoState::Computing => panic!("reactive cycle detected in memo"),
-        }
+        let batch = runtime::OpenBatch::open();
+        let result = self.read(f);
+        batch.close();
+        result
     }
 
     /// Whether the storage behind this handle is still there — see [`crate::RwSignal::is_alive`].
@@ -74,65 +121,91 @@ impl<T: 'static> Memo<T> {
         runtime::signal_is_alive(self.id)
     }
 
-    fn track(&self, inner: &Shared<T>) {
-        if let Some(id) = runtime::current_observer() {
-            let mut borrow = inner.borrow_mut();
-            if !borrow.subscribers.contains(&id) {
-                borrow.subscribers.push(id);
-            }
+    #[track_caller]
+    fn read<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+        let node = self.node();
+        node.track();
+        node.catch_up();
+        let _recompute_missed = RecomputeMissed(&node);
+        let state = match node.state.try_read() {
+            Ok(state) => state,
+            Err(held) => recomputed_while_read::<T>(&held),
+        };
+        match &*state {
+            MemoState::Clean(value) => f(value),
+            MemoState::Dirty => panic!(
+                "memo of type {} has no value: its computation panicked",
+                std::any::type_name::<T>()
+            ),
+            MemoState::Computing => panic!(
+                "reactive cycle detected in memo of type {}",
+                std::any::type_name::<T>()
+            ),
         }
     }
 }
 
 impl<T: Clone + 'static> Memo<T> {
+    /// The value, cloned while it is lent, so a `Clone` that writes this memo's sources and flushes panics naming it rather than reading a value mid-recompute.
+    #[track_caller]
     pub fn get(&self) -> T {
-        self.with(T::clone)
+        self.read(T::clone)
     }
 
     /// [`get`](Self::get), answering `None` rather than panicking when the storage is gone.
+    #[track_caller]
     pub fn try_get(&self) -> Option<T> {
-        self.is_alive().then(|| self.get())
+        if self.is_alive() {
+            Some(self.get())
+        } else {
+            None
+        }
     }
 }
 
 /// A derived value recomputed when its sources change, notifying onward only when the result differs.
 pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
-    let inner: Shared<T> = Rc::new(RefCell::new(MemoInner {
-        state: MemoState::Dirty,
-        subscribers: SmallVec::new(),
-        recompute: None,
-    }));
+    let node = Rc::new(MemoNode {
+        state: SiteCell::new(MemoState::Dirty),
+        missed: Cell::new(false),
+        subscribers: RefCell::new(SmallVec::new()),
+        recompute: Cell::new(None),
+    });
 
     // The arena slot owns the state, so the memo is disposed with its owner. The closure holds a `Weak` rather than the slot's id, because the recompute runs during a flush that may come after disposal — a `Weak` that fails to upgrade says so, where a stale id would only panic.
-    let weak = Rc::downgrade(&inner);
+    let weak = Rc::downgrade(&node);
     let effect_f: Box<dyn Fn()> = Box::new(move || {
-        let Some(inner) = weak.upgrade() else {
+        let Some(node) = weak.upgrade() else {
             return;
         };
-        // The previous value is held aside rather than overwritten: it is what the new one is compared against, and marking the state `Computing` in place threw it away, so every recompute notified onward whether or not anything changed.
-        let previous = std::mem::replace(&mut inner.borrow_mut().state, MemoState::Computing);
+        // Held aside rather than overwritten: it is what the new value is compared against.
+        let previous = match node.state.try_write() {
+            Ok(mut state) => std::mem::replace(&mut *state, MemoState::Computing),
+            Err(held) => {
+                node.missed.set(true);
+                recomputed_while_read::<T>(&held)
+            }
+        };
+        node.missed.set(false);
         let new_value = match catch_unwind(AssertUnwindSafe(&f)) {
             Ok(value) => value,
             Err(payload) => {
-                inner.borrow_mut().state = MemoState::Dirty;
+                node.set_state(MemoState::Dirty);
                 resume_unwind(payload);
             }
         };
-        let subs: SmallVec<[EffectId; 8]> = {
-            let mut memo = inner.borrow_mut();
-            let changed = match &previous {
-                MemoState::Clean(old) => old != &new_value,
-                _ => true,
-            };
-            memo.state = MemoState::Clean(new_value);
-            if changed {
-                memo.subscribers.iter().copied().collect()
-            } else {
-                SmallVec::new()
-            }
+        let changed = match &previous {
+            MemoState::Clean(old) => old != &new_value,
+            _ => true,
         };
+        node.set_state(MemoState::Clean(new_value));
+        if !changed {
+            return;
+        }
+        let subscribers: SmallVec<[EffectId; 8]> =
+            node.subscribers.borrow().iter().copied().collect();
         let mut dead: Option<Vec<EffectId>> = None;
-        for id in subs {
+        for id in subscribers {
             if runtime::is_alive(id) {
                 runtime::schedule(id);
             } else {
@@ -140,22 +213,26 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
             }
         }
         if let Some(dead) = dead {
-            let mut memo = inner.borrow_mut();
-            for id in dead {
-                memo.subscribers.retain(|x| x != &id);
-            }
+            node.subscribers
+                .borrow_mut()
+                .retain(|id| !dead.contains(id));
         }
     });
 
-    let id = runtime::create_signal_storage(Rc::clone(&inner));
+    let id = runtime::create_shared_storage(Rc::clone(&node));
     // Registered as a pure effect, so it runs before user effects during flush. The owner active here recorded it, and that is what disposes it.
     let effect_id = runtime::register_pure_effect(effect_f);
-    inner.borrow_mut().recompute = Some(effect_id);
-    drop(inner);
+    node.recompute.set(Some(effect_id));
+    drop(node);
     runtime::run_effect(effect_id);
 
     Memo {
         id,
         _marker: PhantomData,
+        _ui_thread_only: PhantomData,
     }
 }
+
+#[cfg(test)]
+#[path = "memo_test.rs"]
+mod tests;

@@ -2,7 +2,7 @@
 //!
 //! Key events are broadcast to every widget (see `dispatch_container_event`), so focus is *self-filtering*: a widget handles a key only when [`is_key_target`] holds for its id — there is no central router. Focus is a reactive signal, so a widget that reads [`current`]/[`is_focused`] inside its `view()` re-renders when focus moves (e.g. to show or hide its caret). State is per-surface (each surface owns its own focus via [`FocusContext`], activated by the runner), so focus never crosses windows; preserving focus across a hot-reload dylib swap is out of scope.
 
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 
 use layout_core::NodeId;
@@ -104,12 +104,10 @@ struct Entry {
     active_descendant: Option<Rc<dyn Fn() -> Option<FocusId>>>,
     controls: Option<Rc<dyn Fn() -> Option<FocusId>>>,
     /// The surface that answers for this entry's keyboard while it holds focus. See [`delegate_keyboard`].
-    keyboard: Option<KeyboardDelegate>,
+    keyboard: Option<Weak<crate::Surface>>,
     /// Where a widget that takes text has its caret, for the input method composing into it. See [`crate::text_input`].
     text_input: Option<TextInputSource>,
 }
-
-type KeyboardDelegate = Rc<dyn Fn() -> Option<crate::SurfaceGuard>>;
 
 pub(crate) type TextInputSource = Rc<dyn Fn() -> Option<platform_core::TextInput>>;
 
@@ -185,7 +183,7 @@ reactive_core::surface_local! {
     /// Per-surface focus state. The runner activates each surface's [`FocusContext`] around its build/event/frame, so focus never crosses windows.
     slot FOCUS: FocusState = FocusState::new();
     access with_focus, with_focus_ref;
-    context FocusContext, FocusGuard;
+    context FocusContext;
 }
 
 /// The active surface's focused-widget signal, cloned out of the slot so callers never hold the slot borrow across a `.set()` — its flush re-enters the slot when an effect reads [`current`].
@@ -620,17 +618,13 @@ pub fn text_entry_focused() -> bool {
     }
 }
 
-/// Hands the keyboard questions about `id` on to another surface while `id` holds focus: whether a text entry has the keys, and which keys are kept, are answered by whatever holds focus in the surface `enter` activates.
+/// Hands the keyboard questions about `id` on to another surface while `id` holds focus: whether a text entry has the keys, and which keys are kept, are answered by whatever holds focus in the surface `surface` names, while it is alive.
 ///
 /// A nested surface's frame is the case. It holds focus here while a field inside it has the caret, and a shortcut table here asking whether somebody is typing has to hear about that field, not about the frame.
-pub(crate) fn delegate_keyboard(
-    id: FocusId,
-    enter: impl Fn() -> Option<crate::SurfaceGuard> + 'static,
-) {
-    let enter: KeyboardDelegate = Rc::new(enter);
+pub(crate) fn delegate_keyboard(id: FocusId, surface: Weak<crate::Surface>) {
     with_focus(|s| {
         if let Some(entry) = s.entry_mut(id) {
-            entry.keyboard = Some(enter);
+            entry.keyboard = Some(surface);
         }
     });
 }
@@ -657,9 +651,8 @@ pub(crate) fn focused_text_input() -> Option<TextInputSource> {
 }
 
 fn delegated<R>(id: FocusId, ask: impl FnOnce() -> R) -> Option<R> {
-    let enter = with_focus_ref(|s| s.entry(id).and_then(|e| e.keyboard.clone()))?;
-    let _inside = enter()?;
-    Some(ask())
+    let surface = with_focus_ref(|s| s.entry(id)?.keyboard.as_ref()?.upgrade())?;
+    Some(surface.with_entered(ask))
 }
 
 /// Whether the focused widget — during a key's dispatch, the one the key belongs to — keeps `keys` for itself, as a control of its role uses them: a button acts on Enter, a slider on the arrows and nothing else. `false` with nothing focused. Reactive, like [`current`].

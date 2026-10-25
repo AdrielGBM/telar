@@ -15,7 +15,7 @@ use ui_tree::{Component, ComponentList, EventResult, RenderNode, SegmentNodeInfo
 
 use crate::context::{compute_layout, mark_dirty, new_container};
 use crate::layout_item::LayoutItem;
-use crate::surface_context::{Surface, SurfaceGuard};
+use crate::surface_context::Surface;
 
 /// A tree with a surface of its own. See the module documentation.
 ///
@@ -119,8 +119,7 @@ impl SurfaceCanvas {
         build: impl FnOnce() -> Result<(C, NodeId), LayoutError>,
     ) -> Result<Self, LayoutError> {
         let surface = Surface::new();
-        let (tree, root, signals) = {
-            let _entered = surface.enter();
+        let (tree, root, signals) = surface.with_entered(|| {
             let signals =
                 in_surface_world(|| (signal(size), signal(env.safe_area), signal(1.0f32)));
             crate::set_surface_size(size);
@@ -128,8 +127,8 @@ impl SurfaceCanvas {
             env.apply();
             let _scope = root_scope();
             let (component, root) = build()?;
-            (ComponentList::new(component), root, signals)
-        };
+            Ok::<_, LayoutError>((ComponentList::new(component), root, signals))
+        })?;
         let (size, safe_area, scale) = signals;
         Ok(Self {
             tree,
@@ -147,10 +146,9 @@ impl SurfaceCanvas {
         &self.surface
     }
 
-    /// Activates this canvas's world — its layout tree, overlays, focus — for as long as the guard lives: what building a widget for this tree, reading one of its rects or opening one of its overlays from outside has to happen inside.
-    #[must_use = "the canvas's world is only active while this guard is alive"]
-    pub fn enter(&self) -> SurfaceGuard {
-        self.surface.enter()
+    /// Runs `f` with this canvas's world — its layout tree, overlays, focus — active: what building a widget for this tree, reading one of its rects or opening one of its overlays from outside has to happen inside.
+    pub fn with_entered<R>(&self, f: impl FnOnce() -> R) -> R {
+        self.surface.with_entered(f)
     }
 
     /// The surface's logical size. Reactive.
@@ -173,20 +171,22 @@ impl SurfaceCanvas {
         if self.size.peek() != size {
             self.size.set(size);
         }
-        let _entered = self.enter();
-        crate::set_surface_size(size);
-        let _ = mark_dirty(self.root);
-        let _ = compute_layout(
-            self.root,
-            AvailableSpace::Definite(size.width),
-            AvailableSpace::Definite(size.height),
-        );
+        self.with_entered(|| {
+            crate::set_surface_size(size);
+            let _ = mark_dirty(self.root);
+            let _ = compute_layout(
+                self.root,
+                AvailableSpace::Definite(size.width),
+                AvailableSpace::Definite(size.height),
+            );
+        })
     }
 
     /// Lays out again what the tree's own reactive changes dirtied since the last pass, at the size it has — the per-frame step a runner takes for a windowed tree.
     pub fn relayout_if_dirty(&self) {
-        let _entered = self.enter();
-        crate::relayout_if_dirty();
+        self.with_entered(|| {
+            crate::relayout_if_dirty();
+        })
     }
 
     /// How far in from each edge the system keeps the surface for itself, as `use_safe_area_insets` reads it inside. Reactive.
@@ -198,68 +198,69 @@ impl SurfaceCanvas {
         if self.safe_area.peek() != insets {
             self.safe_area.set(insets);
         }
-        let _entered = self.enter();
-        crate::set_safe_area_insets(insets);
+        self.with_entered(|| {
+            crate::set_safe_area_insets(insets);
+        })
     }
 
     /// The writing direction the surface lays out in, where it has one of its own; `None` where it follows [`set_direction`](crate::set_direction). Reactive.
     pub fn direction(&self) -> Option<Direction> {
-        let _entered = self.enter();
-        layout_reactive::use_surface_direction()
+        self.with_entered(layout_reactive::use_surface_direction)
     }
 
     /// Lays the surface out in `direction` whatever the thread's is, or with `None` in the thread's again. Only this surface lays out anew, on its next pass.
     pub fn set_direction(&self, direction: Option<Direction>) {
-        let _entered = self.enter();
-        layout_reactive::set_surface_direction(direction);
+        self.with_entered(|| {
+            layout_reactive::set_surface_direction(direction);
+        })
     }
 
     /// The locale the surface's text is translated into, where it has one of its own; `None` where it follows [`set_locale`](i18n_core::set_locale). Reactive.
     pub fn locale(&self) -> Option<String> {
-        let _entered = self.enter();
-        i18n_core::use_surface_locale()
+        self.with_entered(i18n_core::use_surface_locale)
     }
 
     /// Translates the surface's text into `locale` whatever the thread's is, or with `None` into the thread's again. Re-renders only the text inside that reads it.
     pub fn set_locale(&self, locale: Option<&str>) {
-        let _entered = self.enter();
-        i18n_core::set_surface_locale(locale);
+        self.with_entered(|| {
+            i18n_core::set_surface_locale(locale);
+        })
     }
 
     /// The size of the controls on the surface, where it has one of its own; `None` where it follows [`set_control_size`](theme_core::set_control_size). Reactive.
     pub fn control_size(&self) -> Option<ControlSize> {
-        let _entered = self.enter();
-        theme_core::use_surface_control_size()
+        self.with_entered(theme_core::use_surface_control_size)
     }
 
     /// Sizes the surface's controls at `size` whatever the thread's is, or with `None` at the thread's again. Re-runs only the readers inside.
     pub fn set_control_size(&self, size: Option<ControlSize>) {
-        let _entered = self.enter();
-        theme_core::set_surface_control_size(size);
+        self.with_entered(|| {
+            theme_core::set_surface_control_size(size);
+        })
     }
 
     /// The theme mode the surface is shown in, where it has one of its own; `None` where it follows [`set_mode`](theme_core::set_mode). Reactive.
     pub fn mode(&self) -> Option<String> {
-        let _entered = self.enter();
-        theme_core::use_surface_mode()
+        self.with_entered(theme_core::use_surface_mode)
     }
 
     /// Shows the surface in mode `id` whatever the thread's is, or with `None` in the thread's again. Its mode-following tokens resolve as that mode, and where the mode was registered with [`register_mode_theme`](theme_core::register_mode_theme), whatever inside has no theme provided resolves that theme. Re-runs only the readers inside; the application's theme stays installed as it is.
     pub fn set_mode(&self, id: Option<&str>) {
-        let _entered = self.enter();
-        theme_core::set_surface_mode(id);
+        self.with_entered(|| {
+            theme_core::set_surface_mode(id);
+        })
     }
 
     /// Whether the surface is shown with more contrast, where it makes that choice itself; `None` where it follows [`set_high_contrast_override`](preferences_core::set_high_contrast_override) and the system. Reactive.
     pub fn high_contrast(&self) -> Option<bool> {
-        let _entered = self.enter();
-        preferences_core::use_surface_high_contrast()
+        self.with_entered(preferences_core::use_surface_high_contrast)
     }
 
     /// Shows the surface with more contrast (`Some(true)`) or without (`Some(false)`) whatever the application and the system say, or with `None` as they say again. Re-runs only the readers of `use_high_contrast` inside.
     pub fn set_high_contrast(&self, high: Option<bool>) {
-        let _entered = self.enter();
-        preferences_core::set_surface_high_contrast(high);
+        self.with_entered(|| {
+            preferences_core::set_surface_high_contrast(high);
+        })
     }
 
     /// How many units of the tree around it one logical unit of this surface covers when a [`SurfaceFrame`](crate::SurfaceFrame) draws it: a zoom, independent of the surface's own size. Reactive.
@@ -311,14 +312,12 @@ impl SurfaceCanvas {
 
     /// Offers an event already in the surface's own coordinates to its overlay layer alone: a live drag, then the dismiss stack, then the overlays by priority. In its own batch, so an overlay handler's writes flush after the walk.
     pub fn dispatch_overlays(&self, event: &Event) -> EventResult {
-        let _entered = self.enter();
-        reactive_core::batch(|| crate::dispatch_overlays(event))
+        self.with_entered(|| reactive_core::batch(|| crate::dispatch_overlays(event)))
     }
 
     /// Hands an event already in the surface's own coordinates to the tree, past the overlay layer.
     pub fn dispatch_tree(&self, event: &Event) -> EventResult {
-        let _entered = self.enter();
-        self.tree.dispatch(event)
+        self.with_entered(|| self.tree.dispatch(event))
     }
 
     /// The tree's current frame in the surface's own coordinates, its overlays drawn last.
@@ -342,7 +341,7 @@ impl SurfaceCanvas {
     pub fn boundary(&self) -> RenderNode {
         RenderNode::group([
             RenderNode::Primitive(DrawCommand::PushSurface {
-                surface: self.surface.handle().0,
+                surface: self.surface.handle().raw(),
             }),
             self.tree.boundary(),
             RenderNode::Primitive(DrawCommand::PopSurface),
@@ -358,51 +357,51 @@ impl SurfaceCanvas {
         else {
             return EventResult::Ignored;
         };
-        if *surface != self.surface.handle().0 {
+        if *surface != self.surface.handle().raw() {
             return self.dispatch_own(event);
         }
-        let _entered = self.enter();
-        let followed = match &**inner {
-            Event::BoxFocused { box_id } => crate::focus::follow_box(*box_id),
-            Event::BoxActivated { box_id } => crate::activate_box(*box_id),
-            Event::RunActivated { box_id, run } => crate::activate_run(*box_id, *run),
-            Event::FocusLeftBoxes => {
-                let held = crate::focus::current().is_some();
-                crate::focus::clear();
-                held
+        self.with_entered(|| {
+            let followed = match &**inner {
+                Event::BoxFocused { box_id } => crate::focus::follow_box(*box_id),
+                Event::BoxActivated { box_id } => crate::activate_box(*box_id),
+                Event::RunActivated { box_id, run } => crate::activate_run(*box_id, *run),
+                Event::FocusLeftBoxes => {
+                    let held = crate::focus::current().is_some();
+                    crate::focus::clear();
+                    held
+                }
+                Event::AccessAction { id, activate } => {
+                    crate::accessibility::perform_action(*id, *activate, |event| {
+                        self.dispatch_own(event);
+                    });
+                    true
+                }
+                other => return self.tree.dispatch(other),
+            };
+            if followed {
+                EventResult::Handled
+            } else {
+                EventResult::Ignored
             }
-            Event::AccessAction { id, activate } => {
-                crate::accessibility::perform_action(*id, *activate, |event| {
-                    self.dispatch_own(event);
-                });
-                true
-            }
-            other => return self.tree.dispatch(other),
-        };
-        if followed {
-            EventResult::Handled
-        } else {
-            EventResult::Ignored
-        }
+        })
     }
 
     /// The mounted components in pre-order, as the inspector lists them, each with its box model read in this surface's world.
     pub fn walk(&self, out: &mut Vec<SegmentNodeInfo>) {
-        let _entered = self.enter();
-        self.tree.walk_tree(out);
+        self.with_entered(|| {
+            self.tree.walk_tree(out);
+        })
     }
 
     /// What a screen reader is told about this surface, in its own coordinates. See [`accessibility::snapshot`](crate::accessibility::snapshot).
     pub fn access_snapshot(&self) -> Vec<AccessNode> {
         let commands = self.frame_commands();
-        let _entered = self.enter();
-        crate::accessibility::snapshot(&commands)
+        self.with_entered(|| crate::accessibility::snapshot(&commands))
     }
 
     /// Drains what the tree asked of the window — a pointer shape, a title bar's drag. The surface has no window of its own, so whoever holds it decides which of these reach the real one.
     pub fn take_window_commands(&self) -> Vec<WindowCommand> {
-        let _entered = self.enter();
-        platform_core::take_window_commands()
+        self.with_entered(platform_core::take_window_commands)
     }
 }
 

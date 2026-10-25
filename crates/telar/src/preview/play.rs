@@ -547,10 +547,9 @@ impl Play {
     fn press_at(&self, rect: crate::Rect) {
         let (x, y) = testing::centre(rect);
         self.dispatch(&testing::moved(x, y));
-        {
-            let _entered = self.canvas().enter();
+        self.canvas().with_entered(|| {
             focus::blur_from_pointer(x as f32, y as f32);
-        }
+        });
         self.dispatch(&testing::press(x, y));
         self.dispatch(&testing::release(x, y));
     }
@@ -568,14 +567,15 @@ impl Play {
         };
         let tab = testing::key_with(Key::Named(NamedKey::Tab), modifiers);
         if self.dispatch(&tab) != EventResult::Handled {
-            let _entered = self.canvas().enter();
-            if focus::current().is_none() {
-                if backwards {
-                    focus::focus_prev();
-                } else {
-                    focus::focus_next();
+            self.canvas().with_entered(|| {
+                if focus::current().is_none() {
+                    if backwards {
+                        focus::focus_prev();
+                    } else {
+                        focus::focus_next();
+                    }
                 }
-            }
+            })
         }
         self.dispatch(&Event::KeyReleased {
             key: Key::Named(NamedKey::Tab),
@@ -592,10 +592,9 @@ impl Play {
         let now = web_time::Instant::now();
         for _ in 0..SETTLE_ROUNDS {
             reactive_core::drain_tasks();
-            {
-                let _entered = canvas.enter();
+            canvas.with_entered(|| {
                 motion::tick(now);
-            }
+            });
             canvas.relayout_if_dirty();
             if !motion::has_active() {
                 break;

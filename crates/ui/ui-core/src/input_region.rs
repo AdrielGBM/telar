@@ -73,7 +73,7 @@ reactive_core::surface_local! {
     /// The runner activates each surface's [`InputRegionContext`] around its build/event/frame.
     slot INPUT: Registry = Registry::default();
     access with_input, with_input_ref;
-    context InputRegionContext, InputRegionGuard;
+    context InputRegionContext;
 }
 
 reactive_core::dropless_thread_local! {
@@ -194,36 +194,35 @@ impl Drop for InputHandle {
         if self.nodes.is_empty() {
             return;
         }
-        let Some(_home) = self.home.enter() else {
-            return;
-        };
-        let token = self.token;
-        let nodes = std::mem::take(&mut self.nodes);
-        with_input(|r| {
-            for node in nodes {
-                if r.answers.get(&node).is_some_and(|a| a.token == token) {
-                    r.answers.remove(&node);
-                }
-                remove_declared(r, node, token);
-                if let Some(gates) = r.gates.get_mut(&node) {
-                    gates.retain(|gate| gate.token != token);
-                    if gates.is_empty() {
-                        r.gates.remove(&node);
+        self.home.with_entered(|| {
+            let token = self.token;
+            let nodes = std::mem::take(&mut self.nodes);
+            with_input(|r| {
+                for node in nodes {
+                    if r.answers.get(&node).is_some_and(|a| a.token == token) {
+                        r.answers.remove(&node);
+                    }
+                    remove_declared(r, node, token);
+                    if let Some(gates) = r.gates.get_mut(&node) {
+                        gates.retain(|gate| gate.token != token);
+                        if gates.is_empty() {
+                            r.gates.remove(&node);
+                        }
+                    }
+                    if let Some(placements) = r.placements.get_mut(&node) {
+                        placements.retain(|(owner, _)| *owner != token);
+                        if placements.is_empty() {
+                            r.placements.remove(&node);
+                        }
+                    }
+                    if r.links.get(&node).is_some_and(|l| l.token == token) {
+                        r.links.remove(&node);
+                    }
+                    if r.outsets.get(&node).is_some_and(|o| o.token == token) {
+                        r.outsets.remove(&node);
                     }
                 }
-                if let Some(placements) = r.placements.get_mut(&node) {
-                    placements.retain(|(owner, _)| *owner != token);
-                    if placements.is_empty() {
-                        r.placements.remove(&node);
-                    }
-                }
-                if r.links.get(&node).is_some_and(|l| l.token == token) {
-                    r.links.remove(&node);
-                }
-                if r.outsets.get(&node).is_some_and(|o| o.token == token) {
-                    r.outsets.remove(&node);
-                }
-            }
+            });
         });
     }
 }

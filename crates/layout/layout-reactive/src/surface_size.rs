@@ -17,7 +17,7 @@ reactive_core::surface_local! {
     /// The active surface's size, in the logical units its layout is written in.
     slot SIDES: Sides = Sides { width: signal(0.0), height: signal(0.0), safe_area: signal(Insets::default()), maximized: signal(false) };
     access with_sides, with_sides_ref;
-    context SurfaceSizeContext, SurfaceSizeGuard;
+    context SurfaceSizeContext;
 }
 
 // Copied out of the slot before any write: a write flushes effects, and one of them reading the size would re-enter the slot's borrow.

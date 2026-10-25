@@ -7,7 +7,7 @@ use layout_core::Direction;
 reactive_core::surface_scoped! {
     /// The active surface's own writing direction, in place of the thread's while it has one.
     scoped direction: Direction = Direction::Ltr;
-    context DirectionContext, DirectionGuard;
+    context DirectionContext;
 }
 
 /// Sets the writing direction every surface without an override of its own lays out against, taking effect on the next layout pass.

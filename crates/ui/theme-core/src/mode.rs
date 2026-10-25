@@ -20,7 +20,7 @@ type ApplyMode = Rc<dyn Fn()>;
 reactive_core::surface_scoped! {
     /// The active surface's own mode, in place of the thread's while it has one.
     scoped mode: String as Option<String> = None;
-    context ModeContext, ModeGuard;
+    context ModeContext;
 }
 
 reactive_core::dropless_thread_local! {

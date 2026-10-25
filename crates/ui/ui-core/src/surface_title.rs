@@ -33,7 +33,7 @@ reactive_core::surface_local! {
     /// The active surface's title, created with the first call that needs it.
     slot TITLE: Option<Title> = None;
     access with_title, with_title_ref;
-    context SurfaceTitleContext, SurfaceTitleGuard;
+    context SurfaceTitleContext;
 }
 
 fn existing() -> Option<Title> {

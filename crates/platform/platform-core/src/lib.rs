@@ -78,6 +78,5 @@ pub use window::{
     Window, WindowConfig, WindowPosition, window_waker,
 };
 pub use window_command::{
-    WindowCommand, WindowCommandContext, WindowCommandGuard, push_window_command,
-    take_window_commands,
+    WindowCommand, WindowCommandContext, push_window_command, take_window_commands,
 };

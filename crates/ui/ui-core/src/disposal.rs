@@ -125,18 +125,24 @@ impl Drop for DispatchGuard {
 
 /// Frees one retired child, containing a panic so the rest of a batch is still freed: a teardown that stops early leaks everything after it.
 fn free(retired: Retired, panicked: &mut Option<PanicPayload>) {
-    // A node id names a node only in its own surface's tree, and a batch may be freed on another surface's turn.
-    let _entered = retired.surface.enter();
+    let Retired {
+        owner,
+        nodes,
+        surface,
+        generation,
+    } = retired;
     // Owner before node: a node freed first has its id back in circulation while the owner still points at it, which lands the cascade on whatever the id names next.
-    if let Some(owner) = retired.owner {
-        contain(panicked, || dispose_owner(owner));
+    if let Some(owner) = owner {
+        surface.with_entered(|| contain(panicked, || dispose_owner(owner)));
     }
-    // A surface torn down first took its tree with it, and so did a reset: the ids held name nothing, or whatever the next tree gave them.
-    if current_surface() == retired.surface && layout_generation() == retired.generation {
-        for node in retired.nodes {
-            contain(panicked, || remove_node(node));
+    // A node id names a node only in its own surface's tree, a batch may be freed on another surface's turn, and a surface torn down first or a reset took its tree with it.
+    surface.with_entered_if_alive(|| {
+        if layout_generation() == generation {
+            for node in nodes {
+                contain(panicked, || remove_node(node));
+            }
         }
-    }
+    });
 }
 
 fn contain(first: &mut Option<PanicPayload>, f: impl FnOnce()) {

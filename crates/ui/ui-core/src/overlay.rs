@@ -416,9 +416,9 @@ impl Overlay {
             let home = HomeSurface::here();
             // Only taken off the host here, and freed with its placeholder: a cleanup registered after this one may still climb to the content, as a menu giving the keyboard back does.
             reactive_core::on_cleanup(move || {
-                if let Some(_home) = home.enter() {
+                home.with_entered(|| {
                     layout_reactive::detach_overlay(content);
-                }
+                });
             });
             input.link(content, placeholder, true);
             Ok(Overlay {
@@ -528,11 +528,10 @@ impl Component for Overlay {
 
 impl Drop for Overlay {
     fn drop(&mut self) {
-        let Some(_home) = self.home.enter() else {
-            return;
-        };
-        unregister_overlay(self.overlay_id);
-        crate::focus::unregister_scope(self.focus_scope);
+        self.home.with_entered(|| {
+            unregister_overlay(self.overlay_id);
+            crate::focus::unregister_scope(self.focus_scope);
+        });
     }
 }
 

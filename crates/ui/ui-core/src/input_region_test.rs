@@ -1070,8 +1070,7 @@ fn two_surfaces_whose_ids_collide_do_not_steer_each_others_input() {
     let a = Surface::new();
     let b = Surface::new();
 
-    let (scroll_in_a, content_in_a) = {
-        let _entered = a.enter();
+    let (scroll_in_a, content_in_a) = a.with_entered(|| {
         let offset = (signal(0.0f32), signal(100.0f32));
         let mut content = None;
         let scroll = LayoutScrollArea::new_keeping(
@@ -1085,10 +1084,9 @@ fn two_surfaces_whose_ids_collide_do_not_steer_each_others_input() {
         )
         .unwrap();
         (scroll, content.unwrap())
-    };
+    });
 
-    {
-        let _entered = b.enter();
+    b.with_entered(|| {
         let inner = boxed(placed(0.0, 0.0, 50.0), vec![]).input_transparent();
         let middle = boxed(placed(50.0, 50.0, 100.0), vec![Box::new(inner)]).input_transparent();
         assert_eq!(
@@ -1104,10 +1102,11 @@ fn two_surfaces_whose_ids_collide_do_not_steer_each_others_input() {
             !claimed(100.0, 100.0),
             "and a's scroll content, under the same id, does not stop b's hole"
         );
-    }
+    });
 
-    let _entered = a.enter();
-    drop(scroll_in_a);
+    a.with_entered(|| {
+        drop(scroll_in_a);
+    })
 }
 
 #[test]

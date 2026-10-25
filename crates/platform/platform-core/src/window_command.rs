@@ -28,10 +28,10 @@ pub enum WindowCommand {
 }
 
 reactive_local::surface_local! {
-    /// A per-surface window-command queue. The runner activates each surface's context around its event dispatch so a title-bar action targets that surface's window; the guard restores the previous one.
+    /// A per-surface window-command queue. The runner enters each surface's context around its event dispatch so a title-bar action targets that surface's window; leaving it restores the previous one.
     slot WINDOW_COMMANDS: Vec<WindowCommand> = Vec::new();
     access with_commands, with_commands_ref;
-    context WindowCommandContext, WindowCommandGuard;
+    context WindowCommandContext;
 }
 
 /// Enqueue a window-management command from UI code (e.g. a title-bar button's `on_press`). The runner drains the queue after event dispatch and applies each command to the OS window. Lives in a thread-local so it works from any widget closure without threading a window handle through the tree; each surface owns its own queue (activated via [`WindowCommandContext`]), so commands never cross windows.

@@ -35,27 +35,26 @@ fn audit_over(
     let painted = (!nested.is_empty()).then(|| a11y::Painted::of(&frame));
     let mut grafts = Vec::new();
     for (nested, parent) in nested {
-        let Some(_entered) = nested.enter() else {
-            continue;
-        };
-        let painted = painted.as_ref().expect("read once a surface is nested");
-        let under = |x: f32, y: f32| {
-            let at = nested.place_rect(Rect::new(x, y, 0.0, 0.0));
-            painted.at(at.x, at.y, behind(at.x, at.y))
-        };
-        let inner = audit_over(&commands[nested.commands.clone()], None, &under);
-        grafts.push((
-            parent,
-            inner
-                .nodes
-                .into_iter()
-                .map(|node| nested.place(node))
-                .collect(),
-        ));
-        violations.extend(inner.violations.into_iter().map(|violation| {
-            let rect = violation.rect.map(|rect| nested.place_rect(rect));
-            violation.at(rect)
-        }));
+        nested.with_entered(|| {
+            let painted = painted.as_ref().expect("read once a surface is nested");
+            let under = |x: f32, y: f32| {
+                let at = nested.place_rect(Rect::new(x, y, 0.0, 0.0));
+                painted.at(at.x, at.y, behind(at.x, at.y))
+            };
+            let inner = audit_over(&commands[nested.commands.clone()], None, &under);
+            grafts.push((
+                parent,
+                inner
+                    .nodes
+                    .into_iter()
+                    .map(|node| nested.place(node))
+                    .collect(),
+            ));
+            violations.extend(inner.violations.into_iter().map(|violation| {
+                let rect = violation.rect.map(|rect| nested.place_rect(rect));
+                violation.at(rect)
+            }));
+        });
     }
     AccessAudit {
         nodes: graft(nodes, grafts),

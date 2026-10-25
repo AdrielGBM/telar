@@ -10,26 +10,26 @@ fn one_surfaces_parent_links_never_answer_for_another() {
     let a = Surface::new();
     let b = Surface::new();
 
-    let (child_in_a, host_in_a) = {
-        let _guard = a.enter();
+    let (child_in_a, host_in_a) = a.with_entered(|| {
         let child = new_container(LayoutStyle::new(), &[]).unwrap();
         let host = new_container(LayoutStyle::new(), &[child]).unwrap();
         assert_eq!(parent(child), Some(host));
         (child, host)
-    };
+    });
 
-    let _guard = b.enter();
-    let child_in_b = new_container(LayoutStyle::new(), &[]).unwrap();
-    assert_eq!(
-        child_in_b, child_in_a,
-        "the two surfaces must really collide on ids, or this proves nothing"
-    );
-    assert_eq!(
-        parent(child_in_b),
-        None,
-        "a's link answered for b's node — the namesake, not the node"
-    );
-    assert_ne!(parent(child_in_b), Some(host_in_a));
+    b.with_entered(|| {
+        let child_in_b = new_container(LayoutStyle::new(), &[]).unwrap();
+        assert_eq!(
+            child_in_b, child_in_a,
+            "the two surfaces must really collide on ids, or this proves nothing"
+        );
+        assert_eq!(
+            parent(child_in_b),
+            None,
+            "a's link answered for b's node — the namesake, not the node"
+        );
+        assert_ne!(parent(child_in_b), Some(host_in_a));
+    })
 }
 
 #[test]
@@ -51,30 +51,27 @@ fn effect_reenters_its_surface_layout_world() {
     let ran_under: Rc<RefCell<Vec<u64>>> = Rc::new(RefCell::new(Vec::new()));
     let ran_c = Rc::clone(&ran_under);
     let read = shared.read_only();
-    let a_node = {
-        let _g = a.enter();
+    let a_node = a.with_entered(|| {
         let (node, _) = new_leaf(LayoutStyle::new().width(10.0).height(10.0)).unwrap();
         effect(move || {
             read.get();
-            ran_c.borrow_mut().push(current_surface().0);
+            ran_c.borrow_mut().push(current_surface().raw());
         });
         node
-    };
+    });
 
     ran_under.borrow_mut().clear();
 
-    {
-        let _g = b.enter();
+    b.with_entered(|| {
         shared.set(1);
-    }
+    });
     assert_eq!(
         ran_under.borrow().as_slice(),
-        &[a.handle().0],
+        &[a.handle().raw()],
         "A's effect must run under A's surface, not B's"
     );
 
-    {
-        let _g = a.enter();
+    a.with_entered(|| {
         compute_layout(
             a_node,
             AvailableSpace::Definite(100.0),
@@ -82,14 +79,13 @@ fn effect_reenters_its_surface_layout_world() {
         )
         .unwrap();
         assert_eq!(track_layout(a_node).unwrap().get().width, 10.0);
-    }
-    {
-        let _g = b.enter();
+    });
+    b.with_entered(|| {
         assert!(
             track_layout(a_node).is_none(),
             "A's node must not exist in B's layout world"
         );
-    }
+    });
 }
 
 // An effect belonging to no surface has the ambient world, and every effect of a single-window app is one: the runner builds no `Surface`. Left un-restored they ran against whichever surface was active.
@@ -122,10 +118,9 @@ fn an_effect_owned_by_no_surface_reenters_the_ambient_world() {
     });
 
     seen.borrow_mut().clear();
-    {
-        let _g = other.enter();
+    other.with_entered(|| {
         shared.set(1);
-    }
+    });
     assert_eq!(
         seen.borrow().as_slice(),
         &[Some(42.0)],
@@ -143,36 +138,32 @@ fn provide_inject_is_per_surface_and_survives_into_effects() {
     let a = Surface::new();
     let b = Surface::new();
 
-    {
-        let _g = a.enter();
+    a.with_entered(|| {
         provide(String::from("A")).unwrap();
         assert_eq!(try_inject::<String>().as_deref(), Some("A"));
-    }
-    {
-        let _g = b.enter();
+    });
+    b.with_entered(|| {
         provide(String::from("B")).unwrap();
         assert_eq!(try_inject::<String>().as_deref(), Some("B"));
-    }
+    });
 
     let shared = signal(0i32);
     let read = shared.read_only();
     let seen: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let seen_c = Rc::clone(&seen);
-    {
-        let _g = a.enter();
+    a.with_entered(|| {
         effect(move || {
             read.get();
             seen_c
                 .borrow_mut()
                 .push(try_inject::<String>().unwrap_or_default());
         })
-    };
+    });
 
     seen.borrow_mut().clear();
-    {
-        let _g = b.enter();
+    b.with_entered(|| {
         shared.set(1);
-    }
+    });
     assert_eq!(
         seen.borrow().as_slice(),
         &[String::from("A")],
@@ -194,23 +185,21 @@ fn global_signal_reruns_all_surfaces_each_under_its_context() {
 
     let log_a = Rc::clone(&log);
     let read_a = global.read_only();
-    {
-        let _g = a.enter();
+    a.with_entered(|| {
         effect(move || {
             read_a.get();
-            log_a.borrow_mut().push(('a', current_surface().0));
+            log_a.borrow_mut().push(('a', current_surface().raw()));
         })
-    };
+    });
 
     let log_b = Rc::clone(&log);
     let read_b = global.read_only();
-    {
-        let _g = b.enter();
+    b.with_entered(|| {
         effect(move || {
             read_b.get();
-            log_b.borrow_mut().push(('b', current_surface().0));
+            log_b.borrow_mut().push(('b', current_surface().raw()));
         })
-    };
+    });
 
     log.borrow_mut().clear();
 
@@ -218,11 +207,11 @@ fn global_signal_reruns_all_surfaces_each_under_its_context() {
 
     let entries = log.borrow().clone();
     assert!(
-        entries.contains(&('a', a.handle().0)),
+        entries.contains(&('a', a.handle().raw())),
         "A's effect must re-run under A: {entries:?}"
     );
     assert!(
-        entries.contains(&('b', b.handle().0)),
+        entries.contains(&('b', b.handle().raw())),
         "B's effect must re-run under B: {entries:?}"
     );
 }
@@ -236,29 +225,27 @@ fn each_surface_reads_its_own_cascade() {
     let a = Surface::new();
     let b = Surface::new();
 
-    let in_a = {
-        let _guard = a.enter();
+    let in_a = a.with_entered(|| {
         let node = new_container(LayoutStyle::new(), &[]).unwrap();
         declare(node, Declared::default().with_font_size(11.0));
         node
-    };
-    let in_b = {
-        let _guard = b.enter();
+    });
+    let in_b = b.with_entered(|| {
         let node = new_container(LayoutStyle::new(), &[]).unwrap();
         declare(node, Declared::default().with_font_size(22.0));
         node
-    };
+    });
     assert_eq!(
         in_a, in_b,
         "the two surfaces must share the node id, or this proves nothing"
     );
 
-    {
-        let _guard = a.enter();
+    a.with_entered(|| {
         assert_eq!(inherited_text_style(in_a).font_size, 11.0);
-    }
-    let _guard = b.enter();
-    assert_eq!(inherited_text_style(in_b).font_size, 22.0);
+    });
+    b.with_entered(|| {
+        assert_eq!(inherited_text_style(in_b).font_size, 22.0);
+    })
 }
 
 #[test]
@@ -272,14 +259,15 @@ fn dropping_a_surface_frees_its_worlds() {
     // `compute_layout` reads the thread-global text direction, which mints its own signal (not per-surface, and outside the scope of this test) on first read. Warm it up before the baseline so the loop below only measures what the surface itself owns.
     {
         let warm = Surface::new();
-        let _entered = warm.enter();
-        let (node, _) = new_leaf(LayoutStyle::new()).unwrap();
-        compute_layout(
-            node,
-            AvailableSpace::Definite(1.0),
-            AvailableSpace::Definite(1.0),
-        )
-        .unwrap();
+        warm.with_entered(|| {
+            let (node, _) = new_leaf(LayoutStyle::new()).unwrap();
+            compute_layout(
+                node,
+                AvailableSpace::Definite(1.0),
+                AvailableSpace::Definite(1.0),
+            )
+            .unwrap();
+        })
     }
     let signals = live_signal_count();
     let effects = live_effect_count();
@@ -287,8 +275,7 @@ fn dropping_a_surface_frees_its_worlds() {
 
     for _ in 0..8 {
         let surface = Surface::new();
-        {
-            let _entered = surface.enter();
+        surface.with_entered(|| {
             crate::inherit::reset_cascade();
             let exits = crate::presence::exits_in_flight();
             effect(move || {
@@ -314,7 +301,7 @@ fn dropping_a_surface_frees_its_worlds() {
                 absolute_rect(node).is_some(),
                 "absolute_rect must mint the node's position signal"
             );
-        }
+        });
         drop(surface);
     }
 
@@ -325,22 +312,20 @@ fn dropping_a_surface_frees_its_worlds() {
 
 #[test]
 fn after_settle_skips_a_surface_dropped_before_it_settles() {
-    use reactive_core::{begin_batch, end_batch};
     use std::cell::Cell;
     use std::rc::Rc;
 
     let ran = Rc::new(Cell::new(false));
     let ran_c = Rc::clone(&ran);
 
-    begin_batch();
-    {
+    reactive_core::batch(|| {
         let surface = Surface::new();
-        let _entered = surface.enter();
-        reactive_core::after_settle(move || {
-            ran_c.set(true);
-        });
-    }
-    end_batch();
+        surface.with_entered(|| {
+            reactive_core::after_settle(move || {
+                ran_c.set(true);
+            });
+        })
+    });
 
     assert!(
         !ran.get(),
@@ -357,36 +342,32 @@ fn a_component_reads_the_size_of_the_surface_it_was_built_on() {
 
     let window = Surface::new();
     let panel = Surface::new();
-    {
-        let _in = window.enter();
+    window.with_entered(|| {
         set_surface_size(Size::new(1280.0, 800.0));
-    }
-    {
-        let _in = panel.enter();
+    });
+    panel.with_entered(|| {
         set_surface_size(Size::new(320.0, 800.0));
-    }
+    });
 
     let seen: Rc<RefCell<Vec<f32>>> = Rc::default();
     let log = Rc::clone(&seen);
-    {
-        let _in = window.enter();
+    window.with_entered(|| {
         effect(move || log.borrow_mut().push(use_surface_width()));
-    }
-    {
-        let _in = panel.enter();
+    });
+    panel.with_entered(|| {
         set_surface_size(Size::new(400.0, 800.0));
-    }
-    {
-        let _in = window.enter();
+    });
+    window.with_entered(|| {
         set_surface_size(Size::new(1024.0, 800.0));
-    }
-    let _elsewhere = panel.enter();
-    set_surface_size(Size::new(360.0, 800.0));
-    assert_eq!(
-        *seen.borrow(),
-        [1280.0, 1024.0],
-        "the panel resizing is not the window resizing"
-    );
+    });
+    panel.with_entered(|| {
+        set_surface_size(Size::new(360.0, 800.0));
+        assert_eq!(
+            *seen.borrow(),
+            [1280.0, 1024.0],
+            "the panel resizing is not the window resizing"
+        );
+    })
 }
 
 /// A control, a modal over a 100×100 root and the root, built on the active surface: the first focus id and the first overlay id that surface mints, so another surface's twins are their namesakes.
@@ -462,52 +443,49 @@ fn untouched(widgets: &Widgets) {
 fn a_widget_dropped_after_its_surface_is_gone_leaves_the_active_surface_alone() {
     let home = Surface::new();
     let away = Surface::new();
-    let gone = {
-        let _home = home.enter();
-        widgets()
-    };
+    let gone = home.with_entered(widgets);
     drop(home);
 
-    let _away = away.enter();
-    let here = widgets();
-    assert_eq!(
-        (here.focus, here.node),
-        (gone.focus, gone.node),
-        "the two surfaces must really collide on ids, or this proves nothing"
-    );
-    drop(gone);
+    away.with_entered(|| {
+        let here = widgets();
+        assert_eq!(
+            (here.focus, here.node),
+            (gone.focus, gone.node),
+            "the two surfaces must really collide on ids, or this proves nothing"
+        );
+        drop(gone);
 
-    untouched(&here);
+        untouched(&here);
+    })
 }
 
 #[test]
 fn a_widget_dropped_on_another_surfaces_turn_withdraws_from_its_own() {
     let home = Surface::new();
     let away = Surface::new();
-    let (leaving, leaving_node) = {
-        let _home = home.enter();
+    let (leaving, leaving_node) = home.with_entered(|| {
         let widgets = widgets();
         let node = widgets.node;
         (widgets, node)
-    };
+    });
 
-    {
-        let _away = away.enter();
+    away.with_entered(|| {
         let here = widgets();
         drop(leaving);
         untouched(&here);
-    }
+    });
 
-    let _home = home.enter();
-    assert!(
-        crate::focus::tab_order().is_empty(),
-        "its focus stop left its own surface"
-    );
-    assert!(
-        !crate::input_region::mentions(leaving_node),
-        "and so did its input region"
-    );
-    assert!(!modal_takes_a_press(), "and its modal");
+    home.with_entered(|| {
+        assert!(
+            crate::focus::tab_order().is_empty(),
+            "its focus stop left its own surface"
+        );
+        assert!(
+            !crate::input_region::mentions(leaving_node),
+            "and so did its input region"
+        );
+        assert!(!modal_takes_a_press(), "and its modal");
+    })
 }
 
 struct FreesNode(layout_reactive::NodeId);
@@ -525,8 +503,7 @@ fn an_owner_disposed_on_another_surfaces_turn_tears_down_inside_its_own() {
 
     let home = Surface::new();
     let away = Surface::new();
-    let owner = {
-        let _home = home.enter();
+    let owner = home.with_entered(|| {
         let scope = owner_scope();
         let held = new_container(LayoutStyle::new(), &[]).unwrap();
         let by_cleanup = new_container(LayoutStyle::new(), &[]).unwrap();
@@ -534,10 +511,9 @@ fn an_owner_disposed_on_another_surfaces_turn_tears_down_inside_its_own() {
         on_cleanup(move || drop(FreesNode(by_cleanup)));
         assert_eq!(live_node_count(), 2);
         scope.id()
-    };
+    });
 
-    {
-        let _away = away.enter();
+    away.with_entered(|| {
         let _namesake = new_container(LayoutStyle::new(), &[]).unwrap();
         let _other = new_container(LayoutStyle::new(), &[]).unwrap();
         assert_eq!(live_node_count(), 2);
@@ -549,14 +525,15 @@ fn an_owner_disposed_on_another_surfaces_turn_tears_down_inside_its_own() {
             2,
             "nothing of the owner's was withdrawn from the surface active now"
         );
-    }
+    });
 
-    let _home = home.enter();
-    assert_eq!(
-        live_node_count(),
-        0,
-        "the owner's nodes left their own surface"
-    );
+    home.with_entered(|| {
+        assert_eq!(
+            live_node_count(),
+            0,
+            "the owner's nodes left their own surface"
+        );
+    })
 }
 
 /// A window from `open_window` or the multi-window runner is a bare `Surface`, with no canvas around it to cancel what it started: closing it has to, or its work finishes later and writes its freed state under whichever window is active then.
@@ -571,8 +548,7 @@ fn dropping_a_surface_cancels_its_tasks_and_timers_and_leaves_anothers() {
     let secondary = Surface::new();
     let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
 
-    let (task, timer, written) = {
-        let _entered = secondary.enter();
+    let (task, timer, written) = secondary.with_entered(|| {
         let written = signal(0u32);
         let task = spawn_task(
             move || {
@@ -582,16 +558,15 @@ fn dropping_a_surface_cancels_its_tasks_and_timers_and_leaves_anothers() {
         );
         let timer = run_after(Duration::from_millis(10), move || written.set(2));
         (task, timer, written)
-    };
-    let (main_task, main_timer, main_written) = {
-        let _entered = main.enter();
+    });
+    let (main_task, main_timer, main_written) = main.with_entered(|| {
         let main_written = signal(0u32);
         let main_task = spawn_task(|| (), move |()| main_written.update(|n| *n += 1));
         let main_timer = run_after(Duration::from_millis(10), move || {
             main_written.update(|n| *n += 1)
         });
         (main_task, main_timer, main_written)
-    };
+    });
 
     drop(secondary);
     assert!(!task.is_pending(), "its task is cancelled when it closes");
@@ -605,25 +580,108 @@ fn dropping_a_surface_cancels_its_tasks_and_timers_and_leaves_anothers() {
     );
 
     release_tx.send(()).ok();
-    let _entered = main.enter();
-    advance_timer_clock(Duration::from_millis(10));
-    fire_timers();
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while main_task.is_pending() {
-        assert!(
-            std::time::Instant::now() < deadline,
-            "the main window's task never completed"
-        );
-        std::thread::sleep(Duration::from_millis(1));
+    main.with_entered(|| {
+        advance_timer_clock(Duration::from_millis(10));
+        fire_timers();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while main_task.is_pending() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the main window's task never completed"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+            drain_tasks();
+        }
+        std::thread::sleep(Duration::from_millis(20));
         drain_tasks();
-    }
-    std::thread::sleep(Duration::from_millis(20));
-    drain_tasks();
 
-    assert!(!main_timer.is_pending());
-    assert_eq!(
-        main_written.get(),
-        2,
-        "the window still open keeps its task and its timer"
+        assert!(!main_timer.is_pending());
+        assert_eq!(
+            main_written.get(),
+            2,
+            "the window still open keeps its task and its timer"
+        );
+    })
+}
+
+#[test]
+fn nested_surfaces_each_resolve_their_own_world_and_restore_the_one_around_them() {
+    use layout_reactive::{LayoutStyle, new_leaf, track_layout};
+
+    let a = Surface::new();
+    let b = Surface::new();
+    let (ambient, _) = new_leaf(LayoutStyle::new().width(1.0)).unwrap();
+    a.with_entered(|| {
+        let (in_a, _) = new_leaf(LayoutStyle::new().width(2.0)).unwrap();
+        b.with_entered(|| {
+            assert_eq!(current_surface(), b.handle());
+            assert!(
+                track_layout(in_a).is_none(),
+                "b's tree does not know a's node"
+            );
+        });
+        assert_eq!(current_surface(), a.handle());
+        assert!(track_layout(in_a).is_some(), "a's tree is live again");
+    });
+    assert!(current_surface().is_none());
+    assert!(track_layout(ambient).is_some());
+}
+
+/// A panic inside a nested surface unwinds through its entry, and the outer surface's world is live again once the panic is caught: a build that failed inside a frame must not leave the next widget built in the frame's world.
+#[test]
+fn an_unwinding_entry_restores_the_surface_around_it() {
+    use layout_reactive::{LayoutStyle, new_leaf, track_layout};
+
+    let outer = Surface::new();
+    let inner = Surface::new();
+    outer.with_entered(|| {
+        let (in_outer, _) = new_leaf(LayoutStyle::new()).unwrap();
+        let quiet = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            inner.with_entered(|| panic!("unwinds through the inner surface"))
+        }));
+        std::panic::set_hook(quiet);
+        assert!(outcome.is_err());
+        assert_eq!(current_surface(), outer.handle());
+        assert!(track_layout(in_outer).is_some());
+    });
+    assert!(current_surface().is_none());
+}
+
+/// The reactive flush re-enters an effect's surface through the hook, and an effect may drop the last handle to that surface — closing the window it runs in. The hook holds the surface until the effect returns, so the rest of the effect still reads a live world, and the surface goes after.
+#[test]
+fn an_effect_that_drops_the_last_handle_to_its_surface_finishes_in_its_world() {
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
+
+    use layout_reactive::{LayoutStyle, new_leaf, track_layout};
+
+    let holder: Rc<RefCell<Option<Rc<Surface>>>> = Rc::new(RefCell::new(None));
+    let surface = Surface::new();
+    let handle = surface.handle();
+    let close = signal(false);
+    let finished_inside = Rc::new(Cell::new(None));
+    let _effect = surface.with_entered(|| {
+        let (node, _) = new_leaf(LayoutStyle::new()).unwrap();
+        let holder = Rc::clone(&holder);
+        let finished_inside = Rc::clone(&finished_inside);
+        effect(move || {
+            if !close.get() {
+                return;
+            }
+            drop(holder.borrow_mut().take());
+            finished_inside.set(Some((current_surface(), track_layout(node).is_some())));
+        })
+    });
+    *holder.borrow_mut() = Some(surface);
+
+    close.set(true);
+
+    assert_eq!(finished_inside.get(), Some((handle, true)));
+    assert!(
+        Surface::find(handle).is_none(),
+        "the surface went once the effect returned"
     );
+    assert!(current_surface().is_none());
 }

@@ -60,20 +60,17 @@ fn a_name_opened_in_one_surface_leaves_another_closed() {
     reset();
     let a = Surface::new();
     let b = Surface::new();
-    {
-        let _inside = a.enter();
+    a.with_entered(|| {
         open("confirm");
-    }
-    {
-        let _inside = b.enter();
+    });
+    b.with_entered(|| {
         assert!(!state("confirm").peek(), "b's confirm is b's own");
         open("confirm");
         close("confirm");
-    }
-    {
-        let _inside = a.enter();
+    });
+    a.with_entered(|| {
         assert!(state("confirm").peek(), "closing b's leaves a's open");
-    }
+    });
     assert!(
         !state("confirm").peek(),
         "the ambient world has a name of its own"
@@ -98,10 +95,9 @@ fn a_canvas_built_against_a_name_follows_opens_from_inside_it_alone() {
     };
     let (first, outer, first_drawer) = build();
     let (second, _, second_drawer) = build();
-    {
-        let _inside = first.enter();
+    first.with_entered(|| {
         open("drawer");
-    }
+    });
     assert!(first_drawer.peek());
     assert!(!second_drawer.peek(), "the sibling canvas stays closed");
     assert!(!outer.peek(), "the tree around them stays closed");
@@ -112,10 +108,7 @@ fn a_canvas_built_against_a_name_follows_opens_from_inside_it_alone() {
 fn a_surfaces_names_go_with_it() {
     reset();
     let surface = Surface::new();
-    let held = {
-        let _inside = surface.enter();
-        state("sheet")
-    };
+    let held = surface.with_entered(|| state("sheet"));
     assert!(held.is_alive());
     drop(surface);
     assert!(

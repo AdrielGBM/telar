@@ -67,24 +67,17 @@ impl SurfaceFrame {
         })?;
         let id = focus::next_id();
         focus::register_with_role(id, FocusKind::Widget, leaf.node, Role::Group);
-        {
-            let _inside = canvas.enter();
+        canvas.with_entered(|| {
             focus::host();
-        }
-        let surface = Rc::downgrade(canvas.surface());
-        focus::delegate_keyboard(id, {
-            let surface = surface.clone();
-            move || surface.upgrade().map(|surface| surface.enter())
         });
+        let surface = Rc::downgrade(canvas.surface());
+        focus::delegate_keyboard(id, surface.clone());
         focus::provide_text_input(id, {
             let canvas = Rc::downgrade(&canvas);
             let node = leaf.node;
             move || {
                 let canvas = canvas.upgrade()?;
-                let inside = {
-                    let _inside = canvas.enter();
-                    crate::text_input()
-                }?;
+                let inside = canvas.with_entered(crate::text_input)?;
                 let input = TextInput {
                     field: inside.field.rotate_left(32) ^ id,
                     caret: zoomed(canvas.scale_now(), inside.caret),
@@ -142,8 +135,9 @@ impl SurfaceFrame {
         if button == PointerButton::Primary {
             focus::request_from_pointer(self.focus);
             let local = to_local(self.placement_now(), x, y);
-            let _inside = self.canvas.enter();
-            focus::blur_from_pointer(local.x, local.y);
+            self.canvas.with_entered(|| {
+                focus::blur_from_pointer(local.x, local.y);
+            })
         }
         self.forward(event)
     }
@@ -162,10 +156,7 @@ impl SurfaceFrame {
     /// A box event or a screen reader's action for a box drawn inside this frame, or inside a frame nested in it. Focus either moved onto a box in there brings the frame the outer focus too, so the keys that follow reach the box.
     fn in_surface(&self, event: &Event) -> EventResult {
         let result = self.canvas.dispatch_in_surface(event);
-        let holds_focus_inside = {
-            let _inside = self.canvas.enter();
-            focus::current().is_some()
-        };
+        let holds_focus_inside = self.canvas.with_entered(|| focus::current().is_some());
         if result == EventResult::Handled && holds_focus_inside && !focus::is_focused(self.focus) {
             focus::request(self.focus);
         }
@@ -174,27 +165,23 @@ impl SurfaceFrame {
 
     /// Tab inside the canvas, and once it steps past the canvas's last focusable or Shift+Tab past its first, on through the outer tree from the frame.
     fn tab(&self, event: &Event, backwards: bool) -> EventResult {
-        let inside = || self.canvas.enter();
-        {
-            // A step off the end that something other than Tab made is no reason for this one to leave.
-            let _inside = inside();
-            focus::take_departure();
-        }
+        // A step off the end that something other than Tab made is no reason for this one to leave.
+        self.canvas.with_entered(focus::take_departure);
         let handled = self.forward(event) == EventResult::Handled;
-        let departed = {
-            let _inside = inside();
+        let departed = self.canvas.with_entered(|| {
             if !handled {
                 step(backwards);
             }
             focus::take_departure().is_some()
-        };
+        });
         if departed {
             step(backwards);
             // The window wrapped round to this frame, its only stop: carry on inside it from the other end.
             if focus::is_focused(self.focus) {
-                let _inside = inside();
-                step(backwards);
-                focus::take_departure();
+                self.canvas.with_entered(|| {
+                    step(backwards);
+                    focus::take_departure();
+                });
             }
         }
         EventResult::Handled
@@ -266,11 +253,10 @@ impl Component for SurfaceFrame {
 
 impl Drop for SurfaceFrame {
     fn drop(&mut self) {
-        let Some(_home) = self.home.enter() else {
-            return;
-        };
-        focus::unregister(self.focus);
-        dispose_owner(self.owner);
+        self.home.with_entered(|| {
+            focus::unregister(self.focus);
+            dispose_owner(self.owner);
+        });
     }
 }
 
@@ -347,12 +333,13 @@ fn follow_outer_focus(id: FocusId, surface: Weak<Surface>) {
         let Some(surface) = surface.upgrade() else {
             return;
         };
-        let _inside = surface.enter();
-        if !held {
-            focus::clear();
-        } else if by_keyboard && focus::current().is_none() {
-            step(backwards);
-        }
+        surface.with_entered(|| {
+            if !held {
+                focus::clear();
+            } else if by_keyboard && focus::current().is_none() {
+                step(backwards);
+            }
+        })
     });
 }
 
@@ -362,10 +349,7 @@ fn follow_inner_focus(id: FocusId, surface: Weak<Surface>) {
         let Some(surface) = surface.upgrade() else {
             return;
         };
-        let held_inside = {
-            let _inside = surface.enter();
-            focus::current().is_some()
-        };
+        let held_inside = surface.with_entered(|| focus::current().is_some());
         // `request` reads the outer focus without subscribing, so losing it out here never takes it back.
         if held_inside {
             focus::request(id);

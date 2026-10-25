@@ -25,12 +25,11 @@ fn a_surface_locale_shadows_the_thread_locale_until_cleared() {
     reset();
     set_locale("en");
     let surface = LocaleContext::new();
-    {
-        let _entered = surface.enter();
+    surface.with_entered(|| {
         set_surface_locale(Some("es"));
         assert_eq!(current_locale().as_deref(), Some("es"));
         assert_eq!(use_surface_locale().as_deref(), Some("es"));
-    }
+    });
     assert_eq!(
         current_locale().as_deref(),
         Some("en"),
@@ -38,8 +37,7 @@ fn a_surface_locale_shadows_the_thread_locale_until_cleared() {
     );
 
     set_locale("de");
-    {
-        let _entered = surface.enter();
+    surface.with_entered(|| {
         assert_eq!(current_locale().as_deref(), Some("es"));
         set_surface_locale(None);
         assert_eq!(
@@ -47,6 +45,6 @@ fn a_surface_locale_shadows_the_thread_locale_until_cleared() {
             Some("de"),
             "cleared, the surface follows the thread again"
         );
-    }
+    });
     reset();
 }

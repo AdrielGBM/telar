@@ -178,10 +178,8 @@ fn catch_for(
             return Ok(());
         };
         let failure = BuildFailure::Panicked(panic_message(&payload));
-        let replaced = {
-            let _surface = surface.enter();
-            with_owner(outer, || attempt(Box::new(move || fallback(failure))))
-        };
+        let replaced = surface
+            .with_entered(|| with_owner(outer, || attempt(Box::new(move || fallback(failure)))));
         let (container, failed) = {
             let mut st = state.borrow_mut();
             (st.node, st.child.take())

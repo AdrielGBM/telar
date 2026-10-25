@@ -293,12 +293,17 @@ impl crate::app_runtime::AppRuntime for HotApp {
             || self.ask(|exports| unsafe { (exports.motion_continuous)() })
     }
 
-    fn begin_event_batch(&self) {
+    // Ended by a guard, so an unwind out of the dispatch cannot leave the dylib's batch open.
+    fn in_event_batch(&self, dispatch: &mut dyn FnMut()) {
+        struct EndBatch<'a>(&'a HotApp);
+        impl Drop for EndBatch<'_> {
+            fn drop(&mut self) {
+                self.0.tell(|exports| unsafe { (exports.end_batch)() });
+            }
+        }
         self.tell(|exports| unsafe { (exports.begin_batch)() });
-    }
-
-    fn end_event_batch(&self) {
-        self.tell(|exports| unsafe { (exports.end_batch)() });
+        let _end = EndBatch(self);
+        dispatch();
     }
 
     fn relayout(&self) {

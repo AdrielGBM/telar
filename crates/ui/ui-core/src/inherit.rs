@@ -71,7 +71,7 @@ reactive_core::surface_local! {
     /// Per surface: a texture UI and its window are different documents, so declarations must not cross between them.
     slot CASCADE: Cascade = Cascade::default();
     access with_cascade, with_cascade_ref;
-    context CascadeContext, CascadeGuard;
+    context CascadeContext;
 }
 
 struct Cascade {

@@ -132,17 +132,13 @@ impl Component for MemoLeaf {
 
 #[test]
 fn signal_dependent_segment_updates_with_runner_batching() {
-    use reactive_core::{begin_batch, end_batch};
+    use reactive_core::batch;
     let a = signal(0.0f32);
     let sa = a;
     let root = SegmentRoot::mount(Leaf { x: sa });
     assert_eq!(animated_rect_x(&root), 0.0);
-    begin_batch();
-    a.set(42.0);
-    end_batch();
-    begin_batch();
-    let mid = animated_rect_x(&root);
-    end_batch();
+    batch(|| a.set(42.0));
+    let mid = batch(|| animated_rect_x(&root));
     assert_eq!(
         mid, 42.0,
         "signal-reading segment must reflect the batched set"
@@ -152,19 +148,15 @@ fn signal_dependent_segment_updates_with_runner_batching() {
 // Regression probe for the frozen memo: replicates the runner's exact batching.
 #[test]
 fn memo_dependent_segment_updates_with_runner_batching() {
-    use reactive_core::{begin_batch, end_batch, memo};
+    use reactive_core::{batch, memo};
     let count = signal(0i32);
     let count_mv = count;
     let double = memo(move || count_mv.get() * 2);
     let root = SegmentRoot::mount(MemoLeaf { double });
     assert_eq!(animated_rect_x(&root), 0.0);
 
-    begin_batch();
-    count.set(3);
-    end_batch();
-    begin_batch();
-    let mid = animated_rect_x(&root);
-    end_batch();
+    batch(|| count.set(3));
+    let mid = batch(|| animated_rect_x(&root));
     assert_eq!(
         mid, 6.0,
         "memo-reading segment must reflect the flushed memo"

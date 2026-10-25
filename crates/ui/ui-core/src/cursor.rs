@@ -45,7 +45,7 @@ reactive_core::surface_local! {
     /// Per surface, because each window shows its own pointer shape.
     slot CURSORS: Cursors = Cursors::new();
     access with_cursors, with_cursors_ref;
-    context CursorContext, CursorGuard;
+    context CursorContext;
 }
 
 reactive_core::dropless_thread_local! {
@@ -132,11 +132,10 @@ impl CursorClaim {
 impl Drop for CursorClaim {
     fn drop(&mut self) {
         let id = self.id;
-        let Some(_home) = self.home.enter() else {
-            return;
-        };
-        with_cursors(|c| c.claims.retain(|claim| claim.id != id));
-        publish();
+        self.home.with_entered(|| {
+            with_cursors(|c| c.claims.retain(|claim| claim.id != id));
+            publish();
+        });
     }
 }
 

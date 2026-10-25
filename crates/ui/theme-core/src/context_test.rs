@@ -352,25 +352,23 @@ fn a_surface_in_the_dark_mode_resolves_dark_defaults_inside_a_light_app() {
 
     let canvas = crate::ModeContext::new();
     let seen = Rc::new(RefCell::new(Vec::new()));
-    let _reader = {
-        let _entered = canvas.enter();
+    let _reader = canvas.with_entered(|| {
         crate::set_surface_mode(Some("dark"));
         let seen = Rc::clone(&seen);
         reactive_core::effect(move || seen.borrow_mut().push(use_theme_tokens().ink().r > 0.5))
-    };
+    });
     assert!(
         use_theme_tokens().ink().r < 0.5,
         "the chrome keeps the light ink"
     );
     assert!(!crate::is_dark());
 
-    {
-        let _entered = canvas.enter();
+    canvas.with_entered(|| {
         assert!(crate::is_dark());
         assert_eq!(crate::use_mode().as_deref(), Some("dark"));
         crate::set_surface_mode(None);
         assert_eq!(crate::use_mode().as_deref(), Some("light"));
-    }
+    });
     scheme(ColorScheme::Dark);
     assert_eq!(
         *seen.borrow(),
@@ -396,8 +394,7 @@ fn a_surface_in_a_mode_registered_with_its_theme_resolves_that_theme_alone() {
 
     let canvas = crate::ModeContext::new();
     let seen = Rc::new(RefCell::new(Vec::new()));
-    let _reader = {
-        let _entered = canvas.enter();
+    let _reader = canvas.with_entered(|| {
         crate::set_surface_mode(Some("red"));
         assert!(use_theme::<Red>().primary() == RED);
         assert_eq!(
@@ -407,18 +404,17 @@ fn a_surface_in_a_mode_registered_with_its_theme_resolves_that_theme_alone() {
         );
         let seen = Rc::clone(&seen);
         reactive_core::effect(move || seen.borrow_mut().push(use_theme_tokens().primary()))
-    };
+    });
     assert_eq!(
         use_theme_tokens().primary(),
         BLUE,
         "the application keeps its theme"
     );
 
-    {
-        let _entered = canvas.enter();
+    canvas.with_entered(|| {
         crate::register_mode_theme("red", Green);
         crate::set_surface_mode(None);
-    }
+    });
     assert_eq!(
         *seen.borrow(),
         vec![RED, GREEN, BLUE],
@@ -431,20 +427,21 @@ fn a_surface_in_a_mode_registered_with_its_theme_resolves_that_theme_alone() {
 fn a_provided_theme_wins_over_the_surface_modes_theme() {
     crate::register_mode_theme("red", Red);
     let canvas = crate::ModeContext::new();
-    let _entered = canvas.enter();
-    crate::set_surface_mode(Some("red"));
-    let _owner = reactive_core::owner_scope();
-    ScopedTheme::new(Blue).provide();
-    assert_eq!(use_theme_tokens().primary(), BLUE);
-    {
-        let _inner = reactive_core::owner_scope();
-        ScopedTheme::follow_global().provide();
-        assert_eq!(
-            use_theme_tokens().primary(),
-            RED,
-            "on this surface, the global theme is its mode's"
-        );
-    }
+    canvas.with_entered(|| {
+        crate::set_surface_mode(Some("red"));
+        let _owner = reactive_core::owner_scope();
+        ScopedTheme::new(Blue).provide();
+        assert_eq!(use_theme_tokens().primary(), BLUE);
+        {
+            let _inner = reactive_core::owner_scope();
+            ScopedTheme::follow_global().provide();
+            assert_eq!(
+                use_theme_tokens().primary(),
+                RED,
+                "on this surface, the global theme is its mode's"
+            );
+        }
+    })
 }
 
 #[test]
@@ -471,9 +468,10 @@ fn a_dark_mode_outside_the_pair_resolves_the_dark_defaults() {
     crate::set_mode_scheme("dusk", ColorScheme::Dark);
 
     let canvas = crate::ModeContext::new();
-    let _entered = canvas.enter();
-    crate::set_surface_mode(Some("dusk"));
-    assert!(use_theme_tokens().ink().r > 0.5);
+    canvas.with_entered(|| {
+        crate::set_surface_mode(Some("dusk"));
+        assert!(use_theme_tokens().ink().r > 0.5);
+    })
 }
 
 #[test]

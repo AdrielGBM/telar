@@ -15,7 +15,7 @@ reactive_core::surface_local! {
     /// Per surface: node ids are minted per surface, so one list would have windows answer with each other's places.
     slot PLACES: Places = Places::default();
     access with_places, with_places_ref;
-    context PlacesContext, PlacesGuard;
+    context PlacesContext;
 }
 
 struct Places {

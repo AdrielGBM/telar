@@ -61,14 +61,13 @@ fn both_sides_moving_is_one_notification() {
 fn each_surface_keeps_its_own_size() {
     let first = SurfaceSizeContext::new();
     let second = SurfaceSizeContext::new();
-    {
-        let _in = first.enter();
+    first.with_entered(|| {
         set_surface_size(Size::new(800.0, 600.0));
-    }
-    {
-        let _in = second.enter();
+    });
+    second.with_entered(|| {
         set_surface_size(Size::new(80.0, 24.0));
-    }
-    let _in = first.enter();
-    assert_eq!(surface_size(), Size::new(800.0, 600.0));
+    });
+    first.with_entered(|| {
+        assert_eq!(surface_size(), Size::new(800.0, 600.0));
+    })
 }

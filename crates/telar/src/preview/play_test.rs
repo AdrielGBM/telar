@@ -201,10 +201,9 @@ fn a_token_read_once_at_build_is_read_in_the_canvas_environment() {
     theme_core::set_mode_scheme("play-dusk", crate::ColorScheme::Dark);
     let host = format!("{:?}", crate::use_theme_tokens().ink());
     let play = Play::mount(&entry(ink_read_once).mode("play-dusk")).unwrap();
-    let dark = {
-        let _entered = play.canvas().enter();
-        format!("{:?}", crate::use_theme_tokens().ink())
-    };
+    let dark = play
+        .canvas()
+        .with_entered(|| format!("{:?}", crate::use_theme_tokens().ink()));
     assert_ne!(
         dark, host,
         "the canvas's mode is dark and the host's is not"

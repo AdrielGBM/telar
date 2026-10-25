@@ -465,8 +465,9 @@ fn a_frame_made_from_commands_alone_is_read_against_the_surface_entered() {
     assert!(bare.access.is_none());
     let snapshot = &captured.access.as_deref().expect("captured").snapshot;
 
-    let _entered = play.canvas().enter();
-    assert_eq!(check(&bare, snapshot), check(&captured, snapshot));
+    play.canvas().with_entered(|| {
+        assert_eq!(check(&bare, snapshot), check(&captured, snapshot));
+    })
 }
 
 #[test]

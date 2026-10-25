@@ -676,7 +676,7 @@ fn a_theme_button_click_that_repaints_the_tree_does_not_panic() {
     let mut tree = crate::ComponentList::new(card);
     let _ = tree.commands();
 
-    reactive_core::begin_batch();
+    let mut held = reactive_core::OpenBatch::open();
     let handled = tree.on_event(&Event::PointerPressed {
         x: (br.x + br.width / 2.0) as f64,
         y: (br.y + br.height / 2.0) as f64,
@@ -684,11 +684,11 @@ fn a_theme_button_click_that_repaints_the_tree_does_not_panic() {
         source: PointerSource::Mouse,
     });
     if handled == EventResult::Handled {
-        reactive_core::end_batch();
-        reactive_core::begin_batch();
+        held.close();
+        held = reactive_core::OpenBatch::open();
     }
     let _ = tree.commands();
-    reactive_core::end_batch();
+    held.close();
 }
 
 #[test]

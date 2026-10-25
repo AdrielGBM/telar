@@ -890,9 +890,9 @@ impl Editor {
 
 impl Drop for Editor {
     fn drop(&mut self) {
-        if let Some(_home) = self.home.enter() {
+        self.home.with_entered(|| {
             focus::unregister(self.id);
-        }
+        });
     }
 }
 

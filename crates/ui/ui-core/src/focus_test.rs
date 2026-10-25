@@ -319,8 +319,7 @@ fn a_deferred_request_from_a_surface_that_is_gone_does_nothing() {
 
     batch(|| {
         let surface = crate::Surface::new();
-        {
-            let _entered = surface.enter();
+        surface.with_entered(|| {
             let shown = signal(false);
             let field = field_shown_by(shown);
             assert_eq!(
@@ -331,7 +330,7 @@ fn a_deferred_request_from_a_surface_that_is_gone_does_nothing() {
             request(field.focus_id());
             shown.set(true);
             drop(field);
-        }
+        });
         drop(surface);
         request(wanted.focus_id());
         wanted_shown.set(true);

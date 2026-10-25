@@ -88,41 +88,48 @@ impl Overlay {
     }
 
     pub fn toggle_panel(&self) {
-        let _entered = self.canvas.enter();
-        self.model.panel_open.toggle();
+        self.canvas.with_entered(|| {
+            self.model.panel_open.toggle();
+        })
     }
 
     pub fn toggle_inspector(&self) {
-        let _entered = self.canvas.enter();
-        self.model.inspector_open.toggle();
+        self.canvas.with_entered(|| {
+            self.model.inspector_open.toggle();
+        })
     }
 
     pub fn show_reading(&self, reading: Reading) {
-        let _entered = self.canvas.enter();
-        self.model.reading.set_if_changed(reading);
+        self.canvas.with_entered(|| {
+            self.model.reading.set_if_changed(reading);
+        })
     }
 
     pub fn set_renderer(&self, renderer: &str) {
-        let _entered = self.canvas.enter();
-        self.model
-            .renderer
-            .set_if_changed(Some(renderer.to_owned()));
+        self.canvas.with_entered(|| {
+            self.model
+                .renderer
+                .set_if_changed(Some(renderer.to_owned()));
+        })
     }
 
     pub fn set_build_outcome(&self, outcome: BuildOutcome) {
-        let _entered = self.canvas.enter();
-        self.model.build.set_if_changed(outcome);
+        self.canvas.with_entered(|| {
+            self.model.build.set_if_changed(outcome);
+        })
     }
 
     pub fn set_app_panic(&self, panic: Option<String>) {
-        let _entered = self.canvas.enter();
-        self.model.app_panic.set_if_changed(panic);
+        self.canvas.with_entered(|| {
+            self.model.app_panic.set_if_changed(panic);
+        })
     }
 
     /// Reads what the runner reported of the app this frame, which only reaches the widgets where it differs from the last.
     pub fn refresh(&self, source: &dyn InspectSource) {
-        let _entered = self.canvas.enter();
-        self.model.inspection.refresh(source);
+        self.canvas.with_entered(|| {
+            self.model.inspection.refresh(source);
+        })
     }
 
     /// Whether an accessibility panel is open, which is what the runner reads the app's audit for.
@@ -145,7 +152,7 @@ impl Overlay {
 
     /// The canvas's handle, which marks its frame inside the window's: its element ids name its own boxes, not the app's.
     pub fn surface(&self) -> u64 {
-        self.canvas.surface().handle().0
+        self.canvas.surface().handle().raw()
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -188,20 +195,20 @@ impl Overlay {
     fn press(&mut self, event: &Event, x: f32, y: f32) -> OverlayResponse {
         if !self.claims(x, y) {
             self.keyboard = false;
-            let _entered = self.canvas.enter();
-            if focus::current().is_none() {
-                return OverlayResponse::IGNORED;
-            }
-            focus::clear();
-            return REDRAWN;
+            return self.canvas.with_entered(|| {
+                if focus::current().is_none() {
+                    return OverlayResponse::IGNORED;
+                }
+                focus::clear();
+                REDRAWN
+            });
         }
         self.captured = true;
         self.hovered = true;
         self.keyboard = true;
-        {
-            let _entered = self.canvas.enter();
+        self.canvas.with_entered(|| {
             focus::blur_from_pointer(x, y);
-        }
+        });
         self.dispatch(event);
         CONSUMED
     }
@@ -222,13 +229,13 @@ impl Overlay {
 
     /// Whether a point lands on something of the overlay's own: a panel, or a control on one. Everywhere else is the app's.
     fn claims(&self, x: f32, y: f32) -> bool {
-        let _entered = self.canvas.enter();
-        interactive_rects().iter().any(|rect| rect.contains(x, y))
+        self.canvas
+            .with_entered(|| interactive_rects().iter().any(|rect| rect.contains(x, y)))
     }
 
     fn holds_keyboard(&self) -> bool {
-        let _entered = self.canvas.enter();
-        self.keyboard && focus::current().is_some()
+        self.canvas
+            .with_entered(|| self.keyboard && focus::current().is_some())
     }
 
     // Batched like the runner batches the tree's dispatch, so a handler's writes flush after every widget borrow is released.

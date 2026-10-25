@@ -203,7 +203,7 @@ impl Segment {
                 .copied()
                 .unwrap_or(Transform::IDENTITY)
         };
-        let mut entered = Vec::new();
+        let mut surfaces = Vec::new();
         let own = self.own_commands.borrow();
         let slots = self.child_slots.borrow();
         let mut next_slot = 0;
@@ -211,7 +211,7 @@ impl Segment {
             while let Some((_, child, stratum)) = slots.get(next_slot).filter(|slot| slot.0 == at) {
                 next_slot += 1;
                 let stratum = enclosing.max(*stratum);
-                let child_bounds = match child.composition.get() {
+                let child_bounds = within(&surfaces, || match child.composition.get() {
                     // A composition root is spliced as its whole frame, every stratum of it under the matrix of the place it goes in.
                     Some(_) => child.collect(
                         depth + 1,
@@ -226,7 +226,7 @@ impl Segment {
                         stratum,
                         out,
                     ),
-                };
+                });
                 bounds = union_nonempty(bounds, child_bounds);
             }
             let Some((cmd, own_stratum)) = own.get(at) else {
@@ -245,13 +245,16 @@ impl Segment {
                     }
                 }
                 DrawCommand::PushSurface { surface } => {
-                    entered.push(reactive_core::SurfaceHandle(*surface).enter());
+                    surfaces.push(reactive_core::SurfaceHandle::from_raw(*surface));
                 }
-                DrawCommand::PopSurface => drop(entered.pop()),
+                DrawCommand::PopSurface => {
+                    surfaces.pop();
+                }
                 DrawCommand::PushElement { element } => {
                     if box_model.is_none() {
-                        box_model =
-                            layout_reactive::box_model(layout_reactive::NodeId::from(element.id.0));
+                        box_model = within(&surfaces, || {
+                            layout_reactive::box_model(layout_reactive::NodeId::from(element.id.0))
+                        });
                     }
                 }
                 // The renderer's own answer to what a command paints, rather than a second list of arms: the local copy knew four commands, so a spanned paragraph contributed nothing and a notification card inspected as an empty rect.
@@ -265,10 +268,6 @@ impl Segment {
                     }
                 }
             }
-        }
-        // Each guard restores the world that was active when it was taken, so they are dropped innermost first.
-        while let Some(guard) = entered.pop() {
-            drop(guard);
         }
 
         let BoxModel {
@@ -284,6 +283,14 @@ impl Segment {
         info.border = border;
         info.gap = gap;
         bounds
+    }
+}
+
+/// Runs `f` in the world of the innermost surface the walk is inside, or in the one active now outside every surface: entering the innermost alone sets every world it has.
+fn within<R>(surfaces: &[reactive_core::SurfaceHandle], f: impl FnOnce() -> R) -> R {
+    match surfaces.last() {
+        Some(surface) => surface.with_entered(f),
+        None => f(),
     }
 }
 

@@ -321,28 +321,27 @@ fn a_link_with_nowhere_to_go_is_the_current_one_of_nothing() {
 fn a_link_dropped_on_another_surfaces_turn_leaves_that_surfaces_namesake_alone() {
     let home = crate::Surface::new();
     let away = crate::Surface::new();
-    let leaving = {
-        let _home = home.enter();
-        link_to(Destination::Route(projects()))
-    };
-    let _away = away.enter();
-    let staying = link_to(Destination::Route(projects()));
-    let id: u64 = staying.layout_node().into();
-    assert_eq!(
-        id,
-        u64::from(leaving.layout_node()),
-        "the two surfaces must really collide on ids, or this proves nothing"
-    );
+    let leaving = home.with_entered(|| link_to(Destination::Route(projects())));
+    away.with_entered(|| {
+        let staying = link_to(Destination::Route(projects()));
+        let id: u64 = staying.layout_node().into();
+        assert_eq!(
+            id,
+            u64::from(leaving.layout_node()),
+            "the two surfaces must really collide on ids, or this proves nothing"
+        );
 
-    drop(leaving);
+        drop(leaving);
 
-    assert!(activate_box(id), "the box here still links where it did");
-    drop(staying);
-    let _home = home.enter();
-    assert!(
-        !activate_box(id),
-        "and the one that left took its link along"
-    );
+        assert!(activate_box(id), "the box here still links where it did");
+        drop(staying);
+        home.with_entered(|| {
+            assert!(
+                !activate_box(id),
+                "and the one that left took its link along"
+            );
+        })
+    })
 }
 
 #[test]

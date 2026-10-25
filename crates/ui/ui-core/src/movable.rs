@@ -170,15 +170,14 @@ impl Shared {
         let Some(node) = self.content_node().filter(|_| was_showing) else {
             return;
         };
-        let Some(_entered) = self.home.enter() else {
-            return;
-        };
-        batch(|| {
-            released.hosting.set(false);
-            match next {
-                Some(next) => self.show_in(next),
-                None => self.park(node),
-            }
+        self.home.with_entered(|| {
+            batch(|| {
+                released.hosting.set(false);
+                match next {
+                    Some(next) => self.show_in(next),
+                    None => self.park(node),
+                }
+            });
         });
     }
 
@@ -190,13 +189,12 @@ impl Shared {
         let host = self.host();
         self.outlets.borrow_mut().clear();
         self.shown.set(false);
-        let Some(_entered) = self.home.enter() else {
-            return;
-        };
-        if let Some(host) = host {
-            host.hosting.set(false);
-        }
-        retire(content.owner(), content.node());
+        self.home.with_entered(|| {
+            if let Some(host) = host {
+                host.hosting.set(false);
+            }
+            retire(content.owner(), content.node());
+        });
     }
 }
 

@@ -70,12 +70,13 @@ impl Frame {
     pub fn capture(canvas: &SurfaceCanvas) -> Self {
         let commands: Arc<[DrawCommand]> = canvas.frame_commands().iter().cloned().collect();
         let size = canvas.size();
-        let _entered = canvas.enter();
-        let access = FrameAccess::read(&commands);
-        Self::new(commands, size)
-            .with_direction(crate::current_direction())
-            .with_lang(i18n_core::current_locale())
-            .with_access(Some(access))
+        canvas.with_entered(|| {
+            let access = FrameAccess::read(&commands);
+            Self::new(commands, size)
+                .with_direction(crate::current_direction())
+                .with_lang(i18n_core::current_locale())
+                .with_access(Some(access))
+        })
     }
 
     pub fn with_direction(self, direction: Direction) -> Self {

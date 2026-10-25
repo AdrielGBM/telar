@@ -4,7 +4,7 @@
 //!
 //! The name is the only new concept: everything else is the existing machinery. The state is a real signal — minted here on first use by either side, so opening a name before its overlay is built works and the overlay picks up the very same signal when it appears — and closing still goes through the dismiss stack, so Escape and `Navigator::back()` already close these with no extra wiring.
 //!
-//! Names are per surface, like the overlays they open: two canvases showing the same tree each have their own `"confirm"`, and opening it in one leaves the other closed. Code outside a surface opens one of its names with the surface entered, as [`SurfaceCanvas::enter`](crate::SurfaceCanvas::enter) does.
+//! Names are per surface, like the overlays they open: two canvases showing the same tree each have their own `"confirm"`, and opening it in one leaves the other closed. Code outside a surface opens one of its names with the surface entered, through [`SurfaceCanvas::with_entered`](crate::SurfaceCanvas::with_entered).
 
 use std::collections::HashMap;
 
@@ -14,7 +14,7 @@ reactive_core::surface_local! {
     /// Per-surface names: a name opened in one surface opens the overlay of that name in that surface alone.
     slot NAMED: HashMap<String, RwSignal<bool>> = HashMap::new();
     access with_named, with_named_ref;
-    context NamedOverlaysContext, NamedOverlaysGuard;
+    context NamedOverlaysContext;
 }
 
 /// The open-state signal for the overlay named `id` in the active surface, minted on first use.

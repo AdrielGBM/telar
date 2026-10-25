@@ -40,12 +40,11 @@ fn setting_the_size_already_in_force_reruns_nobody() {
 fn a_surface_control_size_shadows_the_thread_one_until_cleared() {
     set_control_size(ControlSize::Regular);
     let surface = ControlSizeContext::new();
-    {
-        let _entered = surface.enter();
+    surface.with_entered(|| {
         set_surface_control_size(Some(ControlSize::Mini));
         assert_eq!(use_control_size(), ControlSize::Mini);
         assert_eq!(use_surface_control_size(), Some(ControlSize::Mini));
-    }
+    });
     assert_eq!(
         use_control_size(),
         ControlSize::Regular,
@@ -53,8 +52,7 @@ fn a_surface_control_size_shadows_the_thread_one_until_cleared() {
     );
 
     set_control_size(ControlSize::Large);
-    {
-        let _entered = surface.enter();
+    surface.with_entered(|| {
         assert_eq!(use_control_size(), ControlSize::Mini);
         set_surface_control_size(None);
         assert_eq!(
@@ -62,7 +60,7 @@ fn a_surface_control_size_shadows_the_thread_one_until_cleared() {
             ControlSize::Large,
             "cleared, the surface follows the thread again"
         );
-    }
+    });
     set_control_size(ControlSize::Regular);
 }
 
@@ -80,15 +78,14 @@ fn a_provided_size_shadows_the_surface_and_the_thread_for_its_subtree_only() {
     assert_eq!(control_scale(), ControlSize::Large.scale());
 
     let surface = ControlSizeContext::new();
-    {
-        let _entered = surface.enter();
+    surface.with_entered(|| {
         set_surface_control_size(Some(ControlSize::Mini));
         assert_eq!(
             use_control_size(),
             ControlSize::Large,
             "the subtree's own size is nearer than the surface's"
         );
-    }
+    });
     drop(form);
 
     reactive_core::with_owner(Some(toolbar_owner), || {

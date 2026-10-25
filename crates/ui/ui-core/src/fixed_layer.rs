@@ -168,9 +168,9 @@ impl Component for FixedLayer {
 
 impl Drop for FixedLayer {
     fn drop(&mut self) {
-        if let Some(_home) = self.home.enter() {
+        self.home.with_entered(|| {
             unregister_overlay(self.overlay_id);
-        }
+        });
     }
 }
 

@@ -1,6 +1,7 @@
 //! The owner tree disposes reactive state; an owner belongs to exactly one surface, and disposing a surface disposes its owner roots, never the reverse, and never one made inside [`detached`](reactive_local::detached).
 
 use std::any::{Any, TypeId};
+use std::marker::PhantomData;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::rc::Rc;
 
@@ -12,13 +13,36 @@ use super::{EffectId, RUNTIME, Runtime, SignalId, SurfaceHandle};
 use crate::runtime::effects::deregister_effect;
 
 slotmap::new_key_type! {
-    /// A node in the owner tree: the scope a signal, memo or effect was created in, and what disposes it.
-    pub struct OwnerId;
+    pub(crate) struct OwnerKey;
+}
+
+/// A node in the owner tree, the scope a signal, memo or effect was created in and what disposes it; `!Send` because its key names an owner only in the creating thread's runtime.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OwnerId {
+    key: OwnerKey,
+    _ui_thread_only: PhantomData<*const ()>,
+}
+
+impl std::fmt::Debug for OwnerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("OwnerId")
+            .field(&slotmap::Key::data(&self.key))
+            .finish()
+    }
+}
+
+impl From<OwnerKey> for OwnerId {
+    fn from(key: OwnerKey) -> Self {
+        OwnerId {
+            key,
+            _ui_thread_only: PhantomData,
+        }
+    }
 }
 
 pub(crate) struct OwnerEntry {
-    parent: Option<OwnerId>,
-    children: Vec<OwnerId>,
+    parent: Option<OwnerKey>,
+    children: Vec<OwnerKey>,
     signals: Vec<SignalId>,
     effects: Vec<EffectId>,
     /// What this owner has to undo elsewhere. The escape hatch for state an owner's lifetime governs but this crate cannot name — a cascade declaration is keyed by a layout `NodeId`, which lives three crates up.
@@ -33,7 +57,7 @@ pub(crate) struct OwnerEntry {
 
 impl OwnerEntry {
     // A 10k-row list is 10k of these, so an owner holding nothing must not reach the allocator.
-    fn new(parent: Option<OwnerId>, surface: SurfaceHandle) -> Self {
+    fn new(parent: Option<OwnerKey>, surface: SurfaceHandle) -> Self {
         OwnerEntry {
             parent,
             children: Vec::new(),
@@ -57,16 +81,16 @@ impl OwnerEntry {
 
 /// The owner a signal or effect created right now would belong to, or `None` outside every owner scope (creation still falls back to the surface root via `owning_id`).
 pub fn current_owner() -> Option<OwnerId> {
-    RUNTIME.with(|rt| rt.borrow().owner_stack.last().copied())
+    RUNTIME.with(|rt| rt.borrow().owner_stack.last().copied().map(OwnerId::from))
 }
 
 /// Whether `owner` is `ancestor` or sits anywhere beneath it. `false` once either has been disposed.
 pub fn owner_within(owner: OwnerId, ancestor: OwnerId) -> bool {
     RUNTIME.with(|rt| {
         let rt = rt.borrow();
-        let mut at = Some(owner);
+        let mut at = Some(owner.key);
         while let Some(id) = at {
-            if id == ancestor {
+            if id == ancestor.key {
                 return true;
             }
             at = rt.owners.get(id).and_then(|entry| entry.parent);
@@ -93,7 +117,10 @@ pub fn owner_scope() -> OwnerGuard {
         }
         let depth = rt.owner_stack.len();
         rt.owner_stack.push(id);
-        OwnerGuard { id, depth }
+        OwnerGuard {
+            id: id.into(),
+            depth,
+        }
     })
 }
 
@@ -107,7 +134,10 @@ pub fn root_scope() -> OwnerGuard {
         let id = rt.owners.insert(OwnerEntry::root(surface));
         let depth = rt.owner_stack.len();
         rt.owner_stack.push(id);
-        OwnerGuard { id, depth }
+        OwnerGuard {
+            id: id.into(),
+            depth,
+        }
     })
 }
 
@@ -149,7 +179,7 @@ fn owning(rt: &mut Runtime) -> Option<&mut OwnerEntry> {
     rt.owners.get_mut(id)
 }
 
-pub(crate) fn owning_id(rt: &mut Runtime) -> Option<OwnerId> {
+pub(crate) fn owning_id(rt: &mut Runtime) -> Option<OwnerKey> {
     if reactive_local::is_detached() {
         return None;
     }
@@ -173,9 +203,9 @@ pub fn with_owner<R>(owner: Option<OwnerId>, f: impl FnOnce() -> R) -> R {
         let mut rt = rt.borrow_mut();
         let depth = rt.owner_stack.len();
         if let Some(owner) = owner
-            && rt.owners.contains_key(owner)
+            && rt.owners.contains_key(owner.key)
         {
-            rt.owner_stack.push(owner);
+            rt.owner_stack.push(owner.key);
         }
         depth
     });
@@ -243,9 +273,9 @@ pub fn find_context<T: 'static, R>(mut f: impl FnMut(&T) -> Option<R>) -> Option
 /// The nearest context of type `wanted` at or above `from`, with the owner above the one that holds it.
 fn context_from(
     rt: &Runtime,
-    mut at: Option<OwnerId>,
+    mut at: Option<OwnerKey>,
     wanted: TypeId,
-) -> Option<(Rc<dyn Any>, Option<OwnerId>)> {
+) -> Option<(Rc<dyn Any>, Option<OwnerKey>)> {
     while let Some(id) = at {
         let entry = rt.owners.get(id)?;
         if let Some(value) = entry.context.get(&wanted) {
@@ -281,14 +311,14 @@ pub enum PanicCatch {
 /// Sets what `owner` does with a panic out of an effect at or below it. `None` passes such a panic on to its parent.
 pub fn set_panic_catch(owner: OwnerId, catch: Option<PanicCatch>) {
     RUNTIME.with(|rt| {
-        if let Some(entry) = rt.borrow_mut().owners.get_mut(owner) {
+        if let Some(entry) = rt.borrow_mut().owners.get_mut(owner.key) {
             entry.catch = catch;
         }
     });
 }
 
 /// Offers a panic out of an effect held by `owner` to the nearest owner that catches, resuming the unwind when none does; inside another effect's run it always resumes, since the catching owner may hold that still-executing outer effect.
-pub(crate) fn deliver_panic(owner: Option<OwnerId>, mut payload: PanicPayload) {
+pub(crate) fn deliver_panic(owner: Option<OwnerKey>, mut payload: PanicPayload) {
     if RUNTIME.with(|rt| rt.borrow().running_effects > 0) {
         resume_unwind(payload);
     }
@@ -362,6 +392,7 @@ impl Drop for TearingDown {
 
 /// Disposes an owner and everything below it, children first, each owner's teardown inside the surface it was created on; a panic mid-teardown resumes only once it completes, and whatever the cleanups invalidated is flushed afterward rather than dropped, since a surviving effect may still need to see it. Called from inside another teardown, the owner is freed once that teardown's widgets are gone but before its signals are: a cleanup that lets go of state the torn tree's widgets still read as they drop, a gesture cancelled by its box going away, would otherwise free it under them.
 pub fn dispose_owner(id: OwnerId) {
+    let id = id.key;
     let deferred = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         if rt.tearing_down {
@@ -382,29 +413,31 @@ pub fn dispose_owner(id: OwnerId) {
     resume_unless_unwinding(panicked);
 }
 
-fn tear_down(id: OwnerId, panicked: &mut Option<PanicPayload>) {
+fn tear_down(id: OwnerKey, panicked: &mut Option<PanicPayload>) {
     let mut torn = uproot(id);
 
     // One wave, not one per withdrawal: `undeclare` bumps the cascade's `structure` signal, which every context read subscribes to, so tearing down N nodes outside a batch is N invalidations across the tree.
     batch(|| {
         for owner in &mut torn {
-            let _surface = owner.surface.enter();
-            for cleanup in std::mem::take(&mut owner.cleanups) {
-                contain(panicked, cleanup);
-            }
+            owner.surface.with_entered(|| {
+                for cleanup in std::mem::take(&mut owner.cleanups) {
+                    contain(panicked, cleanup);
+                }
+            });
         }
     });
 
     for owner in &mut torn {
-        let _surface = owner.surface.enter();
-        for effect in std::mem::take(&mut owner.effects) {
-            contain(panicked, || deregister_effect(effect));
-        }
+        owner.surface.with_entered(|| {
+            for effect in std::mem::take(&mut owner.effects) {
+                contain(panicked, || deregister_effect(effect));
+            }
+        });
     }
     free_released_mid_teardown(panicked);
     for owner in torn {
         // Taken out under the borrow and dropped after releasing it: a signal whose value owns signal handles re-enters the runtime as that value drops, which under the borrow aborts.
-        let removed: Vec<Box<dyn Any>> = RUNTIME.with(|rt| {
+        let removed: Vec<Rc<dyn Any>> = RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();
             owner
                 .signals
@@ -413,8 +446,9 @@ fn tear_down(id: OwnerId, panicked: &mut Option<PanicPayload>) {
                 .map(|storage| storage.value)
                 .collect()
         });
-        let _surface = owner.surface.enter();
-        contain(panicked, || drop(removed));
+        owner
+            .surface
+            .with_entered(|| contain(panicked, || drop(removed)));
     }
 }
 
@@ -476,7 +510,7 @@ pub fn dispose_surface(surface: SurfaceHandle) {
         contain(&mut panicked, || dispose_surface_owners(surface));
         let world = RUNTIME.with(|rt| rt.borrow_mut().worlds.remove(&surface));
         if let Some(world) = world {
-            contain(&mut panicked, || dispose_owner(world));
+            contain(&mut panicked, || dispose_owner(world.into()));
         }
     }
     flush_when_settled();
@@ -490,7 +524,7 @@ pub(crate) fn is_surface_disposed(surface: SurfaceHandle) -> bool {
 
 /// Disposes every owner root belonging to a surface, leaving its world standing: see [`dispose_surface`].
 pub fn dispose_surface_owners(surface: SurfaceHandle) {
-    let roots: Vec<OwnerId> = RUNTIME.with(|rt| {
+    let roots: Vec<OwnerKey> = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         rt.roots.remove(&surface);
         let world = rt.worlds.get(&surface).copied();
@@ -510,7 +544,7 @@ pub fn dispose_surface_owners(surface: SurfaceHandle) {
         // Held across the whole set rather than left to each root: the roots of one surface read each other, so a flush landing between two of them runs effects over what the one before it just freed.
         let _disposing = Disposing::enter();
         for root in roots {
-            contain(&mut panicked, || dispose_owner(root));
+            contain(&mut panicked, || dispose_owner(root.into()));
         }
     }
     flush_when_settled();
@@ -542,7 +576,7 @@ struct TornOwner {
     signals: Vec<SignalId>,
 }
 
-fn uproot(root: OwnerId) -> Uprooted {
+fn uproot(root: OwnerKey) -> Uprooted {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
 

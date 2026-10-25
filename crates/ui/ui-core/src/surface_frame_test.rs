@@ -236,14 +236,13 @@ fn a_modal_opened_inside_a_frame_stays_inside_its_bounds_and_its_surface() {
         0,
         "the window's dismiss stack knows nothing of it"
     );
-    {
-        let _inside = canvas.enter();
+    canvas.with_entered(|| {
         assert_eq!(
             dismiss::dismiss_depth(),
             1,
             "the frame's surface holds the modal"
         );
-    }
+    });
     assert_eq!(
         crate::dispatch_overlays(&press(100.0, 100.0)),
         EventResult::Ignored,
@@ -630,19 +629,17 @@ fn the_window_hears_that_a_field_inside_the_frame_has_the_caret() {
         no_focusable(),
         || {},
     );
-    let field = {
-        let _inside = canvas.enter();
+    let field = canvas.with_entered(|| {
         let field = focus::next_id();
         focus::register_as(field, FocusKind::TextEntry);
         field
-    };
+    });
 
     window.click(100.0, 100.0);
     assert!(!focus::text_entry_focused());
-    {
-        let _inside = canvas.enter();
+    canvas.with_entered(|| {
         focus::request(field);
-    }
+    });
     assert!(
         focus::text_entry_focused(),
         "a shortcut table in the window must stand aside while the field inside has the caret"
@@ -1219,7 +1216,7 @@ fn word(text: &'static str, style: LayoutStyle) -> crate::Text {
 }
 
 fn handle_of(canvas: &SurfaceCanvas) -> u64 {
-    canvas.surface().handle().0
+    canvas.surface().handle().raw()
 }
 
 #[test]
@@ -1430,10 +1427,7 @@ fn a_box_event_reaches_a_frame_inside_an_overlay_of_a_frame() {
         inner_focused.get(),
         "the box takes focus in the frame the overlay holds"
     );
-    let outer_focus = {
-        let _inside = outer.enter();
-        focus::current()
-    };
+    let outer_focus = outer.with_entered(focus::current);
     assert!(
         outer_focus.is_some(),
         "and the overlay's frame holds the outer canvas's focus"
@@ -1468,10 +1462,7 @@ fn a_readers_action_on_a_control_in_a_frame_reaches_it_in_the_frames_world() {
         .find(|node| node.role == focus::Role::Button)
         .and_then(|node| node.id)
         .expect("the frame's button is announced");
-    let inner_focus = || {
-        let _inside = canvas.enter();
-        focus::current()
-    };
+    let inner_focus = || canvas.with_entered(focus::current);
 
     crate::accessibility::perform_action(button, false, |event| window.send(event.clone()));
     window.frame();
@@ -1593,10 +1584,9 @@ fn focus_moved_inside_by_the_app_brings_the_frame_the_keys() {
     window.send(key(NamedKey::Tab, false));
     assert!(before.get(), "the keyboard is out in the window");
 
-    {
-        let _inside = canvas.enter();
+    canvas.with_entered(|| {
         focus::focus_next();
-    }
+    });
     assert!(first.get());
     assert!(
         !before.get(),

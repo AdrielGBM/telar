@@ -17,8 +17,7 @@ mod plural;
 pub use catalog::{CatalogModel, MessageModel, PartModel, flatten, is_plural_table, parse_message};
 pub use installed::{catalog, default_locale, set_catalog, set_catalog_if_unset, t};
 pub use locale::{
-    LocaleContext, LocaleGuard, current_locale, set_locale, set_surface_locale, use_locale,
-    use_surface_locale,
+    LocaleContext, current_locale, set_locale, set_surface_locale, use_locale, use_surface_locale,
 };
 pub use message::{Catalog, Entry, Message, Part};
 pub use negotiate::negotiate_locale;

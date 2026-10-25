@@ -39,7 +39,7 @@ reactive_core::surface_local! {
     /// A per-surface overlay registry: the modals/toasts/tooltips registered for priority pointer routing on this surface. The runner activates each surface's [`OverlayContext`] around its build/event/frame.
     slot OVERLAYS: OverlayRegistry = OverlayRegistry::new();
     access with_overlays, with_overlays_ref;
-    context OverlayContext, OverlayGuard;
+    context OverlayContext;
 }
 
 struct OverlayRegistry {

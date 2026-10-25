@@ -162,12 +162,11 @@ impl TextureUi {
         self.canvas.set_placement(placement);
     }
 
-    /// Activates this UI's world — its layout tree, overlay registry, focus and services — for as long as the guard lives.
+    /// Runs `f` with this UI's world — its layout tree, overlay registry, focus and services — active.
     ///
-    /// Anything that touches those has to happen inside it: they are this UI's, and outside it the ambient ones a window tree uses are what answer. Building a widget to hand to this tree, reading a node's rect, opening one of its overlays.
-    #[must_use = "the UI's world is only active while this guard is alive"]
-    pub fn enter(&self) -> ui_core::SurfaceGuard {
-        self.canvas.enter()
+    /// Anything that touches those has to happen inside `f`: they are this UI's, and outside it the ambient ones a window tree uses are what answer. Building a widget to hand to this tree, reading a node's rect, opening one of its overlays.
+    pub fn with_entered<R>(&self, f: impl FnOnce() -> R) -> R {
+        self.canvas.with_entered(f)
     }
 
     /// The UI's logical size: the target's pixels divided by its pixel ratio, which is the box the tree lays out against and the space [`on_event`](Self::on_event) delivers pointers in. Reactive.
@@ -193,15 +192,16 @@ impl TextureUi {
     ///
     /// Animations, timers and background work are not advanced here. The motion engine and the timer and task registries are per-thread, and a windowed application's runner already drives them for every tree on that thread; a windowless one drives them itself, with [`motion::tick`](crate::motion), [`fire_timers`](crate::fire_timers) and [`drain_tasks`](crate::drain_tasks), exactly as it drives this.
     pub fn render(&mut self) -> Result<(), RendererError> {
-        let _g = self.canvas.enter();
-        // A reactive change (a list gaining an item, a panel opening) mutates the layout tree without recomputing it; the runner does the same before composing a window frame.
-        self.canvas.relayout_if_dirty();
-        let generation = self.canvas.generation();
-        self.renderer
-            .begin_frame(self.width, self.height, self.pixel_ratio, generation)?;
-        let commands = self.canvas.frame_commands();
-        self.renderer
-            .render_frame(&commands, Some(self.clear_color))
+        self.canvas.with_entered(|| {
+            // A reactive change (a list gaining an item, a panel opening) mutates the layout tree without recomputing it; the runner does the same before composing a window frame.
+            self.canvas.relayout_if_dirty();
+            let generation = self.canvas.generation();
+            self.renderer
+                .begin_frame(self.width, self.height, self.pixel_ratio, generation)?;
+            let commands = self.canvas.frame_commands();
+            self.renderer
+                .render_frame(&commands, Some(self.clear_color))
+        })
     }
 
     fn lay_out(&self) {

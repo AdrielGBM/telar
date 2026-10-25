@@ -208,7 +208,7 @@ impl<T: Clone + 'static> Transaction<T> {
         Ok(())
     }
 
-    /// Values are handed out rather than dropped in here: this runs under the runtime's borrow, and a value that owns signal handles re-enters the runtime as it drops.
+    /// Values are handed out rather than dropped in here: this runs under the state signal's own borrow, and a value whose drop reaches this transaction again would collide with it.
     fn with_state<R>(&self, f: impl FnOnce(&mut State<T>) -> R) -> Option<R> {
         runtime::try_update_signal_value::<State<T>, R>(self.state, f)
     }

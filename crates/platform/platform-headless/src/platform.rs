@@ -228,7 +228,7 @@ impl MultiSurfacePlatform for HeadlessPlatform {
             states.push((id, window, factory(id)));
         }
 
-        // A surface whose renderer fails or whose build panics is dropped rather than being fatal to the run. The `new_events`/`about_to_wait` bracket keeps the reactive batch balanced even then, since `end_batch` runs regardless. Effective only under `panic=unwind`.
+        // A surface whose renderer fails or whose build panics is dropped rather than being fatal to the run. The `new_events`/`about_to_wait` bracket keeps the reactive batch balanced even then, since `about_to_wait` runs regardless and a handler that is dropped ends the batch it holds. Effective only under `panic=unwind`.
         states.retain_mut(|(id, window, handler)| {
             handler.new_events();
             let resumed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

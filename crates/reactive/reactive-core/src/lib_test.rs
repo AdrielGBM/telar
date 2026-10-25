@@ -19,27 +19,24 @@ fn effect_runs_under_its_own_surface_context() {
 
     let entered: Rc<RefCell<Vec<u64>>> = Rc::new(RefCell::new(Vec::new()));
     let entered_hook = Rc::clone(&entered);
-    set_surface_enter_hook(move |handle| {
+    set_surface_enter_hook(move |handle, run| {
         let prev = set_current_surface(handle);
-        entered_hook.borrow_mut().push(handle.0);
-        SurfaceEnterGuard::new(move || {
-            set_current_surface(prev);
-        })
+        entered_hook.borrow_mut().push(handle.raw());
+        run();
+        set_current_surface(prev);
     });
 
     let trigger = signal(0i32);
     let read = trigger.read_only();
-    let _guard_a = SurfaceHandle(1).enter();
-    let _e = effect(move || {
-        read.get();
+    let _e = SurfaceHandle::from_raw(1).with_entered(|| {
+        effect(move || {
+            read.get();
+        })
     });
-    drop(_guard_a);
 
     entered.borrow_mut().clear();
 
-    let _guard_b = SurfaceHandle(2).enter();
-    trigger.set(1);
-    drop(_guard_b);
+    SurfaceHandle::from_raw(2).with_entered(|| trigger.set(1));
 
     assert!(
         entered.borrow().contains(&1),
@@ -77,6 +74,59 @@ fn runtime_recovers_after_panic_in_batch() {
         "runtime wedged after panic-in-batch; effect never re-ran: {:?}",
         seen.borrow()
     );
+}
+
+#[test]
+fn an_open_batch_an_unwind_drops_ends_without_flushing_and_later_writes_flush() {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    let count = signal(0i32);
+    let seen = Rc::new(Cell::new(0));
+    let into = Rc::clone(&seen);
+    let _e = effect(move || into.set(count.get()));
+
+    catch_unwind(AssertUnwindSafe(|| {
+        let _held = OpenBatch::open();
+        count.set(1);
+        panic!("boom");
+    }))
+    .unwrap_err();
+    assert_eq!(
+        seen.get(),
+        0,
+        "an unwind ends the batch without running effects"
+    );
+
+    count.set(2);
+    assert_eq!(
+        seen.get(),
+        2,
+        "and the next write flushes as if no batch were open"
+    );
+}
+
+#[test]
+fn an_open_batch_flushes_once_when_the_outermost_closes() {
+    let count = signal(0i32);
+    let runs = Rc::new(Cell::new(0));
+    let counted = Rc::clone(&runs);
+    let _e = effect(move || {
+        count.get();
+        counted.set(counted.get() + 1);
+    });
+
+    let outer = OpenBatch::open();
+    let inner = OpenBatch::open();
+    count.set(1);
+    inner.close();
+    count.set(2);
+    assert_eq!(
+        runs.get(),
+        1,
+        "an inner close leaves the flush to the outer one"
+    );
+    outer.close();
+    assert_eq!(runs.get(), 2);
 }
 
 // Regression: the flush-wide epoch stamp turned the reader's second run into a no-op with nothing left to reschedule it, so it kept the stale value until some later, unrelated write opened a fresh flush.

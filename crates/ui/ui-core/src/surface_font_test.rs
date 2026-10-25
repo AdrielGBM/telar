@@ -68,88 +68,90 @@ fn with_face() {
 fn a_text_laid_out_before_the_family_changes_is_measured_and_drawn_in_the_new_one() {
     with_face();
     let surface = Surface::new();
-    let _entered = surface.enter();
-    let laid = Laid::new();
-    let platform = laid.width();
-    assert_eq!(laid.family(), FontFamily::SansSerif);
+    surface.with_entered(|| {
+        let laid = Laid::new();
+        let platform = laid.width();
+        assert_eq!(laid.family(), FontFamily::SansSerif);
 
-    set_font_family(Some(named()));
-    let face = laid.width();
-    assert_eq!(
-        laid.family(),
-        FontFamily::stack([named(), FontFamily::SansSerif]),
-        "drawn in the face, with the platform's own behind it"
-    );
-    assert_ne!(face, platform, "and measured in it");
+        set_font_family(Some(named()));
+        let face = laid.width();
+        assert_eq!(
+            laid.family(),
+            FontFamily::stack([named(), FontFamily::SansSerif]),
+            "drawn in the face, with the platform's own behind it"
+        );
+        assert_ne!(face, platform, "and measured in it");
 
-    set_font_family(Some(FontFamily::Monospace));
-    assert_eq!(laid.family(), FontFamily::Monospace);
-    assert_ne!(laid.width(), face);
+        set_font_family(Some(FontFamily::Monospace));
+        assert_eq!(laid.family(), FontFamily::Monospace);
+        assert_ne!(laid.width(), face);
 
-    set_font_family(None);
-    assert_eq!(laid.family(), FontFamily::SansSerif);
-    assert_eq!(laid.width(), platform, "back where it started");
+        set_font_family(None);
+        assert_eq!(laid.family(), FontFamily::SansSerif);
+        assert_eq!(laid.width(), platform, "back where it started");
+    })
 }
 
 /// A family declared on the way down is the author's, and wins over the surface's default the way a stylesheet wins over a browser's default font.
 #[test]
 fn a_declared_family_still_wins_over_the_surface_default() {
     let surface = Surface::new();
-    let _entered = surface.enter();
-    reset_layout_runtime();
-    set_font_family(Some(named()));
-    let text = Text::declaring(
-        || "Code".to_string(),
-        LayoutStyle::new(),
-        |t| t.with_font_family(FontFamily::Monospace),
-    )
-    .unwrap();
-    compute_layout(
-        text.layout_node(),
-        AvailableSpace::Definite(200.0),
-        AvailableSpace::Definite(40.0),
-    )
-    .unwrap();
-    assert_eq!(
-        drawn_style(&text.view()).unwrap().font_family,
-        FontFamily::Monospace
-    );
+    surface.with_entered(|| {
+        reset_layout_runtime();
+        set_font_family(Some(named()));
+        let text = Text::declaring(
+            || "Code".to_string(),
+            LayoutStyle::new(),
+            |t| t.with_font_family(FontFamily::Monospace),
+        )
+        .unwrap();
+        compute_layout(
+            text.layout_node(),
+            AvailableSpace::Definite(200.0),
+            AvailableSpace::Definite(40.0),
+        )
+        .unwrap();
+        assert_eq!(
+            drawn_style(&text.view()).unwrap().font_family,
+            FontFamily::Monospace
+        );
+    })
 }
 
 #[test]
 fn every_surface_has_a_default_family_of_its_own() {
     let a = Surface::new();
     let b = Surface::new();
-    {
-        let _entered = a.enter();
+    a.with_entered(|| {
         open_surface_font_family(Some(named()));
-    }
-    {
-        let _entered = b.enter();
+    });
+    b.with_entered(|| {
         assert_eq!(use_font_family(), None, "b was told nothing");
         open_surface_font_family(Some(FontFamily::Serif));
-    }
-    let _entered = a.enter();
-    assert_eq!(use_font_family(), Some(named()));
+    });
+    a.with_entered(|| {
+        assert_eq!(use_font_family(), Some(named()));
+    })
 }
 
 /// The runner tells a surface its configured family every time it builds a tree on it; what the app set since is what it keeps.
 #[test]
 fn opening_seeds_the_family_and_a_later_opening_keeps_what_the_app_set() {
     let surface = Surface::new();
-    let _entered = surface.enter();
-    open_surface_font_family(Some(named()));
-    assert_eq!(use_font_family(), Some(named()));
-    open_surface_font_family(Some(FontFamily::Serif));
-    assert_eq!(
-        use_font_family(),
-        Some(FontFamily::Serif),
-        "a configuration opened again is followed while the app has said nothing"
-    );
+    surface.with_entered(|| {
+        open_surface_font_family(Some(named()));
+        assert_eq!(use_font_family(), Some(named()));
+        open_surface_font_family(Some(FontFamily::Serif));
+        assert_eq!(
+            use_font_family(),
+            Some(FontFamily::Serif),
+            "a configuration opened again is followed while the app has said nothing"
+        );
 
-    set_font_family(Some(FontFamily::Monospace));
-    open_surface_font_family(Some(named()));
-    assert_eq!(use_font_family(), Some(FontFamily::Monospace));
+        set_font_family(Some(FontFamily::Monospace));
+        open_surface_font_family(Some(named()));
+        assert_eq!(use_font_family(), Some(FontFamily::Monospace));
+    })
 }
 
 #[test]

@@ -59,8 +59,7 @@ impl InspectSource for SurfaceCanvas {
 
     fn audit(&self) -> Option<AccessAudit> {
         let commands = self.frame_commands().clone();
-        let _entered = self.enter();
-        Some(telar::inspect::audit(&commands, None))
+        self.with_entered(|| Some(telar::inspect::audit(&commands, None)))
     }
 
     fn placement(&self) -> Transform {

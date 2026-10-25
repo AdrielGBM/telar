@@ -76,8 +76,8 @@ fn a_panic_mid_build_leaves_the_stack_where_it_found_it() {
 
 #[test]
 fn a_surface_disposes_the_owner_roots_stamped_with_it() {
-    let surface = SurfaceHandle(41);
-    // `SurfaceHandle::enter` delegates to a hook a higher crate installs, and with none installed it leaves the current surface alone, so the stamp has to be set through the primitive the hook itself calls.
+    let surface = SurfaceHandle::from_raw(41);
+    // With no enter hook installed, `SurfaceHandle::with_entered` leaves the current surface alone, so the stamp is set directly.
     let held = {
         let previous = crate::set_current_surface(surface);
         let scope = owner_scope();
@@ -104,7 +104,7 @@ fn a_surface_disposes_the_owner_roots_stamped_with_it() {
 
 #[test]
 fn a_root_scope_opened_inside_another_belongs_to_its_surface_and_not_to_that_scope() {
-    let surface = SurfaceHandle(42);
+    let surface = SurfaceHandle::from_raw(42);
     let outer = owner_scope();
     provide_context(7u8);
     let (held, saw_context) = {
@@ -136,8 +136,8 @@ fn a_root_scope_opened_inside_another_belongs_to_its_surface_and_not_to_that_sco
 /// A process-wide cache first reached during one window's build: closing that window must not free what every other window still reads from it.
 #[test]
 fn an_owner_opened_detached_outlives_the_surface_that_was_active() {
-    let first = SurfaceHandle(43);
-    let second = SurfaceHandle(44);
+    let first = SurfaceHandle::from_raw(43);
+    let second = SurfaceHandle::from_raw(44);
     let previous = crate::set_current_surface(first);
     let cache = crate::detached(|| owner_scope().id());
     let cached = with_owner(Some(cache), || signal(String::from("cached")));
@@ -181,7 +181,7 @@ fn an_owner_that_holds_nothing_allocates_nothing() {
 
     RUNTIME.with(|rt| {
         let rt = rt.borrow();
-        let entry = &rt.owners[owner];
+        let entry = &rt.owners[owner.key];
         assert_eq!(entry.children.capacity(), 0);
         assert_eq!(entry.signals.capacity(), 0);
         assert_eq!(entry.effects.capacity(), 0);
@@ -362,4 +362,12 @@ fn a_teardown_that_panics_while_the_thread_unwinds_leaves_the_first_panic_to_fin
 
     let payload = unwound.expect_err("the first panic unwinds");
     assert_eq!(payload.downcast_ref::<&str>(), Some(&"first"));
+}
+
+#[test]
+fn an_owner_id_prints_only_its_key() {
+    let scope = owner_scope();
+    let printed = format!("{:?}", scope.id());
+    assert!(printed.starts_with("OwnerId("), "{printed}");
+    assert!(!printed.contains("PhantomData"), "{printed}");
 }

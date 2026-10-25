@@ -301,10 +301,11 @@ fn run_a_session(library: &Path) {
     let mut tree = app.mount();
     app.relayout();
     assert_eq!(app.take_panic(), None, "precondition: the tree mounts");
-    app.begin_event_batch();
-    let overlaid = app.dispatch_overlays(&hover());
-    let handled = tree.on_event(&hover());
-    app.end_event_batch();
+    let mut dispatched = None;
+    app.in_event_batch(&mut || {
+        dispatched = Some((app.dispatch_overlays(&hover()), tree.on_event(&hover())));
+    });
+    let (overlaid, handled) = dispatched.expect("the dispatch ran");
     app.relayout();
     assert_eq!(app.take_panic(), None, "precondition: the move is handled");
     assert!(!overlaid, "precondition: no overlay takes the move");

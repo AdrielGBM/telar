@@ -15,8 +15,7 @@ pub use component::{Component, EventResult};
 pub use dev::{BuildOutcome, DevAction, DevOverlay, OverlayResponse};
 pub use element::{element_capture, set_element_capture};
 pub use overlay_dispatch::{
-    OverlayContext, OverlayGuard, OverlaySink, dispatch_overlays, register_overlay,
-    unregister_overlay,
+    OverlayContext, OverlaySink, dispatch_overlays, register_overlay, unregister_overlay,
 };
 pub use render_node::{NodeVec, RenderNode};
 pub use segment::{Segment, SegmentNodeInfo, SegmentRoot};

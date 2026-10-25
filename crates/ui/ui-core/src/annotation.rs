@@ -15,7 +15,7 @@ reactive_core::surface_local! {
     /// Per surface: node ids are minted per surface, so one map would have windows overwrite each other's annotations.
     slot ANNOTATIONS: Annotations = Annotations::default();
     access with_annotations, with_annotations_ref;
-    context AnnotationsContext, AnnotationsGuard;
+    context AnnotationsContext;
 }
 
 #[derive(Default)]
