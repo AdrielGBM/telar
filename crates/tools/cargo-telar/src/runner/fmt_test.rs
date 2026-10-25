@@ -12,7 +12,7 @@ fn collected(root: &Path, scope: &Path) -> Vec<String> {
     found.sort();
     found
         .iter()
-        .map(|path| path.strip_prefix(root).unwrap().display().to_string())
+        .map(|path| telar_project::relative_slashed(path, root).unwrap())
         .collect()
 }
 

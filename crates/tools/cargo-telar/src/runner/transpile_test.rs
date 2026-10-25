@@ -15,7 +15,7 @@ fn package(name: &str) -> PathBuf {
 #[test]
 fn a_refused_source_is_recorded_for_the_macro_to_report() {
     let root = package("refused");
-    let broken = root.join("src/broken.rsx");
+    let broken = root.join("src").join("broken.rsx");
     std::fs::write(&broken, "[view]\ncol\n    text \"oops\n").unwrap();
 
     assert!(!transpile_member(&root, "test", "0.0.0"));

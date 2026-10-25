@@ -508,11 +508,8 @@ pub(super) fn artifact_problems(package_dir: &Path, telar_version: &str) -> Vec<
             telar_project::ModuleTree::discover(&src_dir, &generated_dir, plain.site_file_name())
                 .first_difference()
     {
-        let shown = stale
-            .strip_prefix(package_dir)
-            .unwrap_or(stale)
-            .display()
-            .to_string();
+        let shown = telar_project::relative_slashed(stale, package_dir)
+            .unwrap_or_else(|| stale.display().to_string());
         problems.push(format!(
             "the module tree file `{shown}` is missing or out of date: a Rust module was added, moved or removed after the transpile. {RETRANSPILE}"
         ));

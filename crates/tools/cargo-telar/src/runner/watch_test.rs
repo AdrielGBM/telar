@@ -513,9 +513,12 @@ fn adopted_within(channel: &mut HotChannel, timeout: Duration) -> bool {
 
 fn first_line(stream: TcpStream) -> String {
     use std::io::BufRead;
-    stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
-        .unwrap();
+    match stream.set_read_timeout(Some(Duration::from_secs(5))) {
+        Ok(()) => {}
+        // macOS refuses socket options with EINVAL once the peer has torn the connection down, which is the hang-up the callers look for.
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidInput => return String::new(),
+        Err(error) => panic!("could not set a read timeout: {error}"),
+    }
     let mut line = String::new();
     let _ = BufReader::new(stream).read_line(&mut line);
     line

@@ -63,6 +63,7 @@ pub use icons::{
 };
 pub use library::{
     ICONS_LIBRARY_RECORD_FILENAME, library_files, library_include, library_include_covers,
+    relative_slashed,
 };
 pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, RendererBackend,

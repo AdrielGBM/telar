@@ -92,7 +92,7 @@ pub fn library_files(package_dir: &Path) -> Vec<String> {
     files
 }
 
-fn relative_slashed(path: &Path, base: &Path) -> Option<String> {
+pub fn relative_slashed(path: &Path, base: &Path) -> Option<String> {
     let relative = path.strip_prefix(base).ok()?;
     Some(
         relative

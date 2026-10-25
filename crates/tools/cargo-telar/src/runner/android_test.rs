@@ -44,9 +44,13 @@ fn a_value_naming_an_existing_directory_stays_literal() {
 #[test]
 fn the_keystore_path_is_resolved_against_the_workspace_root() {
     let dir = tempfile::tempdir().unwrap();
+    let absolute = dir.path().join("abs").join("dev.keystore");
     std::fs::write(
         dir.path().join(".env"),
-        "CARGO_APK_RELEASE_KEYSTORE=release.keystore\nCARGO_APK_DEV_KEYSTORE=/abs/dev.keystore\n",
+        format!(
+            "CARGO_APK_RELEASE_KEYSTORE=release.keystore\nCARGO_APK_DEV_KEYSTORE={}\n",
+            absolute.display()
+        ),
     )
     .unwrap();
     let entries = dotenv_entries(dir.path()).unwrap();
@@ -57,7 +61,7 @@ fn the_keystore_path_is_resolved_against_the_workspace_root() {
     )));
     assert!(entries.contains(&(
         "CARGO_APK_DEV_KEYSTORE".to_string(),
-        "/abs/dev.keystore".to_string()
+        absolute.to_string_lossy().into_owned()
     )));
 }
 
