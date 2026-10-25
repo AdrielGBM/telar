@@ -100,7 +100,7 @@ fn a_named_drawer_is_a_dialog_to_a_reader() {
     let tree = ComponentList::new(drawer);
     relayout_if_dirty();
 
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
     assert!(
         nodes
             .iter()
@@ -130,7 +130,7 @@ fn open_drawer(props: DrawerProps) -> telar::testing::Scoped<ComponentList> {
 }
 
 fn panel(tree: &ComponentList) -> (telar::Rect, RectStyle) {
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
     let panel = nodes
         .iter()
         .find(|node| node.role == Role::Dialog)
@@ -295,7 +295,7 @@ fn a_tall_body_scrolls_inside_a_panel_as_tall_as_the_window() {
     let stops = telar::focus::exposed()
         .into_iter()
         .filter(|exposed| exposed.role == Role::ScrollArea)
-        .filter_map(|exposed| ui_core::visible_rect(exposed.node))
+        .filter_map(|exposed| telar::visible_rect(exposed.node))
         .collect::<Vec<_>>();
     assert_eq!(
         stops.len(),
@@ -304,7 +304,7 @@ fn a_tall_body_scrolls_inside_a_panel_as_tall_as_the_window() {
     );
     assert!(stops[0].y + stops[0].height <= rect.y + rect.height);
 
-    let names: Vec<String> = ui_core::accessibility::snapshot(&tree.commands())
+    let names: Vec<String> = telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .filter(|node| node.role == Role::ScrollArea)
         .map(|node| node.name)

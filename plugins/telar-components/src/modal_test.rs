@@ -249,7 +249,7 @@ fn a_reader_meets_the_dialog_under_its_title() {
     let tree = ComponentList::new(modal);
     relayout_if_dirty();
 
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
     let dialogs: Vec<&str> = nodes
         .iter()
         .filter(|node| node.role == Role::Dialog)
@@ -350,7 +350,7 @@ fn open_modal(props: ModalProps) -> telar::testing::Scoped<ComponentList> {
 
 /// The dialog card's paint, found where a reader is told the dialog is.
 fn card_paint(tree: &ComponentList) -> RectStyle {
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
     let dialog = nodes
         .iter()
         .find(|node| node.role == Role::Dialog)
@@ -521,7 +521,7 @@ fn tall_body(lines: usize) -> Slots {
 }
 
 fn card_rect(tree: &ComponentList) -> telar::Rect {
-    ui_core::accessibility::snapshot(&tree.commands())
+    telar::inspect::snapshot(&tree.commands())
         .iter()
         .find(|node| node.role == Role::Dialog)
         .expect("the modal is open")
@@ -592,7 +592,7 @@ fn a_tall_body_scrolls_inside_a_card_that_fits_the_window() {
     let stops = telar::focus::exposed()
         .into_iter()
         .filter(|exposed| exposed.role == Role::ScrollArea)
-        .filter_map(|exposed| ui_core::visible_rect(exposed.node))
+        .filter_map(|exposed| telar::visible_rect(exposed.node))
         .collect::<Vec<_>>();
     assert_eq!(
         stops.len(),
@@ -615,7 +615,7 @@ fn a_short_body_is_no_stop_of_its_own() {
 
 /// The body as a document has it: the box its scroll area is, if it has one, carrying its name and whether Tab stops on it.
 fn body_in_document(body: impl FnOnce() -> Slots) -> Option<(Option<String>, bool)> {
-    let was = ui_tree::set_element_capture(true);
+    let was = telar::testing::set_element_capture(true);
     let tree = open_modal_with(body, (600.0, 400.0));
     let body = tree.commands().iter().find_map(|command| match command {
         DrawCommand::PushElement { element } if element.semantics.role == Role::ScrollArea => {
@@ -626,7 +626,7 @@ fn body_in_document(body: impl FnOnce() -> Slots) -> Option<(Option<String>, boo
         }
         _ => None,
     });
-    ui_tree::set_element_capture(was);
+    telar::testing::set_element_capture(was);
     body
 }
 
@@ -634,7 +634,7 @@ fn body_in_document(body: impl FnOnce() -> Slots) -> Option<(Option<String>, boo
 fn a_body_that_scrolls_is_a_stop_named_after_the_dialog() {
     plain_theme(None);
     let tree = open_modal_with(|| tall_body(40), (600.0, 400.0));
-    let names: Vec<String> = ui_core::accessibility::snapshot(&tree.commands())
+    let names: Vec<String> = telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .filter(|node| node.role == Role::ScrollArea)
         .map(|node| node.name)

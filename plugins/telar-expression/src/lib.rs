@@ -10,13 +10,13 @@
 //!
 //! **Functions come in families.** [`Registry::standard`] carries [`families::text`], [`families::math`], [`families::list`] and [`families::color`]. A host adds its own the same way: a function that registers forms with typed [`Signature`]s.
 //!
-//! **Reactive binding.** [`bind`] turns a compiled expression and a resolver reading the host's signals into a [`Memo`](reactive_core::Memo) whose dependencies are exactly what the last evaluation read, and [`bind_held`] keeps the last good value through an error.
+//! **Reactive binding.** [`bind`] turns a compiled expression and a resolver reading the host's signals into a [`Memo`](telar::Memo) whose dependencies are exactly what the last evaluation read, and [`bind_held`] keeps the last good value through an error.
 //!
 //! **Localizing errors.** An [`Error`] carries an [`ErrorCode`], an enum whose variants hold the values the message is built from — the types expected and found, the name, the function and its signatures, the limit. [`ErrorCode::key`] is a stable snake_case id (`"unknown_name"`, `"argument_count"`), and the variant's public fields are the arguments (types, patterns, signatures and references implement `Display`), so a host maps key and fields to an entry in its own catalogue and keeps [`Error::span`] for the caret. `Display` for [`ErrorCode`] and [`Error`], [`Error::message`] and [`render`] are the English wording, so a host that does not localize needs nothing more. A failure only the host knows — an unknown field on its source, a reading with no value yet — is a [`HostError`]: [`Environment::reference`], [`Resolver::read`] and a family's [`CallError`] return one (as [`ErrorCode::Host`]), carrying the host's own catalogue key, its arguments and the English message. The crate prints that message and never interprets the key.
 //!
 //! **A calculator for free.** [`calculate`] evaluates a closed numeric expression with the standard functions. It is strict on purpose — a trailing word, an unknown name or a non-finite result is an error, not a guess — so text that is not a sum is told apart from one, and [`format_number`] prints the answer the way a calculator does.
 //!
-//! **A second dependency, like `telar-dynamic`.** It knows nothing of `telar`, and `telar` neither re-exports it nor names it in a feature, since most applications never bind a property to a formula. One that does names this crate beside `telar`, and keeps the two on one version — the same lockstep `telar` and `telar-macros` already have.
+//! **A second dependency, like `telar-dynamic`.** It reaches the kernel through `telar`, which neither re-exports it nor names it in a feature, since most applications never bind a property to a formula. One that does names this crate beside `telar`, and keeps the two on one version — the same lockstep `telar` and `telar-macros` already have.
 //!
 //! # Feature flags
 #![cfg_attr(
@@ -56,7 +56,7 @@ pub use value::{MAX_TEXT_BYTES, Value, format_number};
 ///
 /// Strict, which is the point of it for a launcher evaluating every keystroke: `2 + 3 firefox`, `sqrt` without brackets, `1/0` and anything that is not a number are errors, so text that is really an application's name is never mistaken for a sum.
 pub fn calculate(source: &str) -> Result<f64, Error> {
-    reactive_core::released_static! {
+    telar::released_static! {
         static STANDARD: std::sync::Arc<Registry> = std::sync::Arc::new(Registry::standard());
     }
     let compiled = compile(source, &Closed, &STANDARD.get())

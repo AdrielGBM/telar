@@ -19,27 +19,28 @@ rustdoc-args = ["--cfg", "docsrs"]
 #! features enabled is the seam's vocabulary and a disk cache — no parser, no HTTP client, no codecs.
 #!
 #! **Names here drop the qualifier the rest of the workspace carries**, because this whole crate is the
-#! qualifier: `svg` is what `telar` and `ui-core` call `dynamic-svg`, and `catalog` is their
-#! `runtime-catalog`. Nothing in here is baked or linked ahead of time, so saying so in every name would
+#! qualifier: `svg` and `svg-text` are what `telar` calls `dynamic-svg` and `dynamic-svg-text`, and
+#! `catalog` is its `runtime-catalog`. Nothing in here is baked or linked ahead of time, so saying so in every name would
 #! only be loud.
 default = []
 #! ## Formats
 
 ## SVG parsed at runtime, through `usvg`/`resvg`. Covers `<image>` inside the document too: an SVG parser
 ## that drops the rasters it is pointed at without saying so is a latent bug, not a knob.
-svg = ["renderer-assets/dynamic-svg"]
+svg = ["telar/dynamic-svg"]
 
 ## `<text>` in an SVG parsed at runtime: a shaper, a font database and an outline rasterizer, ~1.6 MB of
 ## wasm for something most icon sets never use. An SVG baked at build time keeps its text either way.
-svg-text = ["svg", "renderer-assets/svg-text"]
+svg-text = ["svg", "telar/dynamic-svg-text"]
 
 ## Bitmaps decoded at runtime. PNG and JPEG come with it; every other format is one knob of its own below.
 image = ["dep:image"]
 
 ## A typeface loaded at run time, through `FontDecoder`: a downloaded face, one the user picked, or one that came
-## with a language pack. Costs the glyph shaper, which is why it is a knob and not a given — a build that draws
-## as a document has none, and lets the browser load its fonts through CSS.
-font = ["dep:renderer-text"]
+## with a language pack. Costs the font database the glyph shaper reads, which is why it is a knob and not a
+## given, and turns on no shaper of its own: the faces are drawn by a build that already shapes its text, and a
+## build that draws as a document lets the browser load its fonts through CSS instead.
+font = ["telar/font-faces"]
 
 ## A translation catalog parsed from TOML at runtime, so a downloaded locale resolves through the same
 ## transport/cache/decoder path an icon does — validated before it is cached, which a plain download is not.
@@ -47,7 +48,7 @@ font = ["dep:renderer-text"]
 ## The same switch as `telar/runtime-catalog`, reached for a different reason: that one is for an application
 ## that already holds the TOML and calls `set_catalog` itself, this one for a catalog that arrives over a
 ## transport. An application doing both names either — they resolve to one parser.
-catalog = ["i18n-core/runtime-catalog"]
+catalog = ["telar/runtime-catalog"]
 #! ## Sources
 
 ## Bytes read from a directory on disk, through `DirTransport`. Adds no dependency: the whole transport is
@@ -96,15 +97,7 @@ image-webp = ["image", "image/webp"]
 document-features = ["dep:document-features"]
 
 [dependencies]
-geometry-core = { workspace = true }
-i18n-core = { workspace = true }
-reactive-core = { workspace = true }
-renderer-assets = { workspace = true }
-# The weight-budgeted LRU every renderer cache is already an instance of. `MemoryCache` is one more, so an asset cache reads its eviction rules from where the renderer's are written down instead of rewriting them.
-renderer-cache = { workspace = true }
-renderer-core = { workspace = true }
-renderer-text = { workspace = true, optional = true }
-ui-core = { workspace = true, features = ["async-assets"] }
+telar = { workspace = true, features = ["async-assets"] }
 
 document-features = { workspace = true, optional = true }
 image = { workspace = true, features = ["png", "jpeg"], optional = true }
@@ -133,13 +126,10 @@ web-sys = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-reactive-core = { workspace = true }
-renderer-assets = { workspace = true }
 # Self-referencing so `src/http_assets_test.rs` gets the transport and the decoder it exercises without them
 # being defaults every dependent links. That test is real coverage of the HTTP path end to end, not an
 # `--all-features`-only extra.
 telar-dynamic = { path = ".", features = ["http", "svg"] }
-ui-core = { workspace = true }
 
 # docs.rs builds with everything on, so every decoder and transport is visible from one page rather than
 # just the ones a default build happens to carry — which here is none of them.

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use geometry_core::Color;
+use telar::Color;
 
 use crate::{Error, ErrorCode, Found, Reference, Span};
 

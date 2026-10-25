@@ -43,7 +43,7 @@ impl Ends {
 /// [`canvas`] with its handle telling `ends` as its drags start and end.
 fn canvas_reporting(start: f32, ends: Ends) -> Canvas {
     fresh_layout_runtime();
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     telar::focus::clear();
     let value = signal(start);
     let clamped = signal(false);

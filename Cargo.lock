@@ -5779,6 +5779,7 @@ dependencies = [
  "telar",
  "telar-geometry-core",
  "telar-i18n-core",
+ "telar-icons-core",
  "telar-layout-core",
  "telar-macros",
  "telar-motion-core",
@@ -5792,6 +5793,7 @@ dependencies = [
  "telar-project",
  "telar-reactive-core",
  "telar-renderer-assets",
+ "telar-renderer-cache",
  "telar-renderer-core",
  "telar-renderer-dom",
  "telar-renderer-hardware",
@@ -5861,9 +5863,6 @@ dependencies = [
  "js-sys",
  "telar",
  "telar-icons",
- "telar-renderer-dom",
- "telar-ui-core",
- "telar-ui-tree",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -5897,15 +5896,8 @@ dependencies = [
  "image",
  "js-sys",
  "sha2",
+ "telar",
  "telar-dynamic",
- "telar-geometry-core",
- "telar-i18n-core",
- "telar-reactive-core",
- "telar-renderer-assets",
- "telar-renderer-cache",
- "telar-renderer-core",
- "telar-renderer-text",
- "telar-ui-core",
  "tracing",
  "ureq",
  "wasm-bindgen",
@@ -5937,8 +5929,7 @@ name = "telar-expression"
 version = "0.2.2"
 dependencies = [
  "document-features",
- "telar-geometry-core",
- "telar-reactive-core",
+ "telar",
 ]
 
 [[package]]
@@ -5979,8 +5970,6 @@ version = "0.2.2"
 dependencies = [
  "telar",
  "telar-dynamic",
- "telar-icons-core",
- "telar-ui-core",
  "tracing",
 ]
 
@@ -6478,8 +6467,6 @@ dependencies = [
  "telar-devtools",
  "telar-icons",
  "telar-navigate",
- "telar-project",
- "telar-theme-core",
  "tiny-skia 0.12.0",
 ]
 

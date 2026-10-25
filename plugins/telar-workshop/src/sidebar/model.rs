@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use telar::preview::PreviewEntry;
+use telar::preview::host::title_path;
 use telar_components::{TreeNode, fuzzy_match};
-use telar_project::protocol::title_path;
 
 /// The tree of `entries` whose package, title, name or tags match `query`, grouped by package when there is more than one and then by title path, with `badge` naming what a preview's row carries. An empty query keeps every preview.
 pub(super) fn tree(

@@ -24,16 +24,22 @@ workshop only under its feature, so no shipping build compiles either.
 
 `crates/` holds `telar`, the kernel crates behind it, and host-side tooling in `crates/tools/`. A crate that a
 `telar` feature pulls in and compiles into the target is core and lives there, even when it is opt-in.
-Nothing under `crates/` may depend on `plugins/`, in any dependency kind, and
-`.github/scripts/check-layering.sh` fails the build when something does: the facade never names a plugin,
-and a plugin reaches an application through the application's own manifest. A plugin you write outside this
-repo has no such constraint beyond the next two sections.
+
+The layering runs one way, in every dependency kind, tests included. Nothing under `crates/` depends on
+`plugins/`: the facade never names a plugin, and a plugin reaches an application through the application's own
+manifest. And a plugin depends on no crate under `crates/` but `telar`: what it needs from the kernel is
+re-exported by the facade, and what only a plugin needs sits behind the features `telar` lists under *For
+plugins*, hidden from its documentation. `.github/scripts/check-layering.sh` fails the build on either.
+
+That check sees only this workspace. A plugin you write outside it should hold itself to the second rule all the
+same: depend on `telar` and nothing behind it. The kernel crates are published because `telar` is built from
+them, not as an API of their own, and naming one directly is the easiest way to end up with the two copies the
+next section describes. A plugin that needs something the facade does not re-export is a request for the facade.
 
 ## Versioning: in lockstep with `telar`
 
-Every kernel type a plugin takes or returns is reached through the facade. Two versions of `telar` in one
-build resolve to two copies of the kernel, and a widget built by one stops being the `LayoutItem` the other's
-tree accepts: a type error naming one trait twice. So a plugin is released at the version of the `telar` it was
+Two versions of `telar` in one build resolve to two copies of the kernel, and a widget built by one stops being
+the `LayoutItem` the other's tree accepts: a type error naming one trait twice. So a plugin is released at the version of the `telar` it was
 written against and says so in its crate docs, as [`telar-components`](../plugins/telar-components/src/lib.rs)
 does. A Rust plugin depends on `telar` by that exact name, because `#[telar::component]`, `t!` and generated
 code spell `::telar::…` and `use telar::*`; a renamed dependency is not supported.

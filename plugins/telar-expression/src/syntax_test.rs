@@ -127,7 +127,7 @@ fn resolver(reference: &Reference) -> Result<Value, HostError> {
         "n" => Ok(Value::Number(f64::MAX)),
         "t" => Ok(Value::text("ünïcode")),
         "l" => Ok(Value::list([Value::Number(1.0), Value::Number(-0.0)])),
-        "c" => Ok(Value::Color(geometry_core::Color::TRANSPARENT)),
+        "c" => Ok(Value::Color(telar::Color::TRANSPARENT)),
         "b" => Err(HostError::new("pending", "not yet")),
         _ => Err(HostError::new("unreachable", "unreachable")),
     }

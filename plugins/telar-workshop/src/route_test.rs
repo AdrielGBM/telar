@@ -230,7 +230,7 @@ fn words_a_link_cannot_mean_are_passed_over() {
 
 #[test]
 fn every_page_an_export_writes_opens_its_own_route_at_the_directory_a_static_host_serves() {
-    use telar_project::protocol::{ListedPreview, workshop_pages};
+    use telar::preview::host::{ListedPreview, workshop_pages};
     let listed = |id: &str, title: &str| ListedPreview {
         id: id.to_string(),
         package: "demo".to_string(),
@@ -298,7 +298,7 @@ const AWKWARD_TITLES: [&str; 7] = [
 
 #[test]
 fn a_docs_page_reaches_its_route_as_its_key_and_back() {
-    use telar_project::protocol::docs_key;
+    use telar::preview::host::docs_key;
     for title in AWKWARD_TITLES {
         let route = WorkshopRoute::new(Page::Docs(docs_key("demo", title).into()), true);
         let written = written(&route.to_location());
@@ -312,7 +312,7 @@ fn a_docs_page_reaches_its_route_as_its_key_and_back() {
 
 #[test]
 fn every_awkward_title_an_export_writes_opens_its_own_route() {
-    use telar_project::protocol::{ListedPreview, docs_key, workshop_pages};
+    use telar::preview::host::{ListedPreview, docs_key, workshop_pages};
     let previews: Vec<_> = AWKWARD_TITLES
         .iter()
         .enumerate()

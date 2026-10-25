@@ -131,7 +131,7 @@ impl Mounted {
     }
 
     fn read(&self) -> Vec<AccessNode> {
-        ui_core::accessibility::snapshot(&self.tree.commands())
+        telar::inspect::snapshot(&self.tree.commands())
     }
 
     fn of_role(&self, role: Role) -> Vec<AccessNode> {
@@ -389,7 +389,7 @@ struct Grid {
 impl Grid {
     fn mount(props: DataTableProps, children: Children) -> Self {
         crate::test_support::fresh_layout_runtime();
-        ui_core::reset_keyboard();
+        telar::testing::reset_keyboard();
         telar::focus::clear();
         telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
         let item = data_table(props, children).unwrap();
@@ -428,7 +428,7 @@ impl Grid {
     }
 
     fn read(&self) -> Vec<AccessNode> {
-        ui_core::accessibility::snapshot(&self.tree.commands())
+        telar::inspect::snapshot(&self.tree.commands())
     }
 
     fn find(&self, role: Role, name: &str) -> AccessNode {

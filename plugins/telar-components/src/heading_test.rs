@@ -33,7 +33,7 @@ fn title_style(build: impl FnOnce() -> Box<dyn LayoutItem>) -> Arc<TextStyle> {
 }
 
 fn exposed_roles(tree: &ComponentList) -> Vec<Role> {
-    ui_core::accessibility::snapshot(&tree.commands())
+    telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .map(|node| node.role)
         .collect()

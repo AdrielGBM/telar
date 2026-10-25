@@ -41,6 +41,9 @@ pub mod hot;
     all(feature = "web-dom", target_arch = "wasm32")
 ))]
 pub mod hot_state;
+#[cfg(feature = "icons")]
+#[doc(hidden)]
+pub mod icons;
 #[cfg(feature = "runtime")]
 mod location;
 #[cfg(feature = "runtime")]
@@ -255,11 +258,20 @@ pub fn install_default_text_metrics() {
     renderer_core::set_default_text_metrics(renderer_text::ShaperMetrics);
 }
 
+#[cfg(feature = "font-faces")]
+#[doc(hidden)]
+pub use renderer_text::fonts::install_face as install_font_face;
+
 #[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
 pub use platform_web::{PageHidden, WebStorage};
+#[cfg(any(feature = "software", feature = "async-assets"))]
+pub use renderer_cache::CacheStat;
+/// The weight-budgeted LRU every renderer cache is an instance of, and what bounds it, for an [`AssetCache`] that keeps bytes in memory.
+#[cfg(feature = "async-assets")]
+pub use renderer_cache::{Cache as LruCache, Policy as CachePolicy};
 /// What the CPU renderer's caches are holding, and a way to make them let go. Exposed so an app can answer "is the memory in the renderer?" from outside the renderer, which nothing short of a heap profiler could do before.
 #[cfg(feature = "software")]
-pub use renderer_software::{CacheStat, cache_stats, sweep_idle as sweep_renderer_caches};
+pub use renderer_software::{cache_stats, sweep_idle as sweep_renderer_caches};
 pub use services_core::app_paths as paths;
 pub use services_core::{AppPathsProvider, NoPaths};
 pub use services_core::{Clipboard, clipboard, clipboard_text, set_clipboard, set_clipboard_text};
@@ -313,8 +325,8 @@ pub use theme_core::{
     ThemeExtensions, ThemeTokens, active_mode, control_scale, current_control_size, follow_system,
     is_dark, nearest_control_size, nearest_theme, register_mode, register_mode_theme,
     registered_modes, scheme_mode, scheme_preference, set_control_size, set_mode, set_mode_scheme,
-    set_scheme_preference, set_theme, use_control_size, use_mode, use_resolved_scheme,
-    use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
+    set_scheme_preference, set_surface_control_size, set_theme, use_control_size, use_mode,
+    use_resolved_scheme, use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
@@ -367,7 +379,7 @@ pub use ui_core::{
     register_transaction_within, relayout_if_dirty, remove_node, requested_cursor, set_children,
     set_direction, set_display, set_min_height, set_overlay_host, shortcut_key, single_line_box,
     step_factor, style_follows, track_layout, transform_pointer, undeclare, use_context,
-    use_direction, use_dismiss_depth, visible_window,
+    use_direction, use_dismiss_depth, visible_rect, visible_window,
 };
 #[cfg(feature = "async-assets")]
 pub use ui_core::{

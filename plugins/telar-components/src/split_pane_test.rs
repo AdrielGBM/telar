@@ -30,7 +30,7 @@ impl Split {
 
     fn holding(props: SplitPaneProps, content: impl FnOnce() -> Slots) -> Self {
         crate::test_support::fresh_layout_runtime();
-        ui_core::reset_keyboard();
+        telar::testing::reset_keyboard();
         focus::clear();
         let (direction, sized) = (props.direction, props.sized);
         let item = split_pane(props, Children::from(content())).unwrap();
@@ -338,7 +338,7 @@ fn a_stacked_splitter_is_a_horizontal_bar() {
 fn splitter_name(props: SplitPaneProps) -> String {
     let split = Split::build(props);
     let tree = telar::ComponentList::new(split.item);
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
     nodes
         .iter()
         .find(|node| node.role == Role::Splitter)
@@ -555,7 +555,7 @@ fn reaches_half_a_gap_over_each_pane(direction: SplitDirection) {
         .map(|side| split.across(side * f64::from(bar_thickness() + 1.0)))
         .collect();
     let mut tree = telar::ComponentList::new(split.item);
-    let target = ui_core::accessibility::snapshot(&tree.commands())
+    let target = telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .find(|node| node.role == Role::Splitter)
         .expect("the splitter is announced")
@@ -714,7 +714,7 @@ fn a_region_holds_the_pane_that_takes_the_rest_and_the_splitter() {
             expected,
             "{direction:?} {sized:?}"
         );
-        let named = ui_core::accessibility::snapshot(&tree.commands())
+        let named = telar::inspect::snapshot(&tree.commands())
             .into_iter()
             .any(|node| node.role == Role::Main && node.name == "Workspace");
         assert!(

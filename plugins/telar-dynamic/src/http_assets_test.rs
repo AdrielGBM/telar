@@ -12,10 +12,10 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use reactive_core::drain_tasks;
-use renderer_assets::SvgData;
+use telar::SvgData;
+use telar::drain_tasks;
+use telar::{AssetCache, AssetLoader, AssetState};
 use telar_dynamic::{AssetKey, AssetTransport, DiskCache, HttpTransport, Reply, SvgDecoder};
-use ui_core::{AssetCache, AssetLoader, AssetState};
 
 const SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2 H22 V22 H2 Z"/></svg>"#;
 

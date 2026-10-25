@@ -49,7 +49,7 @@ impl Mounted {
     }
 
     fn read(&self) -> Vec<AccessNode> {
-        ui_core::accessibility::snapshot(&self.tree.commands())
+        telar::inspect::snapshot(&self.tree.commands())
     }
 
     fn node(&self, role: Role) -> Option<AccessNode> {

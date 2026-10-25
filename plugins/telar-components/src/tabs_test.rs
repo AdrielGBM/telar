@@ -104,7 +104,7 @@ fn the_bar_is_a_tab_list_a_reader_can_name() {
     .unwrap();
     lay_out(item.layout_node());
     let tree = ComponentList::new(item);
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
 
     let mut tabs: Vec<_> = nodes
         .iter()
@@ -208,7 +208,7 @@ fn a_trailing_item_is_drawn_but_not_part_of_the_tabs_name() {
     .unwrap();
     lay_out(item.layout_node());
     let tree = ComponentList::new(item);
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
     assert!(
         nodes
             .iter()

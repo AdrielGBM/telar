@@ -104,12 +104,14 @@ svg = ["ui-core?/svg"]
 
 ## The reactive seam for assets that arrive later: `AssetLoader` over the `AssetTransport` / `AssetCache` /
 ## `AssetDecoder` roles, which is reactive glue and nothing else — no decoder, no client, no format knobs.
+## The weight-budgeted LRU every renderer cache is an instance of comes with it as `LruCache`, bounded by a
+## `CachePolicy`, for a cache that keeps bytes in memory.
 ##
 ## The implementations live in the companion crate `telar-dynamic`: SVG, bitmaps and translation catalogs
 ## as decoders, HTTP and a directory as transports, each behind its own feature there. Depending on it is
 ## how an application gets a format; implementing these three traits is how it gets one we do not ship, and
 ## the two go in through the same door.
-async-assets = ["runtime", "ui-core/async-assets"]
+async-assets = ["runtime", "ui-core/async-assets", "dep:renderer-cache"]
 
 ## Dependency injection over the per-surface service scope.
 di = ["services-core/di"]
@@ -121,6 +123,29 @@ di = ["services-core/di"]
 ## same parser is behind `telar-dynamic`'s `catalog`, which routes it through the asset seam so a corrupt
 ## file fails before it is cached instead of after.
 runtime-catalog = ["i18n-core/runtime-catalog"]
+#! ## For plugins
+#!
+#! What a plugin in this workspace reaches the kernel through, since it may depend on no kernel crate but
+#! `telar`. Each turns on what one plugin feature needs and nothing an application would notice otherwise:
+#! no frontend, no `shaper`, no change to how text is measured or which fonts are scanned. An application
+#! names the plugin's feature instead, and what only these reach, `telar::icons` and `install_font_face`, is
+#! hidden from this documentation.
+
+## Parsing an SVG while the app runs, through `usvg`/`resvg`: `telar-dynamic`'s `svg`.
+dynamic-svg = ["runtime", "svg", "renderer-assets/dynamic-svg"]
+
+## `<text>` in an SVG parsed while the app runs, which costs usvg's own shaper and font database rather than
+## `shaper`: `telar-dynamic`'s `svg-text`.
+dynamic-svg-text = ["dynamic-svg", "renderer-assets/svg-text"]
+
+## Adding a font file's faces to the database text is shaped from, through `install_font_face`:
+## `telar-dynamic`'s `font`. Links that database without `shaper`, so a build that measures and draws its
+## text some other way goes on doing so.
+font-faces = ["runtime", "dep:renderer-text"]
+
+## The icon-set vocabulary `telar-icons` is written in, as `telar::icons`: icon ids, the Iconify format, the
+## sources an icon resolves through and the licence policy over them.
+icons = ["dep:icons-core"]
 #! ## Desktop extras
 #!
 #! Every one of these is in `desktop`, so a desktop build has the lot and nobody has to ask. They are
@@ -244,7 +269,7 @@ shaper = ["runtime", "dep:renderer-text"]
 hardware = ["runtime", "shaper", "dep:renderer-hardware", "dep:platform-headless"]
 
 ## The CPU rasterizer, on `tiny-skia`.
-software = ["runtime", "dep:renderer-software", "shaper"]
+software = ["runtime", "dep:renderer-software", "dep:renderer-cache", "shaper"]
 
 ## A desktop window with no renderer behind it, for a frontend installing its own through
 ## `run_with_platform_and_renderer`. `RendererBackend::Auto` resolves to whichever of `hardware`/`software`
@@ -257,6 +282,7 @@ android-bare = ["runtime", "dep:platform-android"]
 [dependencies]
 geometry-core = { workspace = true, optional = true }
 i18n-core = { workspace = true }
+icons-core = { workspace = true, optional = true }
 layout-core = { workspace = true, optional = true }
 # Always-on (D2): the motion engine is small, and the facade must expose `motion::*` for transpiler codegen whatever else is off.
 motion-core = { workspace = true }
@@ -267,6 +293,7 @@ platform-tui = { workspace = true, optional = true }
 preferences-core = { workspace = true }
 reactive-core = { workspace = true, optional = true }
 renderer-assets = { workspace = true, optional = true }
+renderer-cache = { workspace = true, optional = true }
 renderer-core = { workspace = true, optional = true }
 renderer-dom = { workspace = true, optional = true }
 renderer-hardware = { workspace = true, optional = true }

@@ -2,7 +2,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use ui_core::{AssetError, AssetKey, AssetTransport, Reply};
+use telar::{AssetError, AssetKey, AssetTransport, Reply};
 
 /// An [`AssetTransport`] that resolves each id against a directory.
 ///
@@ -31,7 +31,7 @@ impl DirTransport {
 }
 
 impl AssetTransport for DirTransport {
-    /// Blocking, like the native HTTP transport and for the same reason: the loader runs this on a job in `reactive_core`'s elastic pool, so a read that waits parks one pooled thread and nothing else.
+    /// Blocking, like the native HTTP transport and for the same reason: the loader runs this on a job in Telar's elastic pool, so a read that waits parks one pooled thread and nothing else.
     fn load(&self, key: &AssetKey, reply: Reply) {
         reply(self.read(&key.id));
     }

@@ -1,4 +1,4 @@
-use geometry_core::Color;
+use telar::Color;
 
 use crate::{
     Closed, ErrorCode, ErrorKind, HostError, Pattern, Reference, Registry, Signature, Span, Type,

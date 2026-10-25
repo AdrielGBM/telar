@@ -20,7 +20,7 @@ const NIGHT: Color = Color::rgb(0.05, 0.1, 0.3);
 #[derive(Clone)]
 struct Night;
 
-impl theme_core::ThemeTokens for Night {
+impl telar::ThemeTokens for Night {
     fn surface(&self) -> Color {
         NIGHT
     }
@@ -218,7 +218,7 @@ fn inside(inner: Rect, outer: Rect) -> bool {
 
 #[test]
 fn mode_locale_and_direction_restyle_the_canvas_and_never_the_chrome() {
-    theme_core::register_mode_theme("night", Night);
+    telar::register_mode_theme("night", Night);
     let mut workshop = Workshop::open(entries(environment));
     assert!(workshop.draws("env Ltr none"));
     let canvas = workshop.canvas_rect("env");
@@ -285,11 +285,11 @@ fn mode_locale_and_direction_restyle_the_canvas_and_never_the_chrome() {
 
 #[test]
 fn the_canvas_follows_the_system_scheme_as_it_changes_until_a_scheme_is_picked() {
-    theme_core::register_mode("day", || {});
-    theme_core::set_mode_scheme("day", ColorScheme::Light);
-    theme_core::register_mode_theme("night", Night);
-    theme_core::set_mode_scheme("night", ColorScheme::Dark);
-    theme_core::register_mode("dusk", || {});
+    telar::register_mode("day", || {});
+    telar::set_mode_scheme("day", ColorScheme::Light);
+    telar::register_mode_theme("night", Night);
+    telar::set_mode_scheme("night", ColorScheme::Dark);
+    telar::register_mode("dusk", || {});
     let mut workshop = Workshop::open(entries(environment));
     let canvas = workshop.canvas_rect("env");
     let night = |workshop: &Workshop| {
@@ -767,8 +767,8 @@ fn a_secondary_press_on_the_stage_offers_every_tool() {
 /// The theme mode is in the canvas's own menu too, so changing it does not mean going to the top bar.
 #[test]
 fn the_canvas_menu_switches_the_theme_mode() {
-    theme_core::register_mode_theme("night", Night);
-    theme_core::set_mode_scheme("night", ColorScheme::Dark);
+    telar::register_mode_theme("night", Night);
+    telar::set_mode_scheme("night", ColorScheme::Dark);
     let mut workshop = Workshop::open(entries(environment));
     let canvas = workshop.canvas_rect("env");
     let night = |workshop: &Workshop| {

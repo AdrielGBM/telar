@@ -22,7 +22,7 @@ fn build(
     seen: &Rc<RefCell<Vec<u32>>>,
 ) -> (Box<dyn LayoutItem>, Rect) {
     crate::test_support::fresh_layout_runtime();
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     telar::focus::clear();
     let sink = seen.clone();
     let item = swatches(

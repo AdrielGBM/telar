@@ -31,7 +31,7 @@ pub struct IconProps {
 
 /// Artwork ready to draw, and whether it takes the colour around it.
 ///
-/// `monochrome` is decided where the icon was resolved, by [`icons_core::is_monochrome`]: from the set's `palette` when it declares one, else from whether the SVG paints in `currentColor`. The renderer tints flat — every paint of the artwork becomes the one colour — so only a monochrome icon is tinted unasked.
+/// `monochrome` is decided where the icon was resolved: from the set's `palette` when it declares one, else from whether the SVG paints in `currentColor`. The renderer tints flat — every paint of the artwork becomes the one colour — so only a monochrome icon is tinted unasked.
 #[derive(Clone)]
 pub(crate) struct Glyph {
     pub svg: Arc<SvgData>,

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use renderer_assets::SvgData;
-use ui_core::{AssetDecoder, AssetError};
+use telar::SvgData;
+use telar::{AssetDecoder, AssetError};
 
 /// Decodes an SVG document into the `Arc<SvgData>` the `Svg` widget takes.
 ///

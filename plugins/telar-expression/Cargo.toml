@@ -22,8 +22,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 document-features = ["dep:document-features"]
 
 [dependencies]
-geometry-core = { workspace = true }
-reactive-core = { workspace = true }
+telar = { workspace = true, features = ["runtime"] }
 
 document-features = { workspace = true, optional = true }
 

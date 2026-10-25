@@ -69,7 +69,7 @@ impl Mounted {
     }
 
     fn node(&self, name: &str) -> telar::AccessNode {
-        ui_core::accessibility::snapshot(&self.tree.commands())
+        telar::inspect::snapshot(&self.tree.commands())
             .into_iter()
             .find(|node| node.role == Role::Button && node.name == name)
             .unwrap_or_else(|| panic!("a `{name}` button"))
@@ -265,7 +265,7 @@ fn one_notice(props: ToasterProps, queue: Toasts) -> telar::testing::Scoped<Comp
 
 /// The notice's card: the last box drawn over the whole of the region a reader is told about.
 fn card(tree: &ComponentList) -> (telar::Rect, RectStyle) {
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
     let region = nodes
         .iter()
         .find(|node| node.role == Role::Status)

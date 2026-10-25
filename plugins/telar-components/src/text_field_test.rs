@@ -405,7 +405,7 @@ mod multiline {
         }
 
         fn read(&self) -> Vec<AccessNode> {
-            ui_core::accessibility::snapshot(&self.tree.commands())
+            telar::inspect::snapshot(&self.tree.commands())
         }
 
         fn area(&self) -> AccessNode {

@@ -77,7 +77,7 @@ impl App for WorkshopApp {
     fn root(&self) -> Box<dyn Component> {
         reset_layout_runtime();
         // The window's own surface, not the thread: a canvas inside keeps the application's control size.
-        theme_core::set_surface_control_size(Some(WORKBENCH_CONTROL_SIZE));
+        telar::set_surface_control_size(Some(WORKBENCH_CONTROL_SIZE));
         let keeper = store::install();
         self.keeper.replace(keeper.clone()).flush();
         let state = WorkshopState::kept_in(

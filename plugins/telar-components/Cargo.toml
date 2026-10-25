@@ -64,8 +64,6 @@ web-time = { workspace = true }
 
 [dev-dependencies]
 telar = { workspace = true, features = ["previews", "shaper", "testing"] }
-ui-core = { workspace = true }
-ui-tree = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 telar = { workspace = true, features = ["headless"] }
@@ -73,7 +71,7 @@ telar = { workspace = true, features = ["headless"] }
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 
 js-sys = { workspace = true }
-renderer-dom = { workspace = true }
+telar = { workspace = true, features = ["web-dom"] }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 wasm-bindgen-test = { workspace = true }

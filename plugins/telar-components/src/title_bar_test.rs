@@ -30,7 +30,7 @@ fn controls(props: WindowControlsProps) -> telar::testing::Scoped<ComponentList>
 }
 
 fn nodes(tree: &ComponentList) -> Vec<telar::AccessNode> {
-    ui_core::accessibility::snapshot(&tree.commands())
+    telar::inspect::snapshot(&tree.commands())
 }
 
 /// What a reader hears each button called and where it is drawn, in order.
@@ -81,7 +81,7 @@ fn marks(tree: &ComponentList) -> Vec<PathData> {
 fn the_controls_are_minimize_maximize_and_close_in_a_group_named_window() {
     let tree = controls(WindowControlsProps::props().build());
     assert_eq!(names(&tree), ["Minimize", "Maximize", "Close"]);
-    let reading = ui_core::accessibility::FrameReading::of(&tree.commands());
+    let reading = telar::inspect::FrameReading::of(&tree.commands());
     assert!(
         reading
             .boxes()

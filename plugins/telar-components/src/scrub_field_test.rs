@@ -41,7 +41,7 @@ fn field_over(value: RwSignal<f32>, transaction: Transaction<f32>, min: f32, max
 
 fn fresh() {
     fresh_layout_runtime();
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     telar::focus::clear();
 }
 

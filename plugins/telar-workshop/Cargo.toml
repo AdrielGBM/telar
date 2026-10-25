@@ -30,8 +30,6 @@ telar-components = { workspace = true, features = ["workbench", "overlays", "chr
 telar-devtools = { workspace = true }
 telar-icons = { workspace = true }
 telar-navigate = { workspace = true }
-telar-project = { workspace = true }
-theme-core = { workspace = true }
 
 serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true }

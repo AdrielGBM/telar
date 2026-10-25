@@ -85,14 +85,14 @@ mod name;
 mod runtime;
 
 pub use icon::{IconProps, icon};
-pub use icons_core::{
-    Author, Icon, IconError, IconId, IconSet, IconSource, IconifyDir, License, SetInfo,
-    SourcedIcon, Sources, SvgDir,
-};
 pub use licenses::licenses;
 pub use name::IconName;
 #[cfg(feature = "runtime")]
 pub use runtime::RuntimeIcons;
+pub use telar::icons::{
+    Author, Icon, IconError, IconId, IconSet, IconSource, IconifyDir, License, SetInfo,
+    SourcedIcon, Sources, SvgDir,
+};
 #[cfg(all(feature = "runtime", not(target_arch = "wasm32")))]
 pub use telar_dynamic::DiskCache;
 #[cfg(feature = "runtime")]

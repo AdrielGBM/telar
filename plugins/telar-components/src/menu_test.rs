@@ -390,7 +390,7 @@ fn typed_pick(typed: &str) -> Option<u32> {
 
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
 
     let mut tree = telar::testing::scoped(|| ComponentList::new(typeahead_menu(seen.clone())));
@@ -442,7 +442,7 @@ fn a_modified_character_is_not_a_search() {
 
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     let seen: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
     let mut tree = ComponentList::new(typeahead_menu(seen.clone()));
 
@@ -460,7 +460,7 @@ fn a_modified_character_is_not_a_search() {
         ),
     );
     route(&mut tree, &named(NamedKey::Enter));
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
 
     assert_eq!(
         seen.get(),
@@ -1076,7 +1076,7 @@ fn a_row_s_shortcut_shows_as_the_platform_writes_it() {
                 _ => None,
             })
             .collect();
-        let rows: Vec<_> = ui_core::accessibility::snapshot(&tree.commands())
+        let rows: Vec<_> = telar::inspect::snapshot(&tree.commands())
             .into_iter()
             .filter(|node| node.role == telar::Role::MenuItem)
             .collect();

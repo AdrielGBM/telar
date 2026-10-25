@@ -133,7 +133,7 @@ fn an_icon_is_decoration_unless_it_is_named() {
     )
     .unwrap();
     let laid = lay_out(decorative, Color::RED);
-    assert!(ui_core::accessibility::snapshot(&laid.tree.commands()).is_empty());
+    assert!(telar::inspect::snapshot(&laid.tree.commands()).is_empty());
 
     reset_layout_runtime();
     let named = icon(
@@ -145,7 +145,7 @@ fn an_icon_is_decoration_unless_it_is_named() {
     )
     .unwrap();
     let laid = lay_out(named, Color::RED);
-    let nodes = ui_core::accessibility::snapshot(&laid.tree.commands());
+    let nodes = telar::inspect::snapshot(&laid.tree.commands());
     assert_eq!(nodes.len(), 1, "{nodes:?}");
     assert_eq!(nodes[0].name, "Home");
     assert_eq!(nodes[0].role, Role::Drawing);

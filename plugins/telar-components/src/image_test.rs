@@ -33,7 +33,7 @@ fn drawn_image(tree: &ComponentList) -> Option<telar::Rect> {
 }
 
 fn read(tree: &ComponentList) -> Vec<AccessNode> {
-    ui_core::accessibility::snapshot(&tree.commands())
+    telar::inspect::snapshot(&tree.commands())
 }
 
 fn texts(tree: &ComponentList) -> Vec<String> {

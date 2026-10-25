@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use ui_core::{AssetCache, AssetKey};
+use telar::{AssetCache, AssetKey};
 
 /// An [`AssetCache`] over a directory, laid out as `<root>/<kind>/<name>`.
 ///

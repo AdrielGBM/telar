@@ -1,11 +1,12 @@
 //! Reading a surface the way the inspection panels and the accessibility checks read it.
 //!
-//! [`a11y::check`] reports what would keep someone from using one surface, from a [`Frame`] of it; [`audit`] is what a reader is told about a whole surface and what checking it finds, the surfaces nested in its frame included, each read in its own world. The devtools and the workshop show the same audit, of the window and of a canvas, so the two agree wherever they show the same thing.
+//! [`snapshot`] is what a reader is told about the surface entered, read from the commands it drew, and [`FrameReading`] the same frame box by box, as a checker asks of it. [`a11y::check`] reports what would keep someone from using one surface, from a [`Frame`] of it and its snapshot; [`audit`] is what a reader is told about a whole surface and what checking it finds, the surfaces nested in its frame included, each read in its own world. The devtools and the workshop show the same audit, of the window and of a canvas, so the two agree wherever they show the same thing.
 
 pub mod a11y;
 pub(crate) mod frame;
 
 pub use frame::{Frame, FrameAccess};
+pub use ui_core::accessibility::{FrameReading, snapshot};
 
 use platform_core::AccessAudit;
 use ui_core::accessibility::{SurfaceTree, graft, surface_tree};

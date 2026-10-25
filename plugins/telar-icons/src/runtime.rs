@@ -38,7 +38,7 @@ pub use installed::RuntimeIcons;
 mod installed {
     use std::sync::Arc;
 
-    use icons_core::{IconError, IconId, IconSource};
+    use telar::icons::{IconError, IconId, IconSource};
     use telar::{
         AssetCache, AssetDecoder, AssetError, AssetKey, AssetLoader, AssetState, AssetTransport,
         Reply,
@@ -207,7 +207,7 @@ mod installed {
                 (false, svg)
             } else {
                 (
-                    icons_core::uses_current_color(&String::from_utf8_lossy(bytes)),
+                    telar::icons::uses_current_color(&String::from_utf8_lossy(bytes)),
                     bytes,
                 )
             };

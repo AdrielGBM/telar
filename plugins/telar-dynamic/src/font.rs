@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use ui_core::{AssetDecoder, AssetError};
+use telar::{AssetDecoder, AssetError};
 
 /// Decodes a font file and makes its faces available to every shaper in the process, handing back the family name to ask for them by.
 ///
@@ -32,7 +32,7 @@ impl AssetDecoder for FontDecoder {
     type Output = Arc<str>;
 
     fn decode(&self, bytes: &[u8]) -> Result<Self::Output, AssetError> {
-        let families = renderer_text::fonts::install_face(bytes.to_vec())
+        let families = telar::install_font_face(bytes.to_vec())
             .ok_or_else(|| AssetError::permanent("not a font file this build can read"))?;
         families
             .into_iter()

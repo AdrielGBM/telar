@@ -8,14 +8,13 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use telar::focus::{self, FocusId};
-use telar::preview::host::{Args, PreviewRequest, mount_preview};
+use telar::preview::host::{Args, PreviewRequest, docs_key, docs_path, mount_preview, title_path};
 use telar::preview::{ActionLog, ArgValue, PreviewCtx, PreviewEntry};
 use telar::{
     Container, LayoutError, LayoutItem, LayoutStyle, Memo, OwnerId, Route, RwSignal, Size,
     SurfaceCanvas, batch, box_item, effect, hot_signal, owner_scope, signal, with_owner,
 };
 use telar_devtools::Inspection;
-use telar_project::protocol::{docs_key, docs_path, title_path};
 
 use crate::arrangement::Arrangement;
 use crate::interactions::Interactions;

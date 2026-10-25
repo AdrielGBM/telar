@@ -96,7 +96,7 @@ impl Mounted {
     }
 
     fn read(&self) -> Vec<AccessNode> {
-        ui_core::accessibility::snapshot(&self.tree.commands())
+        telar::inspect::snapshot(&self.tree.commands())
     }
 
     fn pointed(&self) -> Option<String> {
@@ -243,7 +243,7 @@ fn a_row_builder_draws_the_row_while_the_list_keeps_it_a_choosable_option() {
     .unwrap();
     lay_out(item.layout_node(), 240.0, 300.0);
     let tree = ComponentList::new(item);
-    let options: Vec<String> = ui_core::accessibility::snapshot(&tree.commands())
+    let options: Vec<String> = telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .filter(|node| node.role == Role::Option)
         .map(|node| node.name)
@@ -291,7 +291,7 @@ impl Several {
 
     fn mount(items: Vec<ListRow>, wrap: bool) -> Self {
         crate::test_support::fresh_layout_runtime();
-        ui_core::reset_keyboard();
+        telar::testing::reset_keyboard();
         telar::focus::clear();
         telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
         let chosen = signal(BTreeSet::new());
@@ -339,7 +339,7 @@ impl Several {
     }
 
     fn click(&mut self, name: &str) {
-        let rect = ui_core::accessibility::snapshot(&self.tree.commands())
+        let rect = telar::inspect::snapshot(&self.tree.commands())
             .into_iter()
             .find(|node| node.role == Role::Option && node.name == name)
             .unwrap_or_else(|| panic!("{name}"))
@@ -358,7 +358,7 @@ impl Several {
     }
 
     fn options(&self) -> Vec<(String, Option<bool>)> {
-        ui_core::accessibility::snapshot(&self.tree.commands())
+        telar::inspect::snapshot(&self.tree.commands())
             .into_iter()
             .filter(|node| node.role == Role::Option)
             .map(|node| (node.name, node.toggled))
@@ -388,7 +388,7 @@ fn plain() -> telar::ModifiersState {
 #[test]
 fn a_list_of_several_choices_is_multiselectable_and_each_option_says_if_it_is_chosen() {
     let mut list = Several::new(fruit());
-    let read = ui_core::accessibility::snapshot(&list.tree.commands());
+    let read = telar::inspect::snapshot(&list.tree.commands());
     let listbox = read
         .iter()
         .find(|node| node.role == Role::ListBox)
@@ -491,7 +491,7 @@ fn a_list_of_one_choice_is_not_multiselectable_and_ignores_the_modifiers() {
 
 /// The words read inside a status.
 fn statuses(tree: &ComponentList) -> Vec<String> {
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
     nodes
         .iter()
         .filter(|node| {
@@ -596,7 +596,7 @@ fn long(count: usize) -> Vec<ListRow> {
 
 /// The list's view and the options built in it, by name, in window space.
 fn laid_options(tree: &ComponentList) -> (telar::Rect, Vec<(String, telar::Rect)>) {
-    let nodes = ui_core::accessibility::snapshot(&tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.commands());
     let view = nodes
         .iter()
         .find(|node| node.role == Role::ListBox)
@@ -830,7 +830,7 @@ fn shift_with_page_down_chooses_a_page_of_wrapped_rows() {
 #[test]
 fn the_list_box_holds_its_options() {
     let mounted = Mounted::new(fruit(), 400.0);
-    let nodes = ui_core::accessibility::snapshot(&mounted.tree.commands());
+    let nodes = telar::inspect::snapshot(&mounted.tree.commands());
     let list = nodes
         .iter()
         .position(|node| node.role == Role::ListBox)

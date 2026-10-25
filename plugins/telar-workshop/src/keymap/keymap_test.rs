@@ -269,9 +269,9 @@ fn alt_t_l_and_r_cycle_the_mode_locale_and_direction_back_to_the_previews_own() 
         ("ink", Some(ColorScheme::Dark)),
         ("sepia", None),
     ] {
-        theme_core::register_mode(id, || {});
+        telar::register_mode(id, || {});
         if let Some(scheme) = scheme {
-            theme_core::set_mode_scheme(id, scheme);
+            telar::set_mode_scheme(id, scheme);
         }
     }
     for mode in [

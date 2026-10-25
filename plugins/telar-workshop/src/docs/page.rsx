@@ -1,7 +1,7 @@
 [logic]
 use telar::preview::PreviewEntry;
+use telar::preview::host::title_path;
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens};
-use telar_project::protocol::title_path;
 
 use super::frame::{PreviewFrameProps, preview_frame};
 use super::preview_section::{PreviewSectionProps, preview_section};

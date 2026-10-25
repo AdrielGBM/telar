@@ -86,7 +86,7 @@ impl Mounted {
     fn new(start: Color, alpha: bool) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::set_locale("en");
-        ui_core::reset_keyboard();
+        telar::testing::reset_keyboard();
         focus::clear();
         let value = signal(start);
         let changes = Rc::new(RefCell::new(Vec::new()));
@@ -133,7 +133,7 @@ impl Mounted {
     }
 
     fn node(&self, role: Role, name: &str) -> Option<telar::AccessNode> {
-        ui_core::accessibility::snapshot(&self.tree.commands())
+        telar::inspect::snapshot(&self.tree.commands())
             .into_iter()
             .find(|node| node.role == role && node.name == name)
     }

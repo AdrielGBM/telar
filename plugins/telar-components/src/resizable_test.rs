@@ -11,7 +11,7 @@ const HEIGHT: f32 = 600.0;
 
 fn fresh() {
     crate::test_support::fresh_layout_runtime();
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     focus::clear();
 }
 
@@ -297,7 +297,7 @@ fn the_edges_are_named_by_their_side_unless_told_otherwise() {
     telar::set_locale("en");
     let names = |props: ResizableProps| {
         let tree = mount(props);
-        let mut names: Vec<String> = ui_core::accessibility::snapshot(&tree.commands())
+        let mut names: Vec<String> = telar::inspect::snapshot(&tree.commands())
             .into_iter()
             .filter(|node| node.role == Role::Splitter)
             .map(|node| node.name)

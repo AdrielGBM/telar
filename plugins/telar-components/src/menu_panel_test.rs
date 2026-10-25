@@ -171,7 +171,7 @@ fn lists() -> Vec<FocusId> {
 fn exposed_named(role: Role, rect: Rect) -> focus::Exposed {
     focus::exposed()
         .into_iter()
-        .find(|exposed| exposed.role == role && ui_core::visible_rect(exposed.node) == Some(rect))
+        .find(|exposed| exposed.role == role && telar::visible_rect(exposed.node) == Some(rect))
         .expect("the control is exposed")
 }
 
@@ -328,7 +328,7 @@ fn a_typed_letter_takes_the_cursor_to_the_row_it_names() {
         (40.0, 30.0),
         vec![Line::Row("abrir"), Line::Row("borrar"), Line::Row("buscar")],
     );
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     route(
         &mut tree,
         &key_with(Key::Char('b'), ModifiersState::default()),
@@ -338,7 +338,7 @@ fn a_typed_letter_takes_the_cursor_to_the_row_it_names() {
         &key_with(Key::Char('u'), ModifiersState::default()),
     );
     route(&mut tree, &named(NamedKey::Enter));
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     assert_eq!(*said.borrow(), vec!["cerrar", "buscar"]);
 }
 
@@ -729,7 +729,7 @@ fn a_menu_asked_for_from_the_keyboard_opens_under_the_focused_control() {
 #[test]
 fn the_context_menu_key_and_shift_f10_ask_for_a_context_menu() {
     assert!(is_context_menu_key(&Key::Named(NamedKey::ContextMenu)));
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     assert!(!is_context_menu_key(&Key::Named(NamedKey::F10)));
     assert!(!is_context_menu_key(&Key::Char('m')));
 }
@@ -1173,7 +1173,7 @@ fn exposed_named_by(role: Role) -> Rect {
         .into_iter()
         .find(|exposed| exposed.role == role)
         .expect("the row is exposed");
-    ui_core::visible_rect(exposed.node).expect("the row is laid out")
+    telar::visible_rect(exposed.node).expect("the row is laid out")
 }
 
 /// A switch stands where a tick would not: the labels of a panel with one keep the x they have without.

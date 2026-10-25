@@ -3,6 +3,8 @@
 //! Every application testing a Telar UI wrote the same three things: mount a tree at a size, find the text in it, and decide whether something actually drew. The last one is the one that goes wrong quietly — an icon-only widget draws a `Path` and no box, so a "did this render?" check that counts boxes reports it blank on a machine where it renders perfectly.
 //!
 //! The events a test drives a tree with live here too — a press, a release, a key — with [`route`], which hands one to the tree the way the runner does, and [`advance_time`], which lets a timer's wait pass.
+//!
+//! A wasm test that renders into a real document, to read it back the way a browser's own tooling would, draws through `DomRenderer` measuring with `CanvasTextMetrics`.
 
 use std::ops::{Deref, DerefMut};
 use std::time::Duration;
@@ -16,6 +18,11 @@ use ui_core::{Component, ComponentList, OwnedBuild};
 use crate::{
     Event, Key, LayoutStyle, ModifiersState, NamedKey, NodeId, PointerButton, PointerSource,
 };
+
+#[cfg(all(feature = "web-dom", target_arch = "wasm32"))]
+pub use renderer_dom::{CanvasTextMetrics, DomRenderer};
+pub use ui_core::reset_keyboard;
+pub use ui_tree::set_element_capture;
 
 /// Where a surface is repainted going from the frame `old` to the frame `new`, in window space: the regions the renderers' shared diff damages, a scroll's whole clip where the change inside it only scrolled, and nothing where nothing visible changed. `None` where the change reaches the whole surface.
 ///

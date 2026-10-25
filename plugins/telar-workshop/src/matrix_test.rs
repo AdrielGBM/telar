@@ -30,7 +30,7 @@ const AXES_MENU: &str = "Pick the matrix's axes";
 #[derive(Clone)]
 struct Day;
 
-impl theme_core::ThemeTokens for Day {
+impl telar::ThemeTokens for Day {
     fn surface(&self) -> Color {
         DAY
     }
@@ -39,15 +39,15 @@ impl theme_core::ThemeTokens for Day {
 #[derive(Clone)]
 struct Night;
 
-impl theme_core::ThemeTokens for Night {
+impl telar::ThemeTokens for Night {
     fn surface(&self) -> Color {
         NIGHT
     }
 }
 
 fn register_modes() {
-    theme_core::register_mode_theme("day", Day);
-    theme_core::register_mode_theme("night", Night);
+    telar::register_mode_theme("day", Day);
+    telar::register_mode_theme("night", Night);
 }
 
 fn widget(_: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -326,8 +326,8 @@ fn the_themes_matrix_shows_the_preview_in_every_registered_mode_side_by_side() {
 #[test]
 fn the_cells_follow_the_system_scheme_as_it_changes() {
     register_modes();
-    theme_core::set_mode_scheme("day", ColorScheme::Light);
-    theme_core::set_mode_scheme("night", ColorScheme::Dark);
+    telar::set_mode_scheme("day", ColorScheme::Light);
+    telar::set_mode_scheme("night", ColorScheme::Dark);
     let workshop = Workshop::open(BOTH_WAYS);
     assert_eq!(workshop.fills(DAY).len(), 2, "{:?}", workshop.texts());
     assert!(workshop.fills(NIGHT).is_empty());

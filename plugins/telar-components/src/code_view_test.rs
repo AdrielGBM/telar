@@ -127,7 +127,7 @@ impl Mounted {
     }
 
     fn button(&self, name: &str) -> Option<telar::AccessNode> {
-        ui_core::accessibility::snapshot(&self.tree.commands())
+        telar::inspect::snapshot(&self.tree.commands())
             .into_iter()
             .find(|node| node.role == Role::Button && node.name == name)
     }
@@ -317,7 +317,7 @@ fn a_style_amendment_restyles_the_frame() {
 }
 
 fn stop_names(mounted: &Mounted) -> Vec<String> {
-    ui_core::accessibility::snapshot(&mounted.tree.commands())
+    telar::inspect::snapshot(&mounted.tree.commands())
         .into_iter()
         .filter(|node| node.role == Role::ScrollArea)
         .map(|node| node.name)

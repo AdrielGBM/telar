@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 
-use reactive_core::{Memo, memo};
+use telar::{Memo, memo};
 
 use crate::{Compiled, Error, Resolver, Value};
 

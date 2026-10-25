@@ -3,7 +3,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use geometry_core::Color;
+use telar::Color;
 
 use crate::Type;
 

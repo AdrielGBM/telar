@@ -60,7 +60,7 @@ impl Mounted {
 
     fn mount(items: Vec<TreeNode>, height: f32, select_branches: bool, wrap: bool) -> Self {
         crate::test_support::fresh_layout_runtime();
-        ui_core::reset_keyboard();
+        telar::testing::reset_keyboard();
         focus::clear();
         let selected = signal(None);
         let expanded = signal(HashSet::new());
@@ -533,7 +533,7 @@ fn right_to_left_swaps_which_arrow_opens_and_which_shuts() {
 
 /// The name of the row a focused tree points a reader at, or `None` when it points at none.
 fn pointed(tree: &Mounted) -> Option<String> {
-    let nodes = ui_core::accessibility::snapshot(&tree.tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.tree.commands());
     let focused = nodes
         .iter()
         .find(|node| node.role == Role::Tree && node.focused)?;
@@ -660,7 +660,7 @@ fn long(count: usize) -> Vec<TreeNode> {
 
 /// The tree's view and the rows built in it, by name, in window space.
 fn laid_rows(tree: &Mounted) -> (Rect, Vec<(String, Rect)>) {
-    let nodes = ui_core::accessibility::snapshot(&tree.tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.tree.commands());
     let view = nodes
         .iter()
         .find(|node| node.role == Role::Tree)
@@ -816,7 +816,7 @@ fn the_tree_holds_every_row_it_shows() {
     let tree = Mounted::new(catalogue(), 400.0);
     tree.expanded.set(["inputs".into()].into_iter().collect());
     relayout_if_dirty();
-    let nodes = ui_core::accessibility::snapshot(&tree.tree.commands());
+    let nodes = telar::inspect::snapshot(&tree.tree.commands());
     let at = nodes
         .iter()
         .position(|node| node.role == Role::Tree)

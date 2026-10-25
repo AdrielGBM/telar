@@ -1,9 +1,9 @@
-//! Parsing one locale's TOML into the catalog `i18n_core::translate` reads.
+//! Parsing one locale's TOML into the catalog `telar::i18n::translate` reads.
 
-use i18n_core::Catalog;
-use ui_core::{AssetDecoder, AssetError};
+use telar::i18n::Catalog;
+use telar::{AssetDecoder, AssetError};
 
-/// Decodes a locale's TOML into the `&'static Catalog` [`i18n_core::set_catalog`] installs.
+/// Decodes a locale's TOML into the `&'static Catalog` [`telar::i18n::set_catalog`] installs.
 ///
 /// This is the half of i18n that arrives at run time: a downloaded or user-supplied language pack goes through the same transport → cache → decode path an icon does, which is what puts a corrupt TOML on the failure branch instead of into the cache. A catalog the transpiler baked needs none of this and links no parser.
 ///

@@ -134,7 +134,7 @@ fn label_builds_without_panicking() {
 #[test]
 fn only_the_focused_slider_answers_the_arrows() {
     crate::test_support::fresh_layout_runtime();
-    ui_core::reset_keyboard();
+    telar::testing::reset_keyboard();
     telar::focus::clear();
     let (volume, brightness) = (signal(0.5f32), signal(0.5f32));
     let mut sliders: Vec<_> = [volume, brightness]

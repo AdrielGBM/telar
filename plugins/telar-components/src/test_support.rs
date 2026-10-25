@@ -14,7 +14,7 @@ pub(crate) fn drawn(role: telar::focus::Role) -> Vec<telar::Rect> {
     telar::focus::exposed()
         .into_iter()
         .filter(|exposed| exposed.role == role)
-        .filter_map(|exposed| ui_core::visible_rect(exposed.node))
+        .filter_map(|exposed| telar::visible_rect(exposed.node))
         .collect()
 }
 

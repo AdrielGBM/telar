@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use reactive_core::{RwSignal, reset_runtime, signal};
+use telar::{RwSignal, reset_runtime, signal};
 
 use crate::{ErrorCode, HostError, Reference, Registry, Type, compile};
 
@@ -115,7 +115,7 @@ fn a_binding_notifies_onward_only_when_its_result_changes() {
     let bound = bind(Readings::compile("$a > 0"), readings.resolver());
     let runs = Rc::new(Cell::new(0));
     let counted = Rc::clone(&runs);
-    let _watch = reactive_core::effect(move || {
+    let _watch = telar::effect(move || {
         let _ = bound.get();
         counted.set(counted.get() + 1);
     });

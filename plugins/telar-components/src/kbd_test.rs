@@ -89,7 +89,7 @@ fn a_reader_hears_the_chord_once_and_not_each_cap() {
     )
     .unwrap();
     let tree = ComponentList::new(box_item(root));
-    let read: Vec<String> = ui_core::accessibility::snapshot(&tree.commands())
+    let read: Vec<String> = telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .map(|node| node.name)
         .collect();

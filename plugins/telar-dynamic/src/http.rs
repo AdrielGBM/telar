@@ -4,7 +4,7 @@
 
 use std::time::Duration;
 
-use ui_core::{AssetError, AssetKey, AssetTransport, Reply};
+use telar::{AssetError, AssetKey, AssetTransport, Reply};
 
 /// A transient failure — the shell often starts before the network is up at login — is retried within one fetch, and once those attempts run out it is still reported as transient so the loader asks again later; a genuine 404 is permanent and is neither retried nor asked for again.
 const DEFAULT_ATTEMPTS: u32 = 8;
@@ -179,7 +179,7 @@ mod native {
     }
 
     impl AssetTransport for HttpTransport {
-        /// Blocking on purpose, and only safe because of where it runs: a loader calls this from a job on `reactive_core`'s task pool, which is elastic precisely so that work waiting on I/O still makes progress. Sleeping between retries parks that one pooled thread and nothing else — no timer, no second queue, and a burst of icons still costs one connection at a time.
+        /// Blocking on purpose, and only safe because of where it runs: a loader calls this from a job on Telar's task pool, which is elastic precisely so that work waiting on I/O still makes progress. Sleeping between retries parks that one pooled thread and nothing else — no timer, no second queue, and a burst of icons still costs one connection at a time.
         fn load(&self, key: &AssetKey, reply: Reply) {
             reply(self.fetch(&key.id));
         }

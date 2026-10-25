@@ -10,11 +10,11 @@
 
 use std::sync::Arc;
 
+use telar::preview::host::title_path;
 use telar::preview::{
     ArgValue, control_size_word, direction_word, parse_control_size, parse_direction, parse_size,
 };
 use telar::{Location, Route};
-use telar_project::protocol::title_path;
 
 use crate::matrix::{CustomAxis, PickedAxis};
 use crate::settings::{Background, CanvasSettings, CanvasSize, ModeChoice, Zoom};
@@ -36,7 +36,7 @@ pub(crate) enum Page {
     Preview(Arc<str>),
     /// A preview's matrix, by the preview's id.
     Matrix(Arc<str>),
-    /// A component's docs, by the package and title its previews are listed under, as [`docs_key`](telar_project::protocol::docs_key) names them.
+    /// A component's docs, by the package and title its previews are listed under, as [`docs_key`](telar::preview::host::docs_key) names them.
     Docs(Arc<str>),
 }
 

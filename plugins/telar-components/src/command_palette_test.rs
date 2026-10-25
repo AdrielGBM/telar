@@ -116,7 +116,7 @@ impl Mounted {
     fn in_size(commands: Vec<Command>, width: f32, height: f32) -> Self {
         crate::test_support::fresh_layout_runtime();
         telar::set_locale("en");
-        ui_core::reset_keyboard();
+        telar::testing::reset_keyboard();
         focus::clear();
         let open = signal(false);
         let query = signal(String::new());
@@ -190,7 +190,7 @@ impl Mounted {
 
     /// The name of the row the focused field points a reader at.
     fn pointed(&self) -> Option<String> {
-        let nodes = ui_core::accessibility::snapshot(&self.tree.commands());
+        let nodes = telar::inspect::snapshot(&self.tree.commands());
         let field = nodes
             .iter()
             .find(|node| node.role == Role::TextInput && node.focused)?;
@@ -311,7 +311,7 @@ fn nothing_matching_says_so() {
 #[test]
 fn clicking_a_row_runs_its_command_and_clicking_the_scrim_runs_nothing() {
     let mut mounted = Mounted::opened();
-    let save = ui_core::accessibility::snapshot(&mounted.tree.commands())
+    let save = telar::inspect::snapshot(&mounted.tree.commands())
         .into_iter()
         .find(|node| node.role == Role::Option && node.name.starts_with("Save"))
         .expect("the row is on screen")
@@ -333,7 +333,7 @@ fn clicking_a_row_runs_its_command_and_clicking_the_scrim_runs_nothing() {
 #[test]
 fn a_reader_hears_the_dialog_s_name_and_each_row_with_its_shortcut() {
     let mounted = Mounted::opened();
-    let nodes = ui_core::accessibility::snapshot(&mounted.tree.commands());
+    let nodes = telar::inspect::snapshot(&mounted.tree.commands());
     assert!(
         nodes
             .iter()
@@ -382,7 +382,7 @@ fn a_long_list_scrolls_to_keep_the_cursor_in_view() {
         Some("Command 39"),
         "the last row was scrolled to and built"
     );
-    let rows = ui_core::accessibility::snapshot(&mounted.tree.commands())
+    let rows = telar::inspect::snapshot(&mounted.tree.commands())
         .into_iter()
         .filter(|node| node.role == Role::Option)
         .count();
@@ -401,7 +401,7 @@ fn bottom(rect: telar::Rect) -> f32 {
 
 impl Mounted {
     fn rect_of(&self, role: Role, name: Option<&str>) -> telar::Rect {
-        ui_core::accessibility::snapshot(&self.tree.commands())
+        telar::inspect::snapshot(&self.tree.commands())
             .into_iter()
             .find(|node| node.role == role && name.is_none_or(|name| node.name == name))
             .unwrap_or_else(|| panic!("a {role:?} named {name:?} is drawn"))
@@ -410,7 +410,7 @@ impl Mounted {
 
     /// Whether the list holds focus, and the name of the row it points a reader at.
     fn list_pointing(&self) -> (bool, Option<String>) {
-        let nodes = ui_core::accessibility::snapshot(&self.tree.commands());
+        let nodes = telar::inspect::snapshot(&self.tree.commands());
         let list = nodes
             .iter()
             .find(|node| node.role == Role::ListBox)
@@ -486,7 +486,7 @@ fn the_list_is_one_stop_that_walks_the_cursor_the_field_does() {
 #[test]
 fn the_field_names_the_list_of_results_it_controls() {
     let mounted = Mounted::opened();
-    let nodes = ui_core::accessibility::snapshot(&mounted.tree.commands());
+    let nodes = telar::inspect::snapshot(&mounted.tree.commands());
     let field = nodes
         .iter()
         .find(|node| node.role == Role::TextInput && node.focused)
@@ -503,13 +503,13 @@ fn the_field_names_the_list_of_results_it_controls() {
 fn the_results_are_a_named_list_box_whose_cursor_row_is_selected() {
     let mut mounted = Mounted::opened();
     let selected = |mounted: &Mounted| -> Vec<String> {
-        ui_core::accessibility::snapshot(&mounted.tree.commands())
+        telar::inspect::snapshot(&mounted.tree.commands())
             .into_iter()
             .filter(|node| node.role == Role::Option && node.toggled == Some(true))
             .map(|node| node.name)
             .collect()
     };
-    let nodes = ui_core::accessibility::snapshot(&mounted.tree.commands());
+    let nodes = telar::inspect::snapshot(&mounted.tree.commands());
     let list = nodes
         .iter()
         .find(|node| node.role == Role::ListBox)
@@ -580,7 +580,7 @@ fn dialog(style: Option<telar::SurfaceAmendment>) -> (telar::Rect, RectStyle) {
     relayout_if_dirty();
     let _ = tree.commands();
     relayout_if_dirty();
-    let rect = ui_core::accessibility::snapshot(&tree.commands())
+    let rect = telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .find(|node| node.role == Role::Dialog)
         .expect("the dialog is drawn")

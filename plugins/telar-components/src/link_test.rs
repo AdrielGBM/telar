@@ -19,7 +19,7 @@ fn mounted(props: LinkProps) -> ComponentList {
 }
 
 fn the_link(tree: &ComponentList) -> AccessNode {
-    ui_core::accessibility::snapshot(&tree.commands())
+    telar::inspect::snapshot(&tree.commands())
         .into_iter()
         .find(|node| node.role == Role::Link)
         .expect("a link")

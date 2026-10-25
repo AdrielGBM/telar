@@ -297,9 +297,9 @@ fn register_modes() {
         ("sepia", None),
         ("ink", Some(ColorScheme::Dark)),
     ] {
-        theme_core::register_mode(id, || {});
+        telar::register_mode(id, || {});
         if let Some(scheme) = scheme {
-            theme_core::set_mode_scheme(id, scheme);
+            telar::set_mode_scheme(id, scheme);
         }
     }
 }
@@ -352,7 +352,7 @@ fn a_picked_mode_holds_whatever_the_scheme_and_the_preview_ask_for() {
 
 #[test]
 fn a_scheme_the_application_has_no_mode_for_leaves_the_preview_its_own() {
-    theme_core::register_mode("sepia", || {});
+    telar::register_mode("sepia", || {});
     let asking = PreviewEnv::NONE.mode("sepia");
     assert_eq!(
         mode_under(ModeChoice::Dark, asking, ColorScheme::Light).as_deref(),
@@ -371,8 +371,8 @@ fn a_scheme_the_application_has_no_mode_for_leaves_the_preview_its_own() {
 
 #[test]
 fn the_mode_choices_are_the_system_the_application_s_schemes_and_its_other_modes() {
-    theme_core::register_mode("dark", || {});
-    theme_core::register_mode("sepia", || {});
+    telar::register_mode("dark", || {});
+    telar::register_mode("sepia", || {});
     assert_eq!(
         mode_choices(),
         [ModeChoice::System, ModeChoice::Named("sepia".into())],

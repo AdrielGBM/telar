@@ -163,7 +163,7 @@ fn keys_the_toolbar_does_not_keep_are_left_alone() {
 impl Bar {
     /// The name of the item a focused toolbar points a reader at, or `None` when it points at none.
     fn pointed(&self) -> Option<String> {
-        let nodes = ui_core::accessibility::snapshot(&self.tree.commands());
+        let nodes = telar::inspect::snapshot(&self.tree.commands());
         let toolbar = nodes
             .iter()
             .find(|node| node.role == Role::Toolbar && node.focused)?;

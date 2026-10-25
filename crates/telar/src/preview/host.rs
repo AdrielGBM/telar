@@ -103,7 +103,11 @@ fn follow_height(placed: &Container, measured: RwSignal<f32>) {
     });
 }
 
+// The page plan `cargo telar` exports a workshop by, reached only so the workshop can check its routes against it.
+#[doc(hidden)]
+pub use telar_project::protocol::{ListedPreview, workshop_pages};
 pub use telar_project::protocol::{PREVIEW_COMPONENT_VAR, PREVIEW_ID_VAR, WORKSPACE_DIR_VAR};
+pub use telar_project::protocol::{docs_key, docs_path, title_path};
 
 /// Gives the previews the language their text is in when the app's setup chose none: the installed catalog's default. A preview host is what every canvas without a locale of its own follows, so without one a reader is told no language for text that is in one.
 pub fn speak_the_app_language() {

@@ -2,8 +2,7 @@
 
 use std::sync::Mutex;
 
-use renderer_cache::{Cache, Policy};
-use ui_core::{AssetCache, AssetKey};
+use telar::{AssetCache, AssetKey, CachePolicy, LruCache};
 
 /// What [`MemoryCache::new`] budgets when nothing says otherwise.
 ///
@@ -27,26 +26,26 @@ pub const DEFAULT_BUDGET_BYTES: usize = 8 * 1024 * 1024;
 /// ```
 pub struct MemoryCache {
     // `Mutex` and not `RefCell`: `AssetCache` is `Send + Sync`, because one cache is shared by every loader reading through it and a transport replies from whatever thread ended up holding the bytes. Contention is not a concern — the critical section is a hash lookup and a memcpy, and the alternative was a cache that could not be installed at all.
-    entries: Mutex<Cache<AssetKey, Vec<u8>>>,
+    entries: Mutex<LruCache<AssetKey, Vec<u8>>>,
 }
 
 impl MemoryCache {
     /// A cache holding at most `capacity_bytes` of encoded assets.
     pub fn new(capacity_bytes: usize) -> Self {
-        Self::with_policy(Policy::new(capacity_bytes))
+        Self::with_policy(CachePolicy::new(capacity_bytes))
     }
 
     /// The same, under a policy of your own — an idle horizon, or admission on second use.
     ///
     /// Neither is on by default, and the reason is what an asset costs to lose. A renderer's caches evict by age because re-rasterizing a glyph is microseconds; here the entry that ages out is one HTTP round trip, and a horizon that guesses wrong pays it again over the network. The byte budget bounds the cache on its own, and a build that would rather bound it by age as well can say so.
-    pub fn with_policy(policy: Policy) -> Self {
+    pub fn with_policy(policy: CachePolicy) -> Self {
         Self {
-            entries: Mutex::new(Cache::new(policy, Vec::len)),
+            entries: Mutex::new(LruCache::new(policy, Vec::len)),
         }
     }
 
     /// What the cache is holding, for an application answering "where did the memory go" from outside it.
-    pub fn stat(&self) -> renderer_cache::CacheStat {
+    pub fn stat(&self) -> telar::CacheStat {
         self.locked().stat("assets")
     }
 
@@ -56,7 +55,7 @@ impl MemoryCache {
     }
 
     /// A poisoned lock means a panic while the cache was borrowed, which for a byte cache is recoverable: the map is a plain container and nothing here holds an invariant across the panic. Taking the value back is better than propagating a panic into whichever frame happened to ask next.
-    fn locked(&self) -> std::sync::MutexGuard<'_, Cache<AssetKey, Vec<u8>>> {
+    fn locked(&self) -> std::sync::MutexGuard<'_, LruCache<AssetKey, Vec<u8>>> {
         self.entries.lock().unwrap_or_else(|e| e.into_inner())
     }
 }

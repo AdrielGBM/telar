@@ -4,7 +4,7 @@
 
 use std::cell::RefCell;
 
-use renderer_dom::{CanvasTextMetrics, DomRenderer};
+use telar::testing::{CanvasTextMetrics, DomRenderer};
 use telar::{
     Accessible, Children, Color, ComponentList, Container, Event, LayoutError, LayoutItem,
     LayoutStyle, Location, Reactive, RectStyle, RenderBackend, Role, Size, Slots, StyledContainer,
@@ -313,7 +313,7 @@ fn mount() {
         return;
     }
     telar::set_text_metrics(CanvasTextMetrics);
-    ui_tree::set_element_capture(true);
+    telar::testing::set_element_capture(true);
     telar::set_surface_size(Size::new(WIDTH, HEIGHT));
     let mut tree = ComponentList::new(WindowRoot::new(controls().expect("the page builds")));
     tree.on_event(&Event::WindowResized {

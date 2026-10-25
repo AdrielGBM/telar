@@ -4,8 +4,8 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use image::{ImageReader, Limits};
-use renderer_core::ImageData;
-use ui_core::{AssetDecoder, AssetError};
+use telar::ImageData;
+use telar::{AssetDecoder, AssetError};
 
 const MAX_DIMENSION: u32 = 8192;
 const MAX_DECODE_BYTES: u64 = 256 * 1024 * 1024;

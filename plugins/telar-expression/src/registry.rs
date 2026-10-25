@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
-use geometry_core::Color;
+use telar::Color;
 
 use crate::{ErrorCode, Signature, Value, ValueKind, families, is_identifier};
 
