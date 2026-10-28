@@ -13,7 +13,7 @@ use syn::{
     Expr, LitStr, Token,
     parse::{Parse, ParseStream, Result as ParseResult},
 };
-use telar_project::CatalogContext;
+use telar_project::{CatalogContext, ManifestError, TelarManifest};
 
 pub(crate) struct TInput {
     key: LitStr,
@@ -60,15 +60,26 @@ fn load_catalog(manifest_dir: &Path) -> Rc<CatalogContext> {
 }
 
 pub(crate) fn expand(input: TInput) -> TokenStream2 {
-    let TInput { key, args } = input;
-    let key_str = key.value();
-
     let manifest_dir = match std::env::var("CARGO_MANIFEST_DIR") {
         Ok(d) => PathBuf::from(d),
         Err(_) => return quote! { compile_error!("CARGO_MANIFEST_DIR not set") },
     };
+    expand_in(
+        input,
+        &manifest_dir,
+        &std::env::var("CARGO_PKG_NAME").unwrap_or_default(),
+    )
+}
 
-    let catalog = load_catalog(&manifest_dir);
+fn expand_in(input: TInput, manifest_dir: &Path, package_name: &str) -> TokenStream2 {
+    let TInput { key, args } = input;
+    let key_str = key.value();
+
+    let namespace = match library_namespace(manifest_dir, package_name) {
+        Ok(namespace) => namespace,
+        Err(e) => return syn::Error::new(key.span(), format!("rsx: {e}")).to_compile_error(),
+    };
+    let catalog = load_catalog(manifest_dir);
     match catalog.arg_names(&key_str) {
         Ok(Some(expected)) => {
             for (name, _) in &args {
@@ -101,10 +112,6 @@ pub(crate) fn expand(input: TInput) -> TokenStream2 {
         Err(msg) => return syn::Error::new(key.span(), msg).to_compile_error(),
     }
 
-    let namespace = library_namespace(
-        &manifest_dir,
-        &std::env::var("CARGO_PKG_NAME").unwrap_or_default(),
-    );
     lookup(namespace.as_deref(), &key_str, &args)
 }
 
@@ -115,18 +122,24 @@ thread_local! {
 /// The namespace a library's strings are overridden under: its package name as a crate name, the spelling the application's catalog keys them by (`telar_components.close`). `None` for a package that is not a `[telar] library`, whose strings are the application's own.
 ///
 /// Whether or not the library is the package being built: the lookup falls back to the library's own catalog, so its own tests and previews read its text, and one call shape for both keeps an override from depending on who compiled it.
-fn library_namespace(manifest_dir: &Path, package_name: &str) -> Option<String> {
-    let library = LIBRARY_CACHE.with(|cache| {
-        *cache
-            .borrow_mut()
-            .entry(manifest_dir.to_path_buf())
-            .or_insert_with(|| {
-                telar_project::TelarManifest::load_or_default(manifest_dir)
-                    .telar
-                    .library
-            })
-    });
-    library.then(|| package_name.replace('-', "_"))
+fn library_namespace(
+    manifest_dir: &Path,
+    package_name: &str,
+) -> Result<Option<String>, ManifestError> {
+    let cached = LIBRARY_CACHE.with(|cache| cache.borrow().get(manifest_dir).copied());
+    let library = match cached {
+        Some(library) => library,
+        None => {
+            let library = TelarManifest::load(manifest_dir)?.telar.library;
+            LIBRARY_CACHE.with(|cache| {
+                cache
+                    .borrow_mut()
+                    .insert(manifest_dir.to_path_buf(), library)
+            });
+            library
+        }
+    };
+    Ok(library.then(|| package_name.replace('-', "_")))
 }
 
 /// The runtime call: the plain lookup for an application, the overridable one for a library.

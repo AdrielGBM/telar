@@ -330,13 +330,6 @@ impl TelarManifest {
         }
         Ok(Some(manifest))
     }
-
-    /// The same, for a caller with nowhere to report: an unreadable manifest yields the defaults.
-    ///
-    /// Only for a path that genuinely cannot surface an error. Prefer [`load`](Self::load) — a misspelled key that silently does nothing is the failure this module exists to end.
-    pub fn load_or_default(package_root: &Path) -> Self {
-        Self::load(package_root).unwrap_or_default()
-    }
 }
 
 impl TelarSection {

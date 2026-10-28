@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use crate::{
-    BakedAsset, MANIFEST_FILENAME, asset_kind_for_component, generate_assets, write_generated,
+    BakedAsset, MANIFEST_FILENAME, TelarManifest, asset_kind_for_component, generate_assets,
+    write_generated,
 };
 
 const VERSION: &str = "0.2.1";
@@ -14,6 +15,11 @@ fn package(name: &str, manifest: &str) -> PathBuf {
     std::fs::create_dir_all(root.join("assets")).unwrap();
     std::fs::write(root.join(MANIFEST_FILENAME), manifest).unwrap();
     root
+}
+
+fn load(root: &Path) -> AssetContext {
+    let telar = TelarManifest::load(root).unwrap().telar;
+    AssetContext::load(root, &telar, VERSION)
 }
 
 fn bake(root: &Path, assets: &[BakedAsset]) {
@@ -63,7 +69,7 @@ fn the_section_decides_how_ids_are_baked() {
             mode,
             &format!("[telar.icons]\nmode = \"{mode}\"\nsvg = \"icons\"\n"),
         );
-        let context = AssetContext::load(&root, VERSION);
+        let context = load(&root);
         assert_eq!(
             context.id_baking("icon", "name").map(|(_, baking)| baking),
             expected,
@@ -71,18 +77,14 @@ fn the_section_decides_how_ids_are_baked() {
         );
     }
     let root = package("absent", "[telar]\n");
-    assert!(
-        AssetContext::load(&root, VERSION)
-            .id_baking("icon", "name")
-            .is_none()
-    );
+    assert!(load(&root).id_baking("icon", "name").is_none());
 }
 
 #[test]
 fn a_baked_id_becomes_the_pair_its_prop_accepts() {
     let root = package("resolved", "[telar.icons]\nsvg = \"icons\"\n");
     bake(&root, &[icon("mdi:home")]);
-    let context = AssetContext::load(&root, VERSION);
+    let context = load(&root);
     let pair = context.resolve_id(icon_kind(), "mdi:home").unwrap();
     assert_eq!(
         pair,
@@ -97,7 +99,7 @@ fn a_baked_id_becomes_the_pair_its_prop_accepts() {
 fn an_id_missing_from_the_artifact_names_the_bake() {
     let root = package("missing", "[telar.icons]\nsvg = \"icons\"\n");
     bake(&root, &[icon("mdi:home")]);
-    let message = AssetContext::load(&root, VERSION)
+    let message = load(&root)
         .resolve_id(icon_kind(), "mdi:account")
         .unwrap_err();
     assert!(
@@ -111,9 +113,7 @@ fn an_id_missing_from_the_artifact_names_the_bake() {
 #[test]
 fn an_unbaked_package_names_the_bake() {
     let root = package("unbaked", "[telar.icons]\nsvg = \"icons\"\n");
-    let message = AssetContext::load(&root, VERSION)
-        .resolve_id(icon_kind(), "mdi:home")
-        .unwrap_err();
+    let message = load(&root).resolve_id(icon_kind(), "mdi:home").unwrap_err();
     assert!(message.contains("no baked artifact"), "{message}");
 }
 
@@ -151,7 +151,7 @@ fn an_icon_is_not_a_file_to_track() {
             },
         ],
     );
-    let tracked = AssetContext::load(&root, VERSION).tracked_files();
+    let tracked = load(&root).tracked_files();
     assert_eq!(tracked, vec![root.join("assets/mark.svg")]);
 }
 
@@ -165,9 +165,7 @@ fn a_monochrome_icon_carries_its_tint_in_the_triple() {
             ..icon("mdi:home")
         }],
     );
-    let triple = AssetContext::load(&root, VERSION)
-        .resolve_id(icon_kind(), "mdi:home")
-        .unwrap();
+    let triple = load(&root).resolve_id(icon_kind(), "mdi:home").unwrap();
     assert!(triple.ends_with(", true)"), "{triple}");
 }
 
@@ -178,7 +176,7 @@ fn a_bare_name_resolves_in_the_default_set() {
         "[telar.icons]\nsvg = \"icons\"\ndefault_set = \"mdi\"\n",
     );
     bake(&root, &[icon("mdi:home")]);
-    let context = AssetContext::load(&root, VERSION);
+    let context = load(&root);
     let triple = context.resolve_id(icon_kind(), "home").unwrap();
     assert!(triple.starts_with("(\"mdi:home\", "), "{triple}");
     assert_eq!(context.literal_id("icon", "name", "home"), Some(Ok(triple)));
@@ -188,9 +186,7 @@ fn a_bare_name_resolves_in_the_default_set() {
 fn a_bare_name_without_a_default_set_names_the_key() {
     let root = package("no_default_set", "[telar.icons]\nsvg = \"icons\"\n");
     bake(&root, &[icon("mdi:home")]);
-    let message = AssetContext::load(&root, VERSION)
-        .resolve_id(icon_kind(), "home")
-        .unwrap_err();
+    let message = load(&root).resolve_id(icon_kind(), "home").unwrap_err();
     assert!(message.contains("`home` names no icon set"), "{message}");
     assert!(message.contains("default_set"), "{message}");
 }
@@ -201,7 +197,7 @@ fn a_literal_is_spelled_in_full_where_icons_resolve_at_run_time() {
         "runtime_literal",
         "[telar.icons]\nmode = \"runtime\"\ndefault_set = \"mdi\"\n",
     );
-    let context = AssetContext::load(&root, VERSION);
+    let context = load(&root);
     assert_eq!(
         context.literal_id("icon", "name", "home"),
         Some(Ok("\"mdi:home\"".to_string()))
@@ -215,7 +211,7 @@ fn a_literal_is_spelled_in_full_where_icons_resolve_at_run_time() {
 #[test]
 fn a_literal_reaches_the_component_as_written_where_icons_are_not_configured() {
     let root = package("unconfigured", "[telar]\n");
-    let context = AssetContext::load(&root, VERSION);
+    let context = load(&root);
     assert_eq!(context.literal_id("icon", "name", "home"), None);
     assert_eq!(context.literal_id("icon", "size", "24"), None);
 }
@@ -226,9 +222,7 @@ fn a_baked_id_named_from_rust_carries_its_initializer() {
     let mut home = icon("mdi:home");
     home.monochrome = true;
     bake(&root, &[home, icon("mdi:gear")]);
-    let baked = AssetContext::load(&root, VERSION)
-        .baked_id(icon_kind(), "mdi:home")
-        .unwrap();
+    let baked = load(&root).baked_id(icon_kind(), "mdi:home").unwrap();
     assert_eq!(
         baked,
         BakedId {
@@ -247,9 +241,7 @@ fn a_bare_name_named_from_rust_is_read_in_the_default_set() {
         "[telar.icons]\nsvg = \"icons\"\ndefault_set = \"mdi\"\n",
     );
     bake(&root, &[icon("mdi:home")]);
-    let baked = AssetContext::load(&root, VERSION)
-        .baked_id(icon_kind(), "home")
-        .unwrap();
+    let baked = load(&root).baked_id(icon_kind(), "home").unwrap();
     assert_eq!(baked.id, "mdi:home");
 }
 
@@ -257,7 +249,7 @@ fn a_bare_name_named_from_rust_is_read_in_the_default_set() {
 fn an_id_named_from_rust_and_missing_from_the_artifact_names_the_call_and_the_bake() {
     let root = package("rust_missing", "[telar.icons]\nsvg = \"icons\"\n");
     bake(&root, &[icon("mdi:home")]);
-    let message = AssetContext::load(&root, VERSION)
+    let message = load(&root)
         .baked_id(icon_kind(), "mdi:account")
         .unwrap_err();
     assert!(message.contains("`icon!(\"mdi:account\")`"), "{message}");
@@ -269,9 +261,7 @@ fn an_id_named_from_rust_and_missing_from_the_artifact_names_the_call_and_the_ba
 fn an_id_named_from_rust_where_nothing_is_baked_names_the_section() {
     for manifest in ["", "[telar.icons]\nmode = \"runtime\"\nsvg = \"icons\"\n"] {
         let root = package("rust_unconfigured", manifest);
-        let message = AssetContext::load(&root, VERSION)
-            .baked_id(icon_kind(), "mdi:home")
-            .unwrap_err();
+        let message = load(&root).baked_id(icon_kind(), "mdi:home").unwrap_err();
         assert!(message.contains("[telar.icons]"), "{message}");
     }
 }

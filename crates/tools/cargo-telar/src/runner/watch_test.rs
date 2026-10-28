@@ -32,7 +32,7 @@ fn watch_probe(name: &str) -> PathBuf {
 fn the_asset_and_locale_roots_are_watched_too() {
     let root = watch_probe("dirs");
 
-    let dirs = collect_watch_dirs(&root);
+    let dirs = collect_watch_dirs(&root).unwrap();
 
     assert!(dirs.contains(&root.join("src")), "{dirs:?}");
     assert!(dirs.contains(&root.join("assets")), "{dirs:?}");
@@ -51,7 +51,7 @@ fn the_applications_own_icons_are_watched() {
     )
     .unwrap();
 
-    let dirs = collect_watch_dirs(&root);
+    let dirs = collect_watch_dirs(&root).unwrap();
 
     assert!(dirs.contains(&root.join("icons")), "{dirs:?}");
 
@@ -63,9 +63,24 @@ fn the_applications_own_icons_are_watched() {
 fn a_lone_package_is_watched_at_all() {
     let root = watch_probe("lone");
     assert!(
-        !collect_watch_dirs(&root).is_empty(),
+        !collect_watch_dirs(&root).unwrap().is_empty(),
         "a lone package still has directories worth watching"
     );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_telar_toml_that_does_not_load_is_an_error_rather_than_the_default_directories() {
+    let root = watch_probe("broken");
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        "[telar]\nasets = \"art\"\n",
+    )
+    .unwrap();
+
+    let error = collect_watch_dirs(&root).unwrap_err();
+
+    assert!(error.to_string().contains("asets"), "{error}");
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -75,7 +90,7 @@ fn absent_directories_are_left_out() {
     let root = watch_probe("absent");
     std::fs::remove_dir_all(root.join("locales")).unwrap();
 
-    let dirs = collect_watch_dirs(&root);
+    let dirs = collect_watch_dirs(&root).unwrap();
 
     assert!(!dirs.contains(&root.join("locales")), "{dirs:?}");
     assert!(dirs.contains(&root.join("assets")), "{dirs:?}");
@@ -94,7 +109,7 @@ fn a_directory_inside_another_is_not_watched_separately() {
     )
     .unwrap();
 
-    let dirs = collect_watch_dirs(&root);
+    let dirs = collect_watch_dirs(&root).unwrap();
 
     assert!(dirs.contains(&root.join("src")), "{dirs:?}");
     assert!(
@@ -303,7 +318,7 @@ fn every_telar_toml_a_member_reads_is_watched_through_its_directory() {
     let root = root.canonicalize().unwrap();
     let member = root.join("apps/site");
 
-    let watched = WatchSet::collect(&root);
+    let watched = WatchSet::collect(&root).unwrap();
     let watches = watched.watches();
     let _ = std::fs::remove_dir_all(&root);
 

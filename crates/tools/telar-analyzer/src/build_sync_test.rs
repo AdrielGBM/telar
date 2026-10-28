@@ -158,3 +158,28 @@ fn a_component_never_opened_maps_through_the_transpilers_map() {
     assert_eq!(read.to_json(), map.to_json());
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_telar_toml_that_does_not_load_is_not_mirrored_against_the_defaults() {
+    let root = unbaked_crate("broken_manifest");
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        "[telar]\nasets = \"art\"\n",
+    )
+    .unwrap();
+    let source = "[view]\ncol\n    svg src:\"badge.svg\"\n";
+    let rsx = root.join("src/view.rsx");
+    std::fs::write(&rsx, source).unwrap();
+    let document = telar_parser::parse(source).unwrap();
+
+    let synced = sync_build_file(&rsx, source, &document, None);
+    let mirrored = generated_target(&rsx, source, None);
+
+    assert!(synced.is_none());
+    assert!(mirrored.is_none());
+    assert!(
+        !root.join(".telar").exists(),
+        "nothing is baked or written from a manifest that does not load"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}

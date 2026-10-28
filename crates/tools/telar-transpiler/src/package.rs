@@ -250,25 +250,25 @@ pub fn write_package(
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let package = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
 /// let src_dir = package.join("src");
-/// let theme = telar_transpiler::resolve_theme_type(&package);
-/// let prelude = telar_project::resolve_prelude(&package)?;
-/// let library = telar_project::TelarManifest::load(&package)?.telar.library;
+/// let telar = telar_project::TelarManifest::load(&package)?.telar;
+/// let theme = telar_transpiler::resolve_theme_type(&package, &telar);
+/// let prelude = telar.prelude();
 /// // What the macro compares the index against: the `telar` this project resolves, not this crate's own.
 /// let workspace = telar_project::find_workspace_root(&package).unwrap_or_else(|| package.clone());
 /// let telar_version = telar_project::resolve_telar_version(&workspace).ok_or("no telar dependency")?;
-/// let assets = telar_project::AssetContext::load(&package, &telar_version);
+/// let assets = telar_project::AssetContext::load(&package, &telar, &telar_version);
 ///
 /// let flavour = telar_project::BuildFlavour::Plain;
 /// let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
 ///     src_dir: &src_dir,
 ///     theme_type: theme.as_deref(),
 ///     assets: Some(&assets),
-///     prelude: &prelude,
-///     library,
+///     prelude,
+///     library: telar.library,
 ///     flavour,
 /// })?;
 /// telar_transpiler::write_package(&files, &telar_project::generated_dir(&package, flavour))?;
-/// let index = telar_transpiler::build_index(&files, &src_dir, theme.as_deref(), &prelude, "build.rs", &telar_version);
+/// let index = telar_transpiler::build_index(&files, &src_dir, theme.as_deref(), prelude, "build.rs", &telar_version);
 /// telar_project::write_build_index(&package, flavour, &index)?;
 ///
 /// for file in &files {

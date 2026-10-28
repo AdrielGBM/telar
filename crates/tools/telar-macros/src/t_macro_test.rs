@@ -1,4 +1,4 @@
-use super::{library_namespace, lookup};
+use super::{TInput, expand_in, library_namespace, lookup};
 
 fn package(name: &str, manifest: &str) -> std::path::PathBuf {
     let root = std::env::temp_dir().join(format!("telar_t_{name}_{}", std::process::id()));
@@ -11,7 +11,7 @@ fn package(name: &str, manifest: &str) -> std::path::PathBuf {
 #[test]
 fn an_application_looks_its_strings_up_plainly() {
     let root = package("app", "[telar]\nbackend = \"auto\"\n");
-    let namespace = library_namespace(&root, "my-app");
+    let namespace = library_namespace(&root, "my-app").unwrap();
     let _ = std::fs::remove_dir_all(&root);
     assert_eq!(namespace, None);
     let call = lookup(None, "greeting", &[]).to_string().replace(' ', "");
@@ -25,7 +25,7 @@ fn an_application_looks_its_strings_up_plainly() {
 #[test]
 fn a_library_looks_its_strings_up_under_its_crate_name() {
     let root = package("library", "[telar]\nlibrary = true\n");
-    let namespace = library_namespace(&root, "my-kit");
+    let namespace = library_namespace(&root, "my-kit").unwrap();
     let _ = std::fs::remove_dir_all(&root);
     assert_eq!(namespace.as_deref(), Some("my_kit"));
 
@@ -40,4 +40,14 @@ fn a_library_looks_its_strings_up_under_its_crate_name() {
         ),
         "{call}"
     );
+}
+
+#[test]
+fn a_telar_toml_that_does_not_load_is_a_compile_error_rather_than_an_application() {
+    let root = package("broken", "[telar]\nlibary = true\n");
+    let input: TInput = syn::parse_str("\"greeting\"").unwrap();
+    let expanded = expand_in(input, &root, "my-kit").to_string();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(expanded.contains("compile_error"), "{expanded}");
+    assert!(expanded.contains("libary"), "{expanded}");
 }

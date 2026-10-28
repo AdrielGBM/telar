@@ -3,9 +3,14 @@
 use std::path::{Path, PathBuf};
 
 use telar_baker::{ICONS_NOTICE_FILENAME, bake_package, read_icon_record};
-use telar_project::{AssetContext, read_index, static_name_for_path};
+use telar_project::{AssetContext, TelarManifest, read_index, static_name_for_path};
 
 const VERSION: &str = "0.2.1";
+
+fn asset_context(root: &Path) -> AssetContext {
+    let telar = TelarManifest::load(root).unwrap().telar;
+    AssetContext::load(root, &telar, VERSION)
+}
 
 fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/iconify")
@@ -83,7 +88,7 @@ fn only_the_icons_the_view_names_are_baked() {
     let notice = std::fs::read_to_string(root.join(".telar").join(ICONS_NOTICE_FILENAME)).unwrap();
     assert!(notice.contains("Icons: home, house"), "{notice}");
 
-    let assets = AssetContext::load(&root, VERSION);
+    let assets = asset_context(&root);
     let kind = telar_project::asset_kind_for_id("icon").unwrap();
     assert!(assets.resolve_id(kind, "demo:house").is_ok());
     assert!(assets.resolve_id(kind, "demo:gear").is_err());
@@ -174,7 +179,7 @@ fn a_bare_name_bakes_under_the_default_sets_id_and_resolves_from_the_rsx() {
     assert!(report.errors.is_empty(), "{:?}", report.errors);
     assert_eq!(baked_icons(&root), vec!["demo:home", "demo:star"]);
 
-    let assets = AssetContext::load(&root, VERSION);
+    let assets = asset_context(&root);
     let kind = telar_project::asset_kind_for_id("icon").unwrap();
     let triple = assets.resolve_id(kind, "home").unwrap();
     assert!(triple.starts_with("(\"demo:home\", "), "{triple}");
@@ -219,7 +224,7 @@ fn the_tint_decision_is_carried_into_the_artifact() {
         ]
     );
 
-    let assets = AssetContext::load(&root, VERSION);
+    let assets = asset_context(&root);
     let kind = telar_project::asset_kind_for_id("icon").unwrap();
     assert!(
         assets

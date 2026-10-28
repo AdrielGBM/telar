@@ -1,7 +1,15 @@
 use std::path::{Path, PathBuf};
 
 use super::resolve_theme_type;
-use telar_project::theme_type_in_config;
+use telar_project::{TelarManifest, theme_type_in_config};
+
+fn manifest(root: &Path) -> TelarManifest {
+    TelarManifest::load(root).unwrap()
+}
+
+fn resolve(root: &Path) -> Option<String> {
+    resolve_theme_type(root, &manifest(root).telar)
+}
 
 fn package(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("telar_theme_{name}_{}", std::process::id()));
@@ -26,11 +34,8 @@ fn the_invocation_answers_when_the_config_does_not() {
         "telar::app!(\n    core::theme::SandboxTheme,\n    {},\n    telar::AppConfig::default(),\n    core::app::Root\n);\n",
     );
 
-    assert_eq!(theme_type_in_config(&root), None);
-    assert_eq!(
-        resolve_theme_type(&root).as_deref(),
-        Some("core::theme::SandboxTheme")
-    );
+    assert_eq!(theme_type_in_config(&manifest(&root).telar), None);
+    assert_eq!(resolve(&root).as_deref(), Some("core::theme::SandboxTheme"));
 
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -48,7 +53,7 @@ fn the_config_key_wins() {
         "telar::app!(other::Scanned, {}, c, R);\n",
     );
 
-    assert_eq!(resolve_theme_type(&root).as_deref(), Some("app::Declared"));
+    assert_eq!(resolve(&root).as_deref(), Some("app::Declared"));
 
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -59,7 +64,7 @@ fn no_argument_is_no_theme() {
     let root = package("themeless");
     write(&root.join("src/lib.rs"), "telar::rsx_modules!();\n");
 
-    assert_eq!(resolve_theme_type(&root), None);
+    assert_eq!(resolve(&root), None);
 
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -74,10 +79,7 @@ fn a_nested_invocation_is_found() {
         "telar::rsx_modules!(editor::EditorTheme);\n",
     );
 
-    assert_eq!(
-        resolve_theme_type(&root).as_deref(),
-        Some("editor::EditorTheme")
-    );
+    assert_eq!(resolve(&root).as_deref(), Some("editor::EditorTheme"));
 
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -91,7 +93,7 @@ fn prose_about_the_macro_names_no_theme() {
         "//! Call `telar::rsx_modules!()` from the module that owns the files.\npub struct Nothing;\n",
     );
 
-    assert_eq!(resolve_theme_type(&root), None);
+    assert_eq!(resolve(&root), None);
 
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -106,7 +108,7 @@ fn a_library_resolves_no_theme_whatever_its_source_names() {
         "telar::rsx_modules!(kit::KitTheme);\n",
     );
 
-    assert_eq!(resolve_theme_type(&root), None);
+    assert_eq!(resolve(&root), None);
 
     let _ = std::fs::remove_dir_all(&root);
 }

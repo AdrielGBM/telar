@@ -3,9 +3,14 @@
 use std::path::{Path, PathBuf};
 
 use telar_baker::{bake_package, read_library_icons};
-use telar_project::{AssetContext, asset_kind_for_id, read_index};
+use telar_project::{AssetContext, TelarManifest, asset_kind_for_id, read_index};
 
 const VERSION: &str = "0.2.1";
+
+fn asset_context(root: &Path) -> AssetContext {
+    let telar = TelarManifest::load(root).unwrap().telar;
+    AssetContext::load(root, &telar, VERSION)
+}
 
 fn fixtures() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures/iconify")
@@ -72,7 +77,7 @@ fn a_crate_with_no_rsx_bakes_the_icons_its_rust_names() {
         ["demo:home", "demo:star"]
     );
 
-    let baked = AssetContext::load(&root, VERSION)
+    let baked = asset_context(&root)
         .baked_id(asset_kind_for_id("icon").unwrap(), "demo:home")
         .expect("the call resolves against the artifact");
     assert!(

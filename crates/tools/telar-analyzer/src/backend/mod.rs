@@ -820,7 +820,7 @@ impl Backend {
     /// `textDocument/codeLens`: "▶ Open in workshop" over each `[preview …]` section and "▶ Run play" over each `[play]`.
     pub async fn code_lens(&self, params: CodeLensParams) -> Option<Vec<CodeLens>> {
         let uri = &params.text_document.uri;
-        let host = crate::uri::to_path(uri).and_then(|path| PreviewHost::discover(&path))?;
+        let host = self.preview_host(uri)?;
         let store = self.store.read().await;
         let parsed = store.get(uri)?;
         Some(crate::analysis::lens::code_lenses(&parsed.document, &host))
@@ -829,7 +829,7 @@ impl Backend {
     /// `telar/previewAt`: the `[preview]` whose zone holds the cursor, for the editor to show in the workshop; `null` anywhere else.
     pub async fn preview_at(&self, params: TextDocumentPositionParams) -> Option<PreviewTarget> {
         let uri = &params.text_document.uri;
-        let host = crate::uri::to_path(uri).and_then(|path| PreviewHost::discover(&path))?;
+        let host = self.preview_host(uri)?;
         let store = self.store.read().await;
         let parsed = store.get(uri)?;
         crate::analysis::preview_target::preview_at(
@@ -842,18 +842,31 @@ impl Backend {
 
     /// `telar/workshops`: the workshops that list the previews of the document's package, the one to start first; `null` outside a package.
     pub async fn workshops(&self, params: WorkshopsParams) -> Option<Vec<Workshop>> {
-        let path = crate::uri::to_path(&params.text_document.uri)?;
-        Some(PreviewHost::discover(&path)?.workshops)
+        Some(self.preview_host(&params.text_document.uri)?.workshops)
+    }
+
+    /// The preview host of the document at `uri`. A `telar.toml` that does not load is logged where the editor shows the server's output, since a lens or a workshop request has no line of the buffer to put it on.
+    fn preview_host(&self, uri: &Uri) -> Option<PreviewHost> {
+        let path = crate::uri::to_path(uri)?;
+        match PreviewHost::discover(&path)? {
+            Ok(host) => Some(host),
+            Err(e) => {
+                self.outgoing
+                    .log_message(MessageType::ERROR, format!("telar-analyzer: {e}"));
+                None
+            }
+        }
     }
 
     /// `textDocument/documentLink`: clickable links for `img src:"…"` asset paths that exist on disk.
     pub async fn document_link(&self, params: DocumentLinkParams) -> Option<Vec<DocumentLink>> {
         let uri = &params.text_document.uri;
         let path = crate::uri::to_path(uri)?;
-        // Against the package's asset root, matching the baker, falling back to the file's dir outside a package.
-        let assets_dir = telar_project::find_package_root(&path)
-            .map(|root| telar_project::assets_root(&root))
-            .or_else(|| path.parent().map(|p| p.to_path_buf()))?;
+        // Against the package's asset root, matching the baker, falling back to the file's dir outside a package. A package whose `telar.toml` does not load links nothing: its asset root is unknown, and the buffer's diagnostics say why.
+        let assets_dir = match telar_project::find_package_root(&path) {
+            Some(root) => telar_project::assets_root(&root).ok()?,
+            None => path.parent()?.to_path_buf(),
+        };
         let store = self.store.read().await;
         let parsed = store.get(uri)?;
         Some(crate::analysis::links::document_links(

@@ -59,7 +59,9 @@ impl Backend {
         let Some(root) = crate::build_sync::crate_root(rsx_path) else {
             return (Vec::new(), false);
         };
-        let prelude = telar_project::resolve_prelude(&root).unwrap_or_default();
+        let Ok(prelude) = telar_project::resolve_prelude(&root) else {
+            return (Vec::new(), false);
+        };
         if prelude.is_empty() {
             return (Vec::new(), false);
         }

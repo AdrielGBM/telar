@@ -10,7 +10,8 @@ use i18n_core::PluralCategory;
 use i18n_core::{CatalogModel, MessageModel, PartModel};
 use telar_project::{
     CATALOG_ARTIFACT_FORMAT, CATALOG_INDEX_FILENAME, CATALOG_SOURCE_FILENAME, CatalogEntry,
-    CatalogIndex, CatalogSourceFile, content_hash, read_catalog_index, write_if_changed_atomic,
+    CatalogIndex, CatalogSourceFile, ManifestError, TelarManifest, content_hash,
+    read_catalog_index, write_if_changed_atomic,
 };
 
 /// What baking one package's catalog turned up, mirroring [`super::BakeReport`].
@@ -24,22 +25,25 @@ pub struct CatalogReport {
 /// Bakes `package_dir`'s translation catalog, writing `<package_dir>/.telar/i18n.{json,rs}`. `None` when the package has neither `.rsx` files nor locale files, so a crate with no stake in either never grows a `.telar/`.
 ///
 /// Note the `or`: `t!` is plain Rust and needs no `.rsx` to appear in — `crates/i18n/i18n-fixture` is exactly that shape — while a package with `.rsx` and no translations still gets an artifact, with no entries. That empty artifact is what lets `t!` tell "this project has no translations" from "nobody has run the baker", which a missing file cannot distinguish.
+///
+/// `Err` when the package's `telar.toml` does not load, since where the catalogs are is one of its settings.
 pub fn bake_catalog(
     package_dir: &Path,
     producer: &str,
     telar_version: &str,
-) -> Option<CatalogReport> {
-    let sources = catalog_sources(package_dir);
+) -> Result<Option<CatalogReport>, ManifestError> {
+    let config = I18nConfig::load(package_dir)?;
+    let sources = catalog_sources(package_dir, &config);
     if sources.is_empty() && telar_project::find_rsx_files_in_tree(package_dir).is_empty() {
-        return None;
+        return Ok(None);
     }
 
     let mut report = CatalogReport::default();
-    let model = match parse_catalog(package_dir) {
+    let model = match parse_sources(&sources, config.default.as_deref()) {
         Ok(model) => model,
         Err(e) => {
             report.warnings.push(format!("catalog: {e}"));
-            return Some(report);
+            return Ok(Some(report));
         }
     };
 
@@ -106,49 +110,42 @@ pub fn bake_catalog(
             .push(format!("could not write {}: {e}", telar_dir.display()));
         report.changed = false;
     }
-    Some(report)
+    Ok(Some(report))
 }
 
 /// How the catalog is discovered, read from the one `telar.toml` schema. Both sources may be active at once; either name set to `""` disables it.
 struct I18nConfig {
-    root: String,
+    root: Option<PathBuf>,
     scan: String,
     default: Option<String>,
 }
 
-fn read_i18n_config(package_root: &Path) -> I18nConfig {
-    let telar = telar_project::TelarManifest::load_or_default(package_root).telar;
-    I18nConfig {
-        root: telar
-            .locales_root(Path::new(""))
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_default(),
-        scan: telar.catalog_scan_dir(),
-        default: telar.default_locale(),
+impl I18nConfig {
+    fn load(package_root: &Path) -> Result<Self, ManifestError> {
+        let telar = TelarManifest::load(package_root)?.telar;
+        Ok(Self {
+            root: telar.locales_root(package_root),
+            scan: telar.catalog_scan_dir(),
+            default: telar.default_locale(),
+        })
     }
 }
 
-/// The project-wide catalog directory (`locales/` by default, `[telar.i18n] root`), or `None` when it is disabled. Mirrors [`telar_project::assets_root`]: a caller that needs the *directory* — a file watcher, say — must not have to infer it from the files that happen to be in it today, or adding the first `.toml` to an empty one goes unnoticed. The per-module catalogs the `scan` setting finds are under `src/`, so nothing else needs exposing.
-pub fn locales_root(package_root: &Path) -> Option<PathBuf> {
-    let root = read_i18n_config(package_root).root;
-    (!root.is_empty()).then(|| package_root.join(root))
-}
-
 /// The locale files that feed the catalog, sorted — used to emit `include_str!` rerun triggers so editing a translation re-bakes, exactly like editing a `.rsx` file.
-pub fn catalog_files(package_root: &Path) -> Vec<PathBuf> {
-    catalog_sources(package_root)
+pub fn catalog_files(package_root: &Path) -> Result<Vec<PathBuf>, ManifestError> {
+    let config = I18nConfig::load(package_root)?;
+    Ok(catalog_sources(package_root, &config)
         .into_iter()
         .map(|(_, path)| path)
-        .collect()
+        .collect())
 }
 
 /// Every `(locale tag, file)` that feeds the catalog, sorted and de-duplicated. Collected from two places (either configurable in `telar.toml`, both on by default): the project-wide `locales/` directory (a `<tag>.toml` per language, or a `<tag>/` subdir of per-module files), and — scanned recursively under `src/` — every `i18n/<tag>.toml` co-located with a module (`src/modules/battery/i18n/en.toml`). A locale is its file stem; all files for a tag merge into one keyspace.
-fn catalog_sources(package_root: &Path) -> Vec<(String, PathBuf)> {
-    let cfg = read_i18n_config(package_root);
+fn catalog_sources(package_root: &Path, cfg: &I18nConfig) -> Vec<(String, PathBuf)> {
     let mut sources = Vec::new();
 
-    if !cfg.root.is_empty() {
-        discover_root_dir(&package_root.join(&cfg.root), &mut sources);
+    if let Some(root) = &cfg.root {
+        discover_root_dir(root, &mut sources);
     }
     if !cfg.scan.is_empty() {
         for file in
@@ -192,15 +189,25 @@ fn discover_root_dir(root: &Path, sources: &mut Vec<(String, PathBuf)>) {
     }
 }
 
-/// Parses the catalog for `package_root`. Returns `Ok(None)` when no translation files are found (i18n unused), and `Err` for a malformed catalog (bad TOML, non-string message, a key defined twice for one locale).
+/// Parses the catalog for `package_root`. Returns `Ok(None)` when no translation files are found (i18n unused), and `Err` for a malformed catalog (bad TOML, non-string message, a key defined twice for one locale) or a `telar.toml` that does not load.
 pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, String> {
-    let sources = catalog_sources(package_root);
+    let config = I18nConfig::load(package_root).map_err(|e| e.to_string())?;
+    parse_sources(
+        &catalog_sources(package_root, &config),
+        config.default.as_deref(),
+    )
+}
+
+fn parse_sources(
+    sources: &[(String, PathBuf)],
+    default: Option<&str>,
+) -> Result<Option<CatalogModel>, String> {
     if sources.is_empty() {
         return Ok(None);
     }
 
     let mut files: Vec<(String, String, String)> = Vec::new();
-    for (tag, path) in &sources {
+    for (tag, path) in sources {
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("reading {}: {e}", path.display()))?;
         files.push((tag.clone(), content, path.display().to_string()));
@@ -210,8 +217,7 @@ pub fn parse_catalog(package_root: &Path) -> Result<Option<CatalogModel>, String
         .map(|(tag, content, label)| (tag.as_str(), content.as_str(), label.as_str()))
         .collect();
 
-    let default = read_i18n_config(package_root).default;
-    CatalogModel::from_sources(&borrowed, default.as_deref()).map(Some)
+    CatalogModel::from_sources(&borrowed, default).map(Some)
 }
 
 /// Serializes the catalog to a Rust source module. Types are referenced through the `telar::i18n` facade so the generated file compiles with the same `rsx` dependency every generated `.rsx` file has.

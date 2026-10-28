@@ -103,3 +103,13 @@ fn a_rebake_is_seen_by_a_process_that_outlives_it() {
     telar_project::write_generated(&root.join(".telar"), &generated).unwrap();
     assert!(expand_in(input("icon, \"mdi:gear\", ::telar"), &root).is_ok());
 }
+
+#[test]
+fn a_telar_toml_that_does_not_load_is_an_error_on_the_id() {
+    let root = package("broken", "[telar.icons]\nsgv = \"icons\"\n", &["mdi:home"]);
+    let message = expand_in(input("icon, \"mdi:home\", ::telar"), &root)
+        .unwrap_err()
+        .to_string();
+    let _ = std::fs::remove_dir_all(&root);
+    assert!(message.contains("sgv"), "{message}");
+}

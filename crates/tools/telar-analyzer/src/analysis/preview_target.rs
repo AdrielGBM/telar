@@ -6,8 +6,8 @@ use lsp_types::TextDocumentIdentifier;
 use serde::{Deserialize, Serialize};
 use telar_parser::{Preview, RsxDocument, Section, is_preview_header, section_opened_by};
 use telar_project::naming::{preview_id_suffix, preview_slug};
-use telar_project::preview_hosts;
 use telar_project::protocol::{package_workshop_files, preview_location};
+use telar_project::{ManifestError, preview_hosts};
 
 /// The request answering [`preview_at`] for a text document position, `null` outside a preview.
 pub const PREVIEW_AT: &str = "telar/previewAt";
@@ -51,20 +51,20 @@ impl Workshop {
 }
 
 impl PreviewHost {
-    /// The host of the `.rsx` at `rsx_path`. A `*.previews.rsx` previews the component it is named after, so its ids are that component's.
-    pub fn discover(rsx_path: &Path) -> Option<Self> {
+    /// The host of the `.rsx` at `rsx_path`: `None` outside a package, `Err` when a `telar.toml` deciding which workshops list it does not load. A `*.previews.rsx` previews the component it is named after, so its ids are that component's.
+    pub fn discover(rsx_path: &Path) -> Option<Result<Self, ManifestError>> {
         let package_root = telar_project::find_package_root(rsx_path)?;
         let crate_name = crate::project::crate_name(&package_root)?;
-        let workshops = preview_hosts(&package_root, &crate_name)
-            .iter()
-            .filter_map(|dir| Workshop::of(dir))
-            .collect();
-        Some(Self {
-            workshops,
+        let hosts = match preview_hosts(&package_root, &crate_name) {
+            Ok(hosts) => hosts,
+            Err(e) => return Some(Err(e)),
+        };
+        Some(Ok(Self {
+            workshops: hosts.iter().filter_map(|dir| Workshop::of(dir)).collect(),
             package_root,
             crate_name,
             component: telar_project::component_name(rsx_path),
-        })
+        }))
     }
 
     /// The id of the `index`th preview, or `None` when the transpiler refuses it one: a name that slugs to nothing, or to the same as an earlier preview's.

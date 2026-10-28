@@ -442,17 +442,18 @@ fn stale_cli_message(hot_requested_by_env: bool) -> Option<String> {
 ///
 /// A library has no theme to agree on: its manifest may not declare one, every writer transpiles it against none, and its artifact records none. So an invocation naming one is refused rather than compared — it would be refused by the artifact anyway, under a message about re-running the CLI that no run could fix.
 fn check_theme_agrees(
-    package_dir: &Path,
-    library: bool,
+    telar: &telar_project::TelarSection,
     given: Option<&str>,
 ) -> Result<(), TokenStream2> {
-    if library && let Some(given) = given {
+    if telar.library
+        && let Some(given) = given
+    {
         let msg = format!(
             "rsx: this package is a `[telar] library`, so it cannot name a theme type: `{given}` would be one application's, and a library is compiled into applications whose theme types it cannot know. Drop the argument; a library's `$theme.x` reads the shared `ThemeTokens` tokens."
         );
         return Err(quote! { compile_error!(#msg); });
     }
-    let Some(declared) = telar_project::theme_type_in_config(package_dir) else {
+    let Some(declared) = telar_project::theme_type_in_config(telar) else {
         return Ok(());
     };
     let Some(given) = given else {
@@ -730,18 +731,10 @@ fn wire_package(
     invocation: Invocation,
     theme_type_str: Option<&str>,
 ) -> Result<TranspileOutput, TokenStream2> {
-    // Before anything reads a setting out of it: every reader below falls back to a default on a manifest it cannot parse, which is right for them and wrong as the only answer — a misspelled key would configure nothing and say nothing.
     let manifest = telar_project::TelarManifest::load(&manifest_dir).map_err(|e| {
         let msg = format!("rsx: {e}");
         quote! { compile_error!(#msg); }
     })?;
-    let prelude = match telar_project::resolve_prelude(&manifest_dir) {
-        Ok(prelude) => prelude,
-        Err(e) => {
-            let msg = format!("rsx: {e}");
-            return Err(quote! { compile_error!(#msg); });
-        }
-    };
     let package = Package {
         name,
         wiring: Wiring::decide(manifest.telar.library, primary, requested),
@@ -754,11 +747,12 @@ fn wire_package(
     let generated_dir = telar_project::generated_dir(manifest_dir, flavour);
 
     let src_dir = manifest_dir.join("src");
-    let assets = telar_project::AssetContext::load(manifest_dir, ARTIFACT_TELAR_VERSION);
+    let assets =
+        telar_project::AssetContext::load(manifest_dir, &manifest.telar, ARTIFACT_TELAR_VERSION);
 
-    check_theme_agrees(manifest_dir, manifest.telar.library, theme_type_str)?;
+    check_theme_agrees(&manifest.telar, theme_type_str)?;
     // The same order `telar_transpiler::resolve_theme_type` answers in, because the editor's mirror and the golden harness read the key and this is the only other thing that decides what a `use_theme` resolves against. Dropping the argument in favour of the key has to mean the key, not no theme at all.
-    let declared_theme = telar_project::theme_type_in_config(manifest_dir);
+    let declared_theme = telar_project::theme_type_in_config(&manifest.telar);
     let theme_type_str = declared_theme.as_deref().or(theme_type_str);
 
     let wired = wire_sources(
@@ -766,7 +760,7 @@ fn wire_package(
         &src_dir,
         &generated_dir,
         theme_type_str,
-        &prelude,
+        manifest.telar.prelude(),
         &assets,
     )?;
 

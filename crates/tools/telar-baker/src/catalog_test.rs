@@ -66,9 +66,9 @@ fn merges_per_module_files_in_a_locale_dir() {
         "the other module was dropped in the merge: {model:?}"
     );
     assert!(
-        catalog_files(&root).len() == 3,
+        catalog_files(&root).unwrap().len() == 3,
         "every module file in the locale dir counts: {:?}",
-        catalog_files(&root)
+        catalog_files(&root).unwrap()
     );
 
     std::fs::write(
@@ -149,6 +149,31 @@ fn no_locales_dir_is_none() {
     assert!(
         parse_catalog(&root).unwrap().is_none(),
         "no locales dir means no catalog, not an empty one"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_telar_toml_that_does_not_load_is_an_error_rather_than_the_default_catalog() {
+    let root = std::env::temp_dir().join(format!("rsx_i18n_broken_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("locales")).unwrap();
+    std::fs::write(root.join("locales/en.toml"), "title = \"Settings\"\n").unwrap();
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        "[telar.i18n]\nrot = \"strings\"\n",
+    )
+    .unwrap();
+
+    let error = parse_catalog(&root).expect_err("a misspelled key does not mean `locales/`");
+    assert!(error.contains("rot"), "{error}");
+    assert!(catalog_files(&root).is_err());
+    let error = bake_catalog(&root, "test", "0.0.0")
+        .expect_err("a bake against the default directories would write the wrong catalog");
+    assert!(error.to_string().contains("rot"), "{error}");
+    assert!(
+        !root.join(".telar").exists(),
+        "nothing is baked from a manifest that does not load"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

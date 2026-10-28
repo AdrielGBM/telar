@@ -10,7 +10,7 @@ use std::path::Path;
 use telar_parser::{RsxDocument, ViewNode};
 use telar_project::{
     ASSET_KINDS, AssetContext, AssetIndex, AssetKind, BakedAsset, IconsSection, IdBaking,
-    TelarManifest, asset_kind_for_tag, assets_root,
+    TelarManifest, asset_kind_for_tag,
 };
 
 use crate::icon_dependencies::IconDependency;
@@ -117,7 +117,7 @@ pub fn bake_package_with(
         collect_id_refs(&doc, &source, rsx, &id_kind_list, &mut id_refs);
     }
 
-    let assets_root = assets_root(package_dir);
+    let assets_root = manifest.telar.assets_root(package_dir);
     let previous = Previous {
         // An entry baked in another format is not an expression this one can reuse, however unchanged its file.
         index: previous_index

@@ -48,33 +48,29 @@ fn golden_dir() -> PathBuf {
 fn transpile_project(project: &Project) -> Vec<GeneratedFile> {
     let manifest = workspace_root().join(project.manifest);
     let src_dir = manifest.join("src");
-    let assets = telar_project::AssetContext::load(&manifest, env!("CARGO_PKG_VERSION"));
+    let telar = telar_project::TelarManifest::load(&manifest)
+        .unwrap_or_else(|e| panic!("{} has no readable telar.toml: {e}", project.name))
+        .telar;
+    let assets = telar_project::AssetContext::load(&manifest, &telar, env!("CARGO_PKG_VERSION"));
     // Without it every `src:"…"` snapshots as a `compile_error!` telling you to bake — a diff that says nothing about the transpiler, over a snapshot that would then be wrong for everyone who did bake.
     assert!(
         assets.index().is_some(),
         "{} has no usable baked asset artifact — run `cargo run -p cargo-telar -- bake` first",
         project.name
     );
-    let library = telar_project::TelarManifest::load(&manifest)
-        .unwrap_or_else(|e| panic!("{} has no readable telar.toml: {e}", project.name))
-        .telar
-        .library;
-    let theme_type = telar_transpiler::resolve_theme_type(&manifest);
+    let theme_type = telar_transpiler::resolve_theme_type(&manifest, &telar);
     assert!(
-        theme_type.is_some() || library,
+        theme_type.is_some() || telar.library,
         "{} names no theme and is no `[telar] library`, whose `$theme` reads the shared tokens — `use_theme::<T>()` would snapshot untyped, which is not what its build compiles",
         project.name
     );
-
-    let prelude = telar_project::resolve_prelude(&manifest)
-        .unwrap_or_else(|e| panic!("{} declares no readable prelude: {e}", project.name));
 
     let files = telar_transpiler::transpile_package(&telar_transpiler::PackageOptions {
         src_dir: &src_dir,
         theme_type: theme_type.as_deref(),
         assets: Some(&assets),
-        prelude: &prelude,
-        library,
+        prelude: telar.prelude(),
+        library: telar.library,
         flavour: telar_project::BuildFlavour::Plain,
     })
     .unwrap_or_else(|e| panic!("{} failed to transpile: {e}", project.name));

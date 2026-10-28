@@ -67,10 +67,10 @@ pub fn find_rsx_files_in_tree(root: &Path) -> Vec<PathBuf> {
 }
 
 /// The directory that baked `src:"..."` asset paths resolve against: `[telar] assets` in `telar.toml` (default `"assets"`), joined onto the package root — so assets live in one place (e.g. `./assets`) regardless of which `.rsx` references them, instead of being tied to each `.rsx`'s own directory.
-pub fn assets_root(package_root: &Path) -> PathBuf {
-    crate::TelarManifest::load_or_default(package_root)
+pub fn assets_root(package_root: &Path) -> Result<PathBuf, crate::ManifestError> {
+    Ok(crate::TelarManifest::load(package_root)?
         .telar
-        .assets_root(package_root)
+        .assets_root(package_root))
 }
 
 /// The directory under a flavour's generated directory holding one file per discovered subdirectory of `src/`.

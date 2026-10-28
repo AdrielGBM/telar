@@ -45,8 +45,12 @@ pub struct BakedId {
 }
 
 impl AssetContext {
-    /// Reads `<package_dir>/.telar/assets.json` and runs the version handshake against `current_telar_version` — the version of `telar` whose APIs the generated module calls, which is the caller's own `env!("CARGO_PKG_VERSION")` for `telar-macros` and the project's resolved `telar` elsewhere. Never fails: a missing, stale or unreadable artifact is a state every `src:"…"` reports for itself, on its own `.rsx` line, rather than a whole-project error on a project that may reference no asset at all.
-    pub fn load(package_dir: &Path, current_telar_version: &str) -> Self {
+    /// Reads `<package_dir>/.telar/assets.json` and runs the version handshake against `current_telar_version` — the version of `telar` whose APIs the generated module calls, which is the caller's own `env!("CARGO_PKG_VERSION")` for `telar-macros` and the project's resolved `telar` elsewhere. `telar` is the package's loaded `[telar]` table, so a `telar.toml` that does not load is the caller's to report before anything is resolved. Never fails: a missing, stale or unreadable artifact is a state every `src:"…"` reports for itself, on its own `.rsx` line, rather than a whole-project error on a project that may reference no asset at all.
+    pub fn load(
+        package_dir: &Path,
+        telar: &crate::TelarSection,
+        current_telar_version: &str,
+    ) -> Self {
         let telar_dir = package_dir.join(".telar");
         let state = match check_artifact(&telar_dir, current_telar_version) {
             Ok(ArtifactHandshake::NotBaked) => ArtifactState::NotBaked,
@@ -60,11 +64,11 @@ impl AssetContext {
             Err(e) => ArtifactState::Unusable(format!("it could not be read: {e}")),
         };
         Self {
-            root: crate::assets_root(package_dir),
+            root: telar.assets_root(package_dir),
             telar_dir,
             telar_version: current_telar_version.to_string(),
             state,
-            telar: crate::TelarManifest::load_or_default(package_dir).telar,
+            telar: telar.clone(),
             module_source: OnceLock::new(),
         }
     }

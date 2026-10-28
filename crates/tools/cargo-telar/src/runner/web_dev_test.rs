@@ -244,7 +244,7 @@ fn the_page_rebuilds_on_what_the_desktop_loop_watches_and_on_its_own_files() {
     .unwrap();
     let root = root.canonicalize().unwrap();
     let watch = PageWatch::new(
-        WatchSet::collect(&root),
+        WatchSet::collect(&root).unwrap(),
         &root.join("index.html"),
         &root.join("public"),
     );

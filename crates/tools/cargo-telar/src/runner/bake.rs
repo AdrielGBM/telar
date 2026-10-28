@@ -36,6 +36,12 @@ pub(crate) fn bake_workspace() -> bool {
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("package");
+        // Both bakes below read it and would each report it, so it is reported once here instead.
+        if let Err(e) = telar_project::TelarManifest::load(&member) {
+            eprintln!("[cargo-telar] error: {name}: {e}");
+            clean = false;
+            continue;
+        }
         let dependencies = graph
             .as_ref()
             .and_then(|graph| graph.icon_dependencies(&member));
@@ -56,15 +62,22 @@ pub(crate) fn bake_workspace() -> bool {
             }
             clean &= report.errors.is_empty();
         }
-        if let Some(report) = telar_baker::bake_catalog(&member, &producer, &telar_version) {
-            for warning in &report.warnings {
-                eprintln!("[cargo-telar] warning: {warning}");
+        match telar_baker::bake_catalog(&member, &producer, &telar_version) {
+            Ok(Some(report)) => {
+                for warning in &report.warnings {
+                    eprintln!("[cargo-telar] warning: {warning}");
+                }
+                if report.changed {
+                    eprintln!(
+                        "[cargo-telar] Baked {} translation key(s) for {name}",
+                        report.keys
+                    );
+                }
             }
-            if report.changed {
-                eprintln!(
-                    "[cargo-telar] Baked {} translation key(s) for {name}",
-                    report.keys
-                );
+            Ok(None) => {}
+            Err(e) => {
+                eprintln!("[cargo-telar] error: {name}: {e}");
+                clean = false;
             }
         }
     }

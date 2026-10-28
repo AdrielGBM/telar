@@ -125,7 +125,7 @@ fn a_previews_file_previews_the_component_it_is_named_after() {
     std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
     let file = root.join("src/tally.previews.rsx");
 
-    let host = PreviewHost::discover(&file).unwrap();
+    let host = PreviewHost::discover(&file).unwrap().unwrap();
     assert_eq!(host.crate_name, "rsx_fixture");
     assert_eq!(host.component, "tally");
     assert_eq!(
@@ -150,7 +150,7 @@ fn a_previews_file_previews_the_component_it_is_named_after() {
     )
     .unwrap();
     assert_eq!(
-        PreviewHost::discover(&file).unwrap().crate_name,
+        PreviewHost::discover(&file).unwrap().unwrap().crate_name,
         "fixture_lib",
         "`CARGO_CRATE_NAME` is the library's name"
     );
@@ -183,7 +183,9 @@ fn a_librarys_previews_are_shown_by_the_application_that_includes_it() {
     )
     .unwrap();
 
-    let host = PreviewHost::discover(&kit.join("src/button.rsx")).unwrap();
+    let host = PreviewHost::discover(&kit.join("src/button.rsx"))
+        .unwrap()
+        .unwrap();
     assert_eq!(host.package_root, kit, "its tests still run in the library");
     let shown_by: Vec<_> = host
         .workshops
@@ -200,4 +202,28 @@ fn a_librarys_previews_are_shown_by_the_application_that_includes_it() {
         )]
     );
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_telar_toml_that_does_not_load_is_an_error_rather_than_a_host_without_workshops() {
+    let root = scratch("broken");
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"rsx-fixture\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("src/main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        "[telar]\nlibary = true\n",
+    )
+    .unwrap();
+
+    let host = PreviewHost::discover(&root.join("src/tally.previews.rsx"));
+    let _ = std::fs::remove_dir_all(&root);
+
+    let Some(Err(error)) = host else {
+        panic!("a misspelled key decided which workshops list the previews");
+    };
+    assert!(error.to_string().contains("libary"), "{error}");
 }

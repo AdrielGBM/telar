@@ -9,7 +9,7 @@ use serde_json::Value;
 use telar_diagnostics::semantic_diagnostics;
 
 use crate::index::WorkspaceIndex;
-use crate::project::ProjectInfo;
+use crate::project::{ProjectInfo, manifest_diagnostic};
 use crate::ra::Analyzer;
 
 use super::{AnalyzerHandle, AnalyzerState, Backend};
@@ -104,7 +104,11 @@ impl Backend {
             let Some(parsed) = store.get(&uri) else {
                 return Vec::new();
             };
-            let project = file_path.as_deref().and_then(ProjectInfo::discover);
+            let (project, manifest_error) = match file_path.as_deref().and_then(ProjectInfo::load) {
+                Some(Ok(project)) => (Some(project), None),
+                Some(Err(e)) => (None, Some(e)),
+                None => (None, None),
+            };
             let catalog_view = project.as_ref().and_then(ProjectInfo::catalog_view);
             let imported = file_path
                 .as_deref()
@@ -115,7 +119,9 @@ impl Backend {
                 .iter()
                 .map(|class| class.class.name.as_str())
                 .collect();
-            let semantic = semantic_diagnostics(&parsed.document, catalog_view.as_ref(), &names);
+            let mut semantic =
+                semantic_diagnostics(&parsed.document, catalog_view.as_ref(), &names);
+            semantic.extend(manifest_error.as_ref().map(manifest_diagnostic));
             // A new `.rsx` needs something on disk for the crate graph to load; the live buffer itself travels as an overlay, never through the build directory.
             let theme = project.as_ref().and_then(|p| p.theme_type.clone());
             let mut live_map = None;

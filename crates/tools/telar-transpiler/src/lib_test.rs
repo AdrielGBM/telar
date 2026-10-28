@@ -2071,10 +2071,15 @@ fn baked_package(name: &str, kind: &str, rel: &str, content: &[u8]) -> std::path
     root
 }
 
+fn asset_context(root: &Path, telar_version: &str) -> AssetContext {
+    let telar = telar_project::TelarManifest::load(root).unwrap().telar;
+    AssetContext::load(root, &telar, telar_version)
+}
+
 #[test]
 fn quoted_svg_src_references_the_baked_artifact() {
     let root = baked_package("svg_ref", "svg", "icon.svg", b"<svg/>");
-    let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
+    let assets = asset_context(&root, env!("CARGO_PKG_VERSION"));
     let src = "[view]\ncol\n    svg src:\"icon.svg\" color:Color::WHITE width:24 height:24\n";
     let code = transpile_source(src, "demo", None, Some(&assets))
         .unwrap()
@@ -2107,7 +2112,7 @@ fn quoted_svg_src_references_the_baked_artifact() {
 #[test]
 fn two_uses_of_one_asset_share_a_single_static() {
     let root = baked_package("svg_shared", "svg", "icon.svg", b"<svg/>");
-    let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
+    let assets = asset_context(&root, env!("CARGO_PKG_VERSION"));
     let src = "[view]\ncol\n    svg src:\"icon.svg\"\n    svg src:\"icon.svg\"\n";
     let code = transpile_source(src, "demo", None, Some(&assets))
         .unwrap()
@@ -2124,7 +2129,7 @@ fn a_src_with_no_artifact_at_all_names_the_bake_command() {
     let root = std::env::temp_dir().join(format!("rsx_assets_unbaked_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
-    let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
+    let assets = asset_context(&root, env!("CARGO_PKG_VERSION"));
     let code = transpile_source(
         "[view]\nsvg src:\"icon.svg\" width:24\n",
         "demo",
@@ -2147,7 +2152,7 @@ fn a_src_with_no_artifact_at_all_names_the_bake_command() {
 #[test]
 fn a_src_the_artifact_does_not_list_names_the_bake_command() {
     let root = baked_package("svg_unlisted", "svg", "icon.svg", b"<svg/>");
-    let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
+    let assets = asset_context(&root, env!("CARGO_PKG_VERSION"));
     let code = transpile_source(
         "[view]\nsvg src:\"other.svg\" width:24\n",
         "demo",
@@ -2172,7 +2177,7 @@ fn a_src_the_artifact_does_not_list_names_the_bake_command() {
 fn an_asset_edited_since_the_bake_is_a_compile_error() {
     let root = baked_package("svg_stale", "svg", "icon.svg", b"<svg/>");
     std::fs::write(root.join("assets/icon.svg"), b"<svg viewBox=\"0 0 1 1\"/>").unwrap();
-    let assets = AssetContext::load(&root, env!("CARGO_PKG_VERSION"));
+    let assets = asset_context(&root, env!("CARGO_PKG_VERSION"));
     let code = transpile_source(
         "[view]\nsvg src:\"icon.svg\" width:24\n",
         "demo",
@@ -2195,7 +2200,7 @@ fn an_asset_edited_since_the_bake_is_a_compile_error() {
 #[test]
 fn an_artifact_baked_for_another_telar_names_both_commands() {
     let root = baked_package("svg_version", "svg", "icon.svg", b"<svg/>");
-    let assets = AssetContext::load(&root, "0.0.1-other");
+    let assets = asset_context(&root, "0.0.1-other");
     let code = transpile_source(
         "[view]\nsvg src:\"icon.svg\" width:24\n",
         "demo",
@@ -3174,7 +3179,7 @@ fn icon_package_with(name: &str, mode: &str, extra: &str) -> std::path::PathBuf 
 }
 
 fn transpile_in(root: &std::path::Path, src: &str) -> String {
-    let assets = AssetContext::load(root, env!("CARGO_PKG_VERSION"));
+    let assets = asset_context(root, env!("CARGO_PKG_VERSION"));
     transpile_source(src, "demo", None, Some(&assets))
         .unwrap()
         .rust_code

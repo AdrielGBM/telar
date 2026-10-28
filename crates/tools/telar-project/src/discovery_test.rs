@@ -51,17 +51,21 @@ fn assets_root_default_and_configured() {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).unwrap();
 
-    assert_eq!(assets_root(&root), root.join("assets"));
+    assert_eq!(assets_root(&root).unwrap(), root.join("assets"));
 
     std::fs::write(
         root.join("telar.toml"),
         "[telar]\nassets = \"src/shared/assets\"\n",
     )
     .unwrap();
-    assert_eq!(assets_root(&root), root.join("src/shared/assets"));
+    assert_eq!(assets_root(&root).unwrap(), root.join("src/shared/assets"));
 
     std::fs::write(root.join("telar.toml"), "[telar]\nbackend = \"software\"\n").unwrap();
-    assert_eq!(assets_root(&root), root.join("assets"));
+    assert_eq!(assets_root(&root).unwrap(), root.join("assets"));
+
+    std::fs::write(root.join("telar.toml"), "[telar]\nasets = \"art\"\n").unwrap();
+    let error = assets_root(&root).expect_err("a misspelled key is not the default asset root");
+    assert!(error.to_string().contains("asets"), "{error}");
 
     let _ = std::fs::remove_dir_all(&root);
 }

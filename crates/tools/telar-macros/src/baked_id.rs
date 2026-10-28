@@ -12,7 +12,7 @@ use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{LitStr, Token};
-use telar_project::{AssetContext, BakedId};
+use telar_project::{AssetContext, BakedId, ManifestError, TelarManifest};
 
 pub(crate) struct BakedIdInput {
     kind: Ident,
@@ -39,7 +39,7 @@ thread_local! {
     static CONTEXTS: RefCell<HashMap<PathBuf, Loaded>> = RefCell::new(HashMap::new());
 }
 
-fn context(manifest_dir: &Path) -> Rc<AssetContext> {
+fn context(manifest_dir: &Path) -> Result<Rc<AssetContext>, ManifestError> {
     let stamp = std::fs::metadata(
         manifest_dir
             .join(".telar")
@@ -49,17 +49,19 @@ fn context(manifest_dir: &Path) -> Rc<AssetContext> {
     .ok();
     CONTEXTS.with(|contexts| {
         let mut contexts = contexts.borrow_mut();
-        match contexts.get(manifest_dir) {
-            Some((loaded, context)) if *loaded == stamp => Rc::clone(context),
-            _ => {
-                let context = Rc::new(AssetContext::load(
-                    manifest_dir,
-                    crate::ARTIFACT_TELAR_VERSION,
-                ));
-                contexts.insert(manifest_dir.to_path_buf(), (stamp, Rc::clone(&context)));
-                context
-            }
+        if let Some((loaded, context)) = contexts.get(manifest_dir)
+            && *loaded == stamp
+        {
+            return Ok(Rc::clone(context));
         }
+        let telar = TelarManifest::load(manifest_dir)?.telar;
+        let context = Rc::new(AssetContext::load(
+            manifest_dir,
+            &telar,
+            crate::ARTIFACT_TELAR_VERSION,
+        ));
+        contexts.insert(manifest_dir.to_path_buf(), (stamp, Rc::clone(&context)));
+        Ok(context)
     })
 }
 
@@ -80,7 +82,8 @@ fn expand_in(input: BakedIdInput, manifest_dir: &Path) -> syn::Result<TokenStrea
                 format!("`{kind}` is not an asset kind a component names by id"),
             )
         })?;
-    let context = context(manifest_dir);
+    let context =
+        context(manifest_dir).map_err(|e| syn::Error::new(id.span(), format!("rsx: {e}")))?;
     let BakedId {
         id: baked,
         monochrome,

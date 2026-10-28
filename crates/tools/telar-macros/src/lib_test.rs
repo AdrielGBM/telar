@@ -102,7 +102,8 @@ fn wire_as(
     prelude: &[telar_project::PreludeEntry],
     library_dependency: bool,
 ) -> Result<Vec<super::WiredFile>, proc_macro2::TokenStream> {
-    let assets = telar_project::AssetContext::load(root, "0.0.0");
+    let telar = telar_project::TelarManifest::load(root).unwrap().telar;
+    let assets = telar_project::AssetContext::load(root, &telar, "0.0.0");
     let flavour = telar_project::BuildFlavour::Plain;
     let package = super::Package {
         dir: root.to_path_buf(),
@@ -331,8 +332,9 @@ fn a_library_without_an_artifact_is_told_who_produces_it() {
 fn a_library_naming_a_theme_type_is_refused() {
     let root = package("library_named_theme");
     std::fs::write(root.join("telar.toml"), "[telar]\nlibrary = true\n").unwrap();
-    let named = super::check_theme_agrees(&root, true, Some("crate::KitTheme"));
-    let unnamed = super::check_theme_agrees(&root, true, None);
+    let telar = telar_project::TelarManifest::load(&root).unwrap().telar;
+    let named = super::check_theme_agrees(&telar, Some("crate::KitTheme"));
+    let unnamed = super::check_theme_agrees(&telar, None);
     let _ = std::fs::remove_dir_all(&root);
 
     let message = named.err().unwrap().to_string();
@@ -351,11 +353,14 @@ fn only_an_application_has_a_declared_theme_to_agree_with() {
         "[telar]\ntheme = \"crate::AppTheme\"\n",
     )
     .unwrap();
-    let agrees = super::check_theme_agrees(&app, false, Some("crate::AppTheme"));
-    let disagrees = super::check_theme_agrees(&app, false, Some("crate::Other"));
+    let app_telar = telar_project::TelarManifest::load(&app).unwrap().telar;
+    let agrees = super::check_theme_agrees(&app_telar, Some("crate::AppTheme"));
+    let disagrees = super::check_theme_agrees(&app_telar, Some("crate::Other"));
     let library = package("library_declared_theme");
     std::fs::write(library.join("telar.toml"), "[telar]\nlibrary = true\n").unwrap();
-    let library_theme = telar_project::theme_type_in_config(&library);
+    let library_theme = telar_project::theme_type_in_config(
+        &telar_project::TelarManifest::load(&library).unwrap().telar,
+    );
     let _ = std::fs::remove_dir_all(&app);
     let _ = std::fs::remove_dir_all(&library);
 

@@ -451,8 +451,8 @@ fn a_library_inherits_nothing_from_a_workspace_above_it() {
 
     let telar = TelarManifest::load(&vendored).unwrap().telar;
     let prelude = crate::resolve_prelude(&vendored).unwrap();
-    let theme = crate::theme_type_in_config(&vendored);
-    let assets = crate::assets_root(&vendored);
+    let theme = crate::theme_type_in_config(&telar);
+    let assets = crate::assets_root(&vendored).unwrap();
     let files = TelarManifest::files(&vendored);
     let _ = std::fs::remove_dir_all(&root);
 

@@ -8,7 +8,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
 use telar_parser::RsxDocument;
-use telar_project::{AssetContext, BuildFlavour};
+use telar_project::{AssetContext, BuildFlavour, TelarManifest, TelarSection};
 use telar_transpiler::SourceMap;
 
 /// Nearest ancestor holding a `Cargo.toml` — the crate root, i.e. the macro's `CARGO_MANIFEST_DIR`. Anchored on `Cargo.toml` (not `telar.toml`) so this works in crates without an rsx config too.
@@ -29,21 +29,30 @@ pub struct GeneratedTarget {
 }
 
 /// Transpiles `source` into a [`GeneratedTarget`] without touching disk. Shared by [`sync_build_file`] and the embedded-analyzer completion path so both see byte-identical generated text.
+///
+/// `None` when the package's `telar.toml` does not load: the build refuses the package over it rather than transpiling against defaults, and the buffer's diagnostics say so.
 pub fn generated_target(
     rsx_path: &Path,
     source: &str,
     theme_type: Option<&str>,
 ) -> Option<GeneratedTarget> {
     let root = crate_root(rsx_path)?;
+    let telar = TelarManifest::load(&root).ok()?.telar;
+    transpile_target(&root, &telar, rsx_path, source, theme_type)
+}
+
+fn transpile_target(
+    root: &Path,
+    telar: &TelarSection,
+    rsx_path: &Path,
+    source: &str,
+    theme_type: Option<&str>,
+) -> Option<GeneratedTarget> {
     let src_dir = root.join("src");
     let rel = telar_project::relative_output_path(rsx_path, &src_dir)?;
     // The same artifact the macro reads, so the mirror shows the same `src:"…"` errors the build will. Loaded, never baked: this runs on the completion and hover paths too, and neither should be spawning cargo.
-    let assets = AssetContext::load(&root, &project_telar_version(&root));
-    // An unreadable `telar.toml` is the build's error to report; the mirror keeps answering for the tags `telar` and the crate provide.
-    let prelude = telar_project::resolve_prelude(&root).unwrap_or_default();
-    let library = telar_project::TelarManifest::load_or_default(&root)
-        .telar
-        .library;
+    let assets = AssetContext::load(root, telar, &project_telar_version(root));
+    let prelude = telar.prelude().to_vec();
     // No cross-file pre-pass: the editor mirrors the build exactly, because neither needs to know what any other file declares. A component call spells names, and the callee's own type answers for them.
     let result = telar_transpiler::transpile_buffer(
         rsx_path,
@@ -53,12 +62,12 @@ pub fn generated_target(
             theme_type,
             assets: Some(&assets),
             prelude: &prelude,
-            library,
+            library: telar.library,
             flavour: BuildFlavour::Plain,
         },
     )
     .ok()?;
-    let out_path = telar_project::generated_dir(&root, BuildFlavour::Plain).join(&rel);
+    let out_path = telar_project::generated_dir(root, BuildFlavour::Plain).join(&rel);
     Some(GeneratedTarget {
         path: out_path,
         code: result.rust_code,
@@ -101,10 +110,10 @@ fn project_telar_version(package_dir: &Path) -> String {
 /// Bakes `package_dir`'s assets when the artifact cannot answer for something `document` references — it was never baked, it is stale, or a `src:"…"` was just typed for a file no build has seen. Without this the editor shows a `compile_error!` telling the user to run a command, on a keystroke, in a buffer they have not saved.
 ///
 /// Only when the file it names is actually on disk. A `src:` pointing at nothing — a typo, or a path being typed one character at a time — is unresolvable no matter how often it is baked, and this runs on every keystroke: without that guard a mistyped path re-parses every `.rsx` in the package until it is fixed.
-fn bake_if_unanswered(package_dir: &Path, document: &RsxDocument) {
+fn bake_if_unanswered(package_dir: &Path, telar: &TelarSection, document: &RsxDocument) {
     let version = project_telar_version(package_dir);
-    let assets = AssetContext::load(package_dir, &version);
-    let assets_root = telar_project::assets_root(package_dir);
+    let assets = AssetContext::load(package_dir, telar, &version);
+    let assets_root = telar.assets_root(package_dir);
     let mut refs = Vec::new();
     telar_baker::collect_asset_refs(document, &mut refs);
     let bakeable = refs.iter().any(|(kind, path)| {
@@ -117,19 +126,19 @@ fn bake_if_unanswered(package_dir: &Path, document: &RsxDocument) {
     telar_baker::bake_package(package_dir, &producer, &version);
 }
 
-/// Bakes what the buffer references if the artifact cannot answer for it, then leaves the generated file if nothing has produced one yet, and returns the build path with the buffer's map. `theme_type` matches the analyzer's project discovery. A no-op when the file is outside a crate's `src/` or transpilation fails, so IntelliSense keeps working against the last parseable state.
+/// Bakes what the buffer references if the artifact cannot answer for it, then leaves the generated file if nothing has produced one yet, and returns the build path with the buffer's map. `theme_type` matches the analyzer's project discovery. A no-op when the file is outside a crate's `src/`, its `telar.toml` does not load, or transpilation fails, so IntelliSense keeps working against the last parseable state.
 pub fn sync_build_file(
     rsx_path: &Path,
     source: &str,
     document: &RsxDocument,
     theme_type: Option<&str>,
 ) -> Option<(PathBuf, SourceMap)> {
-    if let Some(root) = crate_root(rsx_path) {
-        bake_if_unanswered(&root, document);
-    }
+    let root = crate_root(rsx_path)?;
+    let telar = TelarManifest::load(&root).ok()?.telar;
+    bake_if_unanswered(&root, &telar, document);
     let GeneratedTarget {
         path, code, map, ..
-    } = generated_target(rsx_path, source, theme_type)?;
+    } = transpile_target(&root, &telar, rsx_path, source, theme_type)?;
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

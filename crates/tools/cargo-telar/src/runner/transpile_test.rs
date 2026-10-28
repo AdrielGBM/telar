@@ -229,3 +229,24 @@ fn a_rsx_nothing_can_place_fails_the_run() {
         "{site}"
     );
 }
+
+#[test]
+fn a_telar_toml_that_does_not_load_fails_the_member_instead_of_transpiling_with_defaults() {
+    let root = package("broken_manifest");
+    std::fs::write(root.join("src/home.rsx"), "[view]\ncol\n    text \"hi\"\n").unwrap();
+    std::fs::write(
+        root.join(telar_project::MANIFEST_FILENAME),
+        "[telar]\nlibary = true\n",
+    )
+    .unwrap();
+
+    assert!(!transpile_member(&root, "test", "0.0.0"));
+
+    for flavour in BuildFlavour::ALL {
+        assert!(
+            telar_project::read_build_index(&root, flavour).is_none(),
+            "{flavour:?} was transpiled against the default manifest"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}

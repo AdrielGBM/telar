@@ -438,16 +438,17 @@ fn stage(dir: &Path, listed: &BTreeSet<String>, staged: &Path) -> std::io::Resul
 /// Why the Plain artifact in `package_dir` would be refused by a build compiling it as a dependency, against `telar_version`: the same handshakes the macro runs — the build index answering for every `.rsx`, the module tree matching the source tree, and the version each artifact was written for — plus the baked catalog and assets against the sources they were baked from.
 pub(super) fn artifact_problems(package_dir: &Path, telar_version: &str) -> Vec<String> {
     let mut problems = Vec::new();
-    let prelude = match telar_project::resolve_prelude(package_dir) {
-        Ok(prelude) => prelude,
+    let telar = match telar_project::TelarManifest::load(package_dir) {
+        Ok(manifest) => manifest.telar,
         Err(e) => return vec![e.to_string()],
     };
-    let theme = telar_transpiler::resolve_theme_type(package_dir);
+    let prelude = telar.prelude();
+    let theme = telar_transpiler::resolve_theme_type(package_dir, &telar);
     let src_dir = package_dir.join("src");
     let plain = BuildFlavour::Plain;
     let generated_dir = telar_project::generated_dir(package_dir, plain);
     let telar_dir = package_dir.join(".telar");
-    let assets = telar_project::AssetContext::load(package_dir, telar_version);
+    let assets = telar_project::AssetContext::load(package_dir, &telar, telar_version);
     const RETRANSPILE: &str = "Run `cargo telar transpile` and package again.";
 
     if !telar_project::find_rsx_files(&src_dir).is_empty() {
@@ -467,7 +468,7 @@ pub(super) fn artifact_problems(package_dir: &Path, telar_version: &str) -> Vec<
                 "the `.rsx` were transpiled for telar {}, and this workspace builds telar {telar_version}; a dependency is refused unless the two agree. {RETRANSPILE}",
                 index.telar_version
             )),
-            Some(index) if !index.was_transpiled_with(&prelude) => problems.push(format!(
+            Some(index) if !index.was_transpiled_with(prelude) => problems.push(format!(
                 "the `.rsx` were transpiled with `prelude = {:?}`, and telar.toml now declares {:?}. {RETRANSPILE}",
                 index.prelude,
                 prelude
@@ -484,7 +485,7 @@ pub(super) fn artifact_problems(package_dir: &Path, telar_version: &str) -> Vec<
                     &src_dir,
                     &generated_dir,
                     theme.as_deref(),
-                    &prelude,
+                    prelude,
                     telar_version,
                 ) =>
             {
@@ -516,7 +517,11 @@ pub(super) fn artifact_problems(package_dir: &Path, telar_version: &str) -> Vec<
     }
 
     problems.extend(catalog_problems(package_dir, &telar_dir, telar_version));
-    problems.extend(asset_problems(package_dir, &telar_dir, telar_version));
+    problems.extend(asset_problems(
+        &telar.assets_root(package_dir),
+        &telar_dir,
+        telar_version,
+    ));
     problems.extend(icon_record_problem(package_dir));
     problems
 }
@@ -561,7 +566,7 @@ fn catalog_problems(package_dir: &Path, telar_dir: &Path, telar_version: &str) -
     catalog.staleness().into_iter().collect()
 }
 
-fn asset_problems(package_dir: &Path, telar_dir: &Path, telar_version: &str) -> Vec<String> {
+fn asset_problems(assets_root: &Path, telar_dir: &Path, telar_version: &str) -> Vec<String> {
     const REBAKE: &str = "Run `cargo telar bake` and package again.";
     let index = match telar_project::check_artifact(telar_dir, telar_version) {
         Ok(telar_project::ArtifactHandshake::NotBaked) => return Vec::new(),
@@ -590,9 +595,8 @@ fn asset_problems(package_dir: &Path, telar_dir: &Path, telar_version: &str) -> 
             telar_project::ASSETS_SOURCE_FILENAME
         ));
     }
-    let root = telar_project::assets_root(package_dir);
     problems.extend(index.entries.iter().filter_map(|entry| {
-        let bytes = std::fs::read(root.join(&entry.path)).ok()?;
+        let bytes = std::fs::read(assets_root.join(&entry.path)).ok()?;
         (telar_project::content_hash(&bytes) != entry.hash).then(|| {
             format!(
                 "the asset `{}` changed after it was baked, so the package would carry its old contents. {REBAKE}",

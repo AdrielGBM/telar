@@ -50,19 +50,18 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("package");
-    // Loaded, never baked: the bake already ran, and a `src:"…"` the artifact cannot answer for is an error the macro puts on its own `.rsx` line rather than one this pass can act on.
-    let assets = telar_project::AssetContext::load(member, telar_version);
-    let theme = telar_transpiler::resolve_theme_type(member);
-    let prelude = match telar_project::resolve_prelude(member) {
-        Ok(prelude) => prelude,
+    let telar = match telar_project::TelarManifest::load(member) {
+        Ok(manifest) => manifest.telar,
         Err(e) => {
             eprintln!("[cargo-telar] error: {e}");
             return false;
         }
     };
-    let library = telar_project::TelarManifest::load_or_default(member)
-        .telar
-        .library;
+    // Loaded, never baked: the bake already ran, and a `src:"…"` the artifact cannot answer for is an error the macro puts on its own `.rsx` line rather than one this pass can act on.
+    let assets = telar_project::AssetContext::load(member, &telar, telar_version);
+    let theme = telar_transpiler::resolve_theme_type(member, &telar);
+    let prelude = telar.prelude();
+    let library = telar.library;
 
     let mut reported: Vec<String> = Vec::new();
     let mut all_ok = true;
@@ -74,7 +73,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
                 src_dir: &src_dir,
                 theme_type: theme.as_deref(),
                 assets: Some(&assets),
-                prelude: &prelude,
+                prelude,
                 library,
                 flavour,
             }) {
@@ -108,7 +107,7 @@ pub(super) fn transpile_member(member: &Path, producer: &str, telar_version: &st
                 &files,
                 &src_dir,
                 theme.as_deref(),
-                &prelude,
+                prelude,
                 producer,
                 telar_version,
             );

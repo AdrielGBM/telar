@@ -497,28 +497,41 @@ pub fn previews_include_problems(
 }
 
 /// The packages whose workshop lists the previews of `crate_name`, the crate built at `package_dir`, in the order to look for one: the package itself when it is an application, then each member of its workspace whose `[telar.previews] include` names the crate. A library has no workshop of its own, so its previews are only reached through an application that includes it.
-pub fn preview_hosts(package_dir: &Path, crate_name: &str) -> Vec<PathBuf> {
-    let own = hosts_a_workshop(package_dir).then(|| package_dir.to_path_buf());
+pub fn preview_hosts(
+    package_dir: &Path,
+    crate_name: &str,
+) -> Result<Vec<PathBuf>, crate::ManifestError> {
+    let mut hosts = Vec::new();
+    if hosts_a_workshop(package_dir)?.is_some() {
+        hosts.push(package_dir.to_path_buf());
+    }
     let workspace_root =
         crate::find_workspace_root(package_dir).unwrap_or_else(|| package_dir.to_path_buf());
-    let includers = crate::workspace_member_dirs(&workspace_root)
-        .into_iter()
-        .filter(|member| member != package_dir && hosts_a_workshop(member))
-        .filter(|member| {
-            crate::TelarManifest::load_or_default(member)
-                .telar
-                .previews
-                .include()
-                .iter()
-                .any(|entry| entry.crate_name() == crate_name)
-        });
-    own.into_iter().chain(includers).collect()
+    for member in crate::workspace_member_dirs(&workspace_root) {
+        if member == *package_dir {
+            continue;
+        }
+        let Some(telar) = hosts_a_workshop(&member)? else {
+            continue;
+        };
+        if telar
+            .previews
+            .include()
+            .iter()
+            .any(|entry| entry.crate_name() == crate_name)
+        {
+            hosts.push(member);
+        }
+    }
+    Ok(hosts)
 }
 
-/// Whether `cargo telar preview` can run a workshop for the package: an application, with a binary to run, rather than a `[telar] library`.
-fn hosts_a_workshop(package_dir: &Path) -> bool {
+/// The package's `[telar]` table when `cargo telar preview` can run a workshop for it: an application, with a binary to run, rather than a `[telar] library`.
+fn hosts_a_workshop(
+    package_dir: &Path,
+) -> Result<Option<crate::TelarSection>, crate::ManifestError> {
     let Some(manifest) = crate::cargo_manifest::read_manifest(package_dir) else {
-        return false;
+        return Ok(None);
     };
     let has_binary = package_dir.join("src/main.rs").is_file()
         || package_dir.join("src/bin").is_dir()
@@ -526,10 +539,11 @@ fn hosts_a_workshop(package_dir: &Path) -> bool {
             .get("bin")
             .and_then(toml::Value::as_array)
             .is_some_and(|bins| !bins.is_empty());
-    has_binary
-        && !crate::TelarManifest::load_or_default(package_dir)
-            .telar
-            .library
+    if !has_binary {
+        return Ok(None);
+    }
+    let telar = crate::TelarManifest::load(package_dir)?.telar;
+    Ok((!telar.library).then_some(telar))
 }
 
 #[cfg(test)]

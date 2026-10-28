@@ -13,7 +13,9 @@ use telar_project::protocol::{
     BUILD_ERROR_PREFIX, HOT_RELOAD_PREFIX, HOT_REPLIES_LINE, HOT_TOKEN_VAR, HotOutcome, HotReply,
     TEST_TARGET_DIR_VAR, WORKSPACE_DIR_VAR, escape_lines,
 };
-use telar_project::{ASSET_KINDS, DEVTOOLS_PACKAGE, WORKSHOP_PACKAGE};
+use telar_project::{
+    ASSET_KINDS, DEVTOOLS_PACKAGE, ManifestError, TelarManifest, WORKSHOP_PACKAGE,
+};
 
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
@@ -137,10 +139,10 @@ pub(crate) struct WatchSet {
 
 impl WatchSet {
     /// Canonical, because an event names the path the platform resolved — macOS reports `/private/var/…` for a watch on `/var/…` — and a set spelled any other way would match nothing.
-    pub(crate) fn collect(workspace_root: &Path) -> Self {
+    pub(crate) fn collect(workspace_root: &Path) -> Result<Self, ManifestError> {
         let canonical = |path: PathBuf| path.canonicalize().unwrap_or(path);
-        Self {
-            dirs: collect_watch_dirs(workspace_root)
+        Ok(Self {
+            dirs: collect_watch_dirs(workspace_root)?
                 .into_iter()
                 .map(canonical)
                 .collect(),
@@ -151,7 +153,7 @@ impl WatchSet {
                     _ => manifest,
                 })
                 .collect(),
-        }
+        })
     }
 }
 
@@ -212,24 +214,17 @@ fn collect_watch_manifests(workspace_root: &Path) -> Vec<PathBuf> {
 }
 
 // Every directory an edit can come from: each member's `src/`, the asset root, and the catalog directory. The last two sit outside `src/` by default, so watching only `src/` meant editing an asset or a translation raised no event at all — not one that was handled badly, one that never arrived.
-fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = telar_project::workspace_member_dirs(workspace_root)
-        .into_iter()
-        .flat_map(|member| {
-            [
-                Some(member.join("src")),
-                Some(telar_project::assets_root(&member)),
-                telar_baker::locales_root(&member),
-                // The application's own icons, not its Iconify sets: those usually live in `node_modules`, which is no tree to watch recursively.
-                telar_project::TelarManifest::load_or_default(&member)
-                    .telar
-                    .icons
-                    .and_then(|icons| icons.svg_dir(&member)),
-            ]
-        })
-        .flatten()
-        .filter(|dir| dir.is_dir())
-        .collect();
+fn collect_watch_dirs(workspace_root: &Path) -> Result<Vec<PathBuf>, ManifestError> {
+    let mut dirs = Vec::new();
+    for member in telar_project::workspace_member_dirs(workspace_root) {
+        let telar = TelarManifest::load(&member)?.telar;
+        dirs.push(member.join("src"));
+        dirs.push(telar.assets_root(&member));
+        dirs.extend(telar.locales_root(&member));
+        // The application's own icons, not its Iconify sets: those usually live in `node_modules`, which is no tree to watch recursively.
+        dirs.extend(telar.icons.and_then(|icons| icons.svg_dir(&member)));
+    }
+    dirs.retain(|dir| dir.is_dir());
     dirs.sort();
     dirs.dedup();
     // Each watch is recursive, and `[telar] assets` may point inside `src/` — watching both would deliver every edit twice and rebuild twice for one keystroke.
@@ -242,7 +237,7 @@ fn collect_watch_dirs(workspace_root: &Path) -> Vec<PathBuf> {
         .cloned()
         .collect();
     dirs.retain(|dir| !nested.contains(dir));
-    dirs
+    Ok(dirs)
 }
 
 // TCP loopback rather than a unix socket, so hot reload works on non-Unix hosts. cargo-telar binds and the app connects once at startup, opens with the token, then reads line events and writes back what it did with each reload.
@@ -1031,7 +1026,15 @@ pub(crate) fn run_hot_loop(mode: HotMode, opts: HotLoopOpts) -> ! {
         },
     );
 
-    let changes = match ChangeFeed::start(WatchSet::collect(&workspace_root)) {
+    let watched = match WatchSet::collect(&workspace_root) {
+        Ok(watched) => watched,
+        Err(e) => {
+            eprintln!("[cargo-telar] error: {e}");
+            drop(workshop);
+            std::process::exit(1);
+        }
+    };
+    let changes = match ChangeFeed::start(watched) {
         Ok(changes) => changes,
         Err(e) => {
             eprintln!("[cargo-telar] could not watch for changes: {e}");

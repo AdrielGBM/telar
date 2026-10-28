@@ -457,14 +457,53 @@ fn a_librarys_previews_are_hosted_by_the_applications_that_include_it() {
     );
 
     assert_eq!(
-        preview_hosts(&root.join("libs/kit"), "kit"),
+        preview_hosts(&root.join("libs/kit"), "kit").unwrap(),
         vec![root.join("apps/gallery")],
         "a library has no workshop, and neither does one that includes another"
     );
     assert_eq!(
-        preview_hosts(&root.join("apps/other"), "other"),
+        preview_hosts(&root.join("apps/other"), "other").unwrap(),
         vec![root.join("apps/other")],
         "an application hosts its own"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_workshop_whose_telar_toml_does_not_load_is_an_error_rather_than_no_host() {
+    let root = std::env::temp_dir().join(format!(
+        "telar_previews_hosts_broken_{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"apps/*\", \"libs/*\"]\n",
+    )
+    .unwrap();
+    member(
+        &root,
+        "libs/kit",
+        "[package]\nname = \"kit\"\n",
+        Some("[telar]\nlibrary = true\n"),
+        false,
+    );
+    member(
+        &root,
+        "apps/gallery",
+        "[package]\nname = \"gallery\"\n",
+        Some("[telar.previews]\ninclude = [\"kit\"\n"),
+        true,
+    );
+
+    let error = preview_hosts(&root.join("libs/kit"), "kit")
+        .expect_err("an includer whose manifest does not parse cannot be ruled out");
+    assert!(
+        error
+            .to_string()
+            .contains(&root.join("apps/gallery").display().to_string()),
+        "{error}"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

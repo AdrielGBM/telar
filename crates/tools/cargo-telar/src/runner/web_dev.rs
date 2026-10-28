@@ -106,7 +106,14 @@ fn watch_and_rebuild(
     dist: &Path,
     renderer: Option<WebRenderer>,
 ) -> ! {
-    let changes = match ChangeFeed::start(PageWatch::collect(&cargo_args, &config)) {
+    let watched = match PageWatch::collect(&cargo_args, &config) {
+        Ok(watched) => watched,
+        Err(e) => {
+            eprintln!("[cargo-telar] error: {e}");
+            idle();
+        }
+    };
+    let changes = match ChangeFeed::start(watched) {
         Ok(changes) => changes,
         Err(e) => {
             eprintln!("[cargo-telar] could not watch for changes: {e}");
@@ -141,13 +148,16 @@ struct PageWatch {
 }
 
 impl PageWatch {
-    fn collect(cargo_args: &[String], config: &TelarSection) -> Self {
+    fn collect(
+        cargo_args: &[String],
+        config: &TelarSection,
+    ) -> Result<Self, telar_project::ManifestError> {
         let package_root = find_package_dir(cargo_args);
-        Self::new(
-            WatchSet::collect(&resolve_package(cargo_args).workspace_root),
+        Ok(Self::new(
+            WatchSet::collect(&resolve_package(cargo_args).workspace_root)?,
             &config.web.template_path(&package_root).0,
             &config.web.public_dir(&package_root).0,
-        )
+        ))
     }
 
     /// Canonical for the reason [`WatchSet::collect`] gives, through the template's directory, since the template may not exist yet.
