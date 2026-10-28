@@ -13,7 +13,7 @@ license = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-paths = { git = "https://github.com/rust-lang/rust-analyzer", rev = "5c156cdfb047ea171ba255dcdcd86236d98a389e", version = "0.0.0" }
+paths = { git = "https://github.com/rust-lang/rust-analyzer", rev = "0c4d74686b21f2b3bd8872b6d3cf36ad2e740d49", version = "0.0.0" }
 # The same baker `cargo telar bake` runs. The editor has to answer for a `src:"…"` before any build has,
 # so it bakes for itself rather than showing an error the user cannot act on from where they are.
 telar-baker = { workspace = true }
@@ -26,7 +26,7 @@ anyhow = "1.0.103"
 crossbeam-channel = "0.5.17"
 lsp-server = "0.7"
 lsp-types = { workspace = true }
-rust-analyzer = { git = "https://github.com/rust-lang/rust-analyzer", rev = "5c156cdfb047ea171ba255dcdcd86236d98a389e", version = "0.0.0" }
+rust-analyzer = { git = "https://github.com/rust-lang/rust-analyzer", rev = "0c4d74686b21f2b3bd8872b6d3cf36ad2e740d49", version = "0.0.0" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { version = "1", features = [
