@@ -234,12 +234,16 @@ pub fn context_provided_here<T: 'static>() -> bool {
 
 /// Puts `value` in the current owner's context, replacing whatever this owner had of that type — a rebuild builds its content again and says the same things about it.
 pub fn provide_context<T: 'static>(value: T) {
-    RUNTIME.with(|rt| {
+    let value: Rc<dyn Any> = Rc::new(value);
+    // Dropped after the borrow is released: the value is the caller's, and its `Drop` may reach the runtime.
+    let replaced = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        if let Some(entry) = owning(&mut rt) {
-            entry.context.insert(TypeId::of::<T>(), Rc::new(value));
+        match owning(&mut rt) {
+            Some(entry) => entry.context.insert(TypeId::of::<T>(), value),
+            None => Some(value),
         }
     });
+    drop(replaced);
 }
 
 /// Reads the nearest value of type `T` at or above the current owner, walking rather than copying so opening a scope stays free and the cost lands on the read instead.
@@ -310,11 +314,11 @@ pub enum PanicCatch {
 
 /// Sets what `owner` does with a panic out of an effect at or below it. `None` passes such a panic on to its parent.
 pub fn set_panic_catch(owner: OwnerId, catch: Option<PanicCatch>) {
-    RUNTIME.with(|rt| {
-        if let Some(entry) = rt.borrow_mut().owners.get_mut(owner.key) {
-            entry.catch = catch;
-        }
+    let replaced = RUNTIME.with(|rt| match rt.borrow_mut().owners.get_mut(owner.key) {
+        Some(entry) => std::mem::replace(&mut entry.catch, catch),
+        None => catch,
     });
+    drop(replaced);
 }
 
 /// Offers a panic out of an effect held by `owner` to the nearest owner that catches, resuming the unwind when none does; inside another effect's run it always resumes, since the catching owner may hold that still-executing outer effect.
@@ -432,6 +436,9 @@ fn tear_down(id: OwnerKey, panicked: &mut Option<PanicPayload>) {
             for effect in std::mem::take(&mut owner.effects) {
                 contain(panicked, || deregister_effect(effect));
             }
+            // Before the signals go, since what it provides may hold them.
+            let provided = (std::mem::take(&mut owner.context), owner.catch.take());
+            contain(panicked, || drop(provided));
         });
     }
     free_released_mid_teardown(panicked);
@@ -566,17 +573,8 @@ pub fn live_owner_count() -> usize {
     RUNTIME.with(|rt| rt.borrow().owners.len())
 }
 
-/// Removes an owner's subtree from the arena and hands back what it held, deepest owner first; iterative rather than recursive, since a stack overflow inside disposal would abort rather than unwind.
-type Uprooted = Vec<TornOwner>;
-
-struct TornOwner {
-    surface: SurfaceHandle,
-    cleanups: Vec<Box<dyn FnOnce()>>,
-    effects: Vec<EffectId>,
-    signals: Vec<SignalId>,
-}
-
-fn uproot(root: OwnerKey) -> Uprooted {
+/// Removes an owner's subtree from the arena and hands back its entries, deepest owner first, to be torn down and dropped once the borrow is released; iterative rather than recursive, since a stack overflow inside disposal would abort rather than unwind.
+fn uproot(root: OwnerKey) -> Vec<OwnerEntry> {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
 
@@ -600,12 +598,6 @@ fn uproot(root: OwnerKey) -> Uprooted {
             .into_iter()
             .rev()
             .filter_map(|id| rt.owners.remove(id))
-            .map(|entry| TornOwner {
-                surface: entry.surface,
-                cleanups: entry.cleanups,
-                effects: entry.effects,
-                signals: entry.signals,
-            })
             .collect()
     })
 }

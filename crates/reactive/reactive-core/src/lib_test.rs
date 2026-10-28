@@ -260,7 +260,7 @@ fn effect_reruns_when_memo_changes() {
     assert_eq!(*log.borrow(), vec![0, 6]);
 }
 
-// Regression: `run_effect`'s signal-version shortcut skipped an effect tracking both a signal and a memo, because memo deps are invisible to `sources`.
+// `run_effect`'s version shortcut counts a memo's version as well as the signals', so an effect tracking an unchanged signal still hears the memo.
 #[test]
 fn effect_with_signal_and_memo_sources_reruns_on_memo_change() {
     let unrelated = signal(0i32);

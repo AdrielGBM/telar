@@ -1,11 +1,9 @@
 //! [`Memo`]: a derived value recomputed on demand and only notified onward when it actually changed.
 
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::marker::PhantomData;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::rc::Rc;
-
-use smallvec::SmallVec;
 
 use crate::runtime::{self, EffectId, HeldAt, SignalId, SiteCell};
 
@@ -21,20 +19,10 @@ struct MemoNode<T> {
     state: SiteCell<MemoState<T>>,
     /// A recompute found the value lent to a read and could not run, so the value is stale until the next one does.
     missed: Cell<bool>,
-    subscribers: RefCell<SmallVec<[EffectId; 4]>>,
     recompute: Cell<Option<EffectId>>,
 }
 
 impl<T: 'static> MemoNode<T> {
-    fn track(&self) {
-        if let Some(id) = runtime::current_observer() {
-            let mut subscribers = self.subscribers.borrow_mut();
-            if !subscribers.contains(&id) {
-                subscribers.push(id);
-            }
-        }
-    }
-
     /// Recomputes a memo that has no current value, unless the value is still lent to an outer read, which recomputes it once it returns.
     fn catch_up(&self) {
         let Some(recompute) = self.recompute.get() else {
@@ -124,7 +112,7 @@ impl<T: 'static> Memo<T> {
     #[track_caller]
     fn read<R>(&self, f: impl FnOnce(&T) -> R) -> R {
         let node = self.node();
-        node.track();
+        runtime::track_signal(self.id);
         node.catch_up();
         let _recompute_missed = RecomputeMissed(&node);
         let state = match node.state.try_read() {
@@ -168,11 +156,12 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
     let node = Rc::new(MemoNode {
         state: SiteCell::new(MemoState::Dirty),
         missed: Cell::new(false),
-        subscribers: RefCell::new(SmallVec::new()),
         recompute: Cell::new(None),
     });
+    // Stored as a signal, so the owner disposes it and its readers subscribe and compare versions as they do with a signal.
+    let id = runtime::create_shared_storage(Rc::clone(&node));
 
-    // The arena slot owns the state, so the memo is disposed with its owner. The closure holds a `Weak` rather than the slot's id, because the recompute runs during a flush that may come after disposal — a `Weak` that fails to upgrade says so, where a stale id would only panic.
+    // The node is reached through a `Weak` because the recompute runs during a flush that may come after disposal, which a `Weak` that fails to upgrade reports.
     let weak = Rc::downgrade(&node);
     let effect_f: Box<dyn Fn()> = Box::new(move || {
         let Some(node) = weak.upgrade() else {
@@ -199,29 +188,13 @@ pub fn memo<T: PartialEq + 'static>(f: impl Fn() -> T + 'static) -> Memo<T> {
             _ => true,
         };
         node.set_state(MemoState::Clean(new_value));
-        if !changed {
-            return;
-        }
-        let subscribers: SmallVec<[EffectId; 8]> =
-            node.subscribers.borrow().iter().copied().collect();
-        let mut dead: Option<Vec<EffectId>> = None;
-        for id in subscribers {
-            if runtime::is_alive(id) {
-                runtime::schedule(id);
-            } else {
-                dead.get_or_insert_with(Vec::new).push(id);
-            }
-        }
-        if let Some(dead) = dead {
-            node.subscribers
-                .borrow_mut()
-                .retain(|id| !dead.contains(id));
+        if changed {
+            runtime::notify_signal(id);
         }
     });
 
-    let id = runtime::create_shared_storage(Rc::clone(&node));
-    // Registered as a pure effect, so it runs before user effects during flush. The owner active here recorded it, and that is what disposes it.
-    let effect_id = runtime::register_pure_effect(effect_f);
+    // The owner active here recorded it, and that is what disposes it.
+    let effect_id = runtime::register_memo_effect(effect_f, id);
     node.recompute.set(Some(effect_id));
     drop(node);
     runtime::run_effect(effect_id);

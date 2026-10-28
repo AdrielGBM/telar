@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use super::effects::run_effect;
-use super::{EffectId, FlushNotifyHandle, RUNTIME, SurfaceHandle};
+use super::{EffectId, FlushNotifyHandle, RUNTIME, Runtime, SurfaceHandle};
 
 const MAX_FLUSH_ITERATIONS: usize = 1_000;
 
@@ -36,31 +36,22 @@ pub(crate) fn flush() {
         for _ in 0..MAX_FLUSH_ITERATIONS {
             // One epoch per drain, not one per flush. The dedup in `run_effect` makes two writes to one signal cost one run, but an effect whose source is written by a later effect in the same cascade must still run again: under a flush-wide epoch that re-run was scheduled, popped and skipped, and nothing rescheduled it. A genuine write-read cycle is still caught by the iteration cap below.
             RUNTIME.with(|rt| rt.borrow_mut().flush_epoch += 1);
-            // Memos first, then user effects. Pop minimum height first, so producers run before consumers.
-            let memo_batch: Vec<EffectId> = RUNTIME.with(|rt| {
+            if drain_memos() {
+                did_work = true;
+                continue;
+            }
+            // Every memo has settled, so the set names user effects alone.
+            let pending_batch = RUNTIME.with(|rt| {
                 let mut rt = rt.borrow_mut();
-                let mut batch = Vec::new();
-                while let Some((_, id)) = rt.memo_pending.pop() {
-                    batch.push(id);
-                }
-                batch
+                rt.pending_set.clear();
+                std::mem::take(&mut rt.pending)
             });
-            let pending_batch = if memo_batch.is_empty() {
-                RUNTIME.with(|rt| {
-                    let mut rt = rt.borrow_mut();
-                    rt.pending_set.clear();
-                    std::mem::take(&mut rt.pending)
-                })
-            } else {
-                Vec::new()
-            };
-
-            if memo_batch.is_empty() && pending_batch.is_empty() {
+            if pending_batch.is_empty() {
                 overflowed = false;
                 break;
             }
             did_work = true;
-            let mut unrun = Unrun(memo_batch.into_iter().chain(pending_batch));
+            let mut unrun = Unrun(pending_batch.into_iter());
             for id in unrun.0.by_ref() {
                 run_effect(id);
             }
@@ -91,10 +82,40 @@ pub(crate) fn flush() {
     run_settled();
 }
 
-/// The rest of a drain, put back on the queue when a panic nothing caught leaves it unrun: those effects are still dirty, and dropping them would leave their readers stale until some unrelated write happened to reschedule them.
-struct Unrun<I: Iterator<Item = EffectId>>(I);
+/// Runs pending memos lowest height first, one at a time, so a memo a recompute schedules still runs before anything higher that reads it; answers whether it ran any.
+fn drain_memos() -> bool {
+    let mut ran = false;
+    while let Some(id) = RUNTIME.with(|rt| next_memo(&mut rt.borrow_mut())) {
+        run_effect(id);
+        ran = true;
+    }
+    ran
+}
 
-impl<I: Iterator<Item = EffectId>> Drop for Unrun<I> {
+/// The lowest pending memo, or `None` when there is none or it already ran in this drain, where `run_effect` would skip it: a second run gets a drain of its own.
+fn next_memo(rt: &mut Runtime) -> Option<EffectId> {
+    while let Some(&(Reverse(height), id)) = rt.memo_pending.peek() {
+        let due = rt.pending_set.contains(&id)
+            && rt
+                .effects
+                .get(id)
+                .is_some_and(|entry| entry.height == height);
+        if due && rt.effects[id].last_run_epoch == rt.flush_epoch {
+            return None;
+        }
+        rt.memo_pending.pop();
+        if due {
+            rt.pending_set.remove(&id);
+            return Some(id);
+        }
+    }
+    None
+}
+
+/// The rest of a drain, put back on the queue when a panic nothing caught leaves it unrun: those effects are still dirty, and dropping them would leave their readers stale until some unrelated write happened to reschedule them.
+struct Unrun(std::vec::IntoIter<EffectId>);
+
+impl Drop for Unrun {
     fn drop(&mut self) {
         let rest: Vec<EffectId> = self.0.by_ref().collect();
         if rest.is_empty() {
@@ -103,17 +124,7 @@ impl<I: Iterator<Item = EffectId>> Drop for Unrun<I> {
         RUNTIME.with(|rt| {
             let mut rt = rt.borrow_mut();
             for id in rest {
-                let Some(entry) = rt.effects.get(id) else {
-                    continue;
-                };
-                let (is_pure, height) = (entry.is_pure, entry.height);
-                // Pushed whether or not the set already names it: a drained memo stays in the set until the user-effect drain clears it.
-                rt.pending_set.insert(id);
-                if is_pure {
-                    rt.memo_pending.push((Reverse(height), id));
-                } else {
-                    rt.pending.push(id);
-                }
+                rt.enqueue(id);
             }
         });
     }
@@ -185,16 +196,19 @@ pub(crate) fn flush_when_settled() {
 ///
 /// # Panics
 ///
-/// When called from inside a running effect, whose frame still depends on the runtime it would drop.
+/// When called from inside a running effect, whose frame still depends on the runtime it would drop, or while the runtime is borrowed, as it is while something it holds drops.
 pub fn reset_runtime() {
     RUNTIME.with(|cell| {
         let current = cell.ptr.get();
-        let running = !current.is_null()
-            && unsafe { (*current).try_borrow() }.is_ok_and(|rt| rt.running_effects > 0);
-        assert!(
-            !running,
-            "reset_runtime called from inside a running effect"
-        );
+        if !current.is_null() {
+            let Ok(rt) = (unsafe { (*current).try_borrow_mut() }) else {
+                panic!("reset_runtime called while the runtime is borrowed");
+            };
+            assert!(
+                rt.running_effects == 0,
+                "reset_runtime called from inside a running effect"
+            );
+        }
         let old_ptr = cell.take_ptr();
         // Emptied BEFORE the old one drops: a re-entrant RUNTIME access from its drop glue (drop_signal, etc.) gets a fresh, empty runtime and returns early — no borrow conflict, no double-free.
         if !old_ptr.is_null() {

@@ -371,3 +371,43 @@ fn an_owner_id_prints_only_its_key() {
     assert!(printed.starts_with("OwnerId("), "{printed}");
     assert!(!printed.contains("PhantomData"), "{printed}");
 }
+
+fn reads_on_drop(seen: &Rc<RefCell<Option<String>>>) -> ReadsOnDrop {
+    ReadsOnDrop {
+        read: signal(String::from("read")),
+        seen: Rc::clone(seen),
+    }
+}
+
+#[test]
+fn a_context_value_replaced_or_torn_down_drops_after_the_runtime_borrow() {
+    let (replaced, torn) = (Rc::default(), Rc::default());
+    let scope = owner_scope();
+    let owner = scope.id();
+    provide_context(reads_on_drop(&replaced));
+    provide_context(reads_on_drop(&torn));
+    assert!(replaced.borrow().is_some());
+    drop(scope);
+    dispose_owner(owner);
+    assert!(torn.borrow().is_some());
+}
+
+#[test]
+fn a_panic_catch_replaced_or_torn_down_drops_after_the_runtime_borrow() {
+    let (replaced, torn) = (Rc::default(), Rc::default());
+    let scope = owner_scope();
+    let owner = scope.id();
+    let catch = |seen| {
+        let held = reads_on_drop(seen);
+        PanicCatch::Handle(Rc::new(move |payload| {
+            let _held = &held;
+            Err(payload)
+        }))
+    };
+    set_panic_catch(owner, Some(catch(&replaced)));
+    set_panic_catch(owner, Some(catch(&torn)));
+    assert!(replaced.borrow().is_some());
+    drop(scope);
+    dispose_owner(owner);
+    assert!(torn.borrow().is_some());
+}

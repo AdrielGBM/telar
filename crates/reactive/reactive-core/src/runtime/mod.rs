@@ -17,8 +17,7 @@ mod site_cell;
 mod surface;
 
 pub(crate) use effects::{
-    current_observer, force_run_effect, is_alive, register_effect, register_pure_effect,
-    reschedule_memo, run_effect, schedule, untracked,
+    force_run_effect, register_effect, register_memo_effect, reschedule_memo, run_effect, untracked,
 };
 pub use flush::{OpenBatch, after_settle, batch, reset_runtime, set_flush_notify};
 pub(crate) use owner::OwnerKey;
@@ -52,15 +51,14 @@ pub(crate) struct EffectEntry {
     pub(crate) surface: SurfaceHandle,
     /// The owner active at registration, re-entered for each run so a re-run creates and registers under the scope that built it rather than under whatever the flush happens to be inside.
     pub(crate) owner: Option<OwnerKey>,
-    pub(crate) is_pure: bool,
+    /// The memo this effect recomputes, if it is one; memos run in height order, before every user effect.
+    pub(crate) produces: Option<SignalId>,
     pub(crate) last_run_epoch: u64,
     pub(crate) sources: Vec<SignalId>,
     pub(crate) source_slots: Vec<usize>,
     pub(crate) source_versions: Vec<u64>,
-    // Topological height; 0 is a leaf with no tracked sources.
+    /// 0 with no sources, otherwise one above the highest memo it reads, a plain signal counting as 0.
     pub(crate) height: u32,
-    // Set when a memo schedules this effect. Memo dependencies are invisible to `sources`, so `run_effect`'s version check must be bypassed once or an effect also tracking an unchanged signal would never run.
-    pub(crate) memo_dirty: bool,
 }
 
 pub(crate) struct SignalStorage {
@@ -69,6 +67,8 @@ pub(crate) struct SignalStorage {
     pub(crate) subscribers: Vec<EffectId>,
     // For each subscriber, the index in that effect's `source_slots` recording this signal.
     pub(crate) observer_slots: Vec<usize>,
+    /// The effect recomputing this value, when it is a memo's.
+    pub(crate) producer: Option<EffectId>,
 }
 
 pub(crate) struct Runtime {
@@ -227,11 +227,16 @@ impl Drop for FlushNotifyHandle {
 }
 
 fn deregister_flush_notify(id: u64) {
-    RUNTIME.with(|rt| {
-        rt.borrow_mut()
+    // Dropped after the borrow is released, since dropping the caller's closure runs whatever its captures do as they drop.
+    let removed = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        let at = rt
             .flush_callbacks
-            .retain(|(entry_id, _)| *entry_id != id);
+            .iter()
+            .position(|(entry_id, _)| *entry_id == id)?;
+        Some(rt.flush_callbacks.remove(at))
     });
+    drop(removed);
 }
 
 #[cfg(test)]

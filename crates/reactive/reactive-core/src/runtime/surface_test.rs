@@ -53,3 +53,23 @@ fn with_current_surface_restores_the_one_before_when_it_unwinds() {
     assert!(outcome.is_err());
     assert_eq!(current_surface(), SurfaceHandle::NONE);
 }
+
+struct EntersOnDrop(Rc<Cell<bool>>);
+
+impl Drop for EntersOnDrop {
+    fn drop(&mut self) {
+        self.0.set(ALIVE.with_entered(|| true));
+    }
+}
+
+#[test]
+fn a_replaced_hook_drops_after_the_hook_slot_is_released() {
+    let dropped = Rc::new(Cell::new(false));
+    let held = EntersOnDrop(Rc::clone(&dropped));
+    set_surface_enter_hook(move |handle, run| {
+        let _held = &held;
+        with_current_surface(handle, run);
+    });
+    install_hook_knowing_only_alive();
+    assert!(dropped.get());
+}

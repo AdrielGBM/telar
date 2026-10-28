@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::cell::{Ref, RefMut};
-use std::cmp::Reverse;
 use std::panic::Location;
 use std::rc::Rc;
 
@@ -64,6 +63,7 @@ fn insert_storage(value: Rc<dyn Any>) -> SignalId {
             version: 0,
             subscribers: Vec::new(),
             observer_slots: Vec::new(),
+            producer: None,
         });
         super::owner::attach_signal(&mut rt, id);
         id
@@ -189,11 +189,15 @@ pub(crate) fn release_transaction(id: SignalId) {
     RUNTIME.with(|rt| rt.borrow_mut().transactions.remove(&id));
 }
 
+#[inline]
 pub(crate) fn track_signal(id: SignalId) {
+    if let Some(observer_id) = RUNTIME.with(|rt| rt.borrow().observer_stack.last().copied()) {
+        subscribe(observer_id, id);
+    }
+}
+
+fn subscribe(observer_id: EffectId, id: SignalId) {
     RUNTIME.with(|rt| {
-        let Some(observer_id) = rt.borrow().observer_stack.last().copied() else {
-            return;
-        };
         let mut rt = rt.borrow_mut();
         if !rt.effects.contains_key(observer_id) {
             return;
@@ -256,14 +260,7 @@ pub(crate) fn notify_signal(id: SignalId) {
         let mut dead: Vec<EffectId> = Vec::new();
         for &sub_id in &subs {
             if rt.effects.contains_key(sub_id) {
-                if rt.pending_set.insert(sub_id) {
-                    if rt.effects[sub_id].is_pure {
-                        let h = rt.effects[sub_id].height;
-                        rt.memo_pending.push((Reverse(h), sub_id));
-                    } else {
-                        rt.pending.push(sub_id);
-                    }
-                }
+                rt.enqueue(sub_id);
                 any_scheduled = true;
             } else {
                 dead.push(sub_id);

@@ -112,3 +112,45 @@ fn resetting_the_runtime_inside_an_effect_is_refused() {
     assert!(refused.get());
     reset_runtime();
 }
+
+struct ResetsOnDrop;
+
+impl Drop for ResetsOnDrop {
+    fn drop(&mut self) {
+        reset_runtime();
+    }
+}
+
+/// The trigger Miri caught: the handle's drop used to drop the callback, and with it this reset, under the runtime borrow, which freed the runtime that borrow pointed into.
+#[test]
+fn a_flush_callback_that_resets_the_runtime_as_it_drops_resets_it_after_the_borrow() {
+    let before = crate::signal(1);
+    let resets = ResetsOnDrop;
+    let handle = set_flush_notify(move || {
+        let _held = &resets;
+    });
+    drop(handle);
+    assert!(
+        !before.is_alive(),
+        "the reset ran and freed the old runtime"
+    );
+    assert_eq!(crate::signal(2).get(), 2);
+    reset_runtime();
+}
+
+#[test]
+fn resetting_the_runtime_while_it_is_borrowed_is_refused() {
+    let kept = crate::signal(1);
+    let outcome = RUNTIME.with(|rt| {
+        let _held = rt.borrow_mut();
+        std::panic::catch_unwind(reset_runtime)
+    });
+    let payload = outcome.expect_err("a reset under a live borrow cannot go ahead");
+    let message = payload.downcast_ref::<&str>().copied().unwrap_or_default();
+    assert!(
+        message.contains("while the runtime is borrowed"),
+        "{message}"
+    );
+    assert_eq!(kept.get(), 1, "the runtime it refused to free is intact");
+    reset_runtime();
+}

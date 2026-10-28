@@ -1,18 +1,13 @@
-//! Effect registration, subscription cleanup, and the version and epoch checks that decide whether a scheduled effect actually has to run.
+//! Effect registration, scheduling, subscription cleanup, memo heights, and the version and epoch checks that decide whether a scheduled effect actually has to run.
 
 use std::cmp::Reverse;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
 
-use super::flush::flush;
 use super::owner::deliver_panic;
 
 use super::surface::current_surface;
-use super::{EffectEntry, EffectId, RUNTIME, SignalId};
-
-pub(crate) fn current_observer() -> Option<EffectId> {
-    RUNTIME.with(|rt| rt.borrow().observer_stack.last().copied())
-}
+use super::{EffectEntry, EffectId, RUNTIME, Runtime, SignalId};
 
 /// Runs `f` with no observer, so nothing it reads subscribes whichever effect is running.
 pub(crate) fn untracked<R>(f: impl FnOnce() -> R) -> R {
@@ -28,28 +23,14 @@ pub(crate) fn untracked<R>(f: impl FnOnce() -> R) -> R {
 }
 
 pub(crate) fn register_effect(f: Box<dyn Fn()>) -> EffectId {
-    RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        // Resolved off the borrow already held: `current_owner` takes its own, which would collide.
-        let owner = super::owner::owning_id(&mut rt);
-        let id = rt.effects.insert(EffectEntry {
-            callback: Rc::from(f),
-            surface: current_surface(),
-            owner,
-            is_pure: false,
-            last_run_epoch: 0,
-            sources: Vec::new(),
-            source_slots: Vec::new(),
-            source_versions: Vec::new(),
-            height: 0,
-            memo_dirty: false,
-        });
-        super::owner::attach_effect(&mut rt, id);
-        id
-    })
+    insert_effect(f, None)
 }
 
-pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
+pub(crate) fn register_memo_effect(f: Box<dyn Fn()>, memo: SignalId) -> EffectId {
+    insert_effect(f, Some(memo))
+}
+
+fn insert_effect(f: Box<dyn Fn()>, produces: Option<SignalId>) -> EffectId {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         // Resolved off the borrow already held: `current_owner` takes its own, which would collide.
@@ -58,14 +39,16 @@ pub(crate) fn register_pure_effect(f: Box<dyn Fn()>) -> EffectId {
             callback: Rc::from(f),
             surface: current_surface(),
             owner,
-            is_pure: true,
+            produces,
             last_run_epoch: 0,
             sources: Vec::new(),
             source_slots: Vec::new(),
             source_versions: Vec::new(),
             height: 0,
-            memo_dirty: false,
         });
+        if let Some(storage) = produces.and_then(|memo| rt.signals.get_mut(memo)) {
+            storage.producer = Some(id);
+        }
         super::owner::attach_effect(&mut rt, id);
         id
     })
@@ -83,73 +66,135 @@ pub(crate) fn deregister_effect(id: EffectId) {
     drop(removed);
 }
 
-pub(crate) fn is_alive(id: EffectId) -> bool {
-    RUNTIME.with(|rt| rt.borrow().effects.contains_key(id))
-}
-
-pub(crate) fn schedule(id: EffectId) {
-    let should_flush = RUNTIME.with(|rt| {
-        let mut rt = rt.borrow_mut();
-        let alive = rt.effects.contains_key(id);
-        if alive {
-            // Only ever called by memo change notification, so flag the subscriber and stop `run_effect`'s signal-version shortcut from skipping a genuinely dirty memo read.
-            rt.effects[id].memo_dirty = true;
-        }
-        if alive && rt.pending_set.insert(id) {
-            if rt.effects[id].is_pure {
-                let h = rt.effects[id].height;
-                rt.memo_pending.push((Reverse(h), id));
-            } else {
-                rt.pending.push(id);
-            }
-        }
-        rt.batch_depth == 0 && !rt.flushing
-    });
-    if should_flush {
-        flush();
-    }
-}
-
 /// Queues again a memo recompute that could not run, flushing at once when `now` and nothing holds the flush back; `now` is false during an unwind, where running effects could panic again.
 pub(crate) fn reschedule_memo(id: EffectId, now: bool) {
     let should_flush = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        let Some(entry) = rt.effects.get(id) else {
+        if !rt.effects.contains_key(id) {
             return false;
-        };
-        let height = entry.height;
-        // Pushed whether or not the set already names it: the run that could not happen was drained from the queue, and the set keeps it until the user-effect drain clears it.
-        rt.pending_set.insert(id);
-        rt.memo_pending.push((Reverse(height), id));
+        }
+        rt.enqueue(id);
         now && rt.batch_depth == 0 && !rt.flushing
     });
     if should_flush {
-        flush();
+        super::flush::flush();
+    }
+}
+
+impl Runtime {
+    pub(crate) fn enqueue(&mut self, id: EffectId) {
+        let Some(entry) = self.effects.get(id) else {
+            return;
+        };
+        if !self.pending_set.insert(id) {
+            return;
+        }
+        if entry.produces.is_some() {
+            self.memo_pending.push((Reverse(entry.height), id));
+        } else {
+            self.pending.push(id);
+        }
+    }
+
+    fn set_height(&mut self, id: EffectId, height: u32) {
+        let Some(entry) = self.effects.get_mut(id) else {
+            return;
+        };
+        if entry.height == height {
+            return;
+        }
+        entry.height = height;
+        // The entry queued under the old height is skipped when it surfaces, so a pending memo needs one under the new.
+        if entry.produces.is_some() && self.pending_set.contains(&id) {
+            self.memo_pending.push((Reverse(height), id));
+        }
+    }
+
+    fn raise_dependents(&mut self, id: EffectId) {
+        // An acyclic graph has no height above its effect count, so a raise past it is going round a cycle.
+        let ceiling = u32::try_from(self.effects.len()).unwrap_or(u32::MAX);
+        let mut raised = vec![id];
+        while let Some(id) = raised.pop() {
+            let Some(entry) = self.effects.get(id) else {
+                continue;
+            };
+            let floor = entry.height.saturating_add(1);
+            let Some(storage) = entry.produces.and_then(|memo| self.signals.get(memo)) else {
+                continue;
+            };
+            if floor > ceiling {
+                continue;
+            }
+            let start = raised.len();
+            raised.extend(
+                storage
+                    .subscribers
+                    .iter()
+                    .copied()
+                    .filter(|&sub| self.effects.get(sub).is_some_and(|e| e.height < floor)),
+            );
+            for &sub in &raised[start..] {
+                self.set_height(sub, floor);
+            }
+        }
+    }
+
+    fn record_run(&mut self, id: EffectId) {
+        let Some(entry) = self.effects.get_mut(id) else {
+            return;
+        };
+        let mut versions = std::mem::take(&mut entry.source_versions);
+        versions.clear();
+        let entry = &self.effects[id];
+        let mut height = 0;
+        for &source in &entry.sources {
+            let storage = self.signals.get(source);
+            versions.push(storage.map_or(0, |s| s.version));
+            let above = storage
+                .and_then(|s| s.producer)
+                .and_then(|producer| self.effects.get(producer))
+                .map_or(1, |producer| producer.height.saturating_add(1));
+            height = height.max(above);
+        }
+        let previous = entry.height;
+        self.effects[id].source_versions = versions;
+        self.set_height(id, height);
+        if height > previous {
+            self.raise_dependents(id);
+        }
+    }
+
+    fn sources_unchanged(&self, entry: &EffectEntry) -> bool {
+        !entry.sources.is_empty()
+            && entry.sources.len() == entry.source_versions.len()
+            && entry
+                .sources
+                .iter()
+                .zip(&entry.source_versions)
+                .all(|(&source, &version)| {
+                    self.signals
+                        .get(source)
+                        .is_some_and(|s| s.version == version)
+                })
     }
 }
 
 pub(crate) fn clean_effect(id: EffectId) {
-    let (sources, source_slots) = RUNTIME.with(|rt| {
+    RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        if let Some(entry) = rt.effects.get_mut(id) {
-            (
-                std::mem::take(&mut entry.sources),
-                std::mem::take(&mut entry.source_slots),
-            )
-        } else {
-            (Vec::new(), Vec::new())
-        }
-    });
-    for (&sig_id, &slot) in sources.iter().zip(source_slots.iter()) {
-        RUNTIME.with(|rt| {
-            let mut rt = rt.borrow_mut();
-            if !rt.signals.contains_key(sig_id) {
-                return;
-            }
-            let sig = &mut rt.signals[sig_id];
+        let rt = &mut *rt;
+        let Some(entry) = rt.effects.get_mut(id) else {
+            return;
+        };
+        let mut sources = std::mem::take(&mut entry.sources);
+        let mut source_slots = std::mem::take(&mut entry.source_slots);
+        for (&sig_id, &slot) in sources.iter().zip(source_slots.iter()) {
+            let Some(sig) = rt.signals.get_mut(sig_id) else {
+                continue;
+            };
             let last = sig.subscribers.len().saturating_sub(1);
             if slot > last {
-                return;
+                continue;
             }
             if slot == last {
                 sig.subscribers.pop();
@@ -167,123 +212,75 @@ pub(crate) fn clean_effect(id: EffectId) {
                     entry.source_slots[moved_obs_slot] = slot;
                 }
             }
-        });
-    }
+        }
+        sources.clear();
+        source_slots.clear();
+        if let Some(entry) = rt.effects.get_mut(id) {
+            entry.sources = sources;
+            entry.source_slots = source_slots;
+        }
+    });
 }
 
 /// Runs `id` now whatever its epoch and versions say: for a memo read that finds no value, because the computation that would have left one panicked and nothing has moved since to schedule another.
 pub(crate) fn force_run_effect(id: EffectId) {
-    RUNTIME.with(|rt| {
-        if let Some(entry) = rt.borrow_mut().effects.get_mut(id) {
-            entry.memo_dirty = true;
-            entry.last_run_epoch = 0;
-        }
-    });
-    run_effect(id);
+    run(id, true);
 }
 
 pub(crate) fn run_effect(id: EffectId) {
+    run(id, false);
+}
+
+fn run(id: EffectId, forced: bool) {
     let prepared = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
-        if !rt.effects.contains_key(id) {
+        let epoch = rt.flush_epoch;
+        let entry = rt.effects.get_mut(id)?;
+        if !forced && entry.last_run_epoch == epoch && epoch > 0 {
             return None;
         }
-        if rt.effects[id].last_run_epoch == rt.flush_epoch && rt.flush_epoch > 0 {
+        entry.last_run_epoch = epoch;
+        let entry = &rt.effects[id];
+        if !forced && rt.sources_unchanged(entry) {
             return None;
         }
-        rt.effects[id].last_run_epoch = rt.flush_epoch;
-        let memo_dirty = std::mem::take(&mut rt.effects[id].memo_dirty);
-
-        // Bypassed when a memo scheduled this run: memo deps are not in `sources`, so unchanged signal versions say nothing about the memo's value.
-        let sig_ids: Vec<SignalId> = rt
-            .effects
-            .get(id)
-            .map(|e| e.sources.clone())
-            .unwrap_or_default();
-        let stored_versions: Vec<u64> = rt
-            .effects
-            .get(id)
-            .map(|e| e.source_versions.clone())
-            .unwrap_or_default();
-        if !memo_dirty && !sig_ids.is_empty() && sig_ids.len() == stored_versions.len() {
-            let all_same = sig_ids
-                .iter()
-                .zip(stored_versions.iter())
-                .all(|(&sig_id, &ver)| {
-                    if rt.signals.contains_key(sig_id) {
-                        rt.signals[sig_id].version == ver
-                    } else {
-                        false
-                    }
-                });
-            if all_same {
-                return None;
-            }
-        }
-
-        let callback = Rc::clone(&rt.effects[id].callback);
-        let surface = rt.effects[id].surface;
-        let owner = rt.effects[id].owner;
-        Some((callback, surface, owner)) // Don't push observer_stack yet; clean_effect must run first
+        Some((Rc::clone(&entry.callback), entry.surface, entry.owner))
     });
-    if let Some((callback, surface, owner)) = prepared {
-        // Before re-running, so fresh subscriptions are tracked. `clean_effect` acquires the runtime borrow internally, which is safe because it was released above.
-        clean_effect(id);
-        // After cleanup, so `clean_effect` does not re-register. The owner rides along in the same borrow: a re-run that starts declaring must attribute it to the scope that built this effect, and a borrow of its own for that cost 3-5% of a whole-tree re-run.
-        let owner_depth = RUNTIME.with(|rt| {
-            let mut rt = rt.borrow_mut();
-            rt.observer_stack.push(id);
-            rt.running_effects += 1;
-            let depth = rt.owner_stack.len();
-            if let Some(owner) = owner
-                && rt.owners.contains_key(owner)
-            {
-                rt.owner_stack.push(owner);
-            }
-            depth
-        });
-        struct PopGuard(usize);
-        impl Drop for PopGuard {
-            fn drop(&mut self) {
-                RUNTIME.with(|rt| {
-                    let mut rt = rt.borrow_mut();
-                    rt.observer_stack.pop();
-                    rt.running_effects -= 1;
-                    rt.owner_stack.truncate(self.0);
-                });
-            }
+    let Some((callback, surface, owner)) = prepared else {
+        return;
+    };
+    // Before re-running, so fresh subscriptions are tracked.
+    clean_effect(id);
+    // After cleanup, so `clean_effect` does not re-register. The owner rides along in the same borrow: a re-run that starts declaring must attribute it to the scope that built this effect, and a borrow of its own for that cost 3-5% of a whole-tree re-run.
+    let owner_depth = RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        rt.observer_stack.push(id);
+        rt.running_effects += 1;
+        let depth = rt.owner_stack.len();
+        if let Some(owner) = owner
+            && rt.owners.contains_key(owner)
+        {
+            rt.owner_stack.push(owner);
         }
-        let _guard = PopGuard(owner_depth);
-        // Re-enter this effect's surface, so its layout, overlay and focus resolve against the surface that built it even when the write that scheduled it came from another. Outside the runtime borrow, and inert for a single-surface app.
-        let outcome = surface.with_entered(|| catch_unwind(AssertUnwindSafe(|| callback())));
-        drop(_guard);
-        RUNTIME.with(|rt| {
-            let mut rt = rt.borrow_mut();
-            // First, to avoid borrowing `effects` and `signals` at the same time.
-            let sig_ids: Vec<SignalId> = rt
-                .effects
-                .get(id)
-                .map(|e| e.sources.clone())
-                .unwrap_or_default();
-            let versions: Vec<u64> = sig_ids
-                .iter()
-                .map(|&sig_id| {
-                    if rt.signals.contains_key(sig_id) {
-                        rt.signals[sig_id].version
-                    } else {
-                        0
-                    }
-                })
-                .collect();
-            // Signals are always leaf nodes, so any tracked source gives height 1.
-            let new_height: u32 = if sig_ids.is_empty() { 0 } else { 1 };
-            if let Some(entry) = rt.effects.get_mut(id) {
-                entry.source_versions = versions;
-                entry.height = new_height;
-            }
-        });
-        if let Err(payload) = outcome {
-            deliver_panic(owner, payload);
+        depth
+    });
+    struct PopGuard(usize);
+    impl Drop for PopGuard {
+        fn drop(&mut self) {
+            RUNTIME.with(|rt| {
+                let mut rt = rt.borrow_mut();
+                rt.observer_stack.pop();
+                rt.running_effects -= 1;
+                rt.owner_stack.truncate(self.0);
+            });
         }
+    }
+    let _guard = PopGuard(owner_depth);
+    // Re-enter this effect's surface, so its layout, overlay and focus resolve against the surface that built it even when the write that scheduled it came from another. Outside the runtime borrow, and inert for a single-surface app.
+    let outcome = surface.with_entered(|| catch_unwind(AssertUnwindSafe(|| callback())));
+    drop(_guard);
+    RUNTIME.with(|rt| rt.borrow_mut().record_run(id));
+    if let Err(payload) = outcome {
+        deliver_panic(owner, payload);
     }
 }

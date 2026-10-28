@@ -106,7 +106,8 @@ pub fn with_current_surface<R>(handle: SurfaceHandle, f: impl FnOnce() -> R) -> 
 
 /// Installs the thread's surface-context hook. Given a [`SurfaceHandle`] and a closure, it must run the closure exactly once with that surface's full per-surface world active (the reactive current-surface, through `with_current_surface`, plus the layout/overlay/focus/... thread-locals), keeping the surface alive and restoring the previous world when the closure returns or unwinds; for a surface that is gone it runs the closure where it is, which is how [`SurfaceHandle::with_entered_if_alive`] tells. The higher-level `Surface` layer installs this; reactive-core only knows how to call it. Without a hook, [`SurfaceHandle::with_entered`] just runs its closure — which is exactly right for single-window apps that never install one.
 pub fn set_surface_enter_hook(f: impl Fn(SurfaceHandle, &mut dyn FnMut()) + 'static) {
-    ENTER_HOOK.with(|h| *h.borrow_mut() = Some(Rc::new(f)));
+    let replaced = ENTER_HOOK.with(|h| h.borrow_mut().replace(Rc::new(f)));
+    drop(replaced);
 }
 
 #[cfg(test)]
