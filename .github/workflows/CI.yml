@@ -79,6 +79,33 @@ jobs:
       - run: cargo clippy -p telar-analyzer -p telar-diagnostics --all-targets -- -D warnings
       - run: cargo test -p telar-analyzer -p telar-diagnostics
 
+  # Advisories, licences and sources against `deny.toml`; a new RustSec advisory fails this job alone, whatever the change was.
+  supply-chain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+
+  # The reactive runtime's handles are only sound if the use-after-free and cross-thread triggers stay rejected, and only Miri sees undefined behaviour that happens not to crash.
+  miri:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/rust
+        with:
+          toolchain: nightly
+          components: miri, rust-src
+          transpile: "false"
+      - run: cargo miri test -p telar-reactive-local -p telar-reactive-core
+        env:
+          MIRIFLAGS: -Zmiri-ignore-leaks -Zmiri-disable-isolation
+
   # `cargo publish` verifies each package alone, without the features its workspace siblings unify onto it, so this is the only job that sees a crate the way the registry will; never `--no-verify`, and a bare runner like the one that publishes, so a crate linking a system library fails here rather than there.
   publishable:
     runs-on: ubuntu-24.04
@@ -382,6 +409,8 @@ jobs:
       - check-desktop
       - msrv
       - analyzer
+      - supply-chain
+      - miri
       - publishable
       - check-android
       - check-web

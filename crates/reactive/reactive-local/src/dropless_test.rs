@@ -20,6 +20,10 @@ const NEVER_LINKED: &[&str] = &["crates/tools"];
 
 /// `dropless_thread_local!` refuses a destructor at compile time, but only where it is used: a `std::thread_local!` in any crate an app links bypasses it, and the first anyone hears of that is a hot-reloaded build that stays mapped after it is unloaded.
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "reads the whole workspace's sources, which takes Miri hours and exercises no unsafe code"
+)]
 fn every_thread_local_an_app_links_is_dropless() {
     let root = workspace_root();
     let mut found = Vec::new();

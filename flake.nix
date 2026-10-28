@@ -38,6 +38,16 @@
             ndkVersions = [ "27.2.12479018" ];
           };
           androidSdk = androidComposition.androidsdk;
+          # Miri only ships on nightly, so it gets a shell of its own rather than moving every build off stable.
+          miriToolchain = pkgs.rust-bin.selectLatestNightlyWith (
+            toolchain:
+            toolchain.minimal.override {
+              extensions = [
+                "miri"
+                "rust-src"
+              ];
+            }
+          );
           rustToolchain = pkgs.rust-bin.stable.latest.default.override {
             targets = [
               "aarch64-linux-android"
@@ -101,6 +111,8 @@
               pkgs.geckodriver
               pkgs.firefox
               pkgs.jq
+              pkgs.cargo-audit
+              pkgs.cargo-deny
             ];
             buildInputs = desktopDeps;
             ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
@@ -114,6 +126,10 @@
             # Read at compile time by the browser tests that audit with axe (`include_str!`), so the script reaches the page without a server.
             TELAR_AXE_CORE = "${axeCore}/axe.min.js";
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath desktopDeps;
+          };
+          miri = pkgs.mkShell {
+            packages = [ miriToolchain ];
+            MIRIFLAGS = "-Zmiri-ignore-leaks -Zmiri-disable-isolation";
           };
         }
       );
