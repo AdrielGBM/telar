@@ -132,5 +132,11 @@ pub(in crate::task) fn shutdown_and_join() {
 }
 
 #[cfg(test)]
+pub(crate) fn idle_and_spawned() -> (usize, usize) {
+    let state = lock();
+    (state.idle, state.workers.len())
+}
+
+#[cfg(test)]
 #[path = "native_test.rs"]
 mod tests;

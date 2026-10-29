@@ -26,13 +26,19 @@ fn time_between_timestamps_is_the_time_between_their_instants() {
 fn an_adopted_epoch_reads_an_instant_where_the_host_wrote_it() {
     let host = Epoch::start();
     std::thread::sleep(Duration::from_millis(2));
+    let before = Instant::now();
     let guest = Epoch::adopt(host.now());
-    let instant = Instant::now() + Duration::from_secs(3);
+    let after = Instant::now();
+    let instant = after + Duration::from_secs(3);
     let read = guest.instant(host.stamp(instant));
     let off = read
         .checked_duration_since(instant)
         .unwrap_or_else(|| instant.duration_since(read));
-    assert!(off < Duration::from_millis(5), "{off:?} apart");
+    assert!(
+        off <= after - before,
+        "{off:?} apart, more than the {:?} the handover took",
+        after - before
+    );
 }
 
 #[test]

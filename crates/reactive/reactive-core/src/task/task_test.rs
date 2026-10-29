@@ -162,23 +162,20 @@ fn cancelling_a_stream_stops_its_worker() {
     assert_eq!(seen.get(), 0, "no item may be delivered after cancel");
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn the_pool_reuses_an_idle_thread() {
     let _serial = serial();
-    let threads: Rc<RefCell<Vec<std::thread::ThreadId>>> = Rc::new(RefCell::new(Vec::new()));
-    for _ in 0..2 {
-        let sink = Rc::clone(&threads);
-        spawn_task(
-            || std::thread::current().id(),
-            move |id| sink.borrow_mut().push(id),
-        );
-        drain_until(|| pending_task_count() == 0);
-    }
-    let threads = threads.borrow();
-    assert_eq!(threads.len(), 2);
-    assert_eq!(
-        threads[0], threads[1],
-        "the second task should have reused the idle worker"
+    spawn_task(|| (), |()| {});
+    drain_until(|| pending_task_count() == 0);
+    drain_until(|| super::pool::idle_and_spawned().0 > 0);
+    let (_, spawned_before) = super::pool::idle_and_spawned();
+
+    spawn_task(|| (), |()| {});
+    drain_until(|| pending_task_count() == 0);
+    assert!(
+        super::pool::idle_and_spawned().1 <= spawned_before,
+        "a task submitted while a worker is idle should run on it rather than on a new thread"
     );
 }
 

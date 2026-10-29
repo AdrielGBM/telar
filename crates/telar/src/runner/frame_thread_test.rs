@@ -264,23 +264,25 @@ fn the_backend_is_bound_to_the_thread_before_the_first_frame() {
 #[test]
 fn an_idle_render_thread_sweeps_its_own_caches_once() {
     let (mut backend, _rendered, seen, _) = stub_watching_bind(false);
-    backend.idle_sweep_after = Some(Duration::from_millis(30));
+    backend.idle_sweep_after = Some(Duration::from_millis(200));
     let sweeps = Arc::clone(&backend.sweeps);
     let (tx, _ret_rx, join) = spawn_render_thread(backend);
 
-    tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
-    seen.recv_timeout(Duration::from_secs(5)).unwrap();
+    let arriving_until = Instant::now() + Duration::from_millis(500);
+    while Instant::now() < arriving_until {
+        tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
+        seen.recv_timeout(Duration::from_secs(5)).unwrap();
+        std::thread::sleep(Duration::from_millis(10));
+    }
     assert_eq!(sweeps.load(Ordering::SeqCst), 0, "not while frames arrive");
 
-    std::thread::sleep(Duration::from_millis(300));
+    eventually("the idle sweep", || sweeps.load(Ordering::SeqCst) == 1);
+    std::thread::sleep(Duration::from_millis(400));
     assert_eq!(
         sweeps.load(Ordering::SeqCst),
         1,
         "one sweep per idle stretch, not a repeating timer"
     );
-
-    tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
-    seen.recv_timeout(Duration::from_secs(5)).unwrap();
 
     drop(tx);
     join.join().unwrap();

@@ -7,6 +7,8 @@ mod native;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(super) use native::idle_and_spawned;
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) use native::{shutdown_and_join, submit};
 #[cfg(target_arch = "wasm32")]
