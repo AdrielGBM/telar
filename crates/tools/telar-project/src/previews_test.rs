@@ -502,7 +502,7 @@ fn a_workshop_whose_telar_toml_does_not_load_is_an_error_rather_than_no_host() {
     assert!(
         error
             .to_string()
-            .contains(&root.join("apps/gallery").display().to_string()),
+            .contains(&root.join("apps").join("gallery").display().to_string()),
         "{error}"
     );
     let _ = std::fs::remove_dir_all(&root);

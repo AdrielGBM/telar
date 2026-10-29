@@ -346,20 +346,19 @@ fn an_idle_release_that_asks_to_be_retried_runs_again_until_it_is_done() {
 
     tx.send(frame(100, 50, 1.0, Duration::ZERO)).unwrap();
     seen.recv_timeout(Duration::from_secs(5)).unwrap();
-    std::thread::sleep(Duration::from_millis(250));
+    eventually("the second retry", || releases.lock().unwrap().len() == 3);
     assert_eq!(
         *releases.lock().unwrap(),
         [0, 0, 0],
-        "retried twice, and not again once a release asks for nothing"
+        "retried twice before the sweep, which keeps its own time"
     );
+    eventually("the idle sweep", || sweeps.load(Ordering::SeqCst) == 1);
+    std::thread::sleep(Duration::from_millis(100));
     assert_eq!(
-        sweeps.load(Ordering::SeqCst),
-        0,
-        "the sweep keeps its own time"
+        releases.lock().unwrap().len(),
+        3,
+        "not retried again once a release asks for nothing"
     );
-    std::thread::sleep(Duration::from_millis(400));
-    assert_eq!(sweeps.load(Ordering::SeqCst), 1);
-    assert_eq!(releases.lock().unwrap().len(), 3);
 
     drop(tx);
     join.join().unwrap();
