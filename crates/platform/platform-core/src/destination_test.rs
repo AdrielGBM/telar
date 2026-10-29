@@ -105,6 +105,8 @@ fn a_refused_external_uri_is_logged_without_raw_control_characters() {
         .with_ansi(false)
         .finish();
     let destination = tracing::subscriber::with_default(subscriber, || {
+        // A test on another thread can register this callsite while no subscriber wants it and cache that answer; rebuilding counts this thread's subscriber in.
+        tracing::callsite::rebuild_interest_cache();
         external("https://example.com/\u{1b}[31m").into_destination()
     });
     assert_eq!(destination, None);
