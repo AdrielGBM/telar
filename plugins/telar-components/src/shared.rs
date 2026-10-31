@@ -21,7 +21,7 @@ const BODY_TEXT_CONTRAST: f32 = 4.5;
 
 /// Readable ink for a label sitting on `fill`: whichever of the document's own ink and the theme's `on_primary` has the higher WCAG contrast ratio against it. A mid-tone fill neither of them reads on at 4.5:1 takes black or white instead, whichever reads better.
 ///
-/// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A neutral palette — the greys a shadcn-style theme builds on, say — makes `primary` a near-white in dark mode, and the label disappeared into its own button. Reading both ends of the theme and picking by contrast ratio keeps a caller free to pass any colour at all.
+/// A hard-coded white was right only while a filled control was assumed to carry a saturated accent. A neutral palette — a theme built on greys, say — makes `primary` a near-white in dark mode, and the label disappeared into its own button. Reading both ends of the theme and picking by contrast ratio keeps a caller free to pass any colour at all.
 pub fn ink_on(fill: Color) -> Color {
     let ink = fill.most_readable(&[use_theme_tokens().on_primary(), base_ink()]);
     if fill.contrast_ratio(ink) >= BODY_TEXT_CONTRAST {

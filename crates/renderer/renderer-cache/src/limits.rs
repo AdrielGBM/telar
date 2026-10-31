@@ -1,6 +1,6 @@
 //! Every cache bound in the renderer, in one place.
 //!
-//! They live together because the thing that went wrong with them could only be seen by comparing them. Spread over four crates, each number looked defensible on its own; side by side, a shell's text rasters were budgeted at 152 MB against Skia's 2 MB glyph cache, the GPU texture cache had no size bound at all, and the two backends evicted the same content by opposite rules. A number that cannot be compared cannot be justified.
+//! They live together because the thing that went wrong with them could only be seen by comparing them. Spread over four crates, each number looked defensible on its own; side by side, a shell's text rasters were budgeted at 152 MB against the 2 MB a glyph cache usually gets, the GPU texture cache had no size bound at all, and the two backends evicted the same content by opposite rules. A number that cannot be compared cannot be justified.
 //!
 //! Horizons are wall-clock for every cache, including the GPU ones that used to count frames. Frame counts made the GPU bounds depend on refresh rate — 60 frames is one second at 60 Hz and 0.4 at 144 — and made them incomparable with the CPU side. The durations below are the 60 Hz equivalents of the frame counts they replace.
 
@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use crate::Policy;
 
-/// Bytes of cache per pixel of surface, from Flutter's `width × height × 12 × 4` resource budget.
+/// Bytes of cache per pixel of surface: a `width × height × 12 × 4` resource budget.
 ///
-/// A budget that is the same number on a 4K desktop and on a phone is wrong on one of them. Flutter derives its from the display for this reason; these caches derive theirs from the surface they draw into, which on a desktop shell — a bar a few hundred pixels tall — is far smaller than the display.
+/// A budget that is the same number on a 4K desktop and on a phone is wrong on one of them, so it is derived from the surface the caches draw into rather than from the display, which on a desktop shell — a bar a few hundred pixels tall — is far larger than what the shell draws.
 const SURFACE_BYTES_PER_PIXEL: usize = 48;
 /// Enough to hold a 4K image — ~33 MiB — on a surface whose own size would derive far less. A bar a few hundred pixels tall can still be asked to draw a wallpaper thumbnail, and a budget under one image's size means it is rebuilt from its source bytes on every frame forever.
 ///
@@ -28,18 +28,18 @@ pub fn surface_budget_bytes(surface_width: u32, surface_height: u32) -> usize {
 
 /// How long a CPU-side raster survives unasked-for.
 ///
-/// Far longer than the toolkits that do this at all — GTK4's GPU cache collects on a 15-second timeout by default, and Qt's `QPixmapCache` trims about 25% per minute once the app goes idle — because "unasked-for" here means *not redrawn*, not *not visible*. Dirty-region culling skips the draw for anything outside the changed rectangle, so a label sitting in plain sight on a static bar goes untouched while the clock beside it ticks. A horizon in seconds would evict what is on screen; ten minutes bounds the damage to content that really has gone away — a closed menu, a hidden surface — and costs one reshape if it guesses wrong.
+/// Far longer than toolkits that age their caches usually wait — seconds before collecting, or a fraction trimmed each idle minute — because "unasked-for" here means *not redrawn*, not *not visible*. Dirty-region culling skips the draw for anything outside the changed rectangle, so a label sitting in plain sight on a static bar goes untouched while the clock beside it ticks. A horizon in seconds would evict what is on screen; ten minutes bounds the damage to content that really has gone away — a closed menu, a hidden surface — and costs one reshape if it guesses wrong.
 ///
 /// Text and shadows share it. They were split at first on the theory that a blur recomputes faster than a paragraph reshapes, which the code disproves: shadows above `ASYNC_SHADOW_THRESHOLD` are handed to a background thread precisely because the blur is too slow to do inline.
 pub const CPU_IDLE: Duration = Duration::from_secs(600);
-/// GPU resources, at the 60 Hz equivalent of the frame counts these replace, and in the range GTK4 uses for the same job. VRAM is scarcer than RAM and a re-upload is cheaper than a reshape, so the GPU side can afford to let go on a horizon the CPU side could not.
+/// GPU resources, at the 60 Hz equivalent of the frame counts these replace, and in the range toolkits commonly use for the same job. VRAM is scarcer than RAM and a re-upload is cheaper than a reshape, so the GPU side can afford to let go on a horizon the CPU side could not.
 pub const GPU_TEXTURE_IDLE: Duration = Duration::from_secs(1);
 /// How long tessellated geometry may sit unused before it is dropped.
 pub const GPU_GEOMETRY_IDLE: Duration = Duration::from_secs(2);
 
 /// Composed strings rasterized to premultiplied RGBA, at the size and colour they were drawn.
 ///
-/// No reference renderer caches a composed line as pixels — Skia, Android, Flutter and WebRender cache glyphs and composite the line from an atlas, which on a GPU is a handful of nearly-free blits. The CPU backend composites glyph by glyph with alpha blending, so keeping the finished line does buy something the GPU backends would not need. What it must not do is keep text that repeats zero times, which is what admission is for.
+/// Renderers usually cache glyphs rather than a composed line, and composite the line from an atlas, which on a GPU is a handful of nearly-free blits. The CPU backend composites glyph by glyph with alpha blending, so keeping the finished line does buy something the GPU backends would not need. What it must not do is keep text that repeats zero times, which is what admission is for.
 pub const TEXT_RASTER: Policy = Policy::new(16 * 1024 * 1024)
     .idle(CPU_IDLE)
     .admit_on_second_use();

@@ -1,6 +1,6 @@
 //! The byte spelling of every value that crosses between a Telar host and a guest library.
 //!
-//! A guest links its own copy of std and its own allocator, so nothing it owns may be handed to the host to keep or free, nor the other way round. What crosses is bytes instead: one side spells a value into a buffer it owns and lends it, and the other reads it back into values it allocated itself. Rich values travel this way, as WebRender's display lists do, and only the handful of `repr(C)` building blocks in `platform-core::guest` cross as themselves.
+//! A guest links its own copy of std and its own allocator, so nothing it owns may be handed to the host to keep or free, nor the other way round. What crosses is bytes instead: one side spells a value into a buffer it owns and lends it, and the other reads it back into values it allocated itself. Rich values travel this way, as display lists commonly do across a process boundary, and only the handful of `repr(C)` building blocks in `platform-core::guest` cross as themselves.
 //!
 //! Each type's spelling lives beside the type, in the crate that defines it, through [`Wire`]; this crate holds the primitives they are spelled in and the spelling of the standard types they are built from. Every enum names its tags out loud, so the bytes never follow declaration order and a reordered variant changes nothing.
 

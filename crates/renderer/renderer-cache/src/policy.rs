@@ -4,7 +4,7 @@ use std::time::Duration;
 
 /// What bounds a [`Cache`](crate::Cache): how much it may hold, when it must let go, and what it takes to get in.
 ///
-/// The three are separate because a budget alone answers only the first. A cache that never fills its budget never evicts, so its coldest entry outlives every process that reads it; and a cache with no admission rule stores keys that by construction repeat zero times — a clock at `%H:%M:%S`, a byte counter, a download percentage. Every reference renderer bounds by more than size for exactly this reason: WebRender evicts by frame age, Skia offers a time-boxed purge, Flutter ties the budget to the display.
+/// The three are separate because a budget alone answers only the first. A cache that never fills its budget never evicts, so its coldest entry outlives every process that reads it; and a cache with no admission rule stores keys that by construction repeat zero times — a clock at `%H:%M:%S`, a byte counter, a download percentage. Bounding by more than size is the usual answer for exactly this reason: evicting by frame age, purging what has gone unused for a while, tying the budget to the surface.
 #[derive(Clone, Copy, Debug)]
 pub struct Policy {
     /// The ceiling, in bytes.

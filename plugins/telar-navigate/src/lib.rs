@@ -4,7 +4,7 @@
 //!
 //! A route type stays a plain `Clone` enum unless it needs an address outside the process. Implementing [`Route`] on it adds [`to_location`](Route::to_location) / [`from_location`](Route::from_location) against the platform-neutral [`Location`] (path segments, an optional in-page-anchor fragment, query-style params — not a URL), which unlocks [`Navigator::location`] and [`Navigator::locations`] for whichever target adapter serializes those further (web history, a desktop deep link, an Android intent, a TUI argument).
 //!
-//! [`TabStacks`] and [`TabHost`] are the same pair one level up: one stack *per tab* rather than one shared stack, which is the native model (`UITabBarController`, a nested `Navigator`, a nested nav graph) and what lets a tab you leave stay several screens deep until you come back to it.
+//! [`TabStacks`] and [`TabHost`] are the same pair one level up: one stack *per tab* rather than one shared stack, which is the model native tab bars use, and what lets a tab you leave stay several screens deep until you come back to it.
 //!
 //! An application depends on it beside `telar`:
 //!

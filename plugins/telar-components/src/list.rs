@@ -2,7 +2,7 @@
 //!
 //! This is the compound-component half of the catalogue. A `menu` used to take `items: Vec<&'static str>`, which is the whole of what a string can say: no row could be disabled, carry a shortcut, show a tick, or be anything but one line of text. Widening that prop would have meant a struct per feature and a call site written in Rust rather than in markup.
 //!
-//! What replaces it is the arrangement Radix reaches for: the parent publishes a context, and each piece reads it. The piece is then an ordinary component with ordinary props, and `disabled:$x` on a row means what it means on any other widget. See [`Children`] for the ordering problem this had to solve first — a child is an argument, so without it a row would be built before the menu it belongs to exists.
+//! What replaces it is the usual arrangement for compound components: the parent publishes a context, and each piece reads it. The piece is then an ordinary component with ordinary props, and `disabled:$x` on a row means what it means on any other widget. See [`Children`] for the ordering problem this had to solve first — a child is an argument, so without it a row would be built before the menu it belongs to exists.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

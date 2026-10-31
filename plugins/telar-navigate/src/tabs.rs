@@ -26,7 +26,7 @@ struct BuiltTab<T, R: Clone + Eq + 'static> {
 
 /// One navigation stack per tab, and which tab is active — the state half of [`TabHost`], and the handle the app's tab bar or rail drives.
 ///
-/// A single [`Navigator`] is a browser: one shared history that every destination pushes onto. This is the native model instead — `UITabBarController` giving each tab its own `UINavigationController`, Flutter's nested `Navigator`, Compose's nested graph — where switching tabs is not a navigation at all: it swaps which stack you are looking at, and each tab keeps its own depth and its own history.
+/// A single [`Navigator`] is a browser: one shared history that every destination pushes onto. This is the model native tab bars use instead, each tab holding a navigation stack of its own, where switching tabs is not a navigation at all: it swaps which stack you are looking at, and each tab keeps its own depth and its own history.
 ///
 /// Cheap to clone (the active-tab signal and the stack table are refcounted), so the rail that selects tabs, the back control, and the pages that push all hold their own handle.
 pub struct TabStacks<T: Clone + Eq + 'static, R: Clone + 'static> {

@@ -92,7 +92,7 @@ fn builds_and_lays_out() {
     let _ = tree.commands();
 }
 
-/// A menu was reachable by mouse and by nothing else: the trigger took no focus, so Tab passed it by, and the panel answered to no key at all. Radix gives arrows, Home/End and Escape away for free; here every one of them was absent, which is the difference between a control a keyboard user can operate and one they cannot.
+/// A menu was reachable by mouse and by nothing else: the trigger took no focus, so Tab passed it by, and the panel answered to no key at all. A menu is expected to answer the arrows, Home/End and Escape; here every one of them was absent, which is the difference between a control a keyboard user can operate and one they cannot.
 #[test]
 fn a_menu_can_be_opened_and_driven_from_the_keyboard() {
     use telar::NamedKey;
