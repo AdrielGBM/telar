@@ -112,7 +112,8 @@ fn unknown_tag(tag: &str, prelude: &[PreludeEntry]) -> String {
             .join(", "),
     };
     format!(
-        "unknown tag `{tag}`: not a built-in, not a `.rsx` in this package, and not exported by any `[telar] prelude` entry ({entries})"
+        "unknown tag `{tag}`: not a built-in, not a `.rsx` in this package, and not exported by any `[telar] prelude` entry ({entries}); a tag is a function and its props type, here `{tag}` and `{}`, and both have to be in scope",
+        props_type(tag)
     )
 }
 

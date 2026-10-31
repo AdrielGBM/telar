@@ -254,7 +254,7 @@ fn an_unknown_tag_reads_as_the_terminal_says_it() {
 
     assert_eq!(
         mapped.message,
-        "unknown tag `buton`: not a built-in, not a `.rsx` in this package, and not exported by any `[telar] prelude` entry (`telar_components`)"
+        "unknown tag `buton`: not a built-in, not a `.rsx` in this package, and not exported by any `[telar] prelude` entry (`telar_components`); a tag is a function and its props type, here `buton` and `ButonProps`, and both have to be in scope"
     );
     assert_eq!(
         mapped.range.start,

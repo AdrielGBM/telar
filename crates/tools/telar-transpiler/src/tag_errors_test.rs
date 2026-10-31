@@ -123,7 +123,7 @@ fn an_unknown_tag_lists_the_prelude_it_was_looked_up_in() {
     let none = rewrite_tag_error("E0425", &code, span, &[], &[]).unwrap();
     assert_eq!(
         none,
-        "unknown tag `buton`: not a built-in, not a `.rsx` in this package, and not exported by any `[telar] prelude` entry (this package declares none)"
+        "unknown tag `buton`: not a built-in, not a `.rsx` in this package, and not exported by any `[telar] prelude` entry (this package declares none); a tag is a function and its props type, here `buton` and `ButonProps`, and both have to be in scope"
     );
     let some = rewrite_tag_error(
         "E0433",
@@ -134,7 +134,7 @@ fn an_unknown_tag_lists_the_prelude_it_was_looked_up_in() {
     )
     .unwrap();
     assert!(
-        some.ends_with("(`telar_components`, `telar_navigate`)"),
+        some.contains("(`telar_components`, `telar_navigate`);"),
         "{some}"
     );
 }
@@ -187,4 +187,38 @@ fn an_offset_past_the_end_or_inside_a_character_is_no_site() {
     assert_eq!(generated_site(&code, code.len() + 1, code.len() + 2), None);
     let inside = code.find('é').unwrap() + 1;
     assert_eq!(generated_site(&code, inside, inside), None);
+}
+
+/// rustc's error for a `<Tag>Props` no import brings in lands on the props path, which the source map takes back to the tag's own line, and the tag is found there to underline.
+#[test]
+fn an_error_on_the_props_type_lands_on_the_tags_line() {
+    for (view, tag) in [
+        ("column\n    card label:\"Go\"", "card"),
+        (
+            "column\n    card label:\"Go\"\n        text \"inside\"",
+            "card",
+        ),
+        ("column\n    ui::card label:\"Go\"", "ui::card"),
+    ] {
+        let rsx = format!("[view]\n{view}\n");
+        let out = crate::transpile_source(&rsx, "home", None, None).unwrap();
+        let map = crate::SourceMap::new(out.source_map.clone(), out.expr_spans.clone());
+        let props = props_type(tag);
+        let (start, end) = span_of(&out.rust_code, &format!("{props}::props()"));
+        let end = end - "::props()".len();
+
+        assert_eq!(
+            map.locate(&out.rust_code, start as u32, end as u32, &rsx),
+            Some(crate::RsxSpan::Line(2)),
+            "{view}:\n{}",
+            out.rust_code
+        );
+        let line = crate::nth_line(&rsx, 2).unwrap();
+        assert_eq!(tag_columns(line, tag), Some((4, 4 + tag.len())), "{view}");
+        assert!(
+            rewrite_tag_error("E0433", &out.rust_code, (start, end), &[], &[])
+                .is_some_and(|message| message.contains(&format!("here `{tag}` and `{props}`"))),
+            "{view}"
+        );
+    }
 }
