@@ -236,6 +236,33 @@ fn a_search_opens_the_groups_a_collapse_shut() {
 }
 
 #[test]
+fn clearing_a_search_shuts_the_groups_it_opened() {
+    let sidebar = Mounted::first_run(entries());
+    let before = sidebar.state().expanded().get();
+    sidebar.search("o");
+    assert!(sidebar.drawn("Open"));
+    sidebar.search("");
+    assert_eq!(sidebar.state().expanded().get(), before);
+    assert!(!sidebar.drawn("Open"));
+}
+
+#[test]
+fn clearing_a_search_keeps_open_the_groups_of_each_preview_selected_during_it() {
+    let sidebar = Mounted::first_run(entries());
+    sidebar.search("checked");
+    sidebar.state().select("checkbox--checked");
+    sidebar.search("modal");
+    sidebar.state().select("modal--open");
+    sidebar.search("");
+    assert!(
+        sidebar.drawn("Primary"),
+        "the groups open before it stay open"
+    );
+    assert!(sidebar.drawn("Checked"));
+    assert!(sidebar.drawn("Open"));
+}
+
+#[test]
 fn no_matches_offers_to_clear_the_search() {
     let mut sidebar = Mounted::new(entries());
     sidebar.search("zzz");

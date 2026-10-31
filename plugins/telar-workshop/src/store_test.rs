@@ -108,6 +108,20 @@ mod across_runs {
     }
 
     #[test]
+    fn the_groups_a_search_opens_are_not_kept() {
+        let keeper = Keeper::in_store(Arc::new(MemoryStore::default()));
+        let first = run(&keeper, &PreviewRequest::default());
+        let before = first.expanded().peek();
+        first.search().set("card".into());
+        first.expanded().update(|open| {
+            open.insert(Arc::from("/Layout"));
+        });
+
+        let next = run(&keeper, &PreviewRequest::default());
+        assert_eq!(next.expanded().peek(), before);
+    }
+
+    #[test]
     fn a_requested_id_wins_over_the_stored_selection() {
         let keeper = Keeper::in_store(Arc::new(MemoryStore::default()));
         run(&keeper, &PreviewRequest::default()).select("fake--field--empty");

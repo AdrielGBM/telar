@@ -31,6 +31,7 @@ pub(crate) mod keys {
     pub(crate) const VIEW: &str = "@workshop/view";
     pub(crate) const SEARCH: &str = "@workshop/search";
     pub(crate) const SIDEBAR_EXPANDED: &str = "@workshop/sidebar.expanded";
+    pub(crate) const SIDEBAR_RESTED: &str = "@workshop/sidebar.rested";
     pub(crate) const SIDEBAR_WIDTH: &str = "@workshop/sidebar.width";
     pub(crate) const SIDEBAR_COLLAPSED: &str = "@workshop/sidebar.collapsed";
     pub(crate) const PANEL_SIZE: &str = "@workshop/panel.size";
@@ -118,6 +119,8 @@ pub(crate) enum PanelTab {
     Snapshot,
 }
 
+type OpenGroups = RwSignal<HashSet<Arc<str>>>;
+
 /// What the sidebar, the canvas and the panels share: the previews, which one is selected, which groups are open, the pane sizes, the view, the search, the panel shown and the actions filter, each preview's args, the canvas toolbar's settings, the matrix the Matrix view shows and its focused cell, the calls the mounted preview's callbacks received, what the inspection panels read of its canvas and what the last test run found of each snapshot.
 ///
 /// A cheap handle: clones share one state. Everything but the previews, the remount count, the action log, the inspection, the test report and the search field is a `@workshop/…` hot signal, so it is made where the tree is built, after a hot reload has restored the values it carries.
@@ -125,7 +128,8 @@ pub(crate) enum PanelTab {
 pub(crate) struct WorkshopState {
     entries: Rc<[PreviewEntry]>,
     selection: RwSignal<Option<Arc<str>>>,
-    expanded: RwSignal<HashSet<Arc<str>>>,
+    expanded: OpenGroups,
+    rested: OpenGroups,
     view: RwSignal<ViewMode>,
     search: RwSignal<String>,
     sidebar_width: RwSignal<f32>,
@@ -198,10 +202,11 @@ impl WorkshopState {
             selection.set(initial);
         }
         keeper.keep(selection, store::keys::SELECTION);
-        let expanded = Self::open_groups(&entries, selection.peek().as_deref(), keeper);
+        let (rested, expanded) = Self::open_groups(&entries, selection.peek().as_deref(), keeper);
         let state = Self {
             selection,
             expanded,
+            rested,
             view: keeper.kept(keys::VIEW, store::keys::VIEW, ViewMode::default()),
             search: hot_signal(keys::SEARCH, filter),
             sidebar_width: keeper.kept(
@@ -258,28 +263,61 @@ impl WorkshopState {
             entries,
         };
         state.fold_per_view();
+        state.rest_beside_search();
         state
     }
 
-    /// The sidebar's open groups as a hot reload restored them, else as `keeper` kept them, else the groups holding `selected`; groups the previews no longer have are dropped.
+    /// The groups open outside a search and the groups the sidebar shows open, each as a hot reload restored it; otherwise the first as `keeper` kept it, else the groups holding `selected`, and the second as the first. Groups the previews no longer have are dropped from both.
     fn open_groups(
         entries: &[PreviewEntry],
         selected: Option<&str>,
         keeper: &Keeper,
-    ) -> RwSignal<HashSet<Arc<str>>> {
+    ) -> (OpenGroups, OpenGroups) {
         let holding: HashSet<Arc<str>> = selected
             .map(|id| groups_holding(entries, id).into_iter().collect())
             .unwrap_or_default();
-        let expanded = keeper.kept(
-            keys::SIDEBAR_EXPANDED,
-            store::keys::SIDEBAR_EXPANDED,
-            holding,
-        );
+        let rested = keeper.kept(keys::SIDEBAR_RESTED, store::keys::SIDEBAR_EXPANDED, holding);
+        let expanded = hot_signal(keys::SIDEBAR_EXPANDED, rested.peek());
         let groups: HashSet<Arc<str>> = group_ids(entries).into_iter().collect();
-        if !expanded.peek_with(|open| open.is_subset(&groups)) {
-            expanded.update(|open| open.retain(|id| groups.contains(id)));
+        for open in [rested, expanded] {
+            if !open.peek_with(|open| open.is_subset(&groups)) {
+                open.update(|open| open.retain(|id| groups.contains(id)));
+            }
         }
-        expanded
+        (rested, expanded)
+    }
+
+    /// Keeps the groups open outside a search to what the sidebar shows while nothing is searched. A search opens groups for as long as it lasts: clearing it brings back the groups open before it, with those holding each preview selected during it.
+    fn rest_beside_search(&self) {
+        let (search, selection) = (self.search, self.selection);
+        let (expanded, rested) = (self.expanded, self.rested);
+        let entries = Rc::clone(&self.entries);
+        let searching = move || search.peek_with(|query| !query.trim().is_empty());
+        effect(move || {
+            let open = expanded.get();
+            if !searching() {
+                rested.set_if_changed(open);
+            }
+        });
+        effect(move || {
+            let Some(id) = selection.get() else {
+                return;
+            };
+            if !searching() {
+                return;
+            }
+            let holding = groups_holding(&entries, &id);
+            if !rested.peek_with(|open| holding.iter().all(|id| open.contains(id))) {
+                rested.update(|open| open.extend(holding));
+            }
+        });
+        let was_searching = Cell::new(searching());
+        effect(move || {
+            let now = search.with(|query| !query.trim().is_empty());
+            if was_searching.replace(now) && !now {
+                expanded.set(rested.peek());
+            }
+        });
     }
 
     /// Keeps [`panel_collapsed`](Self::panel_collapsed) to what the view shown keeps: a view brought up folds the panels as it last did, and folding them is kept for the view they were folded in.
@@ -323,7 +361,7 @@ impl WorkshopState {
         listed
     }
 
-    /// The groups of the sidebar that are open, by the id the sidebar gives each. On a first run only the groups holding the selection are.
+    /// The groups of the sidebar that are open, by the id the sidebar gives each. On a first run only the groups holding the selection are; a search opens the groups holding its matches for as long as it lasts.
     pub(crate) fn expanded(&self) -> RwSignal<HashSet<Arc<str>>> {
         self.expanded
     }

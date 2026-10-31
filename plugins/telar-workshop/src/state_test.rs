@@ -48,6 +48,7 @@ fn the_hot_signal_keys_are_stable() {
     assert_eq!(keys::VIEW, "@workshop/view");
     assert_eq!(keys::SEARCH, "@workshop/search");
     assert_eq!(keys::SIDEBAR_EXPANDED, "@workshop/sidebar.expanded");
+    assert_eq!(keys::SIDEBAR_RESTED, "@workshop/sidebar.rested");
     assert_eq!(keys::SIDEBAR_WIDTH, "@workshop/sidebar.width");
     assert_eq!(keys::SIDEBAR_COLLAPSED, "@workshop/sidebar.collapsed");
     assert_eq!(keys::PANEL_SIZE, "@workshop/panel.size");
@@ -67,6 +68,7 @@ fn a_snapshot_carries_every_key() {
         keys::VIEW,
         keys::SEARCH,
         keys::SIDEBAR_EXPANDED,
+        keys::SIDEBAR_RESTED,
         keys::SIDEBAR_WIDTH,
         keys::SIDEBAR_COLLAPSED,
         keys::PANEL_SIZE,
