@@ -421,7 +421,9 @@ fn is_literal_value(tag: &str, key: &str, value: &str) -> bool {
         Some(ValueKind::Number) => number(v) || crate::style::surface_fraction(v).is_some(),
         // The three spellings that cannot change; anything else is read, and a style that reads follows.
         Some(ValueKind::Boolean) => v.is_empty() || v == "true" || v == "false",
-        Some(ValueKind::Edges) => crate::edges::tokens(v).into_iter().all(number),
+        Some(ValueKind::Edges) => crate::edges::tokens(v)
+            .into_iter()
+            .all(|token| number(token) || crate::edges::is_radius_key(key) && token == "full"),
         // A colour is paint, already a closure the renderer re-runs; anything else is a key with no schema.
         Some(ValueKind::Color) | None => true,
     }

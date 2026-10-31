@@ -1866,6 +1866,56 @@ fn a_named_corner_pair_rounds_one_edge() {
     );
 }
 
+#[test]
+fn a_full_radius_rounds_as_far_as_the_box_allows() {
+    let code = paint_code("box fill:#ff0000 radius:full");
+    assert!(
+        code.contains("with_radius(BorderRadius::all(BorderRadius::FULL))"),
+        "`full` is the corner the box fits to its sides:\n{code}"
+    );
+    assert!(
+        !code.contains("full.clone()"),
+        "and a keyword, not a name the closure captures:\n{code}"
+    );
+}
+
+#[test]
+fn a_full_corner_mixes_with_numbered_ones() {
+    let code = paint_code("box fill:#ff0000 radius:full radius_bottom:0");
+    assert!(
+        code.contains(
+            "BorderRadius { top_left: BorderRadius::FULL, top_right: BorderRadius::FULL, bottom_right: 0.0, bottom_left: 0.0 }"
+        ),
+        "a named corner overrides `full` as it would a number:\n{code}"
+    );
+}
+
+#[test]
+fn a_full_radius_in_a_class_reaches_a_component_s_surface() {
+    let out = transpile_source(
+        "[style]\n@round\n    radius: full\n\n[view]\nmenu @round label:\"File\" items:items\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(
+        out.rust_code
+            .contains(".with_radius(BorderRadius::all(BorderRadius::FULL))"),
+        "{}",
+        out.rust_code
+    );
+}
+
+#[test]
+fn full_is_a_radius_and_nothing_else() {
+    let code = paint_code("box stroke:#ff0000 stroke_width:full");
+    assert!(
+        !code.contains("BorderRadius::FULL"),
+        "a border width has no `full`:\n{code}"
+    );
+}
+
 /// And a plain one still emits what it always did, so no existing `.rsx` changes shape.
 #[test]
 fn a_plain_radius_stays_the_one_value_form() {

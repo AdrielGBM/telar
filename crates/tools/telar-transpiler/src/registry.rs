@@ -272,7 +272,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::color("fill"),
     AttrSpec::color("stroke"),
     AttrSpec::edges("stroke_width"),
-    AttrSpec::edges("radius"),
+    AttrSpec::edges("radius").doc(
+        "Rounds the corners, in pixels or `full`: as round as the box allows, a pill on a wide box and a circle on a square one, whatever size it is laid out at. Corners too big for their box shrink together until they meet, as CSS draws them.",
+    ),
     AttrSpec::num("shadow_x"),
     AttrSpec::edges("stroke_top").doc(
         "One number per edge. `stroke_width` and `radius` also take the CSS shorthand (`radius:\"8 8 0 0\"`); these name a single edge, and `start`/`end`, the only form that follows the writing direction.",

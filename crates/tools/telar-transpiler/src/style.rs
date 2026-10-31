@@ -19,6 +19,14 @@ pub fn number_or_error(value: &str, theme: ThemeAccess) -> String {
         .unwrap_or_else(|message| format!("compile_error!({})", crate::view::rust_str(&message)))
 }
 
+/// A corner radius: `full`, the roundest corner its box allows, or a number as [`format_number`] reads one.
+pub fn format_radius(value: &str, theme: ThemeAccess) -> Result<String, String> {
+    match value.trim() {
+        "full" => Ok("BorderRadius::FULL".to_string()),
+        _ => format_number(value, theme),
+    }
+}
+
 /// What a `key:value` attribute contributes to a `LayoutStyle`.
 pub enum PropCall {
     /// The builder call to chain on.

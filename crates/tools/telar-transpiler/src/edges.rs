@@ -63,6 +63,14 @@ pub fn corner_target(suffix: &str) -> Option<EdgeTarget> {
     })
 }
 
+/// Whether `key` rounds corners: `radius` or one of its corner names, the keys that also take `full`.
+pub fn is_radius_key(key: &str) -> bool {
+    key == "radius"
+        || key
+            .strip_prefix("radius_")
+            .is_some_and(|suffix| corner_target(suffix).is_some())
+}
+
 /// A property's four edges as the author left them, with the two the writing direction still has to resolve kept apart.
 #[derive(Default)]
 pub struct Edges {
@@ -127,7 +135,7 @@ pub fn expand_shorthand(value: &str) -> Option<[&str; 4]> {
     }
 }
 
-/// Reads one property's edges out of an element's attributes: the bare shorthand under `base`, then every `prefix`-suffixed name `target` recognises, applied most-general first.
+/// Reads one property's edges out of an element's attributes: the bare shorthand under `base`, then every `prefix`-suffixed name `target` recognises, applied most-general first. A `radius` corner also takes `full`.
 pub fn collect(
     attrs: &[Attr],
     base: &str,
@@ -143,6 +151,10 @@ pub fn collect(
         })
         .collect();
     named.sort_by_key(|(t, _)| t.specificity());
+    let value_of = |value: &str| match base == "radius" {
+        true => crate::style::format_radius(value, theme).unwrap_or_else(|_| ZERO.to_string()),
+        false => crate::style::number_or(value, ZERO, theme),
+    };
 
     let bare = attrs
         .iter()
@@ -155,17 +167,17 @@ pub fn collect(
         && named.is_empty()
         && tokens(value).len() == 1
     {
-        edges.uniform = Some(crate::style::number_or(value, ZERO, theme));
+        edges.uniform = Some(value_of(value));
         return edges;
     }
 
     if let Some(values) = bare.and_then(expand_shorthand) {
         for (slot, value) in edges.slots.iter_mut().zip(values) {
-            *slot = Some(crate::style::number_or(value, ZERO, theme));
+            *slot = Some(value_of(value));
         }
     }
     for (t, value) in named {
-        let value = crate::style::number_or(value.trim(), ZERO, theme);
+        let value = value_of(value.trim());
         match t {
             EdgeTarget::Slots(indices) => {
                 for i in indices {

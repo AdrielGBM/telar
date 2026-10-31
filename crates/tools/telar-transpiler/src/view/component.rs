@@ -203,7 +203,8 @@ impl ViewGen<'_> {
             let _ = write!(
                 chain,
                 ".with_radius(BorderRadius::all({}))",
-                crate::style::number_or_error(radius, self.theme_access)
+                crate::style::format_radius(radius, self.theme_access)
+                    .unwrap_or_else(|message| format!("compile_error!({})", rust_str(&message)))
             );
         }
         if chain.is_empty() {

@@ -739,11 +739,15 @@ pub(crate) fn value_error(tag: &str, key: &str, value: &str, theme: ThemeAccess)
         ValueKind::Edges => {
             let tokens = crate::edges::tokens(value);
             let shorthand = crate::edges::SHORTHAND_KEYS.contains(&key);
+            let format = match crate::edges::is_radius_key(key) {
+                true => crate::style::format_radius,
+                false => crate::style::format_number,
+            };
             match (tokens.len(), shorthand) {
                 (0, _) => Some(format!("`{key}` needs a value")),
                 (1, _) | (2..=4, true) => tokens
                     .into_iter()
-                    .find_map(|token| crate::style::format_number(token, theme).err()),
+                    .find_map(|token| format(token, theme).err()),
                 (n, true) => Some(format!(
                     "`{key}:{value}` names {n} edges: write one value, or two to four as CSS does"
                 )),
