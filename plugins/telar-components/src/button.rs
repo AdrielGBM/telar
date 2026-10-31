@@ -8,21 +8,8 @@ use telar::{
     amend_surface, box_item, children, focus::Role,
 };
 
+use crate::Variant;
 use crate::shared;
-
-/// How a button carries its colour, from the most emphatic to the least.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, telar::PreviewArg)]
-pub enum ButtonVariant {
-    /// Filled with the colour, the label in an ink that reads on it: the action a view leads with.
-    #[default]
-    Solid,
-    /// Framed in the colour with the label in it.
-    Outline,
-    /// A wash of the colour behind a label in the colour: an action that matters without leading.
-    Soft,
-    /// No surface until a pointer rests on it, and the label in the ink around it: a toolbar's action.
-    Ghost,
-}
 
 /// A button's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -75,7 +62,7 @@ pub struct ButtonProps {
     pub label: Reactive<String>,
     /// How the button carries its colour.
     #[props(default)]
-    pub variant: ButtonVariant,
+    pub variant: Variant,
     /// The colour the variant is drawn in. `Color::TRANSPARENT` (the default) is the theme's primary. A closure, so a theme token re-reads on a switch.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -141,17 +128,17 @@ fn tone(color: &Reactive<Color>) -> Option<Color> {
 }
 
 /// The box's paint in `state`, before the caller's amendment. A filled box darkens under the pointer; every other variant lays the theme's washes over what it shows at rest, so its label reads the same in every state.
-fn surface(variant: ButtonVariant, tone: Option<Color>, state: State) -> RectStyle {
+fn surface(variant: Variant, tone: Option<Color>, state: State) -> RectStyle {
     let tokens = ButtonTokens::current();
     let rect = RectStyle::default().with_radius(BorderRadius::all(tokens.radius()));
     let color = tone.unwrap_or_else(shared::accent);
     match variant {
-        ButtonVariant::Solid => rect.with_fill(match state {
+        Variant::Solid => rect.with_fill(match state {
             State::Rest => color,
             State::Hovered => shared::hovered_fill(color),
             State::Pressed => shared::pressed_fill(color),
         }),
-        ButtonVariant::Outline => {
+        Variant::Outline => {
             let framed = rect.with_border(Border::uniform(color, tokens.border_width()));
             match state {
                 State::Rest => framed,
@@ -159,12 +146,12 @@ fn surface(variant: ButtonVariant, tone: Option<Color>, state: State) -> RectSty
                 State::Pressed => framed.with_fill(washed(color, shared::pressed_wash())),
             }
         }
-        ButtonVariant::Soft => rect.with_fill(match state {
+        Variant::Soft => rect.with_fill(match state {
             State::Rest => washed(color, shared::held_wash()),
             State::Hovered => washed(color, shared::pressed_wash()),
             State::Pressed => shared::pressed_fill(washed(color, shared::pressed_wash())),
         }),
-        ButtonVariant::Ghost => match state {
+        Variant::Ghost => match state {
             State::Rest => rect,
             State::Hovered => rect.with_fill(shared::hover_wash()),
             State::Pressed => rect.with_fill(shared::pressed_wash()),
@@ -180,16 +167,16 @@ fn washed(color: Color, wash: Color) -> Color {
 /// The label's colour: an ink that reads on a filled box, the colour itself in an outline, the colour taken just far enough toward an ink to read on the strongest wash of itself a soft button shows, and on a ghost the colour only when the caller named one.
 ///
 /// `None` means "whatever the page says". A ghost button paints no surface of its own, so its label sits on the page beside ordinary text — naming the theme's `ink` here made it the one word in a region that had declared its colour that came out in the theme's.
-fn label_color(variant: ButtonVariant, tone: Option<Color>) -> Option<Color> {
+fn label_color(variant: Variant, tone: Option<Color>) -> Option<Color> {
     match variant {
-        ButtonVariant::Solid => Some(tone.map_or_else(shared::on_accent, shared::ink_on)),
-        ButtonVariant::Outline => Some(tone.unwrap_or_else(shared::accent)),
-        ButtonVariant::Soft => {
+        Variant::Solid => Some(tone.map_or_else(shared::on_accent, shared::ink_on)),
+        Variant::Outline => Some(tone.unwrap_or_else(shared::accent)),
+        Variant::Soft => {
             let color = tone.unwrap_or_else(shared::accent);
             let fill = shared::over(washed(color, shared::pressed_wash()), shared::surface());
             Some(shared::readable_on(color, fill))
         }
-        ButtonVariant::Ghost => tone,
+        Variant::Ghost => tone,
     }
 }
 

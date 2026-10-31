@@ -26,7 +26,6 @@ pub(crate) const NO_RESULTS: &str = "no_results";
 pub(crate) const NOTHING_TO_SHOW: &str = "nothing_to_show";
 pub(crate) const NOTIFICATIONS: &str = "notifications";
 pub(crate) const OPACITY: &str = "opacity";
-pub(crate) const REMOVE: &str = "remove";
 pub(crate) const RESIZE: &str = "resize";
 pub(crate) const RESIZE_COLUMN: &str = "resize_column";
 pub(crate) const RESIZE_HEIGHT: &str = "resize_height";
@@ -259,23 +258,6 @@ static CATALOG: Catalog = Catalog {
                 ("ar", Message::Plain("العتامة")),
                 ("en", Message::Plain("Opacity")),
                 ("es", Message::Plain("Opacidad")),
-            ],
-        },
-        Entry {
-            key: REMOVE,
-            messages: &[
-                (
-                    "ar",
-                    Message::Format(&[Part::Lit("إزالة "), Part::Arg("label")]),
-                ),
-                (
-                    "en",
-                    Message::Format(&[Part::Lit("Remove "), Part::Arg("label")]),
-                ),
-                (
-                    "es",
-                    Message::Format(&[Part::Lit("Quitar "), Part::Arg("label")]),
-                ),
             ],
         },
         Entry {

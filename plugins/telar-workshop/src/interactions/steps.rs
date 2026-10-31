@@ -10,9 +10,7 @@ use telar::{
     LayoutScrollArea, LayoutStyle, NamedKey, Reactive, ReactiveList, RectStyle, Role, ShapeStyle,
     StyledContainer, Text, box_item, children, use_theme_tokens,
 };
-use telar_components::{
-    BadgeProps, ButtonProps, ButtonVariant, ToggleProps, badge, button, metrics, toggle,
-};
+use telar_components::{ButtonProps, TagProps, ToggleProps, Variant, button, metrics, tag, toggle};
 use telar_devtools::{
     WORKBENCH_GRID, WORKBENCH_RADIUS, use_workbench_tokens, workbench_fill, workbench_mono,
     workbench_muted,
@@ -112,7 +110,7 @@ pub(crate) fn tools(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, Layout
             button(
                 ButtonProps::props()
                     .label(Reactive::of(|| strings::text(BACK_TO_LIVE)))
-                    .variant(ButtonVariant::Ghost)
+                    .variant(Variant::Ghost)
                     .on_press(Rc::new(move || interactions.back_to_live()))
                     .build(),
             )
@@ -157,12 +155,10 @@ pub(crate) fn tab_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, La
         },
         |tally: &(usize, Verdict)| *tally,
         |(count, verdict)| {
-            badge(
-                BadgeProps::props()
-                    .label(Reactive::of(move || count.to_string()))
-                    .color(Reactive::of(move || verdict_color(verdict)))
-                    .build(),
-            )
+            tag(TagProps::props()
+                .label(Reactive::of(move || count.to_string()))
+                .tone(Reactive::of(move || verdict_color(verdict)))
+                .build())
         },
     )?;
     Ok(box_item(tally))

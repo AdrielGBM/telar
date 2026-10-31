@@ -1,0 +1,75 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 289,291 64x18 fill=#2eb073ff border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                rect 297,294 12x12
+                element group
+                  matrix 1,0,0,1,297,294
+                    path M10,3 L4.5,8.5 L2,6 stroke=1 stroke-color=#171a2eff cap=round join=round
+                  end
+                end
+              end
+              element group
+                matrix 1,0,0,1,311,293
+                  text 0,0 34.83x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element group
+            rect 362,291 84x18 fill=#3d8ce614 border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                rect 370,294 12x12 border=1.44 border-color=#616680ff radius=6
+                element group
+                  matrix 1,0,0,1,0,0
+                    rect 370,294 12x12
+                    element group
+                      rect 375,294 3x3 fill=#3d8ce6ff radius=1.5
+                    end
+                  end
+                end
+              end
+              element group
+                matrix 1,0,0,1,384,293
+                  text 0,0 54x14.28 "Exporting" size=11.9 family=sans-serif weight=400 color=#3d65abff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element group
+            rect 454,291 58x18 fill=#00000000 border=1 border-color=#4261edff radius=6
+            element group
+              element group
+                matrix 1,0,0,1,462,293
+                  text 0,0 28.31x14.28 "Logo" size=11.9 family=sans-serif weight=400 color=#4261edff wrap=none lang=en
+                end
+              end
+              element group
+                rect 492,294 12x12
+                element group
+                  matrix 1,0,0,1,492,294
+                    path M5.76,1.15 C5.81,1.06 5.9,1 6,1 C6.1,1 6.19,1.06 6.24,1.15 L7.39,3.49 C7.55,3.8 7.84,4.02 8.19,4.07 L10.77,4.45 C10.87,4.46 10.96,4.53 10.99,4.63 C11.02,4.72 10.99,4.83 10.92,4.9 L9.05,6.72 C8.8,6.96 8.69,7.31 8.75,7.66 L9.19,10.23 C9.21,10.32 9.16,10.43 9.08,10.49 C9,10.55 8.89,10.55 8.8,10.51 L6.49,9.29 C6.18,9.13 5.82,9.13 5.51,9.29 L3.2,10.51 C3.11,10.55 3,10.54 2.92,10.49 C2.84,10.43 2.8,10.32 2.81,10.23 L3.25,7.66 C3.31,7.31 3.2,6.96 2.95,6.72 L1.08,4.9 C1.01,4.83 0.98,4.72 1.01,4.63 C1.04,4.53 1.13,4.46 1.23,4.44 L3.81,4.07 C4.15,4.02 4.45,3.8 4.61,3.49 Z stroke=1 stroke-color=#4261edff cap=round join=round
+                  end
+                end
+              end
+            end
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

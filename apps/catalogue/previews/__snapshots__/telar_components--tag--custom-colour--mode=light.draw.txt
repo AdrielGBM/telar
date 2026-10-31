@@ -1,0 +1,60 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          element group
+            rect 289,291 50x18 fill=#7d3bedff border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,297,293
+                  text 0,0 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element group
+            rect 346,291 49x18 fill=#7d3bed14 border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,354,293
+                  text 0,0 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#7d3bedff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element group
+            rect 404,291 49x18 fill=#00000000 border=1 border-color=#7d3bedff radius=6
+            element group
+              element group
+                matrix 1,0,0,1,412,293
+                  text 0,0 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#7d3bedff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+          element group
+            rect 461,291 50x18 fill=#00000000 border=1 border-color=#00000000 radius=6
+            element group
+              element group
+                matrix 1,0,0,1,469,293
+                  text 0,0 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#7d3bedff wrap=none lang=en
+                end
+              end
+            end
+            element group
+            end
+          end
+        end
+      end
+    end
+  end
+end

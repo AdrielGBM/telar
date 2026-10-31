@@ -53,7 +53,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                         )?
                                     };
                                     let __node_4 = button(ButtonProps::props().label("Advance").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let p = p.clone(); move || { p.set((p.get() + 0.15).min(1.0)) } })).build())?;
-                                    let __node_5 = button(ButtonProps::props().label("Reset").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let p = p.clone(); move || { p.set(0.0) } })).build())?;
+                                    let __node_5 = button(ButtonProps::props().label("Reset").variant(Variant::Ghost).on_press(std::rc::Rc::new({ let p = p.clone(); move || { p.set(0.0) } })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__text_0, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));

@@ -3564,3 +3564,21 @@ fn a_bare_icon_name_resolved_at_run_time_still_needs_a_default_set() {
     assert!(code.contains("default_set"), "{code}");
     let _ = std::fs::remove_dir_all(&root);
 }
+
+/// A colour literal handed to a component prop arrives as a colour, so a prop whose type converts from one, as `tag`'s `tone` does, takes `tone:#ff8800`.
+#[test]
+fn a_hex_colour_on_a_component_prop_arrives_as_a_colour() {
+    let code = crate::transpile_source(
+        "[view]\ntag label:\"Brand\" tone:#ff8800\n",
+        "demo",
+        None,
+        None,
+    )
+    .unwrap()
+    .rust_code;
+    let call = code
+        .lines()
+        .find(|line| line.contains(".tone("))
+        .unwrap_or_else(|| panic!("{code}"));
+    assert!(call.contains(".tone(Color::"), "{call}");
+}

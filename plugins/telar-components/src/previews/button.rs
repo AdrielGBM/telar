@@ -3,7 +3,8 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Reactive, Role};
 
-use crate::button::{ButtonProps, ButtonVariant, button};
+use crate::Variant;
+use crate::button::{ButtonProps, button};
 use crate::metrics;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -12,7 +13,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             button(
                 ButtonProps::props()
                     .label(p.arg("label", "Save"))
-                    .variant(p.arg("variant", ButtonVariant::Solid))
+                    .variant(p.arg("variant", Variant::Solid))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
             )
@@ -27,10 +28,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(button: ButtonProps, "Variants", |p| {
             let color = p.arg("color", Color::TRANSPARENT);
             let buttons = [
-                ("Solid", ButtonVariant::Solid),
-                ("Outline", ButtonVariant::Outline),
-                ("Soft", ButtonVariant::Soft),
-                ("Ghost", ButtonVariant::Ghost),
+                ("Solid", Variant::Solid),
+                ("Outline", Variant::Outline),
+                ("Soft", Variant::Soft),
+                ("Ghost", Variant::Ghost),
             ]
             .into_iter()
             .map(|(label, variant)| {
@@ -68,6 +69,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             canvas.click(by_role(Role::Button).named("Pressed 0 times"))?;
             canvas.expect_text("Pressed 1 times")?;
             canvas.expect_action("on_press", 1)?;
+            canvas.click_outside(by_role(Role::Button))?;
+            canvas.hover(by_role(Role::Button))?;
             canvas.tab()?;
             canvas.expect_focused(by_role(Role::Button))?;
             canvas.press(Key::Named(NamedKey::Enter))?;

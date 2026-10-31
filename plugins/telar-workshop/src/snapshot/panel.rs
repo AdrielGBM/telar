@@ -8,8 +8,8 @@ use telar::{
     LayoutStyle, Reactive, ReactiveList, Role, Text, box_item, children, use_theme_tokens,
 };
 use telar_components::{
-    BadgeProps, ButtonProps, CodeSpan, CodeViewProps, Tab, TokenKind, badge, button, code_view,
-    tab_list,
+    ButtonProps, CodeSpan, CodeViewProps, Tab, TagProps, TokenKind, Tone, button, code_view,
+    tab_list, tag,
 };
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_mono, workbench_muted};
 
@@ -111,12 +111,10 @@ pub(crate) fn tab_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, La
         },
         |drifted: &usize| *drifted,
         |drifted| {
-            badge(
-                BadgeProps::props()
-                    .label(Reactive::of(move || drifted.to_string()))
-                    .color(Reactive::of(|| use_theme_tokens().error()))
-                    .build(),
-            )
+            tag(TagProps::props()
+                .label(Reactive::of(move || drifted.to_string()))
+                .tone(Tone::Danger)
+                .build())
         },
     )?;
     Ok(box_item(count))
@@ -137,12 +135,10 @@ pub(crate) fn drift_badge(
         },
         |_: &()| (),
         |()| {
-            badge(
-                BadgeProps::props()
-                    .label(strings::reactive(SNAPSHOT_DRIFT))
-                    .color(Reactive::of(|| use_theme_tokens().error()))
-                    .build(),
-            )
+            tag(TagProps::props()
+                .label(strings::reactive(SNAPSHOT_DRIFT))
+                .tone(Tone::Danger)
+                .build())
         },
     )?;
     Ok(box_item(shown))

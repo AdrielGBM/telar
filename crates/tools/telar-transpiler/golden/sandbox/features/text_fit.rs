@@ -131,7 +131,7 @@ pub fn text_fit(props: TextFitProps) -> Result<Box<dyn LayoutItem>, LayoutError>
                                     )?
                                 };
                                 __children.push(box_item(__text_3));
-                                let __node_9 = button(ButtonProps::props().label("Switch between 90% and 40%").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let narrow = narrow.clone(); move || narrow.toggle() })).build())?;
+                                let __node_9 = button(ButtonProps::props().label("Switch between 90% and 40%").variant(Variant::Ghost).on_press(std::rc::Rc::new({ let narrow = narrow.clone(); move || narrow.toggle() })).build())?;
                                 __children.push(box_item(__node_9));
                                 Ok(__children)
                             }

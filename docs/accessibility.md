@@ -11,13 +11,13 @@ the application knows, and it says them with three attributes that any built-in 
 | `lang:` | a BCP 47 tag: `"ja"`, `"es-CL"` | The language of the box and everything under it. The nearest one wins. |
 | `a11y:hidden` | — | Assistive technology skips the box and its whole subtree. It is still drawn and still answers the pointer. |
 
-On a component tag (`button`, `chip`, …) `label` and `lang` stay the component's own props to declare, so a
+On a component tag (`button`, `tag`, …) `label` and `lang` stay the component's own props to declare, so a
 call says the same three things about the item the component returns under the names of the methods they call:
 `a11y_label:`, `a11y_lang:` and `a11y:hidden`. Said there, they win over what the component said about that item
 itself — a button named by its text can be named for the row it acts on:
 
 ```text
-button label:"Open" variant:ButtonVariant::Ghost a11y_label:"Open {name} in the canvas"
+button label:"Open" variant:Variant::Ghost a11y_label:"Open {name} in the canvas"
 ```
 
 A quoted name or language interpolates `{…}` as text does, wherever it is written.

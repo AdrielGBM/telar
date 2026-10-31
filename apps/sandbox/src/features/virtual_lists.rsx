@@ -38,7 +38,7 @@ col gap:20
             row gap:8
                 button label:"Note 40" on_press:(|| if let Some(rows) = $rows.get() { rows.reveal(40, 8.0) })
                 button label:"Note 250" on_press:(|| if let Some(rows) = $rows.get() { rows.reveal(250, 8.0) })
-                button label:"Note 399" variant:ButtonVariant::Outline on_press:(|| if let Some(rows) = $rows.get() { rows.reveal(399, 8.0) })
+                button label:"Note 399" variant:Variant::Outline on_press:(|| if let Some(rows) = $rows.get() { rows.reveal(399, 8.0) })
             scroll height:200 width:100%
                 for note in $notes key note.id virtual estimated_height:64 overscan:96 rows:$rows
                     col width:100% pad_x:12 pad_y:10 gap:4 stroke:$theme.border

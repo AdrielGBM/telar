@@ -20,9 +20,10 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     #[allow(unused_imports)] use telar::use_theme;
     #[allow(unused_variables)] let theme = telar::Theme::<core::theme::SandboxTheme>::default();
     let tags = signal(3u32);
+    let rust = signal(true);
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("PRESENTATION").title("Badges & chips").desc("badge is a small solid status tag; chip is a softer outlined pill, optionally removable via on_close. Both are components.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("PRESENTATION").title("Tags").desc("tag is a short label: a status, a category, a value the user removes or a filter they select. What it does follows from the props it is handed, and how it looks is a variant and a tone. A component.").build())?;
         let __node_1 = {
             let __recipe_children = Children::new(
                 {
@@ -43,9 +44,9 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                             { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(15.0).with_color(theme.get().ink) },
                                         )?
                                     };
-                                    let __node_3 = badge(BadgeProps::props().label("12").build())?;
-                                    let __node_4 = badge(BadgeProps::props().label("NEW").color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build())?;
-                                    let __node_5 = badge(BadgeProps::props().label("BETA").color(Reactive::of({ let theme = theme.clone(); move || theme.get().purple })).build())?;
+                                    let __node_3 = tag(TagProps::props().label("12").build())?;
+                                    let __node_4 = tag(TagProps::props().label("NEW").tone(Tone::Success).variant(Variant::Soft).build())?;
+                                    let __node_5 = tag(TagProps::props().label("BETA").tone(Reactive::of({ let theme = theme.clone(); move || theme.get().purple })).variant(Variant::Outline).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__text_0, __node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -56,17 +57,18 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_6 = code_line(CodeLineProps::props().code("badge label:'NEW' color:$theme.success").build())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("tag label:'NEW' tone:Tone::Success").build())?;
                     __children.push(box_item(__node_6));
                     Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("badge — a small solid accent tag").children(__recipe_children).build())?
+            example(ExampleProps::props().title("tag — a status or a category, in a tone and a variant").children(__recipe_children).build())?
         };
         let __node_7 = {
             let __recipe_children = Children::new(
                 {
+                    let rust = rust.clone();
                     let tags = tags.clone();
                     let theme = theme.clone();
                 move || {
@@ -74,26 +76,50 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                     let __node_8 = {
                         let __recipe_children = Children::new(
                             {
+                                let rust = rust.clone();
                                 let tags = tags.clone();
                                 let theme = theme.clone();
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_9 = chip(ChipProps::props().label("design").build())?;
-                                    let __node_10 = chip(ChipProps::props().label("rust").build())?;
-                                    let __node_11 = chip(ChipProps::props().label("removable").on_close(std::rc::Rc::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build())?;
+                                    let __node_9 = tag(TagProps::props().label("design").build())?;
+                                    let __node_10 = tag(TagProps::props().label("rust").selected(rust.clone()).build())?;
+                                    let __node_11 = {
+                                        let __recipe_action = Children::new(
+                                            {
+                                                let tags = tags.clone();
+                                            move || {
+                                                let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
+                                                let __sbox_0 = {
+                                                    let __text_1 = {
+                                                        Text::declaring(
+                                                            || "×".to_string(),
+                                                            LayoutStyle::new(),
+                                                            move |__inherited: TextStyle| __inherited,
+                                                        )?
+                                                    };
+                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(24.0).height(24.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__text_1])?.on_press({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } }).cursor(Cursor::Pointer).control(::telar::Role::Button)
+                                                };
+                                                let __sbox_0 = __sbox_0.a11y_label(|| "Remove removable");
+                                                __children.push(box_item(__sbox_0));
+                                                Ok(__children)
+                                            }
+                                            }
+                                        );
+                                        tag(TagProps::props().label("removable").action(__recipe_action).build())?
+                                    };
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_9, __node_10, __node_11])?
                                 };
                                 __children.push(box_item(__row_1));
-                                let __text_1 = {
+                                let __text_2 = {
                                     let tags = tags.clone();
                                     Text::declaring(
-                                        move || format!("chips · {}", tags.get()),
+                                        move || format!("tags · {}", tags.get()),
                                         LayoutStyle::new(),
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_1));
+                                __children.push(box_item(__text_2));
                                 Ok(__children)
                             }
                             }
@@ -101,13 +127,13 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_12 = code_line(CodeLineProps::props().code("chip label:'removable' on_close:|| remove()").build())?;
+                    let __node_12 = code_line(CodeLineProps::props().code("tag label:'removable' / box role:button label:'Remove removable' slot:'action'").build())?;
                     __children.push(box_item(__node_12));
                     Ok(__children)
                 }
                 }
             );
-            example(ExampleProps::props().title("chip — a softer outlined pill; on_close makes it removable").children(__recipe_children).build())?
+            example(ExampleProps::props().title("a control in the action slot acts on the tag; selected or on_toggle makes it a filter").children(__recipe_children).build())?
         };
         Container::new(LayoutStyle::new().flex_column().gap(20.0), children![__node_0, __node_1, __node_7])?
     };

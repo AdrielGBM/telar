@@ -440,7 +440,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     )?
                                 };
                                 __children.push(box_item(__text_28));
-                                let __node_21 = button(ButtonProps::props().label("Move the axis").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new({ let heavy = heavy.clone(); move || heavy.toggle() })).build())?;
+                                let __node_21 = button(ButtonProps::props().label("Move the axis").variant(Variant::Ghost).on_press(std::rc::Rc::new({ let heavy = heavy.clone(); move || heavy.toggle() })).build())?;
                                 __children.push(box_item(__node_21));
                                 let __text_29 = {
                                     Text::declaring(
@@ -657,7 +657,7 @@ pub fn typography(props: TypographyProps) -> Result<Box<dyn LayoutItem>, LayoutE
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
-                                    let __node_39 = button(ButtonProps::props().label(t!("nav.overview")).variant(ButtonVariant::Ghost).build())?;
+                                    let __node_39 = button(ButtonProps::props().label(t!("nav.overview")).variant(Variant::Ghost).build())?;
                                     let __text_37 = {
                                         Text::declaring(
                                             move || format!("{}", t!("greeting", name = "Ada")),

@@ -13,7 +13,7 @@ use telar::{
     SurfaceFrame, Text, ViewRange, box_item, children, effect, memo, on_cleanup, pointer_position,
     scroll_progress, signal, use_theme_tokens,
 };
-use telar_components::{BadgeProps, ItemProps, TooltipProps, badge, item, tooltip};
+use telar_components::{ItemProps, TagProps, TooltipProps, item, tag, tooltip};
 use telar_devtools::{
     WORKBENCH_GRID, WORKBENCH_RADIUS, inspection_marks, use_workbench_tokens, workbench_mono,
     workbench_muted,
@@ -318,12 +318,10 @@ fn badges(statuses: Memo<Vec<Status>>) -> Result<Box<dyn LayoutItem>, LayoutErro
         |status: &Status| format!("{status:?}"),
         |status| {
             let tone = status.tone();
-            badge(
-                BadgeProps::props()
-                    .label(Reactive::of(move || status.text()))
-                    .color(Reactive::of(move || tone_color(tone)))
-                    .build(),
-            )
+            tag(TagProps::props()
+                .label(Reactive::of(move || status.text()))
+                .tone(Reactive::of(move || tone_color(tone)))
+                .build())
         },
     )?;
     Ok(box_item(row))

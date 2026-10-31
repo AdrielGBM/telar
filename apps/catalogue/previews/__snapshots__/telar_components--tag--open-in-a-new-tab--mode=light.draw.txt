@@ -1,0 +1,60 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 352,286 96x28 fill=#61668014 border=1 border-color=#00000000 radius=6
+          element group
+            element group
+              matrix 1,0,0,1,360,288
+                text 0,4 52x14.28 "Logo.svg" size=11.9 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+              end
+            end
+          end
+          element group
+            element group
+              element group
+                rect 420,286 28x28
+                element button
+                  rect 420,286 28x28 fill=#0000000a radius=10
+                  element group
+                    rect 426,292 16x16
+                    element group
+                      matrix 1,0,0,1,426,292
+                        path M10,2 L14,2 L14,6 M6.67,9.33 L14,2 M12,8.67 L12,12.67 C12,13.4 11.4,14 10.67,14 L3.33,14 C2.6,14 2,13.4 2,12.67 L2,5.33 C2,4.6 2.6,4 3.33,4 L7.33,4 stroke=1.33 stroke-color=#616680ff cap=round join=round
+                      end
+                    end
+                  end
+                end
+              end
+              element group
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+matrix 1,0,0,1,420,318
+  element group
+    rect 0,0 185x22 fill=#171a2eff radius=11
+    element group
+      element group
+        matrix 1,0,0,1,8,4
+          text 0,0 157x14.28 "Open Logo.svg in a new tab" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+        end
+      end
+      element group
+        element group
+        end
+      end
+    end
+    element group
+      element group
+      end
+    end
+  end
+end

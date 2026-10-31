@@ -8,7 +8,7 @@ use telar::{
     Accessible, AlignItems, Border, Container, LayoutError, LayoutItem, LayoutScrollArea,
     LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer, Text, box_item, children,
 };
-use telar_components::{BadgeProps, ButtonProps, ButtonVariant, badge, button};
+use telar_components::{ButtonProps, TagProps, Variant, button, tag};
 use telar_devtools::{
     WORKBENCH_GRID, use_workbench_tokens, workbench_fill, workbench_mono, workbench_muted,
 };
@@ -89,11 +89,9 @@ pub(super) fn count_badge(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, 
         },
         |count: &usize| *count,
         |count| {
-            badge(
-                BadgeProps::props()
-                    .label(Reactive::of(move || count.to_string()))
-                    .build(),
-            )
+            tag(TagProps::props()
+                .label(Reactive::of(move || count.to_string()))
+                .build())
         },
     )?;
     Ok(box_item(count))
@@ -253,7 +251,7 @@ fn reset_button(binding: &Binding) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let button = button(
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(RESET)))
-            .variant(ButtonVariant::Ghost)
+            .variant(Variant::Ghost)
             .on_press(on_press)
             .build(),
     )?

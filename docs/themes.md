@@ -76,7 +76,7 @@ defaults to a primitive or a convention, so a theme that names none of them stil
 | `radius_control` | buttons, fields, select and menu triggers, tabs, icon buttons, steppers | `radius` |
 | `radius_surface` | popups and menus, tooltips, toasts, context menus, code blocks | `radius × 1.5` |
 | `radius_dialog` | modals, the command palette, drawers | `radius × 3` |
-| `radius_item` | rows, options and items inside a surface | `radius_sm` |
+| `radius_item` | rows, options and items inside a surface; key caps and tags | `radius_sm` |
 | `border_width`, `border_width_strong` | a hairline; a frame that is the control's shape | `1`, `1.5` |
 | `focus_ring`, `focus_ring_width`, `focus_ring_offset` | the keyboard's ring, and a list's cursor | `primary`, `2`, `0` |
 | `scrollbar_width`, `scrollbar_inset`, `scrollbar_radius` | the lane a scroll area's bar runs in (scaled by the control size); how much narrower the thumb is than its lane; the corner of its thumb | `8`, `2`, fully rounded (`(width - inset) / 2`) |
@@ -86,7 +86,7 @@ defaults to a primitive or a convention, so a theme that names none of them stil
 | `thumb` | a toggle's knob, a slider's thumb | `surface` in light, `ink` in dark |
 | `font_weight_strong` | titles, headings, matched runs | `600` |
 
-A pill (a chip, a badge, a radio, a toggle's track) is fully rounded at whatever size it is laid out, which no
+A pill (a radio, a toggle's track, a progress bar) is fully rounded at whatever size it is laid out, which no
 number can say, so it is not a role: a component rounds it with `metrics::pill(rect)`. The focus ring's offset
 is measured inward: `0` draws the ring on the box's edge in place of its border, more keeps the border and leaves
 a gap. A `[telar] library`'s `$theme` reads every role like any other token.
@@ -152,10 +152,8 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 | Tokens | Fields → fallback |
 | --- | --- |
 | `AccordionTokens` | `pad_x` → `control_pad_x`; `radius` → `radius_control` |
-| `BadgeTokens` | `radius` → a pill; `pad_x` → `gap_md` |
 | `ButtonTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width_strong` |
 | `CheckboxTokens` | `size` → `icon_size`; `radius` → `radius_item`; `border_width` → `border_width_strong` |
-| `ChipTokens` | `radius` → a pill; `pad_x` → `gap_md`; `border_width` → `border_width` |
 | `CodeViewTokens` | `radius` → `radius_surface`; `pad` → `gap_md` |
 | `ColorPickerTokens` | `width` → `measure(16)`; `radius` → `radius_control`; `ring` → `border_width_strong` |
 | `CommandPaletteTokens` | `width` → `measure(40)`; `radius` → `radius_dialog`; `inset_top` → six `gap_xl` |
@@ -181,6 +179,7 @@ in force. Each field and what `None` falls back to (roles in `code`, `metrics` h
 | `StepperTokens` | `radius` → `radius_control` |
 | `SwatchesTokens` | `size` → `icon_size` and `gap_sm`; `ring` → `border_width_strong` |
 | `TabsTokens` | `radius` → `radius_control`; `pad_x` → `control_pad_x` |
+| `TagTokens` | `radius` → `radius_item` (a pill is `radius:full` in a class); `pad_x` → `gap_md`; `border_width` (an outline's frame, and an unselected filter's) → `border_width` |
 | `TextFieldTokens` | a `text_field`'s frame, of one line or several, and the `search_field`'s drawn in it: `radius` → `radius_control`; `pad_x` → `control_pad_x`; `border_width` → `border_width`; `width` → `measure(21.5)` |
 | `ToastTokens` | `radius` → `radius_surface`; `pad` → `gap_lg`; `width` → `measure(26)`; `stripe_width` → `gap_xs` |
 | `ToggleTokens` | `knob` → `icon_size`; `inset` → `gap_xs`; `radius` → a pill. A menu row's `switch` draws the same track as tall as `icon_size`, its knob what the inset leaves |
@@ -199,6 +198,6 @@ its `variant` (`Solid`, `Outline`, `Soft`, `Ghost`) says how its `color` (the th
 
 ```rsx
 button label:"Save"
-button label:"Cancel" variant:ButtonVariant::Outline color:$theme.error
-button label:"Undo" variant:ButtonVariant::Ghost
+button label:"Cancel" variant:Variant::Outline color:$theme.error
+button label:"Undo" variant:Variant::Ghost
 ```

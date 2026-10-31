@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 
@@ -29,6 +31,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(code_view: CodeViewProps, "Rust", |p| {
             code_view(
                 CodeViewProps::props()
+                    .on_copy(Rc::new(|_| {}))
                     .code(SOURCE)
                     .spans(spans())
                     .first_line(p.arg("first_line", 1u32))

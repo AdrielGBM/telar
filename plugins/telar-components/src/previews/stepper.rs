@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
@@ -8,6 +10,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(stepper: StepperProps, "Default", |p| {
             stepper(
                 StepperProps::props()
+                    .on_change(Rc::new(|_| {}))
                     .value(p.signal("value", 2.0f32))
                     .min(p.arg("min", 0.0f32))
                     .max(p.arg("max", 10.0f32))

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, LayoutError, LayoutStyle, Role};
 
@@ -16,6 +18,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 .map(|(value, label)| {
                     radio(
                         RadioProps::props()
+                            .on_select(Rc::new(|_| {}))
                             .selected(selected)
                             .value(value)
                             .label(label)

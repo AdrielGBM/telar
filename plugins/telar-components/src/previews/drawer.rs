@@ -29,6 +29,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             };
             let panel = drawer(
                 DrawerProps::props()
+                    .on_close(Rc::new(|| {}))
                     .open(open)
                     .side(side)
                     .width(p.arg("width", 0.0f32))

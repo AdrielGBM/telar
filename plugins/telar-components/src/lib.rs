@@ -27,11 +27,9 @@ telar::rsx_modules!();
 
 #[cfg(feature = "advanced")]
 mod accordion;
-#[cfg(test)]
-mod badge_test;
+mod appearance;
 mod button;
 mod checkbox;
-mod chip;
 #[cfg(feature = "workbench")]
 mod code_view;
 #[cfg(feature = "workbench")]
@@ -99,6 +97,8 @@ mod style_scan_test;
 mod swatches;
 mod tabs;
 #[cfg(test)]
+mod tag_test;
+#[cfg(test)]
 mod test_support;
 mod text_field;
 #[cfg(feature = "chrome")]
@@ -122,10 +122,9 @@ mod window_frame;
 
 #[cfg(feature = "advanced")]
 pub use accordion::{AccordionProps, AccordionTokens, accordion};
-pub use badge::{BadgeProps, BadgeTokens, badge};
-pub use button::{ButtonProps, ButtonTokens, ButtonVariant, button};
+pub use appearance::{Tone, Variant};
+pub use button::{ButtonProps, ButtonTokens, button};
 pub use checkbox::{CheckboxProps, CheckboxTokens, checkbox};
-pub use chip::{ChipProps, ChipTokens, chip};
 #[cfg(feature = "workbench")]
 pub use code_view::{
     CodeSpan, CodeViewProps, CodeViewTokens, CopyHandler, TokenKind, TokenStyler, code_view,
@@ -191,13 +190,14 @@ pub use split_pane::{
 pub use stepper::{StepperProps, StepperTokens, stepper};
 pub use swatches::{SwatchesProps, SwatchesTokens, swatches};
 pub use tabs::{Tab, TabsProps, TabsTokens, tab_list, tabs};
+pub use tag::{TagProps, TagTokens, tag};
 pub use text_field::{FieldKeyHandler, TextFieldProps, TextFieldTokens, text_field};
 #[cfg(feature = "chrome")]
 pub use title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
 #[cfg(feature = "overlays")]
 pub use toast::{
-    Toast, ToastAction, ToastId, ToastKind, ToastPlacement, ToastTokens, ToasterProps, Toasts,
-    show_toast, toaster, toasts,
+    Toast, ToastAction, ToastId, ToastPlacement, ToastTokens, ToasterProps, Toasts, show_toast,
+    toaster, toasts,
 };
 pub use toggle::{ToggleProps, ToggleTokens, toggle};
 #[cfg(feature = "workbench")]

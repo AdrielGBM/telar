@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Key, NamedKey, Role};
 
@@ -9,6 +11,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let value = p.signal("query", String::new());
             search_field(
                 SearchFieldProps::props()
+                    .on_submit(Rc::new(|_| {}))
+                    .on_clear(Rc::new(|| {}))
                     .value(value)
                     .width(p.arg("width", 280.0f32))
                     .build(),

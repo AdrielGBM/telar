@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Key, NamedKey, Role};
 
@@ -8,6 +10,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(slider: SliderProps, "Default", |p| {
             slider(
                 SliderProps::props()
+                    .on_change(Rc::new(|_| {}))
                     .value(p.signal("value", 0.4f32))
                     .label(p.arg("label", "Volume"))
                     .color(p.arg("color", Color::TRANSPARENT))

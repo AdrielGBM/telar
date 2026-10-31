@@ -61,7 +61,7 @@ here than for a Rust crate: a library ships the code `.rsx` transpiled to, and t
 
 A component is a props struct and a function. The struct derives `Props`, which gives it a builder
 (`ButtonProps::props().label("Save").build()`), and the function takes it and returns a
-layout item. Nested content is a prop too, `pub children: Children`, declared only by a component that takes children. This is a pill tag in the shape of [`badge`](../plugins/telar-components/src/badge.rs), fully rounded at whatever size it is laid out:
+layout item. Nested content is a prop too, `pub children: Children`, declared only by a component that takes children. This is a pill in the spirit of the catalogue's [`tag`](../plugins/telar-components/src/tag.rsx), fully rounded at whatever size it is laid out:
 
 ```rust
 use telar::{

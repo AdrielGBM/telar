@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, LayoutError, LayoutStyle, Reactive, Role};
 
@@ -9,6 +11,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(checkbox: CheckboxProps, "Default", |p| {
             checkbox(
                 CheckboxProps::props()
+                    .on_toggle(Rc::new(|_| {}))
                     .checked(p.signal("checked", false))
                     .label(p.arg("label", "I agree to the terms"))
                     .color(p.arg("color", Color::TRANSPARENT))

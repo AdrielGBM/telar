@@ -119,6 +119,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(menu: MenuProps, "Default", |p| {
             menu(
                 MenuProps::props()
+                    .on_select(Rc::new(|_| {}))
                     .label(p.arg("label", "File"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .bordered(p.arg("bordered", false))

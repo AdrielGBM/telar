@@ -138,6 +138,36 @@ fn tab_walks_the_canvas_in_order() {
     assert!(play.expect_focused(by_text("Two")).is_err());
 }
 
+/// A preview canvas is drawn inside a tree around it, headless as in the workshop, so a Tab past either end leaves it for the host. What it reaches there differs from host to host, so the step fails, the same in each.
+#[test]
+fn a_tab_that_leaves_the_canvas_fails_its_step() {
+    let mut play = Play::mount(&entry(two_buttons)).unwrap();
+    play.click(by_role(Role::Button).named("Two")).unwrap();
+    let error = play.tab().unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("tab left the canvas past its last control"),
+        "{error}"
+    );
+    assert!(error.message.contains("`tab_back`"), "{error}");
+    assert!(play.snapshot().iter().all(|node| !node.focused));
+    play.tab().unwrap();
+    play.expect_focused(by_text("One")).unwrap();
+    let error = play.tab_back().unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("shift+tab left the canvas past its first control"),
+        "{error}"
+    );
+    assert!(
+        play.steps()
+            .last()
+            .is_some_and(|step| step.outcome.is_err())
+    );
+}
+
 #[test]
 fn typing_reaches_the_field_a_reader_names() {
     let mut play = Play::mount(&entry(field)).unwrap();

@@ -15,7 +15,7 @@ fn a_ghost_label_keeps_the_ink_of_the_region_around_it() {
     let btn = button(
         ButtonProps::props()
             .label("Undo")
-            .variant(ButtonVariant::Ghost)
+            .variant(Variant::Ghost)
             .build(),
     )
     .unwrap();
@@ -250,7 +250,7 @@ fn a_ghost_button_is_washed_while_the_pointer_rests_on_it() {
     let btn = button(
         ButtonProps::props()
             .label("Undo")
-            .variant(ButtonVariant::Ghost)
+            .variant(Variant::Ghost)
             .build(),
     )
     .unwrap();
@@ -364,7 +364,7 @@ fn an_outline_is_framed_at_the_theme_s_strong_border_width() {
     let tree = laid_out(
         ButtonProps::props()
             .label("Cancel")
-            .variant(ButtonVariant::Outline)
+            .variant(Variant::Outline)
             .color(red)
             .build(),
     );
@@ -383,7 +383,7 @@ fn a_soft_button_is_a_wash_of_its_colour_at_the_theme_s_strength() {
     let tree = laid_out(
         ButtonProps::props()
             .label("Archive")
-            .variant(ButtonVariant::Soft)
+            .variant(Variant::Soft)
             .color(red)
             .build(),
     );
@@ -407,7 +407,7 @@ fn a_style_amendment_reshapes_every_state() {
     let mut tree = laid_out(
         ButtonProps::props()
             .label("Save")
-            .variant(ButtonVariant::Ghost)
+            .variant(Variant::Ghost)
             .style(square)
             .build(),
     );
@@ -455,7 +455,7 @@ fn a_hugging_button_pads_its_label_evenly_on_both_sides() {
     let btn = button(
         ButtonProps::props()
             .label("Settings")
-            .variant(ButtonVariant::Ghost)
+            .variant(Variant::Ghost)
             .build(),
     )
     .unwrap();

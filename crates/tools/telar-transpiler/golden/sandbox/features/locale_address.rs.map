@@ -163,10 +163,10 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1138..1144	3518	`active`
 1166..1173	3532	`address`
-1279..1299	4070	`ButtonVariant::Ghost`
-1310..1336	4123	`|| telar::set_locale("en")`
-1386..1406	4268	`ButtonVariant::Ghost`
-1417..1443	4321	`|| telar::set_locale("es")`
-1499..1519	4472	`ButtonVariant::Ghost`
-1530..1556	4525	`|| telar::set_locale("ar")`
-1973..2000	10835	`t!("locale_address.anchor")`
+1279..1293	4070	`Variant::Ghost`
+1304..1330	4117	`|| telar::set_locale("en")`
+1380..1394	4262	`Variant::Ghost`
+1405..1431	4309	`|| telar::set_locale("es")`
+1487..1501	4460	`Variant::Ghost`
+1512..1538	4507	`|| telar::set_locale("ar")`
+1955..1982	10817	`t!("locale_address.anchor")`

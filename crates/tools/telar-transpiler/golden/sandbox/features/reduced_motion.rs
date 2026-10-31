@@ -85,9 +85,9 @@ pub fn reduced_motion(props: ReducedMotionProps) -> Result<Box<dyn LayoutItem>, 
                                 };
                                 __children.push(box_item(__text_2));
                                 let __row_0 = {
-                                    let __node_3 = button(ButtonProps::props().label("Follow the system").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(None))).build())?;
-                                    let __node_4 = button(ButtonProps::props().label("Less motion").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(true)))).build())?;
-                                    let __node_5 = button(ButtonProps::props().label("Full motion").variant(ButtonVariant::Ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(false)))).build())?;
+                                    let __node_3 = button(ButtonProps::props().label("Follow the system").variant(Variant::Ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(None))).build())?;
+                                    let __node_4 = button(ButtonProps::props().label("Less motion").variant(Variant::Ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(true)))).build())?;
+                                    let __node_5 = button(ButtonProps::props().label("Full motion").variant(Variant::Ghost).on_press(std::rc::Rc::new(move || telar::set_reduced_motion_override(Some(false)))).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).flex_wrap(), children![__node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));

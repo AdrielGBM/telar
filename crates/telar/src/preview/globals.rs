@@ -122,12 +122,15 @@ impl Globals {
     /// Builds `build`'s content on a new canvas of `size` already in this environment, so what the content reads of it while building is the canvas's and not the host's, and keeps the canvas's mode, direction, locale, control size, high contrast, safe area and, while one is set, size in step with these globals for as long as the current owner lives.
     ///
     /// The background is left to the host: it is drawn around the canvas rather than set on it.
+    ///
+    /// The canvas [hosts its keyboard](SurfaceCanvas::host_keyboard), as every preview canvas is drawn inside a tree around it: Tab past its last focusable leaves nothing focused rather than wrapping, the same in the workshop as in a play run headless.
     pub fn canvas(
         &self,
         size: Size,
         build: impl FnOnce() -> Result<Box<dyn LayoutItem>, LayoutError>,
     ) -> Result<Rc<SurfaceCanvas>, LayoutError> {
         let canvas = Rc::new(SurfaceCanvas::new_in(size, &self.env(), build)?);
+        canvas.host_keyboard();
         self.bind(&canvas);
         Ok(canvas)
     }

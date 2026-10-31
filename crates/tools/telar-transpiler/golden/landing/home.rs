@@ -160,7 +160,7 @@ pub fn home(props: HomeProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         };
                         let __row_4 = {
                             let __node_2 = button(ButtonProps::props().label("Get started").color(PRIMARY).on_press(std::rc::Rc::new({ let signups = signups.clone(); move || signups.update(|n| *n += 1) })).build())?;
-                            let __node_3 = button(ButtonProps::props().label("Read the docs").variant(ButtonVariant::Outline).color(PRIMARY).build())?;
+                            let __node_3 = button(ButtonProps::props().label("Read the docs").variant(Variant::Outline).color(PRIMARY).build())?;
                             Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap(), children![__node_2, __node_3])?
                         };
                         let __text_6 = {

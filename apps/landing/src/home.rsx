@@ -73,7 +73,7 @@ col @page
                     text "rsx compiles declarative .rsx markup to GPU-accelerated widgets — signals, layout and theming included, from desktop to Android." font_size:18 color:$theme.muted
                     row gap:12 wrap
                         button label:"Get started" color:PRIMARY on_press:(|| $signups.update(|n| *n += 1))
-                        button label:"Read the docs" variant:ButtonVariant::Outline color:PRIMARY
+                        button label:"Read the docs" variant:Variant::Outline color:PRIMARY
                     text "{$spots_left} of 200 early-access seats left" font_size:13 color:$theme.accent
                 col grow:1 min_width:320
                     img src:gradient_img width:100% height:320 label:"Blue to violet linear gradient"

@@ -17,8 +17,8 @@ use telar::{
     children, effect, memo, signal, track_layout,
 };
 use telar_components::{
-    ButtonProps, ButtonVariant, IconButtonProps, ItemProps, Tab, button, icon_button, item,
-    metrics, tab_list,
+    ButtonProps, IconButtonProps, ItemProps, Tab, Variant, button, icon_button, item, metrics,
+    tab_list,
 };
 use telar_devtools::{
     WORKBENCH_GRID, accessibility_panel, inspection_toggles, inspector_panel, use_workbench_tokens,
@@ -348,7 +348,7 @@ fn reset_all(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> 
             button(
                 ButtonProps::props()
                     .label(Reactive::of(|| strings::text(RESET_ALL)))
-                    .variant(ButtonVariant::Ghost)
+                    .variant(Variant::Ghost)
                     .on_press(on_press)
                     .build(),
             )

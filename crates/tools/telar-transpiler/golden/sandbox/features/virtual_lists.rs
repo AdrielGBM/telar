@@ -130,7 +130,7 @@ pub fn virtual_lists(props: VirtualListsProps) -> Result<Box<dyn LayoutItem>, La
                                 let __row_0 = {
                                     let __node_9 = button(ButtonProps::props().label("Note 40").on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(40, 8.0) } })).build())?;
                                     let __node_10 = button(ButtonProps::props().label("Note 250").on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(250, 8.0) } })).build())?;
-                                    let __node_11 = button(ButtonProps::props().label("Note 399").variant(ButtonVariant::Outline).on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(399, 8.0) } })).build())?;
+                                    let __node_11 = button(ButtonProps::props().label("Note 399").variant(Variant::Outline).on_press(std::rc::Rc::new({ let rows = rows.clone(); move || if let Some(rows) = rows.get() { rows.reveal(399, 8.0) } })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_9, __node_10, __node_11])?
                                 };
                                 __children.push(box_item(__row_0));

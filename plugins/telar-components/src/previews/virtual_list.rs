@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -58,6 +60,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(virtual_list: VirtualListProps, "Two thousand rows", |p| {
             let list = virtual_list(
                 VirtualListProps::props()
+                    .on_select(Rc::new(|_| {}))
                     .items(contacts())
                     .selected(signal(Some(Arc::from("contact-2"))))
                     .label(p.arg("label", "Contacts"))
@@ -84,6 +87,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let chosen = BTreeSet::from([Arc::from("contact-2"), Arc::from("contact-6")]);
             let list = virtual_list(
                 VirtualListProps::props()
+                    .on_select(Rc::new(|_| {}))
+                    .on_selection_change(Rc::new(|_| {}))
                     .items(contacts())
                     .selection_mode(p.arg("selection_mode", SelectionMode::Multiple))
                     .selected_rows(signal(chosen))
@@ -114,6 +119,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(virtual_list: VirtualListProps, "Wrapped rows", |p| {
             let list = virtual_list(
                 VirtualListProps::props()
+                    .on_select(Rc::new(|_| {}))
                     .items(messages())
                     .wrap(p.arg("wrap", true))
                     .selected(signal(Some(Arc::from("message-1"))))

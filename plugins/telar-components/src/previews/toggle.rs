@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
@@ -8,6 +10,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(toggle: ToggleProps, "Default", |p| {
             toggle(
                 ToggleProps::props()
+                    .on_toggle(Rc::new(|_| {}))
                     .checked(p.signal("checked", true))
                     .label(p.arg("label", "Notifications"))
                     .color(p.arg("color", Color::TRANSPARENT))

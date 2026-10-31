@@ -4,6 +4,7 @@ use telar::testing::{advance_time, centre, moved, press, release, route, texts};
 use telar::{ComponentList, Event, Size, relayout_if_dirty, set_surface_size};
 
 use super::*;
+use telar::Color;
 
 const SURFACE: Size = Size {
     width: 800.0,

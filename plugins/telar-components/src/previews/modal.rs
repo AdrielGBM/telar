@@ -48,6 +48,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )?;
             let dialog = modal(
                 ModalProps::props()
+                    .on_close(Rc::new(|| {}))
                     .open(open)
                     .title(p.arg("title", "Confirm"))
                     .color(p.arg("color", Color::TRANSPARENT))

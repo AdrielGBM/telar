@@ -7,9 +7,7 @@ use telar::{
     LayoutStyle, Reactive, ReactiveList, RectStyle, Role, ShapeStyle, StyledContainer, Text,
     box_item, children,
 };
-use telar_components::{
-    ButtonProps, ButtonVariant, SplitPaneProps, Tab, button, split_pane, tab_list,
-};
+use telar_components::{ButtonProps, SplitPaneProps, Tab, Variant, button, split_pane, tab_list};
 
 use super::{DrawerTab, Model, banner, mounted_while, stats};
 use crate::panels::{accessibility_panel, inspection_toggles, inspector_panel};
@@ -85,7 +83,7 @@ fn header(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let close = button(
         ButtonProps::props()
             .label(Reactive::of(|| strings::text(CLOSE)))
-            .variant(ButtonVariant::Ghost)
+            .variant(Variant::Ghost)
             .on_press(Rc::new(move || model.inspector_open.set(false)))
             .build(),
     )?;

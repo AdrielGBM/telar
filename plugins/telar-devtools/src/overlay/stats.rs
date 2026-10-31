@@ -4,7 +4,7 @@ use telar::{
     Accessible, AlignItems, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, RectStyle,
     Role, ShapeStyle, SizeDimension, StyledContainer, Text, box_item, children, use_theme_tokens,
 };
-use telar_components::{BadgeProps, KbdProps, badge, kbd};
+use telar_components::{KbdProps, TagProps, Tone, kbd, tag};
 
 use super::{Model, mounted_while};
 use crate::strings::{
@@ -57,12 +57,10 @@ fn cluster(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 fn fps_badge(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let tag = badge(
-        BadgeProps::props()
-            .label(Reactive::of(|| strings::text(DEV)))
-            .color(Reactive::of(|| use_theme_tokens().success()))
-            .build(),
-    )?;
+    let tag = tag(TagProps::props()
+        .label(Reactive::of(|| strings::text(DEV)))
+        .tone(Tone::Success)
+        .build())?;
     let fps = Text::declaring(
         move || fps_label(model),
         LayoutStyle::new(),

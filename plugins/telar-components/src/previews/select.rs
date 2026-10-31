@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Key, NamedKey, Reactive, Role};
 
@@ -36,6 +38,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(select: SelectProps, "Default", |p| {
             select(
                 SelectProps::props()
+                    .on_select(Rc::new(|_| {}))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .stretch(p.arg("stretch", false))
                     .children(sizes())

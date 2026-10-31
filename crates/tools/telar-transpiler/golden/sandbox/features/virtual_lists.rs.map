@@ -201,6 +201,6 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 1363..1373	4001	`note.title`
 1453..1462	4686	`note.body`
-1974..1996	8335	`ButtonVariant::Outline`
-2319..2329	10160	`note.title`
-2409..2418	10845	`note.body`
+1974..1990	8335	`Variant::Outline`
+2313..2323	10154	`note.title`
+2403..2412	10839	`note.body`

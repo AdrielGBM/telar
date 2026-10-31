@@ -2,10 +2,8 @@
 
 #[cfg(feature = "advanced")]
 mod accordion;
-mod badge;
 mod button;
 mod checkbox;
-mod chip;
 #[cfg(feature = "workbench")]
 mod code_view;
 #[cfg(feature = "workbench")]
@@ -53,6 +51,7 @@ mod split_pane;
 mod stepper;
 mod swatches;
 mod tabs;
+mod tag;
 mod text_field;
 #[cfg(feature = "overlays")]
 mod toast;
@@ -91,8 +90,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     entries.extend(handle::previews());
     #[cfg(feature = "advanced")]
     entries.extend(stepper::previews());
-    entries.extend(badge::previews());
-    entries.extend(chip::previews());
+    entries.extend(tag::previews());
     entries.extend(image::previews());
     entries.extend(link::previews());
     #[cfg(feature = "overlays")]

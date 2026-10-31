@@ -239,7 +239,7 @@ const SECTIONS: &[SectionDef] = sections![
         "surface_title.rsx"
     ),
     (
-        "Badges & chips",
+        "Tags",
         crate::features::pills::pills,
         crate::features::pills::PillsProps,
         "pills.rsx"

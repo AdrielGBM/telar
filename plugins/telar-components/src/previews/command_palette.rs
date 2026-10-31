@@ -48,6 +48,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             )?;
             let palette = command_palette(
                 CommandPaletteProps::props()
+                    .on_run(Rc::new(|_| {}))
                     .open(open)
                     .commands(commands())
                     .width(p.arg("width", 0.0f32))

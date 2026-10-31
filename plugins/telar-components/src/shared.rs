@@ -31,7 +31,7 @@ pub fn ink_on(fill: Color) -> Color {
     }
 }
 
-/// `color` taken toward the ink that reads on `background` just far enough to read on it at 4.5:1, so a label keeps its hue where it can: the text of a soft button, a tinted badge.
+/// `color` taken toward the ink that reads on `background` just far enough to read on it at 4.5:1, so a label keeps its hue where it can: the text of a soft button, a soft or outline tag.
 pub fn readable_on(color: Color, background: Color) -> Color {
     let ink = ink_on(background);
     (0..=READABLE_STEPS)
@@ -72,7 +72,7 @@ pub const MIN_TARGET: f32 = 24.0;
 pub(crate) fn surface() -> Color {
     use_theme_tokens().surface()
 }
-/// The quiet surface behind a chip or a tag.
+/// The quiet surface behind a key cap, a code block or a field.
 pub(crate) fn surface_alt() -> Color {
     use_theme_tokens().surface_alt()
 }
@@ -113,7 +113,7 @@ pub fn radius_dialog() -> f32 {
 pub fn radius_item() -> f32 {
     use_theme_tokens().radius_item()
 }
-/// Fully rounded ends for a box `short_side` across: a chip, a badge, a radio, a toggle's track, a slider's thumb.
+/// Fully rounded ends for a box `short_side` across: a radio, a toggle's track, a slider's thumb.
 pub fn pill_radius(short_side: f32) -> f32 {
     short_side / 2.0
 }
@@ -162,6 +162,21 @@ pub fn hovered_fill(fill: Color) -> Color {
 /// `fill` as a filled control shows it while it is pressed.
 pub fn pressed_fill(fill: Color) -> Color {
     fill.darken(FILL_PRESS_STEP)
+}
+
+/// [`hovered_fill`] for a fill whose label ink was chosen to read on it at rest: stepped away from the ink rather than always darker, so a dark label on a light fill keeps its contrast under the pointer.
+pub(crate) fn hovered_fill_under(fill: Color, ink: Color) -> Color {
+    away_from(fill, ink, FILL_HOVER_STEP)
+}
+/// [`pressed_fill`] for a fill whose label ink was chosen to read on it at rest, as [`hovered_fill_under`] is.
+pub(crate) fn pressed_fill_under(fill: Color, ink: Color) -> Color {
+    away_from(fill, ink, FILL_PRESS_STEP)
+}
+fn away_from(fill: Color, ink: Color, step: f32) -> Color {
+    match ink.relative_luminance() < fill.relative_luminance() {
+        true => fill.mix(Color::WHITE, step),
+        false => fill.darken(step),
+    }
 }
 
 /// Weight of text that stands out from the body around it: a title, a heading, a matched run.
@@ -531,6 +546,18 @@ pub fn mark(
     .a11y_hidden();
     style_follows(canvas.layout_node(), move || mark_box(shape()));
     Ok(box_item(canvas))
+}
+
+/// What [`glyph`] draws.
+#[derive(telar::Props)]
+pub(crate) struct GlyphProps {
+    pub shape: Mark,
+}
+
+/// [`mark`] as a component a `.rsx` view places, in the ink of the text around it.
+pub(crate) fn glyph(props: GlyphProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let shape = props.shape;
+    mark(move || shape, |text| text.color)
 }
 
 /// What `build` makes while `show` reads true, and nothing at all while it reads false: a mark only some states draw, a button only a filled field needs. Laid out in a box of `style` that is empty and takes no room while there is nothing in it, so whatever spaces it from its neighbours belongs in what `build` makes.

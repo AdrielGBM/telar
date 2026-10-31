@@ -118,7 +118,7 @@ fn a_logged_callback_records_the_call_then_runs() {
 }
 
 #[test]
-fn an_unset_optional_callback_becomes_an_action_and_a_set_one_keeps_running() {
+fn an_unset_optional_callback_stays_unset_and_a_set_one_keeps_running() {
     let log = ActionLog::new();
     let ran = Rc::new(Cell::new(false));
     let set: Option<Rc<dyn Fn()>> = Some(Rc::new({
@@ -127,12 +127,12 @@ fn an_unset_optional_callback_becomes_an_action_and_a_set_one_keeps_running() {
     }));
     let unset: Option<Rc<dyn Fn(bool)>> = None;
     set.logged(log, "on_close").expect("still set")();
-    unset.logged(log, "on_toggle").expect("now set")(true);
-    assert!(ran.get());
-    assert_eq!(
-        logged_calls(&log),
-        [("on_close", Vec::new()), ("on_toggle", texts(&["true"]))]
+    assert!(
+        unset.logged(log, "on_toggle").is_none(),
+        "a component that draws something for a callback must not be handed one it was not given"
     );
+    assert!(ran.get());
+    assert_eq!(logged_calls(&log), [("on_close", Vec::new())]);
 }
 
 struct Node;
@@ -140,9 +140,9 @@ struct Node;
 #[test]
 fn the_probe_logs_a_callback_whose_arguments_have_no_debug_by_their_type() {
     let log = ActionLog::new();
-    let callback: Option<Rc<dyn Fn(Node, u8)>> = None;
+    let callback: Option<Rc<dyn Fn(Node, u8)>> = Some(Rc::new(|_, _| {}));
     let callback = crate::__preview_action!(log, "on_pick", callback);
-    callback.expect("filled")(Node, 3);
+    callback.expect("still set")(Node, 3);
     let call = log.last().expect("logged");
     assert_eq!(call.name, "on_pick");
     assert_eq!(call.args.len(), 2);
@@ -182,8 +182,9 @@ fn a_callback_that_outlives_its_log_records_nothing() {
 fn the_probe_logs_a_callback_of_one_borrowed_argument() {
     let log = ActionLog::new();
     type OnCopy = Rc<dyn Fn(&str)>;
-    let copied = crate::__preview_action!(log, "on_copy", None::<OnCopy>);
-    copied.expect("filled")("let x = 1;");
+    let copied: Option<OnCopy> = Some(Rc::new(|_| {}));
+    let copied = crate::__preview_action!(log, "on_copy", copied);
+    copied.expect("still set")("let x = 1;");
     let picked: Rc<dyn Fn(&Node)> = Rc::new(|_| {});
     let picked = crate::__preview_action!(log, "on_select", picked);
     picked(&Node);

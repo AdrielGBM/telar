@@ -293,11 +293,11 @@
 292	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-903..925	2638	`ButtonVariant::Outline`
-970..989	2774	`ButtonVariant::Soft`
-1035..1055	2908	`ButtonVariant::Ghost`
-1402..1408	5249	`clicks`
-1675..1695	6349	`ButtonVariant::Ghost`
-2092..2098	8499	`clicks`
-3414..3422	16414	`hovering`
-3543..3547	17497	`keys`
+903..919	2638	`Variant::Outline`
+964..977	2768	`Variant::Soft`
+1023..1037	2896	`Variant::Ghost`
+1378..1384	5225	`clicks`
+1651..1665	6325	`Variant::Ghost`
+2062..2068	8469	`clicks`
+3384..3392	16384	`hovering`
+3513..3517	17467	`keys`

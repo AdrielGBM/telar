@@ -5,7 +5,7 @@ use telar::{
     Accessible, Container, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Memo, Reactive,
     ReactiveList, Role, box_item, children, memo,
 };
-use telar_components::{BadgeProps, badge};
+use telar_components::{TagProps, tag};
 use telar_devtools::{WORKBENCH_GRID, workbench_fill};
 
 use super::action_row::{ActionRowProps, action_row};
@@ -104,11 +104,9 @@ pub(super) fn count_badge(log: ActionLog) -> Result<Box<dyn LayoutItem>, LayoutE
         },
         |_: &()| (),
         move |()| {
-            badge(
-                BadgeProps::props()
-                    .label(Reactive::of(move || log.count().to_string()))
-                    .build(),
-            )
+            tag(TagProps::props()
+                .label(Reactive::of(move || log.count().to_string()))
+                .build())
         },
     )?;
     Ok(box_item(count))

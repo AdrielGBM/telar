@@ -54,9 +54,12 @@ fn run(props: &PadProps) {
 }
 
 #[test]
-fn the_builder_logs_every_optional_callback_in_any_state() {
+fn the_builder_logs_every_optional_callback_it_holds_in_any_state() {
     let log = ActionLog::new();
     let props = props()
+        .on_toggle(Rc::new(|_| {}))
+        .on_pick(Rc::new(|_| {}))
+        .on_drop(Rc::new(|_| {}))
         .__preview_actions(&log)
         .on_close(Rc::new(|| {}))
         .build();
@@ -111,7 +114,11 @@ fn the_props_log_their_required_callbacks_too() {
     run(&props);
     assert!(closed.get());
     assert_eq!(log.count_of("on_close"), 1);
-    assert_eq!(log.count(), 5);
+    assert_eq!(
+        log.count(),
+        2,
+        "the optional callbacks left unset stay unset and are never called"
+    );
 }
 
 #[derive(Props)]
@@ -132,7 +139,7 @@ fn clicker(props: ClickerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 #[test]
-fn a_preview_logs_the_calls_of_a_callback_it_leaves_unset() {
+fn a_preview_logs_the_calls_of_a_defaulted_callback_it_does_not_set() {
     let entry = preview!(clicker: ClickerProps, "Default", |_| {
         clicker(ClickerProps::props().build())
     });
@@ -174,4 +181,47 @@ fn a_preview_without_props_logs_nothing() {
     let ctx = PreviewCtx::default();
     entry.build_root(&ctx).expect("the preview builds");
     assert_eq!(ctx.actions().count(), 0);
+}
+
+#[derive(Props)]
+struct ChipProps {
+    #[props(some, default)]
+    on_remove: Option<Rc<dyn Fn()>>,
+}
+
+/// What a component draws for a callback it is handed: a remove button for an `on_remove`.
+fn chip(props: ChipProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let parts = match props.on_remove {
+        Some(on_remove) => {
+            on_remove();
+            vec![box_item(Container::new(LayoutStyle::new(), Vec::new())?)]
+        }
+        None => Vec::new(),
+    };
+    Ok(box_item(Container::new(LayoutStyle::new(), parts)?))
+}
+
+/// Whether a callback is there can be what a component draws, so a preview hands the component only the callbacks its body set.
+#[test]
+fn a_preview_leaves_an_optional_callback_it_does_not_set_unset() {
+    let bare = preview!(chip: ChipProps, "Bare", |_| chip(ChipProps::props().build()));
+    let removable = preview!(chip: ChipProps, "Removable", |_| {
+        chip(ChipProps::props().on_remove(Rc::new(|| {})).build())
+    });
+    reset_layout_runtime();
+    let ctx = PreviewCtx::default();
+    let root = bare.build_root(&ctx).expect("the preview builds");
+    assert_eq!(
+        ctx.actions().count(),
+        0,
+        "no `on_remove` was made up for it"
+    );
+    drop(root);
+    let ctx = PreviewCtx::default();
+    removable.build_root(&ctx).expect("the preview builds");
+    assert_eq!(
+        ctx.actions().count_of("on_remove"),
+        1,
+        "the one it set is logged"
+    );
 }

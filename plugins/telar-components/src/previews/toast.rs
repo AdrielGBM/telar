@@ -4,8 +4,9 @@ use std::time::Duration;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Container, LayoutError, LayoutStyle, Role, box_item};
 
+use crate::Tone;
 use crate::button::{ButtonProps, button};
-use crate::toast::{Toast, ToastKind, ToasterProps, Toasts, toaster};
+use crate::toast::{Toast, ToasterProps, Toasts, toaster};
 
 fn poster(
     label: &'static str,
@@ -31,7 +32,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             queue.push(
                 Toast::new("Your changes are saved.")
                     .titled("Saved")
-                    .kind(ToastKind::Success)
+                    .tone(Tone::Success)
                     .until_dismissed(),
             );
             let buttons = vec![
@@ -41,7 +42,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 poster("Error", queue, move || {
                     Toast::new("The file could not be written.")
                         .titled("Save failed")
-                        .kind(ToastKind::Error)
+                        .tone(Tone::Danger)
                         .lasting(lasting)
                         .with_action("Retry", || {})
                 })?,

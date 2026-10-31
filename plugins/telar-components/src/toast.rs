@@ -6,12 +6,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use telar::{
-    Accessible, AlignItems, Border, BorderRadius, Color, Container, FixedLayer, JustifyContent,
+    Accessible, AlignItems, Border, BorderRadius, Container, FixedLayer, JustifyContent,
     LayoutError, LayoutItem, LayoutStyle, Props, Reactive, ReactiveList, RectStyle, RwSignal,
     ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextWrap, Timer, amend_surface, box_item,
     children, detached, focus::Role, on_cleanup, run_after, signal, style_follows,
 };
 
+use crate::Tone;
 use crate::shared;
 use crate::strings;
 
@@ -28,7 +29,7 @@ pub struct ToastTokens {
     pub pad: Option<f32>,
     /// A notice's width when the toaster names none, at the regular control size, scaled with the control size in force. `None` is 26 ems of the document's text.
     pub width: Option<f32>,
-    /// Width of the stripe in the colour of the notice's kind, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_xs`](crate::metrics::gap_xs).
+    /// Width of the stripe in the colour of the notice's tone, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_xs`](crate::metrics::gap_xs).
     pub stripe_width: Option<f32>,
 }
 
@@ -57,28 +58,6 @@ impl ToastTokens {
     }
 }
 
-/// What a notice is about, which decides the colour of its stripe.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum ToastKind {
-    #[default]
-    Info,
-    Success,
-    Warning,
-    Error,
-}
-
-impl ToastKind {
-    fn accent(self) -> Color {
-        let tokens = telar::use_theme_tokens();
-        match self {
-            ToastKind::Info => tokens.info(),
-            ToastKind::Success => tokens.success(),
-            ToastKind::Warning => tokens.warning(),
-            ToastKind::Error => tokens.error(),
-        }
-    }
-}
-
 /// A button on a notice that does something about it: "Undo", "Retry". Pressing it also puts the notice away.
 #[derive(Clone)]
 pub struct ToastAction {
@@ -91,7 +70,8 @@ pub struct ToastAction {
 pub struct Toast {
     pub message: Arc<str>,
     pub title: Option<Arc<str>>,
-    pub kind: ToastKind,
+    /// What the notice is about, in the colour of its stripe. A new notice is [`Tone::Info`]; every tone draws the stripe in its own colour, `Accent` in the theme's primary and `Neutral` in its muted grey.
+    pub tone: Tone,
     /// How long it shows before putting itself away, not counting the time the pointer rests on the stack or the keyboard spends on its buttons. `None` keeps it until it is dismissed.
     pub duration: Option<Duration>,
     pub action: Option<ToastAction>,
@@ -105,7 +85,7 @@ impl Toast {
         Self {
             message: message.into(),
             title: None,
-            kind: ToastKind::default(),
+            tone: Tone::Info,
             duration: Some(Self::DEFAULT_DURATION),
             action: None,
         }
@@ -116,8 +96,8 @@ impl Toast {
         self
     }
 
-    pub fn kind(mut self, kind: ToastKind) -> Self {
-        self.kind = kind;
+    pub fn tone(mut self, tone: Tone) -> Self {
+        self.tone = tone;
         self
     }
 
@@ -240,7 +220,7 @@ pub fn toasts() -> Toasts {
     })
 }
 
-/// Posts `toast` to the shared queue: `show_toast("Saved")`, or a [`Toast`] built up with a title, a kind and an action.
+/// Posts `toast` to the shared queue: `show_toast("Saved")`, or a [`Toast`] built up with a title, a tone and an action.
 pub fn show_toast(toast: impl Into<Toast>) -> ToastId {
     toasts().push(toast)
 }
@@ -459,7 +439,7 @@ fn notice(
     };
     let text = Container::new(column(), words)?.styled_by(column);
 
-    let mut parts: Vec<Box<dyn LayoutItem>> = vec![stripe(toast.kind)?, box_item(text)];
+    let mut parts: Vec<Box<dyn LayoutItem>> = vec![stripe(toast.tone.clone())?, box_item(text)];
     if let Some(action) = toast.action.clone() {
         let dismiss = dismiss.clone();
         let label = action.label.clone();
@@ -505,7 +485,7 @@ fn card_paint() -> RectStyle {
         .with_radius(BorderRadius::all(ToastTokens::current().radius()))
 }
 
-fn stripe(kind: ToastKind) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn stripe(tone: Tone) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let stripe_box = || {
         LayoutStyle::new()
             .width(ToastTokens::current().stripe_width())
@@ -516,7 +496,7 @@ fn stripe(kind: ToastKind) -> Result<Box<dyn LayoutItem>, LayoutError> {
         stripe_box(),
         move |r| {
             RectStyle::default()
-                .with_fill(kind.accent())
+                .with_fill(tone.color())
                 .with_radius(shared::pill(r))
         },
         vec![],

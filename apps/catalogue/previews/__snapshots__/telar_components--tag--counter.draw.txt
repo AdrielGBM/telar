@@ -1,0 +1,22 @@
+frame 800x600 lang=en
+element group
+  rect 0,0 800x600 fill=#ffffffff
+  element group
+    element group
+      element group
+        element group
+          rect 388,291 24x18 fill=#4261edff border=1 border-color=#00000000 radius=6
+          element group
+            element group
+              matrix 1,0,0,1,396,293
+                text 0,0 8x14.28 "3" size=11.9 family=sans-serif weight=400 color=#ffffffff wrap=none lang=en
+              end
+            end
+          end
+          element group
+          end
+        end
+      end
+    end
+  end
+end
