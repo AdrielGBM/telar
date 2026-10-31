@@ -32,6 +32,7 @@
     doc = document_features::document_features!()
 )]
 #![warn(rustdoc::broken_intra_doc_links)]
+#![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 #[cfg(feature = "catalog")]

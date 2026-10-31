@@ -6,6 +6,7 @@
 //!
 //! [`draw_text`] writes a frame as text, one line per command, for a golden file a reviewer reads a change in.
 
+#![warn(missing_docs)]
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod text;
@@ -21,11 +22,17 @@ pub use text::draw_text;
 /// One frame as the recorder was handed it.
 #[derive(Clone, Debug)]
 pub struct RecordedFrame {
+    /// Surface width the frame was begun with, in physical pixels.
     pub width: u32,
+    /// Surface height the frame was begun with, in physical pixels.
     pub height: u32,
+    /// Physical pixels per logical pixel, as the frame was begun with.
     pub scale_factor: f32,
+    /// The generation the frame was begun with, which changes whenever the commands do.
     pub generation: u64,
+    /// The colour the frame was cleared to, or `None` when it was not cleared.
     pub clear: Option<Color>,
+    /// The commands drawn, in order.
     pub commands: Vec<DrawCommand>,
 }
 
@@ -36,6 +43,7 @@ pub struct RecordedFrame {
 pub struct Recording(Arc<Mutex<Vec<RecordedFrame>>>);
 
 impl Recording {
+    /// An empty recording.
     pub fn new() -> Self {
         Self::default()
     }
@@ -45,6 +53,7 @@ impl Recording {
         self.0.lock().expect("recording lock").clone()
     }
 
+    /// How many frames have been recorded since the last [`clear`](Self::clear).
     pub fn frame_count(&self) -> usize {
         self.0.lock().expect("recording lock").len()
     }
@@ -54,6 +63,7 @@ impl Recording {
         self.0.lock().expect("recording lock").last().cloned()
     }
 
+    /// Forgets every frame, so the next assertion sees only what is drawn after this.
     pub fn clear(&self) {
         self.0.lock().expect("recording lock").clear();
     }
@@ -121,6 +131,7 @@ pub struct RecordingFactory {
 }
 
 impl RecordingFactory {
+    /// A factory whose renderers record into `recording`.
     pub fn new(recording: Recording) -> Self {
         Self { recording }
     }

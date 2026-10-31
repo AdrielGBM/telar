@@ -16,6 +16,7 @@ pub struct DiskCache {
 }
 
 impl DiskCache {
+    /// A cache that keeps its entries under `root`, which nothing creates until the first write.
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }
     }

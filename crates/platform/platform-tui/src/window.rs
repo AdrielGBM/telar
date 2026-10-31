@@ -23,6 +23,7 @@ pub struct TuiWindow {
 }
 
 impl TuiWindow {
+    /// A window of `cols` by `rows` cells, each standing for `cell_width` by `cell_height` logical pixels.
     pub fn new(cols: u16, rows: u16, cell_width: f32, cell_height: f32) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -35,12 +36,14 @@ impl TuiWindow {
         }
     }
 
+    /// Resizes to `cols` by `rows` cells and asks for a redraw.
     pub fn set_grid(&self, cols: u16, rows: u16) {
         self.inner.cols.store(cols as u32, Ordering::Relaxed);
         self.inner.rows.store(rows as u32, Ordering::Relaxed);
         self.inner.redraw.store(true, Ordering::Relaxed);
     }
 
+    /// The size in cells, as `(columns, rows)`.
     pub fn grid(&self) -> (u16, u16) {
         (
             self.inner.cols.load(Ordering::Relaxed) as u16,
@@ -48,6 +51,7 @@ impl TuiWindow {
         )
     }
 
+    /// The logical pixels one cell stands for, as `(width, height)`.
     pub fn cell(&self) -> (f32, f32) {
         (self.inner.cell_width, self.inner.cell_height)
     }

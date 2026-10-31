@@ -141,21 +141,21 @@ const LINES_PER_NOTCH: f32 = 5.0;
 
 /// What a mapped window event means at the platform level, apart from how it is applied.
 pub enum SurfaceIntent {
-    // Deliver this platform event to the handler.
+    /// Deliver this platform event to the handler.
     Event(Event),
-    // Deliver this platform event, then request a redraw (winit `Resized`).
+    /// Deliver this platform event, then request a redraw (winit `Resized`).
     Resized(Event),
-    // Render now (winit `RedrawRequested`).
+    /// Render now (winit `RedrawRequested`).
     Redraw,
-    // Deliver `WindowCloseRequested`, then close this surface.
+    /// Deliver `WindowCloseRequested`, then close this surface.
     Close(Event),
-    // A finger that moved: the scroll it amounts to, then the move itself. Both, because a drag is both — the list under the finger scrolls while a slider under that same finger tracks the movement.
+    /// A finger that moved: the scroll it amounts to, then the move itself. Both, because a drag is both — the list under the finger scrolls while a slider under that same finger tracks the movement.
     Dragged(Event, Event),
-    // The OS reported a changed appearance. The backend owns the whole `SystemPreferences` snapshot, so it re-reads and delivers that rather than a lone colour scheme.
+    /// The OS reported a changed appearance. The backend owns the whole `SystemPreferences` snapshot, so it re-reads and delivers that rather than a lone colour scheme.
     RereadPreferences,
-    // The user asked to go back: Android's back button or gesture, a mouse's back button, a keyboard's `BrowserBack`. Delivered through `EventHandler::on_back`, whose answer decides whether the platform does anything of its own.
+    /// The user asked to go back: Android's back button or gesture, a mouse's back button, a keyboard's `BrowserBack`. Delivered through `EventHandler::on_back`, whose answer decides whether the platform does anything of its own.
     Back,
-    // State-only (e.g. `ModifiersChanged`) or an unmapped event — nothing to deliver.
+    /// State-only (e.g. `ModifiersChanged`) or an unmapped event — nothing to deliver.
     Ignore,
 }
 

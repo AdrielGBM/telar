@@ -25,7 +25,7 @@
 //!
 //! # The tag
 //!
-//! [`icon`] draws one icon in a square box of `size` px, the theme's `icon_size` when unset. A monochrome icon takes the colour of the text around it from the cascade, so it follows a `color:` on its row, a theme switch and a hover state like the text beside it; `color:` sets one instead. Which icons are monochrome is Iconify's answer, decided when the icon is resolved: every icon of a set whose `info` declares `palette: false`, none of a set that declares `palette: true` — so a brand logo drawn in one colour keeps it — and, for a set that declares neither, such as a folder of your own SVGs, an icon that paints in `currentColor`. Draw your own monochrome artwork in `currentColor`. A palette icon keeps its own colours unless `color:` is given, which draws it as a silhouette: the renderer tints flat, every paint of the artwork in the one colour, so it never maps only the `currentColor` parts. It is decoration to a screen reader, skipped, unless `label:` names it, which makes it a picture by that name: label the icon that is the only thing saying something, such as a button with no text.
+//! [`icon()`] draws one icon in a square box of `size` px, the theme's `icon_size` when unset. A monochrome icon takes the colour of the text around it from the cascade, so it follows a `color:` on its row, a theme switch and a hover state like the text beside it; `color:` sets one instead. Which icons are monochrome is Iconify's answer, decided when the icon is resolved: every icon of a set whose `info` declares `palette: false`, none of a set that declares `palette: true` — so a brand logo drawn in one colour keeps it — and, for a set that declares neither, such as a folder of your own SVGs, an icon that paints in `currentColor`. Draw your own monochrome artwork in `currentColor`. A palette icon keeps its own colours unless `color:` is given, which draws it as a silhouette: the renderer tints flat, every paint of the artwork in the one colour, so it never maps only the `currentColor` parts. It is decoration to a screen reader, skipped, unless `label:` names it, which makes it a picture by that name: label the icon that is the only thing saying something, such as a button with no text.
 //!
 //! # Baked by default
 //!
@@ -78,6 +78,7 @@
 //! **Keep this crate on the same version as `telar`.** The `SvgData` an icon is drawn from is the facade's own, so a mismatch resolves two copies of the kernel and a baked icon stops being the type the tag accepts — a type error naming one struct twice. It is the same lockstep `telar` and `telar-macros` already have, and for the same reason.
 
 #![warn(rustdoc::broken_intra_doc_links)]
+#![warn(missing_docs)]
 
 mod icon;
 mod licenses;
@@ -98,7 +99,7 @@ pub use telar_dynamic::DiskCache;
 #[cfg(feature = "runtime")]
 pub use telar_dynamic::MemoryCache;
 
-/// An icon baked into the calling crate, named from Rust: `icon!("lucide:search")` is the [`IconName`] the [`icon`] tag, or any widget taking one, draws.
+/// An icon baked into the calling crate, named from Rust: `icon!("lucide:search")` is the [`IconName`] the [`icon()`] tag, or any widget taking one, draws.
 ///
 /// `cargo telar bake` finds every `icon!("…")` in the crate's `.rs` files, and in the Rust its `.rsx` writes, and bakes those ids as it bakes an `icon name:"…"`, through the sources the crate's `[telar.icons]` names. So a widget library written in Rust ships the icons it draws in its own artifact, credited in the notice of every application built with it, and a typo is a compile error on the literal rather than an empty box at run time. Call it as `icon!` or by its path; under another name the bake does not see it.
 ///

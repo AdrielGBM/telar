@@ -99,6 +99,7 @@ pub struct NavHost<R: Clone + Eq + 'static> {
 }
 
 impl<R: Clone + Eq + 'static> NavHost<R> {
+    /// Starts a host over `nav`, building the page for its current route at once, so a factory error surfaces here rather than on the first navigation.
     pub fn new(
         nav: Navigator<R>,
         factory: impl Fn(&R) -> Result<Box<dyn NavPage>, LayoutError> + 'static,

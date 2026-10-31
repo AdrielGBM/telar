@@ -198,9 +198,13 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> Drop for Har
 #[derive(Clone)]
 /// The one instance, adapter, device and queue every window in the process draws through.
 pub struct SharedGpu {
+    /// The wgpu instance every surface is created from.
     pub instance: wgpu::Instance,
+    /// The physical GPU the device was opened on.
     pub adapter: wgpu::Adapter,
+    /// The logical device every window allocates and records on.
     pub device: Device,
+    /// The queue every window submits to.
     pub queue: Queue,
 }
 
@@ -372,6 +376,7 @@ fn physical_scissor(rect: Rect, width: u32, height: u32, scale: f32) -> (u32, u3
 }
 
 impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRenderer<W> {
+    /// A renderer presenting to `window`, blocking until the process-wide GPU is ready. `cache_path` is where compiled pipelines persist between runs, and `vulkan_only` restricts adapter choice to Vulkan.
     pub fn new(
         window: W,
         cache_path: Option<&std::path::Path>,
@@ -390,6 +395,7 @@ impl<W: HasWindowHandle + HasDisplayHandle + Send + Sync + 'static> HardwareRend
         ))
     }
 
+    /// [`new`](Self::new) without blocking, for targets that cannot park a thread while the GPU initialises.
     pub async fn new_async(
         window: W,
         cache_path: Option<&std::path::Path>,

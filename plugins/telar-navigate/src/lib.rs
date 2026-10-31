@@ -24,6 +24,7 @@
 //! **Keep this crate on the same version as `telar`.** Every kernel type a page here takes or returns is reached through the facade, so a mismatch resolves two copies of the kernel and a page built here stops being the `LayoutItem` a tree over there accepts — a type error naming one trait twice. It is the same lockstep `telar` and `telar-macros` already have, and for the same reason.
 
 #![warn(rustdoc::broken_intra_doc_links)]
+#![warn(missing_docs)]
 
 mod host;
 mod navigator;

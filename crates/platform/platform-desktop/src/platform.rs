@@ -43,6 +43,7 @@ pub struct WinitPlatform {
 }
 
 impl WinitPlatform {
+    /// Builds the event loop and installs the waker that lets other threads wake it; fails when the OS offers no event loop, such as with no display server.
     pub fn try_new() -> Result<Self, PlatformError> {
         let event_loop = EventLoop::<UserEvent>::with_user_event()
             .build()

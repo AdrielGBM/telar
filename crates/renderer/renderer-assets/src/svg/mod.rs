@@ -59,14 +59,21 @@ enum SvgSource {
 /// A `Vec<DrawCommand>` said the same thing in a comment, and three walkers over it each answered a different way when handed something else — one panicked, one cloned it through with a debug assertion, one hashed a marker byte — while the public constructor accepted any command at all. Narrowing the type deletes the question: every walk is exhaustive and there is no unexpected command to disagree about.
 #[derive(Debug, Clone, PartialEq)]
 pub enum VectorCommand {
+    /// One filled or stroked path.
     Path {
+        /// The outline, shared with every other command that draws the same shape.
         data: Arc<PathData>,
+        /// How the outline is painted.
         style: Arc<PathStyle>,
     },
+    /// Starts compositing what follows as one group, until the matching [`PopLayer`](Self::PopLayer).
     PushLayer {
+        /// How opaque the finished group is drawn, from 0 to 1.
         opacity: f32,
+        /// Handed to [`DrawCommand::PushLayer`](renderer_core::DrawCommand::PushLayer) as it is; an SVG asks for no backdrop blur, so the parser leaves it 0.
         backdrop_blur: f32,
     },
+    /// Ends the group the last unmatched [`PushLayer`](Self::PushLayer) opened.
     PopLayer,
 }
 
@@ -139,6 +146,7 @@ const _: fn() = || {
 
 impl SvgData {
     // Named `from_str` per the public API; it is fallible on content, not a `FromStr` impl.
+    /// Parses SVG source at run time; the content hash of `svg` is the [`id`](Self::id).
     #[cfg(feature = "dynamic-svg")]
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(svg: &str) -> Result<Self, SvgError> {
@@ -189,6 +197,7 @@ impl SvgData {
         self.id
     }
 
+    /// The SVG's own width and height, in the viewBox space its commands are baked in.
     pub fn intrinsic_size(&self) -> (f32, f32) {
         self.size
     }

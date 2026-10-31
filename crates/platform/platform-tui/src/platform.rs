@@ -25,7 +25,9 @@ pub const READING_ENV: &str = "TELAR_TUI_READING";
 pub struct TuiPlatformConfig {
     /// How many logical pixels one cell stands for. Must match what the renderer was built with, or the window reports a size the frames do not fill.
     pub cell_width: f32,
+    /// The cell's height in logical pixels, held to the same rule as [`cell_width`](Self::cell_width).
     pub cell_height: f32,
+    /// Whether the terminal is asked to report the mouse, which also stops it selecting text on its own.
     pub mouse: bool,
     /// Whether Ctrl+C asks the application to close.
     ///
@@ -55,6 +57,7 @@ pub struct TuiPlatform {
 }
 
 impl TuiPlatform {
+    /// A platform sized and coloured by `config`.
     pub fn new(config: TuiPlatformConfig) -> Self {
         Self { config }
     }

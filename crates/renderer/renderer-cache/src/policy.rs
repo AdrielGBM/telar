@@ -18,6 +18,7 @@ pub struct Policy {
 }
 
 impl Policy {
+    /// A policy bounded by `capacity` bytes alone: nothing expires and every offered value is admitted.
     pub const fn new(capacity: usize) -> Self {
         Self {
             capacity,
@@ -26,11 +27,13 @@ impl Policy {
         }
     }
 
+    /// Lets an entry go once nothing has asked for it for `after`.
     pub const fn idle(mut self, after: Duration) -> Self {
         self.idle = Some(after);
         self
     }
 
+    /// Keeps a value only once it has been offered twice, so a key seen a single time never displaces an entry in use.
     pub const fn admit_on_second_use(mut self) -> Self {
         self.admit_on_second_use = true;
         self

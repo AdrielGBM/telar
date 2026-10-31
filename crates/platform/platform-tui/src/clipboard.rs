@@ -15,6 +15,7 @@ pub struct OscClipboard {
 }
 
 impl OscClipboard {
+    /// A clipboard that has not copied anything yet.
     pub fn new() -> Self {
         Self {
             last_copied: Mutex::new(String::new()),

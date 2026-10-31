@@ -9,12 +9,16 @@ use telar::{Memo, Reactive, ReadSignal, RwSignal, SvgData};
 /// Written in `.rsx` as `name:"mdi:home"`. Where `[telar.icons]` bakes, the transpiler hands the prop the triple the artifact holds for that literal, `("mdi:home", Arc<SvgData>, monochrome)`, and it becomes [`Baked`](Self::Baked); a bare name written where `[telar.icons] default_set` is configured arrives already read in that set. Anywhere else — a signal, an expression, a package that bakes nothing — it is the id as written, [`Named`](Self::Named), for the runtime source to resolve.
 #[derive(Clone)]
 pub enum IconName {
+    /// An icon the bake resolved ahead of time, so drawing it needs no icon set at run time.
     Baked {
+        /// The Iconify id the bake resolved, such as `mdi:home`.
         id: &'static str,
+        /// The artwork the bake stored for that id.
         svg: Arc<SvgData>,
         /// Whether the icon takes the colour around it, decided when it was baked from its set's `palette` and its markup.
         monochrome: bool,
     },
+    /// An id the runtime source resolves as the application runs, because the markup gave it a signal or an expression.
     Named(Reactive<String>),
 }
 

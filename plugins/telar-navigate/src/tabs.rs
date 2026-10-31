@@ -226,6 +226,7 @@ pub struct TabHost<T: Clone + Eq + 'static, R: Clone + Eq + 'static> {
 }
 
 impl<T: Clone + Eq + 'static, R: Clone + Eq + 'static> TabHost<T, R> {
+    /// Starts a host over `stacks`, building the active tab's host at once, so a factory error surfaces here rather than on the first tab switch.
     pub fn new(
         stacks: TabStacks<T, R>,
         factory: impl Fn(&T, &R) -> Result<Box<dyn NavPage>, LayoutError> + 'static,
