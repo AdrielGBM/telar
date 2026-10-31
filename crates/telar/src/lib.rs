@@ -77,6 +77,9 @@ pub mod inspect;
 #[cfg(feature = "previews")]
 pub mod preview;
 
+mod closure;
+pub use closure::{later, now};
+
 mod markup_number;
 pub use markup_number::{Float, Int, PropNumber};
 

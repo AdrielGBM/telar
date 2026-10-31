@@ -1076,8 +1076,27 @@ pub fn key_constant(name: &str) -> Option<&'static str> {
 #[path = "registry_keys_test.rs"]
 mod keys_tests;
 
-/// Callees known to keep the closure they are given instead of calling it, spelled as paths and matched by their tail; an allowlist because a callee the transpiler cannot see into may run its closure on the spot.
+/// What a closure in a component prop value is handed to: the path written before a call's `(` (`Rc::new`, `std::array::from_fn`), or the name of a method called on a value (`.map`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Callee {
+    Path(String),
+    Method(String),
+}
+
+/// When the closure a callee is handed runs, which decides whether a component prop holding it is wrapped in `Reactive::of(move || …)` to re-read what the closure reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClosureFate {
+    /// Kept to call later: what the closure reads is read when its keeper calls it, so the prop is handed over as it is.
+    Kept,
+    /// Called before the value is had: what it reads is read here, so the prop is wrapped and follows it.
+    Now,
+    /// Nothing written says which, and a `.rsx` transpiles knowing nothing but itself, so the callee cannot be looked at: a closure that reads state is answered in the markup with `later(…)` or `now(…)`.
+    Unknown,
+}
+
+/// Callees whose behaviour is fixed and that keep the closure they are handed, spelled as paths and matched by their tail, turbofish ignored: the markup's `later`, and the framework's and std's keepers. A path whose last segment is capitalised is a tuple struct or variant constructor (`Some`, `Ok`, `Wrapper`), which keeps what it is handed too.
 pub const CLOSURE_KEEPING_CALLEES: &[&str] = &[
+    "later",
     "Reactive::of",
     "Rc::new",
     "Arc::new",
@@ -1087,11 +1106,102 @@ pub const CLOSURE_KEEPING_CALLEES: &[&str] = &[
     "derive_pair",
 ];
 
-/// Whether `callee`, the path written before a call's `(`, is one of [`CLOSURE_KEEPING_CALLEES`].
-pub fn keeps_closure(callee: &str) -> bool {
-    CLOSURE_KEEPING_CALLEES.iter().any(|known| {
-        callee
-            .strip_suffix(known)
+/// Free functions whose behaviour is fixed and that run the closure they are handed before the expression's value is had, matched like [`CLOSURE_KEEPING_CALLEES`]: the markup's `now`, and std's builders that call it on the spot (`std::array::from_fn`) or from the iterator the same expression consumes (`std::iter::from_fn`, `repeat_with`, `successors`).
+pub const CLOSURE_RUNNING_CALLEES: &[&str] = &["now", "from_fn", "repeat_with", "successors"];
+
+/// Methods of std that run the closure they are handed on the spot, or from the iterator the same expression consumes (`.map(…).sum()`): those of `Option`, `Result`, `bool`, `Ordering`, `Iterator`, slices and `Vec`, `str` patterns, map entries, `Cell`, `OnceCell` and `LocalKey`, and a signal's `with` and `update`. Matched by name, since the receiver's type is Rust's to know.
+pub const CLOSURE_RUNNING_METHODS: &[&str] = &[
+    "all",
+    "and_modify",
+    "and_then",
+    "any",
+    "binary_search_by",
+    "binary_search_by_key",
+    "contains",
+    "dedup_by",
+    "dedup_by_key",
+    "ends_with",
+    "filter",
+    "filter_map",
+    "find",
+    "find_map",
+    "flat_map",
+    "fold",
+    "for_each",
+    "get_or_init",
+    "get_or_insert_with",
+    "inspect",
+    "inspect_err",
+    "is_err_and",
+    "is_none_or",
+    "is_ok_and",
+    "is_some_and",
+    "map",
+    "map_err",
+    "map_or",
+    "map_or_else",
+    "map_while",
+    "max_by",
+    "max_by_key",
+    "min_by",
+    "min_by_key",
+    "ok_or_else",
+    "or_else",
+    "or_insert_with",
+    "or_insert_with_key",
+    "partition",
+    "position",
+    "reduce",
+    "retain",
+    "rposition",
+    "scan",
+    "skip_while",
+    "sort_by",
+    "sort_by_cached_key",
+    "sort_by_key",
+    "sort_unstable_by",
+    "sort_unstable_by_key",
+    "split",
+    "starts_with",
+    "take_while",
+    "then",
+    "then_with",
+    "trim_end_matches",
+    "trim_matches",
+    "trim_start_matches",
+    "try_fold",
+    "try_for_each",
+    "unwrap_or_else",
+    "update",
+    "with",
+];
+
+/// When the closure `callee` is handed runs: decided for the callees whose behaviour is fixed, and [`ClosureFate::Unknown`] for every other.
+pub fn closure_fate(callee: &Callee) -> ClosureFate {
+    match callee {
+        Callee::Path(path) if names_any(path, CLOSURE_KEEPING_CALLEES) => ClosureFate::Kept,
+        Callee::Path(path) if names_any(path, CLOSURE_RUNNING_CALLEES) => ClosureFate::Now,
+        Callee::Path(path) if path.rsplit("::").next().is_some_and(starts_uppercase) => {
+            ClosureFate::Kept
+        }
+        Callee::Method(name) if CLOSURE_RUNNING_METHODS.contains(&name.as_str()) => {
+            ClosureFate::Now
+        }
+        Callee::Path(_) | Callee::Method(_) => ClosureFate::Unknown,
+    }
+}
+
+fn names_any(path: &str, known: &[&str]) -> bool {
+    known.iter().any(|known| {
+        path.strip_suffix(known)
             .is_some_and(|head| head.is_empty() || head.ends_with("::"))
     })
 }
+
+fn starts_uppercase(segment: &str) -> bool {
+    segment.chars().next().is_some_and(char::is_uppercase)
+}
+
+#[cfg(test)]
+#[path = "registry_closure_test.rs"]
+mod closure_tests;

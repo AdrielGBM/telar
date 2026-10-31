@@ -2,7 +2,11 @@
 //!
 //! Split from the naming conventions in [`telar_project::naming`]: those say what a generated name looks like and are read by the macro that places the output, while these read the `[logic]` Rust an author wrote and only codegen does that.
 
+use std::ops::Range;
+
 use telar_project::naming::is_ident_byte;
+
+use crate::registry::Callee;
 
 /// If `bytes[i]` opens a string, raw string, char literal or comment, returns the index just past it, so an identifier scan skips its contents — a name embedded in `"text"` or `// note` is not a real reference to it. A `'a` lifetime tick (no closing quote) is left alone; escaped char literals (`'\n'`) are handled. Shared by every identifier scan here, so they agree on what is code.
 ///
@@ -91,11 +95,21 @@ pub(crate) fn ident_positions<'a>(
     })
 }
 
-/// `expr` with every closure that a callee known to keep it (see [`crate::registry::CLOSURE_KEEPING_CALLEES`]) is handed blanked out, so what is left is what runs when the expression is evaluated; such a closure's body only runs when its owner calls it. Every other closure stays: a callee the transpiler cannot see into (`std::array::from_fn(|i| …)`, a helper, an adapter) may call it on the spot, and a read missed there freezes silently. Same length as `expr`, so offsets still line up.
-pub(crate) fn without_deferred_closures(expr: &str) -> String {
+/// A closure written as a direct argument of a call: what it is handed to, and where it sits in the expression.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HandedClosure {
+    pub callee: Callee,
+    /// From its first byte (`move` or the opening `|`) to the end of its body.
+    pub span: Range<usize>,
+    /// Where its body starts, just past the parameter list.
+    pub body_start: usize,
+}
+
+/// Every closure in `expr` handed straight to a call, nested ones included, in source order. A closure in brackets, braces, a macro's arguments or grouping parens is handed to no callee and is not listed.
+pub(crate) fn handed_closures(expr: &str) -> Vec<HandedClosure> {
     let bytes = expr.as_bytes();
-    let mut blanked = bytes.to_vec();
-    let mut keeps: Vec<bool> = Vec::new();
+    let mut handed = Vec::new();
+    let mut open: Vec<Option<Callee>> = Vec::new();
     let mut i = 0;
     while i < bytes.len() {
         if let Some(end) = literal_or_comment_end(bytes, i) {
@@ -103,13 +117,10 @@ pub(crate) fn without_deferred_closures(expr: &str) -> String {
             continue;
         }
         match bytes[i] {
-            b'(' => {
-                let before = expr[..i].trim_end();
-                keeps.push(crate::registry::keeps_closure(&callee_path(before)));
-            }
-            b'[' | b'{' => keeps.push(false),
+            b'(' => open.push(callee(expr[..i].trim_end())),
+            b'[' | b'{' => open.push(None),
             b')' | b']' | b'}' => {
-                keeps.pop();
+                open.pop();
             }
             _ => {}
         }
@@ -117,15 +128,16 @@ pub(crate) fn without_deferred_closures(expr: &str) -> String {
             i += 1;
             continue;
         };
-        if !keeps.last().copied().unwrap_or(false) {
-            i = params_end;
-            continue;
+        if let Some(Some(callee)) = open.last() {
+            handed.push(HandedClosure {
+                callee: callee.clone(),
+                span: i..closure_body_end(expr, params_end),
+                body_start: params_end,
+            });
         }
-        let end = closure_body_end(expr, params_end);
-        blanked[i..end].fill(b' ');
-        i = end;
+        i = params_end;
     }
-    String::from_utf8(blanked).unwrap_or_else(|_| expr.to_string())
+    handed
 }
 
 /// The index just past the parameter list of a closure starting at `at` (`|a, b|`, `||`, `move |a|`), or `None` when `at` starts no closure; a `|` after an operand is a binary or.
@@ -208,8 +220,8 @@ pub(crate) fn format_arg_positions(code: &str, ident: &str) -> Vec<usize> {
 #[path = "lexer_test.rs"]
 mod tests;
 
-/// The path written before a call's `(` at the end of `before`, with its generic arguments (`::<f32>`, `::<dyn Fn()>`) dropped so `Reactive::<f32>::of` reads as `Reactive::of`; empty when what precedes is not a path.
-fn callee_path(before: &str) -> String {
+/// What a call's `(` at the end of `before` calls: a path, with its generic arguments (`::<f32>`, `::<dyn Fn()>`) dropped so `Reactive::<f32>::of` reads as `Reactive::of`, or a method by name. `None` when what precedes is no callee: an operator, a macro's `!`, a keyword opening grouping parens.
+fn callee(before: &str) -> Option<Callee> {
     let bytes = before.as_bytes();
     let mut end = bytes.len();
     let mut path: Vec<u8> = Vec::new();
@@ -233,7 +245,7 @@ fn callee_path(before: &str) -> String {
                 }
             }
             if depth != 0 || !before[..at].ends_with("::") {
-                return String::new();
+                return None;
             }
             end = at - 2;
         } else if is_ident_byte(b) || b == b':' {
@@ -243,9 +255,15 @@ fn callee_path(before: &str) -> String {
             break;
         }
     }
-    if before[..end].trim_end().ends_with('.') {
-        return String::new();
-    }
     path.reverse();
-    String::from_utf8(path).unwrap_or_default()
+    let path = String::from_utf8(path).ok()?;
+    let single = !path.contains("::");
+    if path.is_empty() || single && syn::parse_str::<syn::Ident>(&path).is_err() {
+        return None;
+    }
+    match before[..end].trim_end().ends_with('.') {
+        true if single => Some(Callee::Method(path)),
+        true => None,
+        false => Some(Callee::Path(path)),
+    }
 }

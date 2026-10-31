@@ -2162,12 +2162,95 @@ fn a_reactive_of_closure_reading_a_dollar_signal_is_not_wrapped_again() {
 }
 
 #[test]
-fn an_unknown_helper_taking_a_closure_is_a_read_and_is_wrapped() {
+fn an_unknown_helper_handed_a_closure_that_reads_asks_whether_it_keeps_it() {
+    for value in [
+        "(tweened(move || sig.get() * 2.0))",
+        "(tweened(move || $sig * 2.0))",
+    ] {
+        let code = prop_code("let sig = signal(0.0f32);", value);
+        assert!(
+            code.contains(
+                "compile_error!(\"`tweened(…)` is handed a closure that reads state, and a `.rsx` cannot see whether it keeps the closure or calls it now: write `tweened(later(move || …))` if it keeps it to call later, so the prop is handed over as it is, or `tweened(now(move || …))` if it calls it on the spot, so the prop follows what it reads\")"
+            ),
+            "{value}:\n{code}"
+        );
+    }
+}
+
+#[test]
+fn an_unknown_method_handed_a_closure_that_reads_asks_too() {
     let code = prop_code(
         "let sig = signal(0.0f32);",
-        "(tweened(move || sig.get() * 2.0))",
+        "(motion.animate(|t| t * $sig))",
     );
-    assert!(code.contains("Reactive::of(move || tweened("), "{code}");
+    assert!(
+        code.contains("`.animate(…)` is handed a closure")
+            && code.contains("`.animate(later(|t| …))`"),
+        "{code}"
+    );
+}
+
+#[test]
+fn later_says_the_callee_keeps_the_closure_and_the_prop_is_not_wrapped() {
+    let code = prop_code(
+        "let sig = signal(0.0f32);",
+        "(tweened(later(move || $sig * 2.0)))",
+    );
+    assert!(
+        code.contains("tweened(later(move || sig.get() * 2.0))")
+            && !code.contains("Reactive::of(")
+            && !code.contains("compile_error!"),
+        "{code}"
+    );
+}
+
+#[test]
+fn now_says_the_callee_calls_the_closure_and_the_prop_is_wrapped() {
+    let code = prop_code(
+        "let sig = signal(0.0f32);",
+        "(tweened(now(move || $sig * 2.0)))",
+    );
+    assert!(
+        code.contains(
+            "Reactive::of({ let sig = sig.clone(); move || tweened(now(move || sig.get() * 2.0)) })"
+        ) && !code.contains("compile_error!"),
+        "{code}"
+    );
+}
+
+#[test]
+fn a_closure_reading_nothing_needs_no_answer() {
+    let code = prop_code("", "(tweened(|t| t * 2.0))");
+    assert!(
+        code.contains(".value(tweened(|t| t * 2.0))") && !code.contains("compile_error!"),
+        "{code}"
+    );
+}
+
+#[test]
+fn an_unknown_callee_inside_a_kept_closure_runs_later_and_needs_no_answer() {
+    let code = prop_code(
+        "let sig = signal(0.0f32);",
+        "(Reactive::of(move || tweened(move || $sig)))",
+    );
+    assert!(
+        !code.contains("compile_error!") && !code.contains("Reactive::of(move || Reactive::of"),
+        "{code}"
+    );
+}
+
+#[test]
+fn the_markers_are_written_as_is_in_a_preview_too() {
+    let src = "[logic]\nlet sig = signal(0.0f32);\n\n[view]\ncard value:(tweened(later(move || $sig)))\n\n[preview \"A\"]\ncard value:(tweened(now(move || 1.0)))\n";
+    let code = crate::transpile_source(src, "demo", None, None)
+        .unwrap()
+        .rust_code;
+    assert!(
+        code.contains("tweened(later(move || sig.get()))")
+            && code.contains("tweened(now(move || 1.0))")
+            && !code.contains("compile_error!"),
+        "{code}"
+    );
 }
 
 #[test]
@@ -2246,9 +2329,9 @@ fn a_reactive_constructor_that_stores_its_closure_is_not_wrapped_again() {
 }
 
 #[test]
-fn a_method_named_like_a_closure_keeping_callee_is_not_one() {
+fn a_method_named_like_a_keeper_is_not_one_and_asks() {
     let code = prop_code("let x = signal(0.0f32);", "(table.memo(move || $x))");
-    assert!(code.contains("Reactive::of("), "{code}");
+    assert!(code.contains("`.memo(…)` is handed a closure"), "{code}");
 }
 
 const SURFACE_PROPS: &str = "[logic]\npub struct Props {\n    #[props(some, default)]\n    pub style: Option<SurfaceAmendment>,\n}\n";

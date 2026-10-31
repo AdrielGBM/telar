@@ -4,6 +4,7 @@ use std::fmt::Write;
 
 use telar_parser::{Attr, Element, Value, ViewNode};
 
+use crate::registry::{Callee, ClosureFate};
 use crate::style::{format_f32, hex_to_color_expr};
 use telar_project::naming::to_pascal_case;
 use telar_project::{AssetContext, IdBaking};
@@ -384,7 +385,10 @@ impl ViewGen<'_> {
             return taken;
         }
         // A read has to be re-evaluated or it freezes at construction. A lone `$sig` took the arm above and stays a handle, which is what a two-way binding needs.
-        let evaluated_now = crate::lexer::without_deferred_closures(v);
+        let evaluated_now = match self.evaluated_now(v) {
+            Ok(evaluated_now) => evaluated_now,
+            Err(message) => return format!("compile_error!({})", rust_str(&message)),
+        };
         if evaluated_now.contains('$') {
             return reads_state(&self.owning(
                 &[v],
@@ -413,6 +417,50 @@ impl ViewGen<'_> {
             None => format!("{}{v}", expr_marker(attr.value_start + lead, v.len())),
         }
     }
+}
+
+impl ViewGen<'_> {
+    /// `value` with every closure its callee keeps blanked out, so what is left is what runs when the prop's value is had, the length unchanged so offsets still line up. A closure reading state that is handed to a callee whose behaviour is not fixed is the `Err` asking the markup to say which with `later(…)` or `now(…)`: guessed either way, it freezes silently or is rebuilt on every read.
+    fn evaluated_now(&self, value: &str) -> Result<String, String> {
+        let handed = crate::lexer::handed_closures(value);
+        let mut blanked = value.as_bytes().to_vec();
+        let mut kept: Vec<std::ops::Range<usize>> = Vec::new();
+        let mut unknown = Vec::new();
+        for closure in &handed {
+            if kept.iter().any(|k| k.contains(&closure.span.start)) {
+                continue;
+            }
+            match crate::registry::closure_fate(&closure.callee) {
+                ClosureFate::Kept => {
+                    blanked[closure.span.clone()].fill(b' ');
+                    kept.push(closure.span.clone());
+                }
+                ClosureFate::Now => {}
+                ClosureFate::Unknown => unknown.push(closure),
+            }
+        }
+        let blanked = String::from_utf8(blanked).unwrap_or_else(|_| value.to_string());
+        let ambiguous = unknown.into_iter().find(|closure| {
+            let body = &blanked[closure.span.clone()];
+            body.contains('$') || self.reads_reactive_context(body)
+        });
+        match ambiguous {
+            None => Ok(blanked),
+            Some(closure) => Err(unknown_closure_fate(value, closure)),
+        }
+    }
+}
+
+/// Why a closure reading state cannot be placed, written as the two spellings that would place it.
+fn unknown_closure_fate(value: &str, closure: &crate::lexer::HandedClosure) -> String {
+    let call = match &closure.callee {
+        Callee::Path(path) => path.clone(),
+        Callee::Method(name) => format!(".{name}"),
+    };
+    let head = value[closure.span.start..closure.body_start].trim_end();
+    format!(
+        "`{call}(…)` is handed a closure that reads state, and a `.rsx` cannot see whether it keeps the closure or calls it now: write `{call}(later({head} …))` if it keeps it to call later, so the prop is handed over as it is, or `{call}(now({head} …))` if it calls it on the spot, so the prop follows what it reads"
+    )
 }
 
 impl ViewGen<'_> {

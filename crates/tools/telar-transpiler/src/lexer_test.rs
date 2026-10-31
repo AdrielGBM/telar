@@ -68,29 +68,70 @@ fn format_arg_positions_finds_only_names_in_argument_position_inside_strings() {
     assert_eq!(format_arg_positions(code, "x"), [4, 8, 15, 31]);
 }
 
-#[test]
-fn only_a_closure_a_known_callee_keeps_is_blanked() {
-    let kept = super::without_deferred_closures("Reactive::of(move || sig.get()) + other.get()");
-    assert!(!kept.contains("sig") && kept.contains("other.get()"));
-    let run = super::without_deferred_closures("items.iter().map(|i| i + sig.get())");
-    assert!(run.contains("sig.get()"));
-    let or = super::without_deferred_closures("a.get() | b.get()");
-    assert!(or.contains("b.get()"));
+fn callees(expr: &str) -> Vec<(Callee, &str)> {
+    handed_closures(expr)
+        .into_iter()
+        .map(|closure| (closure.callee, &expr[closure.span]))
+        .collect()
+}
+
+fn path(name: &str) -> Callee {
+    Callee::Path(name.to_string())
+}
+
+fn method(name: &str) -> Callee {
+    Callee::Method(name.to_string())
 }
 
 #[test]
-fn a_closure_given_to_an_unknown_function_stays() {
-    let code =
-        super::without_deferred_closures("std::array::from_fn(|i| v[i]) + helper(|| x.get())");
-    assert!(code.contains("v[i]") && code.contains("x.get()"));
+fn a_closure_handed_to_a_call_is_listed_with_its_callee() {
+    assert_eq!(
+        callees("Reactive::of(move || sig.get()) + other.get()"),
+        [(path("Reactive::of"), "move || sig.get()")]
+    );
+    assert_eq!(
+        callees("items.iter().map(|i| i + sig.get())"),
+        [(method("map"), "|i| i + sig.get()")]
+    );
+    assert_eq!(
+        callees("x.map_or(0.0, |v| v * 2.0)"),
+        [(method("map_or"), "|v| v * 2.0")]
+    );
+    assert!(callees("a.get() | b.get()").is_empty());
 }
 
 #[test]
-fn generic_arguments_do_not_hide_a_closure_keeping_callee() {
-    let kept = super::without_deferred_closures("Reactive::<f32>::of(move || sig.get())");
-    assert!(!kept.contains("sig"));
-    let kept = super::without_deferred_closures("Rc::<dyn Fn() -> f32>::new(move || sig.get())");
-    assert!(!kept.contains("sig"));
-    let run = super::without_deferred_closures("a > (|| sig.get())");
-    assert!(run.contains("sig"));
+fn a_closure_inside_another_is_listed_after_it() {
+    assert_eq!(
+        callees("helper(|| Rc::new(move || x.get()))"),
+        [
+            (path("helper"), "|| Rc::new(move || x.get())"),
+            (path("Rc::new"), "move || x.get()"),
+        ]
+    );
+}
+
+#[test]
+fn generic_arguments_do_not_hide_the_callee() {
+    assert_eq!(
+        callees("Reactive::<f32>::of(move || sig.get())")[0].0,
+        path("Reactive::of")
+    );
+    assert_eq!(
+        callees("Rc::<dyn Fn() -> f32>::new(move || sig.get())")[0].0,
+        path("Rc::new")
+    );
+    assert_eq!(callees("v.iter().map::<f32, _>(|x| x)")[0].0, method("map"));
+}
+
+#[test]
+fn a_closure_handed_to_no_callee_is_not_listed() {
+    for expr in [
+        "a > (|| sig.get())",
+        "if (|| x)() { 1 } else { 2 }",
+        "vec![|| x.get()]",
+        "format!(\"{}\", (|| x.get())())",
+    ] {
+        assert!(callees(expr).is_empty(), "{expr}");
+    }
 }
