@@ -134,7 +134,7 @@ pub struct TreeViewProps {
     /// The bound selection, by node id. `None` (the default) is uncontrolled.
     #[props(some, into, default)]
     pub selected: Option<RwSignal<Option<Arc<str>>>>,
-    /// The bound set of open branches, by node id. `None` (the default) is uncontrolled and starts with every branch shut.
+    /// The bound set of open branches, by node id. `None` (the default) is uncontrolled and starts with every branch shut. Shutting a branch shuts every branch beneath it too.
     #[props(some, into, default)]
     pub expanded: Option<RwSignal<HashSet<Arc<str>>>>,
     /// Fired with the node a click, Enter or Space chose.
@@ -416,21 +416,24 @@ impl Tree {
         }
     }
 
-    fn set_open(&self, id: &Arc<str>, open: bool) {
+    fn open(&self, id: &Arc<str>) {
         self.expanded.update(|set| {
-            if open {
-                set.insert(id.clone());
-            } else {
-                set.remove(id);
-            }
+            set.insert(id.clone());
         });
+    }
+
+    /// Shuts `node` and every branch beneath it, so opening it again shows its children shut.
+    fn shut(&self, node: &TreeNode) {
+        let within = TreeNode::branch_ids(std::slice::from_ref(node));
+        self.expanded
+            .update(|set| set.retain(|id| !within.contains(id)));
     }
 
     /// Opens or shuts the branch at `index`; shutting one with the cursor inside moves the cursor onto it, where it would otherwise vanish.
     fn toggle(&self, rows: &[Rc<Row>], index: usize) {
         let row = &rows[index];
         if !self.is_open(&row.node.id) {
-            self.set_open(&row.node.id, true);
+            self.open(&row.node.id);
             return;
         }
         let cursor = self.cursor.peek();
@@ -441,7 +444,7 @@ impl Tree {
         if holds_cursor {
             self.cursor.set(Some(row.node.id.clone()));
         }
-        self.set_open(&row.node.id, false);
+        self.shut(&row.node);
     }
 
     fn toggle_id(&self, id: &str) {
@@ -524,7 +527,7 @@ impl Tree {
                     self.move_to(&rows, i + 1);
                 } else {
                     self.move_to(&rows, i);
-                    self.set_open(&row.node.id, true);
+                    self.open(&row.node.id);
                 }
             }
             Key::Named(named) if *named == shuts => {
@@ -532,7 +535,7 @@ impl Tree {
                 let row = &rows[i];
                 if row.node.is_branch() && self.is_open(&row.node.id) {
                     self.move_to(&rows, i);
-                    self.set_open(&row.node.id, false);
+                    self.shut(&row.node);
                 } else {
                     self.move_to(&rows, row.parent.unwrap_or(i));
                 }

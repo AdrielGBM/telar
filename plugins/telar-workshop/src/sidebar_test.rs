@@ -152,6 +152,18 @@ fn a_group_counts_its_previews() {
 }
 
 #[test]
+fn shutting_a_group_shuts_the_groups_inside_it() {
+    let mut sidebar = Mounted::new(entries());
+    sidebar.focus_tree();
+    sidebar.key(NamedKey::Home);
+    sidebar.key(NamedKey::ArrowLeft);
+    sidebar.key(NamedKey::ArrowRight);
+    assert!(sidebar.drawn("Button"));
+    assert!(!sidebar.drawn("Primary"));
+    assert!(!sidebar.drawn("Checked"));
+}
+
+#[test]
 fn a_group_collapses_and_opens_again() {
     let mut sidebar = Mounted::new(entries());
     sidebar.focus_tree();
@@ -162,7 +174,8 @@ fn a_group_collapses_and_opens_again() {
     assert!(!sidebar.drawn("Open"));
     assert!(!sidebar.state().expanded().get().contains("/Overlays"));
     sidebar.key(NamedKey::Enter);
-    assert!(sidebar.drawn("Open"));
+    assert!(sidebar.drawn("Modal"));
+    assert!(!sidebar.drawn("Open"), "the group inside it opens shut");
     assert_eq!(sidebar.selected().as_deref(), Some("button--primary"));
 }
 
@@ -240,7 +253,8 @@ fn the_arrows_walk_the_rows_and_enter_selects() {
     sidebar.key(NamedKey::ArrowLeft);
     assert!(!sidebar.drawn("Checked"));
     sidebar.key(NamedKey::ArrowRight);
-    assert!(sidebar.drawn("Checked"));
+    assert!(sidebar.drawn("Checkbox"));
+    assert!(!sidebar.drawn("Checked"));
 }
 
 #[test]

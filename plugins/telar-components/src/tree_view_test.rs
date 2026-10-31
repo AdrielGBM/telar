@@ -402,6 +402,36 @@ fn clicking_a_row_selects_it_and_clicking_its_caret_opens_it() {
 }
 
 #[test]
+fn shutting_a_branch_shuts_the_branches_beneath_it() {
+    let mut tree = Mounted::focused(catalogue());
+    tree.keys(&[
+        NamedKey::ArrowRight,
+        NamedKey::ArrowRight,
+        NamedKey::ArrowRight,
+    ]);
+    assert_eq!(tree.open(), ["button", "inputs"]);
+
+    tree.keys(&[NamedKey::ArrowUp, NamedKey::ArrowLeft]);
+    assert!(tree.open().is_empty(), "by key");
+
+    tree.keys(&[
+        NamedKey::ArrowRight,
+        NamedKey::ArrowRight,
+        NamedKey::ArrowRight,
+    ]);
+    let caret_x = (inset() + pad_x() + caret_width() / 2.0) as f64;
+    tree.click(caret_x, row_height() as f64 * 0.5);
+    assert!(tree.open().is_empty(), "by its caret");
+
+    tree.key(NamedKey::ArrowRight);
+    assert_eq!(
+        tree.open(),
+        ["inputs"],
+        "opening it again shows its children shut"
+    );
+}
+
+#[test]
 fn shutting_a_branch_around_the_cursor_brings_the_cursor_out() {
     let mut tree = Mounted::focused(catalogue());
     tree.keys(&[
