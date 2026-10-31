@@ -1,7 +1,11 @@
-use telar::{AvailableSpace, ComponentList, DrawCommand, compute_layout, new_container};
+use telar::{
+    AvailableSpace, BorderRadius, ComponentList, DrawCommand, LayoutItem, LayoutStyle, Rect,
+    RectStyle, SurfaceAmendment, compute_layout, new_container,
+};
 
-use super::*;
+use crate::shared;
 use crate::test_support::find_text;
+use crate::{BadgeProps, BadgeTokens, badge};
 
 fn laid_out(item: Box<dyn LayoutItem>) -> ComponentList {
     let root = new_container(

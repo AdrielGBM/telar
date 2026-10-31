@@ -27,7 +27,8 @@ telar::rsx_modules!();
 
 #[cfg(feature = "advanced")]
 mod accordion;
-mod badge;
+#[cfg(test)]
+mod badge_test;
 mod button;
 mod checkbox;
 mod chip;
