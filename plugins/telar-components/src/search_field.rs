@@ -11,10 +11,10 @@ use telar::{
     signal,
 };
 
-use crate::ControlSize;
 use crate::shared;
 use crate::strings;
 use crate::text_field::{Adornments, FieldKeyHandler, TextFieldProps, adorned_field};
+use telar::ControlSize;
 
 /// What [`SearchFieldProps::on_submit`] is called with: the query as it stands.
 pub type SearchHandler = Rc<dyn Fn(&str)>;

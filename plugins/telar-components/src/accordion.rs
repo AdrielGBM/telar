@@ -7,8 +7,8 @@ use telar::{
     amend_surface, box_item, children, focus::Role, signal,
 };
 
-use crate::ControlSize;
 use crate::shared;
+use telar::ControlSize;
 
 /// An accordion's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

@@ -7,9 +7,10 @@ use telar::{
     AlignItems, Color, Container, JustifyContent, LayoutError, LayoutItem, LayoutScrollArea,
     LayoutStyle, Reactive, ReactiveList, Role, Text, box_item, children, use_theme_tokens,
 };
+use telar::{ControlSize, Tone};
 use telar_components::{
-    ButtonProps, CodeSpan, CodeViewProps, ControlSize, Tab, TagProps, TokenKind, Tone, button,
-    code_view, tab_list, tag,
+    ButtonProps, CodeSpan, CodeViewProps, Tab, TagProps, TokenKind, button, code_view, tab_list,
+    tag,
 };
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_mono, workbench_muted};
 

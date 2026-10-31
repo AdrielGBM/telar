@@ -78,7 +78,7 @@ fn a_copied_link_carries_args_and_settings() {
         args: vec![
             ("label".into(), ArgValue::Text("Save; \"all\": now".into())),
             ("disabled".into(), ArgValue::Bool(true)),
-            ("size".into(), ArgValue::Choice("Large".into())),
+            ("size".into(), ArgValue::Choice("large".into())),
         ],
         settings: Some(settings),
         ..WorkshopRoute::new(Page::Preview("demo--button--primary".into()), true)

@@ -1,4 +1,4 @@
-//! `label:`, `lang:`, `a11y:`, `anchor:` and `view_progress:` on any built-in tag: what the box is called, what language it is in, whether a reader skips it, the name a link reaches it by, and how far it has scrolled through the view.
+//! `a11y_label:`, `lang:`, `a11y:`, `anchor:` and `view_progress:` on any built-in tag: what the box is called, what language it is in, whether a reader skips it, the name a link reaches it by, and how far it has scrolled through the view.
 
 use telar_parser::{Attr, Element, Value};
 
@@ -6,26 +6,12 @@ use super::signals::substitute_reads;
 use super::{ChildEmit, ViewGen, expr_marker};
 
 impl ViewGen<'_> {
-    /// Chains the annotations an element carries onto the widget it built, through `telar::Accessible`, which every widget with a layout node takes. A component call says them about the item it returns, spelled `a11y_label`/`a11y_lang` there because `label` and `lang` are its own props to declare, and may also say what that item is with a `role:` that only describes it.
+    /// Chains the annotations an element carries onto the widget it built, through `telar::Accessible`, which every widget with a layout node takes. A built-in tag and a component call both name it with `a11y_label`; a component call says its language as `a11y_lang`, because `lang` is its own prop to declare, and may also say what the item it returns is with a `role:` that only describes it.
     pub(super) fn accessible_tail(&mut self, el: &Element, emit: ChildEmit) -> ChildEmit {
         let find = |key: &str| el.attributes.iter().find(|a| a.key == key);
-        if !crate::registry::is_builtin_tag(&el.tag) {
-            let mut calls = String::new();
-            if let Some(label) = find("a11y_label") {
-                calls.push_str(&format!(".a11y_label({})", self.annotation_text(label)));
-            }
-            if let Some(lang) = find("a11y_lang") {
-                calls.push_str(&format!(".a11y_lang({})", self.annotation_text(lang)));
-            }
-            calls.push_str(
-                &self.role_annotation(find("role"), crate::registry::COMPONENT_ROLE_VALUES),
-            );
-            calls.push_str(&self.a11y_keyword_call(find("a11y")));
-            calls.push_str(&self.class_authored_text(&el.classes));
-            return self.chain_calls(emit, &calls);
-        }
+        let builtin = crate::registry::is_builtin_tag(&el.tag);
         let mut calls = String::new();
-        if let Some(label) = find("label") {
+        if let Some(label) = find(crate::registry::A11Y_LABEL_ATTR) {
             // A `scroll` is never a control in markup, so its name is the one a reader hears while it is a Tab stop of its own; `a11y_label` there would name a region that fits as well, said again on the way into it.
             let method = match el.tag.as_str() {
                 "scroll" => "stop_label",
@@ -33,8 +19,16 @@ impl ViewGen<'_> {
             };
             calls.push_str(&format!(".{method}({})", self.annotation_text(label)));
         }
-        if let Some(lang) = find("lang") {
+        if let Some(lang) = find(if builtin { "lang" } else { "a11y_lang" }) {
             calls.push_str(&format!(".a11y_lang({})", self.annotation_text(lang)));
+        }
+        if !builtin {
+            calls.push_str(
+                &self.role_annotation(find("role"), crate::registry::COMPONENT_ROLE_VALUES),
+            );
+            calls.push_str(&self.a11y_keyword_call(find("a11y")));
+            calls.push_str(&self.class_authored_text(&el.classes));
+            return self.chain_calls(emit, &calls);
         }
         calls.push_str(&self.a11y_keyword_call(find("a11y")));
         if el.tag == "text" {

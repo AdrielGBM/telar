@@ -30,9 +30,9 @@ col gap:20
             text "the app's choice · {$chosen}" font_size:15 color:$theme.ink
             text "in effect · {$effective}" font_size:15 color:$theme.primary
             row gap:8 wrap
-                button label:"Follow the system" variant:Variant::Ghost on_press:(|| telar::set_reduced_motion_override(None))
-                button label:"Less motion" variant:Variant::Ghost on_press:(|| telar::set_reduced_motion_override(Some(true)))
-                button label:"Full motion" variant:Variant::Ghost on_press:(|| telar::set_reduced_motion_override(Some(false)))
+                button label:"Follow the system" variant:ghost on_press:(|| telar::set_reduced_motion_override(None))
+                button label:"Less motion" variant:ghost on_press:(|| telar::set_reduced_motion_override(Some(true)))
+                button label:"Full motion" variant:ghost on_press:(|| telar::set_reduced_motion_override(Some(false)))
             text "The choice is kept in the target's preference store: a file in the app's config directory, or localStorage on the web." font_size:12 color:$theme.muted
         code_line code:"set_reduced_motion_override(Some(true))   ·   use_reduced_motion()   ·   use_system_reduced_motion()"
     example title:"Every animation follows the value in effect"

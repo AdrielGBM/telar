@@ -425,7 +425,7 @@ fn a_handle_is_a_spacing_step_thick_until_the_tokens_say_otherwise() {
     let tree = mount(ResizableProps::props().build());
     assert_eq!(
         width_handle().width,
-        crate::metrics::spacing(crate::ControlSize::Regular)
+        crate::metrics::spacing(telar::ControlSize::Regular)
     );
     drop(tree);
 

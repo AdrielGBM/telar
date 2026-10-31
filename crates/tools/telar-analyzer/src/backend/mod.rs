@@ -12,7 +12,7 @@ use tokio::sync::RwLock;
 use crate::analysis::completions::{
     CompletionKind, attribute_key_items, color_items, completion_context, element_name_items,
     matrix_axis_items, matrix_axis_value_items, preview_option_items, preview_option_value_items,
-    signal_items, style_class_items, theme_items,
+    signal_items, style_class_items, theme_items, vocabulary_items,
 };
 use crate::analysis::definition::goto_definition;
 use crate::analysis::hover::hover_info;
@@ -511,6 +511,7 @@ impl Backend {
                 CompletionKind::MatrixAxisValue(axis) => {
                     matrix_axis_value_items(&axis, project.as_ref())
                 }
+                CompletionKind::VocabularyWord(axis) => vocabulary_items(&axis),
             });
             (
                 parsed.source.clone(),

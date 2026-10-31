@@ -3,8 +3,8 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Key, NamedKey, Role};
 
-use crate::ControlSize;
 use crate::search_field::{SearchFieldProps, search_field};
+use telar::ControlSize;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![

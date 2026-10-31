@@ -346,7 +346,7 @@ fn a_long_menu_is_capped_to_the_window_and_scrolls_to_the_keyboard() {
     let panel = panels()[0];
     assert_eq!(
         panel.y,
-        30.0 + crate::shared::panel_pad(crate::ControlSize::Regular),
+        30.0 + crate::shared::panel_pad(telar::ControlSize::Regular),
         "at the point"
     );
     assert!(
@@ -389,7 +389,7 @@ fn a_submenu_opens_flush_beside_its_panel_and_level_with_its_row() {
 
     let found = panels();
     assert_eq!(found.len(), 2, "the submenu opened: {found:?}");
-    let pad = crate::shared::panel_pad(crate::ControlSize::Regular);
+    let pad = crate::shared::panel_pad(telar::ControlSize::Regular);
     let (menu, sub) = (found[0], found[1]);
     assert_eq!(
         sub.x - pad,
@@ -703,8 +703,8 @@ fn a_menu_asked_for_from_the_keyboard_opens_under_the_focused_control() {
     settle(&tree);
     let panel = panels()[0];
     assert_eq!(
-        panel.y - crate::shared::panel_pad(crate::ControlSize::Regular),
-        bottom(control) + crate::shared::popup_offset(crate::ControlSize::Regular)
+        panel.y - crate::shared::panel_pad(telar::ControlSize::Regular),
+        bottom(control) + crate::shared::popup_offset(telar::ControlSize::Regular)
     );
     route(&mut tree, &named(NamedKey::Enter));
     assert_eq!(*said.borrow(), vec!["fila 0"]);
@@ -1062,7 +1062,7 @@ fn a_panel_widens_to_its_widest_row() {
     let (_tree, _) = opened_at((40.0, 30.0), rows(2));
     assert_eq!(
         panels()[0].width,
-        120.0 - crate::shared::panel_pad(crate::ControlSize::Regular) * 2.0,
+        120.0 - crate::shared::panel_pad(telar::ControlSize::Regular) * 2.0,
         "short rows keep the least width"
     );
 }

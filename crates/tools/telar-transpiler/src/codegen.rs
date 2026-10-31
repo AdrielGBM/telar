@@ -130,6 +130,17 @@ fn item_kind(line: &str) -> Option<ItemKind> {
     }
 }
 
+/// The names the logic zone's top-level items declare as values, which a sibling of the component fn sees as well as its body.
+fn logic_item_names(logic: &str) -> Vec<String> {
+    let lines: Vec<&str> = logic.lines().collect();
+    let items: String = hoisted_items(logic)
+        .iter()
+        .flat_map(|item| &lines[item.start..item.end])
+        .map(|line| format!("{line}\n"))
+        .collect();
+    crate::rust::item_value_names(&items)
+}
+
 /// Every top-level item of the logic zone, in source order. An item that never ends stays in the function rather than being guessed at, so a malformed one fails where it was written.
 fn hoisted_items(logic: &str) -> Vec<HoistedItem> {
     let lines: Vec<&str> = logic.lines().collect();
@@ -399,9 +410,17 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
 
     let locals = scan_locals(logic_source);
     let view_locals_bind_scheme = locals.iter().any(|name| name == "scheme");
+    let items = logic_item_names(logic_source);
     let mut view_gen = ViewGen::new(&classes, input.assets)
         .with_theme_access(theme)
         .with_locals(locals)
+        .with_file_bindings(
+            items
+                .iter()
+                .cloned()
+                .chain(crate::view::view_let_names(&doc.view.nodes))
+                .collect(),
+        )
         .with_signals(signals.iter().map(|s| s.name.clone()).collect());
     let view_body = view_gen.generate_root(&doc.view.nodes);
     let scheme_line = scheme_binding(&view_body, view_locals_bind_scheme);
@@ -678,6 +697,7 @@ pub(crate) fn transpile(input: TranspileInput<'_>) -> Result<TranspiledSource, T
                 theme_type,
                 rsx_path: input.rsx_path,
                 classes: &classes,
+                bindings: &items,
             },
         );
         expr_spans.extend(mapped.expr_spans);
@@ -1031,6 +1051,7 @@ pub(crate) fn previews_file(input: TranspileInput<'_>) -> Result<TranspiledSourc
                 theme_type,
                 rsx_path: input.rsx_path,
                 classes: &classes,
+                bindings: &crate::rust::item_value_names(&doc.logic.source),
             },
         );
         code.push(crate::preview::CLOSE, None);

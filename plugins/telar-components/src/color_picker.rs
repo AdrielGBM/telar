@@ -10,11 +10,11 @@ use telar::{
     focus::Role, signal, step_factor,
 };
 
-use crate::ControlSize;
 use crate::shared;
 use crate::strings;
 use crate::swatches::{SwatchesProps, swatches};
 use crate::text_field::{TextFieldProps, text_field};
+use telar::ControlSize;
 
 /// A colour picker's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

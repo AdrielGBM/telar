@@ -28,7 +28,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let column = || LayoutStyle::column().gap(metrics::gap_md(crate::ControlSize::Regular));
+            let column = || LayoutStyle::column().gap(metrics::gap_md(telar::ControlSize::Regular));
             Ok::<_, LayoutError>(Container::new(column(), titles)?.styled_by(column))
         })
         .title("Layout/Heading")

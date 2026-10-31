@@ -94,18 +94,18 @@ a gap. A `[telar] library`'s `$theme` reads every role like any other token.
 ## A component's size
 
 A catalogue component with metrics of its own — a control, a `tag`, a field — takes `size`, a
-`telar_components::ControlSize`: `Small`, `Regular` (the default) or `Large`. It scales every length the component
+`telar::ControlSize`: `small`, `regular` (the default) or `large`. It scales every length the component
 derives from the theme and steps its text, and it is decided where the component is written:
 
 ```rsx
 row gap:8
-    button label:"Save" size:ControlSize::Large
+    button label:"Save" size:large
     button label:"Cancel"
 ```
 
 Nothing inherits a size. A box, a theme or a surface has none to hand down, and a control inside another, such as an
-`icon_button` in a `tag`'s `action`, is sized where it is written, so a form of `Large` controls beside a toolbar of
-`Regular` ones is each control saying so. A text-like component (`heading`, `text`) takes no `size`: its size is its
+`icon_button` in a `tag`'s `action`, is sized where it is written, so a form of `large` controls beside a toolbar of
+`regular` ones is each control saying so. A text-like component (`heading`, `text`) takes no `size`: its size is its
 text's.
 
 ## Drawing like the catalogue
@@ -196,10 +196,30 @@ included, after the component's own paint. What every instance should agree on b
 component's tokens instead. See [plugins](plugins.md#class-and-surfacestyle) for how a component accepts it.
 
 `button` is the reference for all three: it reads the roles through `metrics`, its `ButtonTokens`, and `style`;
-its `variant` (`Solid`, `Outline`, `Soft`, `Ghost`) says how its `color` (the theme's primary by default) is carried:
+its `variant` (`solid`, `outline`, `soft`, `ghost`) says how its `color` (the theme's primary by default) is carried:
 
 ```rsx
 button label:"Save"
-button label:"Cancel" variant:Variant::Outline color:$theme.error
-button label:"Undo" variant:Variant::Ghost
+button label:"Cancel" variant:outline color:$theme.error
+button label:"Undo" variant:ghost
 ```
+
+## The words a component call writes bare
+
+`size`, `variant` and `tone` take a word in place of a Rust path: `size:small`, `variant:ghost`, `tone:danger`. The
+words are one closed vocabulary every component shares:
+
+| Prop | Words |
+| --- | --- |
+| `size` | `small`, `regular`, `large` |
+| `variant` | `solid`, `soft`, `outline`, `ghost` |
+| `tone` | `accent`, `neutral`, `info`, `success`, `warning`, `danger` |
+
+A `.rsx` cannot see a prop's type, so a bare lowercase word on a component call that names no binding of the file
+becomes that name in `telar::kw`, which is the value itself: `telar::kw::small` is `telar::ControlSize::Small`. A
+word no axis has, or a word of another axis (`size:ghost`), is the compiler's error on the line that wrote it. A
+binding of the same name wins: with `let small = …` in `[logic]`, `size:small` hands that binding over. A path
+(`size:(ControlSize::Small)`) still works.
+The same word is the arg's text form in a preview matrix, a link and stored state (see [previews](previews.md)).
+A component of your own takes the words by declaring the prop with one of these types, `telar::ControlSize`,
+`telar::Variant` or `telar::Tone`, as every catalogue component does.

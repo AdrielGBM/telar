@@ -6,8 +6,8 @@ use telar::{
     StyledContainer, box_item,
 };
 
-use crate::ControlSize;
 use crate::handle::{HandleProps, handle};
+use telar::ControlSize;
 
 const TRACK: f32 = 240.0;
 

@@ -102,13 +102,13 @@ fn the_ring_and_its_dot_are_pills_framed_at_the_strong_width() {
     let [(ring, ring_style), (dot, dot_style)] = ring_and_dot(chosen(None))[..] else {
         panic!("a chosen radio paints its ring and its dot");
     };
-    let side = crate::metrics::icon_size(crate::ControlSize::Regular);
+    let side = crate::metrics::icon_size(telar::ControlSize::Regular);
     assert_eq!((ring.width, ring.height), (side, side));
     assert_eq!(ring_style.radius, BorderRadius::all(side / 2.0));
     assert_eq!(ring_style.border.map(|b| b.widths[0]), Some(2.5));
     assert_eq!(
         dot.width,
-        side - crate::metrics::gap_sm(crate::ControlSize::Regular) * 2.0
+        side - crate::metrics::gap_sm(telar::ControlSize::Regular) * 2.0
     );
     assert_eq!(dot_style.radius, BorderRadius::all(dot.width / 2.0));
 }

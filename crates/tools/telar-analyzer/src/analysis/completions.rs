@@ -28,6 +28,8 @@ pub enum CompletionKind {
     PreviewOptionValue(String),
     MatrixAxis,
     MatrixAxisValue(String),
+    /// A value of the prop named, on a component call, when the prop is named after an axis of the shared vocabulary.
+    VocabularyWord(String),
 }
 
 /// What kind of completion the cursor is in, decided from the `.rsx` section around it. A preview header is read from its own line, so one still being typed, with no closing `]` yet, is completed as one.
@@ -83,6 +85,10 @@ pub fn completion_context(source: &str, line: u32, character: u32) -> Option<Com
         let key = &current_token[..colon_pos];
         if color_attr_keys().contains(&key) {
             return Some(CompletionKind::ColorValue);
+        }
+        // A component's prop types are out of a `.rsx`'s sight, so a prop is offered the words of the axis it is named after, which every component that has one names it.
+        if !is_builtin_tag(&tag) && telar_project::vocabulary_axis(key).is_some() {
+            return Some(CompletionKind::VocabularyWord(key.to_string()));
         }
         return None;
     }
@@ -533,7 +539,7 @@ fn axis_item(name: &str, description: &str) -> CompletionItem {
     }
 }
 
-/// The values of an inline matrix axis that can be listed: a direction, or a viewport the package names.
+/// The values of an inline matrix axis that can be listed: a direction, a viewport the package names, or the words of an arg named after an axis of the shared vocabulary.
 pub fn matrix_axis_value_items(axis: &str, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
     match axis {
         "dir" => direction_items(),
@@ -551,8 +557,25 @@ pub fn matrix_axis_value_items(axis: &str, project: Option<&ProjectInfo>) -> Vec
                 ..Default::default()
             })
             .collect(),
-        _ => Vec::new(),
+        _ => vocabulary_items(axis),
     }
+}
+
+/// The words of the shared vocabulary's axis named `axis`, in the order a control lists them; none for a name no axis has.
+pub fn vocabulary_items(axis: &str) -> Vec<CompletionItem> {
+    telar_project::vocabulary_axis(axis)
+        .into_iter()
+        .flat_map(|axis| axis.words.iter().map(move |word| (axis.name, *word)))
+        .map(|(axis, word)| CompletionItem {
+            label: word.to_string(),
+            kind: Some(CompletionItemKind::ENUM_MEMBER),
+            label_details: Some(CompletionItemLabelDetails {
+                detail: None,
+                description: Some(axis.to_string()),
+            }),
+            ..Default::default()
+        })
+        .collect()
 }
 
 fn direction_items() -> Vec<CompletionItem> {

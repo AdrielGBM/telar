@@ -527,7 +527,7 @@ fn view_attribute_bad_hex_errors_but_valid_passes() {
         "eight hex digits are a colour with alpha"
     );
     assert!(
-        parse("[view]\ntext label:\"#hashtag\"\n").is_ok(),
+        parse("[view]\ntext a11y_label:\"#hashtag\"\n").is_ok(),
         "a # inside a string is text, not a colour"
     );
 }

@@ -12,10 +12,10 @@ use telar::{
     focus::Role, track_layout,
 };
 
-use crate::ControlSize;
 use crate::resize::Latch;
 use crate::shared;
 use crate::title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
+use telar::ControlSize;
 
 /// Which window-management controls a frame draws, beside the close button it always has.
 ///

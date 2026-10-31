@@ -300,6 +300,29 @@ fn a_preview_shows_its_source_numbered_from_where_it_is_written() {
     assert!(docs.draws("second_source()"));
 }
 
+/// The block a preview's source is shown in is named for the preview, and a reader still finds the source inside it.
+#[test]
+fn a_preview_s_source_is_read_inside_the_block_named_for_it() {
+    let docs = Docs::open(DEFAULT);
+    let nodes = docs.access();
+    let block = nodes
+        .iter()
+        .position(|node| node.name == "Source of Default")
+        .unwrap_or_else(|| panic!("the source block is named for the preview: {nodes:?}"));
+    let mut inside = vec![block];
+    for (i, node) in nodes.iter().enumerate().skip(block + 1) {
+        if node.parent.is_some_and(|parent| inside.contains(&parent)) {
+            inside.push(i);
+        }
+    }
+    assert!(
+        inside
+            .iter()
+            .any(|&i| nodes[i].name == "badge(label: p.arg(\"label\", \"Save\"))"),
+        "{nodes:?}"
+    );
+}
+
 #[test]
 fn only_the_selected_component_is_documented() {
     let mut docs = Docs::open(DEFAULT);

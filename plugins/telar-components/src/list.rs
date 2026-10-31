@@ -14,10 +14,10 @@ use telar::{
     signal, use_context,
 };
 
-use crate::ControlSize;
 use crate::shared::{self, shown_chord};
 use crate::toggle::{SwitchSize, switch_track};
 use crate::type_ahead::TypeAhead;
+use telar::ControlSize;
 
 /// A row's hint and a group's heading, as shares of the label they sit with, at the alpha that makes them read as secondary without becoming a second colour a theme has to answer for.
 const HINT_RATIO: f32 = 0.9;

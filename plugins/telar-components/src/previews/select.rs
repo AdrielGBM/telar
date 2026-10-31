@@ -3,9 +3,9 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Key, NamedKey, Reactive, Role};
 
-use crate::ControlSize;
 use crate::list::{ItemProps, item};
 use crate::select::{SelectProps, select};
+use telar::ControlSize;
 
 fn sizes(size: ControlSize) -> Children {
     Children::new(move || {

@@ -1,11 +1,12 @@
 use std::rc::Rc;
 
-use telar::preview::{Axis, Layout, Matrix, PreviewEntry, by_role, preview};
+use telar::preview::{Axis, Layout, Matrix, PreviewEntry, by_role, by_text, preview};
 use telar::{Accessible, Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role};
 
 use crate::metrics;
 use crate::tag::{TagProps, tag};
-use crate::{ControlSize, Tone, Variant};
+use telar::kw::Word;
+use telar::{ControlSize, Tone, Variant};
 
 fn row(tags: Vec<Box<dyn telar::LayoutItem>>) -> Result<Container, LayoutError> {
     let style = || LayoutStyle::row().gap(metrics::gap_md(ControlSize::Regular));
@@ -41,11 +42,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .viewport(120.0, 48.0)
         .matrix(Matrix::Axes(&[
             Axis::RegisteredModes,
-            Axis::Arg("variant", &["Solid", "Soft", "Outline", "Ghost"]),
-            Axis::Arg(
-                "tone",
-                &["Accent", "Neutral", "Info", "Success", "Warning", "Danger"],
-            ),
+            Axis::Arg("variant", Variant::WORDS),
+            Axis::Arg("tone", Tone::WORDS),
         ])),
         preview!(tag: TagProps, "Statuses", |p| {
             let variant = p.arg("variant", Variant::Solid);
@@ -130,7 +128,10 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         })
         .title("Display/Tag")
         .layout(Layout::Centered)
-        .play(|canvas| canvas.expect(by_role(Role::Label).named("3 unread comments"))),
+        .play(|canvas| {
+            canvas.expect(by_role(Role::Label).named("3 unread comments"))?;
+            canvas.expect_absent(by_text("3"))
+        }),
     ];
     #[cfg(feature = "icons")]
     let entries = [entries, vec![with_slots()]].concat();

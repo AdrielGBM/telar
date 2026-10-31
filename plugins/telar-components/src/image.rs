@@ -9,8 +9,8 @@ use telar::{
     box_item, children,
 };
 
-use crate::ControlSize;
 use crate::shared;
+use telar::ControlSize;
 
 /// An image's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

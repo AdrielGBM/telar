@@ -14,7 +14,7 @@ use telar::{
 
 use crate::shared;
 use crate::strings;
-use crate::{ControlSize, Tone};
+use telar::{ControlSize, Tone};
 
 const DISMISS_GLYPH: &str = "✕";
 

@@ -111,11 +111,11 @@ fn the_box_is_an_icon_square_framed_at_the_strong_width_and_rounded_like_an_item
     let [(rect, style), (mark, mark_style)] = box_and_mark(built(checked(true)))[..] else {
         panic!("a checked box paints its box and its mark");
     };
-    let side = crate::metrics::icon_size(crate::ControlSize::Regular);
+    let side = crate::metrics::icon_size(telar::ControlSize::Regular);
     assert_eq!((rect.width, rect.height), (side, side));
     assert_eq!(style.radius, BorderRadius::all(3.5));
     assert_eq!(style.border.map(|b| b.widths[0]), Some(3.0));
-    let inset = crate::metrics::gap_sm(crate::ControlSize::Regular);
+    let inset = crate::metrics::gap_sm(telar::ControlSize::Regular);
     assert_eq!(mark.width, side - inset * 2.0);
     assert_eq!(
         mark_style.radius,
@@ -152,7 +152,7 @@ fn the_checkbox_tokens_win_over_the_roles_and_unset_ones_follow_them() {
     assert_eq!((rect.width, rect.height), (22.0, 22.0));
     assert_eq!(style.radius, BorderRadius::all(11.0));
     assert_eq!(style.border.map(|b| b.widths[0]), Some(3.0));
-    let inset = crate::metrics::gap_sm(crate::ControlSize::Regular);
+    let inset = crate::metrics::gap_sm(telar::ControlSize::Regular);
     assert_eq!(mark.width, 22.0 - inset * 2.0);
     assert_eq!(mark_style.radius, BorderRadius::all(11.0 - inset));
 }

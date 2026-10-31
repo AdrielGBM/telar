@@ -292,3 +292,64 @@ fn a_role_said_from_outside_is_the_element_a_group_becomes_and_never_a_controls(
         "the button is not made a navigation"
     );
 }
+
+/// A box that comes to be read by its name says it in front of what it holds and skips the words it draws; one whose name is taken away is read by its words again, with nothing left of the name.
+#[wasm_bindgen_test]
+fn a_name_said_in_place_of_the_words_follows_the_annotation() {
+    let host: web_sys::HtmlElement = document()
+        .create_element("div")
+        .expect("a host element")
+        .dyn_into()
+        .expect("a div is an HTML element");
+    document()
+        .body()
+        .expect("a body")
+        .append_child(host.as_ref())
+        .expect("the host went into the page");
+    let mut renderer = DomRenderer::new(host.clone()).expect("a renderer on the host");
+    let counter = |semantics: Semantics| {
+        [
+            open(60, semantics),
+            open(61, Semantics::group()),
+            text("3"),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ]
+    };
+    let named = Semantics::group().with_label("3 unread comments");
+    renderer
+        .render_frame(&counter(named.clone()), None)
+        .expect("the frame reconciled");
+    let node = host.first_element_child().expect("a box");
+    let spoken = node.first_element_child().expect("the name");
+    assert!(spoken.has_attribute("data-telar-spoken"));
+    assert_eq!(spoken.text_content().as_deref(), Some("3 unread comments"));
+    let digit = spoken.next_element_sibling().expect("the digit's box");
+    assert_eq!(attribute(&digit, "aria-hidden").as_deref(), Some("true"));
+    assert_eq!(attribute(&node, "aria-label"), None);
+
+    renderer
+        .render_frame(&counter(Semantics::group()), None)
+        .expect("the frame reconciled");
+    let node = host.first_element_child().expect("a box");
+    assert!(
+        node.query_selector("[data-telar-spoken]")
+            .ok()
+            .flatten()
+            .is_none()
+    );
+    assert!(
+        node.query_selector("[aria-hidden]")
+            .ok()
+            .flatten()
+            .is_none()
+    );
+    assert_eq!(node.text_content().as_deref(), Some("3"));
+
+    renderer
+        .render_frame(&counter(named), None)
+        .expect("the frame reconciled");
+    let node = host.first_element_child().expect("a box");
+    assert_eq!(node.text_content().as_deref(), Some("3 unread comments3"));
+    assert_eq!(attribute(&node, "aria-label"), None);
+}

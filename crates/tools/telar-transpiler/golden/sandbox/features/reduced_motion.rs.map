@@ -192,9 +192,9 @@
 1267..1273	3267	`system`
 1346..1352	3897	`chosen`
 1418..1427	4526	`effective`
-1548..1562	5076	`Variant::Ghost`
-1573..1616	5123	`|| telar::set_reduced_motion_override(None)`
-1669..1683	5288	`Variant::Ghost`
-1694..1743	5335	`|| telar::set_reduced_motion_override(Some(true))`
-1796..1810	5506	`Variant::Ghost`
-1821..1871	5553	`|| telar::set_reduced_motion_override(Some(false))`
+1548..1553	5089	`ghost`
+1564..1607	5127	`|| telar::set_reduced_motion_override(None)`
+1660..1665	5305	`ghost`
+1676..1725	5343	`|| telar::set_reduced_motion_override(Some(true))`
+1778..1783	5527	`ghost`
+1794..1844	5565	`|| telar::set_reduced_motion_override(Some(false))`

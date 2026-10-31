@@ -12,9 +12,9 @@ use telar::{
 };
 use web_time::Instant;
 
-use crate::ControlSize;
 use crate::edit::{snap, write_through};
 use crate::shared::{self, DOUBLE_CLICK};
+use telar::ControlSize;
 
 /// Turns the value into the text the field shows and starts typed entry from.
 pub type Format = Rc<dyn Fn(f32) -> String>;

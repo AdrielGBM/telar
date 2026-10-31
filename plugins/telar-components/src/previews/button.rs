@@ -5,7 +5,7 @@ use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Reactive,
 
 use crate::button::{ButtonProps, button};
 use crate::metrics;
-use crate::{ControlSize, Variant};
+use telar::{ControlSize, Variant};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![

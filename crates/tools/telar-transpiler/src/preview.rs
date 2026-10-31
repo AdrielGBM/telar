@@ -46,6 +46,8 @@ pub(crate) struct Previews<'a> {
     /// The `.rsx` path relative to its package root, which each entry records as where it is written.
     pub rsx_path: Option<&'a str>,
     pub classes: &'a [StyleClass],
+    /// What the file's items declare, which a build fn sees as a sibling of them and a bare word naming one means.
+    pub bindings: &'a [String],
 }
 
 /// The opening of the block every preview item is emitted in; [`CLOSE`] ends it.
@@ -92,7 +94,15 @@ pub(crate) fn emit_variants(code: &mut Code, previews: &Previews<'_>) -> Mapped 
         let mut view = ViewGen::new(previews.classes, previews.assets)
             .with_theme_access(previews.theme)
             .with_locals(explicit.clone())
-            .with_signals(explicit.clone());
+            .with_signals(explicit.clone())
+            .with_file_bindings(
+                previews
+                    .bindings
+                    .iter()
+                    .cloned()
+                    .chain(crate::view::view_let_names(&preview.body))
+                    .collect(),
+            );
         let implicit: Vec<&Attr> = match (root, options.implicit_args) {
             (Some(root), true) => view.implicit_args(root),
             _ => Vec::new(),
@@ -375,10 +385,18 @@ impl Entry<'_> {
         });
         let implicit = self.implicit.iter().map(|attr| {
             let spec = format!("::telar::preview::ArgSpec::new({})", rust_str(&attr.key));
-            with_default(spec, arg_value_text(&attr.value, Numbers::AsFloat))
+            let default =
+                arg_value_text(&attr.value, Numbers::AsFloat).or_else(|| word_text(&attr.value));
+            with_default(spec, default)
         });
         explicit.chain(implicit).collect()
     }
+}
+
+/// The text form of an implicit arg written as a word of the vocabulary, which is the word itself.
+fn word_text(value: &Value) -> Option<String> {
+    let text = value.text().trim();
+    (matches!(value, Value::Expr(_)) && is_ident(text)).then(|| text.to_string())
 }
 
 fn with_default(spec: String, default: Option<String>) -> String {
@@ -980,14 +998,14 @@ fn axis(name: &str, written: &[&str]) -> Result<MatrixAxis, String> {
         )?),
         "control_size" => {
             return Err(format!(
-                "{at} no longer exists: a component takes its own `size` arg rather than inheriting one, so vary that, as `size:[Small Regular Large]`"
+                "{at} no longer exists: a component takes its own `size` arg rather than inheriting one, so vary that, as `size:[small regular large]`"
             ));
         }
         _ if is_ident(name) => MatrixAxis::Arg {
             name: name.to_string(),
             values: each(
                 is_arg_value_text,
-                "an arg value: a bool, a number, a hex colour, a variant name or text in quotes",
+                "an arg value: a bool, a number, a hex colour, a word such as `small`, a variant name or text in quotes",
             )?,
         },
         _ => {
@@ -999,7 +1017,7 @@ fn axis(name: &str, written: &[&str]) -> Result<MatrixAxis, String> {
     })
 }
 
-/// Whether `text` is an arg value as a matrix writes one: `true`, `none`, `12`, `1.5`, `#ff8800`, `Primary` or `"Save"`.
+/// Whether `text` is an arg value as a matrix writes one: `true`, `none`, `12`, `1.5`, `#ff8800`, a word such as `small`, a variant name such as `Primary`, or `"Save"`.
 fn is_arg_value_text(text: &str) -> bool {
     match text {
         "true" | "false" | "none" => true,

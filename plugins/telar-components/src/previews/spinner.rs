@@ -1,8 +1,8 @@
 use telar::Color;
 use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 
-use crate::ControlSize;
 use crate::spinner::{SpinnerProps, spinner};
+use telar::ControlSize;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![

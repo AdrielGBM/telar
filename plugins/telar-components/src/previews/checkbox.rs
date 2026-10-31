@@ -3,9 +3,9 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, LayoutError, LayoutStyle, Reactive, Role};
 
-use crate::ControlSize;
 use crate::checkbox::{CheckboxProps, checkbox};
 use crate::metrics;
+use telar::ControlSize;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
@@ -42,7 +42,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             let echo =
                 super::sample::text_of(Reactive::of(move || format!("agree · {}", agree.get())))?;
             Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::column().gap(metrics::gap_md(crate::ControlSize::Regular)),
+                LayoutStyle::column().gap(metrics::gap_md(telar::ControlSize::Regular)),
                 vec![check, echo],
             )?)
         })

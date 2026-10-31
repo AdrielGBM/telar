@@ -382,7 +382,7 @@ pub fn color(props: ColorProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     Ok(Box::new(__col_13) as Box<dyn LayoutItem>)
                                 })?;
                                 __children.push(box_item(__col_13));
-                                let __node_17 = button(ButtonProps::props().label("Switch this one").variant(Variant::Ghost).on_press(std::rc::Rc::new({ let night = night.clone(); move || night.toggle() })).build())?;
+                                let __node_17 = button(ButtonProps::props().label("Switch this one").variant(::telar::kw::ghost).on_press(std::rc::Rc::new({ let night = night.clone(); move || night.toggle() })).build())?;
                                 __children.push(box_item(__node_17));
                                 Ok(__children)
                             }

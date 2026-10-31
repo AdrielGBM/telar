@@ -12,20 +12,20 @@ let mood = signal(String::from("calm"));
 
 [view]
 col gap:20
-    doc_header kicker:"ACCESSIBILITY" title:"Names, languages and hiding" desc:"label, lang and a11y:hidden say what a box is called, what language it is in, and whether a screen reader skips it. Every target reads the same words: a document writes aria-label, lang and aria-hidden, the desktop hands them to AccessKit, and a terminal writes them into its plain-text reading."
+    doc_header kicker:"ACCESSIBILITY" title:"Names, languages and hiding" desc:"a11y_label, lang and a11y:hidden say what a box is called, what language it is in, and whether a screen reader skips it. Every target reads the same words: a document writes aria-label, lang and aria-hidden, the desktop hands them to AccessKit, and a terminal writes them into its plain-text reading."
     example title:"Split letters — read as one word, not five"
         card
-            row gap:4 label:"Telar" role:h2
+            row gap:4 a11y_label:"Telar" role:h2
                 for letter in letters.clone()
                     text "{letter}" a11y:hidden font_size:32 font_weight:bold color:$theme.primary
-        code_line code:"row label:'Telar'  ·  text '{{letter}}' a11y:hidden"
+        code_line code:"row a11y_label:'Telar'  ·  text '{{letter}}' a11y:hidden"
     example title:"A picture is decoration until it is named"
         card
             row gap:20 align:center
                 svg src:demo_icon width:40 height:40
-                svg src:demo_icon label:"Telar logo" color:$theme.primary width:40 height:40
+                svg src:demo_icon a11y_label:"Telar logo" color:$theme.primary width:40 height:40
                 text "the first is skipped, the second is read as “Telar logo, image”" font_size:12 color:$theme.muted
-        code_line code:"svg src:demo_icon label:'Telar logo'"
+        code_line code:"svg src:demo_icon a11y_label:'Telar logo'"
     example title:"Language of a subtree"
         card
             col gap:6
@@ -36,17 +36,17 @@ col gap:20
     example title:"A name that follows state"
         card
             row gap:12 align:center
-                box fill:$theme.surface_alt radius:8 pad:12 label:(format!("Mood: {}", $mood)) on_press:(|| $mood.set(if $mood.get() == "calm" { "busy".into() } else { "calm".into() }))
+                box fill:$theme.surface_alt radius:8 pad:12 a11y_label:(format!("Mood: {}", $mood)) on_press:(|| $mood.set(if $mood.get() == "calm" { "busy".into() } else { "calm".into() }))
                     icon name:"lucide:smile" size:20 color:$theme.ink
                 text "press to change the name a reader hears" font_size:12 color:$theme.muted
-        code_line code:"box label:(format!('Mood: {{}}', $mood))"
+        code_line code:"box a11y_label:(format!('Mood: {{}}', $mood))"
     example title:"What a component's item is, said where it is used"
         card role:article a11y_label:"Release notes"
             text "The card is a plain box, so the call can say it is an article. A role a person operates stays the component's: role:button here is a build error." font_size:13
         code_line code:"card role:article a11y_label:'Release notes'"
     example title:"Attributes"
         col gap:6
-            prop_row name:"label" values:"text · t!(…) · $state expr" about:"The name assistive technology reads. On img and svg it is what makes a picture more than decoration."
+            prop_row name:"a11y_label" values:"text · t!(…) · $state expr" about:"The name assistive technology reads. On img and svg it is what makes a picture more than decoration."
             prop_row name:"lang" values:"BCP 47 tag" about:"The language of the box and everything under it; the nearest one wins."
             prop_row name:"a11y" values:"hidden" about:"Skipped by assistive technology, with its whole subtree. Still drawn and still pressable."
             prop_row name:"role" values:"landmark · article · h1–h6 · status · log · listitem · group" about:"On a component call: what the item it returns is, where the component left it a plain box or a region. A control keeps its own role."

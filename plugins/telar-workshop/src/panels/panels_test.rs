@@ -1,6 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
+use telar::Variant;
 use telar::preview::{
     ArgSpec, ArgValue, ControlKind, PreviewCtx, PreviewEntry, PropDefault, PropField, PropsSchema,
 };
@@ -91,6 +92,7 @@ fn badge(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let tint: Color = ctx.arg("tint", Color::from_hex("#ff0000").unwrap());
     let tone: Tone = ctx.arg("tone", Tone::Warm);
     let day: Day = ctx.arg("day", Day::Monday);
+    let variant: Variant = ctx.arg("variant", Variant::Solid);
     let note: Option<String> = ctx.arg("note", None);
     let notes: String = ctx.arg("notes", String::new());
     let shape = telar::__preview_arg!(ctx, "shape", Shape(3));
@@ -102,6 +104,7 @@ fn badge(ctx: &PreviewCtx) -> Result<Box<dyn LayoutItem>, LayoutError> {
         line(format!("tint={}", ArgValue::Color(tint)))?,
         line(format!("tone={tone:?}"))?,
         line(format!("day={day:?}"))?,
+        line(format!("variant={variant:?}"))?,
         line(format!("note={note:?}"))?,
         line(format!("notes={notes}"))?,
         line(format!("shape={}", shape.0))?,
@@ -395,6 +398,24 @@ fn a_short_choice_is_segmented() {
     let mut workshop = Workshop::open(entries(), BADGE);
     workshop.click(Role::Tab, "Cool");
     assert!(workshop.draws("tone=Cool"));
+}
+
+#[test]
+fn a_word_of_the_vocabulary_is_chosen_and_kept_by_the_word_a_rsx_writes() {
+    let mut workshop = Workshop::open(entries(), BADGE);
+    workshop.click(Role::Tab, "ghost");
+    assert!(workshop.draws("variant=Ghost"));
+    let kept = telar::hot_snapshot_json();
+    assert!(kept.contains(r#"{\"variant\":\"ghost\"}"#), "{kept}");
+}
+
+#[test]
+fn a_choice_kept_by_its_variant_name_before_the_words_loads_as_the_default() {
+    telar::hot_restore_json(
+        r#"{"@telar/preview.args/fake--badge--all":"{\"variant\":\"Outline\"}"}"#,
+    );
+    let workshop = Workshop::open(entries(), BADGE);
+    assert!(workshop.draws("variant=Solid"));
 }
 
 #[test]

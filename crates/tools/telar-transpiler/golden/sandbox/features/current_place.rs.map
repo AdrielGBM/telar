@@ -219,5 +219,5 @@
 218	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-2462..2467	6750	`shown`
-3871..3878	13792	`on_page`
+2467..2472	6750	`shown`
+3876..3883	13792	`on_page`

@@ -5,8 +5,8 @@ use telar::{
     ShapeStyle, StyledContainer, SurfaceAmendment, Transform, amend_surface, box_item, children,
 };
 
-use crate::ControlSize;
 use crate::shared;
+use telar::ControlSize;
 
 /// A progress bar's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

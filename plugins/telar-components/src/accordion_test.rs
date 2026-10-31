@@ -181,10 +181,10 @@ fn header_paint_at(
 fn the_header_is_a_row_tall_and_padded_like_a_control() {
     telar::set_theme(Plain::default());
     let (header, title, _) = header_paint(None, false);
-    assert!(header.height >= crate::metrics::row_height(crate::ControlSize::Regular));
+    assert!(header.height >= crate::metrics::row_height(telar::ControlSize::Regular));
     assert_eq!(
         title - header.x,
-        crate::metrics::control_pad_x(crate::ControlSize::Regular)
+        crate::metrics::control_pad_x(telar::ControlSize::Regular)
     );
 
     telar::set_theme(Plain {

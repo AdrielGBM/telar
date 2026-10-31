@@ -1,8 +1,8 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
-use crate::ControlSize;
 use crate::tabs::{TabsProps, tabs};
+use telar::ControlSize;
 
 const LABELS: [&str; 6] = [
     "Overview", "Activity", "Settings", "Billing", "Members", "Audit",

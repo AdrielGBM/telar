@@ -9,7 +9,7 @@ use telar::{
 };
 
 use crate::shared;
-use crate::{ControlSize, Variant};
+use telar::{ControlSize, Variant};
 
 /// A button's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

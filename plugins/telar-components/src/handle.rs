@@ -9,9 +9,9 @@ use telar::{
     Transaction, amend_surface, box_item, focus::Role, signal, step_factor, use_theme_tokens,
 };
 
-use crate::ControlSize;
 use crate::edit::{Stroke, write_through};
 use crate::shared;
+use telar::ControlSize;
 
 /// Where on the canvas the pointer asks for a value, as `(x, y)` → value.
 pub type ToValue = Rc<dyn Fn(f32, f32) -> f32>;

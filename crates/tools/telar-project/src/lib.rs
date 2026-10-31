@@ -26,6 +26,7 @@ mod previews;
 pub mod protocol;
 mod theme;
 pub mod theme_tokens;
+mod vocabulary;
 mod web;
 
 pub use assets::{
@@ -77,8 +78,8 @@ pub use paths::{
     write_if_changed_atomic,
 };
 pub use prelude::{
-    PreludeDeclaration, PreludeEntry, PreludeProblem, prelude_declarations, prelude_problems,
-    resolve_prelude,
+    PreludeDeclaration, PreludeEntry, PreludeProblem, is_plain_identifier, prelude_declarations,
+    prelude_problems, resolve_prelude,
 };
 pub use prerender::{
     DEFAULT_SURFACE, PRERENDER_ENV, PageLocation, PageRequest, Preferences, PrerenderRequest,
@@ -91,4 +92,5 @@ pub use previews::{
     previews_include_problems,
 };
 pub use theme::{normalize_theme_path, theme_type_in_config};
+pub use vocabulary::{VOCABULARY, VocabularyAxis, vocabulary_axis, vocabulary_axis_of};
 pub use web::{OgImage, SchemeColors, ThemeColor, WebHost, is_absolute_url};

@@ -1,8 +1,8 @@
 use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 
-use crate::ControlSize;
 use crate::title_bar::{WindowControlsProps, window_controls};
+use telar::ControlSize;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![

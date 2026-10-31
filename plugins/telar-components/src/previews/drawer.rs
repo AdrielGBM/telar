@@ -4,9 +4,9 @@ use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Container, LayoutError, Role, box_item};
 
 use super::sample;
-use crate::ControlSize;
 use crate::button::{ButtonProps, button};
 use crate::drawer::{DrawerProps, drawer};
+use telar::ControlSize;
 
 #[derive(Clone, Copy, telar::PreviewArg)]
 enum Side {

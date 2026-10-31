@@ -45,8 +45,8 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                         )?
                                     };
                                     let __node_3 = tag(TagProps::props().label("12").build())?;
-                                    let __node_4 = tag(TagProps::props().label("NEW").tone(Tone::Success).variant(Variant::Soft).build())?;
-                                    let __node_5 = tag(TagProps::props().label("BETA").tone(Reactive::of({ let theme = theme.clone(); move || theme.get().purple })).variant(Variant::Outline).build())?;
+                                    let __node_4 = tag(TagProps::props().label("NEW").tone(::telar::kw::success).variant(::telar::kw::soft).build())?;
+                                    let __node_5 = tag(TagProps::props().label("BETA").tone(Reactive::of({ let theme = theme.clone(); move || theme.get().purple })).variant(::telar::kw::outline).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__text_0, __node_3, __node_4, __node_5])?
                                 };
                                 __children.push(box_item(__row_0));
@@ -57,7 +57,7 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_6 = code_line(CodeLineProps::props().code("tag label:'NEW' tone:Tone::Success").build())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("tag label:'NEW' tone:success").build())?;
                     __children.push(box_item(__node_6));
                     Ok(__children)
                 }
@@ -90,7 +90,7 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 let tags = tags.clone();
                                             move || {
                                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                let __node_12 = icon_button(IconButtonProps::props().icon(("lucide:x", crate::__rsx_assets::ASSET_188735C3.get(), true)).label("Remove removable").size(ControlSize::Small).on_press(std::rc::Rc::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build())?;
+                                                let __node_12 = icon_button(IconButtonProps::props().icon(("lucide:x", crate::__rsx_assets::ASSET_188735C3.get(), true)).label("Remove removable").size(::telar::kw::small).on_press(std::rc::Rc::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build())?;
                                                 __children.push(box_item(__node_12));
                                                 Ok(__children)
                                             }
@@ -117,7 +117,7 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_13 = code_line(CodeLineProps::props().code("tag label:'removable' / icon_button icon:'lucide:x' size:(ControlSize::Small) slot:'action'").build())?;
+                    let __node_13 = code_line(CodeLineProps::props().code("tag label:'removable' / icon_button icon:'lucide:x' size:small slot:'action'").build())?;
                     __children.push(box_item(__node_13));
                     Ok(__children)
                 }

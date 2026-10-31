@@ -257,9 +257,9 @@
 2490..2499	8890	`safe_area`
 2974..2980	11860	`chosen`
 3007..3013	11886	`scheme`
-3115..3129	12419	`Variant::Ghost`
-3140..3204	12466	`|| telar::set_scheme_preference(telar::SchemePreference::System)`
-3251..3265	12647	`Variant::Ghost`
-3276..3339	12694	`|| telar::set_scheme_preference(telar::SchemePreference::Light)`
-3385..3399	12873	`Variant::Ghost`
-3410..3472	12920	`|| telar::set_scheme_preference(telar::SchemePreference::Dark)`
+3115..3120	12432	`ghost`
+3131..3195	12470	`|| telar::set_scheme_preference(telar::SchemePreference::System)`
+3242..3247	12664	`ghost`
+3258..3321	12702	`|| telar::set_scheme_preference(telar::SchemePreference::Light)`
+3367..3372	12894	`ghost`
+3383..3445	12932	`|| telar::set_scheme_preference(telar::SchemePreference::Dark)`

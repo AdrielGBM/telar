@@ -9,7 +9,7 @@ fn transpile(view: &str) -> String {
 #[test]
 fn split_letters_are_named_by_their_parent_and_hidden_one_by_one() {
     let code = transpile(
-        "row label:\"Hola\" lang:\"es\"\n    text \"H\" a11y:hidden\n    text \"o\" a11y:hidden\n",
+        "row a11y_label:\"Hola\" lang:\"es\"\n    text \"H\" a11y:hidden\n    text \"o\" a11y:hidden\n",
     );
     assert!(!code.contains("compile_error!"), "{code}");
     assert!(
@@ -30,7 +30,7 @@ fn split_letters_are_named_by_their_parent_and_hidden_one_by_one() {
 /// A name that reads state is re-read, so it can follow a signal or a locale rather than freezing at construction.
 #[test]
 fn a_reactive_label_is_a_closure_that_reads() {
-    let code = transpile("col\n    svg label:$name width:16 height:16\n");
+    let code = transpile("col\n    svg a11y_label:$name width:16 height:16\n");
     let call = code.split(".a11y_label(").nth(1).expect("the svg is named");
     assert!(
         call.starts_with("{ let name = name.clone(); move || ") && call.contains("name.get()"),
@@ -50,7 +50,7 @@ fn a11y_takes_only_the_words_it_knows() {
 /// A `scroll` in markup is never a control, so its name is the one a reader hears while it is a Tab stop of its own, and a region that fits is not announced inside the box that already names it.
 #[test]
 fn a_scroll_is_named_as_a_stop() {
-    let code = transpile("scroll label:$name max_height:40\n    text \"x\"\n");
+    let code = transpile("scroll a11y_label:$name max_height:40\n    text \"x\"\n");
     assert!(!code.contains("compile_error!"), "{code}");
     let call = code
         .split(".stop_label(")
@@ -63,10 +63,36 @@ fn a_scroll_is_named_as_a_stop() {
     assert!(!code.contains("a11y_label"), "{code}");
 }
 
+/// `label` is always visible text, so on a built-in tag, which has none to take, it is refused with the spelling that names the box for a reader.
+#[test]
+fn a_built_in_label_is_refused_with_the_new_spelling() {
+    for (view, tag) in [
+        ("box label:\"Save\"\n", "box"),
+        ("col\n    svg label:$name width:16 height:16\n", "svg"),
+        (
+            "scroll label:$name max_height:40\n    text \"x\"\n",
+            "scroll",
+        ),
+    ] {
+        let code = transpile(view);
+        assert!(
+            code.contains(&format!(
+                "compile_error!(\"`label:` on `{tag}` is spelled `a11y_label:`"
+            )),
+            "{code}"
+        );
+        assert!(
+            !code.contains(".a11y_label(") && !code.contains(".stop_label("),
+            "the old key names nothing:\n{code}"
+        );
+    }
+}
+
 /// On a component `label` is one of its props, and taking it would steal the button's own text.
 #[test]
 fn a_component_keeps_its_label_prop() {
     let code = transpile("button label:\"Save\"\n");
+    assert!(!code.contains("compile_error!"), "{code}");
     assert!(code.contains(".label(\"Save\")"), "{code}");
     assert!(!code.contains("a11y_label"), "{code}");
 }

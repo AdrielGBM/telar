@@ -8,11 +8,11 @@ use telar::{
     focus::Role,
 };
 
-use crate::ControlSize;
 use crate::heading::{HeadingProps, heading};
 use crate::scrim;
 use crate::shared;
 use crate::strings;
+use telar::ControlSize;
 
 /// A modal's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

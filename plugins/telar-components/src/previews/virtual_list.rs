@@ -6,9 +6,9 @@ use std::sync::Arc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
-use crate::ControlSize;
 use crate::selection::SelectionMode;
 use crate::virtual_list::{ListRow, VirtualListProps, virtual_list};
+use telar::ControlSize;
 
 fn contacts() -> Vec<ListRow> {
     const FIRST: [&str; 8] = [

@@ -213,9 +213,9 @@ pub fn system(props: SystemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                 };
                                 __children.push(box_item(__text_7));
                                 let __row_0 = {
-                                    let __node_9 = button(ButtonProps::props().label("System").variant(Variant::Ghost).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::System))).build())?;
-                                    let __node_10 = button(ButtonProps::props().label("Light").variant(Variant::Ghost).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Light))).build())?;
-                                    let __node_11 = button(ButtonProps::props().label("Dark").variant(Variant::Ghost).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Dark))).build())?;
+                                    let __node_9 = button(ButtonProps::props().label("System").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::System))).build())?;
+                                    let __node_10 = button(ButtonProps::props().label("Light").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Light))).build())?;
+                                    let __node_11 = button(ButtonProps::props().label("Dark").variant(::telar::kw::ghost).on_press(std::rc::Rc::new(move || telar::set_scheme_preference(telar::SchemePreference::Dark))).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0), children![__node_9, __node_10, __node_11])?
                                 };
                                 __children.push(box_item(__row_0));

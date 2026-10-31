@@ -8,8 +8,8 @@ use telar::{
     VirtualList, VirtualRows, focus::FocusId, on_cleanup, signal,
 };
 
-use crate::ControlSize;
 use crate::shared;
+use telar::ControlSize;
 
 pub(crate) use empty::with_empty_state;
 pub(crate) use paint::{RowState, cursor_row_paint};
@@ -304,7 +304,8 @@ mod empty {
         Reactive, Text, box_item, focus::Role,
     };
 
-    use crate::{ControlSize, shared, strings};
+    use crate::{shared, strings};
+    use telar::ControlSize;
 
     /// What a list or a table of `size` that has no rows is wrapped in to say so: `scroll`, the list itself, and under it a status that holds, while `no_rows` answers `true`, what `empty` builds where it builds anything, else `label`, else the localized `telar_components.nothing_to_show`.
     ///

@@ -202,6 +202,11 @@ const BUTTON: u64 = 4;
 const PARAGRAPH: u64 = 5;
 const DRAWING: u64 = 6;
 const STAMP: u64 = 7;
+const COUNTER: u64 = 8;
+const DIGIT: u64 = 9;
+const CHORD: u64 = 10;
+const LAYER: u64 = 11;
+const REMOVE: u64 = 12;
 
 /// What can change between the page that was written and the frame that takes it over.
 struct Variant {
@@ -210,6 +215,7 @@ struct Variant {
     button_label: &'static str,
     link: Role,
     link_holds_stamp: bool,
+    counter: &'static str,
 }
 
 const WRITTEN: Variant = Variant {
@@ -218,9 +224,10 @@ const WRITTEN: Variant = Variant {
     button_label: "Cambiar tema",
     link: Role::Link,
     link_holds_stamp: false,
+    counter: "3 comentarios sin leer",
 };
 
-/// A page with every kind of thing a host holds: paint at its own level, boxes inside boxes, a box's own text, a paragraph cut at its spans, paint inside a box that is not a box, and a drawing.
+/// A page with every kind of thing a host holds: paint at its own level, boxes inside boxes, a box's own text, a paragraph cut at its spans, paint inside a box that is not a box, a drawing, and boxes read by their names in place of what they draw.
 fn page(variant: &Variant) -> Vec<DrawCommand> {
     let full = Rect::new(0.0, 0.0, 640.0, 480.0);
     let paragraph = Rect::new(0.0, 120.0, 640.0, 20.0);
@@ -299,6 +306,48 @@ fn page(variant: &Variant) -> Vec<DrawCommand> {
             Rect::new(0.0, 356.0, 40.0, 40.0),
         ),
         fill(Rect::new(0.0, 356.0, 40.0, 40.0), Color::rgb(0.8, 0.2, 0.2)),
+        DrawCommand::PopElement,
+        boxed(
+            COUNTER,
+            Semantics::group().with_label(variant.counter),
+            "display:flex;",
+            Rect::new(0.0, 404.0, 24.0, 20.0),
+        ),
+        boxed(
+            DIGIT,
+            Semantics::group(),
+            "",
+            Rect::new(0.0, 404.0, 24.0, 20.0),
+        ),
+        text("3", Rect::new(0.0, 404.0, 24.0, 20.0)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+        boxed(
+            CHORD,
+            Semantics::group().with_label("Comando K"),
+            "",
+            Rect::new(32.0, 404.0, 40.0, 20.0),
+        ),
+        text("⌘K", Rect::new(32.0, 404.0, 40.0, 20.0)),
+        DrawCommand::PopElement,
+        boxed(
+            LAYER,
+            Semantics::group().with_label("Capa del logo"),
+            "display:flex;",
+            Rect::new(0.0, 432.0, 200.0, 40.0),
+        ),
+        text("Logo", Rect::new(0.0, 432.0, 60.0, 20.0)),
+        boxed(
+            REMOVE,
+            Semantics::of(Role::Button).focusable(Focusable {
+                tab_stop: true,
+                consumes: Role::Button.consumed_keys(),
+            }),
+            "width:40px;height:40px;",
+            Rect::new(160.0, 432.0, 40.0, 40.0),
+        ),
+        text("Quitar", Rect::new(160.0, 432.0, 40.0, 40.0)),
+        DrawCommand::PopElement,
         DrawCommand::PopElement,
         DrawCommand::PopElement,
     ]);
@@ -424,6 +473,10 @@ fn what_the_frame_says_differently_is_patched_where_it_stands() {
     let heading_text = heading.first_child().expect("the heading's text");
     let button = element(BUTTON);
     let main = element(MAIN);
+    let spoken = element(COUNTER)
+        .first_child()
+        .and_then(|name| name.first_child())
+        .expect("the counter's name");
     button
         .set_attribute("aria-hidden", "true")
         .expect("an attribute");
@@ -432,6 +485,7 @@ fn what_the_frame_says_differently_is_patched_where_it_stands() {
         heading: "Hello & <welcome>",
         gap: "gap:16px;",
         button_label: "Change theme",
+        counter: "3 unread comments",
         ..WRITTEN
     });
     let watch = Watch::start(&host);
@@ -449,6 +503,14 @@ fn what_the_frame_says_differently_is_patched_where_it_stands() {
         "the text is rewritten in its own node, so a selection inside it survives"
     );
     assert_eq!(heading.text_content().as_deref(), Some("Hello & <welcome>"));
+    assert!(same(
+        &element(COUNTER)
+            .first_child()
+            .and_then(|name| name.first_child())
+            .expect("the counter's name"),
+        &spoken
+    ));
+    assert_eq!(spoken.text_content().as_deref(), Some("3 unread comments"));
     assert_eq!(
         button.get_attribute("aria-label").as_deref(),
         Some("Change theme")

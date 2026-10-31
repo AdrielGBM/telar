@@ -10,12 +10,12 @@ use telar::{
 };
 use telar::{Children, Clip, ClippedItem, Container, RwSignal};
 
-use crate::ControlSize;
 use crate::edit::Stroke;
 use crate::edit::write_through;
 use crate::resize::{DRAG_THRESHOLD, Latch};
 use crate::shared;
 use crate::strings;
+use telar::ControlSize;
 
 const DEFAULT_SIZE: Size = Size::new(240.0, 160.0);
 const DEFAULT_STEP: f32 = 16.0;

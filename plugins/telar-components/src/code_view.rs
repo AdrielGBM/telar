@@ -13,11 +13,11 @@ use telar::{
     run_after, signal,
 };
 
-use crate::ControlSize;
 use crate::line_gutter::LineGutter;
 use crate::shared;
 use crate::strings;
 use crate::{IconButtonProps, icon_button};
+use telar::ControlSize;
 
 const TAB_WIDTH: usize = 4;
 /// Monospace's share of the text around it: a face whose every glyph is as wide as its widest reads larger than proportional type of the same size.
@@ -340,11 +340,11 @@ pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
         frame_box,
         move |_r| amend_surface(frame_paint(), &style),
         layers,
-    )?
-    .role(Role::Group);
+    )?;
+    // A named block is a section, whose name labels the code it holds; a plain group's name would be read in place of the code.
     Ok(match label {
-        Some(label) => box_item(frame.a11y_label(move || label.get())),
-        None => box_item(frame),
+        Some(label) => box_item(frame.role(Role::Section).a11y_label(move || label.get())),
+        None => box_item(frame.role(Role::Group)),
     })
 }
 

@@ -7,17 +7,19 @@ the application knows, and it says them with three attributes that any built-in 
 
 | Attribute | Value | Means |
 | --- | --- | --- |
-| `label:` | `"text"`, `t!("key")`, or an expression reading `$state` | The name assistive technology reads for the box. Re-read when what it reads changes, so a translated name follows the locale. |
+| `a11y_label:` | `"text"`, `t!("key")`, or an expression reading `$state` | The name assistive technology reads for the box. Re-read when what it reads changes, so a translated name follows the locale. |
 | `lang:` | a BCP 47 tag: `"ja"`, `"es-CL"` | The language of the box and everything under it. The nearest one wins. |
 | `a11y:hidden` | — | Assistive technology skips the box and its whole subtree. It is still drawn and still answers the pointer. |
 
-On a component tag (`button`, `tag`, …) `label` and `lang` stay the component's own props to declare, so a
-call says the same three things about the item the component returns under the names of the methods they call:
-`a11y_label:`, `a11y_lang:` and `a11y:hidden`. Said there, they win over what the component said about that item
-itself — a button named by its text can be named for the row it acts on:
+`label` is always text that is seen, never the name a reader hears, so `label:` on a built-in tag is a build
+error that points at `a11y_label:`. On a component tag (`button`, `tag`, …) `label` and `lang` stay the
+component's own props to declare, so a call says the same three things about the item the component returns
+under the names of the methods they call: `a11y_label:`, `a11y_lang:` and `a11y:hidden`. Said there, they win
+over what the component said about that item itself — a button named by its text can be named for the row it
+acts on:
 
 ```text
-button label:"Open" variant:Variant::Ghost a11y_label:"Open {name} in the canvas"
+button label:"Open" variant:ghost a11y_label:"Open {name} in the canvas"
 ```
 
 A quoted name or language interpolates `{…}` as text does, wherever it is written.
@@ -59,12 +61,12 @@ on a role a call could not say (`Role::is_annotatable`).
 
 ## Pictures
 
-An `img` or `svg` without `label` is decoration and is hidden from assistive technology. With one, it is
+An `img` or `svg` without `a11y_label` is decoration and is hidden from assistive technology. With one, it is
 an image with that name.
 
 ```text
-svg src:icon                       // decoration
-svg src:icon label:"Telar logo"    // "Telar logo, image"
+svg src:icon                            // decoration
+svg src:icon a11y_label:"Telar logo"    // "Telar logo, image"
 ```
 
 ## Split letters
@@ -73,13 +75,19 @@ A word drawn one box per letter — for a stagger, a per-letter colour — would
 letters. The parent names the word and each letter is hidden:
 
 ```text
-row label:"Telar" role:h2
+row a11y_label:"Telar" role:h2
     for letter in letters.clone()
         text "{letter}" a11y:hidden
 ```
 
-A name does not replace a box's content: a reader that walks into the box still finds what is drawn
-there, which is why the letters are hidden rather than left for the name to cover.
+On a box with a role of its own, such as this heading, a name does not replace the box's content: a reader
+that walks into the box still finds what is drawn there, which is why the letters are hidden rather than left
+for the name to cover.
+
+On a box with no role of its own, the name does replace the words it draws: a counter
+`tag label:"3" a11y_label:"3 unread comments"` is read as "3 unread comments" once, and the "3" is not read
+again beside it. A control inside such a box keeps its own name and stays reachable; only the text no control
+owns is left out, and a paragraph holding a link is kept to be read around the link.
 
 ## Controls and their state
 
@@ -101,11 +109,11 @@ says what it means, the way AccessKit models it:
 | `tab`, `option` | selected |
 
 ```text
-box role:button label:"Add one" on_press:(|| $count += 1)
+box role:button a11y_label:"Add one" on_press:(|| $count += 1)
     text "+1"
-box role:switch toggled:$calm label:"Reduce motion" on_press:(|| $calm.set(!$calm.get()))
+box role:switch toggled:$calm a11y_label:"Reduce motion" on_press:(|| $calm.set(!$calm.get()))
     text "≈"
-box role:button toggled:$bold label:"Bold" on_press:(|| $bold.set(!$bold.get()))
+box role:button toggled:$bold a11y_label:"Bold" on_press:(|| $bold.set(!$bold.get()))
     text "B"
 ```
 
@@ -257,16 +265,16 @@ The page's own scroll is never one: it scrolls with nothing focused. A scroll ar
 (`LayoutScrollArea::control`, a tree or a list box) is a stop whether or not it overflows, and one that is
 only presented (`LayoutScrollArea::presented`, the list a select opens) never is.
 
-A reader landing on it has to hear what it scrolls. `label:` on `scroll` (`LayoutScrollArea::stop_label(|| …)`
+A reader landing on it has to hear what it scrolls. `a11y_label:` on `scroll` (`LayoutScrollArea::stop_label(|| …)`
 from Rust) names it while it is a stop and leaves it nameless otherwise, so a region that fits is not announced
 a second time inside the box that already names it. The catalogue's `modal` names its body after its title and
 `drawer` after its label. A scroll area that is a control is named the way any box is, with `.a11y_label`; markup
-has no way to make a `scroll` one, so there `label:` always means the stop's name.
+has no way to make a `scroll` one, so there `a11y_label:` always means the stop's name.
 
 | Target | A scroll area that is a stop |
 | --- | --- |
 | Browser, document (`web-dom`) | `tabindex="0"`, with `role="group"` and `aria-label` once it is named, and `data-telar-keys` holding only the keys for the axes it overflows. The browser scrolls the element itself, the way Telar asks it to. |
-| Desktop | An AccessKit `ScrollView` with `Focus`, named by its name or, without one, by the text it draws. |
+| Desktop | An AccessKit `ScrollView` with `Focus`, named by its name, with the text it draws read inside it, or, without one, named by that text. |
 | Terminal, browser canvas (`web`), Android and headless | A stop in Telar's own Tab order, ringed when focused, and a scroll area with its name in the snapshot. |
 
 ## Shortcuts
@@ -290,10 +298,10 @@ the pointer and belongs to the control, not to the bubble.
 
 ## What each target does with them
 
-| Target | `label` | `lang` | `a11y:hidden` |
+| Target | `a11y_label` | `lang` | `a11y:hidden` |
 | --- | --- | --- | --- |
-| Browser, document (`web-dom`) | `aria-label`. A plain `div` may not carry a name, so a named box with no role of its own gets `role="group"`; a picture is an `<svg role="img">`, where `aria-label` is its `alt`. | `lang` | `aria-hidden="true"` |
-| Desktop | AccessKit node label. A named control is called that instead of by the text it draws; a named box that is not a control is a label, or an image when it draws only artwork. | AccessKit `language` | The subtree, controls included, is left out of the tree. |
+| Browser, document (`web-dom`) | `aria-label`. A named box with no role of its own that draws words outside its controls says its name instead as visually hidden text, its first child (`<span data-telar-spoken>`), and its words are `aria-hidden`, its controls left as they are; one that draws none, such as a group of radios, gets `role="group"`, since a plain `div` may not carry a name. A picture is an `<svg role="img">`, where `aria-label` is its `alt`. | `lang` | `aria-hidden="true"` |
+| Desktop | AccessKit node label. A named control is called that instead of by the text it draws; a named box that is not a control is a label, or an image when it draws only artwork, and a label's name replaces the text drawn in it outside its controls. | AccessKit `language` | The subtree, controls included, is left out of the tree. |
 | Terminal | Used in the plain-text reading (below). | Not in the reading: plain text has no voice to switch. | Left out of the reading. |
 | Android | Not yet: Telar has no Android accessibility bridge. The snapshot already carries all three, and a bridge maps them to `contentDescription`, the locale of the node and `importantForAccessibility="no"`. | — | — |
 | Browser, canvas (`web`) and headless | The canvas has no accessibility tree to hand them to; headless has no reader. The snapshot (`ui_core::accessibility::snapshot`) still resolves them, which is what the tests read. | — | — |
@@ -335,7 +343,7 @@ and a node with no name reads as its role alone (`row, 1 of 501`).
 
 A `text_field` is named by its `label`, or by its `placeholder` when it has no label: the caption drawn above
 the box is not inside the line a reader lands on, so without the name the document's entry announced only
-"Text field" and the desktop read out whatever had been typed. `label:` (`a11y_label`) with an empty string is
+"Text field" and the desktop read out whatever had been typed. `a11y_label:` with an empty string is
 no name at all: the box goes by what it draws, as if nothing had been said.
 
 In the document, a field, a combobox, a slider, a spin button or a splitter that nothing named is named by the
@@ -354,7 +362,7 @@ overrides a token owns its contrast, and the audit below is the way to check it.
 
 Two tests hold every target to the same fixture: a heading, a button, a link to an external address and one
 to a route, a labelled field, a checkbox, a switch and a toggle button built the way `role:` boxes are, a
-paragraph with a link run, a word named with `label:` over hidden letters, a quotation in another `lang:` and
+paragraph with a link run, a word named with `a11y_label:` over hidden letters, a quotation in another `lang:` and
 a box under `a11y:hidden`.
 
 | Test | What it checks |

@@ -75,7 +75,7 @@ fn link<D: telar::IntoDestination + 'static>(
     Ok(box_item(link))
 }
 
-/// What `box role:<role> toggled:$on label:"…"` builds in `.rsx`: a box drawing a glyph that is a control with an on/off state.
+/// What `box role:<role> toggled:$on a11y_label:"…"` builds in `.rsx`: a box drawing a glyph that is a control with an on/off state.
 fn stateful_control(
     role: Role,
     name: &'static str,
@@ -1507,4 +1507,91 @@ async fn an_empty_data_table_says_so_in_a_status_beside_its_grid() {
         "the message is no part of the grid"
     );
     assert_clean(&host, "with an empty table").await;
+}
+
+fn labelled_code(code: String, label: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    telar_components::code_view(
+        telar_components::CodeViewProps::props()
+            .code(code)
+            .max_height(100.0)
+            .copyable(false)
+            .label(Reactive::of(move || label.to_string()))
+            .build(),
+    )
+}
+
+/// A labelled code block is named by its label and still holds its code where a reader finds it, whether it fits or scrolls.
+#[wasm_bindgen_test]
+async fn a_labelled_code_block_keeps_its_code_readable() {
+    mount();
+    let column = Container::new(
+        LayoutStyle::new().flex_column().width(WIDTH),
+        vec![
+            labelled_code("let short = 1;".to_string(), "Short snippet").expect("the block builds"),
+            labelled_code("let tall = 1;\n".repeat(40), "Tall snippet").expect("the block builds"),
+        ],
+    )
+    .expect("the column builds");
+    let mut tree = ComponentList::new(WindowRoot::new(box_item(column)));
+    tree.on_event(&Event::WindowResized {
+        width: WIDTH as u32,
+        height: HEIGHT as u32,
+    });
+    for _ in 0..3 {
+        telar::relayout_if_dirty();
+        let _ = tree.commands();
+    }
+    let host: web_sys::HtmlElement = document()
+        .create_element("div")
+        .expect("a host element")
+        .dyn_into()
+        .expect("a div is an HTML element");
+    document()
+        .body()
+        .expect("a body")
+        .append_child(host.as_ref())
+        .expect("the host went into the page");
+    let mut renderer = DomRenderer::new(host.clone()).expect("a renderer on the host");
+    renderer
+        .render_frame(&tree.commands(), None)
+        .expect("the frame reconciled");
+
+    for (label, code) in [
+        ("Short snippet", "let short = 1;"),
+        ("Tall snippet", "let tall = 1;"),
+    ] {
+        let block = host
+            .query_selector(&format!(r#"section[aria-label="{label}"]"#))
+            .expect("a valid selector")
+            .unwrap_or_else(|| {
+                panic!(
+                    "the block named {label} is a section: {}",
+                    host.inner_html()
+                )
+            });
+        assert!(
+            block.text_content().unwrap_or_default().contains(code),
+            "{label} holds its code"
+        );
+        let hidden = block
+            .query_selector_all("[aria-hidden]")
+            .expect("a valid selector");
+        assert!(
+            (0..hidden.length())
+                .filter_map(|i| hidden.item(i))
+                .all(|hidden| !hidden.text_content().unwrap_or_default().contains(code)),
+            "the code under {label} is not hidden from readers: {}",
+            block.inner_html()
+        );
+        assert!(
+            block
+                .query_selector("[data-telar-spoken]")
+                .ok()
+                .flatten()
+                .is_none()
+        );
+    }
+    assert_clean(&host, "around labelled code blocks").await;
+    drop(renderer);
+    host.remove();
 }

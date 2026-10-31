@@ -144,7 +144,7 @@ pub(crate) fn label_follows<S: Into<Arc<str>>>(
 pub trait Accessible: LayoutItem + Sized {
     /// The name assistive technology reads for this box. Re-read when what `label` reads changes, so a translated name follows the locale.
     ///
-    /// A name, not a replacement for the content: a reader that walks into the box still finds what is drawn there, which is what [`a11y_hidden`](Self::a11y_hidden) on the pieces is for.
+    /// On a box with no role of its own, the name replaces what the box draws ([`Role::name_replaces_content`]): a counter showing "3" and named "3 unread comments" is read as its name alone, while a control inside the box keeps its own name and stays reachable. A box with a role, such as a dialog or a list, holds what it draws under the name.
     ///
     /// An empty name is no name: the box goes by what it draws, as if it had been given none. A control named `""` would otherwise be announced as nothing at all.
     fn a11y_label<S: Into<Arc<str>>>(self, label: impl Fn() -> S + 'static) -> Self {

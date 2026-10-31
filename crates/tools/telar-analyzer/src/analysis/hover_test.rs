@@ -50,3 +50,14 @@ fn a_component_calls_role_hovers_only_the_roles_a_call_may_say() {
     let builtin = hover_text("[view]\nbox role:nav\n", 1, 5).expect("hover over a box's `role`");
     assert!(builtin.contains("button"), "{builtin}");
 }
+
+#[test]
+fn a_built_in_a11y_label_hovers_the_name_a_reader_hears() {
+    let text =
+        hover_text("[view]\nbox a11y_label:\"Save\"\n", 1, 6).expect("hover over `a11y_label`");
+    assert!(text.contains("assistive technology reads"), "{text}");
+    assert!(
+        hover_text("[view]\nbox label:\"Save\"\n", 1, 6)
+            .is_none_or(|text| !text.contains("assistive technology"))
+    );
+}

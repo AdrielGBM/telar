@@ -12,9 +12,9 @@ use telar::{
     signal, track_layout,
 };
 
-use crate::ControlSize;
 use crate::icon_button::picture;
 use crate::shared;
+use telar::ControlSize;
 
 /// The tabs' own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

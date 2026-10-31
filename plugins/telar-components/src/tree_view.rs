@@ -14,11 +14,11 @@ use telar::{
     memo, signal,
 };
 
-use crate::ControlSize;
 use crate::menu::{focused_rect, is_context_menu_key};
 use crate::rows::{BuiltRows, RowPlaces, RowState, cursor_row_paint};
 use crate::shared;
 use crate::type_ahead::TypeAhead;
+use telar::ControlSize;
 
 const OVERSCAN: usize = 4;
 

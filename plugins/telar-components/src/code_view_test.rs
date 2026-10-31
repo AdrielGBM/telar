@@ -465,3 +465,47 @@ fn the_block_is_padded_and_its_copy_button_sized_at_the_block_s_size() {
         );
     }
 }
+
+fn labelled(code: String) -> Mounted {
+    Mounted::new(
+        CodeViewProps::props()
+            .code(code)
+            .max_height(100.0)
+            .copyable(false)
+            .label(Reactive::of(|| "Snippet".to_string()))
+            .build(),
+    )
+}
+
+/// The names of every node under the node of `role` named "Snippet".
+fn read_under(mounted: &Mounted, role: Role) -> Vec<String> {
+    let nodes = telar::inspect::snapshot(&mounted.tree.commands());
+    let at = nodes
+        .iter()
+        .position(|node| node.role == role && node.name == "Snippet")
+        .unwrap_or_else(|| panic!("a {role:?} named Snippet: {nodes:?}"));
+    let mut inside = vec![at];
+    let mut names = Vec::new();
+    for (i, node) in nodes.iter().enumerate().skip(at + 1) {
+        if node.parent.is_some_and(|parent| inside.contains(&parent)) {
+            inside.push(i);
+            names.push(node.name.clone());
+        }
+    }
+    names
+}
+
+/// A label names the block without replacing it: a reader still finds the code inside it, whether it fits or scrolls.
+#[test]
+fn a_labelled_block_is_a_section_whose_code_is_still_read() {
+    let short = labelled("let x = 1;".to_string());
+    assert_eq!(read_under(&short, Role::Section), ["let x = 1;"]);
+
+    let tall = labelled(tall_code());
+    assert_eq!(stop_names(&tall), ["Snippet"]);
+    let read = read_under(&tall, Role::ScrollArea);
+    assert!(
+        read.iter().any(|name| name.contains("let x = 1;")),
+        "the code is read inside the stop: {read:?}"
+    );
+}

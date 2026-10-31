@@ -236,7 +236,7 @@ pub(super) fn cell(
             box_item(slot),
         ],
     )?
-    .role(Role::Group)
+    .role(Role::Article)
     .a11y_label(move || label.clone())
     .on_press(focus_this.clone())
     .on_alt_press(move |button| {

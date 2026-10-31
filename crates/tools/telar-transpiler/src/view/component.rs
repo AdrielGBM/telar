@@ -145,12 +145,15 @@ impl ViewGen<'_> {
         format!("{}::props(){setters}.build()", props_type(tag))
     }
 
-    /// The attributes of a preview's root component call that its controls can change: each written as a literal (a string, a number, a flag or a bool, a hex colour, a `Path::Variant`) and not an id the package bakes. A value reading `$state` or a closure stays as written, and so does anything else that is an expression.
+    /// The attributes of a preview's root component call that its controls can change: each written as a literal (a string, a number, a flag or a bool, a hex colour, a `Path::Variant`, a word of the vocabulary) and not an id the package bakes. A value reading `$state` or a closure stays as written, and so does anything else that is an expression.
     pub(crate) fn implicit_args<'e>(&self, el: &'e Element) -> Vec<&'e Attr> {
         el.attributes
             .iter()
             .filter(|attr| is_prop_attr(&attr.key))
-            .filter(|attr| crate::preview::is_literal(&attr.value))
+            .filter(|attr| {
+                crate::preview::is_literal(&attr.value)
+                    || matches!(&attr.value, Value::Expr(text) if self.is_vocabulary_word(text.trim()))
+            })
             .filter(|attr| self.baked_id_expr(&el.tag, attr).is_none())
             .collect()
     }
@@ -340,9 +343,9 @@ impl ViewGen<'_> {
     /// - a bare flag (`elevated`) or `true`/`false` becomes a `bool`;
     /// - a closure (`on_tap(|| $x += 1)`) becomes a boxed `move` closure with `$signal`s cloned in;
     /// - a lone `$signal` becomes the cloned handle (`count.clone()`);
-    /// - numbers become `f32`, hex/named colors resolve via `color_expr`, and anything else (an enum path like `Variant::Primary`, a Rust expression) is forwarded verbatim.
-    ///
-    /// Simple lowercase identifiers (e.g. `fill:primary`) are routed through `color_expr` so they follow the same [style]-vs-theme precedence as built-in elements. PascalCase or complex expressions are passed through verbatim.
+    /// - numbers become `Int`/`Float`, a hex colour a `Color`;
+    /// - a bare lowercase word no binding of the file is named (`size:small`) becomes that name in `telar::kw`, which is the value itself (`ControlSize::Small`);
+    /// - anything else (a path like `Variant::Ghost`, a Rust expression) is forwarded verbatim.
     fn component_attr_expr(&self, attr: &Attr) -> String {
         let v = match &attr.value {
             Value::Quoted(text) => return self.quoted_prop(text, attr.value_start),
@@ -383,6 +386,9 @@ impl ViewGen<'_> {
         let written = format!("{}{v}", expr_marker(attr.value_start + lead, v.len()));
         if let Some(taken) = self.by_value(v, written) {
             return taken;
+        }
+        if self.is_vocabulary_word(v) {
+            return vocabulary_word(v, attr.value_start + lead);
         }
         // A read has to be re-evaluated or it freezes at construction. A lone `$sig` took the arm above and stays a handle, which is what a two-way binding needs.
         let evaluated_now = match self.evaluated_now(v) {
@@ -474,6 +480,11 @@ impl ViewGen<'_> {
             super::interp::Interpolated::Formatted { format, .. } => format,
         }
     }
+}
+
+/// `word`, written at `start`, as the value of that name in `telar::kw`, its own text mapped back so a word no axis has is rustc's error on it.
+pub(crate) fn vocabulary_word(word: &str, start: usize) -> String {
+    format!("::telar::kw::{}{word}", expr_marker(start, word.len()))
 }
 
 /// Wraps a closure that reads state, so the prop follows it instead of freezing at the value it happened to have when the tree was built.
@@ -773,3 +784,7 @@ pub(super) fn part_class_names(el: &Element) -> Vec<String> {
 pub(super) fn is_placeholder_operand(attr: &Attr) -> bool {
     attr.value.is_flag() || attr.key == "name"
 }
+
+#[cfg(test)]
+#[path = "component_test.rs"]
+mod tests;

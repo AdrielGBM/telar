@@ -344,3 +344,46 @@ fn imported_classes_are_offered_after_the_files_own() {
         .collect();
     assert_eq!(labels, ["card", "mono"]);
 }
+
+/// A built-in tag and a component call complete the accessible name under the same key, and no built-in tag offers `label`, which is always visible text.
+#[test]
+fn the_accessible_name_completes_as_a11y_label_everywhere() {
+    for tag in ["box", "row", "text", "img", "svg", "scroll"] {
+        let items = attribute_key_items(tag);
+        let keys = labels(&items);
+        assert!(keys.contains(&"a11y_label"), "`{tag}`: {keys:?}");
+        assert!(!keys.contains(&"label"), "`{tag}`: {keys:?}");
+    }
+    assert!(labels(&component_instance_items()).contains(&"a11y_label"));
+}
+
+#[test]
+fn a_component_prop_named_after_an_axis_is_offered_its_words() {
+    assert_eq!(
+        context_at_end("button label:\"Go\" size:"),
+        Some(CompletionKind::VocabularyWord("size".to_string()))
+    );
+    assert_eq!(
+        context_at_end("tag tone:da"),
+        Some(CompletionKind::VocabularyWord("tone".to_string()))
+    );
+    assert_eq!(
+        context_at_end("text \"x\" size:"),
+        None,
+        "a built-in's `size` is a length"
+    );
+    assert_eq!(context_at_end("button label:"), None);
+    assert_eq!(
+        labels(&vocabulary_items("variant")),
+        ["solid", "soft", "outline", "ghost"]
+    );
+    assert!(vocabulary_items("label").is_empty());
+}
+
+#[test]
+fn a_matrix_axis_named_after_an_axis_is_offered_its_words() {
+    assert_eq!(
+        labels(&matrix_axis_value_items("size", None)),
+        ["small", "regular", "large"]
+    );
+}

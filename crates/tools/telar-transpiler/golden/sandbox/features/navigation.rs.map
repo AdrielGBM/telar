@@ -297,8 +297,8 @@
 2880..2913	13526	`|| { panes.push(Pane::Overview) }`
 2964..2996	13732	`|| { panes.push(Pane::Pricing) }`
 3044..3073	13934	`|| { panes.push(Pane::Team) }`
-3119..3133	14081	`Variant::Ghost`
-3144..3167	14128	`|| { navigate_back(); }`
-3189..3196	14732	`address`
-3203..3208	14747	`depth`
-3296..3303	15448	`address`
+3119..3124	14094	`ghost`
+3135..3158	14132	`|| { navigate_back(); }`
+3180..3187	14736	`address`
+3194..3199	14751	`depth`
+3287..3294	15452	`address`

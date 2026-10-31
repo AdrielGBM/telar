@@ -158,14 +158,14 @@ Under the document renderer a picture drawn with `fit:` `contain`, `cover` or `f
 with `srcset` and `sizes`, so the browser picks the copy that fits the box and the screen's density,
 decodes it off the main thread and loads it lazily. `priority` on the `img` marks the picture the page is
 about (a hero, a cover): it is fetched at once and first (`fetchpriority="high"`, no `loading="lazy"`). An
-`img` with `label:` gets it as its `alt`; one without has `alt=""` and is decoration. Other fills and nine
+`img` with `a11y_label:` gets it as its `alt`; one without has `alt=""` and is decoration. Other fills and nine
 slices stay part of a drawing and draw the full-size file from its address.
 
 Under the canvas renderer the picture is fetched and decoded by the browser, then drawn like any other
 bitmap, choosing the narrowest copy that covers the box. It is left out of the frames before it arrives.
 
 ```rsx
-img src:"hero.jpg" fit:cover width:100% height:60sh priority label:"The loom at work"
+img src:"hero.jpg" fit:cover width:100% height:60sh priority a11y_label:"The loom at work"
 ```
 
 ## The public directory

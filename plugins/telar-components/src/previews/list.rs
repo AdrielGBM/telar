@@ -3,8 +3,8 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_text, preview};
 use telar::{Container, LayoutError, LayoutStyle};
 
-use crate::ControlSize;
 use crate::list::{GroupProps, ItemProps, SeparatorProps, group, item, separator};
+use telar::ControlSize;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![

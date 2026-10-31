@@ -66,7 +66,7 @@ fn a_field_takes_the_size_the_region_around_it_declared() {
     let height = track_layout(box_node).unwrap().get().height;
     assert_eq!(
         height,
-        shared::control_height(crate::ControlSize::Regular),
+        shared::control_height(telar::ControlSize::Regular),
         "the box stays one control tall whatever size its text is, so it stands level with a button beside it"
     );
 }
@@ -101,7 +101,7 @@ fn typing_into_a_focused_field_edits_the_bound_signal() {
 
     // Past the end of what is in it, which is where a press puts the caret.
     let press_x = (rect.x + rect.width
-        - TextFieldTokens::current().pad_x(crate::ControlSize::Regular)
+        - TextFieldTokens::current().pad_x(telar::ControlSize::Regular)
         - 2.0) as f64;
     let press_y = (rect.y + rect.height / 2.0) as f64;
     tree.on_event(&press(press_x, press_y));
@@ -131,7 +131,7 @@ fn enter_fires_on_submit_while_focused() {
     let _ = tree.commands();
 
     let press_x = (rect.x + rect.width
-        - TextFieldTokens::current().pad_x(crate::ControlSize::Regular)
+        - TextFieldTokens::current().pad_x(telar::ControlSize::Regular)
         - 2.0) as f64;
     let press_y = (rect.y + rect.height / 2.0) as f64;
     tree.on_event(&press(press_x, press_y));
@@ -184,7 +184,7 @@ fn a_key_hook_hears_keys_first_and_takes_only_the_ones_it_answers() {
     let mut tree = ComponentList::new(field);
     let _ = tree.commands();
     tree.on_event(&press(
-        (rect.x + rect.width - TextFieldTokens::current().pad_x(crate::ControlSize::Regular) - 2.0)
+        (rect.x + rect.width - TextFieldTokens::current().pad_x(telar::ControlSize::Regular) - 2.0)
             as f64,
         (rect.y + rect.height / 2.0) as f64,
     ));
@@ -288,7 +288,7 @@ fn a_long_value_is_drawn_on_the_field_s_one_line() {
     );
     assert_eq!(
         rect.height,
-        shared::control_height(crate::ControlSize::Regular)
+        shared::control_height(telar::ControlSize::Regular)
     );
 }
 
@@ -341,9 +341,9 @@ fn a_style_amendment_reshapes_the_box() {
 #[test]
 fn the_default_width_follows_the_size() {
     for size in [
-        crate::ControlSize::Small,
-        crate::ControlSize::Regular,
-        crate::ControlSize::Large,
+        telar::ControlSize::Small,
+        telar::ControlSize::Regular,
+        telar::ControlSize::Large,
     ] {
         crate::test_support::fresh_layout_runtime();
         let field = text_field(TextFieldProps::props().label("Name").size(size).build()).unwrap();
@@ -448,7 +448,7 @@ mod multiline {
 
     fn line() -> f32 {
         telar::line_box(&shared::control_text(
-            crate::ControlSize::Regular,
+            telar::ControlSize::Regular,
             telar::Inherited::initial().text,
             1.0,
         ))
@@ -483,10 +483,10 @@ mod multiline {
         );
         let one = Mounted::new(TextFieldProps::props().rows(1));
         assert!(
-            (one.frame_height() - shared::control_height(crate::ControlSize::Regular)).abs() < 1.0,
+            (one.frame_height() - shared::control_height(telar::ControlSize::Regular)).abs() < 1.0,
             "{} beside a control height of {}",
             one.frame_height(),
-            shared::control_height(crate::ControlSize::Regular)
+            shared::control_height(telar::ControlSize::Regular)
         );
     }
 

@@ -19,6 +19,7 @@ mod props_schema;
 mod t_macro;
 mod text;
 mod theme_tokens;
+mod vocabulary;
 use app_input::{AppInput, preview_const_ident};
 
 /// Reads a function of named arguments as a tag: the arguments are the props, and the body is what the component builds.
@@ -114,6 +115,16 @@ pub fn derive_preview_arg(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn __baked_id(input: TokenStream) -> TokenStream {
     match syn::parse::<baked_id::BakedIdInput>(input).and_then(baked_id::expand) {
+        Ok(tokens) => tokens.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// The items of `telar::kw`, the shared vocabulary's words, expanded from the list in `telar-project` so the facade, the transpiler and the editor read one list: `size => ControlSize, …` names the type of each axis, and braces the variants of it no word names. Invoked once, inside the facade.
+#[doc(hidden)]
+#[proc_macro]
+pub fn __vocabulary(input: TokenStream) -> TokenStream {
+    match syn::parse::<vocabulary::Axes>(input).and_then(vocabulary::expand) {
         Ok(tokens) => tokens.into(),
         Err(e) => e.to_compile_error().into(),
     }

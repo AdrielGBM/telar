@@ -217,6 +217,43 @@ fn page() -> Vec<DrawCommand> {
         ),
         fill(Rect::new(0.0, 356.0, 40.0, 40.0), Color::rgb(0.8, 0.2, 0.2)),
         DrawCommand::PopElement,
+        boxed(
+            8,
+            Semantics::group().with_label("3 comentarios sin leer"),
+            "display:flex;",
+            Rect::new(0.0, 404.0, 24.0, 20.0),
+        ),
+        boxed(9, Semantics::group(), "", Rect::new(0.0, 404.0, 24.0, 20.0)),
+        text("3", Rect::new(0.0, 404.0, 24.0, 20.0)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
+        boxed(
+            10,
+            Semantics::group().with_label("Comando K"),
+            "",
+            Rect::new(32.0, 404.0, 40.0, 20.0),
+        ),
+        text("⌘K", Rect::new(32.0, 404.0, 40.0, 20.0)),
+        DrawCommand::PopElement,
+        boxed(
+            11,
+            Semantics::group().with_label("Capa del logo"),
+            "display:flex;",
+            Rect::new(0.0, 432.0, 200.0, 40.0),
+        ),
+        text("Logo", Rect::new(0.0, 432.0, 60.0, 20.0)),
+        boxed(
+            12,
+            Semantics::of(Role::Button).focusable(Focusable {
+                tab_stop: true,
+                consumes: ConsumedKeys::default(),
+            }),
+            "width:40px;height:40px;",
+            Rect::new(160.0, 432.0, 40.0, 40.0),
+        ),
+        text("Quitar", Rect::new(160.0, 432.0, 40.0, 40.0)),
+        DrawCommand::PopElement,
+        DrawCommand::PopElement,
         DrawCommand::PopElement,
     ]
 }
@@ -271,7 +308,12 @@ fn every_box_names_the_box_it_stands_for() {
         .filter_map(|element| element.get_attribute(ID_ATTRIBUTE))
         .collect();
     ids.sort();
-    assert_eq!(ids, ["1", "2", "3", "4", "5", "6", "7"]);
+    assert_eq!(
+        ids,
+        [
+            "1", "10", "11", "12", "2", "3", "4", "5", "6", "7", "8", "9"
+        ]
+    );
     drop(renderer);
     host.remove();
 }
@@ -301,5 +343,77 @@ fn the_page_a_host_was_served_with_is_taken_over_by_the_first_frame() {
     );
     assert_eq!(reconciled_markup(&served), expected);
     drop(renderer);
+    served.remove();
+}
+
+fn box_of(host: &web_sys::HtmlElement, id: u64) -> web_sys::Element {
+    host.query_selector(&format!("[{ID_ATTRIBUTE}=\"{id}\"]"))
+        .expect("a valid selector")
+        .unwrap_or_else(|| panic!("box {id} is in the document"))
+}
+
+/// What [`page`] says through its boxes read by their names, in `host`.
+fn assert_read_by_their_names(host: &web_sys::HtmlElement) {
+    let counter = box_of(host, 8);
+    assert_eq!(counter.get_attribute("aria-label"), None);
+    assert_eq!(counter.get_attribute("role"), None);
+    let spoken = counter
+        .first_element_child()
+        .expect("the counter says its name");
+    assert!(spoken.has_attribute("data-telar-spoken"));
+    assert_eq!(
+        spoken.text_content().as_deref(),
+        Some("3 comentarios sin leer")
+    );
+    assert!(
+        spoken.get_bounding_client_rect().width() <= 1.0,
+        "the name is not shown"
+    );
+    assert_eq!(
+        box_of(host, 9).get_attribute("aria-hidden").as_deref(),
+        Some("true")
+    );
+    assert_eq!(
+        box_of(host, 10).inner_html(),
+        "<span data-telar-spoken=\"\">Comando K</span><span aria-hidden=\"true\">⌘K</span>"
+    );
+    let caption = box_of(host, 11)
+        .last_element_child()
+        .expect("the caption is painted inside the box");
+    assert_eq!(caption.text_content().as_deref(), Some("Logo"));
+    assert_eq!(
+        caption.get_attribute("aria-hidden").as_deref(),
+        Some("true")
+    );
+    let button = box_of(host, 12);
+    assert!(
+        button.closest("[aria-hidden]").ok().flatten().is_none(),
+        "the button stays where a reader reaches it"
+    );
+    assert_eq!(button.text_content().as_deref(), Some("Quitar"));
+}
+
+/// A box read by its name in place of what it draws says the name as text a reader finds and the page does not show, and its words are skipped, whichever writer wrote it; a control inside it is not.
+#[wasm_bindgen_test]
+fn a_box_read_as_its_name_says_it_as_hidden_text_over_skipped_words() {
+    let commands = page();
+    let live = new_host();
+    let mut renderer = DomRenderer::new(live.clone()).expect("a renderer on the host");
+    renderer
+        .render_frame(&commands, None)
+        .expect("the frame reconciled");
+    assert_read_by_their_names(&live);
+
+    let written = prerender(&commands, None);
+    let served = new_host();
+    for (name, value) in &written.host_attributes {
+        served
+            .set_attribute(name, value)
+            .expect("a host attribute the browser takes");
+    }
+    served.set_inner_html(&written.markup);
+    assert_read_by_their_names(&served);
+    drop(renderer);
+    live.remove();
     served.remove();
 }

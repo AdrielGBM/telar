@@ -16,9 +16,9 @@ use telar::{
     Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, ShapeStyle, StyledContainer, box_item,
     children, effect, memo, signal, track_layout,
 };
+use telar::{ControlSize, Variant};
 use telar_components::{
-    ButtonProps, ControlSize, IconButtonProps, ItemProps, Tab, Variant, button, icon_button, item,
-    metrics, tab_list,
+    ButtonProps, IconButtonProps, ItemProps, Tab, button, icon_button, item, metrics, tab_list,
 };
 use telar_devtools::{
     WORKBENCH_GRID, accessibility_panel, inspection_toggles, inspector_panel, use_workbench_tokens,

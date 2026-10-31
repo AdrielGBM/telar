@@ -5,8 +5,8 @@ use telar::{
     Children, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, Role, Text, box_item,
 };
 
-use crate::ControlSize;
 use crate::window_frame::{SurfaceFrameStyle, WindowControls, WindowFrameProps, window_frame};
+use telar::ControlSize;
 
 fn line(content: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = Text::declaring(

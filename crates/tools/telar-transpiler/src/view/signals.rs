@@ -771,3 +771,30 @@ pub(super) fn build_rect_style(
         }
     }
 }
+
+/// Every name a view `let` anywhere in `nodes` binds, whatever block it is in scope for.
+pub(crate) fn view_let_names(nodes: &[ViewNode]) -> Vec<String> {
+    let mut names = Vec::new();
+    for node in nodes {
+        match node {
+            ViewNode::Element(el) => names.extend(view_let_names(&el.children)),
+            ViewNode::IfBlock(block) => {
+                names.extend(view_let_names(&block.then_branch));
+                names.extend(
+                    block
+                        .else_branch
+                        .as_deref()
+                        .map(view_let_names)
+                        .unwrap_or_default(),
+                );
+            }
+            ViewNode::ForBlock(block) => names.extend(view_let_names(&block.body)),
+            ViewNode::MatchBlock(block) => {
+                names.extend(block.arms.iter().flat_map(|arm| view_let_names(&arm.body)));
+            }
+            ViewNode::LetStmt(stmt) => names.extend(let_bound_names(&stmt.source)),
+            ViewNode::Comment(_) => {}
+        }
+    }
+    names
+}

@@ -486,7 +486,7 @@ fn a_hugging_button_pads_its_label_evenly_on_both_sides() {
     let tree = ComponentList::new(btn);
     let face = crate::test_support::drawn(telar::focus::Role::Button)[0];
     let (before, after) = crate::test_support::run_insets(&tree, "Settings", face);
-    let pad = crate::shared::control_pad_x(crate::ControlSize::Regular);
+    let pad = crate::shared::control_pad_x(telar::ControlSize::Regular);
     assert!((before - pad).abs() <= 0.5, "{before} {after}");
     assert!((after - pad).abs() <= 0.5, "{before} {after}");
 }

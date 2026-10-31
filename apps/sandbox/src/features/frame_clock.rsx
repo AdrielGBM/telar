@@ -24,7 +24,7 @@ col gap:20
         card gap:12
             row gap:12 align:center
                 button label:"Start" color:$theme.primary on_press:(|| $running.set(true))
-                button label:"Stop" variant:Variant::Ghost on_press:(|| $running.set(false))
+                button label:"Stop" variant:ghost on_press:(|| $running.set(false))
                 text "{$seconds}" font_size:15 color:$theme.ink
             box height:24 width:260 align:center
                 box fill:$theme.primary radius:12 width:24 height:24 translate_x:$swing

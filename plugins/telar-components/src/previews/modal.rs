@@ -3,9 +3,9 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role, Text, box_item};
 
-use crate::ControlSize;
 use crate::button::{ButtonProps, button};
 use crate::modal::{ModalProps, modal};
+use telar::ControlSize;
 
 fn body_in(height: Option<f32>) -> Children {
     Children::one(move || {

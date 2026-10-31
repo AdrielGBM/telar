@@ -12,8 +12,9 @@ use telar::{
 
 use crate::shared;
 use crate::test_support::{find_text, first_painted, fresh_layout_runtime, painted_at};
-use crate::{ControlSize, TagProps, TagTokens, Tone, Variant, tag};
+use crate::{TagProps, TagTokens, tag};
 use telar::testing::{centre, moved, press};
+use telar::{ControlSize, Tone, Variant};
 
 const TONES: [Tone; 6] = [
     Tone::Accent,
@@ -545,6 +546,7 @@ fn a_filter_with_an_action_is_a_toggle_with_the_action_beside_it() {
         .unwrap();
 }
 
+/// The name the call gives a counter is what a reader hears for it, once: the digit it shows is not read again beside it.
 #[test]
 fn a_counter_is_named_by_the_call() {
     let read: Vec<(Role, String)> = played(counter)
@@ -553,8 +555,8 @@ fn a_counter_is_named_by_the_call() {
         .map(|node| (node.role, node.name))
         .collect();
     assert_eq!(
-        read.first(),
-        Some(&(Role::Label, "3 unread comments".to_string())),
+        read,
+        [(Role::Label, "3 unread comments".to_string())],
         "{read:?}"
     );
 }

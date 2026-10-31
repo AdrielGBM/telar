@@ -23,7 +23,6 @@
 telar::rsx_modules!();
 
 mod accordion;
-mod appearance;
 mod button;
 mod checkbox;
 mod code_view;
@@ -89,7 +88,6 @@ mod window_edges;
 mod window_frame;
 
 pub use accordion::{AccordionProps, AccordionTokens, accordion};
-pub use appearance::{ControlSize, Tone, Variant};
 pub use button::{ButtonProps, ButtonTokens, button};
 pub use checkbox::{CheckboxProps, CheckboxTokens, checkbox};
 pub use code_view::{
@@ -161,10 +159,11 @@ pub use window_frame::{
 
 /// The geometry, washes, type and marks every catalogue control is drawn from, for an application drawing controls of its own that have to sit beside the catalogue's.
 ///
-/// Each one reads the theme in force — a role such as `radius_control` or `highlight_low`, never a literal — and every length is scaled by the [`ControlSize`] it is handed, the size the control being drawn is written at, so a control built from these matches the catalogue's of that size at any theme:
+/// Each one reads the theme in force — a role such as `radius_control` or `highlight_low`, never a literal — and every length is scaled by the [`ControlSize`](telar::ControlSize) it is handed, the size the control being drawn is written at, so a control built from these matches the catalogue's of that size at any theme:
 ///
 /// ```ignore
-/// use telar_components::{ControlSize, metrics};
+/// use telar::ControlSize;
+/// use telar_components::metrics;
 ///
 /// let shell = LayoutStyle::new()
 ///     .min_height(metrics::control_height(ControlSize::Regular))

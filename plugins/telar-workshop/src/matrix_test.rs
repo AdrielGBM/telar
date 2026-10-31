@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use telar::ControlSize;
 use telar::preview::snapshot::SnapshotStatus;
 use telar::preview::{
     ArgSpec, ArgValue, Axis, ControlKind, Globals, Matrices, Matrix, Play, PreviewCtx,
@@ -12,7 +13,7 @@ use telar::{
     Text, TextStyle, box_item, focus, for_each_with_matrix, reset_layout_runtime,
     set_system_preferences, transform_clip_rect,
 };
-use telar_components::{ButtonProps, ControlSize, ModalProps, button, modal};
+use telar_components::{ButtonProps, ModalProps, button, modal};
 
 use super::cell::{Status, seed, sizing};
 use super::plan::{self, CustomAxis, MatrixAxes, PickedAxis, Problem, grid, toggled};
@@ -687,7 +688,7 @@ fn size_control() -> ControlKind {
 
 static SIZE: [ArgSpec; 1] = [ArgSpec::new("size")
     .control(size_control)
-    .default("Regular")];
+    .default("regular")];
 
 #[test]
 fn a_built_matrix_varies_a_component_s_size_as_its_size_arg() {
@@ -697,7 +698,7 @@ fn a_built_matrix_varies_a_component_s_size_as_its_size_arg() {
     let axis = CustomAxis::Arg("size".into())
         .axis(&args, &Matrices::default())
         .unwrap();
-    assert_eq!(axis, Axis::Arg("size", &["Small", "Regular", "Large"]));
+    assert_eq!(axis, Axis::Arg("size", &["small", "regular", "large"]));
     let sizes: Vec<ControlSize> = Matrix::expand(&[axis], &entry, &Matrices::default())
         .unwrap()
         .iter()

@@ -132,8 +132,8 @@
 131	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-855..868	2745	`Tone::Success`
-877..890	2768	`Variant::Soft`
-951..967	2967	`Variant::Outline`
-1389..1407	5666	`ControlSize::Small`
-1509..1513	6746	`tags`
+855..862	2758	`success`
+871..875	2788	`soft`
+936..943	2991	`outline`
+1358..1363	5688	`small`
+1464..1468	6755	`tags`

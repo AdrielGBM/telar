@@ -2,8 +2,8 @@ use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
 use telar::{Color, Role};
 
 use super::sample;
-use crate::ControlSize;
 use crate::accordion::{AccordionProps, accordion};
+use telar::ControlSize;
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![

@@ -153,11 +153,11 @@
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
 985..990	2704	`shown`
 1106..1165	3266	`|| telar::set_page_title(Some("Surface title".to_string()))`
-1220..1234	3449	`Variant::Ghost`
-1245..1275	3496	`|| telar::set_page_title(None)`
-1331..1345	3651	`Variant::Ghost`
-1356..1400	3698	`|| telar::window::set_title("Telar sandbox")`
-1808..1822	6135	`Variant::Ghost`
-1833..1869	6182	`|| telar::set_title_format(bar_rule)`
-1923..1937	6342	`Variant::Ghost`
-1948..1996	6389	`|| telar::set_title_format(telar::compose_title)`
+1220..1225	3462	`ghost`
+1236..1266	3500	`|| telar::set_page_title(None)`
+1322..1327	3668	`ghost`
+1338..1382	3706	`|| telar::window::set_title("Telar sandbox")`
+1790..1795	6156	`ghost`
+1806..1842	6194	`|| telar::set_title_format(bar_rule)`
+1896..1901	6367	`ghost`
+1912..1960	6405	`|| telar::set_title_format(telar::compose_title)`

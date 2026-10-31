@@ -18,7 +18,7 @@ fn inset() -> f32 {
 }
 
 fn caret_width() -> f32 {
-    crate::shared::icon_size(crate::ControlSize::Regular)
+    crate::shared::icon_size(telar::ControlSize::Regular)
 }
 
 fn catalogue() -> Vec<TreeNode> {

@@ -8,10 +8,10 @@ use telar::{
     children, current_direction, focus::Role,
 };
 
-use crate::ControlSize;
 use crate::scrim;
 use crate::shared;
 use crate::strings;
+use telar::ControlSize;
 
 /// A drawer's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

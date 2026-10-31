@@ -730,6 +730,51 @@ fn a_named_box_holding_more_than_a_control_names_itself() {
     assert!(read_on_its_own(&nodes, "Fixed bar"), "{nodes:?}");
 }
 
+fn caption(words: &'static str) -> Text {
+    Text::new(
+        move || words.to_string(),
+        LayoutStyle::new().width(80.0).height(20.0),
+        || TextStyle::new(12.0, renderer_core::Color::BLACK),
+    )
+    .unwrap()
+}
+
+/// A counter is read as the name its author gave it, once: the digit it shows is not read again beside it.
+#[test]
+fn a_named_box_is_read_as_its_name_in_place_of_the_words_it_draws() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let counter = Container::new(LayoutStyle::new().flex_row(), vec![box_item(caption("3"))])
+        .unwrap()
+        .a11y_label(|| "3 unread comments");
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(counter)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    let read: Vec<(Role, &str)> = nodes.iter().map(|n| (n.role, n.name.as_str())).collect();
+    assert_eq!(read, [(Role::Label, "3 unread comments")]);
+}
+
+/// The name replaces only the words no control owns: a control inside the named box is still reached, by its own name.
+#[test]
+fn a_control_inside_a_named_box_keeps_its_own_name() {
+    use crate::annotation::Accessible;
+    reset_layout_runtime();
+    focus::clear();
+    let item = Container::new(
+        LayoutStyle::new().flex_row(),
+        vec![box_item(caption("Logo")), box_item(drawn_tab("Remove"))],
+    )
+    .unwrap()
+    .a11y_label(|| "Logo layer");
+    let root = Container::new(LayoutStyle::new().flex_column(), vec![box_item(item)]).unwrap();
+
+    let nodes = snapshot_of(root);
+    assert_eq!(names_of(&nodes, Role::Tab), ["Remove"]);
+    assert!(read_on_its_own(&nodes, "Logo layer"), "{nodes:?}");
+    assert!(!read_on_its_own(&nodes, "Logo"), "{nodes:?}");
+}
+
 fn image_at(rect: Rect) -> DrawCommand {
     DrawCommand::Image {
         data: Arc::new(renderer_core::ImageData::new(vec![0; 4], 1, 1)),

@@ -173,6 +173,33 @@ pub(crate) fn let_bindings(source: &str) -> Option<Vec<String>> {
     }
 }
 
+/// The names `items` declares that an expression could name as a value: each `fn`, `const` and `static`, and each name a `use` brings in. Nothing when the text is not a run of items.
+pub(crate) fn item_value_names(items: &str) -> Vec<String> {
+    fn imported(tree: &syn::UseTree, names: &mut Vec<String>) {
+        match tree {
+            syn::UseTree::Path(path) => imported(&path.tree, names),
+            syn::UseTree::Name(name) => names.push(unraw(&name.ident)),
+            syn::UseTree::Rename(rename) => names.push(unraw(&rename.rename)),
+            syn::UseTree::Group(group) => group.items.iter().for_each(|tree| imported(tree, names)),
+            syn::UseTree::Glob(_) => {}
+        }
+    }
+    let Ok(file) = Fallback::forced(|| syn::parse_file(items)) else {
+        return Vec::new();
+    };
+    let mut names = Vec::new();
+    for item in &file.items {
+        match item {
+            syn::Item::Fn(item) => names.push(unraw(&item.sig.ident)),
+            syn::Item::Const(item) => names.push(unraw(&item.ident)),
+            syn::Item::Static(item) => names.push(unraw(&item.ident)),
+            syn::Item::Use(item) => imported(&item.tree, &mut names),
+            _ => {}
+        }
+    }
+    names
+}
+
 pub(crate) fn condition_bindings(condition: &str) -> Option<Vec<String>> {
     fn collect(expr: &syn::Expr, names: &mut Vec<String>) {
         match expr {

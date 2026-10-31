@@ -431,3 +431,28 @@ fn a_document_writes_an_href_only_for_a_uri_the_app_allows() {
         written.markup
     );
 }
+
+/// A box read by its name in place of its words is written with the name as text a reader finds, before its words, which are skipped.
+#[test]
+fn a_box_read_as_its_name_is_written_with_the_name_before_its_skipped_words() {
+    let commands = [
+        open(
+            2,
+            Semantics::group().with_label("3 unread comments"),
+            "",
+            Rect::new(0.0, 0.0, 10.0, 10.0),
+        ),
+        text("3", Rect::new(0.0, 0.0, 10.0, 10.0)),
+        DrawCommand::PopElement,
+    ];
+    let written = prerender(&commands, None);
+    assert!(
+        written.markup.ends_with(
+            "><span data-telar-spoken=\"\">3 unread comments</span><span aria-hidden=\"true\">3</span></div>"
+        ),
+        "{}",
+        written.markup
+    );
+    assert!(!written.markup.contains("aria-label"), "{}", written.markup);
+    assert!(!written.markup.contains("role="), "{}", written.markup);
+}

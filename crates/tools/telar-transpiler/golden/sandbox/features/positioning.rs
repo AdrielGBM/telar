@@ -393,7 +393,7 @@ pub fn positioning(props: PositioningProps) -> Result<Box<dyn LayoutItem>, Layou
                                 };
                                 __children.push(box_item(__sbox_14));
                                 let __row_2 = {
-                                    let __node_24 = button(ButtonProps::props().label("Move the badge").variant(Variant::Ghost).on_press(std::rc::Rc::new({ let corner = corner.clone(); move || corner.set((corner.get() + 1) % 4) })).build())?;
+                                    let __node_24 = button(ButtonProps::props().label("Move the badge").variant(::telar::kw::ghost).on_press(std::rc::Rc::new({ let corner = corner.clone(); move || corner.set((corner.get() + 1) % 4) })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_24])?
                                 };
                                 __children.push(box_item(__row_2));
@@ -639,7 +639,7 @@ pub fn positioning(props: PositioningProps) -> Result<Box<dyn LayoutItem>, Layou
                                 __children.push(box_item(__node_38));
                                 let __row_4 = {
                                     let __node_39 = button(ButtonProps::props().label("Fill").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let slot = slot.clone(); move || slot.set(Slot::Filled(7)) })).build())?;
-                                    let __node_40 = button(ButtonProps::props().label("Clear").variant(Variant::Ghost).on_press(std::rc::Rc::new({ let slot = slot.clone(); move || slot.set(Slot::Empty) })).build())?;
+                                    let __node_40 = button(ButtonProps::props().label("Clear").variant(::telar::kw::ghost).on_press(std::rc::Rc::new({ let slot = slot.clone(); move || slot.set(Slot::Empty) })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_39, __node_40])?
                                 };
                                 __children.push(box_item(__row_4));

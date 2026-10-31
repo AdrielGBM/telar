@@ -115,8 +115,8 @@ const LAYOUT_ATTRS: &[AttrSpec] = &[
 
 /// What any built-in tag may say about itself: to assistive technology (see [`A11Y_VALUES`]), and as a place on the page a link reaches.
 const ACCESSIBILITY_ATTRS: &[AttrSpec] = &[
-    AttrSpec::free("label").doc(
-        "The name assistive technology reads for the box: a quoted string, `t!(…)`, or an expression reading `$state`. An `img` or `svg` without one is decoration.",
+    AttrSpec::free(A11Y_LABEL_ATTR).doc(
+        "The name assistive technology reads for the box: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. On a box with no role of its own it replaces what the box draws, so a counter showing \"3\" named \"3 unread comments\" is read as its name alone, while a control inside keeps its own name and stays reachable; a box with a role of its own (a dialog, a list) holds what it draws under the name. An `img` or `svg` without one is decoration. `label` is always a component's visible text, never this.",
     ),
     AttrSpec::free("lang").doc(
         "The language of the box and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`); the nearest one wins.",
@@ -149,7 +149,9 @@ pub const VIEW_RANGE_VALUES: &[(&str, &str)] = &[
 /// `a11y:` — how assistive technology treats the box, paired with the `Accessible` method it calls.
 pub const A11Y_VALUES: &[(&str, &str)] = &[("hidden", "a11y_hidden")];
 
-/// What a component call may say about the item the component returns, beside its props. Spelled after the `Accessible` methods they call, since `label` and `lang` are a component's own props to declare.
+/// The key naming what assistive technology reads, on a built-in tag and a component call alike.
+pub const A11Y_LABEL_ATTR: &str = "a11y_label";
+
 /// The key a child of a component call names the `Children` prop it is handed through with.
 pub const SLOT_ATTR: &str = "slot";
 
@@ -179,9 +181,10 @@ const SLOT: AttrSpec = AttrSpec::free(SLOT_ATTR).doc(
     "Hands this child to the component through the `Children` prop it names, `slot:\"header\"` through `header`, where a child without one goes through `children`. The callee places it with `children $props.header`.",
 );
 
+/// What a component call may say about the item the component returns, beside its props, spelled after the `Accessible` methods they call: `a11y_label` as on a built-in tag, and `a11y_lang` where a built-in says `lang`, since `lang` is a component's own prop to declare.
 const COMPONENT_INSTANCE_ATTRS: &[AttrSpec] = &[
-    AttrSpec::free("a11y_label").doc(
-        "The name assistive technology reads for the item the component returns, over whatever it is named by: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. `label` stays the component's own prop.",
+    AttrSpec::free(A11Y_LABEL_ATTR).doc(
+        "The name assistive technology reads for the item the component returns, over whatever it is named by: a quoted string (interpolating `{…}` as text does), `t!(…)`, or an expression reading `$state`. On an item with no role of its own it replaces what the item draws, so `tag label:\"3\" a11y_label:\"3 unread comments\"` is read as its name alone, while a control inside keeps its own name and stays reachable; an item with a role of its own (a dialog, a list) holds what it draws under the name. `label` stays the component's own prop.",
     ),
     AttrSpec::free("a11y_lang").doc(
         "The language of the item the component returns and everything under it, as a BCP 47 tag (`\"ja\"`, `\"es-CL\"`).",
@@ -899,8 +902,8 @@ pub fn tag_attr_specs(tag: &str) -> Vec<AttrSpec> {
                 AttrSpec::edges("arrival_margin_x"),
                 AttrSpec::edges("arrival_margin_y"),
             ]);
-            for spec in specs.iter_mut().filter(|spec| spec.key == "label") {
-                *spec = AttrSpec::free("label").doc(
+            for spec in specs.iter_mut().filter(|spec| spec.key == A11Y_LABEL_ATTR) {
+                *spec = AttrSpec::free(A11Y_LABEL_ATTR).doc(
                     "The name a reader hears for the scroll while it is a Tab stop of its own: while its content overflows and nothing inside it is a stop. A scroll that fits, or is scrolled by moving through the controls in it, stays nameless, so the box around it is not announced twice. A quoted string, `t!(…)`, or an expression reading `$state`.",
                 );
             }

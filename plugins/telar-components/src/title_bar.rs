@@ -10,9 +10,9 @@ use telar::{
 };
 use web_time::Instant;
 
-use crate::ControlSize;
 use crate::shared::{self, DOUBLE_CLICK, Mark};
 use crate::strings;
+use telar::ControlSize;
 
 /// How far a press on a title bar travels before it moves the window rather than counting towards a double-click.
 const DRAG_THRESHOLD: f32 = 4.0;

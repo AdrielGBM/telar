@@ -24,7 +24,7 @@ use crate::lexer::contains_ident;
 use crate::registry::ValueKind;
 use crate::theme_access::ThemeAccess;
 pub(crate) use component::props_type;
-pub(crate) use signals::{is_paint_key, rust_str, substitute_reads};
+pub(crate) use signals::{is_paint_key, rust_str, substitute_reads, view_let_names};
 use telar_project::{AssetContext, asset_kind_for_tag};
 
 /// Sentinel comment lines that bracket each view node's generated code with the `.rsx` line it came from. They are emitted into the view body during generation and stripped by [`resolve_source_map`] in the transpiler, which turns them into the per-line origin map. The prefix is deliberately un-generatable by normal codegen so it can never collide with real output.
@@ -250,6 +250,8 @@ pub struct ViewGen<'a> {
     /// The root component call of the preview being emitted, which reads its literal attributes as args and logs its callbacks.
     preview_root: Option<PreviewRoot<'a>>,
     reads: ViewReads,
+    /// What the file binds that no scope tracks while the view is emitted: its items' names and every view `let`'s, wherever it is in scope. A bare word naming one is that binding, not a word of the vocabulary.
+    bindings: Vec<String>,
 }
 
 /// How many snippets of the view read each `[logic]` binding, and which `props` places each snippet reads: what tells a closure that consuming a capture would take it from another reader.
@@ -327,6 +329,7 @@ impl<'a> ViewGen<'a> {
             theme_access: ThemeAccess::Handle,
             preview_root: None,
             reads: ViewReads::default(),
+            bindings: Vec::new(),
         }
     }
 
@@ -437,6 +440,12 @@ impl<'a> ViewGen<'a> {
         self
     }
 
+    /// Attaches what the file binds beyond `[logic]`'s `let`s, see [`Self::is_vocabulary_word`].
+    pub(crate) fn with_file_bindings(mut self, bindings: Vec<String>) -> Self {
+        self.bindings = bindings;
+        self
+    }
+
     /// Marks `element` as the root component call of a preview's body: its builder logs its callbacks in the preview's action log and, unless `implicit_args` is off, reads each of [`Self::implicit_args`] through the preview's args.
     pub(crate) fn with_preview_root(mut self, element: &'a Element, implicit_args: bool) -> Self {
         self.preview_root = Some(PreviewRoot {
@@ -449,6 +458,15 @@ impl<'a> ViewGen<'a> {
     /// Whether `name` is a binding the logic zone made.
     pub(super) fn is_local(&self, name: &str) -> bool {
         self.locals.iter().any(|local| local == name)
+    }
+
+    /// Whether `value`, written on a component call, is a word of the shared vocabulary (`size:small`): a bare lowercase identifier that no binding of the file is named. A `.rsx` cannot see the prop's type, so whether the word is one the prop takes is rustc's to say, on the line that wrote it.
+    pub(crate) fn is_vocabulary_word(&self, value: &str) -> bool {
+        value.starts_with(|c: char| c.is_ascii_lowercase())
+            && telar_project::is_plain_identifier(value)
+            && !self.is_local(value)
+            && !self.loop_variables.iter().any(|bound| bound == value)
+            && !self.bindings.iter().any(|bound| bound == value)
     }
 
     /// The first signal `code` mentions by name, skipping strings and comments.
@@ -667,6 +685,10 @@ impl<'a> ViewGen<'a> {
                 let message = match attr.key.as_str() {
                     "surface" => format!(
                         "`surface:` amends the paint of a `box`, `row`, `col` or `grid`, and `{}` is none of them",
+                        el.tag
+                    ),
+                    "label" if allowed.contains(&crate::registry::A11Y_LABEL_ATTR) => format!(
+                        "`label:` on `{}` is spelled `a11y_label:`: it is the name assistive technology reads, and `label` is always a component's visible text",
                         el.tag
                     ),
                     key => format!("`{key}` is not an attribute of `{}`", el.tag),

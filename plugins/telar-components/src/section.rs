@@ -2,9 +2,9 @@
 
 use telar::{Children, Container, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, box_item};
 
-use crate::ControlSize;
 use crate::heading::{HeadingProps, heading};
 use crate::shared;
+use telar::ControlSize;
 
 /// A titled column: a `heading` above its `children` in a small-gap `flex_column`. High-level sugar; lives in `telar-components`, not the kernel.
 #[derive(Props)]

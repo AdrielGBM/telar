@@ -3,8 +3,8 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Key, NamedKey, Role};
 
-use crate::ControlSize;
 use crate::text_field::{TextFieldProps, text_field};
+use telar::ControlSize;
 
 const WRAPPED: &str = "Ring twice and leave the parcel with the neighbour at number twelve if nobody answers; the side gate is open until six.";
 

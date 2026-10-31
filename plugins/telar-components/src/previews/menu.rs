@@ -3,10 +3,10 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Key, NamedKey, Reactive, Role, RwSignal};
 
-use crate::ControlSize;
 use crate::list::{ItemProps, SeparatorProps, item, separator};
 use crate::menu::{MenuProps, menu};
 use crate::menu_panel::{SubmenuProps, submenu};
+use telar::ControlSize;
 
 fn actions(size: ControlSize) -> Children {
     Children::new(move || {

@@ -139,7 +139,7 @@ col gap:8 pad:(space::lg() * 2.0) align:center
 ```
 
 A quoted value is text, as a `text`'s content is: `{expr}` interpolates and `{{`/`}}` is a brace, whether it is the
-content, a `label:` or a component's prop (`button label:"Open {name}"`). A closure that formats it borrows what it
+content, an `a11y_label:` or a component's prop (`button label:"Open {name}"`). A closure that formats it borrows what it
 reads, and copies in a `[logic]` binding — or the field of `props` it reads — that another part of the view still
 needs, so `text "{props.detail}"` and `text "{project()}"` need no re-binding first. What an `if let` or a `match`
 arm binds is copied into the closures under it, so `if let Some(place) = &location` can be read by a `text` below.

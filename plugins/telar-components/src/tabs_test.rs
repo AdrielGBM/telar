@@ -417,7 +417,7 @@ fn a_trailing_item_keeps_a_gap_from_the_name() {
     let (name, count) = (at("Actions"), at("7"));
     let gap = count.x - (name.x + name.width);
     assert!(
-        (gap - shared::gap_sm(crate::ControlSize::Regular)).abs() < 0.5,
+        (gap - shared::gap_sm(telar::ControlSize::Regular)).abs() < 0.5,
         "{gap}"
     );
 }

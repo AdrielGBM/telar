@@ -12,8 +12,7 @@ fn color_at<'a>(infos: &'a [ColorInformation], src: &str, frag: &str) -> Option<
 
 #[test]
 fn view_hex_and_keyword_attrs_get_swatches_but_quoted_and_tokens_do_not() {
-    let src =
-        "[view]\nbox fill:#ff0000 stroke:transparent color:primary\n    text label:\"#nothex\"\n";
+    let src = "[view]\nbox fill:#ff0000 stroke:transparent color:primary\n    text a11y_label:\"#nothex\"\n";
     let doc = parse(src).unwrap();
     let infos = document_colors(&doc, src);
     assert!(

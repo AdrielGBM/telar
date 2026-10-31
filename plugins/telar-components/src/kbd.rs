@@ -7,8 +7,8 @@ use telar::{
     keyboard_convention, style_follows,
 };
 
-use crate::ControlSize;
 use crate::shared::{self, shown_chord};
+use telar::ControlSize;
 
 /// The keys of a shortcut, each on its own cap.
 #[derive(Props)]

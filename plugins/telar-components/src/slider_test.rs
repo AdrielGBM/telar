@@ -203,7 +203,7 @@ fn the_track_and_thumb_follow_the_roles_until_the_slider_tokens_name_their_own()
     let ((track, track_style), (thumb, thumb_style)) = track_and_thumb(|| plain_slider(None));
     assert_eq!(
         track.height,
-        crate::metrics::spacing(crate::ControlSize::Regular)
+        crate::metrics::spacing(telar::ControlSize::Regular)
     );
     assert_eq!(
         track_style.radius,
@@ -211,7 +211,7 @@ fn the_track_and_thumb_follow_the_roles_until_the_slider_tokens_name_their_own()
     );
     assert_eq!(
         thumb.width,
-        crate::metrics::icon_size(crate::ControlSize::Regular)
+        crate::metrics::icon_size(telar::ControlSize::Regular)
     );
     assert_eq!(thumb_style.border.map(|b| b.widths[0]), Some(2.5));
 

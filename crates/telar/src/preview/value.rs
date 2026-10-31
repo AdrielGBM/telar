@@ -20,7 +20,7 @@ use crate::Color;
 /// | `Float` | `1.5`, `2.0`, `1e-7`, `+inf`, `-inf`, `+NaN` |
 /// | `Text` | `"Save \"all\"\n"` |
 /// | `Color` | `#ff8800`, `#ff880080`, or `rgba(0.1, 0.2, 0.3, 1.0)` when a channel is not a whole byte |
-/// | `Choice` | `Large` |
+/// | `Choice` | `large`, `Primary` |
 ///
 /// The forms never overlap: a number starts with a digit or a sign, text with a quote, a colour with `#` or `rgba(`, and a choice is any other identifier. A float always carries a `.`, an exponent or a sign word, so `2.0` stays a float.
 #[non_exhaustive]
@@ -34,7 +34,7 @@ pub enum ArgValue {
     Float(f64),
     Text(String),
     Color(Color),
-    /// The variant of an enum deriving `PreviewArg`, by name.
+    /// One of a fixed set of names: a word of the shared vocabulary ([`crate::kw`]), or the variant of an enum deriving `PreviewArg`, by name.
     Choice(String),
 }
 

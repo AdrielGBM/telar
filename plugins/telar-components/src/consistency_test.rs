@@ -7,9 +7,9 @@ use telar::{
     set_theme, track_layout,
 };
 
-use crate::ControlSize;
 use crate::metrics;
 use crate::test_support::{drawn, fresh_layout_runtime};
+use telar::ControlSize;
 
 /// One control in the row: how to build it, and where its principal surface is drawn.
 struct Probe {

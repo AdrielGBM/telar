@@ -6,7 +6,7 @@ use telar::{Container, LayoutError, LayoutStyle, Role, box_item};
 
 use crate::button::{ButtonProps, button};
 use crate::toast::{Toast, ToasterProps, Toasts, toaster};
-use crate::{ControlSize, Tone};
+use telar::{ControlSize, Tone};
 
 fn poster(
     label: &'static str,

@@ -130,7 +130,7 @@ fn details(inspection: Inspection) -> Result<Box<dyn LayoutItem>, LayoutError> {
             .padding_all(WORKBENCH_GRID * 1.5),
         vec![placeholder, chosen],
     )?
-    .role(Role::Group)
+    .role(Role::Section)
     .a11y_label(|| strings::text(DETAILS));
     Ok(box_item(details))
 }

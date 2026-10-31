@@ -11,8 +11,8 @@ use telar::{
     signal,
 };
 
-use crate::ControlSize;
 use crate::shared;
+use telar::ControlSize;
 
 /// What an item needs from the toolbar it is in, and what the toolbar learns from its items.
 ///

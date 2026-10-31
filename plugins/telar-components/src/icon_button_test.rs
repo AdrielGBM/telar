@@ -297,7 +297,7 @@ fn the_square_under_the_tooltip_builds_again_as_a_working_button() {
     let square = Square {
         icon: "lucide:search".into(),
         label: "Search".into(),
-        size: crate::ControlSize::Regular,
+        size: telar::ControlSize::Regular,
         shortcut: Reactive::default(),
         pressed: None,
         disabled: Reactive::default(),

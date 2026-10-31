@@ -1,6 +1,6 @@
 [logic]
 use telar::preview::PreviewEntry;
-use telar_components::{ButtonProps, Variant, button};
+use telar_components::{ButtonProps, button};
 use telar_devtools::{WORKBENCH_GRID, use_workbench_tokens, workbench_theme};
 
 use super::states::{location, open_in_editor};
@@ -37,4 +37,4 @@ col theme:(workbench_theme()) gap:WORKBENCH_GRID pad:(WORKBENCH_GRID * 2.0) max_
             if location.is_some()
                 button label:(strings::reactive(OPEN_IN_EDITOR)) on_press:(move || { open_in_editor(file, line); })
             if props.panicked
-                button label:(strings::reactive(REMOUNT)) variant:Variant::Ghost on_press:(move || state.remount())
+                button label:(strings::reactive(REMOUNT)) variant:ghost on_press:(move || state.remount())

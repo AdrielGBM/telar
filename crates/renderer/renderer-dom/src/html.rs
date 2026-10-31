@@ -10,7 +10,7 @@ use renderer_core::{Color, DrawCommand, ImageData, TextStyle};
 use crate::box_key::BoxKey;
 use crate::document::{
     self, ARRIVAL_ID, AUDIT_ATTRIBUTE, BoxNode, Content, DOCUMENT_SCROLL_OVERRIDES, HOST_ATTRIBUTE,
-    ID_ATTRIBUTE, Node, PaintNode, RESET, RESET_ID, Surface,
+    ID_ATTRIBUTE, Node, PaintNode, RESET, RESET_ID, SPOKEN_ATTRIBUTE, Surface,
 };
 use crate::runs::{RUN_ATTRIBUTE, RUN_BOX_ATTRIBUTE, Run};
 
@@ -145,6 +145,13 @@ fn write_box(out: &mut String, node: &BoxNode) {
     if node.tag == "img" {
         return;
     }
+    if let Some(name) = &node.spoken {
+        out.push_str("<span");
+        attribute(out, SPOKEN_ATTRIBUTE, "");
+        out.push('>');
+        text_into(out, name);
+        out.push_str("</span>");
+    }
     match &node.content {
         Content::Children { children, pieces } => {
             for child in children {
@@ -157,10 +164,23 @@ fn write_box(out: &mut String, node: &BoxNode) {
                 write_paint(out, piece, Some(node.key), true);
             }
         }
-        Content::Text { text, runs } => match runs {
-            Some(runs) => write_runs(out, runs, node.key),
-            None => text_into(out, text),
-        },
+        Content::Text { text, runs, muted } => {
+            let wrapped = node.spoken.is_some() || *muted;
+            if wrapped {
+                out.push_str("<span");
+                if *muted {
+                    attribute(out, "aria-hidden", "true");
+                }
+                out.push('>');
+            }
+            match runs {
+                Some(runs) => write_runs(out, runs, node.key),
+                None => text_into(out, text),
+            }
+            if wrapped {
+                out.push_str("</span>");
+            }
+        }
         Content::Drawing(markup) => out.push_str(markup),
     }
     let _ = write!(out, "</{}>", node.tag);
@@ -174,6 +194,9 @@ fn write_paint(out: &mut String, node: &PaintNode, owner: Option<BoxKey>, presen
     }
     if !node.style.is_empty() {
         attribute(out, "style", &node.style);
+    }
+    if node.muted {
+        attribute(out, "aria-hidden", "true");
     }
     out.push('>');
     match (&node.runs, owner) {

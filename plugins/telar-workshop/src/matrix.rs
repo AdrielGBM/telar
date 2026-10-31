@@ -450,7 +450,7 @@ fn table(
         lines.push(line(items)?);
     }
     let table = Container::new(LayoutStyle::column().gap(GAP), lines)?
-        .role(Role::Group)
+        .role(Role::Section)
         .a11y_label(|| strings::text(MATRIX_CELLS));
     Ok(box_item(table))
 }

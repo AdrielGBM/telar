@@ -42,6 +42,9 @@ pub(crate) const BOX_ID_PREFIX: &str = "telar-box-";
 /// Where a box was told to be, beside where the browser put it. See `reconcile.rs`.
 pub(crate) const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
 
+/// Marks the text a box is read by in place of what it draws, which a reader finds and the page does not show: see [`speak_names_in_place`].
+pub(crate) const SPOKEN_ATTRIBUTE: &str = "data-telar-spoken";
+
 /// What a document brings to an element that Telar never asked for: a button's border and its own font, a heading's margins, a link's colour and underline. A widget's style is the whole of what its box looks like, and the browser's idea of it is the difference between what layout computed and what the page shows — a button's 2px frame made every row of a list four pixels taller than the rect hit-testing reads.
 ///
 /// One rule rather than a declaration per box per frame, and the base font is the one the measurer assumes, so a paragraph is drawn in the face it was measured in.
@@ -53,6 +56,8 @@ pub(crate) const AUDIT_ATTRIBUTE: &str = "data-telar-rect";
 /// The outline goes only where Telar draws a ring of its own: a focusable box (`data-telar-focus`). Whatever else the browser walks Tab through — a link inside a paragraph, a scroll area Firefox makes focusable — keeps the browser's ring, since nothing else would show where the keyboard is. Forced colours drop the shadow Telar's ring is painted with, so there every focused element takes the browser's ring back, the field entry included.
 ///
 /// The field entry's own selection goes as well: it is invisible text parked over the field, and the band an input method's selected clause gets there would sit over the text Telar draws, which marks the clause itself.
+///
+/// A name spoken in place of what a box draws ([`SPOKEN_ATTRIBUTE`]) is one clipped pixel taken out of the flow: still text to a reader, and nothing that moves a box.
 pub(crate) const RESET: &str = "[data-telar]{font:400 16px sans-serif;color-scheme:light dark;color:CanvasText}\
 [data-telar] *{margin:0;border:0;padding:0;background:none;font:inherit;color:inherit;\
 text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;scrollbar-width:none;\
@@ -60,7 +65,9 @@ text-align:inherit;text-decoration:none;box-sizing:border-box;appearance:none;sc
 [data-telar] :focus-visible:not([data-telar-focus]){outline:revert}\
 @media (forced-colors:active){[data-telar] :focus-visible{outline:revert!important}}\
 [data-telar] *::-webkit-scrollbar{display:none}\
-[data-telar] [data-telar-entry]::selection{background:transparent;color:transparent}";
+[data-telar] [data-telar-entry]::selection{background:transparent;color:transparent}\
+[data-telar] [data-telar-spoken]{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;\
+clip-path:inset(50%);white-space:nowrap}";
 
 /// Host properties the document scroll overrides, and what they must be for it: a host that keeps a fixed height stops the page from growing, and one that declines touch gestures stops a finger from scrolling it, because a touch pans only when every box between it and the scroller allows it. A page scrolls down only, like every other `ScrollPage`, so content wider than it is clipped rather than handed to the document as a sideways scroll; `clip`, not `hidden`, because `hidden` would make the host a scroller and take the scroll away from the document.
 pub(crate) const DOCUMENT_SCROLL_OVERRIDES: [(&str, &str); 3] = [
@@ -145,6 +152,8 @@ pub(crate) struct BoxNode {
     /// Everything the `style` attribute says, layout and paint together.
     pub style: String,
     pub described: Described,
+    /// The name the box is read by in place of what it draws, written as its first child: see [`speak_names_in_place`].
+    pub spoken: Option<String>,
     /// The picture an `<img>` shows, and the width it is laid out at.
     pub picture: Option<(Arc<Picture>, f32)>,
     pub scroll_to: Option<(f32, f32)>,
@@ -169,6 +178,8 @@ pub(crate) enum Content {
         text: String,
         /// The paragraph cut at its spans, when it has any: written as inline elements rather than as one string.
         runs: Option<Vec<Run>>,
+        /// Whether a reader skips the text, because the name of a box around it is read in its place.
+        muted: bool,
     },
     /// The markup of a drawing, whose boxes are part of its picture rather than elements of the page.
     Drawing(String),
@@ -179,6 +190,8 @@ pub(crate) struct PaintNode {
     pub style: String,
     pub text: String,
     pub runs: Option<Vec<Run>>,
+    /// Whether a reader skips its text, because the name of a box around it is read in its place.
+    pub muted: bool,
 }
 
 /// What a box is, as the attributes that say so.
@@ -470,6 +483,7 @@ pub(crate) fn describe_frame(
     point_at_controlled(&mut roots);
     shut_out_behind_modal_layers(&mut roots);
     name_by_drawn_text(&mut roots);
+    speak_names_in_place(&mut roots);
     Frame {
         background: clear.filter(|color| color.a > 0.0),
         isolate_host: walk.isolate_host,
@@ -904,6 +918,7 @@ impl Walk<'_> {
             style,
             text: text.to_string(),
             runs: None,
+            muted: false,
         }));
     }
 
@@ -1132,6 +1147,7 @@ impl Walk<'_> {
             primary,
             style: String::new(),
             described: describe(element, tag),
+            spoken: None,
             picture: element
                 .picture
                 .as_ref()
@@ -1238,7 +1254,11 @@ impl Walk<'_> {
             let Some(Painted::Text { text, runs, .. }) = open.pieces.pop() else {
                 unreachable!("inline_text is exactly this shape")
             };
-            Content::Text { text, runs }
+            Content::Text {
+                text,
+                runs,
+                muted: false,
+            }
         } else {
             Content::Children {
                 children: open.children,
@@ -1376,6 +1396,119 @@ fn name_by_drawn_text(nodes: &mut [Node]) {
     }
 }
 
+/// Says the name of each box read in place of what it draws ([`Role::name_replaces_content`]) as text inside it, its first child, and takes the words it draws outside its controls away from readers, as the desktop reader skips them. An `aria-label` on a `group` is announced beside the content it names, or not at all in a reader's browse mode. The box keeps the role it has without a name; the controls inside it keep theirs, and their names.
+///
+/// Run once every wrapper has lent its name, since a box that only wraps a control names that control instead; and inner boxes first, so a box read as its name inside another one still says it.
+fn speak_names_in_place(nodes: &mut [Node]) {
+    for node in nodes.iter_mut().filter_map(Node::as_box_mut) {
+        if let Content::Children { children, .. } = &mut node.content {
+            speak_names_in_place(children);
+        }
+        if !reads_as_its_name(node) {
+            continue;
+        }
+        node.spoken = node.described.label.take();
+        node.described.role = aria_role(node.role);
+        let surface = node.key.surface;
+        mute(node, surface);
+    }
+}
+
+fn reads_as_its_name(node: &BoxNode) -> bool {
+    node.tag == "div"
+        && node.described.label.is_some()
+        && node.role.name_replaces_content()
+        && draws_words(node, node.key.surface)
+}
+
+/// Whether `text` is words a reader can be told to skip. A link inside it is a stop a reader reaches like a control, so its paragraph stays to be read around it.
+fn is_mutable(text: &str, runs: Option<&[Run]>) -> bool {
+    !text.trim().is_empty() && !runs.is_some_and(links)
+}
+
+fn links(runs: &[Run]) -> bool {
+    runs.iter().any(|run| run.link.is_some())
+}
+
+/// Whether `node`, a box of the surface `surface`, draws words outside every control that a reader can be told to skip and is not yet.
+fn draws_words(node: &BoxNode, surface: Option<u64>) -> bool {
+    if node.key.surface != surface || is_stop(node) || is_out_of_sight(node) {
+        return false;
+    }
+    match &node.content {
+        Content::Text { text, runs, muted } => !muted && is_mutable(text, runs.as_deref()),
+        Content::Drawing(_) => false,
+        Content::Children { children, pieces } => {
+            pieces
+                .iter()
+                .any(|piece| !piece.muted && is_mutable(&piece.text, piece.runs.as_deref()))
+                || children
+                    .iter()
+                    .filter_map(Node::as_box)
+                    .any(|child| draws_words(child, surface))
+        }
+    }
+}
+
+/// Whether a reader finds something in `node` besides words: a control, a stop of the keyboard, a name, a place in a set, a link, or a surface of its own.
+fn holds_more_than_words(node: &BoxNode, surface: Option<u64>) -> bool {
+    if node.key.surface != surface {
+        return true;
+    }
+    if is_out_of_sight(node) {
+        return false;
+    }
+    let described = &node.described;
+    if is_stop(node)
+        || described.label.is_some()
+        || described.position.is_some()
+        || described.link.is_some()
+        || node.spoken.is_some()
+    {
+        return true;
+    }
+    match &node.content {
+        Content::Text { runs, .. } => runs.as_deref().is_some_and(links),
+        Content::Drawing(_) => false,
+        Content::Children { children, pieces } => {
+            pieces
+                .iter()
+                .any(|piece| piece.runs.as_deref().is_some_and(links))
+                || children.iter().any(|child| match child {
+                    Node::Box(child) => holds_more_than_words(child, surface),
+                    Node::Paint(_) => false,
+                })
+        }
+    }
+}
+
+/// Whether a reader lands on `node` as a stop of its own, a control or a scroll area the keyboard reaches, which keeps what it holds as it would anywhere else: the desktop reads every stop a control.
+fn is_stop(node: &BoxNode) -> bool {
+    node.described.control || node.described.focusable.is_some()
+}
+
+/// Takes the words `node` draws outside its controls away from readers: a box that holds nothing else is hidden whole, and one that holds more stays, its own words skipped.
+fn mute(node: &mut BoxNode, surface: Option<u64>) {
+    match &mut node.content {
+        Content::Text { text, runs, muted } => *muted = is_mutable(text, runs.as_deref()),
+        Content::Drawing(_) => {}
+        Content::Children { children, pieces } => {
+            for piece in pieces.iter_mut() {
+                piece.muted = is_mutable(&piece.text, piece.runs.as_deref());
+            }
+            for child in children.iter_mut().filter_map(Node::as_box_mut) {
+                if !draws_words(child, surface) {
+                    continue;
+                }
+                match holds_more_than_words(child, surface) {
+                    true => mute(child, surface),
+                    false => child.described.hidden = true,
+                }
+            }
+        }
+    }
+}
+
 /// Whether a browser names an element of this role by the text inside it, as ARIA's "name from content" says.
 fn named_by_its_content(role: Role) -> bool {
     !matches!(
@@ -1457,7 +1590,12 @@ fn piece(painted: Painted) -> PaintNode {
     paint::declare(&mut style, "height", &paint::px(rect.height.max(0.0)));
     style.push_str(UNSELECTABLE);
     style.push_str(&css);
-    PaintNode { style, text, runs }
+    PaintNode {
+        style,
+        text,
+        runs,
+        muted: false,
+    }
 }
 
 /// Says what the box is, in whatever way the element it became does not already say it.

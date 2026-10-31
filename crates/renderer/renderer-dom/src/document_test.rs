@@ -67,7 +67,7 @@ fn a_single_run_of_text_is_the_elements_own_text() {
         false,
     );
     let node = only_box(&frame);
-    assert!(matches!(&node.content, Content::Text { text, runs: None } if text == "Hello"));
+    assert!(matches!(&node.content, Content::Text { text, runs: None, .. } if text == "Hello"));
     assert!(node.style.contains("font-size:14px;"), "{}", node.style);
 }
 
@@ -962,7 +962,7 @@ fn a_hidden_control_does_not_stop_a_wrapper_naming_the_visible_one() {
     assert_eq!(attribute(children(wrapper)[1], "aria-label"), None);
 }
 
-/// A tab list has a role of its own, and a box with a caption beside its button has words of its own: each names itself, and its control keeps its own name.
+/// A tab list has a role of its own, and a box with a caption beside its button has words of its own: each is read by its name, and its control keeps its own.
 #[test]
 fn a_named_box_with_a_role_or_content_of_its_own_names_itself() {
     let list = describe_frame(
@@ -993,8 +993,8 @@ fn a_named_box_with_a_role_or_content_of_its_own_names_itself() {
         false,
     );
     let bar = only_box(&bar);
-    assert_eq!(attribute(bar, "aria-label").as_deref(), Some("Fixed bar"));
-    assert_eq!(attribute(bar, "role").as_deref(), Some("group"));
+    assert_eq!(bar.spoken.as_deref(), Some("Fixed bar"));
+    assert_eq!(attribute(bar, "aria-label"), None);
     assert_eq!(attribute(children(bar)[0], "aria-label"), None);
 }
 
@@ -1799,4 +1799,153 @@ fn a_modal_layer_in_a_nested_surface_shuts_out_only_that_surface() {
     assert_eq!(nested[0].key, in_nested(1));
     assert!(inert(nested[0]));
     assert!(!inert(nested[1]));
+}
+
+fn pieces(node: &BoxNode) -> &[PaintNode] {
+    match &node.content {
+        Content::Children { pieces, .. } => pieces,
+        _ => panic!("a box with boxes inside"),
+    }
+}
+
+/// A counter is read as the name its author gave it: the name is text inside it, and the digit it shows is skipped, with no `group` left to announce.
+#[test]
+fn a_named_box_with_no_role_is_read_as_its_name_in_place_of_its_words() {
+    let frame = describe_frame(
+        &[
+            open(1, named(Semantics::group(), "3 unread comments")),
+            open(2, Semantics::group()),
+            text("3"),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let counter = only_box(&frame);
+    assert_eq!(counter.spoken.as_deref(), Some("3 unread comments"));
+    assert_eq!(attribute(counter, "aria-label"), None);
+    assert_eq!(attribute(counter, "role"), None);
+    let digit = children(counter)[0];
+    assert_eq!(attribute(digit, "aria-hidden").as_deref(), Some("true"));
+}
+
+/// Its own text is skipped where it stands, after the name, since hiding the element would hide the name with it.
+#[test]
+fn a_named_box_s_own_text_is_skipped_inside_it() {
+    let frame = describe_frame(
+        &[
+            open(1, named(Semantics::group(), "Command K")),
+            text("⌘K"),
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let chord = only_box(&frame);
+    assert_eq!(chord.spoken.as_deref(), Some("Command K"));
+    assert_eq!(attribute(chord, "aria-hidden"), None);
+    assert!(matches!(&chord.content, Content::Text { muted: true, .. }));
+}
+
+/// A control inside the named box is not hidden with the words beside it: it is still reached, by its own name, and the box around it stays.
+#[test]
+fn a_control_inside_a_box_read_as_its_name_keeps_its_own() {
+    let frame = describe_frame(
+        &[
+            open(1, named(Semantics::group(), "Logo layer")),
+            text("Logo"),
+            open(2, Semantics::group()),
+            open(3, Semantics::of(Role::Button)),
+            text("Remove"),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let item = only_box(&frame);
+    assert_eq!(item.spoken.as_deref(), Some("Logo layer"));
+    assert!(pieces(item).iter().all(|piece| piece.muted));
+    let slot = children(item)[0];
+    assert_eq!(attribute(slot, "aria-hidden"), None);
+    let button = &children(slot)[0];
+    assert_eq!(attribute(button, "aria-hidden"), None);
+    assert!(
+        matches!(&button.content, Content::Text { muted: false, text, .. } if text == "Remove")
+    );
+}
+
+/// A box with a role holds what it draws under its name, and a box that draws no words has none to replace: both keep the `aria-label`.
+#[test]
+fn a_name_replaces_words_only_on_a_box_with_no_role_that_draws_some() {
+    let frame = describe_frame(
+        &[
+            open(1, Semantics::group()),
+            open(2, named(Semantics::of(Role::Navigation), "Primary")),
+            text("Home"),
+            DrawCommand::PopElement,
+            open(3, named(Semantics::group(), "Size")),
+            open(4, Semantics::of(Role::Radio)),
+            DrawCommand::PopElement,
+            open(5, Semantics::of(Role::Radio)),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let [navigation, sizes] = children(only_box(&frame))[..] else {
+        panic!("two boxes inside the root");
+    };
+    assert_eq!(navigation.spoken, None);
+    assert_eq!(
+        attribute(navigation, "aria-label").as_deref(),
+        Some("Primary")
+    );
+    assert!(matches!(
+        &navigation.content,
+        Content::Text { muted: false, .. }
+    ));
+    assert_eq!(sizes.spoken, None);
+    assert_eq!(attribute(sizes, "aria-label").as_deref(), Some("Size"));
+    assert_eq!(attribute(sizes, "role").as_deref(), Some("group"));
+}
+
+/// A scroll area the keyboard stops at keeps what it holds inside a named box, as a control does: the words in it are content a reader lands on it to read.
+#[test]
+fn a_stop_inside_a_box_read_as_its_name_keeps_its_words() {
+    let stop = Semantics::of(Role::ScrollArea).focusable(renderer_core::Focusable {
+        tab_stop: true,
+        consumes: renderer_core::ConsumedKeys::default(),
+    });
+    let frame = describe_frame(
+        &[
+            open(1, named(Semantics::group(), "Snippet")),
+            text("Rust"),
+            open(2, stop),
+            open(3, Semantics::group()),
+            text("let x = 1;"),
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+            DrawCommand::PopElement,
+        ],
+        None,
+        &mut Fixed,
+        false,
+    );
+    let block = only_box(&frame);
+    assert_eq!(block.spoken.as_deref(), Some("Snippet"));
+    assert!(pieces(block).iter().all(|piece| piece.muted));
+    let scroll = children(block)[0];
+    assert_eq!(attribute(scroll, "aria-hidden"), None);
+    let line = children(scroll)[0];
+    assert_eq!(attribute(line, "aria-hidden"), None);
+    assert!(matches!(&line.content, Content::Text { muted: false, .. }));
 }

@@ -2,7 +2,7 @@
 use std::rc::Rc;
 
 use crate::shared::{self, GlyphProps, Mark, glyph};
-use crate::{ControlSize, Tone, Variant};
+use telar::{ControlSize, Tone, Variant};
 
 /// A tag's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

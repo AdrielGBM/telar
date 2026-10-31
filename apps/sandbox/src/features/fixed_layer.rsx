@@ -24,7 +24,7 @@ col gap:20
             text "Scroll this section, or click beside the bar: the page under it still answers. Tab from the toggle reaches the bar's button next." font_size:12 color:$theme.muted
             if $shown
                 layer justify:end align:center pad:24
-                    row gap:12 pad_x:16 pad_y:10 radius:12 fill:$theme.surface stroke:$theme.border align:center label:"Fixed bar"
+                    row gap:12 pad_x:16 pad_y:10 radius:12 fill:$theme.surface stroke:$theme.border align:center role:section a11y_label:"Fixed bar"
                         text "Fixed over the surface" font_size:13 color:$theme.ink
                         button label:"Tap" color:$theme.primary on_press:(|| $taps.update(|n| *n += 1))
         code_line code:"layer justify:end align:center pad:24  >  row …     (laid out against the whole surface)"
@@ -36,7 +36,7 @@ col gap:20
         card gap:12
             scroll height:260 width:100% arrival_margin_top:40
                 col width:100%
-                    row sticky inset_top:0 height:40 width:100% gap:8 pad_x:12 align:center fill:$theme.surface_alt label:"Bar over the sections"
+                    row sticky inset_top:0 height:40 width:100% gap:8 pad_x:12 align:center fill:$theme.surface_alt a11y_label:"Bar over the sections"
                         box to:anchor("arrival-one") fill:$theme.surface radius:6 pad_x:10 pad_y:4 hover_style(fill:$theme.border)
                             text "One" font_size:12 color:$theme.ink
                         box to:anchor("arrival-two") fill:$theme.surface radius:6 pad_x:10 pad_y:4 hover_style(fill:$theme.border)

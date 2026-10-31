@@ -2,13 +2,14 @@
 
 use std::rc::Rc;
 
+use telar::Variant;
 use telar::preview::host::{ArgState, Args};
 use telar::preview::{ControlKind, PreviewEntry, PropDefault};
 use telar::{
     Accessible, AlignItems, Border, Container, LayoutError, LayoutItem, LayoutScrollArea,
     LayoutStyle, Reactive, ReactiveList, RectStyle, StyledContainer, Text, box_item, children,
 };
-use telar_components::{ButtonProps, TagProps, Variant, button, tag};
+use telar_components::{ButtonProps, TagProps, button, tag};
 use telar_devtools::{
     WORKBENCH_GRID, use_workbench_tokens, workbench_fill, workbench_mono, workbench_muted,
 };

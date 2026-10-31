@@ -6,6 +6,7 @@ telar::rsx_modules!();
 
 use std::rc::Rc;
 
+use telar::ControlSize;
 use telar::{
     AlignItems, BorderRadius, Container, JustifyContent, LayoutError, LayoutItem, LayoutStyle,
     Memo, NodeId, Reactive, ReactiveList, Rect, RectStyle, Role, RwSignal, StyledContainer, Text,
@@ -13,7 +14,7 @@ use telar::{
 };
 use telar_components::metrics::{control_height, control_pad_x, radius_control};
 use telar_components::{
-    ControlSize, IconButtonProps, TitleBarOptions, WindowControlsProps, icon_button, title_bar,
+    IconButtonProps, TitleBarOptions, WindowControlsProps, icon_button, title_bar,
 };
 use telar_devtools::WORKBENCH_GRID;
 

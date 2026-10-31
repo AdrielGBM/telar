@@ -82,6 +82,8 @@ pub mod preview;
 mod closure;
 pub use closure::{later, now};
 
+#[cfg(feature = "runtime")]
+pub mod kw;
 mod markup_number;
 pub use markup_number::{Float, Int, PropNumber};
 
@@ -332,11 +334,11 @@ pub use surface::{
 pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions, ThemeTokens,
-    active_mode, follow_system, is_dark, nearest_theme, register_mode, register_mode_theme,
-    registered_modes, scheme_mode, scheme_preference, set_mode, set_mode_scheme,
-    set_scheme_preference, set_theme, use_mode, use_resolved_scheme, use_scheme_preference,
-    use_theme, use_theme_extension, use_theme_tokens,
+    ControlSize, ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions,
+    ThemeTokens, Tone, Variant, active_mode, follow_system, is_dark, nearest_theme, register_mode,
+    register_mode_theme, registered_modes, scheme_mode, scheme_preference, set_mode,
+    set_mode_scheme, set_scheme_preference, set_theme, use_mode, use_resolved_scheme,
+    use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;

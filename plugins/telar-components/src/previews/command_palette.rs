@@ -3,9 +3,9 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Container, Key, LayoutError, NamedKey, Role, box_item};
 
-use crate::ControlSize;
 use crate::button::{ButtonProps, button};
 use crate::command_palette::{Command, CommandPaletteProps, command_palette};
+use telar::ControlSize;
 
 fn commands() -> Vec<Command> {
     vec![

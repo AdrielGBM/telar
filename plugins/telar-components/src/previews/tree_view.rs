@@ -6,8 +6,8 @@ use std::sync::Arc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
-use crate::ControlSize;
 use crate::tree_view::{TreeNode, TreeViewProps, tree_view};
+use telar::ControlSize;
 
 fn project() -> Vec<TreeNode> {
     vec![

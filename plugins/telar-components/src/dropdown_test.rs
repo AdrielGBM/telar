@@ -76,12 +76,12 @@ fn bottom(rect: Rect) -> f32 {
 fn a_short_list_is_as_tall_as_its_rows() {
     let (_tree, _) = opened(3, 0.0);
     let list = list();
-    assert_eq!(list.height, 3.0 * row_height(crate::ControlSize::Regular));
+    assert_eq!(list.height, 3.0 * row_height(telar::ControlSize::Regular));
     assert_eq!(
         list.y,
-        crate::shared::control_height(crate::ControlSize::Regular)
-            + crate::shared::popup_offset(crate::ControlSize::Regular)
-            + panel_pad(crate::ControlSize::Regular),
+        crate::shared::control_height(telar::ControlSize::Regular)
+            + crate::shared::popup_offset(telar::ControlSize::Regular)
+            + panel_pad(telar::ControlSize::Regular),
         "under its trigger"
     );
 }
@@ -92,11 +92,11 @@ fn a_long_list_is_capped_to_the_window_and_scrolls_to_the_cursor() {
     let (mut tree, picked) = opened(40, 0.0);
     let list = list();
     assert!(
-        bottom(list) + panel_pad(crate::ControlSize::Regular) <= WINDOW_HEIGHT,
+        bottom(list) + panel_pad(telar::ControlSize::Regular) <= WINDOW_HEIGHT,
         "inside the window: {list:?}"
     );
     assert!(
-        list.height < 40.0 * row_height(crate::ControlSize::Regular),
+        list.height < 40.0 * row_height(telar::ControlSize::Regular),
         "cut to the room: {list:?}"
     );
 
@@ -125,11 +125,11 @@ fn a_dropdown_near_the_bottom_opens_above_its_trigger() {
     let list = list();
     assert_eq!(
         list.height,
-        5.0 * row_height(crate::ControlSize::Regular),
+        5.0 * row_height(telar::ControlSize::Regular),
         "whole, since it fits above"
     );
     assert!(
-        bottom(list) + panel_pad(crate::ControlSize::Regular) <= top,
+        bottom(list) + panel_pad(telar::ControlSize::Regular) <= top,
         "above the trigger: {list:?}"
     );
 
@@ -146,11 +146,11 @@ fn a_long_list_near_the_bottom_is_capped_to_the_room_above() {
     let (_tree, _) = opened(40, top);
     let list = list();
     assert!(
-        bottom(list) + panel_pad(crate::ControlSize::Regular) <= top,
+        bottom(list) + panel_pad(telar::ControlSize::Regular) <= top,
         "above the trigger: {list:?}"
     );
     assert!(
-        list.y - panel_pad(crate::ControlSize::Regular) >= 0.0,
+        list.y - panel_pad(telar::ControlSize::Regular) >= 0.0,
         "inside the window: {list:?}"
     );
 }
@@ -161,7 +161,7 @@ fn a_dropdown_with_more_room_below_stays_below_however_long_it_is() {
     let (_tree, _) = opened(40, top);
     let list = list();
     assert!(
-        list.y >= top + crate::shared::control_height(crate::ControlSize::Regular),
+        list.y >= top + crate::shared::control_height(telar::ControlSize::Regular),
         "below the trigger: {list:?}"
     );
     assert!(bottom(list) <= WINDOW_HEIGHT, "inside the window: {list:?}");
@@ -318,7 +318,7 @@ fn controls_of_every_kind_standing_in_a_row_are_drawn_at_one_height() {
     assert!(
         heights
             .iter()
-            .all(|height| *height == crate::shared::control_height(crate::ControlSize::Regular)),
+            .all(|height| *height == crate::shared::control_height(telar::ControlSize::Regular)),
         "{heights:?}"
     );
 }
@@ -326,10 +326,10 @@ fn controls_of_every_kind_standing_in_a_row_are_drawn_at_one_height() {
 /// A select's list keeps the popup offset from its field on whichever side it opens, and its tokens name one of their own.
 #[test]
 fn a_list_keeps_the_popup_offset_from_its_field_on_either_side() {
-    let offset = crate::shared::popup_offset(crate::ControlSize::Regular);
+    let offset = crate::shared::popup_offset(telar::ControlSize::Regular);
     let (flipped, _) = opened(5, 220.0);
     assert_eq!(
-        bottom(list()) + panel_pad(crate::ControlSize::Regular),
+        bottom(list()) + panel_pad(telar::ControlSize::Regular),
         220.0 - offset,
         "over the field, flipped"
     );
@@ -364,8 +364,8 @@ fn a_list_keeps_the_popup_offset_from_its_field_on_either_side() {
     settle(&tree);
     let shown = list();
     assert_eq!(
-        shown.y - panel_pad(crate::ControlSize::Regular),
-        crate::shared::control_height(crate::ControlSize::Regular) + 20.0
+        shown.y - panel_pad(telar::ControlSize::Regular),
+        crate::shared::control_height(telar::ControlSize::Regular) + 20.0
     );
     telar::set_theme(crate::test_support::TokensTheme::<crate::SelectTokens> {
         role: 4.0,

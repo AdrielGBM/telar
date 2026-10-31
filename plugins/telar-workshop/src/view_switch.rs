@@ -1,7 +1,8 @@
 //! The view switch in the top bar: icon tabs choosing what the area beside the sidebar shows, each named by a tooltip with the shortcut that picks it.
 
+use telar::ControlSize;
 use telar::{Color, IconName, LayoutError, LayoutItem, icon};
-use telar_components::{ControlSize, Tab, tab_list};
+use telar_components::{Tab, tab_list};
 
 use crate::keymap::Action;
 use crate::state::{ViewMode, WorkshopState};

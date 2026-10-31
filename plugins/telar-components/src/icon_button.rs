@@ -8,9 +8,9 @@ use telar::{
     amend_surface, box_item, focus::Role,
 };
 
-use crate::ControlSize;
 use crate::shared;
 use crate::toolbar::ToolbarContext;
+use telar::ControlSize;
 
 /// A button that is only a picture, so its name is not optional: `label` is what the tooltip says and what a screen reader announces.
 #[derive(Props)]

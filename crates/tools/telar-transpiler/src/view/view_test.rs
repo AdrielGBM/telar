@@ -1726,7 +1726,7 @@ fn a_fit_is_refused_off_a_text_and_when_it_names_nothing() {
 /// A mask is its box, then the source its content is seen through, then the content.
 #[test]
 fn a_mask_is_a_source_and_a_content_in_one_box() {
-    let src = "[view]\nmask width:100% height:200 label:\"SIMULACION\"\n    text \"SIMULACION\" font_size:18sw\n    canvas paint:(|_rect| RenderNode::Empty)\n";
+    let src = "[view]\nmask width:100% height:200 a11y_label:\"SIMULACION\"\n    text \"SIMULACION\" font_size:18sw\n    canvas paint:(|_rect| RenderNode::Empty)\n";
     let code = crate::transpile_source(src, "demo", None, None)
         .unwrap()
         .rust_code;
@@ -1914,7 +1914,7 @@ fn text_block<'c>(code: &'c str, needle: &str) -> &'c str {
 #[test]
 fn text_copies_in_a_binding_another_reader_still_needs() {
     let code = transpile_view(
-        "[logic]\nlet project = std::rc::Rc::new(|| String::from(\"telar\"));\nlet once = String::from(\"x\");\n[view]\nrow label:(project())\n    text \"{project()}\"\n    text \"{once}\"\n",
+        "[logic]\nlet project = std::rc::Rc::new(|| String::from(\"telar\"));\nlet once = String::from(\"x\");\n[view]\nrow a11y_label:(project())\n    text \"{project()}\"\n    text \"{once}\"\n",
     );
     assert!(
         text_block(&code, "format!(\"{}\", project())").contains("let project = project.clone();"),
@@ -2003,7 +2003,7 @@ fn a_prop_reading_reactive_context_follows_it() {
 /// A hole of a quoted value maps back to the text it was written as, wherever the value is: a cursor on it reaches the Rust it became.
 #[test]
 fn a_quoted_values_holes_keep_their_source_spans() {
-    let src = "[logic]\nlet name = String::from(\"Ada\");\n[view]\ncol\n    button label:\"Hi {name.len()}\" a11y_label:\"Open {name.len()}\"\n    box label:\"Box {name.len()}\"\n";
+    let src = "[logic]\nlet name = String::from(\"Ada\");\n[view]\ncol\n    button label:\"Hi {name.len()}\" a11y_label:\"Open {name.len()}\"\n    box a11y_label:\"Box {name.len()}\"\n";
     let out = crate::transpile_source(src, "demo", None, None).unwrap();
     let mapped: Vec<&str> = out
         .expr_spans

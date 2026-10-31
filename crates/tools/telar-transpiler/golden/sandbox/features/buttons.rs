@@ -47,9 +47,9 @@ pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
                                     let __node_3 = button(ButtonProps::props().label("Solid").build())?;
-                                    let __node_4 = button(ButtonProps::props().label("Outline").variant(Variant::Outline).build())?;
-                                    let __node_5 = button(ButtonProps::props().label("Soft").variant(Variant::Soft).build())?;
-                                    let __node_6 = button(ButtonProps::props().label("Ghost").variant(Variant::Ghost).build())?;
+                                    let __node_4 = button(ButtonProps::props().label("Outline").variant(::telar::kw::outline).build())?;
+                                    let __node_5 = button(ButtonProps::props().label("Soft").variant(::telar::kw::soft).build())?;
+                                    let __node_6 = button(ButtonProps::props().label("Ghost").variant(::telar::kw::ghost).build())?;
                                     let __node_7 = button(ButtonProps::props().label("Danger").color(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).build())?;
                                     let __node_8 = button(ButtonProps::props().label("Success").color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).flex_wrap().align_items(AlignItems::CENTER), children![__node_3, __node_4, __node_5, __node_6, __node_7, __node_8])?
@@ -62,7 +62,7 @@ pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                         card(CardProps::props().children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_9 = code_line(CodeLineProps::props().code("button label:'Save' variant:Variant::Outline color:$theme.danger").build())?;
+                    let __node_9 = code_line(CodeLineProps::props().code("button label:'Save' variant:outline color:$theme.danger").build())?;
                     __children.push(box_item(__node_9));
                     Ok(__children)
                 }
@@ -96,7 +96,7 @@ pub fn buttons(props: ButtonsProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                                 let __row_1 = {
                                     let __node_12 = button(ButtonProps::props().label("+1").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 1) })).build())?;
                                     let __node_13 = button(ButtonProps::props().label("+10").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.update(|__v| *__v += 10) })).build())?;
-                                    let __node_14 = button(ButtonProps::props().label("Reset").variant(Variant::Ghost).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build())?;
+                                    let __node_14 = button(ButtonProps::props().label("Reset").variant(::telar::kw::ghost).on_press(std::rc::Rc::new({ let clicks = clicks.clone(); move || clicks.set(0) })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_12, __node_13, __node_14])?
                                 };
                                 __children.push(box_item(__row_1));

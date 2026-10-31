@@ -14,11 +14,11 @@ use telar::{
     memo, on_cleanup, signal, track_layout, use_context,
 };
 
-use crate::ControlSize;
 use crate::list::{self, Act, ListContext, Mark, RowLook};
 use crate::menu::MenuTokens;
 use crate::popup;
 use crate::shared;
+use telar::ControlSize;
 
 pub(crate) type Anchored = Rc<dyn Fn() -> Anchoring>;
 

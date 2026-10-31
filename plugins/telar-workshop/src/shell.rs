@@ -6,14 +6,15 @@
 //!
 //! Each region is an area: a framed surface over the backdrop, set a gap apart from its neighbours and from the window's edges. The gap between two areas is the splitter that resizes them.
 
+use telar::ControlSize;
 use telar::{
     Accessible, Children, Clip, ClippedItem, Color, Container, Key, LayoutError, LayoutItem,
     LayoutStyle, Movable, Reactive, ReactiveList, RectStyle, Role, ShapeStyle, SizeDimension,
     StyledContainer, box_item, effect, use_theme_tokens,
 };
 use telar_components::{
-    ControlSize, DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer,
-    metrics, split_pane, window_edges,
+    DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer, metrics,
+    split_pane, window_edges,
 };
 use telar_devtools::{use_workbench_tokens, workbench_card, workbench_fill};
 

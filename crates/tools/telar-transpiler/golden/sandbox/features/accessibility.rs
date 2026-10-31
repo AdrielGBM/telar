@@ -26,7 +26,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
     let mood = signal(String::from("calm"));
 
     let __col_0 = {
-        let __node_0 = doc_header(DocHeaderProps::props().kicker("ACCESSIBILITY").title("Names, languages and hiding").desc("label, lang and a11y:hidden say what a box is called, what language it is in, and whether a screen reader skips it. Every target reads the same words: a document writes aria-label, lang and aria-hidden, the desktop hands them to AccessKit, and a terminal writes them into its plain-text reading.").build())?;
+        let __node_0 = doc_header(DocHeaderProps::props().kicker("ACCESSIBILITY").title("Names, languages and hiding").desc("a11y_label, lang and a11y:hidden say what a box is called, what language it is in, and whether a screen reader skips it. Every target reads the same words: a document writes aria-label, lang and aria-hidden, the desktop hands them to AccessKit, and a terminal writes them into its plain-text reading.").build())?;
         let __node_1 = {
             let __recipe_children = Children::new(
                 {
@@ -66,7 +66,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                         card(CardProps::props().children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("row label:'Telar'  ·  text '{letter}' a11y:hidden").build())?;
+                    let __node_3 = code_line(CodeLineProps::props().code("row a11y_label:'Telar'  ·  text '{letter}' a11y:hidden").build())?;
                     __children.push(box_item(__node_3));
                     Ok(__children)
                 }
@@ -125,7 +125,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                         card(CardProps::props().children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("svg src:demo_icon label:'Telar logo'").build())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("svg src:demo_icon a11y_label:'Telar logo'").build())?;
                     __children.push(box_item(__node_6));
                     Ok(__children)
                 }
@@ -224,7 +224,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                         card(CardProps::props().children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_11));
-                    let __node_13 = code_line(CodeLineProps::props().code("box label:(format!('Mood: {}', $mood))").build())?;
+                    let __node_13 = code_line(CodeLineProps::props().code("box a11y_label:(format!('Mood: {}', $mood))").build())?;
                     __children.push(box_item(__node_13));
                     Ok(__children)
                 }
@@ -267,7 +267,7 @@ pub fn accessibility(props: AccessibilityProps) -> Result<Box<dyn LayoutItem>, L
                 move || {
                     let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                     let __col_2 = {
-                        let __node_18 = prop_row(PropRowProps::props().name("label").values("text · t!(…) · $state expr").about("The name assistive technology reads. On img and svg it is what makes a picture more than decoration.").build())?;
+                        let __node_18 = prop_row(PropRowProps::props().name("a11y_label").values("text · t!(…) · $state expr").about("The name assistive technology reads. On img and svg it is what makes a picture more than decoration.").build())?;
                         let __node_19 = prop_row(PropRowProps::props().name("lang").values("BCP 47 tag").about("The language of the box and everything under it; the nearest one wins.").build())?;
                         let __node_20 = prop_row(PropRowProps::props().name("a11y").values("hidden").about("Skipped by assistive technology, with its whole subtree. Still drawn and still pressable.").build())?;
                         let __node_21 = prop_row(PropRowProps::props().name("role").values("landmark · article · h1–h6 · status · log · listitem · group").about("On a component call: what the item it returns is, where the component left it a plain box or a region. A control keeps its own role.").build())?;

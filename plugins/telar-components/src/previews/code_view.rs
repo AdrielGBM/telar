@@ -3,8 +3,8 @@ use std::rc::Rc;
 use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 
-use crate::ControlSize;
 use crate::code_view::{CodeSpan, CodeViewProps, TokenKind, code_view};
+use telar::ControlSize;
 
 const SOURCE: &str = "/// Greets whoever is named.\nfn greet(name: &str) -> String {\n    let greeting = format!(\"Hello, {name}!\");\n    greeting\n}\n";
 

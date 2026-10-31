@@ -169,7 +169,7 @@ fn an_alias_is_the_role_it_stands_for() {
 #[test]
 fn a_state_is_read_after_the_box_became_the_control_that_carries_it() {
     let code = transpiled(
-        "box role:switch toggled:$open label:\"Open\" on_press:(|| $open.set(!$open.get()))\n    text \"x\"\n",
+        "box role:switch toggled:$open a11y_label:\"Open\" on_press:(|| $open.set(!$open.get()))\n    text \"x\"\n",
     );
     let control = code
         .find(".control(::telar::Role::Switch)")

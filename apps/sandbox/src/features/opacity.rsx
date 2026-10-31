@@ -38,7 +38,7 @@ col gap:20
         code_line code:"box opacity:0.6   >   box opacity:0.6   (layers multiply)"
     example title:"Mask — a word as a window onto what is behind it"
         card
-            mask width:100% height:120 label:"FIELD"
+            mask width:100% height:120 a11y_label:"FIELD"
                 text "FIELD" font_size:96 font_weight:900 text_align:center color:$theme.ink
                 box fill:linear(horizontal, $theme.primary, $theme.purple, $theme.danger) width:100% height:120
         code_line code:"mask  >  text \"FIELD\" (the source, never shown)  +  box fill:linear(…) (seen through it)"

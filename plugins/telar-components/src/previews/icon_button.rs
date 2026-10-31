@@ -1,8 +1,8 @@
 use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 
-use crate::ControlSize;
 use crate::icon_button::{IconButtonProps, icon_button};
+use telar::ControlSize;
 
 #[derive(Clone, Copy, telar::PreviewArg)]
 enum Glyph {

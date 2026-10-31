@@ -3,8 +3,8 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
-use crate::ControlSize;
 use crate::color_picker::{ColorPickerProps, color_picker};
+use telar::ControlSize;
 
 fn palette() -> Vec<Color> {
     let tokens = telar::use_theme_tokens();

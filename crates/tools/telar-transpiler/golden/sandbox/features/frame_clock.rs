@@ -58,7 +58,7 @@ pub fn frame_clock(props: FrameClockProps) -> Result<Box<dyn LayoutItem>, Layout
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_0 = {
                                     let __node_3 = button(ButtonProps::props().label("Start").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(true) })).build())?;
-                                    let __node_4 = button(ButtonProps::props().label("Stop").variant(Variant::Ghost).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(false) })).build())?;
+                                    let __node_4 = button(ButtonProps::props().label("Stop").variant(::telar::kw::ghost).on_press(std::rc::Rc::new({ let running = running.clone(); move || running.set(false) })).build())?;
                                     let __text_0 = {
                                         let seconds = seconds.clone();
                                         Text::declaring(

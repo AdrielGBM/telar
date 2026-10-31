@@ -1,10 +1,11 @@
 //! The FPS badge in the corner, and the panel it opens: the frame rate, the frame time, how many components are mounted, which renderer is drawing, and the chords.
 
+use telar::Tone;
 use telar::{
     Accessible, AlignItems, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, RectStyle,
     Role, ShapeStyle, SizeDimension, StyledContainer, Text, box_item, children, use_theme_tokens,
 };
-use telar_components::{KbdProps, TagProps, Tone, kbd, tag};
+use telar_components::{KbdProps, TagProps, kbd, tag};
 
 use super::{Model, mounted_while};
 use crate::strings::{
@@ -156,7 +157,7 @@ fn panel(model: Model) -> Result<Box<dyn LayoutItem>, LayoutError> {
         items,
     )?
     .input_opaque()
-    .role(Role::Group)
+    .role(Role::Section)
     .a11y_label(|| strings::text(DEVTOOLS));
     Ok(box_item(panel))
 }

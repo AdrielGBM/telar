@@ -159,8 +159,8 @@ fn the_track_is_sized_from_the_knob_and_follows_the_tokens() {
     telar::set_theme(Plain::default());
     let ((track, style), (knob, _)) = track_and_knob(|| switch(false));
     let (icon, inset) = (
-        crate::metrics::icon_size(crate::ControlSize::Regular),
-        crate::metrics::gap_xs(crate::ControlSize::Regular),
+        crate::metrics::icon_size(telar::ControlSize::Regular),
+        crate::metrics::gap_xs(telar::ControlSize::Regular),
     );
     assert_eq!((knob.width, knob.height), (icon, icon));
     assert_eq!(

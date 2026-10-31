@@ -8,8 +8,8 @@ use telar::{
     motion::{Easing, Keyframes, Repeat},
 };
 
-use crate::ControlSize;
 use crate::shared;
+use telar::ControlSize;
 
 /// A spinner's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

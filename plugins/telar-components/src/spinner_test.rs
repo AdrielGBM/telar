@@ -56,7 +56,7 @@ fn an_unsized_spinner_stands_a_control_height_tall_and_follows_its_tokens() {
     let (rect, style) = ring(SpinnerProps::props().build());
     assert_eq!(
         rect.width,
-        crate::metrics::control_height(crate::ControlSize::Regular)
+        crate::metrics::control_height(telar::ControlSize::Regular)
     );
     assert_eq!(style.radius, telar::BorderRadius::all(rect.width / 2.0));
 
@@ -71,7 +71,7 @@ fn an_unsized_spinner_stands_a_control_height_tall_and_follows_its_tokens() {
 
 #[test]
 fn a_spinner_stands_as_tall_as_a_control_of_its_size_and_scales_its_token() {
-    use crate::ControlSize;
+    use telar::ControlSize;
     for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
         telar::set_theme(Plain::default());
         let (rect, _) = ring(SpinnerProps::props().size(size).build());

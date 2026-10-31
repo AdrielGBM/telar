@@ -218,6 +218,11 @@ impl Role {
         *self == Self::Group && !drew_beside_controls && controls_inside == 1
     }
 
+    /// Whether a named box with this role is read as its name in place of the words drawn inside it: a box with no role of its own, such as a counter showing "3" and named "3 unread comments", is one thing said once, so a run of text inside it that no control owns is not read on its own. The controls inside it keep their own names and stay reachable. A box with a role, such as a dialog or a list, holds what it draws under its name instead. Every target applies this one rule, so the same item is announced the same wherever it is read.
+    pub fn name_replaces_content(&self) -> bool {
+        *self == Self::Group
+    }
+
     /// The name this role goes by in markup and in a stylesheet — the ARIA role, which is also what an application writes in `.rsx`.
     ///
     /// One table rather than one per target: a name that parses and a name that is announced must be the same word, or an author has learned two vocabularies for one idea.

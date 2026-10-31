@@ -7,8 +7,8 @@ use telar::{
     box_item, box_transform, children, focus::Role, signal,
 };
 
-use crate::ControlSize;
 use crate::shared;
+use telar::ControlSize;
 
 /// A slider's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

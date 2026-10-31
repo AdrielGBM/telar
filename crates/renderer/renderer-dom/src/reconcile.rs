@@ -16,7 +16,7 @@ use wasm_bindgen::prelude::Closure;
 use crate::box_key::BoxKey;
 use crate::document::{
     self, AUDIT_ATTRIBUTE, BoxNode, Content, Described, HOST_ATTRIBUTE, ID_ATTRIBUTE, Node,
-    PaintNode, RESET, RESET_ID, Surface,
+    PaintNode, RESET, RESET_ID, SPOKEN_ATTRIBUTE, Surface,
 };
 use crate::paint;
 
@@ -67,6 +67,8 @@ struct Live {
     pieces: Vec<Piece>,
     /// The paint a nested surface drawn in this box carries at its own level, as the children standing in for it among the surface's roots.
     paint: Vec<Piece>,
+    /// The child that says the name the box is read by in place of what it holds, while it holds boxes: one holding text writes it with the text.
+    spoken: Option<Spoken>,
     /// What was last said about what this box *is*, so an unchanged frame writes no attributes.
     described: Described,
     /// What was last written to a picture's `<img>`.
@@ -90,11 +92,54 @@ pub(crate) fn set_or_clear(node: &web_sys::Element, name: &str, value: Option<&s
     }
 }
 
+struct Spoken {
+    node: web_sys::Element,
+    text: String,
+}
+
+/// What an element holding text is written with: the name it is read by in place of the text, then the text, which a reader skips when it is muted.
+struct Written<'a> {
+    spoken: Option<&'a str>,
+    text: &'a str,
+    runs: Option<&'a [crate::runs::Run]>,
+    muted: bool,
+    owner: BoxKey,
+}
+
+impl<'a> Written<'a> {
+    fn plain(text: &'a str, runs: Option<&'a [crate::runs::Run]>, owner: BoxKey) -> Self {
+        Self {
+            spoken: None,
+            text,
+            runs,
+            muted: false,
+            owner,
+        }
+    }
+
+    /// A string that changes whenever what is written does.
+    fn signature(&self) -> String {
+        let text = match self.runs {
+            Some(runs) => crate::runs::signature(runs),
+            None => self.text.to_string(),
+        };
+        match (self.spoken, self.muted) {
+            (None, false) => text,
+            (spoken, muted) => format!(
+                "\u{4}{}\u{4}{}{text}",
+                spoken.unwrap_or_default(),
+                u8::from(muted)
+            ),
+        }
+    }
+}
+
 /// One thing an element paints inside itself that the browser has to place rather than lay out.
 struct Piece {
     node: web_sys::Element,
     style: String,
     text: String,
+    muted: bool,
     adopted: bool,
 }
 
@@ -104,6 +149,7 @@ impl Piece {
             node,
             style: String::new(),
             text: String::new(),
+            muted: false,
             adopted: false,
         }
     }
@@ -111,6 +157,7 @@ impl Piece {
     fn adopted(node: web_sys::Element) -> Self {
         Self {
             style: node.get_attribute("style").unwrap_or_default(),
+            muted: node.get_attribute("aria-hidden").as_deref() == Some("true"),
             node,
             text: String::new(),
             adopted: true,
@@ -125,15 +172,15 @@ impl Piece {
         runs: Option<&[crate::runs::Run]>,
         owner: BoxKey,
     ) {
-        let written = runs.map(crate::runs::signature);
-        let wanted = written.as_deref().unwrap_or(text);
+        let written = Written::plain(text, runs, owner);
+        let wanted = written.signature();
         if std::mem::take(&mut self.adopted) {
-            morph_text(document, &self.node, text, runs, owner);
+            morph_text(document, &self.node, &written);
         } else if self.text != wanted {
-            write_text(document, &self.node, text, runs, owner);
+            write_text(document, &self.node, &written);
         }
         if self.text != wanted {
-            self.text = wanted.to_string();
+            self.text = wanted;
         }
     }
 }
@@ -402,6 +449,40 @@ impl Reconciler {
         Some(show_paint(&self.document, &mut live.paint[index], paint))
     }
 
+    /// The child of box `key` that says `name`, the name it is read by in place of the boxes it holds: taken over from the served box, made the first frame it has one, and removed once it has none.
+    fn speak(&mut self, key: BoxKey, name: Option<&str>) -> Option<web_sys::Element> {
+        let live = self.live.get_mut(&key)?;
+        let Some(name) = name else {
+            if let Some(gone) = live.spoken.take() {
+                gone.node.remove();
+            }
+            return None;
+        };
+        if live.spoken.is_none() {
+            let served = live
+                .node
+                .first_element_child()
+                .filter(|first| live.adopted && first.has_attribute(SPOKEN_ATTRIBUTE));
+            let node = served.or_else(|| spoken_span(&self.document))?;
+            live.spoken = Some(Spoken {
+                text: node.text_content().unwrap_or_default(),
+                node,
+            });
+        }
+        let spoken = live.spoken.as_mut()?;
+        if spoken.text != name {
+            // Rewritten in its own text node, as a served box's text is, so taking the page over moves no node.
+            match spoken.node.first_child().filter(|text| {
+                text.node_type() == web_sys::Node::TEXT_NODE && text.next_sibling().is_none()
+            }) {
+                Some(text) => text.set_node_value(Some(name)),
+                None => spoken.node.set_text_content(Some(name)),
+            }
+            spoken.text = name.to_string();
+        }
+        Some(spoken.node.clone())
+    }
+
     /// Brings one box's element, and everything inside it, in line with `node`. `parent` is where the box belongs, which a served element has to be in already to be taken over.
     fn apply(&mut self, node: &BoxNode, parent: &web_sys::Node) -> web_sys::Element {
         let element = self.element_for(node.key, node.tag, node.scrolls, parent);
@@ -422,6 +503,10 @@ impl Reconciler {
         let own: web_sys::Node = element.clone().into();
         let mut placed = 0u32;
         if let Content::Children { children, .. } = &node.content {
+            if let Some(spoken) = self.speak(node.key, node.spoken.as_deref()) {
+                place(&own, placed, &spoken);
+                placed += 1;
+            }
             let mut painted = 0usize;
             for child in children {
                 let child = match child {
@@ -466,20 +551,25 @@ impl Reconciler {
                     live.paint.clear();
                 }
             }
-            Content::Text { text, runs } => {
-                let wanted = runs
-                    .as_deref()
-                    .map(crate::runs::signature)
-                    .unwrap_or_else(|| text.clone());
+            Content::Text { text, runs, muted } => {
+                let written = Written {
+                    spoken: node.spoken.as_deref(),
+                    text,
+                    runs: runs.as_deref(),
+                    muted: *muted,
+                    owner: node.key,
+                };
+                let wanted = written.signature();
                 if adopted {
-                    morph_text(&document, &live.node, text, runs.as_deref(), node.key);
+                    morph_text(&document, &live.node, &written);
                 } else if live.text != wanted {
-                    write_text(&document, &live.node, text, runs.as_deref(), node.key);
+                    write_text(&document, &live.node, &written);
                 }
                 if live.text != wanted {
                     live.text = wanted;
                     live.pieces.clear();
                     live.paint.clear();
+                    live.spoken = None;
                 }
             }
             Content::Children { pieces, .. } => {
@@ -659,6 +749,7 @@ impl Reconciler {
                 drawn: String::new(),
                 pieces: Vec::new(),
                 paint: Vec::new(),
+                spoken: None,
                 described: Described::default(),
                 shown: None,
                 _scrolls: scrolls,
@@ -767,6 +858,10 @@ fn fill_pieces(
             let _ = piece.node.set_attribute("style", &painted.style);
             piece.style = painted.style.clone();
         }
+        if piece.muted != painted.muted {
+            set_or_clear(&piece.node, "aria-hidden", painted.muted.then_some("true"));
+            piece.muted = painted.muted;
+        }
         piece.show(document, &painted.text, painted.runs.as_deref(), owner);
     }
     while live.pieces.len() > pieces.len() {
@@ -780,33 +875,50 @@ fn fill_pieces(
     }
 }
 
-/// Replaces `node`'s children with `text`, or with `runs` when it has spans. Wipes the children with it, which is the point: the element carries the text itself now.
-fn write_text(
-    document: &web_sys::Document,
-    node: &web_sys::Element,
-    text: &str,
-    runs: Option<&[crate::runs::Run]>,
-    owner: BoxKey,
-) {
-    match runs {
-        Some(runs) => crate::runs::write(document, node, runs, owner),
-        None => node.set_text_content(Some(text)),
+/// Replaces `node`'s children with what `written` says: the text, or its runs when it has spans, after the name it is read by in place of them, if any, and inside an element a reader skips when it is muted. Wipes the children with it, which is the point: the element carries the text itself now.
+fn write_text(document: &web_sys::Document, node: &web_sys::Element, written: &Written) {
+    if written.spoken.is_none() && !written.muted {
+        fill_text(document, node, written);
+        return;
+    }
+    node.set_text_content(None);
+    if let Some(name) = written.spoken
+        && let Some(spoken) = spoken_span(document)
+    {
+        spoken.set_text_content(Some(name));
+        let _ = node.append_child(&spoken);
+    }
+    let Ok(shown) = document.create_element("span") else {
+        return;
+    };
+    if written.muted {
+        let _ = shown.set_attribute("aria-hidden", "true");
+    }
+    fill_text(document, &shown, written);
+    let _ = node.append_child(&shown);
+}
+
+fn fill_text(document: &web_sys::Document, node: &web_sys::Element, written: &Written) {
+    match written.runs {
+        Some(runs) => crate::runs::write(document, node, runs, written.owner),
+        None => node.set_text_content(Some(written.text)),
     }
 }
 
+/// An empty element for the name a box is read by in place of what it draws, which the reset keeps off the page.
+fn spoken_span(document: &web_sys::Document) -> Option<web_sys::Element> {
+    let span = document.create_element("span").ok()?;
+    let _ = span.set_attribute(SPOKEN_ATTRIBUTE, "");
+    Some(span)
+}
+
 /// The same content brought into a served element, keeping every text node and inline element already there that says the same.
-fn morph_text(
-    document: &web_sys::Document,
-    node: &web_sys::Element,
-    text: &str,
-    runs: Option<&[crate::runs::Run]>,
-    owner: BoxKey,
-) {
+fn morph_text(document: &web_sys::Document, node: &web_sys::Element, written: &Written) {
     let Ok(wanted) = document.create_element("div") else {
-        write_text(document, node, text, runs, owner);
+        write_text(document, node, written);
         return;
     };
-    write_text(document, &wanted, text, runs, owner);
+    write_text(document, &wanted, written);
     crate::adopt::morph_children(node.as_ref(), wanted.as_ref());
 }
 

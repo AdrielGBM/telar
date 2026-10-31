@@ -721,6 +721,6 @@
 720	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-4744..4758	28454	`Variant::Ghost`
-7335..7353	41904	`t!("nav.overview")`
-7362..7376	41932	`Variant::Ghost`
+4744..4749	28467	`ghost`
+7326..7344	41908	`t!("nav.overview")`
+7353..7358	41949	`ghost`

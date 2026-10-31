@@ -3,9 +3,9 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, LayoutError, LayoutStyle, Role};
 
-use crate::ControlSize;
 use crate::metrics;
 use crate::radio::{RadioProps, radio};
+use telar::ControlSize;
 
 const SIZES: [&str; 3] = ["Small", "Medium", "Large"];
 

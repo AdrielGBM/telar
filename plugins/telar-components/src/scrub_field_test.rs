@@ -341,7 +341,7 @@ fn the_label_and_the_value_are_centred_in_the_handle_as_lone_text_leaves_of_its_
     assert_eq!(
         rect_of(&tree, "Width").expect("the label is drawn"),
         drawn_alone_in(height, "Width", |t| shared::quiet(
-            crate::ControlSize::Regular,
+            telar::ControlSize::Regular,
             t,
             1.0
         )),
@@ -349,7 +349,7 @@ fn the_label_and_the_value_are_centred_in_the_handle_as_lone_text_leaves_of_its_
     assert_eq!(
         rect_of(&tree, "7").expect("the value is drawn"),
         drawn_alone_in(height, "7", |t| shared::control_text(
-            crate::ControlSize::Regular,
+            telar::ControlSize::Regular,
             t,
             1.0
         )),

@@ -87,7 +87,7 @@ col gap:20
             box fill:$theme.surface_alt radius:10 height:120 width:220
                 box fill:$theme.primary radius:6 width:60 height:24 absolute inset_top:$badge_top inset_start:$badge_start
             row gap:10
-                button label:"Move the badge" variant:Variant::Ghost on_press:(|| $corner.set(($corner.get() + 1) % 4))
+                button label:"Move the badge" variant:ghost on_press:(|| $corner.set(($corner.get() + 1) % 4))
         code_line code:"box absolute inset_top:$top inset_start:$start     (the node keeps an effect and re-styles)"
     example title:"margin_start / margin_end — logical margins that mirror with the reading direction"
         card gap:10
@@ -128,7 +128,7 @@ col gap:20
                         text "tile {n}" font_size:12 color:$theme.on_primary
             row gap:10
                 button label:"Fill" color:$theme.primary on_press:(|| $slot.set(Slot::Filled(7)))
-                button label:"Clear" variant:Variant::Ghost on_press:(|| $slot.set(Slot::Empty))
+                button label:"Clear" variant:ghost on_press:(|| $slot.set(Slot::Empty))
         code_line code:"match caption > Some(note) > text …            (no $ — the arm is chosen once)"
         code_line code:"match $slot as s key *s > Slot::Empty > box …  (reactive; the key decides when an arm rebuilds)"
     example title:"Attributes"

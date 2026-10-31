@@ -11,9 +11,9 @@ use telar::{
     memo, signal, track_layout,
 };
 
-use crate::ControlSize;
 use crate::popup;
 use crate::shared;
+use telar::ControlSize;
 
 /// How many ems wide a trigger and the panel it opens are when their tokens name no width: room for a two-word label beside the caret, and a width the panel lines up under.
 const WIDTH_EMS: f32 = 13.0;

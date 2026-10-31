@@ -463,6 +463,6 @@
 462	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-4149..4163	26891	`Variant::Ghost`
-4472..4477	29084	`theme`
-4570..4649	29763	`use_context::<ThemedPanelContext>().map(|panel| panel.mode).unwrap_or_default()`
+4149..4154	26904	`ghost`
+4463..4468	29088	`theme`
+4561..4640	29767	`use_context::<ThemedPanelContext>().map(|panel| panel.mode).unwrap_or_default()`

@@ -123,7 +123,8 @@ pub(crate) fn problems(entries: &[PreludeEntry]) -> Vec<String> {
         .collect()
 }
 
-pub(crate) fn is_plain_identifier(segment: &str) -> bool {
+/// Whether `segment` is an identifier Rust reads as a name and nothing else: ASCII, not `_` alone, and no keyword.
+pub fn is_plain_identifier(segment: &str) -> bool {
     let mut chars = segment.chars();
     let starts_well = chars
         .next()

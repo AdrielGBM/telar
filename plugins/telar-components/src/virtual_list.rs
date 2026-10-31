@@ -13,12 +13,12 @@ use telar::{
     key_nav_apply, memo, signal,
 };
 
-use crate::ControlSize;
 use crate::list::ListTokens;
 use crate::rows::{BuiltRows, RowPlaces, RowState, counted, cursor_row_paint, with_empty_state};
 use crate::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
 use crate::shared;
 use crate::type_ahead::TypeAhead;
+use telar::ControlSize;
 
 const OVERSCAN: usize = 4;
 

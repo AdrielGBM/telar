@@ -282,8 +282,8 @@ fn the_dot_is_a_ringed_pill_a_step_smaller_than_a_slider_s_thumb() {
     telar::set_theme(Plain::default());
     let canvas = canvas(20.0);
     let (rect, style) = dot_paint(&canvas);
-    let side = crate::metrics::icon_size(crate::ControlSize::Regular)
-        - crate::metrics::gap_sm(crate::ControlSize::Regular);
+    let side = crate::metrics::icon_size(telar::ControlSize::Regular)
+        - crate::metrics::gap_sm(telar::ControlSize::Regular);
     assert_eq!((rect.width, rect.height), (side, side));
     assert_eq!(style.radius, telar::BorderRadius::all(side / 2.0));
     assert_eq!(style.border.map(|b| b.widths[0]), Some(2.5));

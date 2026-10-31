@@ -6,9 +6,9 @@ use std::sync::Arc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Role, signal};
 
-use crate::ControlSize;
 use crate::data_table::{CellAlign, Column, DataTableProps, TableRow, data_table};
 use crate::selection::SelectionMode;
+use telar::ControlSize;
 
 fn columns() -> Vec<Column> {
     vec![

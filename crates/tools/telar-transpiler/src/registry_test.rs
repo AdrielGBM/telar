@@ -86,7 +86,7 @@ fn every_meaningful_tag_takes_the_accessibility_attributes() {
         "text", "col", "row", "grid", "box", "img", "image", "svg", "path", "canvas", "scroll",
         "input",
     ] {
-        for key in ["label", "lang", "a11y"] {
+        for key in ["a11y_label", "lang", "a11y"] {
             assert!(
                 tag_attr_keys(tag).contains(&key),
                 "`{tag}` should take `{key}`"

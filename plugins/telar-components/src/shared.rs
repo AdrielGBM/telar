@@ -10,7 +10,7 @@ use telar::{
 
 pub use telar::DOUBLE_CLICK;
 
-use crate::ControlSize;
+use telar::ControlSize;
 
 /// The ink the document starts in — the root of the cascade, not the text at any particular node.
 ///

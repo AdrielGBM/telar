@@ -415,7 +415,7 @@ mod from_a_screen {
         Ok(box_item(link))
     }
 
-    /// What `box role:<role> toggled:$on label:"…" on_press:(…)` builds in `.rsx`: a box drawing a glyph that is a control with an on/off state, flipped by its own press.
+    /// What `box role:<role> toggled:$on a11y_label:"…" on_press:(…)` builds in `.rsx`: a box drawing a glyph that is a control with an on/off state, flipped by its own press.
     fn stateful_control(
         role: platform_core::Role,
         name: &'static str,

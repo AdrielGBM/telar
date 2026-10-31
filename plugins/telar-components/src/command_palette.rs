@@ -14,7 +14,6 @@ use telar::{
     memo, signal,
 };
 
-use crate::ControlSize;
 use crate::fuzzy::fuzzy_match;
 use crate::list::{ListTokens, row_paint, tinted};
 use crate::rows::{BuiltRows, RowPlaces};
@@ -23,6 +22,7 @@ use crate::shared::{self, shown_chord};
 use crate::strings;
 use crate::text_field::{TextFieldProps, text_field};
 use crate::{KbdProps, kbd};
+use telar::ControlSize;
 
 /// How many rows show before the list scrolls.
 const VISIBLE_ROWS: usize = 8;

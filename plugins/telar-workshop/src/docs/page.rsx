@@ -49,7 +49,7 @@ let prose: Vec<String> = docs
     .collect();
 
 [view]
-scroll grow:1 min_width:0 min_height:0 axis:col label:(strings::text(VIEW_DOCS))
+scroll grow:1 min_width:0 min_height:0 axis:col a11y_label:(strings::text(VIEW_DOCS))
     col gap:(WORKBENCH_GRID * 2.0) pad:PAGE_MARGIN max_width:PAGE_MAX_WIDTH
         if !group.is_empty()
             text "{group}" color:(use_workbench_tokens().text_muted)

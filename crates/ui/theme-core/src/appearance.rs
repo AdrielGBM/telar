@@ -1,13 +1,16 @@
-//! The axes every component is drawn along: [`Variant`], how emphatic it is, and [`Tone`], what it means, for one that carries a colour; [`ControlSize`], how large it is, for one with metrics of its own.
+//! The axes every component is drawn along, one type each for every component that has them: [`Variant`], how emphatic it is, and [`Tone`], what it means, for one that carries a colour; [`ControlSize`], how large it is, for one with metrics of its own.
+//!
+//! They belong to the theme's vocabulary because a tone is the theme's token of its intent and a size is read off the theme's spacing unit and icon size. Each value has one word, which a `.rsx` writes bare (`size:small`, `variant:ghost`, `tone:danger`) and which is its text form as a preview arg; the facade's `kw` module names them.
 
 use std::fmt;
 
-use telar::{Color, Memo, Reactive, ReadSignal, RwSignal};
+use geometry_core::Color;
+use reactive_core::{Memo, Reactive, ReadSignal, RwSignal};
 
-use crate::shared;
+use crate::use_theme_tokens;
 
 /// How a component carries its colour, from the most emphatic to the least. Any variant goes with any [`Tone`].
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, telar::PreviewArg)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Variant {
     /// Filled with the colour, its label in an ink that reads on it: what a view leads with.
     #[default]
@@ -24,12 +27,12 @@ pub enum Variant {
 ///
 /// Every length comes from the theme's spacing unit and icon size, at the default theme 8 and 16:
 ///
-/// - **A control** (a button, an icon button, a field's box) is its icon with a spacing unit either side, both multiplied by [`scale`](Self::scale): 24, 32 and 40 px from small to large. The smallest is already the smallest pointer target, [`MIN_TARGET`](crate::metrics::MIN_TARGET), so nothing a pointer operates is grown past what it draws; a theme whose units would draw one below it is held at it.
+/// - **A control** (a button, an icon button, a field's box) is its icon with a spacing unit either side, both multiplied by [`scale`](Self::scale): 24, 32 and 40 px from small to large. The smallest is already the smallest pointer target, so nothing a pointer operates is grown past what it draws; a theme whose units would draw one below it is held at it.
 /// - **A tag** moves half as far: half a control's height plus one spacing unit, 20, 24 and 28 px, and never below the smallest target where it answers the pointer, as a filter or round an action, so a small one is 24 there.
 /// - **The gaps and padding** are the theme's spacing steps multiplied by [`scale`](Self::scale).
 /// - **The text** steps by [`text_scale`](Self::text_scale), less than the box round it, since type below about 12 px stops reading and a line is centred in its control rather than padding it.
 /// - **Corners** do not scale: a smaller control is smaller, not flatter.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, telar::PreviewArg)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ControlSize {
     /// Compact: a control inside another, as a tag's remove button, or a dense inspector.
     Small,
@@ -82,35 +85,19 @@ pub enum Tone {
     Color(Reactive<Color>),
 }
 
-/// The names the named tones are chosen by, in the order a control lists them.
-const NAMES: [&str; 6] = ["Accent", "Neutral", "Info", "Success", "Warning", "Danger"];
-
 impl Tone {
-    /// The theme's colour for this tone, or the caller's, read now.
-    pub(crate) fn color(&self) -> Color {
-        let theme = telar::use_theme_tokens();
+    /// The theme's colour for this tone, or the caller's, read now and subscribing the caller to the theme.
+    pub fn color(&self) -> Color {
+        let theme = use_theme_tokens();
         match self {
-            Tone::Accent => shared::accent(),
-            Tone::Neutral => shared::muted(),
+            Tone::Accent => theme.primary(),
+            Tone::Neutral => theme.muted(),
             Tone::Info => theme.info(),
             Tone::Success => theme.success(),
             Tone::Warning => theme.warning(),
             Tone::Danger => theme.error(),
             Tone::Color(color) => color.get(),
         }
-    }
-
-    fn name(&self) -> Option<&'static str> {
-        let at = match self {
-            Tone::Accent => 0,
-            Tone::Neutral => 1,
-            Tone::Info => 2,
-            Tone::Success => 3,
-            Tone::Warning => 4,
-            Tone::Danger => 5,
-            Tone::Color(_) => return None,
-        };
-        Some(NAMES[at])
     }
 }
 
@@ -119,17 +106,23 @@ impl PartialEq for Tone {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Tone::Color(a), Tone::Color(b)) => a.get() == b.get(),
-            (a, b) => a.name() == b.name(),
+            (a, b) => std::mem::discriminant(a) == std::mem::discriminant(b),
         }
     }
 }
 
 impl fmt::Debug for Tone {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.name() {
-            Some(name) => f.write_str(name),
-            None => f.debug_tuple("Color").field(&self.color()).finish(),
-        }
+        let name = match self {
+            Tone::Accent => "Accent",
+            Tone::Neutral => "Neutral",
+            Tone::Info => "Info",
+            Tone::Success => "Success",
+            Tone::Warning => "Warning",
+            Tone::Danger => "Danger",
+            Tone::Color(color) => return f.debug_tuple("Color").field(&color.get()).finish(),
+        };
+        f.write_str(name)
     }
 }
 
@@ -163,39 +156,6 @@ impl From<Memo<Color>> for Tone {
     }
 }
 
-// The workshop chooses among the named tones; a matrix or a saved arg may still hand it a colour.
-telar::__previews! {
-    impl Tone {
-        fn named(name: &str) -> Option<Self> {
-            Some(match name {
-                "Accent" => Tone::Accent,
-                "Neutral" => Tone::Neutral,
-                "Info" => Tone::Info,
-                "Success" => Tone::Success,
-                "Warning" => Tone::Warning,
-                "Danger" => Tone::Danger,
-                _ => return None,
-            })
-        }
-    }
-
-    impl telar::preview::PreviewArg for Tone {
-        const CONTROL: telar::preview::ControlKind =
-            telar::preview::ControlKind::Choice { variants: &NAMES };
-
-        fn to_arg_value(&self) -> telar::preview::ArgValue {
-            match self.name() {
-                Some(name) => telar::preview::ArgValue::Choice(name.to_string()),
-                None => telar::preview::ArgValue::Color(self.color()),
-            }
-        }
-
-        fn from_arg_value(value: &telar::preview::ArgValue) -> Option<Self> {
-            match value {
-                telar::preview::ArgValue::Choice(name) => Tone::named(name),
-                telar::preview::ArgValue::Color(color) => Some(Tone::from(*color)),
-                _ => None,
-            }
-        }
-    }
-}
+#[cfg(test)]
+#[path = "appearance_test.rs"]
+mod tests;

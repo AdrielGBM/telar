@@ -14,15 +14,15 @@ col gap:20
             row gap:8 align:center
                 text "Inbox" font_size:15 color:$theme.ink
                 tag label:"12"
-                tag label:"NEW" tone:Tone::Success variant:Variant::Soft
-                tag label:"BETA" tone:$theme.purple variant:Variant::Outline
-        code_line code:"tag label:'NEW' tone:Tone::Success"
+                tag label:"NEW" tone:success variant:soft
+                tag label:"BETA" tone:$theme.purple variant:outline
+        code_line code:"tag label:'NEW' tone:success"
     example title:"a control in the action slot acts on the tag; selected or on_toggle makes it a filter"
         card gap:10
             row gap:8 align:center
                 tag label:"design"
                 tag label:"rust" selected:$rust
                 tag label:"removable"
-                    icon_button icon:"lucide:x" label:"Remove removable" size:(ControlSize::Small) on_press:(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) }) slot:"action"
+                    icon_button icon:"lucide:x" label:"Remove removable" size:small on_press:(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) }) slot:"action"
             text "tags · {$tags}" font_size:13 color:$theme.muted
-        code_line code:"tag label:'removable' / icon_button icon:'lucide:x' size:(ControlSize::Small) slot:'action'"
+        code_line code:"tag label:'removable' / icon_button icon:'lucide:x' size:small slot:'action'"

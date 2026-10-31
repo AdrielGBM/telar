@@ -203,9 +203,12 @@ laptop = "1280x800"
 - **Environment axes** are `mode`, `locale`, `dir` and `viewport`. A viewport value is a size such as `390x844` or a
   name from `[telar.previews.viewports]`.
 - **Any other key names an arg** of the preview, declared in `args(…)` or written as a literal on the root, and
-  takes values in their text form: `12`, `true`, `Primary`, `#ff8800`, `"Save"`. A component's size is one of them, its
-  `size` arg, since nothing inherits one: `size:[Small Regular Large]`, or `size = ["Small", "Regular", "Large"]` in
-  `telar.toml`. A matrix that still writes the old `control_size` axis is refused, naming that arg.
+  takes values in their text form: `12`, `true`, `small`, `Primary`, `#ff8800`, `"Save"`. A value of the shared
+  vocabulary is its word, as a `.rsx` prop writes it (`size`, `variant`, `tone`), and an enum deriving `PreviewArg` its
+  variant's name. A component's size is one of them, its `size` arg, since nothing inherits one:
+  `size:[small regular large]`, or `size = ["small", "regular", "large"]` in `telar.toml`. A link, stored state or matrix
+  that still writes the variant's name (`Small`) gives the arg its default, as the removed `control_size` setting is
+  skipped; a matrix that still writes the old `control_size` axis is refused, naming that arg.
 - The cells are the product of the axes, the first outermost. `themes` is built in: every registered mode, side by
   side. A package's own `themes` replaces it.
 - In Rust, `.matrix(Matrix::Named("themes"))` or `.matrix(Matrix::Axes(&[Axis::Dir(&[…]), Axis::Arg("size", &["12", "16"])]))`.

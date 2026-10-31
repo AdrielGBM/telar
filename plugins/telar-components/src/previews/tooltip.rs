@@ -3,9 +3,9 @@ use std::time::Duration;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Role};
 
-use crate::ControlSize;
 use crate::button::{ButtonProps, button};
 use crate::tooltip::{TooltipProps, tooltip};
+use telar::ControlSize;
 
 #[derive(Clone, Copy, telar::PreviewArg)]
 enum Side {

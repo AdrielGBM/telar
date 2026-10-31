@@ -17,9 +17,11 @@
 
 #![warn(rustdoc::broken_intra_doc_links)]
 
+mod appearance;
 mod context;
 mod mode;
 
+pub use appearance::{ControlSize, Tone, Variant};
 pub use context::{
     ScopedTheme, Theme, ThemeExtensions, ThemeTokens, nearest_theme, set_theme, use_theme,
     use_theme_extension, use_theme_tokens,

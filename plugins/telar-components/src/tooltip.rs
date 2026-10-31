@@ -7,8 +7,8 @@ use telar::{
     box_item, children, signal, use_theme_tokens,
 };
 
-use crate::ControlSize;
 use crate::shared::{self, shown_chord};
+use telar::ControlSize;
 
 /// Leading for the description line, the only one that wraps (`leading-snug`).
 const DESCRIPTION_LEADING: f32 = 1.375;

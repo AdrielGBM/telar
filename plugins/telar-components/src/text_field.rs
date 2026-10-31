@@ -2,9 +2,9 @@
 
 use std::rc::Rc;
 
-use crate::ControlSize;
 use crate::shared;
 use crate::strings;
+use telar::ControlSize;
 use telar::{
     Accessible, AlignItems, Border, BorderRadius, Color, Container, Input, JustifyContent, Key,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, ModifiersState, NodeId, Props,

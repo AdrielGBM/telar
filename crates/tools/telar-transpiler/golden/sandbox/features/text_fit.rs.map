@@ -208,4 +208,4 @@
 207	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1597..1611	7808	`Variant::Ghost`
+1597..1602	7821	`ghost`

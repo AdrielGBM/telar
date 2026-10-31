@@ -8,8 +8,8 @@ use telar::{
     box_transform, children, focus::Role, signal,
 };
 
-use crate::ControlSize;
 use crate::shared;
+use telar::ControlSize;
 
 /// A switch's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

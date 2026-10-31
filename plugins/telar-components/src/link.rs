@@ -8,9 +8,9 @@ use telar::{
     SurfaceAmendment, Text, TextWrap, amend_surface, box_item, children,
 };
 
-use crate::ControlSize;
 use crate::shared;
 use crate::strings;
+use telar::ControlSize;
 
 /// A link's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///

@@ -239,7 +239,7 @@
 238	.
 
 # verbatim expression spans: rsx[start..end] -> gen[start] `source text`
-1527..1534	4484	`presses`
-2077..2089	7066	`calm_reading`
-2229..2241	8587	`calm_reading`
-3296..3302	14298	`styles`
+1532..1539	4484	`presses`
+2092..2104	7071	`calm_reading`
+2244..2256	8592	`calm_reading`
+3326..3332	14308	`styles`

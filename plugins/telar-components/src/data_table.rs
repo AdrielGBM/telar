@@ -19,7 +19,8 @@ use telar::{
 use crate::resizable::{ResizeEdge, ResizeHandleProps, resize_handle};
 use crate::rows::{BuiltRows, RowPlaces, RowState, counted, cursor_row_paint, with_empty_state};
 use crate::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
-use crate::{ControlSize, shared, strings};
+use crate::{shared, strings};
+use telar::ControlSize;
 
 const OVERSCAN: usize = 4;
 const MIN_COLUMN_WIDTH: f32 = 48.0;

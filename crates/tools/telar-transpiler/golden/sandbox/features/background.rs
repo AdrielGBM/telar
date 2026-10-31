@@ -151,7 +151,7 @@ pub fn background(props: BackgroundProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                 __children.push(box_item(__row_0));
                                 let __row_1 = {
                                     let __node_5 = button(ButtonProps::props().label("Compute").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let busy = busy.clone(); let total = total.clone(); move || { busy.set(true); total.set(String::from("…")); spawn_task(|| slow_sum(2_000_000), on_computed(total.clone(), busy.clone())); } })).build())?;
-                                    let __node_6 = button(ButtonProps::props().label("Bounce").variant(Variant::Outline).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let beat = beat.clone(); move || { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) } })).build())?;
+                                    let __node_6 = button(ButtonProps::props().label("Bounce").variant(::telar::kw::outline).color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let beat = beat.clone(); move || { beat.retarget(if beat.get() > 1.0 { 1.0 } else { 1.4 }) } })).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(10.0), children![__node_5, __node_6])?
                                 };
                                 __children.push(box_item(__row_1));
@@ -206,7 +206,7 @@ pub fn background(props: BackgroundProps) -> Result<Box<dyn LayoutItem>, LayoutE
                                     let mut __slots: Vec<ChildSlot> = Vec::new();
                                     let __node_10 = button(ButtonProps::props().label("Scan").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let found = found.clone(); let scanning = scanning.clone(); let scan = scan.clone(); move || { found.set(Vec::new()); scanning.set(true); *scan.borrow_mut() = Some(spawn_stream(walk_project, on_found(found.clone()), on_scan_end(scanning.clone()))); } })).build())?;
                                     __slots.push(ChildSlot::stat(box_item(__node_10)));
-                                    let __node_11 = button(ButtonProps::props().label("Cancel").variant(Variant::Outline).color(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).on_press(std::rc::Rc::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build())?;
+                                    let __node_11 = button(ButtonProps::props().label("Cancel").variant(::telar::kw::outline).color(Reactive::of({ let theme = theme.clone(); move || theme.get().danger })).on_press(std::rc::Rc::new({ let scan = scan.clone(); let scanning = scanning.clone(); move || { if let Some(task) = scan.borrow_mut().take() { task.cancel(); } scanning.set(false); } })).build())?;
                                     __slots.push(ChildSlot::stat(box_item(__node_11)));
                                     let __node_12 = fragment(
                                         { let scanning = scanning.clone(); move || vec![scanning.get()] },

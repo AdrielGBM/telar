@@ -84,7 +84,7 @@ pub fn controls(props: ControlsProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         card(CardProps::props().children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_2));
-                    let __node_3 = code_line(CodeLineProps::props().code("box role:button label:'Add one' on_press:(|| $presses += 1)").build())?;
+                    let __node_3 = code_line(CodeLineProps::props().code("box role:button a11y_label:'Add one' on_press:(|| $presses += 1)").build())?;
                     __children.push(box_item(__node_3));
                     Ok(__children)
                 }
@@ -140,7 +140,7 @@ pub fn controls(props: ControlsProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         card(CardProps::props().children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_5));
-                    let __node_6 = code_line(CodeLineProps::props().code("box role:switch toggled:$calm label:'Reduce motion' on_press:(|| $calm.set(!$calm.get()))").build())?;
+                    let __node_6 = code_line(CodeLineProps::props().code("box role:switch toggled:$calm a11y_label:'Reduce motion' on_press:(|| $calm.set(!$calm.get()))").build())?;
                     __children.push(box_item(__node_6));
                     Ok(__children)
                 }
@@ -209,7 +209,7 @@ pub fn controls(props: ControlsProps) -> Result<Box<dyn LayoutItem>, LayoutError
                         card(CardProps::props().children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_9 = code_line(CodeLineProps::props().code("box role:button toggled:$bold label:'Bold' on_press:(|| $bold.set(!$bold.get()))").build())?;
+                    let __node_9 = code_line(CodeLineProps::props().code("box role:button toggled:$bold a11y_label:'Bold' on_press:(|| $bold.set(!$bold.get()))").build())?;
                     __children.push(box_item(__node_9));
                     Ok(__children)
                 }

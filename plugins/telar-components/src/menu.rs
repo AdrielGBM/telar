@@ -11,10 +11,10 @@ use telar::{
     memo, signal, track_layout,
 };
 
-use crate::ControlSize;
 use crate::dropdown;
 use crate::menu_panel::{self, Config, Keys, Level, Spec};
 use crate::shared;
+use telar::ControlSize;
 // What the test module below reads via `use super::*` to compute click points.
 #[cfg(test)]
 fn panel_width() -> f32 {
