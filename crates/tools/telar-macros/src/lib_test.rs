@@ -2,6 +2,7 @@ use super::{families_without_sfnt_face, font_asset_tokens, stale_cli_message};
 
 /// The failure this catches was silent: an installed `cargo-telar` older than the `telar` it drives asks for a hot-reload build the way it used to — an environment variable — the macro builds a plain application instead, and the only thing said about it is that the app never connected to a channel it was never compiled to open.
 #[test]
+#[cfg(not(feature = "hot-reload"))]
 fn an_older_cli_asking_the_old_way_is_named() {
     let message = stale_cli_message(true).expect("this test binary has no `hot-reload` feature");
 
@@ -13,6 +14,13 @@ fn an_older_cli_asking_the_old_way_is_named() {
         message.contains(env!("CARGO_PKG_VERSION")),
         "and which version to install: {message}"
     );
+}
+
+/// A build that has the feature already is the hot-reload build the old way asked for, so there is nothing to name.
+#[test]
+#[cfg(feature = "hot-reload")]
+fn a_hot_reload_build_asked_for_the_old_way_got_what_it_asked_for() {
+    assert_eq!(stale_cli_message(true), None);
 }
 
 /// A current CLI names the feature and sets no such variable, which is every build that is not the mismatch above.
