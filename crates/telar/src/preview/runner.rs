@@ -10,20 +10,16 @@ use super::test_run::{TestOptions, run_previews};
 
 /// The `cargo telar` dev-loop entry, for an app that wires its own runner instead of expanding [`crate::app!`] — a multi-surface host, or one on an out-of-tree backend, which reaches [`crate::run_with_platform`] or [`crate::run_multi_with_platform`] directly. `app!` generates a call to this; anything using `rsx_modules!` has to make it by hand, and until it does, `cargo telar preview`/`test` silently start the real application.
 ///
+/// It answers the requests a build with previews takes without a window: listing them, testing them, and drawing them to PNGs. A build with the preview host goes on to [`show_previews`](super::host::show_previews) when this declines, so an app built with both can still ask for pictures rather than a window.
+///
 /// Returns `true` when it handled the invocation and the caller must return without starting its app.
 ///
 /// `setup` runs only on the dev path, never on the way to a normal start — a caller whose setup seeds a world that exists *for* previews must not pay for it, or change its own startup, every time the app launches. It is not optional on the dev path, because [`crate::use_theme`] panics when no theme is set: a `[preview]` reading one would otherwise fail for a reason that has nothing to do with the component under test.
 ///
 /// `entries` is a closure so a normal run pays nothing to build a list it will not read. `app!` passes the crate's `telar_all_previews` followed by each `[telar.previews] include` crate's; a runner wired by hand passes whatever list it builds, usually its own `telar_all_previews`.
-///
-/// `shell` builds the app that shows the previews under `cargo telar preview`: [`PreviewApp::new`](super::host::PreviewApp::new), or a workshop's. It reads the preview or component to open first, if any, from [`requested_preview`](super::host::requested_preview).
-///
-/// A page has no environment to be asked through, so a browser build answers from the build alone: one with the preview host, which only `cargo telar preview --target web` makes, shows the previews in `shell` as it loads, and any other starts the app.
-pub fn dev_entry<F, S, A>(entries: F, config: AppConfig, setup: impl FnOnce(), shell: S) -> bool
+pub fn dev_entry<F>(entries: F, config: AppConfig, setup: impl FnOnce()) -> bool
 where
     F: Fn() -> Vec<PreviewEntry>,
-    S: FnOnce(Vec<PreviewEntry>) -> A,
-    A: crate::App + 'static,
 {
     let Some(request) = Request::asked() else {
         return false;
@@ -37,31 +33,47 @@ where
         }
         Request::List(file) => list(&entries(), file.as_deref()),
         Request::Test => try_run_test(entries(), config),
-        Request::Show => {
-            let entries = entries();
-            if let Some(duplicates) = duplicate_ids(&entries) {
-                refuse(&duplicates);
-            }
-            crate::run_app_with_name(config, shell(entries), "telar-workshop");
-            true
-        }
     }
 }
 
-/// What `cargo telar` asked the app to do in place of starting.
+/// Opens the previews in `shell`, the app `cargo telar preview` shows them in, when it asked for them, and returns `true` when it did. `entries` and `setup` are [`dev_entry`]'s.
+///
+/// `app!` passes the workshop's `WorkshopApp`, from the package's optional `telar-workshop` dependency, and refuses to compile a build with the preview host that lacks it. `shell` reads the preview or component to open first, if any, from [`requested_preview`](super::host::requested_preview).
+///
+/// A page has no environment to be asked through, so a browser build answers from the build alone: one with the preview host, which only `cargo telar preview --target web` makes, shows the previews as it loads.
+#[cfg(feature = "preview")]
+pub fn show_previews<F, S, A>(entries: F, config: AppConfig, setup: impl FnOnce(), shell: S) -> bool
+where
+    F: Fn() -> Vec<PreviewEntry>,
+    S: FnOnce(Vec<PreviewEntry>) -> A,
+    A: crate::App + 'static,
+{
+    if !cfg!(target_arch = "wasm32") && std::env::var("TELAR_PREVIEW").is_err() {
+        return false;
+    }
+    setup();
+    super::host::speak_the_app_language();
+    let entries = entries();
+    if let Some(duplicates) = duplicate_ids(&entries) {
+        refuse(&duplicates);
+    }
+    crate::run_app_with_name(config, shell(entries), "telar-workshop");
+    true
+}
+
+/// What `cargo telar` asked the app to do in place of starting, short of showing the previews.
 enum Request {
     #[cfg(feature = "preview-headless")]
     Png(String),
     List(Option<String>),
     Test,
-    Show,
 }
 
 impl Request {
-    /// Checked in this order, so an app built with both hosts can ask for pictures rather than a window.
+    /// Checked in this order, so a build with the PNG renderer can be asked for pictures whatever else is set.
     fn asked() -> Option<Self> {
         if cfg!(target_arch = "wasm32") {
-            return cfg!(feature = "preview").then_some(Self::Show);
+            return None;
         }
         #[cfg(feature = "preview-headless")]
         if let Ok(out_dir) = std::env::var("TELAR_PREVIEW_PNG") {
@@ -71,11 +83,7 @@ impl Request {
         if set(PREVIEW_LIST_VAR) {
             return Some(Self::List(std::env::var(PREVIEW_LIST_FILE_VAR).ok()));
         }
-        if set(TEST_VAR) {
-            return Some(Self::Test);
-        }
-        // Only a build with the preview host can show the previews; without it the caller starts its app as usual.
-        (cfg!(feature = "preview") && set("TELAR_PREVIEW")).then_some(Self::Show)
+        set(TEST_VAR).then_some(Self::Test)
     }
 }
 

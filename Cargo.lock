@@ -3009,6 +3009,7 @@ dependencies = [
  "telar-components",
  "telar-devtools",
  "telar-icons",
+ "telar-workshop",
  "tracing-subscriber",
 ]
 
@@ -5270,6 +5271,7 @@ dependencies = [
  "telar-renderer-text",
  "telar-renderer-tui",
  "telar-ui-core",
+ "telar-workshop",
  "tracing-subscriber",
 ]
 

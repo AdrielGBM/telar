@@ -484,3 +484,27 @@ fn a_valid_manifest_telar_section_is_parsed() {
     assert_eq!(section.backend, Some(RendererBackend::Software));
     assert_eq!(section.dev.window.unwrap().width, Some(800));
 }
+
+fn workshop_refusal(package: &str) -> Option<String> {
+    missing_workshop(&resolve_package(&["-p", package].map(str::to_string)))
+}
+
+#[test]
+fn a_package_without_the_workshop_is_refused_with_the_command_that_adds_it() {
+    let refusal =
+        workshop_refusal("telar-components").expect("telar-components declares no workshop");
+    assert!(
+        refusal.contains("`telar-components` declares no optional `telar-workshop` dependency"),
+        "{refusal}"
+    );
+    assert!(
+        refusal.contains("cargo add -p telar-components telar-workshop --optional"),
+        "{refusal}"
+    );
+    assert_eq!(refusal.lines().count(), 1, "{refusal}");
+}
+
+#[test]
+fn a_package_that_declares_the_workshop_is_not_refused() {
+    assert_eq!(workshop_refusal("catalogue"), None);
+}

@@ -97,9 +97,9 @@ telar-workshop = ["dep:telar-workshop"]
 
 Cargo.lock pins an optional dependency a member declares whether or not a build enables it, and only
 `cargo telar dev` and `cargo telar preview` enable the devtools, and only `cargo telar preview` the workshop.
-Without the declaration the session runs without the overlay or the workshop and says so (`preview` falls back to a
-plain page that lists every preview); `cargo telar dev --devtools off` leaves the overlay out of the build even
-when it is declared.
+Without the devtools declaration a dev session runs without the overlay and says so; without the workshop's,
+`cargo telar preview` stops before building and gives the `cargo add` line that adds it. `cargo telar dev --devtools off`
+leaves the overlay out of the build even when it is declared.
 
 ## Do not set `panic = "abort"` on `[profile.dev]` or `[profile.release]`
 

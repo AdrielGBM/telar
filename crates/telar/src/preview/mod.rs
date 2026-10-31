@@ -47,8 +47,8 @@ mod query;
 pub mod snapshot;
 mod value;
 
-#[cfg(not(target_os = "android"))]
-mod app;
+#[cfg(all(feature = "preview-headless", not(target_os = "android")))]
+mod png;
 #[cfg(not(target_os = "android"))]
 mod runner;
 pub mod test_run;
@@ -84,3 +84,37 @@ pub use telar_macros::{__preview_file_of, __preview_names, __preview_source};
 
 /// A preview, as [`preview!`] returns it and its setters configure it: another name for [`PreviewEntry`], so `vec![preview!(…).title(…), …]` is already the `Vec<Preview>` a crate lists.
 pub type Preview = PreviewEntry;
+
+/// Keeps what only a build with the preview host (`telar/preview`, the window or page `cargo telar preview` opens) compiles. Defined only under `previews`, so it is reached inside [`crate::__previews!`].
+#[cfg(feature = "preview")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __preview_host {
+    ($($item:tt)*) => {
+        $($item)*
+    };
+}
+
+#[cfg(not(feature = "preview"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __preview_host {
+    ($($item:tt)*) => {};
+}
+
+/// The other side of `__preview_host!`: what a build with previews but no preview host keeps in its place.
+#[cfg(feature = "preview")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __without_preview_host {
+    ($($item:tt)*) => {};
+}
+
+#[cfg(not(feature = "preview"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __without_preview_host {
+    ($($item:tt)*) => {
+        $($item)*
+    };
+}

@@ -38,7 +38,7 @@ use cli::{
     BuildArgs, BuildFormat, Cli, CommonArgs, DevArgs, DevtoolsArg, HotArgs, PreviewArgs, Target,
     TelarCommand, WebRenderer,
 };
-use config::{TelarSection, load_config, resolve_package};
+use config::{TelarSection, load_config, missing_workshop, resolve_package};
 use doctor::run_doctor_cmd;
 use fmt::run_fmt_cmd;
 use library::{run_package_cmd, run_publish_cmd};
@@ -294,13 +294,20 @@ struct HeldWorkshop {
     page: Option<ServerClaim>,
 }
 
-/// What this `cargo telar preview` holds for the workshop it is about to run, or `None` when one already runs for the package and the request was handed to it. Asked before anything is built: a workshop that is already running needs nothing rebuilt.
+/// What this `cargo telar preview` holds for the workshop it is about to run, or `None` when one already runs for the package and the request was handed to it. Asked before anything is built: a workshop that is already running needs nothing rebuilt, and a package that declares none is refused before a build could fail on it.
 fn hold_workshop(args: &PreviewArgs) -> Option<HeldWorkshop> {
-    if args.list || args.png.is_some() || args.build.is_some() {
+    if args.list || args.png.is_some() {
         return Some(HeldWorkshop::default());
     }
     let common = &args.hot.common;
     let resolved = resolve_package(&build_cargo_args(&common.package, false, &None));
+    if let Some(refusal) = missing_workshop(&resolved) {
+        eprintln!("[cargo-telar] error: {refusal}");
+        std::process::exit(1);
+    }
+    if args.build.is_some() {
+        return Some(HeldWorkshop::default());
+    }
     let (root, package) = (&resolved.workspace_root, resolved.name());
     if common.target == Some(Target::Web) {
         return match ServerClaim::claim(&workshop_server_file(root, &package)) {

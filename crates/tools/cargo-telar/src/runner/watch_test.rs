@@ -261,11 +261,13 @@ fn workshop_for(mode: HotMode, package: &str) -> Option<String> {
     )
 }
 
-/// A dev session never builds the workshop, and a package that does not declare it falls back to the plain page rather than naming a feature cargo would refuse.
 #[test]
-fn the_workshop_is_turned_on_only_by_a_preview_of_a_package_that_declares_it() {
-    assert_eq!(workshop_for(HotMode::Dev, "sandbox"), None);
-    assert_eq!(workshop_for(HotMode::Preview, "telar-components"), None);
+fn the_workshop_is_turned_on_by_a_preview_and_never_by_a_dev_session() {
+    assert_eq!(workshop_for(HotMode::Dev, "catalogue"), None);
+    assert_eq!(
+        workshop_for(HotMode::Preview, "catalogue").as_deref(),
+        Some("catalogue/telar-workshop")
+    );
 }
 
 /// A page loads no dylib, so `telar/dev` would only fail to build for wasm; and it draws no overlay, so the devtools would be dead weight.
@@ -286,16 +288,6 @@ fn a_web_preview_builds_the_preview_host_and_the_workshop_alone() {
     );
     let dev = ["-p", "catalogue"].map(str::to_string).to_vec();
     assert_eq!(with_web_features(&HotMode::Dev, dev.clone()), dev);
-}
-
-#[test]
-fn the_fallback_hint_names_the_command_that_adds_the_workshop() {
-    let note = missing_workshop_note("app");
-    assert!(
-        note.contains("cargo add -p app telar-workshop --optional"),
-        "{note}"
-    );
-    assert_eq!(note.lines().count(), 1, "{note}");
 }
 
 /// `prelude` and `theme` change the Rust every `.rsx` becomes, and the loop used to watch neither file: an edit there did nothing until some unrelated source was saved.

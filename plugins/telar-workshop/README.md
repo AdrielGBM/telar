@@ -11,7 +11,7 @@ An application declares it as an optional dependency, beside `telar-devtools`, w
 cargo add telar-workshop --optional
 ```
 
-`cargo telar preview` turns that feature on, and `telar::app!` starts `WorkshopApp` only under it, so the workshop is in a preview build and in nothing else. Without the dependency, `cargo telar preview` falls back to the plain preview page.
+`cargo telar preview` turns that feature on, and `telar::app!` starts `WorkshopApp` only under it, so the workshop is in a preview build and in nothing else. Without the dependency, `cargo telar preview` stops before building and gives this line, and a build with telar's preview host that lacks it does not compile.
 
 The workshop runs in the same runtime as the previews it shows, so a hot reload keeps the selected preview, its args, the pane sizes and the canvas toolbar's settings. Each preview renders in a canvas with a surface of its own: its overlays, focus and size stay inside the canvas, and it draws in the application's theme while the workshop's own chrome draws in the workbench theme `telar-devtools` defines.
 

@@ -43,6 +43,7 @@ web = ["telar/web"]
 # The browser drawing as a document alone: no GPU, no shaper, and no faces to carry for one.
 web-dom = ["telar/web-dom"]
 telar-devtools = ["dep:telar-devtools"]
+telar-workshop = ["dep:telar-workshop"]
 
 [dependencies]
 # The frontend is this app's `default` to choose rather than telar's — the workspace turns telar's own off.
@@ -60,6 +61,7 @@ telar-devtools = { workspace = true, optional = true }
 telar-dynamic = { workspace = true, features = ["svg"] }
 telar-icons = { workspace = true }
 telar-navigate = { workspace = true }
+telar-workshop = { workspace = true, optional = true }
 
 serde = { workspace = true }
 

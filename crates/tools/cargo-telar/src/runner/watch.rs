@@ -20,7 +20,7 @@ use telar_project::{
 use super::android::{android_install_and_launch, make_android_cmd};
 use super::config::{
     ResolvedPackage, TelarSection, WindowSection, backend_as_str, missing_devtools_note,
-    missing_workshop_note, resolve_package, split_android_flag, warn_if_tooling_unlocked,
+    resolve_package, split_android_flag, warn_if_tooling_unlocked,
 };
 use super::diagnostics;
 use super::package::{package_bin_path, package_lib_path, profile_of};
@@ -882,17 +882,10 @@ fn devtools_feature(resolved: &ResolvedPackage, config: &TelarSection) -> Option
     Some(format!("{package}/{DEVTOOLS_PACKAGE}"))
 }
 
-/// The package's own feature for the workshop `cargo telar preview` shows the previews in. `None` in a dev session, and when the package declares no `telar-workshop`, which is said with the command that adds it: the previews then open in the plain page.
+/// The package's own feature for the workshop `cargo telar preview` shows the previews in, or `None` in a dev session. A package that does not declare it was refused before the preview built anything ([`missing_workshop`](super::config::missing_workshop)).
 fn workshop_feature(mode: &HotMode, resolved: &ResolvedPackage) -> Option<String> {
-    if !mode.is_preview() {
-        return None;
-    }
-    let package = resolved.name();
-    if !telar_project::declares_optional_dependency(&resolved.package_dir, WORKSHOP_PACKAGE) {
-        eprintln!("[cargo-telar] {}", missing_workshop_note(&package));
-        return None;
-    }
-    Some(format!("{package}/{WORKSHOP_PACKAGE}"))
+    mode.is_preview()
+        .then(|| format!("{}/{WORKSHOP_PACKAGE}", resolved.name()))
 }
 
 fn with_tooling<'a>(features: &[&'a str], tooling: &[&'a str]) -> Vec<&'a str> {

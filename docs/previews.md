@@ -378,8 +378,8 @@ includes them: `cargo telar preview -p catalogue`.
 ## The workshop
 
 `cargo telar preview` opens the workshop, provided by [`telar-workshop`](../plugins/telar-workshop), an optional
-dependency of your package that `cargo telar new` writes. Without it the command falls back to a plain page that
-lists every preview, and says how to add it.
+dependency of your package that `cargo telar new` writes. Without it the command stops before building and gives the
+line that adds it, `cargo add -p <package> telar-workshop --optional`; `--list` and `--png` need no workshop.
 
 - **Top bar.** A bold Preview label and the Settings menu, setting the environment every canvas is shown in: a row for
   each of mode, locale, direction, control size and background that names the value it holds and opens a submenu of

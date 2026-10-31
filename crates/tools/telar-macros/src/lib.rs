@@ -219,20 +219,33 @@ pub fn app(input: TokenStream) -> TokenStream {
 
     let preview_table = previews_table(&preview_const_idents);
     let app_previews = app_previews_fn(&previews_include);
-    let shell = preview_shell(tooling_crate(telar_project::WORKSHOP_PACKAGE).as_ref());
+    let package = std::env::var("CARGO_PKG_NAME").unwrap_or_default();
+    let shell = preview_shell(
+        &package,
+        tooling_crate(telar_project::WORKSHOP_PACKAGE).as_ref(),
+    );
 
-    // The env-var dispatch lives in `telar::dev_entry` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
+    // The env-var dispatch lives in `telar::dev_entry` and `show_previews` rather than here, so an app that wires its own runner (`rsx_modules!` plus a hand-written `run()`) gets the same dev loop this macro generates.
     //
-    // Absent from a build that carries no previews, and that is the whole of what keeps the dev loop out of a shipped application: `dev_entry` reads four environment variables on every start and can be told to run the preview harness and exit, so a release binary that still called it answered `TELAR_TEST=1` from anyone who set it.
+    // Absent from a build that carries no previews, and that is the whole of what keeps the dev loop out of a shipped application: the two read four environment variables on every start and can be told to run the preview harness and exit, so a release binary that still called them answered `TELAR_TEST=1` from anyone who set it.
     let dev_entry_call = quote! {
         ::telar::__previews! {
             if ::telar::dev_entry(
                 __telar_app_previews,
                 ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
                 || #setup,
-                #shell,
             ) {
                 return;
+            }
+            ::telar::__preview_host! {
+                if ::telar::preview::host::show_previews(
+                    __telar_app_previews,
+                    ::telar::AppConfig::from(#config).with_fonts(#declared_fonts),
+                    || #setup,
+                    __telar_preview_shell,
+                ) {
+                    return;
+                }
             }
         }
     };
@@ -296,8 +309,13 @@ pub fn app(input: TokenStream) -> TokenStream {
     let hot_exports = if is_hot_reload {
         let body = quote! {
             ::telar::__previews! {
-                ::telar::preview::host::speak_the_app_language();
-                return ::std::boxed::Box::new((#shell)(__telar_app_previews()));
+                ::telar::__preview_host! {
+                    ::telar::preview::host::speak_the_app_language();
+                    return ::std::boxed::Box::new(__telar_preview_shell(__telar_app_previews()));
+                }
+                ::telar::__without_preview_host! {
+                    return ::std::boxed::Box::new(#app_expr);
+                }
             }
             ::telar::__without_previews! {
                 return ::std::boxed::Box::new(#app_expr);
@@ -337,6 +355,7 @@ pub fn app(input: TokenStream) -> TokenStream {
         #include_stmts
         #preview_table
         #app_previews
+        #shell
         #desktop_run
         #android_run
         #hot_exports
@@ -1017,20 +1036,44 @@ fn app_previews_fn(includes: &[Ident]) -> TokenStream2 {
     }
 }
 
-/// The constructor of the app `cargo telar preview` shows the previews in: the workshop's while the package's feature for it is on, named after the package as it is compiled, so a browser, with no environment to read the name from, shows it too; and the fallback page otherwise.
-fn preview_shell(workshop: Option<&Ident>) -> TokenStream2 {
-    let fallback = quote! { ::telar::preview::host::PreviewApp::new };
-    let Some(krate) = workshop else {
-        return fallback;
-    };
+/// `__telar_preview_shell`, the app `cargo telar preview` shows the previews in, defined only in a build with the preview host: the workshop's, named after the package as it is compiled, so a browser, with no environment to read the name from, shows it too.
+///
+/// A build with the host but no workshop is refused here, once, saying what adds it, rather than opening the previews in anything else.
+fn preview_shell(package: &str, workshop: Option<&Ident>) -> TokenStream2 {
     let feature = telar_project::WORKSHOP_PACKAGE;
-    quote! {{
-        #[cfg(feature = #feature)]
-        let shell = |entries| ::#krate::WorkshopApp::new(entries).project_name(::core::env!("CARGO_PKG_NAME"));
-        #[cfg(not(feature = #feature))]
-        let shell = #fallback;
-        shell
-    }}
+    let body = match workshop {
+        None => {
+            let message = format!(
+                "`cargo telar preview` shows the previews in `{feature}`, which `{package}` does not declare: add it with `cargo add -p {package} {feature} --optional`"
+            );
+            quote! { ::core::compile_error!(#message) }
+        }
+        Some(krate) => {
+            let message = format!(
+                "this build has telar's preview host without `{package}`'s `{feature}` feature, which shows the previews: build it with `--features {feature}`, as `cargo telar preview` does"
+            );
+            quote! {
+                #[cfg(feature = #feature)]
+                let shell = ::#krate::WorkshopApp::new(entries).project_name(::core::env!("CARGO_PKG_NAME"));
+                #[cfg(not(feature = #feature))]
+                let shell = ::core::compile_error!(#message);
+                shell
+            }
+        }
+    };
+    quote! {
+        ::telar::__previews! {
+            ::telar::__preview_host! {
+                #[cfg(not(target_os = "android"))]
+                #[doc(hidden)]
+                fn __telar_preview_shell(
+                    entries: ::std::vec::Vec<::telar::preview::PreviewEntry>,
+                ) -> impl ::telar::App + 'static {
+                    #body
+                }
+            }
+        }
+    }
 }
 
 /// The faces `[[telar.fonts]]` declares, as the `Vec<FontAsset>` a shaper loads: embedded, so a binary finds its faces wherever it is run from, and `include_bytes!` is also what makes cargo rebuild when a face changes.

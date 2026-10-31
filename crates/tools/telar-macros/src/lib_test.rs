@@ -801,17 +801,30 @@ fn an_application_lists_its_previews_then_each_included_crates() {
 /// The workshop is named only under its own feature, and only for a package that declares it, so a package without it never sees a feature cfg it does not define.
 #[test]
 fn the_preview_shell_is_the_workshop_only_under_its_feature() {
-    let fallback = spaced(super::preview_shell(None));
-    assert_eq!(fallback, ":: telar :: preview :: host :: PreviewApp :: new");
-
     let krate = proc_macro2::Ident::new("telar_workshop", proc_macro2::Span::call_site());
-    let shell = spaced(super::preview_shell(Some(&krate)));
+    let shell = spaced(super::preview_shell("app", Some(&krate)));
     assert!(
-        shell.contains("# [cfg (feature = \"telar-workshop\")] let shell = | entries | :: telar_workshop :: WorkshopApp :: new (entries) . project_name (:: core :: env ! (\"CARGO_PKG_NAME\")) ;"),
+        shell.contains(":: telar :: __previews ! { :: telar :: __preview_host ! {"),
         "{shell}"
     );
     assert!(
-        shell.contains("# [cfg (not (feature = \"telar-workshop\"))] let shell = :: telar :: preview :: host :: PreviewApp :: new ;"),
+        shell.contains("# [cfg (feature = \"telar-workshop\")] let shell = :: telar_workshop :: WorkshopApp :: new (entries) . project_name (:: core :: env ! (\"CARGO_PKG_NAME\")) ;"),
         "{shell}"
     );
+    assert!(
+        shell.contains("# [cfg (not (feature = \"telar-workshop\"))] let shell = :: core :: compile_error ! (\"this build has telar's preview host without `app`'s `telar-workshop` feature"),
+        "{shell}"
+    );
+}
+
+/// With no workshop to open them in, a build with the preview host does not compile, and says what adds it.
+#[test]
+fn a_package_without_the_workshop_cannot_build_the_preview_host() {
+    let shell = spaced(super::preview_shell("app", None));
+    assert!(
+        shell.contains(":: core :: compile_error ! (\"`cargo telar preview` shows the previews in `telar-workshop`, which `app` does not declare: add it with `cargo add -p app telar-workshop --optional`\")"),
+        "{shell}"
+    );
+    assert!(!shell.contains("cfg (feature"), "{shell}");
+    assert!(!shell.contains("WorkshopApp"), "{shell}");
 }

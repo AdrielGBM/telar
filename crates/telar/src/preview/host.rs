@@ -15,10 +15,10 @@ use super::{Layout, PreviewCtx, PreviewEntry};
 pub use super::args::{ArgError, ArgState, Args};
 pub use super::mount::{preview_nodes, remounting};
 
-#[cfg(not(target_os = "android"))]
-pub use super::app::PreviewApp;
 #[cfg(all(feature = "preview-headless", not(target_os = "android")))]
-pub use super::app::run_preview_png;
+pub use super::png::run_preview_png;
+#[cfg(all(feature = "preview", not(target_os = "android")))]
+pub use super::runner::show_previews;
 #[cfg(not(target_os = "android"))]
 pub use super::runner::{dev_entry, try_run_test};
 
