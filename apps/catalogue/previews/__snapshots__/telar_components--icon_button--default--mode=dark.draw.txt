@@ -29,7 +29,7 @@ element group
 end
 matrix 1,0,0,1,386,318
   element group
-    rect 0,0 100x22 fill=#ebedf5ff radius=12
+    rect 0,0 100x22 fill=#ebedf5ff radius=11
     element group
       element group
         matrix 1,0,0,1,8,4

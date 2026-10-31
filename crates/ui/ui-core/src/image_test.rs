@@ -46,6 +46,12 @@ fn a_radius_clips_the_picture_whatever_the_fit() {
     )
     .unwrap()
     .with_radius(6.0);
+    compute_layout(
+        image.layout_node(),
+        AvailableSpace::Definite(40.0),
+        AvailableSpace::Definite(20.0),
+    )
+    .unwrap();
 
     let radius_of = |node: &RenderNode| -> Option<BorderRadius> {
         let mut current = node;

@@ -104,7 +104,9 @@ impl RenderNode {
         }
     }
 
-    pub fn rect(rect: Rect, style: RectStyle) -> Self {
+    /// A box painted with `style`, its corners fitted to `rect` so every backend draws the same shape, a [`BorderRadius::FULL`] corner included.
+    pub fn rect(rect: Rect, mut style: RectStyle) -> Self {
+        style.radius = style.radius.fitted(rect.width, rect.height);
         Self::Primitive(DrawCommand::Rect {
             rect,
             style: Arc::new(style),
@@ -160,7 +162,7 @@ impl RenderNode {
         }
     }
 
-    /// Cuts its subtree to `rect`, which the renderer maps through the active matrix — so a widget clipping itself passes its own local box and the clip composes with whatever moved it there.
+    /// Cuts its subtree to `rect`, which the renderer maps through the active matrix — so a widget clipping itself passes its own local box and the clip composes with whatever moved it there. Its corners are fitted to `rect` as a painted box's are.
     pub fn clip(
         rect: Rect,
         radius: BorderRadius,
@@ -168,7 +170,7 @@ impl RenderNode {
     ) -> Self {
         Self::Clip {
             rect,
-            radius,
+            radius: radius.fitted(rect.width, rect.height),
             children: NodeVec::collect(children),
         }
     }

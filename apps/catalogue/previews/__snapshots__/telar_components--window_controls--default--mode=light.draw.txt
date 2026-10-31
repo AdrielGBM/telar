@@ -61,7 +61,7 @@ element group
 end
 matrix 1,0,0,1,413,316
   element group
-    rect 0,0 60x22 fill=#171a2eff radius=12
+    rect 0,0 60x22 fill=#171a2eff radius=11
     element group
       element group
         matrix 1,0,0,1,8,4

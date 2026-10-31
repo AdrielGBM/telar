@@ -108,6 +108,16 @@ fn mounted(props: KbdProps) -> ComponentList {
     ComponentList::new(caps)
 }
 
+fn first_cap(tree: &ComponentList) -> telar::Rect {
+    tree.commands()
+        .iter()
+        .find_map(|c| match c {
+            DrawCommand::Rect { rect, style } if style.fill.is_some() => Some(*rect),
+            _ => None,
+        })
+        .expect("a kbd paints its caps")
+}
+
 /// Every cap's paint, in the order the keys are pressed.
 fn caps(tree: &ComponentList) -> Vec<RectStyle> {
     tree.commands()
@@ -124,7 +134,10 @@ fn the_corner_is_the_theme_s_item_role_until_the_kbd_tokens_name_one() {
     crate::test_support::assert_corner_follows_the_role_until_the_tokens_name_one(
         || mounted(KbdProps::props().chord("Ctrl+K").build()),
         |tree| caps(tree)[0].radius,
-        |_, role| BorderRadius::all(role),
+        |tree, role| {
+            let cap = first_cap(tree);
+            BorderRadius::all(role).fitted(cap.width, cap.height)
+        },
         |radius| KbdTokens {
             radius: Some(radius),
             ..KbdTokens::default()

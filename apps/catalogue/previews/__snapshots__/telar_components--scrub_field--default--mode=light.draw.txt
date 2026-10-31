@@ -19,7 +19,7 @@ element group
             end
           end
           element group
-            rect 359,286 0x0 radius=10
+            rect 359,286 0x0
             element group
               matrix 1,0,0,1,359,286
                 clip 0,0 0x0

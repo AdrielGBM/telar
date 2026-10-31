@@ -173,12 +173,12 @@ fn the_box_scales_with_the_control_size_in_force() {
 #[test]
 fn a_style_amendment_reshapes_the_box_checked_and_unchecked() {
     let round: telar::SurfaceAmendment =
-        Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(9.0)));
+        Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(5.0)));
     for on in [false, true] {
         crate::test_support::fresh_layout_runtime();
         let mut props = checked(on);
         props.style = Some(round.clone());
         let (_, style) = box_and_mark(built(props))[0];
-        assert_eq!(style.radius, BorderRadius::all(9.0), "checked {on}");
+        assert_eq!(style.radius, BorderRadius::all(5.0), "checked {on}");
     }
 }
