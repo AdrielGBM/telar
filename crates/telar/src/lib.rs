@@ -41,6 +41,8 @@ pub mod hot;
     all(feature = "web-dom", target_arch = "wasm32")
 ))]
 pub mod hot_state;
+#[cfg(all(feature = "runtime", feature = "svg"))]
+mod icon_name;
 #[cfg(feature = "icons")]
 #[doc(hidden)]
 pub mod icons;
@@ -172,6 +174,8 @@ pub use i18n_core::set_catalog;
 pub use ctor as __ctor;
 // The notice of the icons an application baked, installed by the same constructor and read back by `telar-icons`.
 pub use i18n_core::{current_locale, negotiate_locale, set_locale, use_locale};
+#[cfg(all(feature = "runtime", feature = "svg"))]
+pub use icon_name::IconName;
 pub use licenses::icon_licenses;
 #[doc(hidden)]
 pub use licenses::install_icon_licenses as __install_icon_licenses;
@@ -482,7 +486,7 @@ pub use runner::{run_app_with_devtools, run_app_with_name};
 
 // Always present, like `Props`: an enum derives it in every build, and the impl it expands to is gated behind `__previews!`.
 pub use telar_macros::{PreviewArg, Props, ThemeTokens, app, component, rsx_modules, t};
-// Reached only through a plugin's own macro naming a baked asset by id, such as `telar_icons::icon!`.
+// Reached only through a macro naming a baked asset by id, such as `icon!`.
 #[doc(hidden)]
 pub use telar_macros::__baked_id;
 

@@ -278,7 +278,7 @@ trait Setting {
 
 /// A setting turned on and off: an icon button pressed while on, or a menu row with a switch.
 struct Switch {
-    icon: telar_icons::IconName,
+    icon: telar::IconName,
     name: &'static str,
     on: Rc<dyn Fn() -> bool>,
     flip: Rc<dyn Fn()>,
@@ -287,7 +287,7 @@ struct Switch {
 
 impl Switch {
     fn new(
-        icon: telar_icons::IconName,
+        icon: telar::IconName,
         name: &'static str,
         on: impl Fn() -> bool + 'static,
         flip: impl Fn() + 'static,
@@ -356,13 +356,13 @@ impl Setting for Switch {
 
 /// Something done to the canvas at once: an icon button, or a menu row.
 struct Action {
-    icon: telar_icons::IconName,
+    icon: telar::IconName,
     name: &'static str,
     act: Rc<dyn Fn()>,
 }
 
 impl Action {
-    fn new(icon: telar_icons::IconName, name: &'static str, act: impl Fn() + 'static) -> Self {
+    fn new(icon: telar::IconName, name: &'static str, act: impl Fn() + 'static) -> Self {
         Self {
             icon,
             name,

@@ -140,24 +140,48 @@ fn an_icon_with_no_stand_in_still_gets_a_body() {
     assert_eq!(glyph_for("lucide:no-such-icon"), "•");
 }
 
-#[cfg(feature = "icons")]
-#[test]
-fn an_icon_baked_from_rust_draws_its_artwork() {
+fn drawn_with(icon: impl Into<IconName>) -> Vec<telar::DrawCommand> {
     crate::test_support::fresh_layout_runtime();
     focus::clear();
-    let button = icon_button(
-        IconButtonProps::props()
-            .icon(telar_icons::icon!("lucide:search"))
-            .label("Search")
-            .build(),
-    )
-    .unwrap();
-    let tree = mount(button);
-    let commands = tree.commands();
+    let button = icon_button(IconButtonProps::props().icon(icon).label("Icon").build()).unwrap();
+    mount(button).commands().to_vec()
+}
+
+#[cfg(feature = "icons")]
+fn draws(commands: &[telar::DrawCommand], _id: &str) -> bool {
+    commands
+        .iter()
+        .any(|command| matches!(command, telar::DrawCommand::Path { .. }))
+}
+
+#[cfg(not(feature = "icons"))]
+fn draws(commands: &[telar::DrawCommand], id: &str) -> bool {
+    commands.iter().any(|command| {
+        matches!(command, telar::DrawCommand::Text { text, .. } if text.as_ref() == glyph_for(id))
+    })
+}
+
+#[test]
+fn an_icon_named_from_rust_draws_its_artwork_or_its_stand_in() {
+    let commands = drawn_with(telar::icon!("lucide:search"));
+    assert!(draws(&commands, "lucide:search"), "{commands:?}");
+}
+
+/// `icon_button icon:"lucide:x"` in a package that bakes icons hands the prop the artifact's triple, which the one prop type takes whether or not `telar-icons` is in the build.
+#[test]
+fn the_triple_a_baked_rsx_literal_becomes_draws_in_every_build() {
+    let commands = drawn_with(telar::__baked_id!(icon, "lucide:x", telar));
+    assert!(draws(&commands, "lucide:x"), "{commands:?}");
+}
+
+#[cfg(not(feature = "icons"))]
+#[test]
+fn an_unknown_name_draws_a_dot_without_icons() {
+    let commands = drawn_with("lucide:no-such-icon");
     assert!(
-        commands
-            .iter()
-            .any(|command| matches!(command, telar::DrawCommand::Path { .. })),
+        commands.iter().any(
+            |command| matches!(command, telar::DrawCommand::Text { text, .. } if text.as_ref() == "•")
+        ),
         "{commands:?}"
     );
 }

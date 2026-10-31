@@ -24,7 +24,7 @@ include = [
     "/.telar/icons-library.json",
 ]
 
-# docs.rs builds with every feature on, so the pages show the `icon` props `telar-icons` draws and the `AssetLoader` conversions, rather than only what a build with no features carries.
+# docs.rs builds with every feature on, so the pages show the `AssetLoader` conversions, rather than only what a build with no features carries.
 [package.metadata.docs.rs]
 all-features = true
 
@@ -33,7 +33,7 @@ all-features = true
 
 default = []
 
-## Draws `icon:"set:name"` ids through `telar-icons`, baked with the application. Without it, icon buttons and icon tabs draw a Unicode stand-in read from the icon's name.
+## Draws `icon:"set:name"` ids through `telar-icons`, baked with the application. Without it, icon buttons and icon tabs take the same ids and draw a Unicode stand-in read from the icon's name.
 icons = ["dep:telar-icons"]
 
 ## Lets an `image` follow an `AssetLoader`: the state a load hands out converts into the picture an image shows.

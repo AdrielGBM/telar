@@ -5,15 +5,15 @@ use std::rc::Rc;
 
 use telar::focus::{self, FocusId};
 use telar::{
-    Accessible, AlignItems, BorderRadius, Children, Color, Container, JustifyContent, Key, KeyNav,
-    KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, Props, Reactive,
-    Rect, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text, TextStyle,
-    amend_surface, box_item, current_direction, effect, focus::Role, key_nav_apply, signal,
-    track_layout,
+    Accessible, AlignItems, BorderRadius, Children, Color, Container, IconName, JustifyContent,
+    Key, KeyNav, KeyNavMove, LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, NodeId, Props,
+    Reactive, Rect, RectStyle, RwSignal, ShapeStyle, StyledContainer, SurfaceAmendment, Text,
+    TextStyle, amend_surface, box_item, current_direction, effect, focus::Role, key_nav_apply,
+    signal, track_layout,
 };
 
 use crate::ControlSize;
-use crate::icon_button::{IconSource, picture};
+use crate::icon_button::picture;
 use crate::shared;
 
 /// The tabs' own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -93,7 +93,7 @@ pub struct Tab<T> {
     value: T,
     label: Reactive<String>,
     trailing: Children,
-    icon: Option<IconSource>,
+    icon: Option<IconName>,
     shortcut: Option<Reactive<String>>,
 }
 
@@ -116,7 +116,7 @@ impl<T> Tab<T> {
     }
 
     /// Draws `icon` in place of the tab's name, which a tooltip then shows and a reader still hears: a row too tight for words.
-    pub fn icon(mut self, icon: impl Into<IconSource>) -> Self {
+    pub fn icon(mut self, icon: impl Into<IconName>) -> Self {
         self.icon = Some(icon.into());
         self
     }
@@ -501,7 +501,7 @@ where
 /// The icon a tab is drawn as: on the accent pill while selected, and in the ink around it otherwise.
 fn pictured<T>(
     size: ControlSize,
-    icon: IconSource,
+    icon: IconName,
     selected: RwSignal<T>,
     value: T,
 ) -> Result<Box<dyn LayoutItem>, LayoutError>

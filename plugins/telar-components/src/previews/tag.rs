@@ -145,7 +145,7 @@ fn with_actions() -> Vec<PreviewEntry> {
                 .into_iter()
                 .map(|label| {
                     let remove = action(
-                        crate::icon_button::icon!("lucide:x"),
+                        telar::icon!("lucide:x"),
                         format!("Remove {label}"),
                         ControlSize::Regular,
                         Rc::new(move || actions.log("remove", vec![label.to_string()])),
@@ -173,7 +173,7 @@ fn with_actions() -> Vec<PreviewEntry> {
                 .into_iter()
                 .map(|label| {
                     let remove = action(
-                        crate::icon_button::icon!("lucide:x"),
+                        telar::icon!("lucide:x"),
                         format!("Remove {label}"),
                         ControlSize::Small,
                         Rc::new(move || actions.log("remove", vec![label.to_string()])),
@@ -197,7 +197,7 @@ fn with_actions() -> Vec<PreviewEntry> {
         preview!(tag: TagProps, "Open in a new tab", |p| {
             let actions = p.actions();
             let open = action(
-                crate::icon_button::icon!("lucide:external-link"),
+                telar::icon!("lucide:external-link"),
                 "Open Logo.svg in a new tab".to_string(),
                 ControlSize::Regular,
                 Rc::new(move || actions.log("open", Vec::new())),
@@ -222,7 +222,7 @@ fn with_actions() -> Vec<PreviewEntry> {
 }
 
 fn action(
-    icon: crate::icon_button::IconSource,
+    icon: telar::IconName,
     label: String,
     size: ControlSize,
     run: Rc<dyn Fn()>,
@@ -246,7 +246,7 @@ fn with_slots() -> PreviewEntry {
             TagProps::props()
                 .label("Saved")
                 .tone(Tone::Success)
-                .leading(drawn(|| icon(telar_icons::icon!("lucide:check"))))
+                .leading(drawn(|| icon(telar::icon!("lucide:check"))))
                 .build(),
         )?;
         let exporting = tag(
@@ -268,7 +268,7 @@ fn with_slots() -> PreviewEntry {
             TagProps::props()
                 .label("Logo")
                 .variant(Variant::Outline)
-                .trailing(drawn(|| icon(telar_icons::icon!("lucide:star"))))
+                .trailing(drawn(|| icon(telar::icon!("lucide:star"))))
                 .build(),
         )?;
         row(vec![saved, exporting, logo])
@@ -291,7 +291,7 @@ fn glyph_size() -> f32 {
 }
 
 #[cfg(feature = "icons")]
-fn icon(name: telar_icons::IconName) -> Result<Box<dyn telar::LayoutItem>, LayoutError> {
+fn icon(name: telar::IconName) -> Result<Box<dyn telar::LayoutItem>, LayoutError> {
     telar_icons::icon(
         telar_icons::IconProps::props()
             .name(name)

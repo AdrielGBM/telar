@@ -109,7 +109,7 @@ pub fn derive_preview_arg(input: TokenStream) -> TokenStream {
     }
 }
 
-/// An id of a component-named asset kind baked into the calling crate, as the value its component accepts: `__baked_id!(icon, "mdi:home", ::telar)` expands to `("mdi:home", Arc<SvgData>, monochrome)` with the data inlined from `.telar/assets.rs`, or to a `compile_error!` on the literal when the artifact does not hold it. Reached through a plugin's own macro, such as `telar_icons::icon!`, which passes the path its crate reaches `telar` by.
+/// An id of a component-named asset kind baked into the calling crate, as the value its component accepts: `__baked_id!(icon, "mdi:home", ::telar)` expands to `("mdi:home", Arc<SvgData>, monochrome)` with the data inlined from `.telar/assets.rs`, or to a `compile_error!` on the literal when the artifact does not hold it. Reached through a naming macro, such as `telar::icon!`, which passes the path its crate reaches `telar` by.
 #[doc(hidden)]
 #[proc_macro]
 pub fn __baked_id(input: TokenStream) -> TokenStream {

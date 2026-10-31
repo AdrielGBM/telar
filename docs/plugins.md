@@ -309,7 +309,9 @@ of `telar.toml` that configures where ids resolve and whether they are baked. Wh
 and the transpiler hands the prop the triple `("set:name", Arc<Data>, monochrome)` instead of the string, so the
 props type accepts both through `From`. The id is spelled the way the bake keyed it, so a bare name written where
 `[telar.icons] default_set` is set arrives read in that set, and `monochrome` is the tint decision the bake made from
-the set's Iconify `palette` and the SVG's `currentColor`:
+the set's Iconify `palette` and the SVG's `currentColor`. For icons that type is the facade's `telar::IconName`,
+the same in every build, so a component taking an icon, such as `telar-components`' `icon_button`, takes the
+triple whether or not `telar-icons` is in its build, and only what it draws changes:
 
 ```rust
 pub enum IconName {

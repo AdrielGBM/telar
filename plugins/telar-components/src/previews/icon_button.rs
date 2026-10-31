@@ -2,7 +2,7 @@ use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 
 use crate::ControlSize;
-use crate::icon_button::{IconButtonProps, IconSource, icon, icon_button};
+use crate::icon_button::{IconButtonProps, icon_button};
 
 #[derive(Clone, Copy, telar::PreviewArg)]
 enum Glyph {
@@ -13,12 +13,12 @@ enum Glyph {
 }
 
 impl Glyph {
-    fn icon(self) -> IconSource {
+    fn icon(self) -> telar::IconName {
         match self {
-            Self::Search => icon!("lucide:search"),
-            Self::Settings => icon!("lucide:settings"),
-            Self::Star => icon!("lucide:star"),
-            Self::Copy => icon!("lucide:copy"),
+            Self::Search => telar::icon!("lucide:search"),
+            Self::Settings => telar::icon!("lucide:settings"),
+            Self::Star => telar::icon!("lucide:star"),
+            Self::Copy => telar::icon!("lucide:copy"),
         }
     }
 }

@@ -37,6 +37,8 @@
 //!
 //! Rust names a baked icon with [`icon!`]: `telar_icons::icon!("lucide:search")` is the [`IconName`] of an icon the bake found named that way in the crate's `.rs` files or in the Rust its `.rsx` writes, and baked through the crate's own `[telar.icons]`. The artwork is read from the crate's artifact as it compiles, so an id the bake did not resolve is a compile error on the literal. A crate written wholly in Rust, such as a widget library, draws its icons this way: as a `[telar] library` it ships them in its package, credited in the notice of every application built with it.
 //!
+//! [`IconName`] and [`icon!`] are the facade's, `telar::IconName` and `telar::icon!`, republished here: every prop that names an icon takes that one type, so a widget library can take and name icons in a build without this crate, and draws them through it in a build with it.
+//!
 //! # Sources
 //!
 //! Every source is an [`IconSource`], the seam the bake and the runtime both resolve through; [`Sources`] asks several in order. `[telar.icons]` asks its three in this order, so an application redraws one icon of a set by dropping its own SVG under the set's name:
@@ -82,42 +84,18 @@
 
 mod icon;
 mod licenses;
-mod name;
 mod runtime;
 
 pub use icon::{IconProps, icon};
 pub use licenses::licenses;
-pub use name::IconName;
 #[cfg(feature = "runtime")]
 pub use runtime::RuntimeIcons;
 pub use telar::icons::{
     Author, Icon, IconError, IconId, IconSet, IconSource, IconifyDir, License, SetInfo,
     SourcedIcon, Sources, SvgDir,
 };
+pub use telar::{IconName, icon};
 #[cfg(all(feature = "runtime", not(target_arch = "wasm32")))]
 pub use telar_dynamic::DiskCache;
 #[cfg(feature = "runtime")]
 pub use telar_dynamic::MemoryCache;
-
-/// An icon baked into the calling crate, named from Rust: `icon!("lucide:search")` is the [`IconName`] the [`icon()`] tag, or any widget taking one, draws.
-///
-/// `cargo telar bake` finds every `icon!("…")` in the crate's `.rs` files, and in the Rust its `.rsx` writes, and bakes those ids as it bakes an `icon name:"…"`, through the sources the crate's `[telar.icons]` names. So a widget library written in Rust ships the icons it draws in its own artifact, credited in the notice of every application built with it, and a typo is a compile error on the literal rather than an empty box at run time. Call it as `icon!` or by its path; under another name the bake does not see it.
-///
-/// ```ignore
-/// let search = telar_icons::icon!("lucide:search");
-/// ```
-#[macro_export]
-macro_rules! icon {
-    ($id:literal) => {
-        $crate::IconName::from($crate::__private::telar::__baked_id!(
-            icon,
-            $id,
-            $crate::__private::telar
-        ))
-    };
-}
-
-#[doc(hidden)]
-pub mod __private {
-    pub use telar;
-}

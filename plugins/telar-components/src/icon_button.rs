@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use telar::{
-    Accessible, AlignItems, BorderRadius, Color, JustifyContent, LayoutError, LayoutItem,
+    Accessible, AlignItems, BorderRadius, Color, IconName, JustifyContent, LayoutError, LayoutItem,
     LayoutStyle, Props, Reactive, RectStyle, ShapeStyle, StyledContainer, SurfaceAmendment,
     amend_surface, box_item, focus::Role,
 };
@@ -15,14 +15,9 @@ use crate::toolbar::ToolbarContext;
 /// A button that is only a picture, so its name is not optional: `label` is what the tooltip says and what a screen reader announces.
 #[derive(Props)]
 pub struct IconButtonProps {
-    /// The icon: one baked into the calling crate, `telar_icons::icon!("lucide:search")`, or an id, `"lucide:search"`, which only a runtime source installed through `telar-icons` can draw.
-    #[cfg(feature = "icons")]
+    /// The icon, `set:name`: `icon:"lucide:search"` in `.rsx`, baked where the package bakes icons, or `telar::icon!("lucide:search")` from Rust. Under the `icons` feature `telar-icons` draws it; without it, a Unicode glyph read from its name alone stands in (`x` is ✕, `search` ⚲, `external-link` ↗, the chevrons ‹ › ˄ ˅), and a dot for a name with none.
     #[props(into)]
-    pub icon: telar_icons::IconName,
-    /// The icon's id, `set:name`: `"lucide:search"`, drawn as a Unicode glyph read from its name alone (`x` is ✕, `search` ⚲, `external-link` ↗, the chevrons ‹ › ˄ ˅), and a name with no stand-in as a dot. Under the `icons` feature it is drawn by `telar-icons` instead.
-    #[cfg(not(feature = "icons"))]
-    #[props(into)]
-    pub icon: Reactive<String>,
+    pub icon: IconName,
     /// The button's name.
     #[props(into)]
     pub label: Reactive<String>,
@@ -142,7 +137,7 @@ pub fn icon_button(props: IconButtonProps) -> Result<Box<dyn LayoutItem>, Layout
 /// Everything the square under an icon button's tooltip is built from, so the tooltip can build it wherever and however often it places it.
 #[derive(Clone)]
 struct Square {
-    icon: IconSource,
+    icon: IconName,
     label: Reactive<String>,
     size: ControlSize,
     shortcut: Reactive<String>,
@@ -243,31 +238,10 @@ fn ink(disabled: Reactive<bool>) -> Reactive<Color> {
     })
 }
 
-/// What names an icon: an [`IconName`](telar_icons::IconName) under the `icons` feature, and an id drawn as a Unicode glyph without it.
-#[cfg(feature = "icons")]
-pub(crate) type IconSource = telar_icons::IconName;
-#[cfg(not(feature = "icons"))]
-pub(crate) type IconSource = Reactive<String>;
-
-/// An icon this crate draws itself, `icon!("lucide:copy")`: baked under the `icons` feature, and an id read as its stand-in glyph without it. It shares `telar_icons::icon!`'s name because the bake finds the ids to bake by that name.
-#[cfg(feature = "icons")]
-macro_rules! icon {
-    ($id:literal) => {
-        telar_icons::icon!($id)
-    };
-}
-#[cfg(not(feature = "icons"))]
-macro_rules! icon {
-    ($id:literal) => {
-        $crate::icon_button::IconSource::from($id)
-    };
-}
-pub(crate) use icon;
-
 /// `icon` at the size a control of `size` draws one, in `color`, or in the text around it while that is transparent.
 #[cfg(feature = "icons")]
 pub(crate) fn picture(
-    icon: IconSource,
+    icon: IconName,
     size: ControlSize,
     color: Reactive<Color>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -284,7 +258,7 @@ pub(crate) fn picture(
 
 #[cfg(not(feature = "icons"))]
 pub(crate) fn picture(
-    icon: IconSource,
+    icon: IconName,
     size: ControlSize,
     color: Reactive<Color>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -292,7 +266,7 @@ pub(crate) fn picture(
 
     let side = shared::icon_size(size);
     let glyph = Text::declaring(
-        move || glyph_for(&icon.get()).to_string(),
+        move || glyph_for(&icon.id()).to_string(),
         LayoutStyle::new(),
         move |t| {
             let text = shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::NoWrap);

@@ -3479,6 +3479,24 @@ fn a_literal_icon_id_given_to_a_component_that_carries_icons_is_baked() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// A baked literal is one value whoever takes it, the triple `telar::IconName` converts from, so `icon_button icon:"…"` compiles whether or not its crate draws through `telar-icons`; `telar-components`' `the_triple_a_baked_rsx_literal_becomes_draws_in_every_build` takes it in both builds.
+#[test]
+fn a_baked_icon_literal_is_the_same_triple_on_the_icon_and_on_a_carrier() {
+    let root = icon_package("same_triple", "baked");
+    let code = transpile_in(
+        &root,
+        "[view]\ncol\n    icon name:\"mdi:home\"\n    icon_button icon:\"mdi:home\" label:\"Home\"\n",
+    );
+    let triple = format!(
+        "(\"mdi:home\", crate::__rsx_assets::{}.get(), false)",
+        static_name_for_path("mdi:home")
+    );
+    assert!(code.contains(&format!(".name({triple})")), "{code}");
+    assert!(code.contains(&format!(".icon({triple})")), "{code}");
+    assert!(!code.contains("telar_icons::"), "{code}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[test]
 fn an_icon_the_artifact_lacks_names_the_bake() {
     let root = icon_package("unbaked_id", "baked");

@@ -2,7 +2,7 @@
 //!
 //! An application depends on it beside `telar`. Every widget is in every build, and an application links only the ones it calls; a feature brings in a dependency, and none is on by default:
 //!
-//! - `icons`: draws `icon:"set:name"` ids through `telar-icons`, baked with the application. Without it, icon buttons and icon tabs draw a Unicode stand-in read from the icon's name.
+//! - `icons`: draws `icon:"set:name"` ids through `telar-icons`, baked with the application. Without it, icon buttons and icon tabs take the same ids, a [`telar::IconName`] in every build, and draw a Unicode stand-in read from the icon's name.
 //! - `async-assets`: lets an [`image`] follow an `AssetLoader`, whose load state converts into what the image shows.
 //!
 //! ```toml

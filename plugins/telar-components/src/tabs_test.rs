@@ -244,7 +244,7 @@ fn an_icon_tab_is_the_same_square_as_an_icon_button() {
     crate::test_support::fresh_layout_runtime();
     let tab_list = tab_list(
         signal(0u32),
-        vec![Tab::new(0u32, "One").icon(crate::icon_button::icon!("lucide:square"))],
+        vec![Tab::new(0u32, "One").icon(telar::icon!("lucide:square"))],
         Color::TRANSPARENT.into(),
         None,
         ControlSize::Regular,
@@ -252,7 +252,7 @@ fn an_icon_tab_is_the_same_square_as_an_icon_button() {
     .unwrap();
     let button = crate::icon_button(
         crate::IconButtonProps::props()
-            .icon(crate::icon_button::icon!("lucide:square"))
+            .icon(telar::icon!("lucide:square"))
             .label("Two")
             .build(),
     )

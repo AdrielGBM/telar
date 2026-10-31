@@ -13,7 +13,7 @@ fn tools() -> Children {
         Ok(vec![
             icon_button(
                 IconButtonProps::props()
-                    .icon(crate::icon_button::icon!("lucide:play"))
+                    .icon(telar::icon!("lucide:play"))
                     .label("Run")
                     .shortcut("F5")
                     .pressed(playing)
@@ -22,7 +22,7 @@ fn tools() -> Children {
             )?,
             icon_button(
                 IconButtonProps::props()
-                    .icon(crate::icon_button::icon!("lucide:square"))
+                    .icon(telar::icon!("lucide:square"))
                     .label("Stop")
                     .shortcut("Shift+F5")
                     .on_press(Rc::new(move || playing.set(false)))
@@ -30,13 +30,13 @@ fn tools() -> Children {
             )?,
             icon_button(
                 IconButtonProps::props()
-                    .icon(crate::icon_button::icon!("lucide:rotate-cw"))
+                    .icon(telar::icon!("lucide:rotate-cw"))
                     .label("Restart")
                     .build(),
             )?,
             icon_button(
                 IconButtonProps::props()
-                    .icon(crate::icon_button::icon!("lucide:settings"))
+                    .icon(telar::icon!("lucide:settings"))
                     .label("Settings")
                     .disabled(true)
                     .build(),

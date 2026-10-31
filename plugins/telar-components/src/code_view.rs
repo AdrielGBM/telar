@@ -379,7 +379,7 @@ fn copy_button(
     });
     let button = icon_button(
         IconButtonProps::props()
-            .icon(crate::icon_button::icon!("lucide:copy"))
+            .icon(telar::icon!("lucide:copy"))
             .label(Reactive::of(move || {
                 strings::text(if copied.get() {
                     strings::COPIED

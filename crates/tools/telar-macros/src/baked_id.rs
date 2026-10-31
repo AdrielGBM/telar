@@ -1,6 +1,6 @@
 //! `__baked_id!(kind, "id", path::to::telar)`: an id of a component-named asset kind, baked into the calling crate's artifact, as the value the kind's component accepts, `("id", Arc<Data>, monochrome)`.
 //!
-//! It is what a plugin's own macro expands to — `telar_icons::icon!("mdi:home")` — so Rust names a baked icon as surely as `icon name:"mdi:home"` does in `.rsx`. The data is inlined at the call site from the artifact rather than reached through `crate::__rsx_assets`, which only a crate wiring `.rsx` declares, so it works in a crate written wholly in Rust. An id the artifact does not hold is a `compile_error!` on the literal, naming what the bake reported.
+//! It is what a naming macro expands to — `telar::icon!("mdi:home")` — so Rust names a baked icon as surely as `icon name:"mdi:home"` does in `.rsx`. The data is inlined at the call site from the artifact rather than reached through `crate::__rsx_assets`, which only a crate wiring `.rsx` declares, so it works in a crate written wholly in Rust. An id the artifact does not hold is a `compile_error!` on the literal, naming what the bake reported.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
