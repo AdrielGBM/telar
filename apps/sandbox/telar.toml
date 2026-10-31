@@ -20,7 +20,7 @@ transparent = false
 fullscreen = "disabled"
 position = "centered"
 
-# A face the app ships: embedded for a native shaper, hashed with an `@font-face` and a preload on the web. The one file the snapshot tests set text in, which `crates/renderer/renderer-text/test-fonts/build.py` regenerates.
+# A face the app ships: embedded for a native shaper, hashed with an `@font-face` and a preload on the web. The one file the snapshot tests set text in, which `cargo run -p telar-renderer-text --example build-test-font` regenerates.
 [[telar.fonts]]
 family = "Telar Test"
 src = "../../crates/renderer/renderer-text/test-fonts/TelarTest.ttf"
