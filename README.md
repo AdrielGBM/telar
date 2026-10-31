@@ -1,6 +1,6 @@
 # Telar
 
-[![CI](https://github.com/AdrielGBM/telar/actions/workflows/CI.yml/badge.svg)](https://github.com/AdrielGBM/telar/actions/workflows/CI.yml)
+[![CI](https://github.com/AdrielGBM/telar/actions/workflows/ci.yaml/badge.svg)](https://github.com/AdrielGBM/telar/actions/workflows/ci.yaml)
 [![crates.io](https://img.shields.io/crates/v/telar.svg)](https://crates.io/crates/telar)
 [![docs.rs](https://img.shields.io/docsrs/telar)](https://docs.rs/telar)
 [![license](https://img.shields.io/crates/l/telar.svg)](#license)

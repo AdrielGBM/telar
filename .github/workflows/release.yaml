@@ -11,7 +11,7 @@ permissions:
 jobs:
   ci:
     name: CI gate
-    uses: ./.github/workflows/CI.yml
+    uses: ./.github/workflows/ci.yaml
 
   build:
     name: Build (${{ matrix.target }})
