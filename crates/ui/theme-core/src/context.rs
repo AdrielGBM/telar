@@ -138,7 +138,7 @@ pub trait ThemeTokens: 'static {
     fn scrollbar(&self) -> Color {
         Color::rgba(0.5, 0.5, 0.6, 0.6)
     }
-    /// Thickness of the lane a scroll area's bar runs in, at the regular control size.
+    /// Thickness of the lane a scroll area's bar runs in.
     fn scrollbar_width(&self) -> f32 {
         8.0
     }

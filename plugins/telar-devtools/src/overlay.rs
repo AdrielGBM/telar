@@ -1,6 +1,6 @@
 //! The overlay's widget tree: a window-sized [`SurfaceCanvas`] in the host's runtime, drawn over the app in the workbench theme.
 //!
-//! The canvas is a surface of its own, so its focus, overlays, direction and control size never mix with the app's, whether the app shares this runtime or lives in a hot-reloaded dylib with one of its own. Whoever holds the [`Overlay`] decides which events reach it: a pointer only over a panel, the keyboard only while a press on a panel left it focused there.
+//! The canvas is a surface of its own, so its focus, overlays and direction never mix with the app's, whether the app shares this runtime or lives in a hot-reloaded dylib with one of its own. Whoever holds the [`Overlay`] decides which events reach it: a pointer only over a panel, the keyboard only while a press on a panel left it focused there.
 
 mod banner;
 mod inspector;
@@ -17,7 +17,7 @@ use telar::{
 use crate::inspect::{InspectSource, Inspection};
 use crate::meter::Reading;
 use crate::panels::mounted_while;
-use crate::workbench::{WORKBENCH_CONTROL_SIZE, workbench_scope};
+use crate::workbench::workbench_scope;
 
 const DRAWER_WIDTH: f32 = 320.0;
 
@@ -76,7 +76,6 @@ impl Overlay {
             Ok(box_item(workbench_scope(move || root(model))?))
         })?;
         canvas.set_direction(Some(Direction::Ltr));
-        canvas.set_control_size(Some(WORKBENCH_CONTROL_SIZE));
         let model = built.expect("the canvas runs its build before it returns");
         Ok(Self {
             canvas,

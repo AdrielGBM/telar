@@ -117,6 +117,42 @@ fn an_unset_size_is_the_tokens_and_a_named_one_wins() {
         (90.0, 4.0),
         "the bar's own size wins"
     );
+    let (width, height) = track(&bar(ProgressProps::props()
+        .size(ControlSize::Small)
+        .build()));
+    assert_eq!(width, (150.0 * ControlSize::Small.text_scale()).round());
+    assert!(
+        (height - 6.0 * ControlSize::Small.scale()).abs() <= 0.5,
+        "the tokens' lengths are the regular size's, scaled to the bar's, snapped to the pixel grid: {height}"
+    );
+}
+
+/// An unset bar is the measure and the medium gap of its own size.
+#[test]
+fn the_bar_scales_with_its_size() {
+    telar::set_theme(crate::test_support::TokensTheme::<ProgressTokens> {
+        role: 7.0,
+        tokens: None,
+    });
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        let tree = bar(ProgressProps::props().size(size).build());
+        let track = tree
+            .commands()
+            .iter()
+            .find_map(|command| match command {
+                telar::DrawCommand::Rect { rect, .. } => Some((rect.width, rect.height)),
+                _ => None,
+            })
+            .expect("the track is drawn");
+        assert_eq!(
+            track,
+            (
+                crate::metrics::measure(size, 16.0),
+                crate::metrics::gap_md(size)
+            ),
+            "{size:?}"
+        );
+    }
 }
 
 #[test]

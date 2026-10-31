@@ -12,9 +12,9 @@ use telar::{
     children, detached, focus::Role, on_cleanup, run_after, signal, style_follows,
 };
 
-use crate::Tone;
 use crate::shared;
 use crate::strings;
+use crate::{ControlSize, Tone};
 
 const DISMISS_GLYPH: &str = "✕";
 
@@ -25,11 +25,11 @@ const DISMISS_GLYPH: &str = "✕";
 pub struct ToastTokens {
     /// Corner radius of each notice. `None` is the theme's `radius_surface`.
     pub radius: Option<f32>,
-    /// Space between a notice's edge and what it says, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_lg`](crate::metrics::gap_lg).
+    /// Space between a notice's edge and what it says, at the regular size, scaled with the toaster's own. `None` is [`metrics::gap_lg`](crate::metrics::gap_lg).
     pub pad: Option<f32>,
-    /// A notice's width when the toaster names none, at the regular control size, scaled with the control size in force. `None` is 26 ems of the document's text.
+    /// A notice's width when the toaster names none, at the regular size, scaled with the toaster's text. `None` is 26 ems of the document's text.
     pub width: Option<f32>,
-    /// Width of the stripe in the colour of the notice's tone, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_xs`](crate::metrics::gap_xs).
+    /// Width of the stripe in the colour of the notice's tone, at the regular size, scaled with the toaster's own. `None` is [`metrics::gap_xs`](crate::metrics::gap_xs).
     pub stripe_width: Option<f32>,
 }
 
@@ -43,18 +43,21 @@ impl ToastTokens {
         self.radius.unwrap_or_else(shared::radius_surface)
     }
 
-    pub fn pad(&self) -> f32 {
+    /// The space between a notice's edge and what it says in a toaster of `size`.
+    pub fn pad(&self, size: ControlSize) -> f32 {
         self.pad
-            .map_or_else(shared::gap_lg, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_lg(size), |pad| pad * size.scale())
     }
 
-    pub fn width(&self) -> f32 {
-        shared::width_or_measure(self.width, 26.0)
+    /// A notice's width in a toaster of `size` that names none.
+    pub fn width(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.width, 26.0)
     }
 
-    pub fn stripe_width(&self) -> f32 {
+    /// The stripe's width in a toaster of `size`.
+    pub fn stripe_width(&self, size: ControlSize) -> f32 {
         self.stripe_width
-            .map_or_else(shared::gap_xs, |width| width * telar::control_scale())
+            .map_or_else(|| shared::gap_xs(size), |width| width * size.scale())
     }
 }
 
@@ -270,6 +273,9 @@ pub struct ToasterProps {
     /// Each notice's width in logical px. `0.0` (the default) means "unset" -> [`ToastTokens::width`].
     #[props(default)]
     pub width: f32,
+    /// How large the notices are drawn: their padding, text, buttons and the gaps between them, and the width they take when the toaster names none, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// What a reader calls the stack. `None` (the default) uses the localized `telar_components.notifications` message.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
@@ -285,6 +291,7 @@ pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         placement,
         max_visible,
         width,
+        size,
         label,
         style,
     } = props;
@@ -294,7 +301,10 @@ pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     } else {
         max_visible as usize
     };
-    let width = Width((width > 0.0).then_some(width));
+    let width = Width {
+        named: (width > 0.0).then_some(width),
+        size,
+    };
     let held = Rc::new(Hold::default());
 
     let shown = move || {
@@ -306,10 +316,10 @@ pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         }
         shown
     };
-    let stack_box = || LayoutStyle::column().gap(shared::gap_md());
+    let stack_box = move || LayoutStyle::column().gap(shared::gap_md(size));
     let stack = ReactiveList::with_style(stack_box(), shown, |entry: &Posted| entry.id, {
         let held = held.clone();
-        move |entry| notice(queue, entry, width, &style, &held)
+        move |entry| notice(size, queue, entry, width, &style, &held)
     })?;
     style_follows(stack.layout_node(), stack_box);
     let region_box = move || LayoutStyle::column().width(width.get());
@@ -333,20 +343,24 @@ pub fn toaster(props: ToasterProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             } else {
                 JustifyContent::END
             })
-            .padding_all(shared::gap_xl())
+            .padding_all(shared::gap_xl(size))
     };
     let layer = FixedLayer::new(layer_box(), children![region])?;
     style_follows(layer.layout_node(), layer_box);
     Ok(box_item(layer))
 }
 
-/// The width a toaster was given, else its theme's.
+/// The width a toaster was given, else its theme's at its size.
 #[derive(Clone, Copy)]
-struct Width(Option<f32>);
+struct Width {
+    named: Option<f32>,
+    size: ControlSize,
+}
 
 impl Width {
     fn get(self) -> f32 {
-        self.0.unwrap_or_else(|| ToastTokens::current().width())
+        self.named
+            .unwrap_or_else(|| ToastTokens::current().width(self.size))
     }
 }
 
@@ -397,6 +411,7 @@ impl Hold {
 }
 
 fn notice(
+    size: ControlSize,
     queue: Toasts,
     entry: Posted,
     width: Width,
@@ -421,29 +436,31 @@ fn notice(
         words.push(box_item(Text::declaring(
             move || title.to_string(),
             LayoutStyle::new(),
-            |t| shared::control_text(t, 1.0).with_font_weight(shared::strong_weight()),
+            move |t| shared::control_text(size, t, 1.0).with_font_weight(shared::strong_weight()),
         )?));
     }
     let message = toast.message.clone();
     words.push(box_item(Text::declaring(
         move || message.to_string(),
         LayoutStyle::new(),
-        |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::Wrap),
+        move |t| shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::Wrap),
     )?));
-    let column = || {
+    let column = move || {
         LayoutStyle::column()
             .flex_grow(1.0)
             .flex_shrink(1.0)
             .min_width(0.0)
-            .gap(shared::gap_xs())
+            .gap(shared::gap_xs(size))
     };
     let text = Container::new(column(), words)?.styled_by(column);
 
-    let mut parts: Vec<Box<dyn LayoutItem>> = vec![stripe(toast.tone.clone())?, box_item(text)];
+    let mut parts: Vec<Box<dyn LayoutItem>> =
+        vec![stripe(size, toast.tone.clone())?, box_item(text)];
     if let Some(action) = toast.action.clone() {
         let dismiss = dismiss.clone();
         let label = action.label.clone();
         parts.push(text_button(
+            size,
             move || label.to_string(),
             move || {
                 (action.run)();
@@ -454,6 +471,7 @@ fn notice(
         )?);
     }
     parts.push(text_button(
+        size,
         || DISMISS_GLYPH.to_string(),
         move || dismiss(),
         held,
@@ -464,8 +482,8 @@ fn notice(
         LayoutStyle::row()
             .align_items(AlignItems::START)
             .width(width.get())
-            .padding_all(ToastTokens::current().pad())
-            .gap(shared::gap_md())
+            .padding_all(ToastTokens::current().pad(size))
+            .gap(shared::gap_md(size))
     };
     let style = style.clone();
     let card = StyledContainer::new(
@@ -485,10 +503,10 @@ fn card_paint() -> RectStyle {
         .with_radius(BorderRadius::all(ToastTokens::current().radius()))
 }
 
-fn stripe(tone: Tone) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let stripe_box = || {
+fn stripe(size: ControlSize, tone: Tone) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let stripe_box = move || {
         LayoutStyle::new()
-            .width(ToastTokens::current().stripe_width())
+            .width(ToastTokens::current().stripe_width(size))
             .align_self_stretch()
             .flex_shrink(0.0)
     };
@@ -508,25 +526,26 @@ fn stripe(tone: Tone) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 /// A small button of text on a notice: its action, or the glyph that dismisses it, which a reader hears by name instead.
 fn text_button(
+    size: ControlSize,
     words: impl Fn() -> String + 'static,
     press: impl Fn() + 'static,
     held: &Rc<Hold>,
     dismisses: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = Text::declaring(words, LayoutStyle::new(), move |t| {
-        let t = shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap);
-        if dismisses {
-            shared::quiet(t, 1.0)
-        } else {
-            t.with_color(shared::accent())
-                .with_font_weight(shared::strong_weight())
-        }
+        let t = match dismisses {
+            true => shared::quiet(size, t, 1.0),
+            false => shared::control_text(size, t, 1.0)
+                .with_color(shared::accent())
+                .with_font_weight(shared::strong_weight()),
+        };
+        t.with_text_wrap(TextWrap::NoWrap)
     })?;
-    let shell = || {
+    let shell = move || {
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
-            .padding_horizontal(shared::gap_sm())
+            .padding_horizontal(shared::gap_sm(size))
     };
     let shape = || RectStyle::default().with_radius(BorderRadius::all(shared::radius_item()));
     let focused = Rc::new(Cell::new(false));

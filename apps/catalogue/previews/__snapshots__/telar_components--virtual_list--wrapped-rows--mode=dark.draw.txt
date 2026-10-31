@@ -12,142 +12,142 @@ element group
                   matrix 1,0,0,1,260,140
                     element group
                       element option
-                        rect 0,0 280x32 fill=#ffffff0d radius=6
+                        rect 0,0 280x36 fill=#ffffff0d radius=6
                         element group
-                          clip 8,4 230x24
+                          clip 8,4 230x28
                             matrix 1,0,0,1,8,4
-                              text 0,3 230.17x16.8 "Ada: Lunch?" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                              text 0,5 230.17x16.8 "Ada: Lunch?" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                             end
                           end
                         end
                         element group
                           matrix 1,0,0,1,246,4
-                            text 0,4 26x14.28 "9:00" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                            text 0,6 26x14.28 "9:00" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,32 280x58 radius=6
+                        rect 0,36 280x58 radius=6
                         element group
-                          clip 8,36 233x50
-                            matrix 1,0,0,1,8,36
+                          clip 8,40 233x50
+                            matrix 1,0,0,1,8,40
                               text 0,0 233x50.4 "Grace: The build is green again: the flaky test was waiting on a clock it never started" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,249,36
+                          matrix 1,0,0,1,249,40
                             text 0,17 23.16x14.28 "9:01" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,90 280x42 radius=6
+                        rect 0,94 280x42 radius=6
                         element group
-                          clip 8,94 230x34
-                            matrix 1,0,0,1,8,94
+                          clip 8,98 230x34
+                            matrix 1,0,0,1,8,98
                               text 0,0 230.42x33.6 "Alan: Can you look at the table before Friday?" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,246,94
+                          matrix 1,0,0,1,246,98
                             text 0,9 26x14.28 "9:02" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,132 280x92 fill=#ffffff1a radius=6
+                        rect 0,136 280x92 fill=#ffffff1a radius=6
                         element group
-                          clip 8,136 230x84
-                            matrix 1,0,0,1,8,136
+                          clip 8,140 230x84
+                            matrix 1,0,0,1,8,140
                               text 0,0 230.33x84 "Ken: Notes from the review: rows of different heights page by what the view shows whole, and the cursor's row is always brought in whole" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,246,136
+                          matrix 1,0,0,1,246,140
                             text 0,34 26x14.28 "9:03" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,224 280x32 radius=6
+                        rect 0,228 280x36 radius=6
                         element group
-                          clip 8,228 230x24
-                            matrix 1,0,0,1,8,228
-                              text 0,3 230x16.8 "Ada: Thanks!" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                          clip 8,232 230x28
+                            matrix 1,0,0,1,8,232
+                              text 0,5 230x16.8 "Ada: Thanks!" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,246,228
-                            text 0,4 26.02x14.28 "9:04" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                          matrix 1,0,0,1,246,232
+                            text 0,6 26.02x14.28 "9:04" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,256 280x32 radius=6
+                        rect 0,264 280x36 radius=6
                         element group
-                          clip 8,260 231x24
-                            matrix 1,0,0,1,8,260
-                              text 0,3 231x16.8 "Grace: Lunch?" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+                          clip 8,268 231x28
+                            matrix 1,0,0,1,8,268
+                              text 0,5 231x16.8 "Grace: Lunch?" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,247,260
-                            text 0,4 25.38x14.28 "9:05" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
+                          matrix 1,0,0,1,247,268
+                            text 0,6 25.38x14.28 "9:05" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,288 280x58 radius=6
+                        rect 0,300 280x58 radius=6
                         element group
-                          clip 8,292 230x50
-                            matrix 1,0,0,1,8,292
+                          clip 8,304 230x50
+                            matrix 1,0,0,1,8,304
                               text 0,0 230.3x50.4 "Alan: The build is green again: the flaky test was waiting on a clock it never started" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,246,292
+                          matrix 1,0,0,1,246,304
                             text 0,17 26x14.28 "9:06" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,346 280x42 radius=6
+                        rect 0,358 280x42 radius=6
                         element group
-                          clip 8,350 231x34
-                            matrix 1,0,0,1,8,350
+                          clip 8,362 231x34
+                            matrix 1,0,0,1,8,362
                               text 0,0 231.17x33.6 "Ken: Can you look at the table before Friday?" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,247,350
+                          matrix 1,0,0,1,247,362
                             text 0,9 25x14.28 "9:07" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,388 280x92 radius=6
+                        rect 0,400 280x92 radius=6
                         element group
-                          clip 8,392 230x84
-                            matrix 1,0,0,1,8,392
+                          clip 8,404 230x84
+                            matrix 1,0,0,1,8,404
                               text 0,0 230.31x84 "Ada: Notes from the review: rows of different heights page by what the view shows whole, and the cursor's row is always brought in whole" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,246,392
+                          matrix 1,0,0,1,246,404
                             text 0,34 26x14.28 "9:08" size=11.9 family=sans-serif weight=400 color=#ebedf5b3 wrap=none lang=en
                           end
                         end
                       end
                       element group
-                        rect 0,480 280x25023
+                        rect 0,492 280x25009
                       end
                     end
                   end

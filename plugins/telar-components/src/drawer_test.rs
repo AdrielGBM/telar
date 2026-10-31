@@ -198,6 +198,31 @@ fn an_unset_width_is_the_tokens_and_a_named_one_wins() {
     assert_eq!(panel(&tree).0.width, 180.0, "the drawer's own width wins");
 }
 
+/// An unset panel is the measure of the drawer's own size wide, and a width its tokens name at the regular size scales with the text to it.
+#[test]
+fn the_panel_s_width_follows_the_drawer_s_size() {
+    telar::set_theme(crate::test_support::PanelTheme::<DrawerTokens> {
+        role: crate::test_support::PanelRole::Dialog,
+        radius: 9.0,
+        tokens: None,
+    });
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        let tree = open_drawer(DrawerProps::props().open(signal(true)).size(size).build());
+        assert_eq!(
+            panel(&tree).0.width,
+            crate::metrics::measure(size, 20.0),
+            "{size:?}"
+        );
+    }
+    let tokens = DrawerTokens {
+        width: Some(250.0),
+        pad: Some(10.0),
+        ..DrawerTokens::default()
+    };
+    assert_eq!(tokens.width(ControlSize::Large), (250.0 * 1.125f32).round());
+    assert_eq!(tokens.pad(ControlSize::Large), 12.5);
+}
+
 #[test]
 fn a_style_amendment_and_the_overlay_role_reach_the_open_drawer() {
     use telar::ThemeTokens;

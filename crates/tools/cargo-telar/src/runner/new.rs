@@ -302,7 +302,7 @@ path = "src/main.rs"
 # `default-features = false` so this file is the only place a target is named: telar's own default is a
 # desktop window, and it would otherwise ride along into a build that asked for the terminal or a browser.
 telar = {{ version = "{TELAR_VERSION}", default-features = false, features = ["runtime"] }}
-# The widget catalogue. Name the groups you draw beyond the basics: "overlays", "chrome", "advanced".
+# The widget catalogue, every widget in every build. Its `icons` feature draws `icon:"set:name"` ids through `telar-icons`.
 telar-components = {{ version = "{TELAR_VERSION}", default-features = false }}
 # The devtools overlay: an FPS counter, a node inspector and the build-error banner. Optional, so only
 # `cargo telar dev` and `cargo telar preview` compile it, by turning on the `telar-devtools` feature below.

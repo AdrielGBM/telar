@@ -13,7 +13,7 @@ use telar::{
 };
 use telar_components::metrics::{control_height, control_pad_x, radius_control};
 use telar_components::{
-    IconButtonProps, TitleBarOptions, WindowControlsProps, icon_button, title_bar,
+    ControlSize, IconButtonProps, TitleBarOptions, WindowControlsProps, icon_button, title_bar,
 };
 use telar_devtools::WORKBENCH_GRID;
 
@@ -188,8 +188,8 @@ fn preview_label() -> Result<Box<dyn LayoutItem>, LayoutError> {
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
-            .height(control_height())
-            .padding_horizontal(control_pad_x()),
+            .height(control_height(ControlSize::Regular))
+            .padding_horizontal(control_pad_x(ControlSize::Regular)),
         children![label],
     )?;
     Ok(box_item(boxed))
@@ -310,7 +310,7 @@ fn find_button(
 fn window_controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
     telar_components::window_controls(
         WindowControlsProps::props()
-            .min_size(Reactive::of(control_height))
+            .min_size(Reactive::of(|| control_height(ControlSize::Regular)))
             .style(Rc::new(|paint: RectStyle| {
                 paint.with_radius(BorderRadius::all(radius_control()))
             }))

@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use telar::preview::{Matrices, PreviewEntry, ViewportPreset};
 use telar::{
-    Accessible, Children, Container, ControlSize, Direction, LayoutError, LayoutItem, LayoutStyle,
-    Reactive, RwSignal, Size, box_item, effect, signal,
+    Accessible, Children, Container, Direction, LayoutError, LayoutItem, LayoutStyle, Reactive,
+    RwSignal, Size, box_item, effect, signal,
 };
 use telar_components::{
     GroupProps, IconButtonProps, ItemProps, MenuProps, SelectProps, SeparatorProps, SubmenuProps,
@@ -21,11 +21,10 @@ use crate::settings::{
 use crate::state::WorkshopState;
 use crate::strings::{
     self, BACKGROUND, BACKGROUND_DARK, BACKGROUND_LIGHT, BACKGROUND_PREVIEW,
-    BACKGROUND_TRANSPARENT, CANVAS_TOOLS, CONTROL_SIZE, CONTROL_SIZE_DEFAULT, CONTROL_SIZE_LARGE,
-    CONTROL_SIZE_MINI, CONTROL_SIZE_REGULAR, CONTROL_SIZE_SMALL, COPY_LINK, DEVICE_FRAMES,
-    DIRECTION, DIRECTION_AUTO, DIRECTION_LTR, DIRECTION_RTL, GRID, HIGH_CONTRAST, LOCALE,
-    LOCALE_DEFAULT, MODE, PROJECT_VIEWPORTS, REDUCED_MOTION, REMOUNT, ROTATE, RULERS, SETTINGS,
-    VIEWPORT, VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM, ZOOM_FIT,
+    BACKGROUND_TRANSPARENT, CANVAS_TOOLS, COPY_LINK, DEVICE_FRAMES, DIRECTION, DIRECTION_AUTO,
+    DIRECTION_LTR, DIRECTION_RTL, GRID, HIGH_CONTRAST, LOCALE, LOCALE_DEFAULT, MODE,
+    PROJECT_VIEWPORTS, REDUCED_MOTION, REMOUNT, ROTATE, RULERS, SETTINGS, VIEWPORT,
+    VIEWPORT_CUSTOM, VIEWPORT_FILL, VIEWPORT_PRESETS, VIEWPORT_PREVIEW, ZOOM, ZOOM_FIT,
     ZOOM_PERCENT,
 };
 
@@ -35,7 +34,7 @@ const WIDE: f32 = WORKBENCH_GRID * 22.0;
 /// The index a select shows as nothing chosen.
 const NO_ROW: u32 = u32::MAX;
 
-/// The top bar's preview settings as one menu: the mode, locale, direction, control size and background every canvas is shown in, each a row naming the one in use that opens a submenu of its choices, then reduced motion and high contrast, ticked while on.
+/// The top bar's preview settings as one menu: the mode, locale, direction and background every canvas is shown in, each a row naming the one in use that opens a submenu of its choices, then reduced motion and high contrast, ticked while on.
 pub(crate) fn environment_menu(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let settings: Rc<[Box<dyn Setting>]> = environment_settings(state).into();
     menu(
@@ -98,19 +97,6 @@ fn environment_settings(state: &WorkshopState) -> Vec<Box<dyn Setting>> {
             ],
             move || settings.with(|settings| settings.direction),
             move |direction| settings.update(|settings| settings.direction = direction),
-        )),
-        Box::new(Choice::new(
-            CONTROL_SIZE,
-            REGULAR,
-            vec![
-                Row::choice(None, Label::Key(CONTROL_SIZE_DEFAULT)),
-                Row::choice(Some(ControlSize::Mini), Label::Key(CONTROL_SIZE_MINI)),
-                Row::choice(Some(ControlSize::Small), Label::Key(CONTROL_SIZE_SMALL)),
-                Row::choice(Some(ControlSize::Regular), Label::Key(CONTROL_SIZE_REGULAR)),
-                Row::choice(Some(ControlSize::Large), Label::Key(CONTROL_SIZE_LARGE)),
-            ],
-            move || settings.with(|settings| settings.control_size),
-            move |size| settings.update(|settings| settings.control_size = size),
         )),
         Box::new(Choice::new(
             BACKGROUND,

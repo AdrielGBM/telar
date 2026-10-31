@@ -4,6 +4,7 @@ use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Container, LayoutError, Role, box_item};
 
 use super::sample;
+use crate::ControlSize;
 use crate::button::{ButtonProps, button};
 use crate::drawer::{DrawerProps, drawer};
 
@@ -33,6 +34,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .open(open)
                     .side(side)
                     .width(p.arg("width", 0.0f32))
+                    .size(p.arg("size", ControlSize::Regular))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .children(Children::new(|| {
                         Ok(vec![

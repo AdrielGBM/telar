@@ -7,6 +7,7 @@ use telar::{
     SurfaceAmendment, Text, amend_surface, box_item, children, focus::Role, signal,
 };
 
+use crate::ControlSize;
 use crate::shared;
 use crate::strings;
 
@@ -30,17 +31,17 @@ impl StepperTokens {
     }
 }
 
-fn row_box() -> LayoutStyle {
+fn row_box(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
-        .gap(shared::gap_md())
+        .gap(shared::gap_md(size))
 }
-fn button_box() -> LayoutStyle {
+fn button_box(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
-        .width(shared::control_height())
-        .height(shared::control_height())
+        .width(shared::control_height(size))
+        .height(shared::control_height(size))
 }
 
 /// A numeric stepper: `[−]  value  [+]`. High-level sugar over `button`-style pressable boxes (see `button.rs`) plus a reactive `Text::new` readout; lives in `telar-components`, not the kernel. `value` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own `signal(min)`).
@@ -58,6 +59,9 @@ pub struct StepperProps {
     /// Increment applied per press. `0.0` (the default) means "unset" — use `1.0`.
     #[props(default)]
     pub step: f32,
+    /// How large the stepper is drawn: its buttons, gaps and value, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// − / + fill. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme's primary token.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -76,6 +80,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         min,
         max,
         step,
+        size,
         color,
         on_change,
         style,
@@ -86,7 +91,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let value = value.unwrap_or_else(|| signal(min));
     let paint = Paint { color, style };
 
-    let minus = stepper_button("−", strings::DECREASE, paint.clone(), {
+    let minus = stepper_button(size, "−", strings::DECREASE, paint.clone(), {
         let on_change = on_change.clone();
         move || {
             let v = (value.get() - step).clamp(min, max);
@@ -97,7 +102,7 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         }
     })?;
 
-    let plus = stepper_button("+", strings::INCREASE, paint, {
+    let plus = stepper_button(size, "+", strings::INCREASE, paint, {
         let on_change = on_change.clone();
         move || {
             let v = (value.get() + step).clamp(min, max);
@@ -119,10 +124,11 @@ pub fn stepper(props: StepperProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             }
         },
         LayoutStyle::new(),
-        |t| shared::control_text(t, 1.0),
+        move |t| shared::control_text(size, t, 1.0),
     )?;
 
-    let row = Container::new(row_box(), children![minus, display, plus])?.styled_by(row_box);
+    let row = Container::new(row_box(size), children![minus, display, plus])?
+        .styled_by(move || row_box(size));
     Ok(box_item(row))
 }
 
@@ -163,6 +169,7 @@ impl Paint {
 
 /// A square pressable box one control tall with a centred glyph, filled like a solid `button`.
 fn stepper_button(
+    size: ControlSize,
     glyph: &'static str,
     name: &'static str,
     paint: Paint,
@@ -172,15 +179,15 @@ fn stepper_button(
     let glyph_widget = Text::declaring(
         move || glyph.to_string(),
         LayoutStyle::new(),
-        move |t| shared::control_text(t, 1.0).with_color(shared::ink_on(ink.fill())),
+        move |t| shared::control_text(size, t, 1.0).with_color(shared::ink_on(ink.fill())),
     )?;
     let (rest, hover, press) = (paint.clone(), paint.clone(), paint);
     let container = StyledContainer::new(
-        button_box(),
+        button_box(size),
         move |_r| rest.surface(State::Rest),
         children![glyph_widget],
     )?
-    .styled_by(button_box)
+    .styled_by(move || button_box(size))
     .hover_style(move |_r| hover.surface(State::Hovered))
     .active_style(move |_r| press.surface(State::Pressed))
     .control(Role::Button)

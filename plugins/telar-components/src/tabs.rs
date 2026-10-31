@@ -12,7 +12,7 @@ use telar::{
     track_layout,
 };
 
-#[cfg(feature = "workbench")]
+use crate::ControlSize;
 use crate::icon_button::{IconSource, picture};
 use crate::shared;
 
@@ -23,7 +23,7 @@ use crate::shared;
 pub struct TabsTokens {
     /// Corner radius of each tab. `None` is the theme's `radius_control`.
     pub radius: Option<f32>,
-    /// Space between a tab's edge and its name at the regular control size, scaled with the control size in force. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    /// Space between a tab's edge and its name at the regular size, scaled with the bar's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
     pub pad_x: Option<f32>,
 }
 
@@ -37,31 +37,31 @@ impl TabsTokens {
         self.radius.unwrap_or_else(shared::radius_control)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between a tab's edge and its name in a bar of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::control_pad_x, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
     }
 }
 
-fn tab_box() -> LayoutStyle {
+fn tab_box(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
-        .padding_horizontal(TabsTokens::current().pad_x())
-        .gap(shared::gap_sm())
-        .min_height(shared::control_height())
+        .padding_horizontal(TabsTokens::current().pad_x(size))
+        .gap(shared::gap_sm(size))
+        .min_height(shared::control_height(size))
 }
-#[cfg(feature = "workbench")]
-fn icon_tab_box() -> LayoutStyle {
+fn icon_tab_box(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
-        .padding_all(shared::icon_pad())
-        .min_width(shared::control_height())
-        .min_height(shared::control_height())
+        .padding_all(shared::icon_pad(size))
+        .min_width(shared::control_height(size))
+        .min_height(shared::control_height(size))
 }
-fn bar() -> LayoutStyle {
-    LayoutStyle::row().gap(shared::gap_sm())
+fn bar(size: ControlSize) -> LayoutStyle {
+    LayoutStyle::row().gap(shared::gap_sm(size))
 }
 
 /// A horizontal tab bar: one button per label, driving a `selected` index. Renders only the row of tab buttons — the matching content panel is the caller's responsibility (typically the DSL's reactive `if selected == i`, mirroring the sandbox's own nav-button/section-switch split). Modelled on `select.rs`'s items/selected handling, but rendered inline (a row) rather than as an anchored overlay. High-level sugar over the primitives; lives in `telar-components`, not the kernel.
@@ -79,6 +79,9 @@ pub struct TabsProps {
     /// What a reader calls the set of tabs: "Settings sections". `None` (the default) leaves the list unnamed.
     #[props(some, into, default)]
     pub label: Option<Reactive<String>>,
+    /// How large the bar is drawn: each tab's height, padding and name, the gaps between them and the arrows that scroll them, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// Amends the paint of every tab — the bar's **principal surface** — selected or not, at rest, hovered and pressed. See [`telar::SurfaceStyle`] for when a theme token or [`TabsTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -90,9 +93,7 @@ pub struct Tab<T> {
     value: T,
     label: Reactive<String>,
     trailing: Children,
-    #[cfg(feature = "workbench")]
     icon: Option<IconSource>,
-    #[cfg(feature = "workbench")]
     shortcut: Option<Reactive<String>>,
 }
 
@@ -103,9 +104,7 @@ impl<T> Tab<T> {
             value,
             label: label.into(),
             trailing: Children::default(),
-            #[cfg(feature = "workbench")]
             icon: None,
-            #[cfg(feature = "workbench")]
             shortcut: None,
         }
     }
@@ -116,14 +115,12 @@ impl<T> Tab<T> {
         self
     }
 
-    #[cfg(feature = "workbench")]
     /// Draws `icon` in place of the tab's name, which a tooltip then shows and a reader still hears: a row too tight for words.
     pub fn icon(mut self, icon: impl Into<IconSource>) -> Self {
         self.icon = Some(icon.into());
         self
     }
 
-    #[cfg(feature = "workbench")]
     /// The key binding that selects this tab from anywhere, written portably (`"Alt+1"`) and shown in a tooltip over it as the platform writes it.
     pub fn shortcut(mut self, shortcut: impl Into<Reactive<String>>) -> Self {
         self.shortcut = Some(shortcut.into());
@@ -138,6 +135,7 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         selected,
         color,
         label,
+        size,
         style,
     } = props;
     // Uncontrolled: own the index so the bar still tracks the active tab when the caller binds no signal.
@@ -147,25 +145,27 @@ pub fn tabs(props: TabsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         .zip(0u32..)
         .map(|(name, index)| Tab::new(index, name))
         .collect();
-    tab_row(selected, entries, color, label, style)
+    tab_row(size, selected, entries, color, label, style)
 }
 
 /// The row of pills behind [`tabs`], selecting any `Copy` value instead of an index, so a caller whose selection is an enum binds it directly.
 ///
-/// While one tab holds focus the arrows (following the writing direction), Home and End move the selection and focus along the row, wrapping at either end.
+/// While one tab holds focus the arrows (following the writing direction), Home and End move the selection and focus along the row, wrapping at either end. Drawn at `size`, as [`TabsProps::size`] says. Positional rather than a props struct, since props take no type parameter and the selection here is the caller's own `T`.
 pub fn tab_list<T>(
     selected: RwSignal<T>,
     entries: Vec<Tab<T>>,
     color: Reactive<Color>,
     label: Option<Reactive<String>>,
+    size: ControlSize,
 ) -> Result<Box<dyn LayoutItem>, LayoutError>
 where
     T: Copy + PartialEq + 'static,
 {
-    tab_row(selected, entries, color, label, None)
+    tab_row(size, selected, entries, color, label, None)
 }
 
 fn tab_row<T>(
+    size: ControlSize,
     selected: RwSignal<T>,
     entries: Vec<Tab<T>>,
     color: Reactive<Color>,
@@ -180,12 +180,14 @@ where
     let paint = Paint { color, style };
     let mut tab_items: Vec<Box<dyn LayoutItem>> = Vec::with_capacity(entries.len());
     for (index, entry) in entries.into_iter().enumerate() {
-        tab_items.push(tab(selected, entry, index, &paint, &values, &focus_ids)?);
+        tab_items.push(tab(
+            size, selected, entry, index, &paint, &values, &focus_ids,
+        )?);
     }
 
     let nodes: Rc<[NodeId]> = tab_items.iter().map(|tab| tab.layout_node()).collect();
-    let row = Container::new(bar(), tab_items)?
-        .styled_by(bar)
+    let row = Container::new(bar(size), tab_items)?
+        .styled_by(move || bar(size))
         .role(Role::TabList);
     let list = match label {
         Some(label) => box_item(row.a11y_label(move || label.get())),
@@ -196,11 +198,12 @@ where
         values,
         nodes,
     };
-    scrolling(list, stepping)
+    scrolling(size, list, stepping)
 }
 
 /// `list` in a strip that scrolls it sideways, by the wheel as well, once it is wider than the room it is given, with the tab chosen kept in its middle and an arrow at either end that chooses the tab before or after it. The arrows are no Tab stops and say nothing to a reader: the keys that walk the tabs already do what they do.
 fn scrolling<T>(
+    size: ControlSize,
     list: Box<dyn LayoutItem>,
     stepping: Stepping<T>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError>
@@ -245,11 +248,11 @@ where
         strip_box(),
         vec![
             shared::shown_while(overflows, LayoutStyle::row(), move || {
-                arrow(back.clone(), false)
+                arrow(size, back.clone(), false)
             })?,
             box_item(scroll),
             shared::shown_while(overflows, LayoutStyle::row(), move || {
-                arrow(forward.clone(), true)
+                arrow(size, forward.clone(), true)
             })?,
         ],
     )?
@@ -310,6 +313,7 @@ impl<T: Copy + PartialEq + 'static> Stepping<T> {
 }
 
 fn arrow<T: Copy + PartialEq + 'static>(
+    size: ControlSize,
     stepping: Stepping<T>,
     toward_end: bool,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -322,7 +326,7 @@ fn arrow<T: Copy + PartialEq + 'static>(
         false => shared::Mark::ChevronBack,
     };
     let faded = spent.clone();
-    let face = shared::mark(shape, move |text| match faded() {
+    let face = shared::mark(size, shape, move |text| match faded() {
         true => text.color.faded(shared::QUIET_ALPHA * shared::QUIET_ALPHA),
         false => text.color.faded(shared::QUIET_ALPHA),
     })?;
@@ -337,13 +341,13 @@ fn arrow<T: Copy + PartialEq + 'static>(
             }
         }
     };
-    let arrow_box = || {
+    let arrow_box = move || {
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
             .flex_shrink(0.0)
-            .width(shared::icon_size() + shared::icon_pad() * 2.0)
-            .min_height(shared::control_height())
+            .width(shared::icon_size(size) + shared::icon_pad(size) * 2.0)
+            .min_height(shared::control_height(size))
     };
     let pressed = spent.clone();
     let arrow = StyledContainer::new(arrow_box(), |_r| RectStyle::default(), vec![face])?
@@ -360,6 +364,7 @@ fn arrow<T: Copy + PartialEq + 'static>(
 }
 
 fn tab<T>(
+    size: ControlSize,
     selected: RwSignal<T>,
     entry: Tab<T>,
     index: usize,
@@ -370,10 +375,10 @@ fn tab<T>(
 where
     T: Copy + PartialEq + 'static,
 {
-    #[cfg(feature = "workbench")]
     let hint = (entry.icon.is_some() || entry.shortcut.is_some())
         .then(|| (entry.label.clone(), entry.shortcut.clone()));
     let button = TabButton {
+        size,
         selected,
         entry,
         index,
@@ -381,9 +386,13 @@ where
         values: Rc::clone(values),
         focus_ids: Rc::clone(focus_ids),
     };
-    #[cfg(feature = "workbench")]
     if let Some((text, shortcut)) = hint {
-        return shared::hinted(move || button.build(), text, shortcut.unwrap_or_default());
+        return shared::hinted(
+            move || button.build(),
+            size,
+            text,
+            shortcut.unwrap_or_default(),
+        );
     }
     button.build()
 }
@@ -391,6 +400,7 @@ where
 /// Everything one tab is built from, so a tooltip wrapping it can build it wherever and however often it places it.
 #[derive(Clone)]
 struct TabButton<T: 'static> {
+    size: ControlSize,
     selected: RwSignal<T>,
     entry: Tab<T>,
     index: usize,
@@ -405,6 +415,7 @@ where
 {
     fn build(&self) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let TabButton {
+            size,
             selected,
             entry,
             index,
@@ -416,36 +427,36 @@ where
             value,
             label,
             trailing,
-            #[cfg(feature = "workbench")]
             icon,
-            #[cfg(feature = "workbench")]
             shortcut,
         } = entry;
         let name = label.clone();
-        #[cfg(feature = "workbench")]
         let (face, shape) = match icon {
-            Some(icon) => (pictured(icon, selected, value)?, icon_tab_box as fn() -> _),
-            None => (named(label, selected, value)?, tab_box as fn() -> _),
+            Some(icon) => (
+                pictured(size, icon, selected, value)?,
+                icon_tab_box as fn(ControlSize) -> _,
+            ),
+            None => (
+                named(size, label, selected, value)?,
+                tab_box as fn(ControlSize) -> _,
+            ),
         };
-        #[cfg(not(feature = "workbench"))]
-        let (face, shape) = (named(label, selected, value)?, tab_box as fn() -> _);
         let mut content = vec![face];
         content.extend(trailing.build()?);
 
         let (rest, hover, press) = (paint.clone(), paint.clone(), paint);
         let tab = StyledContainer::new(
-            shape(),
+            shape(size),
             move |_r| rest.surface(selected.get() == value, State::Rest),
             content,
         )?
-        .styled_by(shape)
+        .styled_by(move || shape(size))
         .hover_style(move |_r| hover.surface(selected.get() == value, State::Hovered))
         .active_style(move |_r| press.surface(selected.get() == value, State::Pressed))
         .control(Role::Tab)
         .toggled(move || selected.get() == value)
         .on_press(move || selected.set(value))
         .a11y_label(move || name.get());
-        #[cfg(feature = "workbench")]
         let tab = match shortcut {
             Some(chord) => tab.keyboard_shortcut(move || chord.get()),
             None => tab,
@@ -472,6 +483,7 @@ where
 }
 
 fn named<T>(
+    size: ControlSize,
     label: Reactive<String>,
     selected: RwSignal<T>,
     value: T,
@@ -482,13 +494,13 @@ where
     Ok(box_item(Text::declaring(
         move || label.get(),
         LayoutStyle::new(),
-        move |t| tab_text(t, selected.get() == value),
+        move |t| tab_text(size, t, selected.get() == value),
     )?))
 }
 
 /// The icon a tab is drawn as: on the accent pill while selected, and in the ink around it otherwise.
-#[cfg(feature = "workbench")]
 fn pictured<T>(
+    size: ControlSize,
     icon: IconSource,
     selected: RwSignal<T>,
     value: T,
@@ -498,6 +510,7 @@ where
 {
     picture(
         icon,
+        size,
         Reactive::of(move || {
             if selected.get() == value {
                 shared::on_accent()
@@ -561,11 +574,11 @@ impl Paint {
 }
 
 /// A tab's label: legible on the accent pill when it is the selected one, and otherwise a quieter shade of whatever the bar around it is written in.
-fn tab_text(inherited: TextStyle, active: bool) -> TextStyle {
+fn tab_text(size: ControlSize, inherited: TextStyle, active: bool) -> TextStyle {
     if active {
-        shared::control_text(inherited, 1.0).with_color(shared::on_accent())
+        shared::control_text(size, inherited, 1.0).with_color(shared::on_accent())
     } else {
-        shared::quiet(inherited, 1.0)
+        shared::quiet(size, inherited, 1.0)
     }
 }
 

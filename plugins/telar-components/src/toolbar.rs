@@ -11,6 +11,7 @@ use telar::{
     signal,
 };
 
+use crate::ControlSize;
 use crate::shared;
 
 /// What an item needs from the toolbar it is in, and what the toolbar learns from its items.
@@ -196,7 +197,9 @@ pub fn toolbar(props: ToolbarProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         } else {
             LayoutStyle::row()
         };
-        style.gap(shared::gap_xs()).align_items(AlignItems::CENTER)
+        style
+            .gap(shared::gap_xs(ControlSize::Regular))
+            .align_items(AlignItems::CENTER)
     };
     let keys = if vertical {
         ConsumedKeys::VERTICAL_ARROWS

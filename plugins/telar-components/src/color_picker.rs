@@ -10,6 +10,7 @@ use telar::{
     focus::Role, signal, step_factor,
 };
 
+use crate::ControlSize;
 use crate::shared;
 use crate::strings;
 use crate::swatches::{SwatchesProps, swatches};
@@ -20,7 +21,7 @@ use crate::text_field::{TextFieldProps, text_field};
 /// Every field left `None` follows the role named beside it, read when the picker paints.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ColorPickerTokens {
-    /// Width when the caller names none, at the regular control size and scaled with the control size in force. `None` is 16 ems of the document's text, a slider's length.
+    /// Width when the caller names none, at the regular size and scaled with the picker's own. `None` is 16 ems of the document's text, a slider's length.
     pub width: Option<f32>,
     /// Corner radius of the saturation and brightness area and of the chip showing the colour. `None` is the theme's `radius_control`.
     pub radius: Option<f32>,
@@ -36,8 +37,9 @@ impl ColorPickerTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    pub fn width(&self) -> f32 {
-        shared::width_or_measure(self.width, WIDTH_EMS)
+    /// The width of a picker of `size` whose call names none.
+    pub fn width(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.width, WIDTH_EMS)
     }
 
     pub fn radius(&self) -> f32 {
@@ -53,22 +55,22 @@ const AREA_RATIO: f32 = 0.62;
 /// One arrow-key step on any channel, as a share of its range.
 const KEY_STEP: f32 = 0.01;
 
-fn gap() -> f32 {
-    shared::gap_md()
+fn gap(size: ControlSize) -> f32 {
+    shared::gap_md(size)
 }
-fn thumb_size() -> f32 {
-    shared::icon_size()
+fn thumb_size(size: ControlSize) -> f32 {
+    shared::icon_size(size)
 }
 /// A channel's track sits inside its thumb by the smallest step on each side.
-fn track_height() -> f32 {
-    thumb_size() - shared::gap_xs() * 2.0
+fn track_height(size: ControlSize) -> f32 {
+    thumb_size(size) - shared::gap_xs(size) * 2.0
 }
 /// The chip spans both channel tracks and the gap between them.
-fn chip_size() -> f32 {
-    track_height() * 2.0 + gap()
+fn chip_size(size: ControlSize) -> f32 {
+    track_height(size) * 2.0 + gap(size)
 }
-fn checker_cell() -> f32 {
-    shared::gap_sm()
+fn checker_cell(size: ControlSize) -> f32 {
+    shared::gap_sm(size)
 }
 
 fn ring(color: Color) -> Border {
@@ -97,6 +99,9 @@ pub struct ColorPickerProps {
     /// Width in logical px. `0.0` (the default) means "unset" -> [`ColorPickerTokens::width`].
     #[props(default)]
     pub width: f32,
+    /// How large the picker is drawn: its thumbs, tracks, chip, hex field, swatches, caption and gaps and, unless it names one, its width, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// A small caption stacked above the picker; omitted when empty.
     #[props(into, default)]
     pub label: Reactive<String>,
@@ -168,6 +173,7 @@ fn same_rgb(a: Color, b: Color) -> bool {
 
 #[derive(Clone)]
 struct Picker {
+    size: ControlSize,
     value: RwSignal<Color>,
     hsv: RwSignal<Hsv>,
     on_change: Option<Rc<dyn Fn(Color)>>,
@@ -222,6 +228,7 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
         swatches: palette,
         swatch_names,
         width,
+        size,
         label,
         on_change,
         style,
@@ -230,10 +237,11 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
     let width = if width > 0.0 {
         width
     } else {
-        ColorPickerTokens::current().width()
+        ColorPickerTokens::current().width(size)
     };
     let start = value.peek();
     let picker = Picker {
+        size,
         value,
         hsv: signal(Picker::hsv_keeping(
             start,
@@ -251,7 +259,7 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
     }
 
     let mut rows: Vec<Box<dyn LayoutItem>> = vec![area(&picker, width, style)?];
-    let slider_width = width - chip_size() - gap();
+    let slider_width = width - chip_size(size) - gap(size);
     let mut sliders: Vec<Box<dyn LayoutItem>> = vec![hue_slider(&picker, slider_width)?];
     if alpha {
         sliders.push(alpha_slider(&picker, slider_width)?);
@@ -263,17 +271,17 @@ pub fn color_picker(props: ColorPickerProps) -> Result<Box<dyn LayoutItem>, Layo
     rows.push(box_item(Container::new(
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
-            .gap(gap()),
-        vec![chip(value)?, box_item(slider_column)],
+            .gap(gap(size)),
+        vec![chip(size, value)?, box_item(slider_column)],
     )?));
     rows.push(hex_field(&picker, width, alpha)?);
     if !palette.is_empty() {
         rows.push(swatch_row(&picker, palette, swatch_names)?);
     }
 
-    let column = move || LayoutStyle::column().width(width).gap(gap());
+    let column = move || LayoutStyle::column().width(width).gap(gap(size));
     let picker_box = Container::new(column(), rows)?.styled_by(column);
-    shared::captioned(box_item(picker_box), label, width)
+    shared::captioned(size, box_item(picker_box), label, width)
 }
 
 /// The saturation (across) and brightness (up) of the current hue, dragged or stepped with the arrows.
@@ -310,7 +318,7 @@ fn area(
         },
         vec![],
     )?;
-    let size = thumb_size();
+    let size = thumb_size(picker.size);
     let thumb = StyledContainer::new(
         LayoutStyle::new().absolute().width(size).height(size),
         move |r| {
@@ -401,6 +409,8 @@ struct Channel {
     paint: Rc<dyn Fn(Rect) -> Paint>,
     /// The colour the track shows under the thumb, which the thumb's ring has to stand out from.
     under: Rc<dyn Fn() -> Color>,
+    /// The picker's size, which the track, its thumb and its checker are drawn at.
+    size: ControlSize,
     checkered: bool,
     name: &'static str,
     /// The announced range: degrees for the hue, a percentage for the opacity.
@@ -441,6 +451,7 @@ fn hue_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, Layout
                 let h = under.hsv.get().h;
                 from_hsv(Hsv { h, s: 1.0, v: 1.0 }, 1.0)
             }),
+            size: picker.size,
             checkered: false,
             name: strings::HUE,
             range: 360.0,
@@ -469,6 +480,7 @@ fn alpha_slider(picker: &Picker, width: f32) -> Result<Box<dyn LayoutItem>, Layo
                 ))
             }),
             under: Rc::new(move || shared::over(under.value.get(), shared::surface())),
+            size: picker.size,
             checkered: true,
             name: strings::OPACITY,
             range: 100.0,
@@ -483,14 +495,16 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
         write,
         paint,
         under,
+        size: control_size,
         checkered,
         name,
         range,
     } = channel;
+    let track_height = track_height(control_size);
     let mut layers: Vec<Box<dyn LayoutItem>> = Vec::new();
     if checkered {
-        layers.push(checker(|| {
-            BorderRadius::all(shared::pill_radius(track_height()))
+        layers.push(checker(control_size, move || {
+            BorderRadius::all(shared::pill_radius(track_height))
         })?);
     }
     layers.push(box_item(StyledContainer::new(
@@ -503,7 +517,7 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
         },
         vec![],
     )?));
-    let size = thumb_size();
+    let size = thumb_size(control_size);
     let at = read.clone();
     layers.push(box_item(
         StyledContainer::new(
@@ -523,7 +537,7 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
                 1.0,
                 1.0,
                 t * (width - size),
-                (track_height() - size) / 2.0,
+                (track_height - size) / 2.0,
             )
         })
         .a11y_hidden(),
@@ -531,10 +545,7 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
 
     let (announced, keyed) = (read.clone(), read);
     let drag = write.clone();
-    let track = Container::new(
-        LayoutStyle::new().width(width).height(track_height()),
-        layers,
-    )?;
+    let track = Container::new(LayoutStyle::new().width(width).height(track_height), layers)?;
     let track = StyledContainer::new(
         LayoutStyle::column()
             .width(width)
@@ -568,12 +579,13 @@ fn channel(channel: Channel, width: f32) -> Result<Box<dyn LayoutItem>, LayoutEr
 
 /// The squares a translucent colour is shown over, so how much shows through can be seen, filling its parent and cut to the `corner` of what is drawn over it.
 fn checker(
+    size: ControlSize,
     corner: impl Fn() -> BorderRadius + 'static,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let canvas = Canvas::new(LayoutStyle::new().absolute_fill(), |rect| {
+    let canvas = Canvas::new(LayoutStyle::new().absolute_fill(), move |rect| {
         let light = shared::surface();
         let dark = shared::over(shared::border(), light);
-        let cell = checker_cell();
+        let cell = checker_cell(size);
         let columns = (rect.width / cell).ceil() as usize;
         let rows = (rect.height / cell).ceil() as usize;
         let mut cells = vec![RenderNode::rect(
@@ -600,8 +612,11 @@ fn checker(
 }
 
 /// The colour as it stands, alpha and all, over the checker.
-fn chip(value: RwSignal<Color>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let size = chip_size();
+fn chip(
+    control_size: ControlSize,
+    value: RwSignal<Color>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let size = chip_size(control_size);
     let face = StyledContainer::new(
         LayoutStyle::new().absolute_fill(),
         move |_r| {
@@ -614,7 +629,7 @@ fn chip(value: RwSignal<Color>) -> Result<Box<dyn LayoutItem>, LayoutError> {
     )?;
     let chip = Container::new(
         LayoutStyle::new().width(size).height(size).flex_shrink(0.0),
-        vec![checker(rounded)?, box_item(face)],
+        vec![checker(control_size, rounded)?, box_item(face)],
     )?
     .a11y_hidden();
     Ok(box_item(chip))
@@ -662,6 +677,7 @@ fn hex_field(picker: &Picker, width: f32, alpha: bool) -> Result<Box<dyn LayoutI
             .value(text)
             .placeholder(Reactive::of(|| strings::text(strings::HEX)))
             .width(width)
+            .size(picker.size)
             .on_submit(apply)
             .on_key(on_key)
             .build(),
@@ -700,6 +716,7 @@ fn swatch_row(
             .names(names)
             .selected(selected)
             .on_select(choose)
+            .size(picker.size)
             .build(),
     )
 }

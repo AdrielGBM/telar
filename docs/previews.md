@@ -200,16 +200,19 @@ laptop = "1280x800"
 [preview "Default" matrix:rtl]
 ```
 
-- **Environment axes** are `mode`, `locale`, `dir`, `viewport` and `control_size` (`mini`, `small`, `regular`,
-  `large`). A viewport value is a size such as `390x844` or a name from `[telar.previews.viewports]`.
+- **Environment axes** are `mode`, `locale`, `dir` and `viewport`. A viewport value is a size such as `390x844` or a
+  name from `[telar.previews.viewports]`.
 - **Any other key names an arg** of the preview, declared in `args(…)` or written as a literal on the root, and
-  takes values in their text form: `12`, `true`, `Primary`, `#ff8800`, `"Save"`.
+  takes values in their text form: `12`, `true`, `Primary`, `#ff8800`, `"Save"`. A component's size is one of them, its
+  `size` arg, since nothing inherits one: `size:[Small Regular Large]`, or `size = ["Small", "Regular", "Large"]` in
+  `telar.toml`. A matrix that still writes the old `control_size` axis is refused, naming that arg.
 - The cells are the product of the axes, the first outermost. `themes` is built in: every registered mode, side by
   side. A package's own `themes` replaces it.
 - In Rust, `.matrix(Matrix::Named("themes"))` or `.matrix(Matrix::Axes(&[Axis::Dir(&[…]), Axis::Arg("size", &["12", "16"])]))`.
 
 `cargo telar test` and the snapshots treat each cell as a preview of its own. The workshop's Matrix view lays the
-cells out in a grid, and builds one from the axes you pick for a preview that has no matrix.
+cells out in a grid, and builds one from the axes you pick for a preview that has no matrix: the environment's, and
+each arg with a fixed set of values, a component's `size` among them.
 
 ## Ids
 
@@ -384,7 +387,7 @@ dependency of your package that `cargo telar new` writes. Without it the command
 line that adds it, `cargo add -p <package> telar-workshop --optional`; `--list` and `--png` need no workshop.
 
 - **Top bar.** A bold Preview label and the Settings menu, setting the environment every canvas is shown in: a row for
-  each of mode, locale, direction, control size and background that names the value it holds and opens a submenu of
+  each of mode, locale, direction and background that names the value it holds and opens a submenu of
   its choices, then high contrast and reduced motion, ticked while on (the mode is System until Light, Dark or another registered
   mode is picked: a preview's own mode where it asks for one, else the application's light or dark mode as the
   system's scheme is, following it live); a search field centred on the window, showing the project's

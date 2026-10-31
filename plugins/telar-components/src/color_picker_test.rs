@@ -303,7 +303,10 @@ fn the_area_is_rounded_like_a_control_and_takes_the_style_amendment() {
     telar::set_theme(Plain::default());
     let (area, style) = painted(Color::rgb(0.2, 0.4, 0.8), None)[0];
     assert_eq!(style.radius, BorderRadius::all(6.0));
-    assert_eq!(area.width, ColorPickerTokens::default().width());
+    assert_eq!(
+        area.width,
+        ColorPickerTokens::default().width(ControlSize::Regular)
+    );
 
     let square: SurfaceAmendment = Rc::new(|s: RectStyle| s.with_radius(BorderRadius::all(0.0)));
     let (_, style) = painted(Color::rgb(0.2, 0.4, 0.8), Some(square))[0];

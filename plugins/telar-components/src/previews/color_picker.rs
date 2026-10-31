@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
+use crate::ControlSize;
 use crate::color_picker::{ColorPickerProps, color_picker};
 
 fn palette() -> Vec<Color> {
@@ -28,6 +29,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .alpha(p.arg("alpha", true))
                     .label(p.arg("label", "Accent"))
                     .width(p.arg("width", 0.0f32))
+                    .size(p.arg("size", ControlSize::Regular))
                     .swatches(palette())
                     .swatch_names(
                         ["Primary", "Info", "Success", "Warning", "Error", "Muted"]

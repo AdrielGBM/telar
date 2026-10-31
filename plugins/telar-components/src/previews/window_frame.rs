@@ -5,6 +5,7 @@ use telar::{
     Children, Container, LayoutError, LayoutItem, LayoutStyle, Reactive, Role, Text, box_item,
 };
 
+use crate::ControlSize;
 use crate::window_frame::{SurfaceFrameStyle, WindowControls, WindowFrameProps, window_frame};
 
 fn line(content: &'static str) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -23,6 +24,7 @@ fn token(read: fn(&dyn telar::ThemeTokens) -> telar::Color) -> Reactive<telar::C
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(window_frame: WindowFrameProps, "Default", |p| {
+            let size = p.arg("size", ControlSize::Regular);
             let style = SurfaceFrameStyle {
                 radius: Some(crate::metrics::radius_dialog()),
                 controls: WindowControls {
@@ -30,7 +32,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     minimize: p.arg("minimize", true),
                     maximize: p.arg("maximize", true),
                 },
-                body_inset: Some(p.arg("body_inset", crate::metrics::gap_lg())),
+                body_inset: Some(p.arg("body_inset", crate::metrics::gap_lg(size))),
                 ..SurfaceFrameStyle::default()
             }
             .close_hover(token(|t| t.error()))
@@ -49,6 +51,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 WindowFrameProps::props()
                     .title(p.arg("title", "Settings"))
                     .style(style)
+                    .size(size)
                     .close(Rc::new(move || actions.log("on_close", Vec::new())))
                     .body(body)
                     .resize(Rc::new(|_, _| {}))

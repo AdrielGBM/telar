@@ -291,7 +291,7 @@ fn up_from_the_first_row_reaches_the_header_where_enter_sorts() {
 #[test]
 fn only_a_screenful_of_thousands_of_rows_is_built_and_the_header_stays_on_top() {
     let mut mounted = Mounted::focused(many(5_000), 240.0);
-    let row_height = DataTableTokens::current().row_height();
+    let row_height = DataTableTokens::current().row_height(ControlSize::Regular);
     let screenful = (240.0 / row_height).ceil() as usize + 1;
     let built = mounted.of_role(Role::Row).len();
     assert!(
@@ -861,7 +861,7 @@ impl Mounted {
 #[test]
 fn a_wrapping_column_grows_its_row_to_hold_its_lines_and_the_header_keeps_its_height() {
     let mounted = Mounted::wrapping(wordy(12), 400.0);
-    let row_height = DataTableTokens::current().row_height();
+    let row_height = DataTableTokens::current().row_height(ControlSize::Regular);
     assert_eq!(mounted.header("Name").rect.height, row_height);
     let rows = mounted.of_role(Role::Row);
     let cells = mounted.of_role(Role::GridCell);
@@ -950,7 +950,7 @@ fn page_down_and_up_move_a_wrapping_table_by_the_rows_its_view_shows_whole() {
     mounted.settled();
     let tall = mounted.cursor_cell().rect.height;
     assert!(
-        tall > DataTableTokens::current().row_height(),
+        tall > DataTableTokens::current().row_height(ControlSize::Regular),
         "the rows wrap"
     );
     let (top, bottom) = mounted.rows_view();
@@ -1171,4 +1171,27 @@ fn a_table_reads_as_a_grid_of_rows_that_hold_their_cells() {
             (Role::GridCell, "x"),
         ]
     );
+}
+
+/// The header and every row stand at the row height of the table's own size.
+#[test]
+fn the_rows_and_the_header_stand_at_the_table_s_size() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        let grid = Grid::mount(
+            DataTableProps::props()
+                .columns(columns())
+                .rows(files())
+                .label("Files")
+                .size(size)
+                .build(),
+        );
+        let wanted = crate::metrics::row_height(size);
+        let rows = crate::test_support::drawn(Role::Row);
+        assert!(rows.len() > 1, "{rows:?}");
+        assert!(
+            rows.iter().all(|row| row.height == wanted),
+            "{size:?}: {rows:?}"
+        );
+        drop(grid);
+    }
 }

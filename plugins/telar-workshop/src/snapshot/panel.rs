@@ -8,8 +8,8 @@ use telar::{
     LayoutStyle, Reactive, ReactiveList, Role, Text, box_item, children, use_theme_tokens,
 };
 use telar_components::{
-    ButtonProps, CodeSpan, CodeViewProps, Tab, TagProps, TokenKind, Tone, button, code_view,
-    tab_list, tag,
+    ButtonProps, CodeSpan, CodeViewProps, ControlSize, Tab, TagProps, TokenKind, Tone, button,
+    code_view, tab_list, tag,
 };
 use telar_devtools::{WORKBENCH_GRID, workbench_fill, workbench_mono, workbench_muted};
 
@@ -213,6 +213,7 @@ fn moment_switch(
         tabs,
         Color::TRANSPARENT.into(),
         Some(strings::reactive(SNAPSHOT_MOMENT)),
+        ControlSize::Regular,
     )
 }
 
@@ -300,6 +301,7 @@ fn mode_switch(review: &SnapshotReview) -> Result<Box<dyn LayoutItem>, LayoutErr
         ],
         Color::TRANSPARENT.into(),
         Some(strings::reactive(SNAPSHOT_COMPARE)),
+        ControlSize::Regular,
     )
 }
 

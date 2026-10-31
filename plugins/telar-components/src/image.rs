@@ -9,6 +9,7 @@ use telar::{
     box_item, children,
 };
 
+use crate::ControlSize;
 use crate::shared;
 
 /// An image's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -168,7 +169,10 @@ impl Size {
             (true, true) => (self.width, self.height),
             (true, false) => (self.width, self.width),
             (false, true) => (self.height, self.height),
-            (false, false) => (shared::control_height(), shared::control_height()),
+            (false, false) => (
+                shared::control_height(ControlSize::Regular),
+                shared::control_height(ControlSize::Regular),
+            ),
         }
     }
 }
@@ -215,7 +219,10 @@ fn placeholder(
             Text::declaring(
                 move || alt.get(),
                 LayoutStyle::new().min_width(0.0).flex_shrink(1.0),
-                |t| shared::quiet(t, shared::CAPTION_RATIO).with_text_wrap(TextWrap::NoWrap),
+                |t| {
+                    shared::quiet(ControlSize::Regular, t, shared::CAPTION_RATIO)
+                        .with_text_wrap(TextWrap::NoWrap)
+                },
             )?
             .a11y_hidden()
         };
@@ -231,7 +238,7 @@ fn placeholder(
             .flex_shrink(0.0)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .padding_horizontal(shared::gap_sm()),
+            .padding_horizontal(shared::gap_sm(ControlSize::Regular)),
         move |_r| {
             let quiet = RectStyle::default()
                 .with_fill(shared::surface_alt())

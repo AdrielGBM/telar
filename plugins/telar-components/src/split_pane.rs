@@ -12,6 +12,7 @@ use telar::{
 };
 use web_time::Instant;
 
+use crate::ControlSize;
 use crate::edit::write_through;
 use crate::resize::DRAG_THRESHOLD;
 use crate::shared::{self, DOUBLE_CLICK};
@@ -25,7 +26,7 @@ const DEFAULT_STEP: f32 = 16.0;
 /// Every field left `None` follows the role named beside it, read when the splitter paints.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SplitPaneTokens {
-    /// Width of the gap between the panes at the regular control size, scaled with the control size in force. The splitter is grabbed from a strip twice as wide, reaching half a gap over each pane and no further, so what a pane keeps at its edge, such as a scrollbar, stays its own. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm).
+    /// Width of the gap between the panes. The splitter is grabbed from a strip twice as wide, reaching half a gap over each pane and no further, so what a pane keeps at its edge, such as a scrollbar, stays its own. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm) at the regular size.
     pub thickness: Option<f32>,
     /// Corner radius of the rule drawn in the gap. `None` is a pill.
     pub radius: Option<f32>,
@@ -38,9 +39,8 @@ impl SplitPaneTokens {
     }
 
     pub fn thickness(&self) -> f32 {
-        self.thickness.map_or_else(shared::gap_sm, |thickness| {
-            thickness * telar::control_scale()
-        })
+        self.thickness
+            .unwrap_or_else(|| shared::gap_sm(ControlSize::Regular))
     }
 
     /// The bar's corner for a bar laid out at `rect`.

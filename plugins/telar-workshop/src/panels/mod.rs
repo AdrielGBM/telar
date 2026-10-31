@@ -17,8 +17,8 @@ use telar::{
     children, effect, memo, signal, track_layout,
 };
 use telar_components::{
-    ButtonProps, IconButtonProps, ItemProps, Tab, Variant, button, icon_button, item, metrics,
-    tab_list,
+    ButtonProps, ControlSize, IconButtonProps, ItemProps, Tab, Variant, button, icon_button, item,
+    metrics, tab_list,
 };
 use telar_devtools::{
     WORKBENCH_GRID, accessibility_panel, inspection_toggles, inspector_panel, use_workbench_tokens,
@@ -72,7 +72,7 @@ fn header(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         };
         let tab = shown.get();
         let tools = tools_widths.with(|widths| widths.get(&tab).copied().unwrap_or(0.0));
-        let fold = metrics::control_height() + WORKBENCH_GRID;
+        let fold = metrics::control_height(ControlSize::Regular) + WORKBENCH_GRID;
         let room = header.get().width - 2.0 * HEADER_PAD - WORKBENCH_GRID - fold;
         tools > 0.0 && tabs_width.get() + tools > room
     });
@@ -176,6 +176,7 @@ fn strip(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
         tabs,
         Color::TRANSPARENT.into(),
         Some(strings::reactive(PANELS)),
+        ControlSize::Regular,
     )
 }
 

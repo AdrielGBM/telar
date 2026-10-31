@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Container, Key, LayoutError, NamedKey, Role, box_item};
 
+use crate::ControlSize;
 use crate::button::{ButtonProps, button};
 use crate::command_palette::{Command, CommandPaletteProps, command_palette};
 
@@ -52,6 +53,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .open(open)
                     .commands(commands())
                     .width(p.arg("width", 0.0f32))
+                    .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )?;
             Ok::<_, LayoutError>(Container::column(vec![box_item(reopen), palette])?)

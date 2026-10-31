@@ -14,6 +14,7 @@ use telar::{
     memo, on_cleanup, signal, track_layout, use_context,
 };
 
+use crate::ControlSize;
 use crate::list::{self, Act, ListContext, Mark, RowLook};
 use crate::menu::MenuTokens;
 use crate::popup;
@@ -49,8 +50,9 @@ impl Config {
         self.tokens.or(MenuTokens::current())
     }
 
-    pub(crate) fn panel_width(&self) -> f32 {
-        self.width.unwrap_or_else(|| self.look().width())
+    /// The least width of a panel of `size`: the caller's, else the tokens'.
+    pub(crate) fn panel_width(&self, size: ControlSize) -> f32 {
+        self.width.unwrap_or_else(|| self.look().width(size))
     }
 }
 
@@ -64,6 +66,8 @@ pub(crate) enum Level {
 /// One panel to open: its rows, what picking one of them reports, and where it goes.
 pub(crate) struct Spec {
     pub(crate) rows: Children,
+    /// The size of the menu or submenu that opens it, which its padding is drawn at.
+    pub(crate) size: ControlSize,
     /// Fired with the index of the picked row among this panel's rows.
     pub(crate) on_select: Option<Rc<dyn Fn(u32)>>,
     pub(crate) anchoring: Anchored,
@@ -130,7 +134,7 @@ impl Cascade {
     pub(crate) fn look(&self) -> RowLook {
         let look = self.config.look();
         RowLook {
-            height: look.row_height(),
+            row_height: look.row_height,
             label: look.label,
             faint: Some(look.faint()),
             highlight: look.highlight,
@@ -190,6 +194,7 @@ impl Cascade {
 pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError> {
     let Spec {
         rows,
+        size,
         on_select,
         anchoring,
         width,
@@ -236,7 +241,7 @@ pub(crate) fn panel(spec: Spec, config: Rc<Config>) -> Result<Built, LayoutError
         popup::Popup {
             anchoring,
             width: popup::Width::AtLeast(width),
-            padding: config.look().padding(),
+            padding: config.look().padding(size),
             cursor,
             keyboard: popup::Keyboard::Held { pointed },
         },
@@ -313,11 +318,11 @@ fn keys(list: ListContext, cascade: Rc<Cascade>, level: Level) -> Keys {
 }
 
 /// Where a submenu opens: beside the panel its row is in, level with the row, on whichever side has the room. Flush against that panel, so the pointer crosses no gap that belongs to neither on its way in.
-fn beside(row: NodeId, cascade: &Rc<Cascade>) -> Anchored {
+fn beside(row: NodeId, size: ControlSize, cascade: &Rc<Cascade>) -> Anchored {
     let cascade = cascade.clone();
     let laid = track_layout(row).expect("a row is registered");
     let config = cascade.config.clone();
-    let padding = memo(move || config.look().padding());
+    let padding = memo(move || config.look().padding(size));
     Rc::new(move || {
         laid.get();
         let padding = padding.get();
@@ -397,6 +402,9 @@ fn hand_keyboard_in(content: NodeId, list: FocusId, deepest: Deepest) {
 pub struct SubmenuProps {
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// How large the row and the panel it opens are drawn: the row as an [`item`](crate::item) of this size, and the panel's padding and width, as [`ControlSize`] works them out. The panel's rows are sized where they are written.
+    #[props(default)]
+    pub size: ControlSize,
     /// Quiet text before the mark that says it opens: the value its rows choose between, as it stands.
     #[props(some, into, default)]
     pub hint: Option<Reactive<String>>,
@@ -415,6 +423,7 @@ pub struct SubmenuProps {
 pub fn submenu(props: SubmenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SubmenuProps {
         label,
+        size,
         hint,
         disabled,
         on_select,
@@ -438,19 +447,20 @@ pub fn submenu(props: SubmenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     }
 
     let mut content = vec![
-        list::tick_column(&list, None, false)?,
-        box_item(list::label_text(label, disabled.clone(), &list)?),
+        list::tick_column(size, &list, None, false)?,
+        box_item(list::label_text(size, label, disabled.clone(), &list)?),
     ];
     if let Some(hint) = hint {
-        content.push(box_item(list::hint_text(hint, &list)?));
+        content.push(box_item(list::hint_text(size, hint, &list)?));
     }
     let faint = cascade.clone();
     content.push(shared::mark(
+        size,
         || shared::Mark::ChevronForward,
         move |_| faint.look().faint.unwrap_or_else(shared::muted).into(),
     )?);
     let opening = cascade.clone();
-    let row = list::styled_row(&list, Some(index), disabled, content)?
+    let row = list::styled_row(size, &list, Some(index), disabled, content)?
         .on_press(move || opening.open(index, false));
     let row = ctx.present(row, index, Mark::None);
     let shown = cascade.clone();
@@ -461,7 +471,7 @@ pub fn submenu(props: SubmenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         ctx.attach(index, row.layout_node(), focus, Act::Opens);
     }
 
-    let anchoring = beside(row.layout_node(), &cascade);
+    let anchoring = beside(row.layout_node(), size, &cascade);
     let (parent, opened) = (cascade.clone(), cascade.opened);
     // Built the first time it is opened: a menu with six submenus is six panels nobody asked for, and the row it hangs off has no place on screen until the panel it is in has one.
     let layer = telar::Lazy::new(
@@ -475,9 +485,10 @@ pub fn submenu(props: SubmenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
             let sub = panel(
                 Spec {
                     rows: children,
+                    size,
                     on_select,
                     anchoring,
-                    width: config.panel_width(),
+                    width: config.panel_width(size),
                     level: Level::Sub,
                     seed: parent.seeding.take(),
                 },

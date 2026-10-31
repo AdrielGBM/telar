@@ -172,7 +172,6 @@ fn the_workbench_keeps_its_grid_radius_and_text_size() {
         assert!(theme.workbench.mono_size < WORKBENCH_TEXT_SIZE);
     }
     assert_eq!(WORKBENCH_TEXT_SIZE, 13.0);
-    assert_eq!(WORKBENCH_CONTROL_SIZE, ControlSize::Regular);
 }
 
 #[test]

@@ -352,12 +352,12 @@ fn every_control_of_the_bar_is_as_tall_as_the_window_controls_and_centred_in_the
         let rect = workshop.control(role, name).rect;
         assert_eq!(
             rect.height,
-            telar_components::metrics::control_height(),
+            telar_components::metrics::control_height(ControlSize::Regular),
             "{name} is {rect:?}"
         );
         assert_eq!(
             rect.y,
-            (super::HEIGHT - telar_components::metrics::control_height()) / 2.0,
+            (super::HEIGHT - telar_components::metrics::control_height(ControlSize::Regular)) / 2.0,
             "{name} is {rect:?}"
         );
     }
@@ -497,7 +497,7 @@ fn the_project_name_is_centred_in_the_field_by_its_ink() {
 /// The bold label is set in a control's box, so its text starts where a ghost button's label would and stands on the line a control's label does.
 #[test]
 fn the_preview_label_is_inset_and_centred_like_a_control_label() {
-    let pad = telar_components::metrics::control_pad_x();
+    let pad = telar_components::metrics::control_pad_x(ControlSize::Regular);
     let wide = Workshop::open(Frame::Host, WIDE);
     let (label, _) = drawn_text(&wide, "Telar Workshop");
     assert_eq!(label.x, WORKBENCH_GRID + pad, "first in the bar");

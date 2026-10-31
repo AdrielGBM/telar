@@ -85,8 +85,8 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                             move || {
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
-                                    let __node_9 = spinner(SpinnerProps::props().size(::telar::Int(28)).build())?;
-                                    let __node_10 = spinner(SpinnerProps::props().size(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build())?;
+                                    let __node_9 = spinner(SpinnerProps::props().diameter(::telar::Int(28)).build())?;
+                                    let __node_10 = spinner(SpinnerProps::props().diameter(::telar::Int(20)).color(Reactive::of({ let theme = theme.clone(); move || theme.get().success })).build())?;
                                     let __text_1 = {
                                         Text::declaring(
                                             || "working…".to_string(),
@@ -104,7 +104,7 @@ pub fn indicators(props: IndicatorsProps) -> Result<Box<dyn LayoutItem>, LayoutE
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_11 = code_line(CodeLineProps::props().code("spinner size:28").build())?;
+                    let __node_11 = code_line(CodeLineProps::props().code("spinner diameter:28").build())?;
                     __children.push(box_item(__node_11));
                     Ok(__children)
                 }

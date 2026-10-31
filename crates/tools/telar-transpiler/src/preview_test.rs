@@ -212,14 +212,14 @@ fn the_meta_section_titles_every_variant_and_sets_what_they_share() {
 #[test]
 fn a_matrix_is_named_or_written_out() {
     let code = code(
-        "[preview \"Themes\" matrix:themes]\ncheckbox\n\n[preview \"Grid\" args(agree:false) matrix:(mode:[light dark] locale:[en \"ar\"] dir:[ltr rtl] viewport:[390x844 phone] control_size:[small large] size:[12 16] label:[\"Save\" Primary] agree:[true false])]\ncheckbox size:12 label:\"Save\" checked:$agree\n",
+        "[preview \"Themes\" matrix:themes]\ncheckbox\n\n[preview \"Grid\" args(agree:false) matrix:(mode:[light dark] locale:[en \"ar\"] dir:[ltr rtl] viewport:[390x844 phone] size:[12 16] label:[\"Save\" Primary] agree:[true false])]\ncheckbox size:12 label:\"Save\" checked:$agree\n",
     );
     assert!(
         code.contains(".matrix(::telar::preview::Matrix::Named(\"themes\"))"),
         "{code}"
     );
     assert!(
-        code.contains(".matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Mode(&[\"light\", \"dark\"]), ::telar::preview::Axis::Locale(&[\"en\", \"ar\"]), ::telar::preview::Axis::Dir(&[::telar::Direction::Ltr, ::telar::Direction::Rtl]), ::telar::preview::Axis::Viewport(&[\"390x844\", \"phone\"]), ::telar::preview::Axis::ControlSize(&[::telar::ControlSize::Small, ::telar::ControlSize::Large]), ::telar::preview::Axis::Arg(\"size\", &[\"12\", \"16\"]), ::telar::preview::Axis::Arg(\"label\", &[\"\\\"Save\\\"\", \"Primary\"]), ::telar::preview::Axis::Arg(\"agree\", &[\"true\", \"false\"])]))"),
+        code.contains(".matrix(::telar::preview::Matrix::Axes(&[::telar::preview::Axis::Mode(&[\"light\", \"dark\"]), ::telar::preview::Axis::Locale(&[\"en\", \"ar\"]), ::telar::preview::Axis::Dir(&[::telar::Direction::Ltr, ::telar::Direction::Rtl]), ::telar::preview::Axis::Viewport(&[\"390x844\", \"phone\"]), ::telar::preview::Axis::Arg(\"size\", &[\"12\", \"16\"]), ::telar::preview::Axis::Arg(\"label\", &[\"\\\"Save\\\"\", \"Primary\"]), ::telar::preview::Axis::Arg(\"agree\", &[\"true\", \"false\"])]))"),
         "{code}"
     );
     assert!(!code.contains("compile_error!"), "{code}");
@@ -237,8 +237,8 @@ fn a_matrix_the_transpiler_cannot_read_is_refused_on_its_header() {
             "`a/b` is not a size like 390x844",
         ),
         (
-            "matrix:(control_size:[huge])",
-            "`huge` is not one of mini, small, regular, large",
+            "matrix:(control_size:[small large])",
+            "`matrix:` axis `control_size` no longer exists: a component takes its own `size` arg",
         ),
         (
             "matrix:(mode:[light light])",
@@ -251,7 +251,7 @@ fn a_matrix_the_transpiler_cannot_read_is_refused_on_its_header() {
         ("matrix:{x}", "is neither a matrix's name"),
         (
             "matrix:(weight:[1 2])",
-            "varies `weight`, which is neither one of mode, locale, dir, viewport, control_size nor an arg of this preview",
+            "varies `weight`, which is neither one of mode, locale, dir, viewport nor an arg of this preview",
         ),
     ] {
         let previews = format!("[preview \"Grid\" {matrix}]\ncheckbox size:12\n");

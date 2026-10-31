@@ -125,11 +125,10 @@ fn switching_theme_re_spaces_the_button() {
     );
 }
 
-/// The control size is one ambient number that every component interprets through its own proportions — the alternative being a `size` prop on each of them and a table of what each of their parts measures at each size. So the check is that the button did *not* need to know: nothing about it mentions a size, and it still gets smaller.
+/// A button's size moves the unit under its proportions rather than naming lengths of its own, so its padding carries through at every size.
 #[test]
-fn the_ambient_control_size_scales_a_control_that_never_asked_for_one() {
-    use telar::relayout_if_dirty;
-    use telar::{ControlSize, ThemeTokens, set_control_size, set_theme};
+fn the_size_scales_the_padding_through_the_button_s_own_proportions() {
+    use telar::{ThemeTokens, set_theme};
 
     #[derive(Clone)]
     struct Plain;
@@ -139,23 +138,37 @@ fn the_ambient_control_size_scales_a_control_that_never_asked_for_one() {
         }
     }
 
-    crate::test_support::fresh_layout_runtime();
-    set_theme(Plain);
-    set_control_size(ControlSize::Regular);
-    let btn = button(ButtonProps::props().build()).unwrap();
-    let node = btn.layout_node();
-    let rect = track_layout(node).unwrap();
-    compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
-    let regular = rect.get().width;
+    let width_at = |size: ControlSize| {
+        crate::test_support::fresh_layout_runtime();
+        set_theme(Plain);
+        let btn = button(ButtonProps::props().size(size).build()).unwrap();
+        let node = btn.layout_node();
+        let rect = track_layout(node).unwrap();
+        compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
+        rect.get().width
+    };
+    let regular = width_at(ControlSize::Regular);
+    for size in [ControlSize::Small, ControlSize::Large] {
+        assert_eq!(width_at(size), regular * size.scale(), "{size:?}");
+    }
+}
 
-    set_control_size(ControlSize::Mini);
-    relayout_if_dirty();
-    assert_eq!(
-        rect.get().width,
-        regular * ControlSize::Mini.scale(),
-        "a denser control size carries through the button's own padding ratio"
-    );
-    set_control_size(ControlSize::Regular);
+/// A button is 24, 32 and 40 px tall from small to large, so the smallest is already the smallest pointer target.
+#[test]
+fn a_button_stands_at_its_size_s_height() {
+    for (size, height) in [
+        (ControlSize::Small, 24.0),
+        (ControlSize::Regular, 32.0),
+        (ControlSize::Large, 40.0),
+    ] {
+        crate::test_support::fresh_layout_runtime();
+        let btn = button(ButtonProps::props().label("Save").size(size).build()).unwrap();
+        let node = btn.layout_node();
+        let rect = track_layout(node).unwrap();
+        compute_layout(node, AvailableSpace::MaxContent, AvailableSpace::MaxContent).unwrap();
+        assert_eq!(rect.get().height, height, "{size:?}");
+        assert!(height >= crate::metrics::MIN_TARGET);
+    }
 }
 
 #[test]
@@ -473,7 +486,7 @@ fn a_hugging_button_pads_its_label_evenly_on_both_sides() {
     let tree = ComponentList::new(btn);
     let face = crate::test_support::drawn(telar::focus::Role::Button)[0];
     let (before, after) = crate::test_support::run_insets(&tree, "Settings", face);
-    let pad = crate::shared::control_pad_x();
+    let pad = crate::shared::control_pad_x(crate::ControlSize::Regular);
     assert!((before - pad).abs() <= 0.5, "{before} {after}");
     assert!((after - pad).abs() <= 0.5, "{before} {after}");
 }

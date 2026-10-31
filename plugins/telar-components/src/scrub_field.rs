@@ -12,6 +12,7 @@ use telar::{
 };
 use web_time::Instant;
 
+use crate::ControlSize;
 use crate::edit::{snap, write_through};
 use crate::shared::{self, DOUBLE_CLICK};
 
@@ -35,6 +36,9 @@ pub struct ScrubFieldProps {
     /// The caption that doubles as the scrub handle.
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// How large the field is drawn: its height, padding, gaps and text, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     #[props(default = f32::NEG_INFINITY)]
     pub min: f32,
     #[props(default = f32::INFINITY)]
@@ -63,7 +67,7 @@ pub struct ScrubFieldProps {
 pub struct ScrubFieldTokens {
     /// Corner radius. `None` is the theme's `radius_control`.
     pub radius: Option<f32>,
-    /// Space between the handle's edge and its caption and value at the regular control size, scaled with the control size in force. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    /// Space between the handle's edge and its caption and value at the regular size, scaled with the field's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
     pub pad_x: Option<f32>,
 }
 
@@ -77,9 +81,10 @@ impl ScrubFieldTokens {
         self.radius.unwrap_or_else(shared::radius_control)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between the handle's edge and its caption and value in a field of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::control_pad_x, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
     }
 }
 
@@ -94,6 +99,7 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
         value,
         transaction,
         label,
+        size,
         min,
         max,
         step,
@@ -121,14 +127,16 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
             move || format(value.get())
         },
         LayoutStyle::new(),
-        |t| shared::control_text(t, 1.0),
+        move |t| shared::control_text(size, t, 1.0),
     )?;
-    let input = Input::declaring(draft, LayoutStyle::new(), |t| shared::control_text(t, 1.0))?
-        .select_on_focus();
+    let input = Input::declaring(draft, LayoutStyle::new(), move |t| {
+        shared::control_text(size, t, 1.0)
+    })?
+    .select_on_focus();
     let input_id = input.focus_id();
     let editing = signal(false);
     style_follows(input.layout_node(), move || match editing.get() {
-        true => LayoutStyle::new().min_width(shared::control_height()),
+        true => LayoutStyle::new().min_width(shared::control_height(size)),
         false => LayoutStyle::new().display_none(),
     });
     shared::displayed_while(shown.layout_node(), move || !editing.get());
@@ -181,14 +189,14 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
     let caption = Text::declaring(
         move || label.get(),
         LayoutStyle::new(),
-        |t| shared::quiet(t, 1.0),
+        move |t| shared::quiet(size, t, 1.0),
     )?;
     // Out of the row when empty, or the gap beside it still opens a space before the value.
     shared::displayed_while(caption.layout_node(), captioned);
 
     let last_click: Rc<Cell<Option<Instant>>> = Rc::new(Cell::new(None));
     let handle = StyledContainer::new(
-        handle_box(),
+        handle_box(size),
         move |_| {
             let rect = RectStyle::default()
                 .with_fill(shared::surface_alt())
@@ -197,7 +205,7 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
         },
         children![caption, shown],
     )?
-    .styled_by(handle_box)
+    .styled_by(move || handle_box(size))
     .control(Role::SpinButton)
     .valued(move || telar::NumericValue {
         now: value.get() as f64,
@@ -269,7 +277,7 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
     });
 
     let typed = StyledContainer::new(
-        typed_box(),
+        typed_box(size),
         |_| {
             RectStyle::default()
                 .with_radius(BorderRadius::all(ScrubFieldTokens::current().radius()))
@@ -278,33 +286,34 @@ pub fn scrub_field(props: ScrubFieldProps) -> Result<Box<dyn LayoutItem>, Layout
     )?
     .frames_focus_of(input_id);
     style_follows(typed.layout_node(), move || match editing.get() {
-        true => typed_box(),
+        true => typed_box(size),
         false => LayoutStyle::new().display_none(),
     });
 
-    let row = Container::new(row_box(), children![handle, typed])?.styled_by(row_box);
+    let row =
+        Container::new(row_box(size), children![handle, typed])?.styled_by(move || row_box(size));
     Ok(box_item(row))
 }
 
-fn row_box() -> LayoutStyle {
+fn row_box(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
-        .gap(shared::gap_sm())
+        .gap(shared::gap_sm(size))
 }
 
-fn handle_box() -> LayoutStyle {
+fn handle_box(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
-        .gap(shared::gap_md())
-        .padding_horizontal(ScrubFieldTokens::current().pad_x())
-        .min_height(shared::control_height())
+        .gap(shared::gap_md(size))
+        .padding_horizontal(ScrubFieldTokens::current().pad_x(size))
+        .min_height(shared::control_height(size))
 }
 
-fn typed_box() -> LayoutStyle {
+fn typed_box(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
-        .padding_horizontal(shared::gap_sm())
-        .min_height(shared::control_height())
+        .padding_horizontal(shared::gap_sm(size))
+        .min_height(shared::control_height(size))
 }
 
 fn plain(value: f32) -> String {

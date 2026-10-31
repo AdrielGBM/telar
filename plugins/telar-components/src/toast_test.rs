@@ -313,6 +313,31 @@ fn an_unset_width_is_the_tokens_and_a_named_one_wins() {
     assert_eq!(card(&tree).0.width, 240.0, "the toaster's own width wins");
 }
 
+/// A width the toaster names none of moves with the text of its size, the tokens' as well.
+#[test]
+fn the_size_moves_an_unset_width_with_the_text() {
+    for size in [ControlSize::Small, ControlSize::Large] {
+        telar::set_theme(crate::test_support::PanelTheme {
+            role: crate::test_support::PanelRole::Surface,
+            radius: 6.0,
+            tokens: Some(ToastTokens {
+                width: Some(300.0),
+                ..ToastTokens::default()
+            }),
+        });
+        let queue = Toasts::new();
+        let tree = one_notice(
+            ToasterProps::props().toasts(queue).size(size).build(),
+            queue,
+        );
+        assert_eq!(
+            card(&tree).0.width,
+            (300.0 * size.text_scale()).round(),
+            "{size:?}"
+        );
+    }
+}
+
 #[test]
 fn a_style_amendment_restyles_every_notice() {
     let ink = Color::rgb(0.2, 0.6, 0.3);

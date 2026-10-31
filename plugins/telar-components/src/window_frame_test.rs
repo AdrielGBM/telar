@@ -47,7 +47,10 @@ fn the_grip_resizes_by_the_distance_dragged_not_to_the_pointer() {
     )
     .unwrap();
 
-    let (side, inset) = (crate::shared::icon_size(), crate::shared::gap_sm());
+    let (side, inset) = (
+        crate::shared::icon_size(ControlSize::Regular),
+        crate::shared::gap_sm(ControlSize::Regular),
+    );
     let grip = Rect {
         x: 400.0 - inset - side,
         y: 300.0 - inset - side,
@@ -108,7 +111,8 @@ fn the_grip_stays_inside_a_window_whose_body_wants_all_of_it() {
     .unwrap();
 
     // A grip laid out past the bottom edge receives nothing, so nothing resizes.
-    let reach = crate::shared::gap_sm() + crate::shared::icon_size() / 2.0;
+    let reach = crate::shared::gap_sm(ControlSize::Regular)
+        + crate::shared::icon_size(ControlSize::Regular) / 2.0;
     let (x, y) = (SURFACE.0 - reach, SURFACE.1 - reach);
     frame.on_event(&press(x as f64, y as f64));
     frame.on_event(&Event::PointerMoved {
@@ -461,4 +465,32 @@ fn a_strip_that_is_not_the_window_s_title_bar_leaves_the_window_as_it_is() {
             assert!(window_asked().is_empty(), "{controls:?}");
         }
     }
+}
+
+/// A frame hands its size to the window controls it builds, so a small frame's close button is a small one.
+#[test]
+fn the_frame_s_size_reaches_its_window_controls() {
+    let close_width = |size: ControlSize| {
+        crate::test_support::fresh_layout_runtime();
+        let frame = window_frame(WindowFrameProps {
+            size,
+            ..framing("Settings", SurfaceFrameStyle::default())
+        })
+        .unwrap();
+        compute_layout(
+            frame.layout_node(),
+            AvailableSpace::Definite(400.0),
+            AvailableSpace::Definite(300.0),
+        )
+        .unwrap();
+        let tree = telar::ComponentList::new(frame);
+        telar::inspect::snapshot(&tree.commands())
+            .into_iter()
+            .find(|node| node.role == Role::Button && node.name == "Close")
+            .expect("the frame draws a close button")
+            .rect
+            .width
+    };
+    let widths = [ControlSize::Small, ControlSize::Regular, ControlSize::Large].map(close_width);
+    assert!(widths[0] < widths[1] && widths[1] < widths[2], "{widths:?}");
 }

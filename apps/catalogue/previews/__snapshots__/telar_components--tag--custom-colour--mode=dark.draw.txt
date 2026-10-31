@@ -6,11 +6,11 @@ element group
       element group
         element group
           element group
-            rect 289,291 50x18 fill=#7d3bedff border=1 border-color=#00000000 radius=6
+            rect 289,288 50x24 fill=#7d3bedff border=1 border-color=#00000000 radius=6
             element group
               element group
-                matrix 1,0,0,1,297,293
-                  text 0,0 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
+                matrix 1,0,0,1,297,288
+                  text 0,4 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#ebedf5ff wrap=none lang=en
                 end
               end
             end
@@ -18,11 +18,11 @@ element group
             end
           end
           element group
-            rect 346,291 49x18 fill=#7d3bed1a border=1 border-color=#00000000 radius=6
+            rect 346,288 49x24 fill=#7d3bed1a border=1 border-color=#00000000 radius=6
             element group
               element group
-                matrix 1,0,0,1,354,293
-                  text 0,0 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#8e7ef8ff wrap=none lang=en
+                matrix 1,0,0,1,354,288
+                  text 0,4 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#8e7ef8ff wrap=none lang=en
                 end
               end
             end
@@ -30,11 +30,11 @@ element group
             end
           end
           element group
-            rect 404,291 49x18 fill=#00000000 border=1 border-color=#7d3bedff radius=6
+            rect 404,288 49x24 fill=#00000000 border=1 border-color=#7d3bedff radius=6
             element group
               element group
-                matrix 1,0,0,1,412,293
-                  text 0,0 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#8e7ef8ff wrap=none lang=en
+                matrix 1,0,0,1,412,288
+                  text 0,4 33.27x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#8e7ef8ff wrap=none lang=en
                 end
               end
             end
@@ -42,11 +42,11 @@ element group
             end
           end
           element group
-            rect 461,291 50x18 fill=#00000000 border=1 border-color=#00000000 radius=6
+            rect 461,288 50x24 fill=#00000000 border=1 border-color=#00000000 radius=6
             element group
               element group
-                matrix 1,0,0,1,469,293
-                  text 0,0 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#8e7ef8ff wrap=none lang=en
+                matrix 1,0,0,1,469,288
+                  text 0,4 34x14.28 "Brand" size=11.9 family=sans-serif weight=400 color=#8e7ef8ff wrap=none lang=en
                 end
               end
             end

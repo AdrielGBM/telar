@@ -1,10 +1,8 @@
-#[cfg(feature = "overlays")]
 use telar::relayout_if_dirty;
 use telar::{
     AvailableSpace, ComponentList, DrawCommand, LayoutItem, LayoutStyle, compute_layout,
     new_container, signal,
 };
-#[cfg(feature = "overlays")]
 use telar_components::{ModalProps, modal};
 use telar_components::{SelectProps, select};
 
@@ -44,7 +42,6 @@ pub fn select_placeholder() -> Vec<String> {
     drawn_text(&lay_out(item))
 }
 
-#[cfg(feature = "overlays")]
 pub fn open_modal(props: ModalProps) -> Vec<String> {
     reset();
     let item = modal(props).unwrap();

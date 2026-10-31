@@ -8,6 +8,7 @@ use telar::{
     motion::{Easing, Keyframes, Repeat},
 };
 
+use crate::ControlSize;
 use crate::shared;
 
 /// A spinner's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -15,7 +16,7 @@ use crate::shared;
 /// Every field left `None` follows the role named beside it, read when the spinner paints.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SpinnerTokens {
-    /// Diameter of the ring when the caller names no `size`, at the regular control size and scaled with the control size in force. `None` is [`metrics::control_height`](crate::metrics::control_height), so a spinner stands level in a row of controls.
+    /// Diameter of the ring at the regular size, scaled with the spinner's own. `None` is [`metrics::control_height`](crate::metrics::control_height) at that size, so a spinner stands level in a row of controls of its size.
     pub size: Option<f32>,
 }
 
@@ -25,9 +26,12 @@ impl SpinnerTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    pub fn size(&self) -> f32 {
-        self.size
-            .map_or_else(shared::control_height, |size| size * telar::control_scale())
+    /// The diameter of the ring of a spinner of `size`.
+    pub fn size(&self, size: ControlSize) -> f32 {
+        self.size.map_or_else(
+            || shared::control_height(size),
+            |diameter| diameter * size.scale(),
+        )
     }
 }
 
@@ -43,9 +47,12 @@ pub struct SpinnerProps {
     /// Head (orbiting dot) accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
-    /// Ring diameter in px. `0.0` (the default) means "unset": the [`SpinnerTokens`] size at the control size in force.
+    /// How large the ring is drawn, as [`ControlSize`] works it out from [`SpinnerTokens::size`].
     #[props(default)]
-    pub size: f32,
+    pub size: ControlSize,
+    /// The ring's diameter in px, over what [`size`](Self::size) works out. `0.0` (the default) means "unset".
+    #[props(default)]
+    pub diameter: f32,
     /// Amends the paint of the ring — the spinner's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`SpinnerTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -53,12 +60,17 @@ pub struct SpinnerProps {
 
 /// An indeterminate ring, for work with no bound value to show.
 pub fn spinner(props: SpinnerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let SpinnerProps { color, size, style } = props;
+    let SpinnerProps {
+        color,
+        size,
+        diameter,
+        style,
+    } = props;
     let size = move || {
-        if size > 0.0 {
-            size
+        if diameter > 0.0 {
+            diameter
         } else {
-            SpinnerTokens::current().size()
+            SpinnerTokens::current().size(size)
         }
     };
     let head_box = move || {

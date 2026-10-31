@@ -8,17 +8,15 @@ use telar::{
     SurfaceAmendment, Transaction, amend_surface, box_item, current_direction, focus::Role, signal,
     step_factor, track_layout,
 };
-#[cfg(feature = "workbench")]
 use telar::{Children, Clip, ClippedItem, Container, RwSignal};
 
+use crate::ControlSize;
 use crate::edit::Stroke;
-#[cfg(feature = "workbench")]
 use crate::edit::write_through;
 use crate::resize::{DRAG_THRESHOLD, Latch};
 use crate::shared;
 use crate::strings;
 
-#[cfg(feature = "workbench")]
 const DEFAULT_SIZE: Size = Size::new(240.0, 160.0);
 const DEFAULT_STEP: f32 = 16.0;
 
@@ -27,7 +25,7 @@ const DEFAULT_STEP: f32 = 16.0;
 /// Every field left `None` follows the role named beside it, read when a handle paints.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ResizableTokens {
-    /// Thickness of an edge handle, and the side of the corner one, at the regular control size, scaled with the control size in force. `None` is [`metrics::spacing`](crate::metrics::spacing).
+    /// Thickness of an edge handle, and the side of the corner one. `None` is [`metrics::spacing`](crate::metrics::spacing) at the regular size: a handle is a strip to grab, sized by what it resizes rather than by a size of its own.
     pub thickness: Option<f32>,
     /// The corner handle at rest. An edge handle is bare until a pointer finds it. `None` is the theme's `border`.
     pub grip: Option<Color>,
@@ -42,9 +40,8 @@ impl ResizableTokens {
     }
 
     pub fn thickness(&self) -> f32 {
-        self.thickness.map_or_else(shared::spacing, |thickness| {
-            thickness * telar::control_scale()
-        })
+        self.thickness
+            .unwrap_or_else(|| shared::spacing(ControlSize::Regular))
     }
 
     pub fn grip(&self) -> Color {
@@ -116,7 +113,6 @@ impl ResizeEdge {
     }
 }
 
-#[cfg(feature = "workbench")]
 /// Which handles a [`resizable`] draws.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, telar::PreviewArg)]
 pub enum ResizeEdges {
@@ -129,7 +125,6 @@ pub enum ResizeEdges {
     All,
 }
 
-#[cfg(feature = "workbench")]
 impl ResizeEdges {
     fn has_end(self) -> bool {
         self != Self::Bottom
@@ -155,7 +150,6 @@ impl ResizeGrowth {
     }
 }
 
-#[cfg(feature = "workbench")]
 /// Content in a box of the size the user gives it, with handles to give it one: dragged, or stepped with the arrow keys, Home and End once an edge handle has focus. Every drag is a [`Transaction`] on the size, so Escape puts it back, and every key step is one of its own.
 #[derive(Props)]
 pub struct ResizableProps {
@@ -324,7 +318,6 @@ struct Look {
     style: Option<SurfaceAmendment>,
 }
 
-#[cfg(feature = "workbench")]
 pub fn resizable(props: ResizableProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ResizableProps {
         size,
@@ -590,6 +583,6 @@ fn outward() -> f32 {
     }
 }
 
-#[cfg(all(test, feature = "workbench"))]
+#[cfg(test)]
 #[path = "resizable_test.rs"]
 mod tests;

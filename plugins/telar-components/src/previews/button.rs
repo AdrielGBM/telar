@@ -3,9 +3,9 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Reactive, Role};
 
-use crate::Variant;
 use crate::button::{ButtonProps, button};
 use crate::metrics;
+use crate::{ControlSize, Variant};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
@@ -13,6 +13,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             button(
                 ButtonProps::props()
                     .label(p.arg("label", "Save"))
+                    .size(p.arg("size", ControlSize::Regular))
                     .variant(p.arg("variant", Variant::Solid))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
@@ -44,8 +45,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-            let row = Container::new(LayoutStyle::row().gap(metrics::gap_md()), buttons)?
-                .styled_by(|| LayoutStyle::row().gap(metrics::gap_md()));
+            let row = Container::new(LayoutStyle::row().gap(metrics::gap_md(ControlSize::Regular)), buttons)?
+                .styled_by(|| LayoutStyle::row().gap(metrics::gap_md(ControlSize::Regular)));
             Ok::<_, LayoutError>(row)
         })
         .title("Inputs/Button")

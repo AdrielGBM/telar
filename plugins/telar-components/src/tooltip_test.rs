@@ -227,7 +227,7 @@ fn a_bubble_is_as_wide_as_what_it_says() {
         })
         .fold(0.0f32, f32::max);
     assert!(
-        widest > 0.0 && widest < TooltipTokens::current().max_width() * 0.75,
+        widest > 0.0 && widest < TooltipTokens::current().max_width(ControlSize::Regular) * 0.75,
         "the bubble hugged its text instead of taking its cap, got {widest}"
     );
 }
@@ -490,5 +490,69 @@ fn every_line_of_a_bubble_reads_on_it_in_light_and_in_dark() {
                 fill.contrast_ratio(ink)
             );
         }
+    }
+}
+
+/// The space before the bubble's name and the name's text follow the tooltip's size.
+#[test]
+fn the_size_pads_and_sizes_the_bubble() {
+    let drawn = |size: ControlSize| {
+        crate::test_support::fresh_layout_runtime();
+        let mut tree = telar::testing::scoped(|| {
+            let tooltip = tooltip(
+                TooltipProps::props()
+                    .text("Move")
+                    .size(size)
+                    .children(trigger())
+                    .build(),
+            )
+            .unwrap();
+            let root = new_container(
+                LayoutStyle::new().flex_column().width(400.0).height(400.0),
+                &[tooltip.layout_node()],
+            )
+            .unwrap();
+            compute_layout(
+                root,
+                AvailableSpace::Definite(400.0),
+                AvailableSpace::Definite(400.0),
+            )
+            .unwrap();
+            ComponentList::new(tooltip)
+        });
+        let _ = tree.commands();
+        tree.on_event(&moved(40.0, 15.0));
+        relayout_if_dirty();
+        let (mut fills, mut name) = (Vec::new(), None);
+        telar::for_each_with_matrix(&tree.commands(), |command, matrix| match command {
+            DrawCommand::Rect { rect, style } if style.fill.is_some() => {
+                fills.push(telar::transform_clip_rect(matrix, *rect));
+            }
+            DrawCommand::Text {
+                text, rect, style, ..
+            } if text.as_ref() == "Move" => {
+                name = Some((telar::transform_clip_rect(matrix, *rect), style.font_size));
+            }
+            _ => {}
+        });
+        let (text, font_size) = name.expect("the bubble says its name");
+        let chip = fills
+            .into_iter()
+            .find(|chip| chip.x <= text.x && chip.x + chip.width >= text.x + text.width)
+            .expect("the bubble is painted round its name");
+        (text.x - chip.x, font_size)
+    };
+    let (_, regular_font) = drawn(ControlSize::Regular);
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        let (padding, font_size) = drawn(size);
+        let pad = TooltipTokens::current().pad_x(size);
+        assert!(
+            (padding - pad).abs() <= 1.0,
+            "{size:?}: {padding} for {pad}"
+        );
+        assert!(
+            (font_size - regular_font * size.text_scale()).abs() < 0.01,
+            "{size:?}: {font_size}"
+        );
     }
 }

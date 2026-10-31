@@ -6,13 +6,14 @@ use telar::{
     Children, Color, LayoutError, LayoutItem, Props, Reactive, RwSignal, SurfaceAmendment, signal,
 };
 
+use crate::ControlSize;
 use crate::dropdown;
 use crate::shared;
 use crate::strings;
 // What the test module below reads via `use super::*` to compute click points.
 #[cfg(test)]
 fn panel_width() -> f32 {
-    dropdown::width(None)
+    dropdown::width(ControlSize::Regular, None)
 }
 #[cfg(test)]
 use crate::shared::{panel_pad, row_height};
@@ -26,13 +27,13 @@ use telar::track_layout;
 pub struct SelectTokens {
     /// Corner of the trigger. `None` is the theme's `radius_control`.
     pub radius: Option<f32>,
-    /// Space between the trigger's edge and its value at the regular control size, scaled with the control size in force. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    /// Space between the trigger's edge and its value at the regular size, scaled with the select's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
     pub pad_x: Option<f32>,
     /// Width of the trigger's frame. `None` is the theme's `border_width`.
     pub border_width: Option<f32>,
-    /// Width of the trigger, unless it is stretched, and of the list it opens, at the regular control size and scaled with the control size in force. `None` is 13 ems of the document's text.
+    /// Width of the trigger, unless it is stretched, and of the list it opens, at the regular size and scaled with the select's own. `None` is 13 ems of the document's text.
     pub width: Option<f32>,
-    /// Space between the list and the trigger it drops from, at the regular control size and scaled with the control size in force. `None` is [`metrics::popup_offset`](crate::metrics::popup_offset).
+    /// Space between the list and the trigger it drops from, at the regular size and scaled with the select's own. `None` is [`metrics::popup_offset`](crate::metrics::popup_offset).
     pub offset: Option<f32>,
 }
 
@@ -46,34 +47,37 @@ impl SelectTokens {
         self.radius.unwrap_or_else(shared::radius_control)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between the edge and the value of the trigger of a select of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::control_pad_x, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
     }
 
     pub fn border_width(&self) -> f32 {
         self.border_width.unwrap_or_else(shared::border_width)
     }
 
-    pub fn width(&self) -> f32 {
-        dropdown::width(self.width)
+    /// The width of the trigger of a select of `size`, and of the list it opens.
+    pub fn width(&self, size: ControlSize) -> f32 {
+        dropdown::width(size, self.width)
     }
 
-    pub fn offset(&self) -> f32 {
-        dropdown::offset(self.offset)
+    /// The space between the list and the trigger of a select of `size`.
+    pub fn offset(&self, size: ControlSize) -> f32 {
+        dropdown::offset(size, self.offset)
     }
 
-    fn current_offset() -> f32 {
-        Self::current().offset()
+    fn current_offset(size: ControlSize) -> f32 {
+        Self::current().offset(size)
     }
 
-    fn geometry() -> dropdown::Geometry {
+    fn geometry(size: ControlSize) -> dropdown::Geometry {
         let tokens = Self::current();
         dropdown::Geometry {
             radius: tokens.radius(),
-            pad_x: tokens.pad_x(),
+            pad_x: tokens.pad_x(size),
             border_width: tokens.border_width(),
-            width: tokens.width(),
+            width: tokens.width(size),
         }
     }
 }
@@ -86,6 +90,9 @@ pub struct SelectProps {
     /// The bound selection index. `None` (the default) makes the select uncontrolled — it owns an internal signal so it still tracks a choice, just not one the caller can read.
     #[props(some, into, default)]
     pub selected: Option<RwSignal<u32>>,
+    /// How large the field and its list are drawn: the field's height, padding, value and caret, and the list's padding, width and offset, as [`ControlSize`] works them out. The choices are sized where they are written.
+    #[props(default)]
+    pub size: ControlSize,
     /// The colour the trigger is framed in and the rows' washes are tinted with. `Color::TRANSPARENT` (the default) frames it in the theme accent and leaves the theme's washes as they are. A closure so a theme token re-reads on every render.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -107,6 +114,7 @@ pub struct SelectProps {
 pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let SelectProps {
         selected,
+        size,
         color,
         on_select,
         stretch,
@@ -117,6 +125,7 @@ pub fn select(props: SelectProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let selected = selected.unwrap_or_else(|| signal(0u32));
     dropdown::dropdown(dropdown::Dropdown {
         placeholder: || strings::text(strings::SELECT),
+        size,
         rows: children,
         color,
         on_pick: on_select,

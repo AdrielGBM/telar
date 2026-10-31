@@ -20,7 +20,7 @@ col gap:20
     example title:"spinner — an indeterminate ring; it drives its own rotation"
         card gap:10
             row gap:16 align:center
-                spinner size:28
-                spinner size:20 color:$theme.success
+                spinner diameter:28
+                spinner diameter:20 color:$theme.success
                 text "working…" font_size:14 color:$theme.muted
-        code_line code:"spinner size:28"
+        code_line code:"spinner diameter:28"

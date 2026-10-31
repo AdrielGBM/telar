@@ -8,6 +8,7 @@ use telar::{
     box_item, children, focus::Role, signal,
 };
 
+use crate::ControlSize;
 use crate::shared;
 
 /// A radio button's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -15,7 +16,7 @@ use crate::shared;
 /// Every field left `None` follows the role named beside it, read when the radio paints. The ring and its dot are pills at whatever size they are laid out.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RadioTokens {
-    /// Diameter of the ring at the regular control size, scaled with the control size in force. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
+    /// Diameter of the ring at the regular size, scaled with the radio's own. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
     pub size: Option<f32>,
     /// Width of the ring. `None` is the theme's `border_width_strong`.
     pub border_width: Option<f32>,
@@ -27,9 +28,10 @@ impl RadioTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    pub fn size(&self) -> f32 {
+    /// The diameter of the ring of a radio of `size`.
+    pub fn size(&self, size: ControlSize) -> f32 {
         self.size
-            .map_or_else(shared::icon_size, |size| size * telar::control_scale())
+            .map_or_else(|| shared::icon_size(size), |side| side * size.scale())
     }
 
     pub fn border_width(&self) -> f32 {
@@ -38,18 +40,18 @@ impl RadioTokens {
     }
 }
 
-fn ring_style() -> LayoutStyle {
-    let size = RadioTokens::current().size();
+fn ring_style(size: ControlSize) -> LayoutStyle {
+    let side = RadioTokens::current().size(size);
     LayoutStyle::row()
-        .width(size)
-        .height(size)
+        .width(side)
+        .height(side)
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
 }
 
 /// The dot stands inside the ring by the step between the parts of one control, as a checkbox's mark does inside its box.
-fn dot_style() -> LayoutStyle {
-    let side = (RadioTokens::current().size() - shared::gap_sm() * 2.0).max(0.0);
+fn dot_style(size: ControlSize) -> LayoutStyle {
+    let side = (RadioTokens::current().size(size) - shared::gap_sm(size) * 2.0).max(0.0);
     LayoutStyle::new().width(side).height(side)
 }
 
@@ -64,6 +66,9 @@ pub struct RadioProps {
     pub value: u32,
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// How large the radio is drawn: its ring, dot and label, and the control height its row stands at, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// Accent (the selected dot and border). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -81,6 +86,7 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         selected,
         value,
         label,
+        size,
         color,
         on_select,
         style,
@@ -90,7 +96,7 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let dot_selected = selected;
     let dot_color = color.clone();
     let dot = StyledContainer::new(
-        dot_style(),
+        dot_style(size),
         move |r| {
             let fill = if dot_selected.get() == value {
                 shared::resolve(&dot_color, shared::accent)
@@ -103,11 +109,11 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         },
         vec![],
     )?
-    .styled_by(dot_style);
+    .styled_by(move || dot_style(size));
 
     let ring_selected = selected;
     let ring = StyledContainer::new(
-        ring_style(),
+        ring_style(size),
         move |r| {
             let stroke = if ring_selected.get() == value {
                 shared::resolve(&color, shared::accent)
@@ -125,11 +131,12 @@ pub fn radio(props: RadioProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         },
         children![dot],
     )?
-    .styled_by(ring_style);
+    .styled_by(move || ring_style(size));
 
     let select = selected;
     let announced = selected;
     shared::labelled_control(
+        size,
         box_item(ring),
         label,
         Role::Radio,

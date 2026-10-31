@@ -5,7 +5,7 @@
 use std::fmt;
 use std::sync::{PoisonError, RwLock};
 
-use crate::{ControlSize, Direction, Size};
+use crate::{Direction, Size};
 
 use super::host::{ArgError, Args};
 use super::{ArgValue, Globals, PreviewCtx, PreviewEntry};
@@ -42,7 +42,6 @@ pub enum Axis {
     Viewport(&'static [&'static str]),
     /// Every viewport `[telar.previews.viewports]` names, by name, as [`Matrices::installed`] reads them.
     ProjectViewports,
-    ControlSize(&'static [ControlSize]),
     /// An arg, by name, and its values in [`ArgValue`]'s text form: `"12"`, `"true"`, `"Primary"`, `"\"Save\""`.
     Arg(&'static str, &'static [&'static str]),
 }
@@ -55,7 +54,6 @@ impl Axis {
             Self::Locale(_) => "locale",
             Self::Dir(_) => "dir",
             Self::Viewport(_) | Self::ProjectViewports => "viewport",
-            Self::ControlSize(_) => "control_size",
             Self::Arg(name, _) => name,
         }
     }
@@ -66,7 +64,6 @@ impl Axis {
             Self::RegisteredModes => matrices.modes.len(),
             Self::ProjectViewports => matrices.viewports.len(),
             Self::Dir(values) => values.len(),
-            Self::ControlSize(values) => values.len(),
             Self::Arg(_, values) => values.len(),
         }
     }
@@ -98,7 +95,6 @@ impl Axis {
                 .iter()
                 .map(|preset| Setting::Viewport(preset.name, preset.size))
                 .collect(),
-            Self::ControlSize(sizes) => sizes.iter().copied().map(Setting::ControlSize).collect(),
             Self::Arg(name, texts) => texts
                 .iter()
                 .map(|text| {
@@ -118,7 +114,6 @@ enum Setting {
     Locale(String),
     Dir(Direction),
     Viewport(&'static str, Size),
-    ControlSize(ControlSize),
     Arg(&'static str, ArgValue),
 }
 
@@ -128,7 +123,6 @@ impl Setting {
             Self::Mode(text) | Self::Locale(text) => text.clone(),
             Self::Dir(direction) => direction_word(*direction).to_string(),
             Self::Viewport(text, _) => text.trim().to_string(),
-            Self::ControlSize(size) => control_size_word(*size).to_string(),
             Self::Arg(_, value) => value.to_string(),
         }
     }
@@ -140,20 +134,12 @@ impl Setting {
             Self::Locale(locale) => globals.locale = Some(locale.clone()),
             Self::Dir(direction) => globals.direction = Some(*direction),
             Self::Viewport(_, size) => globals.viewport = Some(*size),
-            Self::ControlSize(size) => globals.control_size = Some(*size),
             Self::Arg(name, value) => cell.args.push((*name, value.clone())),
         }
     }
 }
 
 const DIRECTION_WORDS: [(&str, Direction); 2] = [("ltr", Direction::Ltr), ("rtl", Direction::Rtl)];
-
-const CONTROL_SIZE_WORDS: [(&str, ControlSize); 4] = [
-    ("mini", ControlSize::Mini),
-    ("small", ControlSize::Small),
-    ("regular", ControlSize::Regular),
-    ("large", ControlSize::Large),
-];
 
 fn word_of<T: Copy + PartialEq>(words: &[(&'static str, T)], value: T) -> &'static str {
     words
@@ -177,16 +163,6 @@ pub fn direction_word(direction: Direction) -> &'static str {
 /// The direction [`direction_word`] writes as `word`.
 pub fn parse_direction(word: &str) -> Option<Direction> {
     value_of(&DIRECTION_WORDS, word)
-}
-
-/// The word a matrix's `control_size` axis and a workshop link write `size` as: `mini`, `small`, `regular` or `large`.
-pub fn control_size_word(size: ControlSize) -> &'static str {
-    word_of(&CONTROL_SIZE_WORDS, size)
-}
-
-/// The control size [`control_size_word`] writes as `word`.
-pub fn parse_control_size(word: &str) -> Option<ControlSize> {
-    value_of(&CONTROL_SIZE_WORDS, word)
 }
 
 /// A matrix a preview names rather than writes out.
@@ -475,7 +451,6 @@ pub struct CellGlobals {
     pub direction: Option<Direction>,
     /// The canvas size, in logical px.
     pub viewport: Option<Size>,
-    pub control_size: Option<ControlSize>,
 }
 
 impl MatrixCell {
@@ -506,7 +481,6 @@ impl MatrixCell {
             locale,
             direction,
             viewport,
-            control_size,
         } = &self.globals;
         if let Some(mode) = mode {
             globals.mode().set(Some(mode.clone()));
@@ -519,9 +493,6 @@ impl MatrixCell {
         }
         if let Some(viewport) = viewport {
             globals.viewport().set(Some(*viewport));
-        }
-        if let Some(control_size) = control_size {
-            globals.control_size().set(Some(*control_size));
         }
     }
 

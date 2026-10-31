@@ -10,7 +10,9 @@ use telar::{
     LayoutScrollArea, LayoutStyle, NamedKey, Reactive, ReactiveList, RectStyle, Role, ShapeStyle,
     StyledContainer, Text, box_item, children, use_theme_tokens,
 };
-use telar_components::{ButtonProps, TagProps, ToggleProps, Variant, button, metrics, tag, toggle};
+use telar_components::{
+    ButtonProps, ControlSize, TagProps, ToggleProps, Variant, button, metrics, tag, toggle,
+};
 use telar_devtools::{
     WORKBENCH_GRID, WORKBENCH_RADIUS, use_workbench_tokens, workbench_fill, workbench_mono,
     workbench_muted,
@@ -407,6 +409,7 @@ fn head(index: usize, step: &Step) -> Result<StyledContainer, LayoutError> {
             .flex_row()
             .align_items(AlignItems::CENTER),
         vec![metrics::mark(
+            ControlSize::Regular,
             move || shape,
             move |_| status_color(&status).into(),
         )?],

@@ -3,20 +3,33 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Key, NamedKey, Reactive, Role, RwSignal};
 
+use crate::ControlSize;
 use crate::list::{ItemProps, SeparatorProps, item, separator};
 use crate::menu::{MenuProps, menu};
 use crate::menu_panel::{SubmenuProps, submenu};
 
-fn actions() -> Children {
-    Children::new(|| {
+fn actions(size: ControlSize) -> Children {
+    Children::new(move || {
         let row = |label: &'static str, shortcut: &'static str| {
-            item(ItemProps::props().label(label).shortcut(shortcut).build())
+            item(
+                ItemProps::props()
+                    .label(label)
+                    .shortcut(shortcut)
+                    .size(size)
+                    .build(),
+            )
         };
         Ok(vec![
             row("New file", "Mod+N")?,
             row("Open…", "Mod+O")?,
-            separator(SeparatorProps::props().build())?,
-            item(ItemProps::props().label("Close").disabled(true).build())?,
+            separator(SeparatorProps::props().size(size).build())?,
+            item(
+                ItemProps::props()
+                    .label("Close")
+                    .disabled(true)
+                    .size(size)
+                    .build(),
+            )?,
         ])
     })
 }
@@ -117,15 +130,17 @@ fn settings_menu(
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(menu: MenuProps, "Default", |p| {
+            let size = p.arg("size", ControlSize::Regular);
             menu(
                 MenuProps::props()
                     .on_select(Rc::new(|_| {}))
                     .label(p.arg("label", "File"))
+                    .size(size)
                     .color(p.arg("color", Color::TRANSPARENT))
                     .bordered(p.arg("bordered", false))
                     .caret(p.arg("caret", true))
                     .stretch(p.arg("stretch", false))
-                    .children(actions())
+                    .children(actions(size))
                     .build(),
             )
         })

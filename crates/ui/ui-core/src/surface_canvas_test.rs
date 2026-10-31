@@ -207,7 +207,6 @@ fn a_canvas_in_an_environment_is_built_in_it() {
         mode: Some(String::from("dusk")),
         locale: Some(String::from("ar")),
         direction: Some(Direction::Rtl),
-        control_size: Some(ControlSize::Large),
         high_contrast: Some(true),
         safe_area: Insets::new(44.0, 0.0, 34.0, 0.0),
     };
@@ -218,7 +217,6 @@ fn a_canvas_in_an_environment_is_built_in_it() {
             mode: theme_core::use_mode(),
             locale: i18n_core::current_locale(),
             direction: Some(crate::current_direction()),
-            control_size: Some(theme_core::current_control_size()),
             high_contrast: preferences_core::high_contrast(),
             safe_area: crate::use_safe_area_insets(),
         }));

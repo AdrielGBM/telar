@@ -6,9 +6,9 @@ element group
       element group
         element group
           element group
-            rect 386,286 28x28
+            rect 384,284 32x32
             element button
-              rect 386,286 28x28 fill=#ffffff0d radius=10
+              rect 384,284 32x32 fill=#ffffff0d radius=10
               element group
                 rect 392,292 16x16
                 element group
@@ -27,7 +27,7 @@ element group
     end
   end
 end
-matrix 1,0,0,1,386,318
+matrix 1,0,0,1,384,320
   element group
     rect 0,0 100x22 fill=#ebedf5ff radius=11
     element group

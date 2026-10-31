@@ -130,7 +130,7 @@ pub fn reduced_motion(props: ReducedMotionProps) -> Result<Box<dyn LayoutItem>, 
                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
                                 let __row_1 = {
                                     let __node_9 = button(ButtonProps::props().label("Slide").color(Reactive::of({ let theme = theme.clone(); move || theme.get().primary })).on_press(std::rc::Rc::new({ let pulse = pulse.clone(); move || pulse.set(if pulse.get() < 0.5 { 1.0 } else { 0.0 }) })).build())?;
-                                    let __node_10 = spinner(SpinnerProps::props().size(::telar::Int(20)).build())?;
+                                    let __node_10 = spinner(SpinnerProps::props().diameter(::telar::Int(20)).build())?;
                                     Container::new(LayoutStyle::new().flex_row().gap(12.0).align_items(AlignItems::CENTER), children![__node_9, __node_10])?
                                 };
                                 __children.push(box_item(__row_1));

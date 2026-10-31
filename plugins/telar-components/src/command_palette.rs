@@ -14,6 +14,7 @@ use telar::{
     memo, signal,
 };
 
+use crate::ControlSize;
 use crate::fuzzy::fuzzy_match;
 use crate::list::{ListTokens, row_paint, tinted};
 use crate::rows::{BuiltRows, RowPlaces};
@@ -38,11 +39,11 @@ const INSET_IN_GAPS: f32 = 6.0;
 /// Every field left `None` follows the role named beside it, read when the palette opens. Its rows follow [`ListTokens`].
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CommandPaletteTokens {
-    /// Width of the dialog at the regular control size, scaled with the control size in force. `None` is 40 ems of the document's text. A palette's own `width` prop wins over it.
+    /// Width of the dialog at the regular size, scaled with the palette's own. `None` is 40 ems of the document's text. A palette's own `width` prop wins over it.
     pub width: Option<f32>,
     /// Corner of the dialog. `None` is the theme's `radius_dialog`.
     pub radius: Option<f32>,
-    /// How far below the top of the window the dialog stands, at the regular control size and scaled with the control size in force. `None` is six of [`metrics::gap_xl`](crate::metrics::gap_xl).
+    /// How far below the top of the window the dialog stands, at the regular size and scaled with the palette's own. `None` is six of [`metrics::gap_xl`](crate::metrics::gap_xl).
     pub inset_top: Option<f32>,
 }
 
@@ -52,24 +53,26 @@ impl CommandPaletteTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    pub fn width(&self) -> f32 {
-        shared::width_or_measure(self.width, WIDTH_EMS)
+    /// The width of a palette of `size` whose call names none.
+    pub fn width(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.width, WIDTH_EMS)
     }
 
     pub fn radius(&self) -> f32 {
         self.radius.unwrap_or_else(shared::radius_dialog)
     }
 
-    pub fn inset_top(&self) -> f32 {
+    /// How far below the top of the window a palette of `size` stands.
+    pub fn inset_top(&self, size: ControlSize) -> f32 {
         self.inset_top.map_or_else(
-            || shared::gap_xl() * INSET_IN_GAPS,
-            |inset| inset * telar::control_scale(),
+            || shared::gap_xl(size) * INSET_IN_GAPS,
+            |inset| inset * size.scale(),
         )
     }
 }
 
-fn card_pad() -> f32 {
-    shared::gap_md()
+fn card_pad(size: ControlSize) -> f32 {
+    shared::gap_md(size)
 }
 
 /// One thing the palette can run: what it is called, the group it is listed under, the other words it answers to and the shortcut that runs it without the palette.
@@ -160,6 +163,9 @@ pub struct CommandPaletteProps {
     /// The dialog's width in logical px. `0.0` (the default) is [`CommandPaletteTokens::width`].
     #[props(default)]
     pub width: f32,
+    /// How large the dialog is drawn: its search field, rows, headings, key caps, padding and, unless it names one, its width, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// The colour the matched characters are drawn in and the cursor's wash is tinted with. `Color::TRANSPARENT` (the default) draws the matches in the theme accent and leaves the theme's wash as it is.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -181,6 +187,7 @@ pub fn command_palette(props: CommandPaletteProps) -> Result<Box<dyn LayoutItem>
         on_run,
         on_close,
         width,
+        size,
         color,
         style,
     } = props;
@@ -194,6 +201,7 @@ pub fn command_palette(props: CommandPaletteProps) -> Result<Box<dyn LayoutItem>
         empty_label,
         on_run,
         width,
+        size,
         color,
         style,
     };
@@ -212,6 +220,7 @@ struct Parts {
     on_run: Option<RunHandler>,
     /// `0.0` for the tokens' width.
     width: f32,
+    size: ControlSize,
     color: Reactive<Color>,
     style: SurfaceStyle,
 }
@@ -433,12 +442,17 @@ fn build_open_palette(
         empty_label,
         on_run,
         width,
+        size,
         color,
         style,
     } = parts;
     let tokens = CommandPaletteTokens::current();
-    let width = if width > 0.0 { width } else { tokens.width() };
-    let row_height = ListTokens::current().row_height();
+    let width = if width > 0.0 {
+        width
+    } else {
+        tokens.width(size)
+    };
+    let row_height = ListTokens::current().row_height(size);
     let results = memo(move || {
         let commands = commands.get();
         let ranked = query.with(|query| rank(&commands, query));
@@ -468,7 +482,7 @@ fn build_open_palette(
             let palette = Rc::new(Palette {
                 results,
                 cursor,
-                places: RowPlaces::fixed(viewport, row_height),
+                places: RowPlaces::fixed(viewport, size, row_height),
                 built: BuiltRows::new(),
                 run,
                 color,
@@ -523,7 +537,7 @@ fn build_open_palette(
         });
     }
 
-    let field_width = width - card_pad() * 2.0;
+    let field_width = width - card_pad(size) * 2.0;
     let keys = {
         let palette = palette.clone();
         let dismiss = dismiss.clone();
@@ -543,6 +557,7 @@ fn build_open_palette(
                 None => strings::text(strings::SEARCH_COMMANDS),
             }))
             .width(field_width)
+            .size(size)
             .on_key(keys)
             .active_descendant(pointed)
             .controls(Rc::new(move || list))
@@ -552,16 +567,16 @@ fn build_open_palette(
     let empty = ReactiveList::new(
         move || vec![results.with(|results| results.0.is_empty())],
         |empty: &bool| *empty,
-        move |empty| empty_state(empty, empty_label.clone()),
+        move |empty| empty_state(size, empty, empty_label.clone()),
         0.0,
     )?;
 
     let room = scrim::Room::new();
     let card_box = move || {
         LayoutStyle::column()
-            .width(width.min(room.inside(card_pad()).width))
-            .padding_all(card_pad())
-            .gap(card_pad())
+            .width(width.min(room.inside(card_pad(size)).width))
+            .padding_all(card_pad(size))
+            .gap(card_pad(size))
             .min_height(0.0)
     };
     let name = label.clone();
@@ -584,15 +599,15 @@ fn build_open_palette(
     })
     .on_press(|| {});
 
-    let backdrop_box = || {
+    let backdrop_box = move || {
         LayoutStyle::column()
             .flex_grow(1.0)
             .min_height(0.0)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::START)
-            .padding_top(CommandPaletteTokens::current().inset_top())
-            .padding_bottom(card_pad())
-            .padding_horizontal(card_pad())
+            .padding_top(CommandPaletteTokens::current().inset_top(size))
+            .padding_bottom(card_pad(size))
+            .padding_horizontal(card_pad(size))
     };
     let backdrop = StyledContainer::new(
         backdrop_box(),
@@ -606,6 +621,7 @@ fn build_open_palette(
 }
 
 fn empty_state(
+    size: ControlSize,
     empty: bool,
     empty_label: Option<Reactive<String>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -618,12 +634,12 @@ fn empty_state(
             None => strings::text(strings::NO_RESULTS),
         },
         LayoutStyle::new(),
-        |t| shared::quiet(t, 1.0),
+        move |t| shared::quiet(size, t, 1.0),
     )?;
     let status = Container::new(
         LayoutStyle::row()
             .justify_content(JustifyContent::CENTER)
-            .padding_vertical(card_pad()),
+            .padding_vertical(card_pad(size)),
         children![text],
     )?
     .role(Role::Status);
@@ -641,6 +657,7 @@ fn heading(group: Arc<str>, places: &RowPlaces) -> Result<Box<dyn LayoutItem>, L
     let heading = crate::list::group(
         crate::list::GroupProps::props()
             .label(Reactive::of(move || group.to_string()))
+            .size(places.size())
             .build(),
     )?;
     let slot = Container::new(
@@ -659,6 +676,7 @@ fn build_row(
     command: &Command,
     marks: &[Range<usize>],
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let size = palette.places.size();
     let label = command.label.clone();
     let spans = {
         let marks: Vec<Range<usize>> = marks.to_vec();
@@ -685,13 +703,14 @@ fn build_row(
             .flex_grow(1.0)
             .flex_shrink(1.0)
             .min_width(0.0),
-        |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap),
+        move |t| shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::NoWrap),
     )?;
     let mut content: Vec<Box<dyn LayoutItem>> =
         children![ClippedItem::new(box_item(text), Clip::both())];
     if let Some(chord) = command.shortcut.clone() {
         content.push(kbd(KbdProps::props()
             .chord(Reactive::of(move || chord.to_string()))
+            .size(size)
             .build())?);
     }
 
@@ -729,8 +748,8 @@ fn build_row(
                 .align_items(AlignItems::CENTER)
                 .justify_content(JustifyContent::SPACE_BETWEEN)
                 .flex_shrink(0.0)
-                .padding_horizontal(ListTokens::current().pad_x())
-                .gap(shared::gap_md()),
+                .padding_horizontal(ListTokens::current().pad_x(size))
+                .gap(shared::gap_md(size)),
         )
     };
     let selected = {

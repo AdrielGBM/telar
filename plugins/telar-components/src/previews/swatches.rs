@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
+use crate::ControlSize;
 use crate::swatches::{SwatchesProps, swatches};
 
 fn palette() -> Vec<Color> {
@@ -29,7 +30,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                             .to_vec(),
                     )
                     .selected(p.signal("selected", Some(0u32)))
-                    .size(p.arg("size", 0.0f32))
+                    .size(p.arg("size", ControlSize::Regular))
+                    .diameter(p.arg("diameter", 0.0f32))
                     .build(),
             )
         })

@@ -7,6 +7,7 @@ use telar::{
     keyboard_convention, style_follows,
 };
 
+use crate::ControlSize;
 use crate::shared::{self, shown_chord};
 
 /// The keys of a shortcut, each on its own cap.
@@ -15,6 +16,9 @@ pub struct KbdProps {
     /// The chord, written portably as [`Chord`] reads it: `"Mod+K"`, `"Alt+Shift+P"`, `"Ctrl++"`. Its caps are the keys the platform names, `⌘` `K` on a Mac and `Ctrl` `K` elsewhere, and text that names no chord is one cap, as written.
     #[props(into, default)]
     pub chord: Reactive<String>,
+    /// How large the caps are drawn: their padding, the gap between them and their text, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// Amends the paint of every cap — the chord's **principal surface**. See [`telar::SurfaceStyle`] for when a theme token or [`KbdTokens`] is the right instrument instead.
     #[props(some, default)]
     pub style: Option<SurfaceAmendment>,
@@ -48,10 +52,10 @@ impl KbdTokens {
 
 /// One cap per key of `chord`.
 pub fn kbd(props: KbdProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let KbdProps { chord, style } = props;
+    let KbdProps { chord, size, style } = props;
     let spoken = chord.clone();
     let caps = ReactiveList::with_style(
-        caps_row(),
+        caps_row(size),
         move || {
             shown_keys(&chord.get())
                 .into_iter()
@@ -59,42 +63,46 @@ pub fn kbd(props: KbdProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 .collect::<Vec<_>>()
         },
         |(position, key): &(usize, String)| (*position, key.clone()),
-        move |(_, key)| cap(key, style.clone()),
+        move |(_, key)| cap(size, key, style.clone()),
     )?
     .a11y_hidden();
-    style_follows(caps.layout_node(), caps_row);
+    style_follows(caps.layout_node(), move || caps_row(size));
     let row = Container::new(LayoutStyle::row(), children![caps])?
         .a11y_label(move || shown_chord(&spoken.get()));
     Ok(box_item(row))
 }
 
-fn caps_row() -> LayoutStyle {
+fn caps_row(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
-        .gap(shared::gap_xs())
+        .gap(shared::gap_xs(size))
 }
 
 /// A cap around its key, never narrower than it is tall, so a one-letter key is a square.
-fn cap_box(text: NodeId) -> LayoutStyle {
-    let pad_y = shared::gap_xs();
-    let line = telar::single_line_box(shared::control_text_size(text, shared::CAPTION_RATIO));
+fn cap_box(size: ControlSize, text: NodeId) -> LayoutStyle {
+    let pad_y = shared::gap_xs(size);
+    let line = telar::single_line_box(shared::control_text_size(size, text, shared::CAPTION_RATIO));
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .min_width(line + pad_y * 2.0)
-        .padding_horizontal(shared::gap_sm())
+        .padding_horizontal(shared::gap_sm(size))
         .padding_vertical(pad_y)
 }
 
-fn cap(label: String, style: Option<SurfaceAmendment>) -> Result<Box<dyn LayoutItem>, LayoutError> {
+fn cap(
+    size: ControlSize,
+    label: String,
+    style: Option<SurfaceAmendment>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let text = Text::declaring(
         move || label.clone(),
         LayoutStyle::new(),
-        |t| shared::quiet(t, shared::CAPTION_RATIO).with_text_wrap(TextWrap::NoWrap),
+        move |t| shared::quiet(size, t, shared::CAPTION_RATIO).with_text_wrap(TextWrap::NoWrap),
     )?;
     let text_node = text.layout_node();
     let cap = StyledContainer::new(
-        cap_box(text_node),
+        cap_box(size, text_node),
         move |_| {
             let tokens = KbdTokens::current();
             let rect = RectStyle::default()
@@ -105,7 +113,7 @@ fn cap(label: String, style: Option<SurfaceAmendment>) -> Result<Box<dyn LayoutI
         },
         children![text],
     )?
-    .styled_by(move || cap_box(text_node));
+    .styled_by(move || cap_box(size, text_node));
     Ok(box_item(cap))
 }
 

@@ -40,7 +40,7 @@ fn builds_and_lays_out() {
     )
     .unwrap();
     assert!(
-        root_rect.get().height >= crate::shared::control_height() - 0.5,
+        root_rect.get().height >= crate::shared::control_height(crate::ControlSize::Regular) - 0.5,
         "closed select is at least the trigger tall: {:?}",
         root_rect.get()
     );
@@ -77,17 +77,17 @@ fn selecting_an_option_sets_the_signal_and_closes() {
     let _ = tree.commands();
 
     let tx = (panel_width() / 2.0) as f64;
-    let ty = (crate::shared::control_height() / 2.0) as f64;
+    let ty = (crate::shared::control_height(crate::ControlSize::Regular) / 2.0) as f64;
     route(&mut tree, &press(tx, ty));
     route(&mut tree, &release(tx, ty));
     relayout_if_dirty();
 
     let ox = panel_width() / 2.0;
-    let oy = (crate::shared::control_height()
-        + crate::shared::popup_offset()
-        + panel_pad()
-        + 2.0 * row_height()
-        + row_height() / 2.0) as f64;
+    let oy = (crate::shared::control_height(crate::ControlSize::Regular)
+        + crate::shared::popup_offset(crate::ControlSize::Regular)
+        + panel_pad(crate::ControlSize::Regular)
+        + 2.0 * row_height(crate::ControlSize::Regular)
+        + row_height(crate::ControlSize::Regular) / 2.0) as f64;
     route(&mut tree, &press(ox as f64, oy));
     route(&mut tree, &release(ox as f64, oy));
 
@@ -172,19 +172,25 @@ fn a_choice_can_be_disabled_which_a_list_of_strings_could_not_say() {
     let tx = (panel_width() / 2.0) as f64;
     route(
         &mut tree,
-        &press(tx, (crate::shared::control_height() / 2.0) as f64),
+        &press(
+            tx,
+            (crate::shared::control_height(crate::ControlSize::Regular) / 2.0) as f64,
+        ),
     );
     route(
         &mut tree,
-        &release(tx, (crate::shared::control_height() / 2.0) as f64),
+        &release(
+            tx,
+            (crate::shared::control_height(crate::ControlSize::Regular) / 2.0) as f64,
+        ),
     );
     relayout_if_dirty();
 
-    let oy = (crate::shared::control_height()
-        + crate::shared::popup_offset()
-        + panel_pad()
-        + row_height()
-        + row_height() / 2.0) as f64;
+    let oy = (crate::shared::control_height(crate::ControlSize::Regular)
+        + crate::shared::popup_offset(crate::ControlSize::Regular)
+        + panel_pad(crate::ControlSize::Regular)
+        + row_height(crate::ControlSize::Regular)
+        + row_height(crate::ControlSize::Regular) / 2.0) as f64;
     route(&mut tree, &press(tx, oy));
     route(&mut tree, &release(tx, oy));
 
@@ -256,15 +262,15 @@ fn a_stretched_select_keeps_the_width_of_its_row_after_a_longer_pick() {
     let _ = tree.commands();
     assert_eq!(field_rect.get().width, 136.0, "before the pick");
 
-    let ty = (crate::shared::control_height() / 2.0) as f64;
+    let ty = (crate::shared::control_height(crate::ControlSize::Regular) / 2.0) as f64;
     route(&mut tree, &press(20.0, ty));
     route(&mut tree, &release(20.0, ty));
     relayout_if_dirty();
-    let oy = (crate::shared::control_height()
-        + crate::shared::popup_offset()
-        + panel_pad()
-        + 2.0 * row_height()
-        + row_height() / 2.0) as f64;
+    let oy = (crate::shared::control_height(crate::ControlSize::Regular)
+        + crate::shared::popup_offset(crate::ControlSize::Regular)
+        + panel_pad(crate::ControlSize::Regular)
+        + 2.0 * row_height(crate::ControlSize::Regular)
+        + row_height(crate::ControlSize::Regular) / 2.0) as f64;
     route(&mut tree, &press(20.0, oy));
     route(&mut tree, &release(20.0, oy));
     relayout_if_dirty();
@@ -342,7 +348,10 @@ fn a_stretched_trigger_keeps_its_height_in_a_taller_row() {
     let trigger = drawn_rects(&tree)[0];
     assert_eq!(
         (trigger.width, trigger.height),
-        (160.0, crate::shared::control_height())
+        (
+            160.0,
+            crate::shared::control_height(crate::ControlSize::Regular)
+        )
     );
 }
 
@@ -433,7 +442,7 @@ fn a_tall_panel_is_capped_to_the_window_and_follows_the_keyboard() {
 
     let panel = crate::test_support::drawn(telar::focus::Role::ListBox)[0];
     assert!(
-        panel.y + panel.height + panel_pad() <= 300.0,
+        panel.y + panel.height + panel_pad(crate::ControlSize::Regular) <= 300.0,
         "the panel stays inside the window: {panel:?}"
     );
     assert!(panel.height < 800.0, "and is cut to the room: {panel:?}");
@@ -444,7 +453,8 @@ fn a_tall_panel_is_capped_to_the_window_and_follows_the_keyboard() {
     settle(&tree);
 
     let tx = (panel.x + panel.width / 2.0) as f64;
-    let last_visible = (panel.y + panel.height - row_height() / 2.0) as f64;
+    let last_visible =
+        (panel.y + panel.height - row_height(crate::ControlSize::Regular) / 2.0) as f64;
     route(&mut tree, &press(tx, last_visible));
     route(&mut tree, &release(tx, last_visible));
     assert_eq!(

@@ -1,6 +1,7 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Key, NamedKey, Role};
 
+use crate::ControlSize;
 use crate::scrub_field::{ScrubFieldProps, scrub_field};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -10,6 +11,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 ScrubFieldProps::props()
                     .value(p.signal("value", 12.0f32))
                     .label(p.arg("label", "Width"))
+                    .size(p.arg("size", ControlSize::Regular))
                     .min(p.arg("min", 0.0f32))
                     .max(p.arg("max", 100.0f32))
                     .step(p.arg("step", 1.0f32))

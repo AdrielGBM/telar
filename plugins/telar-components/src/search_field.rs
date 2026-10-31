@@ -11,6 +11,7 @@ use telar::{
     signal,
 };
 
+use crate::ControlSize;
 use crate::shared;
 use crate::strings;
 use crate::text_field::{Adornments, FieldKeyHandler, TextFieldProps, adorned_field};
@@ -37,6 +38,9 @@ pub struct SearchFieldProps {
     /// Box width in logical px. `0.0` (the default) is [`TextFieldTokens::width`](crate::TextFieldTokens::width).
     #[props(default)]
     pub width: f32,
+    /// How large the field is drawn: its frame as a text field of this size, and the glass and the clear button in it, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// Runs with the query when Enter is pressed in the field.
     #[props(some, default)]
     pub on_submit: Option<SearchHandler>,
@@ -67,6 +71,7 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
         placeholder,
         label,
         width,
+        size,
         on_submit,
         on_clear,
         on_key,
@@ -85,6 +90,7 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
     });
 
     let glass = shared::mark(
+        size,
         || shared::Mark::Search,
         |text| text.color.faded(shared::QUIET_ALPHA),
     )?;
@@ -93,7 +99,7 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
         shared::shown_while(
             move || value.with(|query| !query.is_empty()),
             LayoutStyle::row(),
-            move || clear_button(clear.clone(), line.clone()),
+            move || clear_button(size, clear.clone(), line.clone()),
         )?
     };
 
@@ -119,6 +125,7 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
         }))
         .label(label)
         .width(width)
+        .size(size)
         .on_key(keys);
     if let Some(on_submit) = on_submit {
         field = field.on_submit(Rc::new(move || on_submit(&value.get())));
@@ -148,19 +155,21 @@ pub fn search_field(props: SearchFieldProps) -> Result<Box<dyn LayoutItem>, Layo
 
 /// The button that empties the field, handing the keyboard back to the line typed into. Announced, but no Tab stop: Escape in the field does the same.
 fn clear_button(
+    size: ControlSize,
     clear: Rc<dyn Fn()>,
     line: Rc<Cell<Option<FocusId>>>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let cross = shared::mark(
+        size,
         || shared::Mark::Close,
         |text| text.color.faded(shared::QUIET_ALPHA),
     )?;
-    let side = || {
+    let side = move || {
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .width(shared::icon_size())
-            .height(shared::icon_size())
+            .width(shared::icon_size(size))
+            .height(shared::icon_size(size))
             .flex_shrink(0.0)
     };
     let paint = |hovered: bool| {
@@ -178,8 +187,8 @@ fn clear_button(
         .hover_style(paint(true))
         .presented(Role::Button)
         .a11y_label(|| strings::text(strings::CLEAR_SEARCH))
-        .hit_outset(Reactive::of(|| {
-            telar::Insets::all(((shared::MIN_TARGET - shared::icon_size()) / 2.0).max(0.0))
+        .hit_outset(Reactive::of(move || {
+            telar::Insets::all(shared::target_outset(shared::icon_size(size)))
         }))
         .on_press(move || {
             clear();

@@ -18,8 +18,7 @@ use telar_project::naming::{
     is_ident, preview_entries_const_name, preview_file_expr, preview_slug, to_pascal_case,
 };
 use telar_project::{
-    AssetContext, MATRIX_GLOBAL_AXES, MatrixAxis, MatrixControlSize, MatrixDirection, Viewport,
-    is_preview_name,
+    AssetContext, MATRIX_GLOBAL_AXES, MatrixAxis, MatrixDirection, Viewport, is_preview_name,
 };
 
 use crate::codegen::{Code, push_theme_binding, scheme_binding};
@@ -979,16 +978,11 @@ fn axis(name: &str, written: &[&str]) -> Result<MatrixAxis, String> {
             |value| Viewport::parse(value).is_some() || is_preview_name(value),
             "a size like 390x844 nor a name in `[telar.previews.viewports]`",
         )?),
-        "control_size" => MatrixAxis::ControlSize(
-            values
-                .iter()
-                .map(|value| {
-                    MatrixControlSize::parse(value).ok_or_else(|| {
-                        format!("{at}: `{value}` is not one of mini, small, regular, large")
-                    })
-                })
-                .collect::<Result<_, _>>()?,
-        ),
+        "control_size" => {
+            return Err(format!(
+                "{at} no longer exists: a component takes its own `size` arg rather than inheriting one, so vary that, as `size:[Small Regular Large]`"
+            ));
+        }
         _ if is_ident(name) => MatrixAxis::Arg {
             name: name.to_string(),
             values: each(
@@ -1034,18 +1028,6 @@ fn axis_expr(axis: &MatrixAxis) -> String {
             format!("{path}::Dir(&[{}])", directions.join(", "))
         }
         MatrixAxis::Viewport(viewports) => format!("{path}::Viewport(&{viewports:?})"),
-        MatrixAxis::ControlSize(sizes) => {
-            let sizes: Vec<&str> = sizes
-                .iter()
-                .map(|size| match size {
-                    MatrixControlSize::Mini => "::telar::ControlSize::Mini",
-                    MatrixControlSize::Small => "::telar::ControlSize::Small",
-                    MatrixControlSize::Regular => "::telar::ControlSize::Regular",
-                    MatrixControlSize::Large => "::telar::ControlSize::Large",
-                })
-                .collect();
-            format!("{path}::ControlSize(&[{}])", sizes.join(", "))
-        }
         MatrixAxis::Arg { name, values } => format!("{path}::Arg({name:?}, &{values:?})"),
     }
 }

@@ -12,232 +12,217 @@ element group
                   matrix 1,0,0,1,260,140
                     element group
                       element option
-                        rect 0,0 280x32 radius=6
+                        rect 0,0 280x36 radius=6
                         element group
-                          clip 8,0 241x32
+                          clip 8,0 241x36
                             matrix 1,0,0,1,8,0
-                              text 0,7 241x16.8 "Ada Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                              text 0,9 241x16.8 "Ada Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
                           matrix 1,0,0,1,257,0
-                            text 0,8 15.05x14.28 "#0" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,10 15.05x14.28 "#0" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,32 280x32 radius=6
+                        rect 0,36 280x36 radius=6
                         element group
-                          clip 8,32 244x32
-                            matrix 1,0,0,1,8,32
-                              text 0,7 244x16.8 "Alan Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,36 244x36
+                            matrix 1,0,0,1,8,36
+                              text 0,9 244x16.8 "Alan Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,260,32
-                            text 0,8 12.39x14.28 "#1" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,260,36
+                            text 0,10 12.39x14.28 "#1" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,64 280x32 radius=6
+                        rect 0,72 280x36 radius=6
                         element group
-                          clip 8,64 241x32
-                            matrix 1,0,0,1,8,64
-                              text 0,7 241.2x16.8 "Grace Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,72 241x36
+                            matrix 1,0,0,1,8,72
+                              text 0,9 241.2x16.8 "Grace Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,257,64
-                            text 0,8 15x14.28 "#2" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,257,72
+                            text 0,10 15x14.28 "#2" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,96 280x32 fill=#00000014 radius=6
+                        rect 0,108 280x36 fill=#00000014 radius=6
                         element group
-                          clip 8,96 241x32
-                            matrix 1,0,0,1,8,96
-                              text 0,7 241.11x16.8 "Edsger Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,108 241x36
+                            matrix 1,0,0,1,8,108
+                              text 0,9 241.11x16.8 "Edsger Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,257,96
-                            text 0,8 15x14.28 "#3" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,257,108
+                            text 0,10 15x14.28 "#3" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,128 280x32 fill=#00000014 radius=6
+                        rect 0,144 280x36 fill=#00000014 radius=6
                         element group
-                          clip 8,128 241x32
-                            matrix 1,0,0,1,8,128
-                              text 0,7 241x16.8 "Barbara Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,144 241x36
+                            matrix 1,0,0,1,8,144
+                              text 0,9 241x16.8 "Barbara Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,257,128
-                            text 0,8 15.23x14.28 "#4" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,257,144
+                            text 0,10 15.23x14.28 "#4" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,160 280x32 radius=6
+                        rect 0,180 280x36 radius=6
                         element group
-                          clip 8,160 241x32
-                            matrix 1,0,0,1,8,160
-                              text 0,7 241.39x16.8 "Donald Lovelace" size=14 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
+                          clip 8,180 241x36
+                            matrix 1,0,0,1,8,180
+                              text 0,9 241.39x16.8 "Donald Lovelace" size=14 family=sans-serif weight=400 color=#616680ff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,257,160
-                            text 0,8 15x14.28 "#5" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,257,180
+                            text 0,10 15x14.28 "#5" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,192 280x32 radius=6
+                        rect 0,216 280x36 radius=6
                         element group
-                          clip 8,192 241x32
-                            matrix 1,0,0,1,8,192
-                              text 0,7 241.08x16.8 "Frances Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,216 241x36
+                            matrix 1,0,0,1,8,216
+                              text 0,9 241.08x16.8 "Frances Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,257,192
-                            text 0,8 15x14.28 "#6" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,257,216
+                            text 0,10 15x14.28 "#6" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,224 280x32 radius=6
+                        rect 0,252 280x36 radius=6
                         element group
-                          clip 8,224 242x32
-                            matrix 1,0,0,1,8,224
-                              text 0,7 242x16.8 "Ken Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,252 242x36
+                            matrix 1,0,0,1,8,252
+                              text 0,9 242x16.8 "Ken Lovelace" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,258,224
-                            text 0,8 14.28x14.28 "#7" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,258,252
+                            text 0,10 14.28x14.28 "#7" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,256 280x32 radius=6
+                        rect 0,288 280x36 radius=6
                         element group
-                          clip 8,256 241x32
-                            matrix 1,0,0,1,8,256
-                              text 0,7 241.09x16.8 "Ada Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
-                            end
-                          end
-                        end
-                        element group
-                          matrix 1,0,0,1,257,256
-                            text 0,8 15x14.28 "#8" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
-                          end
-                        end
-                      end
-                      element option
-                        rect 0,288 280x32 radius=6
-                        element group
-                          clip 8,288 241x32
+                          clip 8,288 241x36
                             matrix 1,0,0,1,8,288
-                              text 0,7 241.08x16.8 "Alan Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                              text 0,9 241.09x16.8 "Ada Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
                           matrix 1,0,0,1,257,288
-                            text 0,8 15x14.28 "#9" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                            text 0,10 15x14.28 "#8" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,320 280x32 radius=6
+                        rect 0,324 280x36 radius=6
                         element group
-                          clip 8,320 236x32
-                            matrix 1,0,0,1,8,320
-                              text 0,7 236.11x16.8 "Grace Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,324 241x36
+                            matrix 1,0,0,1,8,324
+                              text 0,9 241.08x16.8 "Alan Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,252,320
-                            text 0,8 20x14.28 "#10" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,257,324
+                            text 0,10 15x14.28 "#9" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,352 280x32 radius=6
+                        rect 0,360 280x36 radius=6
                         element group
-                          clip 8,352 239x32
-                            matrix 1,0,0,1,8,352
-                              text 0,7 239x16.8 "Edsger Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,360 236x36
+                            matrix 1,0,0,1,8,360
+                              text 0,9 236.11x16.8 "Grace Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,255,352
-                            text 0,8 17.22x14.28 "#11" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,252,360
+                            text 0,10 20x14.28 "#10" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,384 280x32 radius=6
+                        rect 0,396 280x36 radius=6
                         element group
-                          clip 8,384 236x32
-                            matrix 1,0,0,1,8,384
-                              text 0,7 236.36x16.8 "Barbara Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,396 239x36
+                            matrix 1,0,0,1,8,396
+                              text 0,9 239x16.8 "Edsger Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,252,384
-                            text 0,8 20x14.28 "#12" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,255,396
+                            text 0,10 17.22x14.28 "#11" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,416 280x32 radius=6
+                        rect 0,432 280x36 radius=6
                         element group
-                          clip 8,416 236x32
-                            matrix 1,0,0,1,8,416
-                              text 0,7 236.27x16.8 "Donald Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,432 236x36
+                            matrix 1,0,0,1,8,432
+                              text 0,9 236.36x16.8 "Barbara Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,252,416
-                            text 0,8 20x14.28 "#13" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,252,432
+                            text 0,10 20x14.28 "#12" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element option
-                        rect 0,448 280x32 radius=6
+                        rect 0,468 280x36 radius=6
                         element group
-                          clip 8,448 236x32
-                            matrix 1,0,0,1,8,448
-                              text 0,7 236x16.8 "Frances Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                          clip 8,468 236x36
+                            matrix 1,0,0,1,8,468
+                              text 0,9 236.27x16.8 "Donald Turing" size=14 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                             end
                           end
                         end
                         element group
-                          matrix 1,0,0,1,252,448
-                            text 0,8 20.08x14.28 "#14" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
+                          matrix 1,0,0,1,252,468
+                            text 0,10 20x14.28 "#13" size=11.9 family=sans-serif weight=400 color=#171a2eb3 wrap=none lang=en
                           end
                         end
                       end
                       element group
-                        rect 0,480 280x63520
+                        rect 0,504 280x71496
                       end
                     end
                   end

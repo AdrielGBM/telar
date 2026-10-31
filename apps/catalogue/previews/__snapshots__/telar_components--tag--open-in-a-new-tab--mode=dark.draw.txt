@@ -5,20 +5,20 @@ element group
     element group
       element group
         element group
-          rect 352,286 96x28 fill=#99a1b81a border=1 border-color=#00000000 radius=6
+          rect 350,284 100x32 fill=#99a1b81a border=1 border-color=#00000000 radius=6
           element group
             element group
-              matrix 1,0,0,1,360,288
-                text 0,4 52x14.28 "Logo.svg" size=11.9 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
+              matrix 1,0,0,1,358,284
+                text 0,8 52x14.28 "Logo.svg" size=11.9 family=sans-serif weight=400 color=#99a1b8ff wrap=none lang=en
               end
             end
           end
           element group
             element group
               element group
-                rect 420,286 28x28
+                rect 418,284 32x32
                 element button
-                  rect 420,286 28x28 fill=#ffffff0d radius=10
+                  rect 418,284 32x32 fill=#ffffff0d radius=10
                   element group
                     rect 426,292 16x16
                     element group
@@ -38,7 +38,7 @@ element group
     end
   end
 end
-matrix 1,0,0,1,420,318
+matrix 1,0,0,1,418,320
   element group
     rect 0,0 185x22 fill=#ebedf5ff radius=11
     element group

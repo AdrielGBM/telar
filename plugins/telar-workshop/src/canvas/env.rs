@@ -10,7 +10,7 @@ use telar::{
 
 use crate::state::WorkshopState;
 
-/// Builds `build`'s content on a canvas in the environment the settings and `entry` resolve to, and keeps it there: the mode, direction, locale, control size, high contrast, viewport, a device's safe area and the background, through `globals`.
+/// Builds `build`'s content on a canvas in the environment the settings and `entry` resolve to, and keeps it there: the mode, direction, locale, high contrast, viewport, a device's safe area and the background, through `globals`.
 pub(super) fn canvas(
     state: &WorkshopState,
     entry: &PreviewEntry,
@@ -51,7 +51,6 @@ fn resolved_canvas(
         globals.mode().set_if_changed(resolved.mode);
         globals.locale().set_if_changed(resolved.locale);
         globals.direction().set_if_changed(resolved.direction);
-        globals.control_size().set_if_changed(resolved.control_size);
         globals
             .high_contrast()
             .set_if_changed(resolved.high_contrast);

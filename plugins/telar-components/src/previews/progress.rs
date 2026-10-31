@@ -1,6 +1,7 @@
 use telar::Color;
 use telar::preview::{Layout, Matrix, PreviewEntry, preview};
 
+use crate::ControlSize;
 use crate::progress::{ProgressProps, progress};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -9,6 +10,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             progress(
                 ProgressProps::props()
                     .value(p.arg("value", 0.6f32))
+                    .size(p.arg("size", ControlSize::Regular))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .track_color(p.arg("track_color", Color::TRANSPARENT))
                     .width(p.arg("width", 0.0f32))

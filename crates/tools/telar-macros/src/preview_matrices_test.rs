@@ -8,7 +8,7 @@ viewports = { phone = "390x844" }
 
 [telar.previews.matrices]
 themes = { mode = ["paper", "ink"] }
-layouts = { dir = ["ltr", "rtl"], viewport = ["phone", "1280x800"], control_size = ["small"], locale = ["ar"], size = [12, 1.5], label = ['"Save"'] }
+layouts = { dir = ["ltr", "rtl"], viewport = ["phone", "1280x800"], locale = ["ar"], size = [12, 1.5], label = ['"Save"'] }
 "#;
 
 fn package(name: &str, telar_toml: &str) -> std::path::PathBuf {
@@ -53,7 +53,7 @@ fn each_named_matrix_becomes_a_constant_table() {
         .to_string();
     for expected in [
         "static MATRICES : & [:: telar :: preview :: NamedMatrix] = & [",
-        ":: telar :: preview :: NamedMatrix :: new (\"layouts\" , & [:: telar :: preview :: Axis :: Locale (& [\"ar\"]) , :: telar :: preview :: Axis :: Dir (& [:: telar :: Direction :: Ltr , :: telar :: Direction :: Rtl]) , :: telar :: preview :: Axis :: Viewport (& [\"phone\" , \"1280x800\"]) , :: telar :: preview :: Axis :: ControlSize (& [:: telar :: ControlSize :: Small]) , :: telar :: preview :: Axis :: Arg (\"label\" , & [\"\\\"Save\\\"\"]) , :: telar :: preview :: Axis :: Arg (\"size\" , & [\"12\" , \"1.5\"])])",
+        ":: telar :: preview :: NamedMatrix :: new (\"layouts\" , & [:: telar :: preview :: Axis :: Locale (& [\"ar\"]) , :: telar :: preview :: Axis :: Dir (& [:: telar :: Direction :: Ltr , :: telar :: Direction :: Rtl]) , :: telar :: preview :: Axis :: Viewport (& [\"phone\" , \"1280x800\"]) , :: telar :: preview :: Axis :: Arg (\"label\" , & [\"\\\"Save\\\"\"]) , :: telar :: preview :: Axis :: Arg (\"size\" , & [\"12\" , \"1.5\"])])",
         ":: telar :: preview :: NamedMatrix :: new (\"themes\" , & [:: telar :: preview :: Axis :: Mode (& [\"paper\" , \"ink\"])])",
         ":: telar :: preview :: ViewportPreset :: new (\"phone\" , 390f32 , 844f32)",
         ":: telar :: preview :: __install_matrices (MATRICES , VIEWPORTS)",

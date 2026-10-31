@@ -6,19 +6,19 @@ use telar::{ComponentList, DrawCommand, Event, Rect, relayout_if_dirty};
 use super::*;
 
 fn row_height() -> f32 {
-    TreeViewTokens::current().row_height()
+    TreeViewTokens::current().row_height(ControlSize::Regular)
 }
 
 fn pad_x() -> f32 {
-    TreeViewTokens::current().pad_x()
+    TreeViewTokens::current().pad_x(ControlSize::Regular)
 }
 
 fn inset() -> f32 {
-    TreeViewTokens::current().inset()
+    TreeViewTokens::current().inset(ControlSize::Regular)
 }
 
 fn caret_width() -> f32 {
-    crate::shared::icon_size()
+    crate::shared::icon_size(crate::ControlSize::Regular)
 }
 
 fn catalogue() -> Vec<TreeNode> {
@@ -400,6 +400,78 @@ fn clicking_a_row_selects_it_and_clicking_its_caret_opens_it() {
     assert!(tree.open().is_empty(), "and shuts it again");
 }
 
+/// The caret is drawn an icon wide where it was, its label beside it where it was, and is found by the pointer across at least the smallest target round what it draws at every size.
+#[test]
+fn the_caret_is_pressed_across_the_smallest_target_at_every_size() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        crate::test_support::fresh_layout_runtime();
+        focus::clear();
+        let expanded = signal(HashSet::new());
+        let item = tree_view(
+            TreeViewProps::props()
+                .items(catalogue())
+                .expanded(expanded)
+                .label("Components")
+                .size(size)
+                .build(),
+        )
+        .unwrap();
+        lay_out(item.layout_node(), 240.0, 400.0);
+        let mut tree = ComponentList::new(item);
+        let _ = tree.commands();
+        let tokens = TreeViewTokens::current();
+        let start = tokens.inset(size) + tokens.pad_x(size);
+        let side = crate::shared::icon_size(size);
+        let middle = tokens.row_height(size) / 2.0;
+        let mut toggled_at = Vec::new();
+        for x in 0..60 {
+            let was = expanded.get().contains("inputs");
+            for event in [
+                press(x as f64, middle as f64),
+                release(x as f64, middle as f64),
+            ] {
+                route(&mut tree, &event);
+                relayout_if_dirty();
+                let _ = tree.commands();
+            }
+            if expanded.get().contains("inputs") != was {
+                toggled_at.push(x as f32);
+            }
+        }
+        let (first, last) = (toggled_at[0], toggled_at[toggled_at.len() - 1]);
+        assert_eq!(
+            toggled_at.len() as f32,
+            last - first + 1.0,
+            "{size:?}: one span toggles, {toggled_at:?}"
+        );
+        assert!(
+            last + 1.0 - first >= crate::metrics::MIN_TARGET,
+            "{size:?}: the caret is found across {first}..={last}"
+        );
+        assert!(
+            first <= start && start + side <= last + 1.0,
+            "{size:?}: {first}..={last} holds the caret drawn at {start}..{}",
+            start + side
+        );
+
+        let mut label = None;
+        telar::for_each_with_matrix(&tree.commands(), |command, matrix| {
+            if let DrawCommand::Text { text, rect, .. } = command
+                && text.as_ref() == "Inputs"
+            {
+                label.get_or_insert(telar::transform_clip_rect(matrix, *rect));
+            }
+        });
+        let label = label.expect("the label is drawn");
+        let want = start + side + crate::shared::gap_sm(size);
+        assert!(
+            (label.x - want).abs() < 0.5,
+            "{size:?}: the label stands at {}, want {want}",
+            label.x
+        );
+    }
+}
+
 #[test]
 fn shutting_a_branch_shuts_the_branches_beneath_it() {
     let mut tree = Mounted::focused(catalogue());
@@ -658,7 +730,8 @@ fn a_tree_s_rows_are_as_tall_as_every_other_list_s() {
     assert!(!rows.is_empty());
     assert!(
         rows.iter()
-            .all(|row| row.height == crate::list::ListTokens::default().row_height()),
+            .all(|row| row.height
+                == crate::list::ListTokens::default().row_height(ControlSize::Regular)),
         "{rows:?}"
     );
     drop(tree);
@@ -926,5 +999,31 @@ fn the_rows_stand_in_from_the_tree_s_sides() {
     for (name, row) in rows {
         assert_eq!(row.x, view.x + inset(), "{name}");
         assert_eq!(row.width, view.width - inset() * 2.0, "{name}");
+    }
+}
+
+/// Every row stands at the row height of the tree's own size, set in by that size's inset.
+#[test]
+fn the_rows_stand_at_the_tree_s_size() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        crate::test_support::fresh_layout_runtime();
+        let item = tree_view(
+            TreeViewProps::props()
+                .items(catalogue())
+                .label("Components")
+                .size(size)
+                .build(),
+        )
+        .unwrap();
+        lay_out(item.layout_node(), 240.0, 400.0);
+        let tree = ComponentList::new(item);
+        let _ = tree.commands();
+        let view = crate::test_support::drawn(Role::Tree)[0];
+        let rows = crate::test_support::drawn(Role::TreeItem);
+        assert!(!rows.is_empty());
+        for row in rows {
+            assert_eq!(row.height, crate::metrics::row_height(size), "{size:?}");
+            assert_eq!(row.x, view.x + crate::metrics::panel_pad(size), "{size:?}");
+        }
     }
 }

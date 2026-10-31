@@ -282,9 +282,9 @@ fn table(manifest: &str) -> toml::Table {
     manifest.parse().unwrap()
 }
 
-/// Cargo's error for a feature `telar` no longer has names no fix, so the check names it: the crate each one became, the feature groups it stood for, and the prelude line that brings the tags back.
+/// Cargo's error for a feature `telar` no longer has names no fix, so the check names it: the crate each one became and the prelude line that brings the tags back. Every widget is in every `telar-components` build, so no group the old features stood for is a feature to name.
 #[test]
-fn the_catalogue_features_become_telar_components_with_their_groups() {
+fn the_catalogue_features_become_telar_components_with_no_feature() {
     let manifest = table(
         "[package]\nname = \"app\"\n[dependencies]\ntelar = { version = \"0.2\", features = [\"desktop\", \"components-overlays\", \"components-advanced\", \"components-base\"] }\n",
     );
@@ -300,15 +300,16 @@ fn the_catalogue_features_become_telar_components_with_their_groups() {
 
     let hint = moved_features_hint("app", &moved, &[]).unwrap();
     assert!(
-        hint.contains("cargo add -p app telar-components --features advanced,overlays\n"),
+        hint.contains("cargo add -p app telar-components\n"),
         "{hint}"
     );
+    assert!(!hint.contains("--features"), "{hint}");
     assert!(!hint.contains("telar-navigate"), "{hint}");
     assert!(hint.contains("prelude = [\"telar_components\"]"), "{hint}");
 }
 
 #[test]
-fn the_whole_catalogue_is_every_group_and_navigate_is_its_own_crate() {
+fn the_whole_catalogue_is_telar_components_and_navigate_is_its_own_crate() {
     let moved = moved_telar_features(
         &table(
             "[package]\nname = \"app\"\n[dependencies]\ntelar = { version = \"0.2\", features = [\"components\", \"navigate\"] }\n",
@@ -317,7 +318,7 @@ fn the_whole_catalogue_is_every_group_and_navigate_is_its_own_crate() {
     );
     let hint = moved_features_hint("app", &moved, &[]).unwrap();
     assert!(
-        hint.contains("cargo add -p app telar-components --features advanced,chrome,overlays"),
+        hint.contains("cargo add -p app telar-components\n"),
         "{hint}"
     );
     assert!(hint.contains("cargo add -p app telar-navigate"), "{hint}");
@@ -325,23 +326,6 @@ fn the_whole_catalogue_is_every_group_and_navigate_is_its_own_crate() {
         hint.contains("prelude = [\"telar_components\", \"telar_navigate\"]"),
         "{hint}"
     );
-}
-
-/// `components-base` was the catalogue with no group, which is what `telar-components` is with no features.
-#[test]
-fn the_base_catalogue_needs_no_feature() {
-    let moved = moved_telar_features(
-        &table(
-            "[package]\nname = \"app\"\n[dependencies]\ntelar = { version = \"0.2\", features = [\"components-base\"] }\n",
-        ),
-        None,
-    );
-    let hint = moved_features_hint("app", &moved, &[]).unwrap();
-    assert!(
-        hint.contains("cargo add -p app telar-components\n"),
-        "{hint}"
-    );
-    assert!(!hint.contains("--features"), "{hint}");
 }
 
 /// Everywhere a manifest can turn a `telar` feature on: a `[features]` entry in either spelling, a target-specific dependency, a renamed one, and the workspace entry a `workspace = true` inherits.

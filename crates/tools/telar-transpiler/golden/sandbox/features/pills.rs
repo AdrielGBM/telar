@@ -90,18 +90,8 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                                 let tags = tags.clone();
                                             move || {
                                                 let mut __children: Vec<Box<dyn LayoutItem>> = Vec::new();
-                                                let __sbox_0 = {
-                                                    let __text_1 = {
-                                                        Text::declaring(
-                                                            || "×".to_string(),
-                                                            LayoutStyle::new(),
-                                                            move |__inherited: TextStyle| __inherited,
-                                                        )?
-                                                    };
-                                                    StyledContainer::new(LayoutStyle::new().flex_column().width(24.0).height(24.0).align_items(AlignItems::CENTER).justify_content(JustifyContent::CENTER), move |_| RectStyle::default(), children![__text_1])?.on_press({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } }).cursor(Cursor::Pointer).control(::telar::Role::Button)
-                                                };
-                                                let __sbox_0 = __sbox_0.a11y_label(|| "Remove removable");
-                                                __children.push(box_item(__sbox_0));
+                                                let __node_12 = icon_button(IconButtonProps::props().icon(("lucide:x", crate::__rsx_assets::ASSET_188735C3.get(), true)).label("Remove removable").size(ControlSize::Small).on_press(std::rc::Rc::new({ let tags = tags.clone(); move || { tags.update(|n| if *n > 0 { *n -= 1 }) } })).build())?;
+                                                __children.push(box_item(__node_12));
                                                 Ok(__children)
                                             }
                                             }
@@ -111,7 +101,7 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                     Container::new(LayoutStyle::new().flex_row().gap(8.0).align_items(AlignItems::CENTER), children![__node_9, __node_10, __node_11])?
                                 };
                                 __children.push(box_item(__row_1));
-                                let __text_2 = {
+                                let __text_1 = {
                                     let tags = tags.clone();
                                     Text::declaring(
                                         move || format!("tags · {}", tags.get()),
@@ -119,7 +109,7 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                                         { let theme = theme.clone(); move |__inherited: TextStyle| __inherited.with_font_size(13.0).with_color(theme.get().muted) },
                                     )?
                                 };
-                                __children.push(box_item(__text_2));
+                                __children.push(box_item(__text_1));
                                 Ok(__children)
                             }
                             }
@@ -127,8 +117,8 @@ pub fn pills(props: PillsProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                         card(CardProps::props().gap(::telar::Int(10)).children(__recipe_children).build())?
                     };
                     __children.push(box_item(__node_8));
-                    let __node_12 = code_line(CodeLineProps::props().code("tag label:'removable' / box role:button label:'Remove removable' slot:'action'").build())?;
-                    __children.push(box_item(__node_12));
+                    let __node_13 = code_line(CodeLineProps::props().code("tag label:'removable' / icon_button icon:'lucide:x' size:(ControlSize::Small) slot:'action'").build())?;
+                    __children.push(box_item(__node_13));
                     Ok(__children)
                 }
                 }

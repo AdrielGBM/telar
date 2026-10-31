@@ -24,6 +24,7 @@ type Told = Rc<std::cell::RefCell<Vec<&'static str>>>;
 struct Ends {
     on_start: Option<Rc<dyn Fn()>>,
     on_end: Option<Rc<dyn Fn(bool)>>,
+    size: ControlSize,
 }
 
 impl Ends {
@@ -36,6 +37,7 @@ impl Ends {
                     .borrow_mut()
                     .push(if kept { "kept" } else { "undone" })
             })),
+            size: ControlSize::Regular,
         }
     }
 }
@@ -54,6 +56,7 @@ fn canvas_reporting(start: f32, ends: Ends) -> Canvas {
         .min(0.0)
         .max(100.0)
         .clamped(clamped)
+        .size(ends.size)
         .build();
     props.on_start = ends.on_start;
     props.on_end = ends.on_end;
@@ -279,10 +282,34 @@ fn the_dot_is_a_ringed_pill_a_step_smaller_than_a_slider_s_thumb() {
     telar::set_theme(Plain::default());
     let canvas = canvas(20.0);
     let (rect, style) = dot_paint(&canvas);
-    let side = crate::metrics::icon_size() - crate::metrics::gap_sm();
+    let side = crate::metrics::icon_size(crate::ControlSize::Regular)
+        - crate::metrics::gap_sm(crate::ControlSize::Regular);
     assert_eq!((rect.width, rect.height), (side, side));
     assert_eq!(style.radius, telar::BorderRadius::all(side / 2.0));
     assert_eq!(style.border.map(|b| b.widths[0]), Some(2.5));
+}
+
+/// The dot is a step smaller than a slider's thumb of the handle's own size, and is still taken hold of a smallest target's half away from its centre at the small one.
+#[test]
+fn the_dot_scales_with_the_handle_s_size_and_keeps_its_grab_area() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        telar::set_theme(Plain::default());
+        let mut canvas = canvas_reporting(
+            20.0,
+            Ends {
+                size,
+                ..Ends::default()
+            },
+        );
+        let (rect, _) = dot_paint(&canvas);
+        let side = crate::metrics::icon_size(size) - crate::metrics::gap_sm(size);
+        assert_eq!((rect.width, rect.height), (side, side), "{size:?}");
+        let reach = crate::metrics::MIN_TARGET / 2.0 - 1.0;
+        canvas.event(press(20.0 + reach, 50.0));
+        canvas.event(moved(60.0 + reach, 50.0));
+        assert_eq!(canvas.value.peek(), 60.0, "{size:?}");
+        canvas.event(release(60.0 + reach, 50.0));
+    }
 }
 
 #[test]

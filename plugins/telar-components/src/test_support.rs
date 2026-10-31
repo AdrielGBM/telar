@@ -115,7 +115,6 @@ pub(crate) fn painted_at(tree: &telar::ComponentList, at: telar::Rect) -> telar:
 }
 
 /// The corner role a floating panel is rounded by.
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum PanelRole {
     Surface,
@@ -123,7 +122,6 @@ pub(crate) enum PanelRole {
 }
 
 /// A theme that rounds `role` by `radius` and the other panel role by a value nothing should land on, supplying `tokens` as a component's own when there are any.
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 #[derive(Clone)]
 pub(crate) struct PanelTheme<K> {
     pub(crate) role: PanelRole,
@@ -131,7 +129,6 @@ pub(crate) struct PanelTheme<K> {
     pub(crate) tokens: Option<K>,
 }
 
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 impl<K> PanelTheme<K> {
     const ELSEWHERE: f32 = 31.0;
 
@@ -145,7 +142,6 @@ impl<K> PanelTheme<K> {
     }
 }
 
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 impl<K: Clone + Default + 'static> telar::ThemeTokens for PanelTheme<K> {
     fn radius_surface(&self) -> f32 {
         self.corner(PanelRole::Surface)
@@ -161,7 +157,6 @@ impl<K: Clone + Default + 'static> telar::ThemeTokens for PanelTheme<K> {
 }
 
 /// [`assert_corner_follows_the_role_until_the_tokens_name_one`] for a panel rounded by `role`: left `None` the radius is the role's, read when the panel paints, a radius the theme names wins, and `shape` says which corners a radius reaches.
-#[cfg(any(feature = "overlays", feature = "workbench"))]
 pub(crate) fn assert_panel_corner_follows_its_role<K: Clone + Default + 'static>(
     role: PanelRole,
     mount: impl FnOnce() -> telar::testing::Scoped<telar::ComponentList>,
@@ -227,7 +222,6 @@ pub(crate) fn run_insets(
 }
 
 /// A body of one 20 px line reading `label`: what an accordion, a dialog or a drawer is opened on when only its own box is under test.
-#[cfg(any(feature = "advanced", feature = "overlays"))]
 pub(crate) fn text_body(label: &'static str) -> telar::Children {
     telar::Children::one(move || {
         let body = telar::Text::declaring(
@@ -240,7 +234,6 @@ pub(crate) fn text_body(label: &'static str) -> telar::Children {
 }
 
 /// A body of `lines` 20 px lines, `Line 0` onwards: enough of them to be taller than the window a dialog or a drawer is opened in.
-#[cfg(feature = "overlays")]
 pub(crate) fn tall_body(lines: usize) -> telar::Children {
     telar::Children::new(move || {
         (0..lines)

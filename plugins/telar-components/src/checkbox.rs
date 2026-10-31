@@ -8,6 +8,7 @@ use telar::{
     amend_surface, box_item, children, focus::Role, signal,
 };
 
+use crate::ControlSize;
 use crate::shared;
 
 /// A checkbox's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -15,7 +16,7 @@ use crate::shared;
 /// Every field left `None` follows the role named beside it, read when the checkbox paints, so a theme that moves the role still moves every checkbox it has not given a value of its own.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CheckboxTokens {
-    /// Side of the box at the regular control size, scaled with the control size in force. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
+    /// Side of the box at the regular size, scaled with the checkbox's own. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
     pub size: Option<f32>,
     /// Corner radius of the box; the mark's is concentric with it. `None` is the theme's `radius_item`.
     pub radius: Option<f32>,
@@ -29,9 +30,10 @@ impl CheckboxTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    pub fn size(&self) -> f32 {
+    /// The side of the box of a checkbox of `size`.
+    pub fn size(&self, size: ControlSize) -> f32 {
         self.size
-            .map_or_else(shared::icon_size, |size| size * telar::control_scale())
+            .map_or_else(|| shared::icon_size(size), |side| side * size.scale())
     }
 
     pub fn radius(&self) -> f32 {
@@ -45,21 +47,21 @@ impl CheckboxTokens {
 }
 
 /// How far the mark stands inside the box's edge.
-fn mark_inset() -> f32 {
-    shared::gap_sm()
+fn mark_inset(size: ControlSize) -> f32 {
+    shared::gap_sm(size)
 }
 
-fn box_style() -> LayoutStyle {
-    let size = CheckboxTokens::current().size();
+fn box_style(size: ControlSize) -> LayoutStyle {
+    let side = CheckboxTokens::current().size(size);
     LayoutStyle::row()
-        .width(size)
-        .height(size)
+        .width(side)
+        .height(side)
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
 }
 
-fn mark_style() -> LayoutStyle {
-    let side = (CheckboxTokens::current().size() - mark_inset() * 2.0).max(0.0);
+fn mark_style(size: ControlSize) -> LayoutStyle {
+    let side = (CheckboxTokens::current().size(size) - mark_inset(size) * 2.0).max(0.0);
     LayoutStyle::new().width(side).height(side)
 }
 
@@ -71,6 +73,9 @@ pub struct CheckboxProps {
     pub checked: Option<RwSignal<bool>>,
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// How large the checkbox is drawn: its box, mark and label, and the control height its row stands at, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// Accent (the checked fill). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -87,6 +92,7 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
     let CheckboxProps {
         checked,
         label,
+        size,
         color,
         on_toggle,
         style,
@@ -97,25 +103,25 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
     let mark_checked = checked;
     let mark_color = color.clone();
     let mark = StyledContainer::new(
-        mark_style(),
+        mark_style(size),
         move |_r| {
             let fill = if mark_checked.get() {
                 shared::ink_on(shared::resolve(&mark_color, shared::accent))
             } else {
                 Color::TRANSPARENT
             };
-            let radius = (CheckboxTokens::current().radius() - mark_inset()).max(0.0);
+            let radius = (CheckboxTokens::current().radius() - mark_inset(size)).max(0.0);
             RectStyle::default()
                 .with_fill(fill)
                 .with_radius(BorderRadius::all(radius))
         },
         vec![],
     )?
-    .styled_by(mark_style);
+    .styled_by(move || mark_style(size));
 
     let box_checked = checked;
     let control = StyledContainer::new(
-        box_style(),
+        box_style(size),
         move |_r| {
             let tokens = CheckboxTokens::current();
             let (fill, frame) = if box_checked.get() {
@@ -132,11 +138,12 @@ pub fn checkbox(props: CheckboxProps) -> Result<Box<dyn LayoutItem>, LayoutError
         },
         children![mark],
     )?
-    .styled_by(box_style);
+    .styled_by(move || box_style(size));
 
     let toggle_checked = checked;
     let announced = checked;
     shared::labelled_control(
+        size,
         box_item(control),
         label,
         Role::CheckBox,

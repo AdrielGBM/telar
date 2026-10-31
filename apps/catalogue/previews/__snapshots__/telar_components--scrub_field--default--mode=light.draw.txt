@@ -6,22 +6,22 @@ element group
       element group
         element group
           element spinbutton
-            rect 359,286 82x28 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+            rect 359,284 82x32 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
             element group
-              matrix 1,0,0,1,371,286
-                text 0,5 39x16.8 "Width" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
+              matrix 1,0,0,1,371,284
+                text 0,7 39x16.8 "Width" size=14 family=sans-serif weight=400 color=#171a2eb3 lang=en
               end
             end
             element group
-              matrix 1,0,0,1,418,286
-                text 0,5 11.39x16.8 "11" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+              matrix 1,0,0,1,418,284
+                text 0,7 11.39x16.8 "11" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
               end
             end
           end
           element group
-            rect 359,286 0x0
+            rect 359,284 0x0
             element group
-              matrix 1,0,0,1,359,286
+              matrix 1,0,0,1,359,284
                 clip 0,0 0x0
                   text 0,0 0x0 "" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
                 end

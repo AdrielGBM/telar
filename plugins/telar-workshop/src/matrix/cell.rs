@@ -121,9 +121,6 @@ pub(crate) fn seed(
     if let Some(direction) = settings.direction {
         globals.direction().set(Some(direction));
     }
-    if let Some(size) = settings.control_size {
-        globals.control_size().set(Some(size));
-    }
     if let Some(high) = settings.high_contrast {
         globals.high_contrast().set(Some(high));
     }

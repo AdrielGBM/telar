@@ -8,6 +8,7 @@ use telar::{
     focus::Role,
 };
 
+use crate::ControlSize;
 use crate::heading::{HeadingProps, heading};
 use crate::scrim;
 use crate::shared;
@@ -20,11 +21,11 @@ use crate::strings;
 pub struct ModalTokens {
     /// Corner radius. `None` is the theme's `radius_dialog`.
     pub radius: Option<f32>,
-    /// Space between the dialog's edge and its content, and between the dialog and the window's edge, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
+    /// Space between the dialog's edge and its content, and between the dialog and the window's edge, at the regular size, scaled with the modal's own. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
     pub pad: Option<f32>,
-    /// The narrowest the dialog is drawn, at the regular control size, scaled with the control size in force. `None` is 24 ems of the document's text.
+    /// The narrowest the dialog is drawn, at the regular size, scaled with the modal's own. `None` is 24 ems of the document's text.
     pub min_width: Option<f32>,
-    /// The widest the dialog is drawn, at the regular control size, scaled with the control size in force. `None` is 32 ems of the document's text.
+    /// The widest the dialog is drawn, at the regular size, scaled with the modal's own. `None` is 32 ems of the document's text.
     pub max_width: Option<f32>,
 }
 
@@ -38,53 +39,56 @@ impl ModalTokens {
         self.radius.unwrap_or_else(shared::radius_dialog)
     }
 
-    pub fn pad(&self) -> f32 {
+    /// The padding of a modal of `size`.
+    pub fn pad(&self, size: ControlSize) -> f32 {
         self.pad
-            .map_or_else(shared::gap_xl, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_xl(size), |pad| pad * size.scale())
     }
 
-    pub fn min_width(&self) -> f32 {
-        shared::width_or_measure(self.min_width, 24.0)
+    /// The narrowest a modal of `size` is drawn.
+    pub fn min_width(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.min_width, 24.0)
     }
 
-    pub fn max_width(&self) -> f32 {
-        shared::width_or_measure(self.max_width, 32.0)
+    /// The widest a modal of `size` is drawn.
+    pub fn max_width(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.max_width, 32.0)
     }
 }
 
 /// The close glyph's share of the text around it.
 const CLOSE_RATIO: f32 = 0.93;
 
-fn header_row() -> LayoutStyle {
+fn header_row(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::SPACE_BETWEEN)
-        .gap(shared::gap_lg())
+        .gap(shared::gap_lg(size))
 }
-fn card(room: scrim::Room) -> LayoutStyle {
+fn card(size: ControlSize, room: scrim::Room) -> LayoutStyle {
     let tokens = ModalTokens::current();
-    let room = room.inside(tokens.pad());
+    let room = room.inside(tokens.pad(size));
     LayoutStyle::column()
-        .gap(shared::gap_lg())
+        .gap(shared::gap_lg(size))
         // So the dialog never collapses to its min-content width: the header and body leaves are unmeasured, with 0 intrinsic width, which would shrink the card to a strip. Capped by the room, so a narrow window wins over the minimum.
-        .min_width(tokens.min_width().min(room.width))
-        .max_width(tokens.max_width().min(room.width))
+        .min_width(tokens.min_width(size).min(room.width))
+        .max_width(tokens.max_width(size).min(room.width))
         .max_height(room.height)
-        .padding_all(tokens.pad())
+        .padding_all(tokens.pad(size))
 }
-fn body_column() -> LayoutStyle {
-    LayoutStyle::column().gap(shared::gap_lg())
+fn body_column(size: ControlSize) -> LayoutStyle {
+    LayoutStyle::column().gap(shared::gap_lg(size))
 }
 fn body_scroll() -> LayoutStyle {
     LayoutStyle::new().flex_shrink(1.0)
 }
-fn backdrop() -> LayoutStyle {
+fn backdrop(size: ControlSize) -> LayoutStyle {
     LayoutStyle::column()
         .flex_grow(1.0)
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
         .min_height(0.0)
-        .padding_all(ModalTokens::current().pad())
+        .padding_all(ModalTokens::current().pad(size))
 }
 
 /// A centred dialog over a dimming scrim. When `open` is true it portals an `Overlay` (a top-layer layer that escapes clipping and blocks clicks behind it) with a translucent scrim and, centred on it, an opaque surface card holding the `title`, its `children` (the dialog body) and a Close affordance; when false it collapses to a 0-size node. Tapping the scrim (or Close) dismisses; tapping the card itself does not. High-level sugar built on the `overlay` primitive; lives in `telar-components`, not the kernel.
@@ -99,6 +103,9 @@ pub struct ModalProps {
     /// The dialog's heading, shown beside its Close affordance.
     #[props(into, default)]
     pub title: Reactive<String>,
+    /// How large the dialog is drawn: its padding, widths, gaps and Close, as [`ControlSize`] works them out. Its title is a heading, whose size is the text's, and its body is sized where it is written.
+    #[props(default)]
+    pub size: ControlSize,
     /// Runs after the modal sets `open = false` (scrim tap or Close), so a caller can react to dismissal.
     #[props(some, default)]
     pub on_close: Option<Rc<dyn Fn()>>,
@@ -122,6 +129,7 @@ pub fn modal(props: ModalProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         open,
         id,
         title,
+        size,
         on_close,
         close_label,
         color,
@@ -136,6 +144,7 @@ pub fn modal(props: ModalProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         // Built on the first open rather than here: a body built while the dialog has never opened would register its focus stops with nothing on screen to take them.
         let body = children.build()?;
         build_open_modal(
+            size,
             title.clone(),
             close_label.clone(),
             body,
@@ -147,6 +156,7 @@ pub fn modal(props: ModalProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
 
 /// Builds the scrim + centred opaque card for the open state: scrim (dims + dismisses) > centred card (title row with Close, then the body). The card swallows its own taps so a click inside it never dismisses.
 fn build_open_modal(
+    size: ControlSize,
     title: Reactive<String>,
     close_label: Option<Reactive<String>>,
     body: Vec<Box<dyn LayoutItem>>,
@@ -163,42 +173,46 @@ fn build_open_modal(
             None => strings::text(strings::CLOSE),
         },
         LayoutStyle::new(),
-        |t| shared::control_text(t, CLOSE_RATIO),
+        move |t| shared::control_text(size, t, CLOSE_RATIO),
     )?;
     let close = StyledContainer::new(
         LayoutStyle::row(),
         |_r| RectStyle::default(),
         children![close_label],
-    )?
-    .control(Role::Button)
-    .on_press({
-        let dismiss = dismiss.clone();
-        move || (*dismiss)()
-    });
+    )?;
+    let laid = telar::track_layout(close.layout_node()).expect("the close is registered");
+    let close = close
+        .control(Role::Button)
+        .hit_outset(Reactive::of(move || shared::target_reach(laid.peek())))
+        .on_press({
+            let dismiss = dismiss.clone();
+            move || (*dismiss)()
+        });
 
-    let header = Container::new(header_row(), children![heading, close])?.styled_by(header_row);
+    let header = Container::new(header_row(size), children![heading, close])?
+        .styled_by(move || header_row(size));
 
     let body = LayoutScrollArea::new(
         body_scroll(),
-        box_item(Container::new(body_column(), body)?),
+        box_item(Container::new(body_column(size), body)?),
     )?
     .stop_label(move || body_name.get());
     let dialog_children: Vec<Box<dyn LayoutItem>> = children![header, body];
 
     let room = scrim::Room::new();
-    let dialog = StyledContainer::new(card(room), move |_r| paint(), dialog_children)?
-        .styled_by(move || card(room))
+    let dialog = StyledContainer::new(card(size, room), move |_r| paint(), dialog_children)?
+        .styled_by(move || card(size, room))
         .role(Role::Dialog)
         .a11y_label(move || name.get())
         // Swallow taps on the card so only the scrim (or Close) dismisses.
         .on_press(|| {});
 
     let scrim = StyledContainer::new(
-        backdrop(),
+        backdrop(size),
         |_r| RectStyle::default().with_fill(shared::overlay()),
         children![dialog],
     )?
-    .styled_by(backdrop);
+    .styled_by(move || backdrop(size));
     room.follow(scrim.layout_node());
     let scrim = shared::dismissed_by_press(scrim, move || (*dismiss)());
 

@@ -176,3 +176,30 @@ fn a_one_letter_cap_is_never_narrower_than_it_is_tall() {
         .expect("the key is drawn on a cap");
     assert!(cap.width >= cap.height, "{cap:?}");
 }
+
+/// The caps, their text and the gap between them all follow the chord's own size.
+#[test]
+fn the_caps_scale_with_the_kbd_s_size() {
+    let laid = |size: ControlSize| {
+        let tree = mounted(KbdProps::props().chord("Ctrl+K").size(size).build());
+        let rects: Vec<telar::Rect> = tree
+            .commands()
+            .iter()
+            .filter_map(|c| match c {
+                DrawCommand::Rect { rect, style } if style.fill.is_some() => Some(*rect),
+                _ => None,
+            })
+            .collect();
+        let gap = rects[1].x - (rects[0].x + rects[0].width);
+        (rects[0].height, gap, crate::metrics::gap_xs(size))
+    };
+    let [small, regular, large] =
+        [ControlSize::Small, ControlSize::Regular, ControlSize::Large].map(laid);
+    assert!(
+        small.0 < regular.0 && regular.0 < large.0,
+        "{small:?} {regular:?} {large:?}"
+    );
+    for (_, gap, wanted) in [small, regular, large] {
+        assert!((gap - wanted).abs() <= 0.5, "{gap} snapped from {wanted}");
+    }
+}

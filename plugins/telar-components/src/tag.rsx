@@ -2,7 +2,7 @@
 use std::rc::Rc;
 
 use crate::shared::{self, GlyphProps, Mark, glyph};
-use crate::{Tone, Variant};
+use crate::{ControlSize, Tone, Variant};
 
 /// A tag's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -11,7 +11,7 @@ use crate::{Tone, Variant};
 pub struct TagTokens {
     /// Corner radius. `None` is the theme's `radius_item`, the corner of a key cap; a class with `radius:full` makes a pill of one tag.
     pub radius: Option<f32>,
-    /// Space between the edge and the label at the regular control size, scaled with the control size in force. `None` is [`gap_md`](crate::metrics::gap_md).
+    /// Space between the edge and the label at the regular size, scaled with the tag's own. `None` is [`gap_md`](crate::metrics::gap_md).
     pub pad_x: Option<f32>,
     /// Width of the outline variant's frame, and of the frame round a filter that is not selected. `None` is the theme's `border_width`.
     pub border_width: Option<f32>,
@@ -28,10 +28,10 @@ impl TagTokens {
         self.radius.unwrap_or_else(shared::radius_item)
     }
 
-    /// The space between the edge and the label at the control size in force.
-    pub fn pad_x(&self) -> f32 {
+    /// The space between the edge and the label of a tag of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
     }
 
     /// The width of a frame the tag draws.
@@ -54,6 +54,9 @@ pub struct Props {
     /// What the tag's colour says: a named tone, or a colour of the caller's (`tone:$theme.brand`, `tone:#ff8800`), from which every state and the ink are worked out alike. `transparent` is transparent.
     #[props(into, default)]
     pub tone: Tone,
+    /// How large the tag is drawn: its height, text, padding and gaps, as [`ControlSize`] works them out. A control in `action` is sized where it is written: a small icon button is as tall as a regular tag, and as a small tag round an action.
+    #[props(default)]
+    pub size: ControlSize,
     /// How the tag carries its colour.
     #[props(default)]
     pub variant: Variant,
@@ -166,6 +169,15 @@ impl Look {
     }
 }
 
+/// How tall the tag's body stands at `size`: half a control and a spacing unit, so a tag moves half as far between sizes as a control does, and never below the smallest pointer target where it is a filter.
+fn body_height(size: ControlSize, filter: bool) -> f32 {
+    let height = (shared::control_height(size) / 2.0 + shared::spacing(ControlSize::Regular)).round();
+    match filter {
+        true => height.max(shared::MIN_TARGET),
+        false => height,
+    }
+}
+
 fn flip(selected: RwSignal<bool>, on_toggle: Option<&dyn Fn(bool)>) {
     let next = !selected.get();
     selected.set(next);
@@ -176,6 +188,7 @@ fn flip(selected: RwSignal<bool>, on_toggle: Option<&dyn Fn(bool)>) {
 
 let filter = (props.selected.is_some() || props.on_toggle.is_some())
     .then(|| props.selected.unwrap_or_else(|| signal(false)));
+let size = props.size;
 let on_toggle = props.on_toggle.clone();
 let look = Look {
     tone: props.tone.clone(),
@@ -185,16 +198,17 @@ let look = Look {
 };
 
 [view]
-row align:stretch radius:(TagTokens::current().radius()) fill:(look.fill()) stroke:(look.frame()) stroke_width:(TagTokens::current().border_width()) color:(look.ink()) font_size:(telar::control_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap surface:$props.style
+row align:stretch radius:(TagTokens::current().radius()) fill:(look.fill()) stroke:(look.frame()) stroke_width:(TagTokens::current().border_width()) color:(look.ink()) font_size:(size.text_scale() * shared::CAPTION_RATIO)em text_wrap:nowrap surface:$props.style
     if let Some(selected) = filter
-        row role:button toggled:selected.get() on_press:(move || flip(selected, on_toggle.as_deref())) cursor:pointer fill:transparent radius:(TagTokens::current().radius()) hover_style(fill:(look.hovered()) radius:(TagTokens::current().radius())) active_style(fill:(look.pressed()) radius:(TagTokens::current().radius())) align:center gap:(shared::gap_xs()) pad_y:(shared::gap_xs()) pad_start:(TagTokens::current().pad_x()) pad_end:(TagTokens::current().pad_x())
-            row shown:selected.get()
-                glyph shape:Mark::Check
+        row role:button toggled:selected.get() on_press:(move || flip(selected, on_toggle.as_deref())) cursor:pointer fill:transparent radius:(TagTokens::current().radius()) hover_style(fill:(look.hovered()) radius:(TagTokens::current().radius())) active_style(fill:(look.pressed()) radius:(TagTokens::current().radius())) align:center gap:(shared::gap_xs(size)) min_height:(body_height(size, true)) min_width:(shared::MIN_TARGET) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
+            // A leading icon carries an inset round its ink and the drawn tick fills its box, so the tick takes that inset as padding to stand as far from the label.
+            row shown:selected.get() pad_end:(shared::gap_xs(size))
+                glyph shape:Mark::Check size:size
             children $props.leading
             text "{$props.label}"
             children $props.trailing
     else
-        row align:center gap:(shared::gap_xs()) pad_y:(shared::gap_xs()) pad_start:(TagTokens::current().pad_x()) pad_end:(TagTokens::current().pad_x())
+        row align:center gap:(shared::gap_xs(size)) min_height:(body_height(size, false)) pad_start:(TagTokens::current().pad_x(size)) pad_end:(TagTokens::current().pad_x(size))
             children $props.leading
             text "{$props.label}"
             children $props.trailing

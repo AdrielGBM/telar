@@ -1,6 +1,7 @@
 use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 
+use crate::ControlSize;
 use crate::title_bar::{WindowControlsProps, window_controls};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -10,6 +11,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 WindowControlsProps::props()
                     .minimize(p.arg("minimize", true))
                     .maximize(p.arg("maximize", true))
+                    .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )
         })

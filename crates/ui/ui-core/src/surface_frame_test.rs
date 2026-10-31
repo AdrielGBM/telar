@@ -7,7 +7,6 @@ use layout_core::{AvailableSpace, Direction, LayoutError, LayoutStyle, SizeDimen
 use platform_core::{Event, Key, ModifiersState, NamedKey, PointerButton, PointerSource};
 use reactive_core::{RwSignal, effect, signal};
 use renderer_core::{Color, DrawCommand, RectStyle, ShapeStyle};
-use theme_core::ControlSize;
 use ui_tree::ComponentList;
 
 use super::*;
@@ -913,51 +912,6 @@ fn a_locale_set_on_a_frame_translates_the_text_inside_it_only() {
         "a frame with no locale of its own hears the window's change"
     );
     i18n_core::set_locale("en");
-}
-
-#[test]
-fn a_control_size_set_on_a_frame_reaches_only_the_readers_inside_it() {
-    reset_layout_runtime();
-    theme_core::set_control_size(ControlSize::Regular);
-    let inside = Rc::new(RefCell::new(Vec::new()));
-    let outside = Rc::new(RefCell::new(Vec::new()));
-    let canvas = {
-        let inside = inside.clone();
-        Rc::new(
-            SurfaceCanvas::new(Size::new(1.0, 1.0), move || {
-                effect(move || inside.borrow_mut().push(theme_core::use_control_size()));
-                Ok(boxed(Container::new(fill(), vec![])?))
-            })
-            .unwrap(),
-        )
-    };
-    let _outside = {
-        let outside = outside.clone();
-        effect(move || outside.borrow_mut().push(theme_core::use_control_size()))
-    };
-
-    canvas.set_control_size(Some(ControlSize::Mini));
-    assert_eq!(canvas.control_size(), Some(ControlSize::Mini));
-    theme_core::set_control_size(ControlSize::Large);
-    canvas.set_control_size(None);
-    theme_core::set_control_size(ControlSize::Small);
-
-    assert_eq!(
-        *inside.borrow(),
-        vec![
-            ControlSize::Regular,
-            ControlSize::Mini,
-            ControlSize::Large,
-            ControlSize::Small
-        ],
-        "its own size, deaf to the window's change, then the window's again once cleared"
-    );
-    assert_eq!(
-        *outside.borrow(),
-        vec![ControlSize::Regular, ControlSize::Large, ControlSize::Small],
-        "the window never sees the frame's size"
-    );
-    theme_core::set_control_size(ControlSize::Regular);
 }
 
 #[test]

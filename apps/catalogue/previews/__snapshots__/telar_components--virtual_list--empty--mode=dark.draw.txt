@@ -8,7 +8,7 @@ element group
           element group
             element group
               element listbox
-                clip 260,140 280x32
+                clip 260,140 280x36
                   matrix 1,0,0,1,260,140
                     element group
                     end
@@ -20,7 +20,7 @@ element group
               element group
                 element group
                   element group
-                    matrix 1,0,0,1,348,308
+                    matrix 1,0,0,1,348,310
                       text 0,0 104.17x16.8 "No contacts yet" size=14 family=sans-serif weight=400 color=#ebedf5b3 lang=en
                     end
                   end

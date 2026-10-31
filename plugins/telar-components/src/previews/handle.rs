@@ -6,6 +6,7 @@ use telar::{
     StyledContainer, box_item,
 };
 
+use crate::ControlSize;
 use crate::handle::{HandleProps, handle};
 
 const TRACK: f32 = 240.0;
@@ -21,7 +22,8 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .min(p.arg("min", 0.0f32))
                     .max(p.arg("max", 100.0f32))
                     .step(p.arg("step", 1.0f32))
-                    .size(p.arg("size", 0.0f32))
+                    .size(p.arg("size", ControlSize::Regular))
+                    .diameter(p.arg("diameter", 0.0f32))
                     .label(p.arg("label", "Opacity"))
                     .build(),
             )?;

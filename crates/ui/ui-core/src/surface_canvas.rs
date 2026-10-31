@@ -1,6 +1,6 @@
 //! [`SurfaceCanvas`]: a tree with a [`Surface`] of its own, driven by whatever holds it rather than by a runner.
 //!
-//! Its overlays, dismiss stack, focus, size, safe area and breakpoints are its own, and so are the writing direction, locale, control size, theme mode and high contrast wherever it is given one, so it can sit inside another tree — through a [`SurfaceFrame`](crate::SurfaceFrame) — or inside an application's texture, or stand as a window-sized layer over an app, without either side reaching into the other.
+//! Its overlays, dismiss stack, focus, size, safe area and breakpoints are its own, and so are the writing direction, locale, theme mode and high contrast wherever it is given one, so it can sit inside another tree — through a [`SurfaceFrame`](crate::SurfaceFrame) — or inside an application's texture, or stand as a window-sized layer over an app, without either side reaching into the other.
 
 use std::cell::{Cell, Ref};
 use std::rc::Rc;
@@ -10,7 +10,6 @@ use layout_core::{AvailableSpace, Direction, LayoutError, LayoutStyle, NodeId, S
 use platform_core::{AccessNode, ConsumedKeys, Event, TextInput, WindowCommand};
 use reactive_core::{RwSignal, in_surface_world, root_scope, signal};
 use renderer_core::{BorderRadius, DrawCommand};
-use theme_core::ControlSize;
 use ui_tree::{Component, ComponentList, EventResult, RenderNode, SegmentNodeInfo};
 
 use crate::context::{compute_layout, mark_dirty, new_container};
@@ -39,7 +38,6 @@ pub struct SurfaceEnv {
     /// A BCP 47 language tag.
     pub locale: Option<String>,
     pub direction: Option<Direction>,
-    pub control_size: Option<ControlSize>,
     /// `Some(true)` for more contrast, `Some(false)` for the regular palette, whatever the application and the system say.
     pub high_contrast: Option<bool>,
     /// How far in from each edge the system keeps the surface for itself, as a device's notch and home indicator do. Zero keeps nothing.
@@ -51,7 +49,6 @@ impl SurfaceEnv {
         theme_core::set_surface_mode(self.mode.as_deref());
         i18n_core::set_surface_locale(self.locale.as_deref());
         layout_reactive::set_surface_direction(self.direction);
-        theme_core::set_surface_control_size(self.control_size);
         preferences_core::set_surface_high_contrast(self.high_contrast);
     }
 }
@@ -86,7 +83,7 @@ impl SurfaceCanvas {
         Self::new_in(size, &SurfaceEnv::default(), build)
     }
 
-    /// [`new`](Self::new) on a surface already in `env`: what `build` reads of the mode, locale, direction, control size, high contrast and safe area — once, or reactively — is `env`'s from the first build on. Setting them afterwards re-runs only the reactive readers, so a canvas shown in an environment of its own is built in it.
+    /// [`new`](Self::new) on a surface already in `env`: what `build` reads of the mode, locale, direction, high contrast and safe area — once, or reactively — is `env`'s from the first build on. Setting them afterwards re-runs only the reactive readers, so a canvas shown in an environment of its own is built in it.
     pub fn new_in(
         size: Size,
         env: &SurfaceEnv,
@@ -224,18 +221,6 @@ impl SurfaceCanvas {
     pub fn set_locale(&self, locale: Option<&str>) {
         self.with_entered(|| {
             i18n_core::set_surface_locale(locale);
-        })
-    }
-
-    /// The size of the controls on the surface, where it has one of its own; `None` where it follows [`set_control_size`](theme_core::set_control_size). Reactive.
-    pub fn control_size(&self) -> Option<ControlSize> {
-        self.with_entered(theme_core::use_surface_control_size)
-    }
-
-    /// Sizes the surface's controls at `size` whatever the thread's is, or with `None` at the thread's again. Re-runs only the readers inside.
-    pub fn set_control_size(&self, size: Option<ControlSize>) {
-        self.with_entered(|| {
-            theme_core::set_surface_control_size(size);
         })
     }
 

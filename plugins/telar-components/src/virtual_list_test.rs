@@ -145,7 +145,8 @@ fn a_list_is_a_named_list_box_of_options() {
 fn only_a_screenful_of_ten_thousand_rows_is_built() {
     let mounted = Mounted::new(rows(10_000), 200.0);
     let built = mounted.drawn().len();
-    let screenful = (200.0 / ListTokens::current().row_height()).ceil() as usize + 1;
+    let screenful =
+        (200.0 / ListTokens::current().row_height(ControlSize::Regular)).ceil() as usize + 1;
     assert!(
         built <= screenful + OVERSCAN * 2,
         "{built} rows built for a view of {screenful}"
@@ -211,7 +212,7 @@ fn a_press_chooses_a_row_and_a_disabled_one_cannot_be_chosen() {
 #[test]
 fn page_down_moves_a_view_s_worth_and_scrolls_the_cursor_into_view() {
     let mut mounted = Mounted::focused(rows(200), 200.0);
-    let page = (200.0 / ListTokens::current().row_height()).floor() as usize;
+    let page = (200.0 / ListTokens::current().row_height(ControlSize::Regular)).floor() as usize;
     mounted.key(NamedKey::PageDown);
     let expected = format!("Row {page}");
     assert_eq!(mounted.pointed().as_deref(), Some(expected.as_str()));
@@ -643,7 +644,7 @@ fn a_wrapping_list_grows_a_row_to_hold_its_label_and_leaves_a_short_one_a_row_ta
             .map(|(_, rect)| rect.height)
             .unwrap_or_else(|| panic!("`{name}` is drawn among {options:?}"))
     };
-    let row_height = ListTokens::current().row_height();
+    let row_height = ListTokens::current().row_height(ControlSize::Regular);
     assert_eq!(height("Row 000"), row_height, "a one-line row");
     assert!(height("Row 001") > row_height, "a wrapped row is taller");
     for pair in options.windows(2) {
@@ -692,7 +693,7 @@ fn a_row_builder_s_lines_are_given_the_height_they_ask_for_in_a_wrapping_list() 
     }
     let (_, options) = laid_options(&tree);
     assert_eq!(options.len(), 4);
-    let row_height = ListTokens::current().row_height();
+    let row_height = ListTokens::current().row_height(ControlSize::Regular);
     assert!(
         options.iter().all(|(_, rect)| rect.height > row_height),
         "two lines and the space round them: {options:?}"
@@ -751,7 +752,10 @@ fn page_down_and_up_move_a_wrapping_list_by_the_rows_its_view_shows_whole() {
     mounted.key(NamedKey::Home);
     mounted.settle();
     let tall = mounted.cursor_rect().height;
-    assert!(tall > ListTokens::current().row_height(), "the rows wrap");
+    assert!(
+        tall > ListTokens::current().row_height(ControlSize::Regular),
+        "the rows wrap"
+    );
     let page = (mounted.view().height / tall).floor() as usize;
     let at = |i: usize| long(100)[i].label.to_string();
     mounted.key(NamedKey::PageDown);
@@ -835,4 +839,28 @@ fn the_list_box_holds_its_options() {
         })
         .collect();
     assert_eq!(options, ["Apple 3", "Banana", "Blueberry", "Cherry"]);
+}
+
+/// Every row stands at the row height of the list's own size, and a wrapping row's padding is that size's step.
+#[test]
+fn the_rows_stand_at_the_list_s_size() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        crate::test_support::fresh_layout_runtime();
+        let item = virtual_list(
+            VirtualListProps::props()
+                .items(fruit())
+                .label("Fruit")
+                .size(size)
+                .build(),
+        )
+        .unwrap();
+        lay_out(item.layout_node(), 240.0, 300.0);
+        let tree = ComponentList::new(item);
+        let (_, options) = laid_options(&tree);
+        let wanted = crate::metrics::row_height(size);
+        assert!(
+            options.iter().all(|(_, rect)| rect.height == wanted),
+            "{size:?}: {options:?}"
+        );
+    }
 }

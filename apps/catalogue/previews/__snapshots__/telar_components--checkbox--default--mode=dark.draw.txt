@@ -5,7 +5,7 @@ element group
     element group
       element group
         element checkbox
-          rect 324,286 152x28
+          rect 324,284 152x32
           element group
             rect 324,292 16x16 fill=#1c1f29ff border=1.5 border-color=#3d4252ff radius=6
             element group
@@ -13,8 +13,8 @@ element group
             end
           end
           element group
-            matrix 1,0,0,1,348,286
-              text 0,5 128.94x16.8 "I agree to the terms" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
+            matrix 1,0,0,1,348,284
+              text 0,7 128.94x16.8 "I agree to the terms" size=14 family=sans-serif weight=400 color=#ebedf5ff lang=en
             end
           end
         end

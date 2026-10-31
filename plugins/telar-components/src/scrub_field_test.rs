@@ -280,33 +280,42 @@ fn a_style_amendment_reshapes_the_handle() {
     assert!(painted.fill.is_some(), "the rest of the paint is kept");
 }
 
-/// With no label there is no caption to space the value from, so the handle is the value and its padding, with no gap opened before it.
+/// With no label there is no caption to space the value from, so the handle is the value and its padding, with no gap opened before it, at every size.
 #[test]
 fn an_unlabelled_handle_holds_only_its_value_and_its_padding() {
-    fresh();
-    let widget = scrub_field(ScrubFieldProps::props().value(signal(7.0)).build()).unwrap();
-    let node = widget.layout_node();
-    let tree = ComponentList::new(widget);
-    lay_out(node, 300.0, 40.0);
-    let commands = tree.commands();
-    let handle = commands
-        .iter()
-        .find_map(|command| match command {
-            telar::DrawCommand::Rect { rect, .. } => Some(*rect),
-            _ => None,
-        })
-        .expect("the handle is painted");
-    let value = commands
-        .iter()
-        .find_map(|command| match command {
-            telar::DrawCommand::Text { text, rect, .. } if text.as_ref() == "7" => Some(*rect),
-            _ => None,
-        })
-        .expect("the value is drawn");
-    assert_eq!(
-        handle.width,
-        value.width + 2.0 * ScrubFieldTokens::current().pad_x()
-    );
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        fresh();
+        let widget = scrub_field(
+            ScrubFieldProps::props()
+                .value(signal(7.0))
+                .size(size)
+                .build(),
+        )
+        .unwrap();
+        let node = widget.layout_node();
+        let tree = ComponentList::new(widget);
+        lay_out(node, 300.0, 40.0);
+        let commands = tree.commands();
+        let handle = commands
+            .iter()
+            .find_map(|command| match command {
+                telar::DrawCommand::Rect { rect, .. } => Some(*rect),
+                _ => None,
+            })
+            .expect("the handle is painted");
+        let value = commands
+            .iter()
+            .find_map(|command| match command {
+                telar::DrawCommand::Text { text, rect, .. } if text.as_ref() == "7" => Some(*rect),
+                _ => None,
+            })
+            .expect("the value is drawn");
+        assert_eq!(
+            handle.width,
+            value.width + 2.0 * ScrubFieldTokens::current().pad_x(size),
+            "{size:?}"
+        );
+    }
 }
 
 fn drawn_alone_in(height: f32, text: &'static str, style: fn(TextStyle) -> TextStyle) -> Rect {
@@ -331,10 +340,18 @@ fn the_label_and_the_value_are_centred_in_the_handle_as_lone_text_leaves_of_its_
 
     assert_eq!(
         rect_of(&tree, "Width").expect("the label is drawn"),
-        drawn_alone_in(height, "Width", |t| shared::quiet(t, 1.0)),
+        drawn_alone_in(height, "Width", |t| shared::quiet(
+            crate::ControlSize::Regular,
+            t,
+            1.0
+        )),
     );
     assert_eq!(
         rect_of(&tree, "7").expect("the value is drawn"),
-        drawn_alone_in(height, "7", |t| shared::control_text(t, 1.0)),
+        drawn_alone_in(height, "7", |t| shared::control_text(
+            crate::ControlSize::Regular,
+            t,
+            1.0
+        )),
     );
 }

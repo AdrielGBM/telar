@@ -1,19 +1,20 @@
-//! The guardrails that hold the catalogue to one set of proportions at every control size: every single-line control is [`metrics::control_height`] tall and rounds by `radius_control`; every selection control stands a control height tall round a box scaled to the size; every list, menu, select, tree and context menu stands its rows at [`metrics::row_height`]; and every floating panel rounds by its role, `radius_surface` for a popup, a tooltip, a toast, a context menu or a code block and `radius_dialog` for a modal, a drawer or the command palette.
+//! The guardrails that hold the catalogue to one set of proportions at every size: every single-line control is [`metrics::control_height`] tall and rounds by `radius_control`; every selection control stands a control height tall round a box scaled to the size; every list, menu, select, tree and context menu stands its rows at [`metrics::row_height`]; and every floating panel rounds by its role, `radius_surface` for a popup, a tooltip, a toast, a context menu or a code block and `radius_dialog` for a modal, a drawer or the command palette.
 
 use telar::testing::{Scoped, scoped};
 use telar::{
-    AvailableSpace, BorderRadius, Children, ComponentList, ControlSize, DrawCommand, LayoutError,
-    LayoutItem, LayoutStyle, Rect, RwSignal, ThemeTokens, compute_layout, focus::Role,
-    provide_control_size, relayout_if_dirty, set_theme, track_layout,
+    AvailableSpace, BorderRadius, Children, ComponentList, DrawCommand, LayoutError, LayoutItem,
+    LayoutStyle, Rect, RwSignal, ThemeTokens, compute_layout, focus::Role, relayout_if_dirty,
+    set_theme, track_layout,
 };
 
+use crate::ControlSize;
 use crate::metrics;
 use crate::test_support::{drawn, fresh_layout_runtime};
 
 /// One control in the row: how to build it, and where its principal surface is drawn.
 struct Probe {
     name: &'static str,
-    build: fn() -> Result<Box<dyn LayoutItem>, LayoutError>,
+    build: fn(ControlSize) -> Result<Box<dyn LayoutItem>, LayoutError>,
     surface: Surface,
 }
 
@@ -50,26 +51,36 @@ fn probes() -> Vec<Probe> {
     let mut probes = vec![
         Probe {
             name: "button",
-            build: || crate::button(crate::ButtonProps::props().label("Save").build()),
+            build: |size| {
+                crate::button(crate::ButtonProps::props().label("Save").size(size).build())
+            },
             surface: Surface::First(Role::Button),
         },
         Probe {
             name: "text_field",
-            build: || crate::text_field(crate::TextFieldProps::props().placeholder("Name").build()),
+            build: |size| {
+                crate::text_field(
+                    crate::TextFieldProps::props()
+                        .placeholder("Name")
+                        .size(size)
+                        .build(),
+                )
+            },
             surface: Surface::Root,
         },
         Probe {
             name: "search_field",
-            build: || crate::search_field(crate::SearchFieldProps::props().build()),
+            build: |size| crate::search_field(crate::SearchFieldProps::props().size(size).build()),
             surface: Surface::Root,
         },
         Probe {
             name: "multiline text_field of one row",
-            build: || {
+            build: |size| {
                 crate::text_field(
                     crate::TextFieldProps::props()
                         .multiline(true)
                         .rows(1)
+                        .size(size)
                         .build(),
                 )
             },
@@ -77,49 +88,69 @@ fn probes() -> Vec<Probe> {
         },
         Probe {
             name: "select",
-            build: || crate::select(crate::SelectProps::props().build()),
+            build: |size| crate::select(crate::SelectProps::props().size(size).build()),
             surface: Surface::First(Role::ComboBox),
         },
         Probe {
             name: "tab",
-            build: || crate::tabs(crate::TabsProps::props().items(vec!["One", "Two"]).build()),
+            build: |size| {
+                crate::tabs(
+                    crate::TabsProps::props()
+                        .items(vec!["One", "Two"])
+                        .size(size)
+                        .build(),
+                )
+            },
             surface: Surface::First(Role::Tab),
         },
         Probe {
             name: "scrub_field",
-            build: || crate::scrub_field(crate::ScrubFieldProps::props().label("X").build()),
+            build: |size| {
+                crate::scrub_field(
+                    crate::ScrubFieldProps::props()
+                        .label("X")
+                        .size(size)
+                        .build(),
+                )
+            },
             surface: Surface::Root,
         },
     ];
-    #[cfg(feature = "workbench")]
     probes.push(Probe {
         name: "icon_button",
-        build: || {
+        build: |size| {
             crate::icon_button(
                 crate::IconButtonProps::props()
                     .icon("lucide:search")
                     .label("Find")
+                    .size(size)
                     .build(),
             )
         },
         surface: Surface::First(Role::Button),
     });
-    #[cfg(feature = "overlays")]
     probes.push(Probe {
         name: "menu",
-        build: || crate::menu(crate::MenuProps::props().label("File").fit(true).build()),
+        build: |size| {
+            crate::menu(
+                crate::MenuProps::props()
+                    .label("File")
+                    .fit(true)
+                    .size(size)
+                    .build(),
+            )
+        },
         surface: Surface::First(Role::Button),
     });
-    #[cfg(feature = "advanced")]
     probes.push(Probe {
         name: "stepper",
-        build: || crate::stepper(crate::StepperProps::props().build()),
+        build: |size| crate::stepper(crate::StepperProps::props().size(size).build()),
         surface: Surface::First(Role::Button),
     });
     probes
 }
 
-/// What one probe measured at one control size.
+/// What one probe measured at one size.
 #[derive(Debug)]
 struct Measured {
     height: f32,
@@ -129,12 +160,12 @@ struct Measured {
 /// What `build` makes at `size`, alone in a row of an 800×600 window, laid out and mounted on a fresh layout runtime, with the signal its own rect is published through.
 fn in_a_row(
     size: ControlSize,
-    build: fn() -> Result<Box<dyn LayoutItem>, LayoutError>,
+    build: fn(ControlSize) -> Result<Box<dyn LayoutItem>, LayoutError>,
 ) -> Scoped<(RwSignal<Rect>, ComponentList)> {
     fresh_layout_runtime();
     set_theme(Distinct);
     scoped(|| {
-        let control = provide_control_size(size, build).expect("the control builds");
+        let control = build(size).expect("the control builds");
         let rect = track_layout(control.layout_node()).expect("the control has a node");
         let row = telar::Container::new(
             LayoutStyle::new()
@@ -187,27 +218,17 @@ fn same(a: Rect, b: Rect) -> bool {
 fn expected_height(size: ControlSize) -> f32 {
     fresh_layout_runtime();
     set_theme(Distinct);
-    let mut height = 0.0;
-    let _scope = provide_control_size(size, || {
-        height = metrics::control_height();
-        telar::Container::new(LayoutStyle::new(), vec![]).map(telar::box_item)
-    });
-    height
+    metrics::control_height(size)
 }
 
-const SIZES: [ControlSize; 4] = [
-    ControlSize::Mini,
-    ControlSize::Small,
-    ControlSize::Regular,
-    ControlSize::Large,
-];
+const SIZES: &[ControlSize] = &[ControlSize::Small, ControlSize::Regular, ControlSize::Large];
 
 #[test]
-fn every_single_line_control_is_one_height_and_one_corner_at_every_control_size() {
+fn every_single_line_control_is_one_height_and_one_corner_at_every_size() {
     let corner = Some(BorderRadius::all(Distinct.radius_control()));
     let mut failures = Vec::new();
     for probe in probes() {
-        for size in SIZES {
+        for &size in SIZES {
             let height = expected_height(size);
             let measured = measure(&probe, size);
             if (measured.height - height).abs() >= 0.5 || measured.radius != corner {
@@ -224,10 +245,10 @@ fn every_single_line_control_is_one_height_and_one_corner_at_every_control_size(
 /// A selection control — a checkbox, a radio, a switch — and the box it draws inside its row.
 struct Selection {
     name: &'static str,
-    build: fn() -> Result<Box<dyn LayoutItem>, LayoutError>,
+    build: fn(ControlSize) -> Result<Box<dyn LayoutItem>, LayoutError>,
     role: Role,
-    /// The drawn box's size at the control size in force.
-    drawn: fn() -> (f32, f32),
+    /// The drawn box's size at a given size.
+    drawn: fn(ControlSize) -> (f32, f32),
     /// The drawn box's corner, laid out at `rect`.
     corner: fn(Rect) -> BorderRadius,
 }
@@ -236,24 +257,40 @@ fn selections() -> Vec<Selection> {
     vec![
         Selection {
             name: "checkbox",
-            build: || crate::checkbox(crate::CheckboxProps::props().label("Agree").build()),
+            build: |size| {
+                crate::checkbox(
+                    crate::CheckboxProps::props()
+                        .label("Agree")
+                        .size(size)
+                        .build(),
+                )
+            },
             role: Role::CheckBox,
-            drawn: || (metrics::icon_size(), metrics::icon_size()),
+            drawn: |size| (metrics::icon_size(size), metrics::icon_size(size)),
             corner: |_| BorderRadius::all(Distinct.radius_item()),
         },
         Selection {
             name: "radio",
-            build: || crate::radio(crate::RadioProps::props().label("Small").build()),
+            build: |size| {
+                crate::radio(crate::RadioProps::props().label("Small").size(size).build())
+            },
             role: Role::Radio,
-            drawn: || (metrics::icon_size(), metrics::icon_size()),
+            drawn: |size| (metrics::icon_size(size), metrics::icon_size(size)),
             corner: metrics::pill,
         },
         Selection {
             name: "toggle",
-            build: || crate::toggle(crate::ToggleProps::props().label("Wi-Fi").build()),
+            build: |size| {
+                crate::toggle(
+                    crate::ToggleProps::props()
+                        .label("Wi-Fi")
+                        .size(size)
+                        .build(),
+                )
+            },
             role: Role::Switch,
-            drawn: || {
-                let (knob, inset) = (metrics::icon_size(), metrics::gap_xs());
+            drawn: |size| {
+                let (knob, inset) = (metrics::icon_size(size), metrics::gap_xs(size));
                 (knob * 2.0 + inset * 2.0, knob + inset * 2.0)
             },
             corner: metrics::pill,
@@ -266,24 +303,19 @@ fn snapped(laid: f32, want: f32) -> bool {
     (laid - want).abs() <= 0.5
 }
 
-/// What `selection` asks of the size in force, read under it.
+/// What `selection` asks of `size`, under the probes' theme.
 fn expected_box(selection: &Selection, size: ControlSize) -> (f32, f32) {
     fresh_layout_runtime();
     set_theme(Distinct);
-    let mut drawn = (0.0, 0.0);
-    let _scope = provide_control_size(size, || {
-        drawn = (selection.drawn)();
-        telar::Container::new(LayoutStyle::new(), vec![]).map(telar::box_item)
-    });
-    drawn
+    (selection.drawn)(size)
 }
 
-/// A selection control's row stands a control height tall at every control size, like a button beside it, and the box drawn in it scales with the size, is centred in the row and takes its corner from the theme's roles.
+/// A selection control's row stands a control height tall at every size, like a button beside it, and the box drawn in it scales with the size, is centred in the row and takes its corner from the theme's roles.
 #[test]
 fn every_selection_control_stands_a_control_height_tall_with_a_box_scaled_to_the_size() {
     let mut failures = Vec::new();
     for selection in selections() {
-        for size in SIZES {
+        for &size in SIZES {
             let height = expected_height(size);
             let (width, tall) = expected_box(&selection, size);
             let built = in_a_row(size, selection.build);
@@ -371,11 +403,13 @@ fn open_from_keyboard(tree: &mut ComponentList) {
 
 fn nothing_to_open(_: &mut ComponentList) {}
 
-fn two_items() -> Children {
-    Children::new(|| {
+fn two_items(size: ControlSize) -> Children {
+    Children::new(move || {
         let mut items = Vec::new();
         for label in ["Cut", "Copy"] {
-            items.push(crate::item(crate::ItemProps::props().label(label).build())?);
+            items.push(crate::item(
+                crate::ItemProps::props().label(label).size(size).build(),
+            )?);
         }
         Ok(items)
     })
@@ -384,7 +418,7 @@ fn two_items() -> Children {
 /// A component that draws rows, how to show them, and where its first row is.
 struct Rows {
     name: &'static str,
-    build: fn() -> Result<Box<dyn LayoutItem>, LayoutError>,
+    build: fn(ControlSize) -> Result<Box<dyn LayoutItem>, LayoutError>,
     open: fn(&mut ComponentList),
     row: Surface,
 }
@@ -394,26 +428,33 @@ fn row_probes() -> Vec<Rows> {
     let mut probes = vec![
         Rows {
             name: "list item",
-            build: || crate::item(crate::ItemProps::props().label("Cut").build()),
+            build: |size| crate::item(crate::ItemProps::props().label("Cut").size(size).build()),
             open: nothing_to_open,
             row: Surface::Root,
         },
         Rows {
             name: "select",
-            build: || crate::select(crate::SelectProps::props().children(two_items()).build()),
+            build: |size| {
+                crate::select(
+                    crate::SelectProps::props()
+                        .size(size)
+                        .children(two_items(size))
+                        .build(),
+                )
+            },
             open: open_from_keyboard,
             row: Surface::First(Role::Option),
         },
     ];
-    #[cfg(feature = "overlays")]
     probes.extend([
         Rows {
             name: "menu",
-            build: || {
+            build: |size| {
                 crate::menu(
                     crate::MenuProps::props()
                         .label("Edit")
-                        .children(two_items())
+                        .size(size)
+                        .children(two_items(size))
                         .build(),
                 )
             },
@@ -422,13 +463,14 @@ fn row_probes() -> Vec<Rows> {
         },
         Rows {
             name: "context menu",
-            build: || {
+            build: |size| {
                 crate::context_menu(
                     crate::ContextMenuProps::props()
                         .at((40.0, 30.0))
                         .on_close(std::rc::Rc::new(|| {}))
                         .within(Rect::new(0.0, 0.0, 800.0, 600.0))
-                        .children(two_items())
+                        .size(size)
+                        .children(two_items(size))
                         .build(),
                 )
             },
@@ -436,10 +478,9 @@ fn row_probes() -> Vec<Rows> {
             row: Surface::First(Role::MenuItem),
         },
     ]);
-    #[cfg(feature = "workbench")]
     probes.push(Rows {
         name: "tree",
-        build: || {
+        build: |size| {
             crate::tree_view(
                 crate::TreeViewProps::props()
                     .items(vec![
@@ -447,17 +488,17 @@ fn row_probes() -> Vec<Rows> {
                         crate::TreeNode::new("lib", "lib.rs"),
                     ])
                     .label("Files")
+                    .size(size)
                     .build(),
             )
         },
         open: nothing_to_open,
         row: Surface::First(Role::TreeItem),
     });
-    #[cfg(feature = "advanced")]
     probes.extend([
         Rows {
             name: "virtual list",
-            build: || {
+            build: |size| {
                 crate::virtual_list(
                     crate::VirtualListProps::props()
                         .items(vec![
@@ -465,6 +506,7 @@ fn row_probes() -> Vec<Rows> {
                             crate::ListRow::new("copy", "Copy"),
                         ])
                         .label("Edit")
+                        .size(size)
                         .build(),
                 )
             },
@@ -473,12 +515,13 @@ fn row_probes() -> Vec<Rows> {
         },
         Rows {
             name: "data table",
-            build: || {
+            build: |size| {
                 crate::data_table(
                     crate::DataTableProps::props()
-                        .columns(vec![crate::Column::new("name", "Name")])
+                        .columns(vec![crate::Column::new("name", "Name").fixed(120.0)])
                         .rows(vec![crate::TableRow::new("a", ["lib.rs"])])
                         .label("Files")
+                        .size(size)
                         .build(),
                 )
             },
@@ -492,25 +535,20 @@ fn row_probes() -> Vec<Rows> {
 fn expected_row_height(size: ControlSize) -> f32 {
     fresh_layout_runtime();
     set_theme(Distinct);
-    let mut height = 0.0;
-    let _scope = provide_control_size(size, || {
-        height = metrics::row_height();
-        telar::Container::new(LayoutStyle::new(), vec![]).map(telar::box_item)
-    });
-    height
+    metrics::row_height(size)
 }
 
-/// Every list, menu, select, tree, context menu, virtual list and data table stands its rows at the one row height of the control size in force, so a menu and the list beside it cannot disagree about how tall a row is.
+/// Every list, menu, select, tree, context menu, virtual list and data table stands its rows at the one row height of their size, so a menu and the list beside it cannot disagree about how tall a row is.
 #[test]
-fn every_row_of_every_list_is_the_one_row_height_at_every_control_size() {
+fn every_row_of_every_list_is_the_one_row_height_at_every_size() {
     let mut failures = Vec::new();
     for probe in row_probes() {
-        for size in SIZES {
+        for &size in SIZES {
             let want = expected_row_height(size);
             fresh_layout_runtime();
             set_theme(Distinct);
             let mut built = scoped(|| {
-                let item = provide_control_size(size, probe.build).expect("the rows build");
+                let item = (probe.build)(size).expect("the rows build");
                 let own = track_layout(item.layout_node()).expect("the rows have a node");
                 (own, mounted(Box::new(item)))
             });
@@ -576,14 +614,18 @@ fn panel_probes() -> Vec<Panel> {
         name: "popup",
         corner: Corner::Surface,
         show: || {
-            let mut tree =
-                shown(|| crate::select(crate::SelectProps::props().children(two_items()).build()));
+            let mut tree = shown(|| {
+                crate::select(
+                    crate::SelectProps::props()
+                        .children(two_items(ControlSize::Regular))
+                        .build(),
+                )
+            });
             open_from_keyboard(&mut tree);
             settle(&tree);
             tree
         },
     }];
-    #[cfg(feature = "overlays")]
     probes.extend([
         Panel {
             name: "tooltip",
@@ -632,7 +674,7 @@ fn panel_probes() -> Vec<Panel> {
                             .at((40.0, 30.0))
                             .on_close(std::rc::Rc::new(|| {}))
                             .within(Rect::new(0.0, 0.0, 800.0, 600.0))
-                            .children(two_items())
+                            .children(two_items(ControlSize::Regular))
                             .build(),
                     )
                 })
@@ -680,7 +722,6 @@ fn panel_probes() -> Vec<Panel> {
             },
         },
     ]);
-    #[cfg(feature = "workbench")]
     probes.push(Panel {
         name: "code view",
         corner: Corner::Surface,
@@ -736,6 +777,176 @@ fn every_floating_panel_rounds_by_its_role() {
                 probe.corner.other(),
                 probe.corner
             ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Something a pointer operates, as the sweep of pointer targets mounts it: how to build it at a size and how to show what it holds.
+struct Pointed {
+    name: &'static str,
+    build: fn(ControlSize) -> Result<Box<dyn LayoutItem>, LayoutError>,
+    open: fn(&mut ComponentList),
+}
+
+/// Every probe above, and the controls drawn smaller than a target that only an outset holds at the smallest one: a selection control with no label, a swatch, a slider's thumb, a field's clear button, a dialog's close button.
+fn pointed() -> Vec<Pointed> {
+    let mut pointed: Vec<Pointed> = probes()
+        .into_iter()
+        // A field of several lines takes presses on its text area alone, which at one row is a line tall inside the frame's padding; growing it reaches into `TextArea` itself.
+        .filter(|probe| probe.name != "multiline text_field of one row")
+        .map(|probe| Pointed {
+            name: probe.name,
+            build: probe.build,
+            open: nothing_to_open,
+        })
+        .chain(selections().into_iter().map(|selection| Pointed {
+            name: selection.name,
+            build: selection.build,
+            open: nothing_to_open,
+        }))
+        .chain(row_probes().into_iter().map(|rows| Pointed {
+            name: rows.name,
+            build: rows.build,
+            open: rows.open,
+        }))
+        .collect();
+    pointed.extend([
+        Pointed {
+            name: "checkbox with no label",
+            build: |size| crate::checkbox(crate::CheckboxProps::props().size(size).build()),
+            open: nothing_to_open,
+        },
+        Pointed {
+            name: "radio with no label",
+            build: |size| crate::radio(crate::RadioProps::props().size(size).build()),
+            open: nothing_to_open,
+        },
+        Pointed {
+            name: "toggle with no label",
+            build: |size| crate::toggle(crate::ToggleProps::props().size(size).build()),
+            open: nothing_to_open,
+        },
+        Pointed {
+            name: "swatches",
+            build: |size| {
+                crate::swatches(
+                    crate::SwatchesProps::props()
+                        .colors(vec![telar::Color::WHITE, telar::Color::BLACK])
+                        .names(vec!["White".into(), "Black".into()])
+                        .size(size)
+                        .build(),
+                )
+            },
+            open: nothing_to_open,
+        },
+        Pointed {
+            name: "slider",
+            build: |size| {
+                crate::slider(
+                    crate::SliderProps::props()
+                        .label("Volume")
+                        .size(size)
+                        .build(),
+                )
+            },
+            open: nothing_to_open,
+        },
+        Pointed {
+            name: "search_field with text",
+            build: |size| {
+                crate::search_field(
+                    crate::SearchFieldProps::props()
+                        .value(telar::signal(String::from("lib")))
+                        .size(size)
+                        .build(),
+                )
+            },
+            open: nothing_to_open,
+        },
+    ]);
+    pointed.push(Pointed {
+        name: "accordion",
+        build: |size| {
+            crate::accordion(
+                crate::AccordionProps::props()
+                    .title("Details")
+                    .size(size)
+                    .build(),
+            )
+        },
+        open: nothing_to_open,
+    });
+    pointed.push(Pointed {
+        name: "modal",
+        build: |size| {
+            crate::modal(
+                crate::ModalProps::props()
+                    .open(telar::signal(true))
+                    .title("Confirm")
+                    .size(size)
+                    .build(),
+            )
+        },
+        open: nothing_to_open,
+    });
+    pointed.push(Pointed {
+        name: "window controls",
+        build: |size| {
+            crate::window_controls(
+                crate::WindowControlsProps::props()
+                    .on_close(std::rc::Rc::new(|| {}))
+                    .size(size)
+                    .build(),
+            )
+        },
+        open: nothing_to_open,
+    });
+    pointed.push(Pointed {
+        name: "color picker",
+        build: |size| {
+            crate::color_picker(
+                crate::ColorPickerProps::props()
+                    .alpha(true)
+                    .swatches(vec![telar::Color::WHITE])
+                    .label("Fill")
+                    .size(size)
+                    .build(),
+            )
+        },
+        open: nothing_to_open,
+    });
+    pointed
+}
+
+/// Every control a pointer operates is found across at least [`metrics::MIN_TARGET`] each way at every size, however small it is drawn: what a reader and a target-size check are told its rect is, the drawn box grown by any outset it declares.
+#[test]
+fn every_pointer_target_is_at_least_the_smallest_target_at_every_size() {
+    let mut failures = Vec::new();
+    for pointed in pointed() {
+        for &size in SIZES {
+            fresh_layout_runtime();
+            set_theme(Distinct);
+            telar::set_surface_size(telar::Size::new(800.0, 600.0));
+            let mut built = scoped(|| mounted((pointed.build)(size).expect("the control builds")));
+            (pointed.open)(&mut built);
+            settle(&built);
+            let small: Vec<String> = telar::inspect::snapshot(&built.commands())
+                .into_iter()
+                .filter(|node| node.id.is_some() && node.enabled)
+                .filter(|node| {
+                    node.rect.width + 0.01 < metrics::MIN_TARGET
+                        || node.rect.height + 0.01 < metrics::MIN_TARGET
+                })
+                .map(|node| format!("{:?} {:?} {:?}", node.role, node.name, node.rect))
+                .collect();
+            if !small.is_empty() {
+                failures.push(format!(
+                    "`{}` at {size:?}: {}",
+                    pointed.name,
+                    small.join(", ")
+                ));
+            }
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));

@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
+use crate::ControlSize;
 use crate::stepper::{StepperProps, stepper};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -15,6 +16,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .min(p.arg("min", 0.0f32))
                     .max(p.arg("max", 10.0f32))
                     .step(p.arg("step", 1.0f32))
+                    .size(p.arg("size", ControlSize::Regular))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
             )

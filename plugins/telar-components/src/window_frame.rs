@@ -6,12 +6,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use telar::{
-    AlignItems, BorderRadius, Children, Color, Container, JustifyContent, LayoutError, LayoutItem,
-    LayoutStyle, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, Size, SizeDimension,
-    StyledContainer, SurfaceAmendment, Text, TextStyle, amend_surface, box_item, focus::Role,
-    track_layout,
+    AlignItems, BorderRadius, Children, Color, Container, Insets, JustifyContent, LayoutError,
+    LayoutItem, LayoutStyle, Props, Reactive, Rect, RectStyle, RwSignal, ShapeStyle, Size,
+    SizeDimension, StyledContainer, SurfaceAmendment, Text, TextStyle, amend_surface, box_item,
+    focus::Role, track_layout,
 };
 
+use crate::ControlSize;
 use crate::resize::Latch;
 use crate::shared;
 use crate::title_bar::{TitleBarOptions, WindowControlsProps, title_bar, window_controls};
@@ -44,7 +45,7 @@ pub struct SurfaceFrameStyle {
     pub radius: Option<f32>,
     /// The controls beside close. Default is none.
     pub controls: WindowControls,
-    /// The inset around `body`, in logical px. `None` is [`metrics::gap_lg`](crate::metrics::gap_lg); an application window whose content owns the whole area below the title strip passes `Some(0.0)`, and would otherwise get a border of background colour it never asked for.
+    /// The inset around `body`, in logical px. `None` is [`metrics::gap_lg`](crate::metrics::gap_lg) at the frame's size; an application window whose content owns the whole area below the title strip passes `Some(0.0)`, and would otherwise get a border of background colour it never asked for.
     pub body_inset: Option<f32>,
     /// Fill behind minimize/maximize under the pointer, and behind close — often the louder of the two, since closing is the one control that cannot be undone. `None` is the theme's hover wash for both.
     pub control_hover: Option<Reactive<Color>>,
@@ -65,18 +66,18 @@ fn or_theme(color: &Option<Reactive<Color>>, fallback: impl FnOnce() -> Color) -
 }
 
 /// The text of the title and of the controls' glyphs: the frame's inherited text, in `color` when one was given.
-fn chrome_text(inherited: TextStyle, color: Option<Color>) -> TextStyle {
-    let text = shared::control_text(inherited, 1.0);
+fn chrome_text(size: ControlSize, inherited: TextStyle, color: Option<Color>) -> TextStyle {
+    let text = shared::control_text(size, inherited, 1.0);
     match color {
         Some(color) => text.with_color(color),
         None => text,
     }
 }
 
-fn grip_box() -> LayoutStyle {
+fn grip_box(size: ControlSize) -> LayoutStyle {
     LayoutStyle::new()
-        .width(shared::icon_size())
-        .height(shared::icon_size())
+        .width(shared::icon_size(size))
+        .height(shared::icon_size(size))
 }
 
 /// The rect a grip measures the frame against. It is a cell rather than a signal because the grip has to exist before the row that holds it, and that row before the card that holds *both* — so the one rect the grip needs is the one thing it cannot be handed at construction. Filled in as soon as the card exists.
@@ -86,16 +87,20 @@ type DeferredRect = Rc<RefCell<Option<RwSignal<Rect>>>>;
 ///
 /// The surface grows by the distance the pointer travelled from where it pressed the grip, measured in surface space and against the card's size when the drag took hold, so the corner neither jumps to the cursor nor drifts as the card resizes under the gesture.
 fn resize_grip(
+    size: ControlSize,
     color: Option<Reactive<Color>>,
     card_rect: DeferredRect,
     resize: Rc<dyn Fn(f32, f32)>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let grip = StyledContainer::new(
-        grip_box(),
+        grip_box(size),
         move |_| RectStyle::filled(or_theme(&color, shared::muted), shared::radius_item()),
         vec![],
     )?
-    .styled_by(grip_box);
+    .styled_by(move || grip_box(size))
+    .hit_outset(Reactive::of(move || {
+        Insets::all(shared::target_outset(shared::icon_size(size)))
+    }));
     let grip_rect = track_layout(grip.layout_node());
     let latch = Rc::new(Latch::default());
     let held = latch.clone();
@@ -132,6 +137,9 @@ pub struct WindowFrameProps {
     /// How the frame is painted, and which window controls it draws beside close.
     #[props(default)]
     pub style: SurfaceFrameStyle,
+    /// How large the chrome is drawn: the title strip's padding and text, the window controls, the inset round the body and the grip, as [`ControlSize`] works them out. The body and `leading` are the caller's, sized where they are written.
+    #[props(default)]
+    pub size: ControlSize,
     /// What the close button does.
     pub close: Rc<dyn Fn()>,
     /// What the frame holds, under the title strip.
@@ -148,6 +156,7 @@ pub fn window_frame(props: WindowFrameProps) -> Result<Box<dyn LayoutItem>, Layo
         title,
         leading,
         style,
+        size,
         close,
         body,
         resize,
@@ -156,7 +165,7 @@ pub fn window_frame(props: WindowFrameProps) -> Result<Box<dyn LayoutItem>, Layo
     let title_label = box_item(Text::declaring(
         move || title.get(),
         LayoutStyle::new(),
-        move |inherited| chrome_text(inherited, title_color.as_ref().map(Reactive::get)),
+        move |inherited| chrome_text(size, inherited, title_color.as_ref().map(Reactive::get)),
     )?);
 
     let or_unset = |color: &Option<Reactive<Color>>| {
@@ -165,6 +174,7 @@ pub fn window_frame(props: WindowFrameProps) -> Result<Box<dyn LayoutItem>, Layo
     let controls = window_controls(WindowControlsProps {
         minimize: style.controls.minimize,
         maximize: style.controls.maximize,
+        size,
         on_close: close,
         glyph: or_unset(&style.close),
         hover: or_unset(&style.control_hover),
@@ -176,23 +186,23 @@ pub fn window_frame(props: WindowFrameProps) -> Result<Box<dyn LayoutItem>, Layo
     })?;
 
     // One group, so `SPACE_BETWEEN` pushes the controls to the far edge rather than spreading three things across the strip.
-    let label_box = || {
+    let label_box = move || {
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
-            .gap(shared::gap_md())
+            .gap(shared::gap_md(size))
     };
     let mut labels = leading.build()?;
     labels.push(title_label);
     let label_group = box_item(Container::new(label_box(), labels)?.styled_by(label_box));
 
     let title_bar_color = style.title_bar.clone();
-    let strip_box = || {
+    let strip_box = move || {
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::SPACE_BETWEEN)
             .width(SizeDimension::Percent(1.0))
-            .padding_horizontal(shared::gap_lg())
-            .padding_vertical(shared::gap_md())
+            .padding_horizontal(shared::gap_lg(size))
+            .padding_vertical(shared::gap_md(size))
     };
     let title_strip = StyledContainer::new(
         strip_box(),
@@ -220,25 +230,30 @@ pub fn window_frame(props: WindowFrameProps) -> Result<Box<dyn LayoutItem>, Layo
             .width(SizeDimension::Percent(1.0))
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .padding_all(body_inset.unwrap_or_else(shared::gap_lg))
+            .padding_all(body_inset.unwrap_or_else(|| shared::gap_lg(size)))
     };
     let body_area = box_item(Container::new(body_box(), body.build()?)?.styled_by(body_box));
 
     let card_rect: DeferredRect = Rc::new(RefCell::new(None));
     let mut children = vec![strip, body_area];
     if let Some(resize) = resize {
-        let grip_row = || {
+        let grip_row = move || {
             LayoutStyle::row()
                 .width(SizeDimension::Percent(1.0))
                 .flex_shrink(0.0)
                 .justify_content(JustifyContent::END)
-                .padding_horizontal(shared::gap_sm())
-                .padding_bottom(shared::gap_sm())
+                .padding_horizontal(shared::gap_sm(size))
+                .padding_bottom(shared::gap_sm(size))
         };
         children.push(box_item(
             Container::new(
                 grip_row(),
-                vec![resize_grip(style.close.clone(), card_rect.clone(), resize)?],
+                vec![resize_grip(
+                    size,
+                    style.close.clone(),
+                    card_rect.clone(),
+                    resize,
+                )?],
             )?
             .styled_by(grip_row),
         ));

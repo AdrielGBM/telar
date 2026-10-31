@@ -20,7 +20,6 @@ fn the_select_placeholder_follows_the_locale() {
     assert!(select_placeholder().contains(&"اختر".to_string()));
 }
 
-#[cfg(feature = "overlays")]
 mod modal {
     use super::*;
     use telar::signal;

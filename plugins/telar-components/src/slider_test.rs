@@ -201,12 +201,18 @@ fn the_track_and_thumb_follow_the_roles_until_the_slider_tokens_name_their_own()
     crate::test_support::fresh_layout_runtime();
     telar::set_theme(Plain::default());
     let ((track, track_style), (thumb, thumb_style)) = track_and_thumb(|| plain_slider(None));
-    assert_eq!(track.height, crate::metrics::spacing());
+    assert_eq!(
+        track.height,
+        crate::metrics::spacing(crate::ControlSize::Regular)
+    );
     assert_eq!(
         track_style.radius,
         telar::BorderRadius::all(track.height / 2.0)
     );
-    assert_eq!(thumb.width, crate::metrics::icon_size());
+    assert_eq!(
+        thumb.width,
+        crate::metrics::icon_size(crate::ControlSize::Regular)
+    );
     assert_eq!(thumb_style.border.map(|b| b.widths[0]), Some(2.5));
 
     telar::set_theme(Plain {
@@ -223,26 +229,32 @@ fn the_track_and_thumb_follow_the_roles_until_the_slider_tokens_name_their_own()
     assert_eq!(thumb_style.border.map(|b| b.widths[0]), Some(1.0));
 }
 
+/// The track's thickness and the thumb scale with the slider's size, and its length follows the text, as a field's does.
 #[test]
-fn the_slider_scales_with_the_control_size_in_force() {
+fn the_slider_scales_with_its_size() {
     crate::test_support::fresh_layout_runtime();
     let ((regular, _), (regular_thumb, _)) = track_and_thumb(|| plain_slider(None));
-    crate::test_support::fresh_layout_runtime();
-    let ((large, _), (large_thumb, _)) = track_and_thumb(|| {
-        Box::new(
-            telar::provide_control_size(telar::ControlSize::Large, || Ok(plain_slider(None)))
-                .unwrap(),
-        )
-    });
-    let scale = telar::ControlSize::Large.scale();
-    assert_eq!(
-        (large.width, large.height, large_thumb.width),
-        (
-            regular.width * scale,
-            regular.height * scale,
-            regular_thumb.width * scale
-        )
-    );
+    for size in [ControlSize::Small, ControlSize::Large] {
+        crate::test_support::fresh_layout_runtime();
+        let ((track, _), (thumb, _)) = track_and_thumb(|| {
+            slider(
+                SliderProps::props()
+                    .value(signal(0.5f32))
+                    .size(size)
+                    .build(),
+            )
+            .unwrap()
+        });
+        assert_eq!(
+            (track.width, track.height, thumb.width),
+            (
+                shared::measure(size, WIDTH_EMS),
+                regular.height * size.scale(),
+                regular_thumb.width * size.scale()
+            ),
+            "{size:?}"
+        );
+    }
 }
 
 #[test]

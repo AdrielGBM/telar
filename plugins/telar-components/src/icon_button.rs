@@ -8,6 +8,7 @@ use telar::{
     amend_surface, box_item, focus::Role,
 };
 
+use crate::ControlSize;
 use crate::shared;
 use crate::toolbar::ToolbarContext;
 
@@ -18,7 +19,7 @@ pub struct IconButtonProps {
     #[cfg(feature = "icons")]
     #[props(into)]
     pub icon: telar_icons::IconName,
-    /// The icon's id, `set:name`: `"lucide:search"`, drawn as a Unicode glyph read from its name. Under the `icons` feature it is drawn by `telar-icons` instead.
+    /// The icon's id, `set:name`: `"lucide:search"`, drawn as a Unicode glyph read from its name alone (`x` is ✕, `search` ⚲, `external-link` ↗, the chevrons ‹ › ˄ ˅), and a name with no stand-in as a dot. Under the `icons` feature it is drawn by `telar-icons` instead.
     #[cfg(not(feature = "icons"))]
     #[props(into)]
     pub icon: Reactive<String>,
@@ -28,6 +29,9 @@ pub struct IconButtonProps {
     /// The key binding that does the same thing, written portably (`"Mod+K"`) and shown in the tooltip as the platform writes it. Empty means none.
     #[props(into, default)]
     pub shortcut: Reactive<String>,
+    /// How large the button is drawn: its square and the icon in it, as [`ControlSize`] works them out. A small one is the smallest pointer target, so it fits a tag's `action` without making the tag taller.
+    #[props(default)]
+    pub size: ControlSize,
     /// Makes the button a toggle that reads as pressed while this is true. Unset, it is a plain button and says nothing about being pressed.
     #[props(some, into, default)]
     pub pressed: Option<Reactive<bool>>,
@@ -60,13 +64,13 @@ impl IconButtonTokens {
     }
 }
 
-fn shell() -> LayoutStyle {
+fn shell(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
-        .padding_all(shared::icon_pad())
-        .min_width(shared::control_height())
-        .min_height(shared::control_height())
+        .padding_all(shared::icon_pad(size))
+        .min_width(shared::control_height(size))
+        .min_height(shared::control_height(size))
 }
 
 /// Which of its paints the square is showing.
@@ -105,6 +109,7 @@ pub fn icon_button(props: IconButtonProps) -> Result<Box<dyn LayoutItem>, Layout
     let IconButtonProps {
         icon,
         label,
+        size,
         shortcut,
         pressed,
         disabled,
@@ -121,6 +126,7 @@ pub fn icon_button(props: IconButtonProps) -> Result<Box<dyn LayoutItem>, Layout
     let square = Square {
         icon,
         label: label.clone(),
+        size,
         shortcut: shortcut.clone(),
         pressed,
         disabled,
@@ -130,7 +136,7 @@ pub fn icon_button(props: IconButtonProps) -> Result<Box<dyn LayoutItem>, Layout
         index,
     };
 
-    shared::hinted(move || square.build(), label, shortcut)
+    shared::hinted(move || square.build(), size, label, shortcut)
 }
 
 /// Everything the square under an icon button's tooltip is built from, so the tooltip can build it wherever and however often it places it.
@@ -138,6 +144,7 @@ pub fn icon_button(props: IconButtonProps) -> Result<Box<dyn LayoutItem>, Layout
 struct Square {
     icon: IconSource,
     label: Reactive<String>,
+    size: ControlSize,
     shortcut: Reactive<String>,
     pressed: Option<Reactive<bool>>,
     disabled: Reactive<bool>,
@@ -152,6 +159,7 @@ impl Square {
         let Square {
             icon,
             label,
+            size,
             shortcut,
             pressed,
             disabled,
@@ -176,7 +184,7 @@ impl Square {
             }
         };
 
-        let picture = picture(icon, ink(disabled))?;
+        let picture = picture(icon, size, ink(disabled))?;
         let surface = {
             let is_pressed = is_pressed.clone();
             Rc::new(move |state: State, at_cursor: bool| {
@@ -196,11 +204,11 @@ impl Square {
             }
         };
         let button = StyledContainer::new(
-            shell(),
+            shell(size),
             move |_| rest(State::Rest, rest_cursor()),
             vec![picture],
         )?
-        .styled_by(shell)
+        .styled_by(move || shell(size))
         .hover_style(move |_| hover(State::Hovered, hover_cursor()))
         .active_style(move |_| pressing(State::Pressed, press_cursor()))
         .disabled(is_disabled)
@@ -241,10 +249,26 @@ pub(crate) type IconSource = telar_icons::IconName;
 #[cfg(not(feature = "icons"))]
 pub(crate) type IconSource = Reactive<String>;
 
-/// `icon` at the size a control draws one, in `color`, or in the text around it while that is transparent.
+/// An icon this crate draws itself, `icon!("lucide:copy")`: baked under the `icons` feature, and an id read as its stand-in glyph without it. It shares `telar_icons::icon!`'s name because the bake finds the ids to bake by that name.
+#[cfg(feature = "icons")]
+macro_rules! icon {
+    ($id:literal) => {
+        telar_icons::icon!($id)
+    };
+}
+#[cfg(not(feature = "icons"))]
+macro_rules! icon {
+    ($id:literal) => {
+        $crate::icon_button::IconSource::from($id)
+    };
+}
+pub(crate) use icon;
+
+/// `icon` at the size a control of `size` draws one, in `color`, or in the text around it while that is transparent.
 #[cfg(feature = "icons")]
 pub(crate) fn picture(
     icon: IconSource,
+    size: ControlSize,
     color: Reactive<Color>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_icons::{IconProps, icon as draw};
@@ -252,7 +276,7 @@ pub(crate) fn picture(
     draw(
         IconProps::props()
             .name(icon)
-            .size(shared::icon_size())
+            .size(shared::icon_size(size))
             .color(color)
             .build(),
     )
@@ -261,16 +285,17 @@ pub(crate) fn picture(
 #[cfg(not(feature = "icons"))]
 pub(crate) fn picture(
     icon: IconSource,
+    size: ControlSize,
     color: Reactive<Color>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    use telar::{Text, TextWrap};
+    use telar::{Container, Text, TextWrap};
 
-    let size = shared::icon_size();
+    let side = shared::icon_size(size);
     let glyph = Text::declaring(
         move || glyph_for(&icon.get()).to_string(),
         LayoutStyle::new(),
         move |t| {
-            let text = shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap);
+            let text = shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::NoWrap);
             match color.get() {
                 Color::TRANSPARENT => text,
                 dimmed => text.with_color(dimmed),
@@ -281,8 +306,8 @@ pub(crate) fn picture(
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .width(size)
-            .height(size)
+            .width(side)
+            .height(side)
             .flex_shrink(0.0),
         telar::children![glyph],
     )?
@@ -295,26 +320,39 @@ pub(crate) fn picture(
 pub(crate) fn glyph_for(icon: &str) -> &'static str {
     let name = icon.rsplit(':').next().unwrap_or(icon);
     match name {
-        "search" | "magnifying-glass" => "⌕",
+        "search" | "magnifying-glass" | "zoom" => "⚲",
         "close" | "x" | "cross" => "✕",
         "plus" | "add" => "+",
         "minus" | "remove" => "−",
         "check" | "done" => "✓",
         "settings" | "cog" | "gear" => "⚙",
         "menu" => "☰",
+        "ellipsis" | "more-horizontal" | "dots-horizontal" => "…",
+        "ellipsis-vertical" | "more-vertical" | "dots-vertical" => "⋮",
         "play" => "▶",
-        "pause" => "⏸",
-        "stop" => "■",
+        "pause" => "‖",
+        "stop" | "square" => "■",
+        "circle" => "●",
         "refresh" | "rotate-cw" | "reload" => "↻",
         "undo" | "rotate-ccw" => "↺",
-        "chevron-left" | "arrow-left" => "←",
-        "chevron-right" | "arrow-right" => "→",
-        "chevron-up" | "arrow-up" => "↑",
-        "chevron-down" | "arrow-down" => "↓",
+        "chevron-left" => "‹",
+        "chevron-right" => "›",
+        "chevron-up" => "˄",
+        "chevron-down" => "˅",
+        "arrow-left" => "←",
+        "arrow-right" => "→",
+        "arrow-up" => "↑",
+        "arrow-down" => "↓",
+        "external-link" | "square-arrow-out-up-right" | "arrow-up-right" | "open-in-new" => "↗",
+        "link" => "⚯",
+        "home" | "house" => "⌂",
+        "pencil" | "edit" => "✎",
+        "alert" | "warning" | "triangle-alert" => "⚠",
+        "panel-left" | "sidebar" => "◧",
         "star" => "★",
-        "info" => "ⓘ",
-        "copy" => "⧉",
-        "grid" => "▦",
+        "info" => "ℹ",
+        "copy" => "❐",
+        "grid" | "layout-grid" | "grid-3x3" => "▦",
         "sun" => "☀",
         "moon" => "☾",
         _ => "•",

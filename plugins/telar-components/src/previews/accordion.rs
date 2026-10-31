@@ -2,6 +2,7 @@ use telar::preview::{Layout, Matrix, PreviewEntry, by_role, by_text, preview};
 use telar::{Color, Role};
 
 use super::sample;
+use crate::ControlSize;
 use crate::accordion::{AccordionProps, accordion};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -10,6 +11,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             accordion(
                 AccordionProps::props()
                     .title(p.arg("title", "Shipping details"))
+                    .size(p.arg("size", ControlSize::Regular))
                     .open(p.signal("open", true))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .children(sample::paragraph(

@@ -429,7 +429,7 @@ fn a_short_list_is_as_tall_as_its_rows() {
     let mounted = Mounted::opened();
     assert_eq!(
         mounted.rect_of(Role::ListBox, None).height,
-        7.0 * row_height()
+        7.0 * row_height(crate::ControlSize::Regular)
     );
 }
 
@@ -444,11 +444,11 @@ fn in_a_short_window_the_list_gives_up_rows_to_fit_and_keeps_the_cursor_in_view(
     let list = mounted.rect_of(Role::ListBox, None);
     assert!(bottom(card) <= height, "the dialog fits: {card:?}");
     assert!(
-        list.height < VISIBLE_ROWS as f32 * row_height(),
+        list.height < VISIBLE_ROWS as f32 * row_height(crate::ControlSize::Regular),
         "the list gave up rows: {list:?}"
     );
     assert!(
-        list.height >= row_height(),
+        list.height >= row_height(crate::ControlSize::Regular),
         "and still shows some: {list:?}"
     );
 
@@ -605,7 +605,10 @@ fn the_dialog_takes_the_dialog_corner_until_the_palette_tokens_name_their_own() 
         style.radius,
         BorderRadius::all(Themed { palettes: None }.radius_dialog())
     );
-    assert_eq!(rect.width, CommandPaletteTokens::default().width());
+    assert_eq!(
+        rect.width,
+        CommandPaletteTokens::default().width(ControlSize::Regular)
+    );
 
     telar::set_theme(Themed {
         palettes: Some(CommandPaletteTokens {

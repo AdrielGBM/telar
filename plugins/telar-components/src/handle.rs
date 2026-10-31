@@ -9,6 +9,7 @@ use telar::{
     Transaction, amend_surface, box_item, focus::Role, signal, step_factor, use_theme_tokens,
 };
 
+use crate::ControlSize;
 use crate::edit::{Stroke, write_through};
 use crate::shared;
 
@@ -22,7 +23,7 @@ pub type ToPoint = Rc<dyn Fn(f32) -> (f32, f32)>;
 /// Every field left `None` follows the role named beside it, read when the handle paints.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HandleTokens {
-    /// Diameter of the dot at the regular control size, scaled with the control size in force. `None` is a slider's thumb less [`metrics::gap_sm`](crate::metrics::gap_sm), since a handle sits over the content it edits.
+    /// Diameter of the dot at the regular size, scaled with the handle's own. `None` is a slider's thumb less [`metrics::gap_sm`](crate::metrics::gap_sm) at that size, since a handle sits over the content it edits.
     pub size: Option<f32>,
     /// Width of the ring that parts the dot from what it sits on. `None` is the theme's `border_width_strong`.
     pub ring: Option<f32>,
@@ -34,10 +35,11 @@ impl HandleTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    pub fn size(&self) -> f32 {
+    /// The diameter of the dot of a handle of `size`.
+    pub fn size(&self, size: ControlSize) -> f32 {
         self.size.map_or_else(
-            || crate::slider::SliderTokens::current().thumb() - shared::gap_sm(),
-            |size| size * telar::control_scale(),
+            || crate::slider::SliderTokens::current().thumb(size) - shared::gap_sm(size),
+            |diameter| diameter * size.scale(),
         )
     }
 
@@ -71,9 +73,12 @@ pub struct HandleProps {
     /// One unscaled arrow-key step. Non-positive falls back to `1.0`.
     #[props(default = 1.0)]
     pub step: f32,
-    /// The handle's diameter in px. `0.0` (the default) means "unset": the [`HandleTokens`] size at the control size in force.
+    /// How large the dot is drawn, as [`ControlSize`] works it out from [`HandleTokens::size`]. Its grab area is at least the smallest pointer target at every size.
     #[props(default)]
-    pub size: f32,
+    pub size: ControlSize,
+    /// The dot's diameter in px, over what [`size`](Self::size) works out. `0.0` (the default) means "unset".
+    #[props(default)]
+    pub diameter: f32,
     #[props(default = Cursor::Grab)]
     pub cursor: Cursor,
     /// Mirrors whether the last request was clamped, for a caller that shows it elsewhere too.
@@ -115,6 +120,7 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         max,
         step,
         size,
+        diameter,
         cursor,
         clamped,
         color,
@@ -125,10 +131,10 @@ pub fn handle(props: HandleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         style,
     } = props;
     let size = move || {
-        if size > 0.0 {
-            size
+        if diameter > 0.0 {
+            diameter
         } else {
-            HandleTokens::current().size()
+            HandleTokens::current().size(size)
         }
     };
     let dot_box = move || {

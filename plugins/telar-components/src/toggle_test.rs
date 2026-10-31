@@ -158,7 +158,10 @@ fn the_track_is_sized_from_the_knob_and_follows_the_tokens() {
     crate::test_support::fresh_layout_runtime();
     telar::set_theme(Plain::default());
     let ((track, style), (knob, _)) = track_and_knob(|| switch(false));
-    let (icon, inset) = (crate::metrics::icon_size(), crate::metrics::gap_xs());
+    let (icon, inset) = (
+        crate::metrics::icon_size(crate::ControlSize::Regular),
+        crate::metrics::gap_xs(crate::ControlSize::Regular),
+    );
     assert_eq!((knob.width, knob.height), (icon, icon));
     assert_eq!(
         (track.width, track.height),
@@ -189,21 +192,27 @@ fn the_track_is_sized_from_the_knob_and_follows_the_tokens() {
 }
 
 #[test]
-fn the_switch_scales_with_the_control_size_in_force() {
+fn the_switch_scales_with_its_size() {
     crate::test_support::fresh_layout_runtime();
     telar::set_theme(Plain::default());
     let ((regular, _), _) = track_and_knob(|| switch(false));
-    crate::test_support::fresh_layout_runtime();
-    let ((large, _), _) = track_and_knob(|| {
-        Box::new(
-            telar::provide_control_size(telar::ControlSize::Large, || Ok(switch(false))).unwrap(),
-        )
-    });
-    let scale = telar::ControlSize::Large.scale();
-    assert_eq!(
-        (large.width, large.height),
-        (regular.width * scale, regular.height * scale)
-    );
+    for size in [ControlSize::Small, ControlSize::Large] {
+        crate::test_support::fresh_layout_runtime();
+        let ((track, _), _) = track_and_knob(|| {
+            toggle(
+                ToggleProps::props()
+                    .checked(signal(false))
+                    .size(size)
+                    .build(),
+            )
+            .unwrap()
+        });
+        assert_eq!(
+            (track.width, track.height),
+            (regular.width * size.scale(), regular.height * size.scale()),
+            "{size:?}"
+        );
+    }
 }
 
 #[test]

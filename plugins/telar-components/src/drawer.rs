@@ -8,6 +8,7 @@ use telar::{
     children, current_direction, focus::Role,
 };
 
+use crate::ControlSize;
 use crate::scrim;
 use crate::shared;
 use crate::strings;
@@ -19,9 +20,9 @@ use crate::strings;
 pub struct DrawerTokens {
     /// Radius of the two corners away from the edge the panel is pinned to. `None` is the theme's `radius_dialog`.
     pub radius: Option<f32>,
-    /// Space between the panel's edge and its content, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
+    /// Space between the panel's edge and its content, at the regular size, scaled with the drawer's own. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
     pub pad: Option<f32>,
-    /// The panel's width when the drawer names none, at the regular control size, scaled with the control size in force. `None` is 20 ems of the document's text.
+    /// The panel's width when the drawer names none, at the regular size, scaled with the drawer's own. `None` is 20 ems of the document's text.
     pub width: Option<f32>,
 }
 
@@ -35,13 +36,15 @@ impl DrawerTokens {
         self.radius.unwrap_or_else(shared::radius_dialog)
     }
 
-    pub fn pad(&self) -> f32 {
+    /// The padding of a drawer of `size`.
+    pub fn pad(&self, size: ControlSize) -> f32 {
         self.pad
-            .map_or_else(shared::gap_xl, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_xl(size), |pad| pad * size.scale())
     }
 
-    pub fn width(&self) -> f32 {
-        shared::width_or_measure(self.width, 20.0)
+    /// The panel's width in a drawer of `size` whose call names none.
+    pub fn width(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.width, 20.0)
     }
 }
 
@@ -62,6 +65,9 @@ pub struct DrawerProps {
     /// Panel width in logical px. `0.0` (the default) means "unset" -> [`DrawerTokens::width`].
     #[props(default)]
     pub width: f32,
+    /// How large the panel is drawn: its padding, gaps and, unless it names one, its width, as [`ControlSize`] works them out. What it holds is sized where it is written.
+    #[props(default)]
+    pub size: ControlSize,
     /// Runs after the drawer sets `open = false`, so a caller can react to dismissal.
     #[props(some, default)]
     pub on_close: Option<Rc<dyn Fn()>>,
@@ -86,6 +92,7 @@ pub fn drawer(props: DrawerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         id,
         side,
         width,
+        size,
         on_close,
         label,
         color,
@@ -101,7 +108,15 @@ pub fn drawer(props: DrawerProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     scrim::scrim_overlay(open, on_close, move |dismiss| {
         // Built on the first open rather than here: a body built while the drawer has never opened would register its focus stops with nothing on screen to take them.
         let body = children.build()?;
-        build_open_drawer(width, at_start, body, label.clone(), paint.clone(), dismiss)
+        build_open_drawer(
+            size,
+            width,
+            at_start,
+            body,
+            label.clone(),
+            paint.clone(),
+            dismiss,
+        )
     })
 }
 
@@ -131,6 +146,7 @@ fn inner_corners(at_start: bool, radius: f32) -> BorderRadius {
 
 /// Builds the scrim + full-height opaque panel for the open state: scrim (dims + dismisses) > panel pinned to `side`. The panel swallows its own taps so a click inside it never dismisses.
 fn build_open_drawer(
+    size: ControlSize,
     width: Option<f32>,
     at_start: bool,
     body: Vec<Box<dyn LayoutItem>>,
@@ -142,11 +158,11 @@ fn build_open_drawer(
     let sheet = move || {
         let tokens = DrawerTokens::current();
         LayoutStyle::column()
-            .width(width.unwrap_or_else(|| tokens.width()))
+            .width(width.unwrap_or_else(|| tokens.width(size)))
             .max_width(room.inside(0.0).width)
             .min_height(0.0)
-            .gap(shared::gap_lg())
-            .padding_all(tokens.pad())
+            .gap(shared::gap_lg(size))
+            .padding_all(tokens.pad(size))
     };
     let name = Rc::new(move || match &label {
         Some(label) => label.get(),
@@ -155,7 +171,7 @@ fn build_open_drawer(
     let body = LayoutScrollArea::new(
         LayoutStyle::new().flex_shrink(1.0),
         box_item(Container::new(
-            LayoutStyle::column().gap(shared::gap_lg()),
+            LayoutStyle::column().gap(shared::gap_lg(size)),
             body,
         )?),
     )?

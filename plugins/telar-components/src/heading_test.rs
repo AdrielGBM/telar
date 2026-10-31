@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use telar::testing::{Scoped, scoped};
 use telar::{
-    AvailableSpace, ComponentList, ControlSize, DrawCommand, LayoutItem, Role, TextStyle,
-    compute_layout,
+    AvailableSpace, ComponentList, DrawCommand, LayoutItem, Role, TextStyle, compute_layout,
 };
 
 use crate::{HeadingProps, heading};
@@ -80,17 +79,6 @@ fn a_heading_is_the_heading_of_its_level_to_assistive_technology() {
             "level {level} is read as h{expected}: {roles:?}"
         );
     }
-}
-
-#[test]
-fn a_heading_is_text_and_keeps_its_size_whatever_the_control_size() {
-    crate::test_support::fresh_layout_runtime();
-    let regular = title_style(|| titled(2)).font_size;
-    crate::test_support::fresh_layout_runtime();
-    let large = title_style(|| {
-        Box::new(telar::provide_control_size(ControlSize::Large, || Ok(titled(2))).unwrap())
-    });
-    assert_eq!(large.font_size, regular);
 }
 
 /// What the call authors replaces what the heading chose, and what it does not name stays the heading's: a lighter `h1` keeps its size, and a size in `em` is of the text around it.

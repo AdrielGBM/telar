@@ -440,3 +440,28 @@ fn a_growing_block_takes_the_room_its_parent_leaves() {
     let grown = Mounted::new(source_props().grow(true).build());
     assert_eq!(grown.height(), 400.0);
 }
+
+/// The lines sit the medium gap of the block's own size in, and its copy button is an icon button of that size.
+#[test]
+fn the_block_is_padded_and_its_copy_button_sized_at_the_block_s_size() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        let mounted = Mounted::new(source_props().line_numbers(false).size(size).build());
+        let frame = track_layout(mounted.node).unwrap().get();
+        let mut line = None;
+        telar::for_each_with_matrix(&mounted.tree.commands(), |command, matrix| {
+            if let DrawCommand::Text { rect, .. } = command
+                && line.is_none()
+            {
+                line = Some(rect.x + matrix[4]);
+            }
+        });
+        let x = line.expect("the code is drawn");
+        assert_eq!(x - frame.x, crate::metrics::gap_md(size), "{size:?}");
+        let copy = mounted.button("Copy").expect("the copy button is shown");
+        assert_eq!(
+            copy.rect.height,
+            crate::metrics::control_height(size),
+            "{size:?}"
+        );
+    }
+}

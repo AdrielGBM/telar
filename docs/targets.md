@@ -216,21 +216,20 @@ there is nothing to list in `telar.toml`.
 
 Nor are the widgets. Buttons, fields, menus, modals and the rest are
 [`telar-components`](https://docs.rs/telar-components), a plugin you add beside `telar`, with no default
-features. The widgets every interface uses are in every build, and each group beyond them is one feature:
-`overlays` for menus, modals, drawers and tooltips, `chrome` for a window frame the app draws itself, and
-`advanced` for reorderable lists, accordions and steppers. List it in `telar.toml` so `.rsx` sees its tags
-without a `use`:
+features. Every widget is in every build, and an application links only the ones it calls; a feature brings in a
+dependency, such as `icons` for drawing icon ids through `telar-icons`. List it in `telar.toml` so `.rsx` sees
+its tags without a `use`:
 
 ```toml
 # Cargo.toml
-telar-components = { version = "0.2.2", features = ["overlays"] }
+telar-components = { version = "0.2.2", features = ["icons"] }
 
 # telar.toml
 [telar]
 prelude = ["telar_components"]
 ```
 
-`cargo telar new` writes both, with no group named.
+`cargo telar new` writes both, with no feature named.
 
 Nor is the page stack. The app's address — its history on every target, `to:` links, the locale it carries —
 is in `telar`; the `Navigator` that keeps a stack of pages in step with it, the host that animates between

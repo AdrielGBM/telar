@@ -3,15 +3,17 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Key, NamedKey, Reactive, Role};
 
+use crate::ControlSize;
 use crate::list::{ItemProps, item};
 use crate::select::{SelectProps, select};
 
-fn sizes() -> Children {
-    Children::new(|| {
+fn sizes(size: ControlSize) -> Children {
+    Children::new(move || {
         let mut items = Vec::new();
         for label in ["Small", "Medium", "Large"] {
             let props = ItemProps::props()
                 .label(Reactive::of(move || label.to_string()))
+                .size(size)
                 .build();
             items.push(item(props)?);
         }
@@ -36,12 +38,14 @@ fn options() -> Children {
 pub(crate) fn previews() -> Vec<PreviewEntry> {
     vec![
         preview!(select: SelectProps, "Default", |p| {
+            let size = p.arg("size", ControlSize::Regular);
             select(
                 SelectProps::props()
                     .on_select(Rc::new(|_| {}))
+                    .size(size)
                     .color(p.arg("color", Color::TRANSPARENT))
                     .stretch(p.arg("stretch", false))
-                    .children(sizes())
+                    .children(sizes(size))
                     .build(),
             )
         })
@@ -65,7 +69,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             select(
                 SelectProps::props()
                     .selected(selected)
-                    .children(sizes())
+                    .children(sizes(ControlSize::Regular))
                     .build(),
             )
         })

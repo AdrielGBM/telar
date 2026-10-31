@@ -13,6 +13,7 @@ use telar::{
     run_after, signal,
 };
 
+use crate::ControlSize;
 use crate::line_gutter::LineGutter;
 use crate::shared;
 use crate::strings;
@@ -30,7 +31,7 @@ const COPIED_FOR: Duration = Duration::from_millis(1500);
 pub struct CodeViewTokens {
     /// Corner radius. `None` is the theme's `radius_surface`.
     pub radius: Option<f32>,
-    /// Space between the block's edge and its lines, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    /// Space between the block's edge and its lines, at the regular size, scaled with the block's own. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
     pub pad: Option<f32>,
 }
 
@@ -44,14 +45,15 @@ impl CodeViewTokens {
         self.radius.unwrap_or_else(shared::radius_surface)
     }
 
-    pub fn pad(&self) -> f32 {
+    /// The padding of a block of `size`.
+    pub fn pad(&self, size: ControlSize) -> f32 {
         self.pad
-            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
     }
 }
 
-fn pad() -> f32 {
-    CodeViewTokens::current().pad()
+fn pad(size: ControlSize) -> f32 {
+    CodeViewTokens::current().pad(size)
 }
 
 /// What a run of source is, as far as its colour goes. The caller decides which runs are which; nothing here parses a language.
@@ -97,6 +99,9 @@ pub type CopyHandler = Rc<dyn Fn(&str)>;
 pub struct CodeViewProps {
     #[props(into, default)]
     pub code: Reactive<String>,
+    /// How large the block is drawn: its padding, its lines and their numbers, and its copy button, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// Runs of `code` by byte range. A run that does not start and end on a character boundary of `code` is left plain.
     #[props(into, default)]
     pub spans: Reactive<Vec<CodeSpan>>,
@@ -211,8 +216,8 @@ pub(crate) fn prepare(code: &str, spans: &[CodeSpan]) -> Prepared {
     Prepared { text, runs, lines }
 }
 
-fn code_text(inherited: TextStyle) -> TextStyle {
-    shared::control_text(inherited, MONO_RATIO)
+fn code_text(size: ControlSize, inherited: TextStyle) -> TextStyle {
+    shared::control_text(size, inherited, MONO_RATIO)
         .with_font_family(FontFamily::Monospace)
         .with_text_wrap(TextWrap::NoWrap)
 }
@@ -221,6 +226,7 @@ fn code_text(inherited: TextStyle) -> TextStyle {
 pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let CodeViewProps {
         code,
+        size,
         spans,
         highlighted,
         first_line,
@@ -256,14 +262,14 @@ pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
             })
         },
         LayoutStyle::new().flex_shrink(0.0),
-        code_text,
+        move |inherited| code_text(size, inherited),
     )?;
     let source_node = source.layout_node();
 
     let marks = Canvas::declaring(
         LayoutStyle::new().absolute_fill(),
         move |rect, inherited| {
-            let line = line_box(&code_text(inherited));
+            let line = line_box(&code_text(size, inherited));
             let wash = shared::resolve(&color, shared::accent).with_alpha(shared::held_wash().a);
             let lines = prepared.with(|prepared| prepared.lines) as u32;
             let bands = highlighted
@@ -271,7 +277,7 @@ pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
                 .into_iter()
                 .filter(|number| (first_line..first_line + lines).contains(number))
                 .map(|number| {
-                    let top = pad() + (number - first_line) as f32 * line;
+                    let top = pad(size) + (number - first_line) as f32 * line;
                     RenderNode::rect(
                         Rect::new(0.0, top, rect.width, line),
                         RectStyle::default().with_fill(wash),
@@ -288,16 +294,24 @@ pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
             move || first_line as usize,
             move || prepared.with(|prepared| prepared.lines),
             LayoutStyle::new().flex_shrink(0.0),
-            move || shared::quiet(code_text(inherited_text_style(source_node)), 1.0),
+            move || {
+                shared::quiet(
+                    size,
+                    code_text(size, inherited_text_style(source_node)),
+                    1.0,
+                )
+            },
         )?
         .a11y_hidden();
         row.push(box_item(gutter));
     }
     row.push(box_item(source));
     let content_box = move || {
-        let style = LayoutStyle::row().padding_all(pad()).gap(shared::gap_lg());
+        let style = LayoutStyle::row()
+            .padding_all(pad(size))
+            .gap(shared::gap_lg(size));
         match copyable {
-            true => style.padding_end(copy_room()),
+            true => style.padding_end(copy_room(size)),
             false => style,
         }
     };
@@ -316,7 +330,7 @@ pub fn code_view(props: CodeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
 
     let mut layers: Vec<Box<dyn LayoutItem>> = children![scroll];
     if copyable {
-        layers.push(copy_button(code, on_copy)?);
+        layers.push(copy_button(size, code, on_copy)?);
     }
     let frame_box = match grow {
         true => LayoutStyle::column().flex_grow(1.0),
@@ -343,11 +357,12 @@ fn frame_paint() -> RectStyle {
 }
 
 /// How far the lines keep from the block's end so the copy button in its corner stands beside them rather than over them: the button, its inset from the edge, and the same again between it and the code.
-fn copy_room() -> f32 {
-    shared::control_height() + shared::gap_sm() * 2.0
+fn copy_room(size: ControlSize) -> f32 {
+    shared::control_height(size) + shared::gap_sm(size) * 2.0
 }
 
 fn copy_button(
+    size: ControlSize,
     code: Reactive<String>,
     on_copy: Option<CopyHandler>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
@@ -364,7 +379,7 @@ fn copy_button(
     });
     let button = icon_button(
         IconButtonProps::props()
-            .icon(telar_icons::icon!("lucide:copy"))
+            .icon(crate::icon_button::icon!("lucide:copy"))
             .label(Reactive::of(move || {
                 strings::text(if copied.get() {
                     strings::COPIED
@@ -372,14 +387,15 @@ fn copy_button(
                     strings::COPY
                 })
             }))
+            .size(size)
             .on_press(press)
             .build(),
     )?;
-    let corner_box = || {
+    let corner_box = move || {
         LayoutStyle::new()
             .absolute()
-            .inset_top(shared::gap_sm())
-            .inset_end(shared::gap_sm())
+            .inset_top(shared::gap_sm(size))
+            .inset_end(shared::gap_sm(size))
     };
     let corner = Container::new(corner_box(), vec![button])?.styled_by(corner_box);
     Ok(box_item(corner))

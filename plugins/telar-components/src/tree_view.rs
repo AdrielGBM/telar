@@ -14,6 +14,7 @@ use telar::{
     memo, signal,
 };
 
+use crate::ControlSize;
 use crate::menu::{focused_rect, is_context_menu_key};
 use crate::rows::{BuiltRows, RowPlaces, RowState, cursor_row_paint};
 use crate::shared;
@@ -26,7 +27,7 @@ const OVERSCAN: usize = 4;
 /// Every field left `None` follows the role named beside it, read when the tree is built or painted, so a tree's rows stand at the height every other list's do.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TreeViewTokens {
-    /// Height of a row at the regular control size, scaled with the control size in force. `None` is [`metrics::row_height`](crate::metrics::row_height).
+    /// Height of a row at the regular size, scaled with the tree's own. `None` is [`metrics::row_height`](crate::metrics::row_height).
     pub row_height: Option<f32>,
     /// How far each level is set in from the one above it, likewise. `None` is [`metrics::gap_xl`](crate::metrics::gap_xl).
     pub indent: Option<f32>,
@@ -44,30 +45,31 @@ impl TreeViewTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    /// In whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
-    pub fn row_height(&self) -> f32 {
-        self.row_height
-            .map_or_else(shared::row_height, |height| height * telar::control_scale())
-            .round()
+    /// The height of a row of a tree of `size`, in whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
+    pub fn row_height(&self, size: ControlSize) -> f32 {
+        crate::list::scaled_row_height(self.row_height, size)
     }
 
-    pub fn indent(&self) -> f32 {
+    /// How far each level of a tree of `size` is set in from the one above it.
+    pub fn indent(&self, size: ControlSize) -> f32 {
         self.indent
-            .map_or_else(shared::gap_xl, |indent| indent * telar::control_scale())
+            .map_or_else(|| shared::gap_xl(size), |indent| indent * size.scale())
     }
 
     pub fn radius(&self) -> f32 {
         self.radius.unwrap_or_else(shared::radius_item)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between a row's edges and what it shows in a tree of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
     }
 
-    pub fn inset(&self) -> f32 {
+    /// The space between the sides of a tree of `size` and its rows.
+    pub fn inset(&self, size: ControlSize) -> f32 {
         self.inset
-            .map_or_else(shared::panel_pad, |inset| inset * telar::control_scale())
+            .map_or_else(|| shared::panel_pad(size), |inset| inset * size.scale())
     }
 }
 
@@ -126,11 +128,14 @@ fn collect_branch_ids(nodes: &[TreeNode], ids: &mut Vec<Arc<str>>) {
 
 /// A tree of rows given as data, walked with the arrow keys, Home, End, Page Up, Page Down and type-ahead, and bound to a selection and a set of open branches.
 ///
-/// It fills the height its parent gives it and scrolls within it, building only the rows on screen, so a tree of thousands of nodes costs what a screenful does. Every row stands at [`TreeViewTokens::row_height`], unless [`wrap`](Self::wrap) lets rows grow: then each is measured once built, and stands at the row height until then.
+/// It fills the height its parent gives it and scrolls within it, building only the rows on screen, so a tree of thousands of nodes costs what a screenful does. Every row stands at [`TreeViewTokens::row_height`] of the tree's size, unless [`wrap`](Self::wrap) lets rows grow: then each is measured once built, and stands at the row height until then.
 #[derive(Props)]
 pub struct TreeViewProps {
     #[props(into, default)]
     pub items: Reactive<Vec<TreeNode>>,
+    /// How large the rows are drawn: their height, padding, indent, caret and text, as [`ControlSize`] works them out. What [`trailing`](Self::trailing) builds is sized where it is written.
+    #[props(default)]
+    pub size: ControlSize,
     /// The bound selection, by node id. `None` (the default) is uncontrolled.
     #[props(some, into, default)]
     pub selected: Option<RwSignal<Option<Arc<str>>>>,
@@ -180,6 +185,7 @@ pub type TrailingBuilder = Rc<dyn Fn(&TreeNode) -> Result<Box<dyn LayoutItem>, L
 pub fn tree_view(props: TreeViewProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let TreeViewProps {
         items,
+        size,
         selected,
         expanded,
         on_select,
@@ -196,7 +202,7 @@ pub fn tree_view(props: TreeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
         let items = items.get();
         expanded.with(|open| Flat::of(&items, open))
     });
-    let row_height = TreeViewTokens::current().row_height();
+    let row_height = TreeViewTokens::current().row_height(size);
 
     let mut made: Option<Rc<Tree>> = None;
     let scroll = LayoutScrollArea::new_with(fill(), |viewport| {
@@ -209,7 +215,7 @@ pub fn tree_view(props: TreeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
             on_select,
             on_context,
             select_branches,
-            places: RowPlaces::new(viewport, row_height, wrap),
+            places: RowPlaces::new(viewport, size, row_height, wrap),
             focus: Cell::new(None),
             built: BuiltRows::new(),
         });
@@ -232,7 +238,8 @@ pub fn tree_view(props: TreeViewProps) -> Result<Box<dyn LayoutItem>, LayoutErro
             },
             move |_, row| build_row(&tree, row, trailing.as_ref(), &color),
         )?;
-        let inset = Container::new(inset_box(), vec![box_item(rows)])?.styled_by(inset_box);
+        let inset = Container::new(inset_box(size), vec![box_item(rows)])?
+            .styled_by(move || inset_box(size));
         Ok(box_item(inset))
     })?;
     let tree = made.expect("a scroll area builds its content before it returns");
@@ -262,8 +269,8 @@ fn fill() -> LayoutStyle {
 }
 
 /// Only across: the virtual list places its rows from the content's top, so space above them would stand every row off where it reckons it is.
-fn inset_box() -> LayoutStyle {
-    LayoutStyle::column().padding_horizontal(TreeViewTokens::current().inset())
+fn inset_box(size: ControlSize) -> LayoutStyle {
+    LayoutStyle::column().padding_horizontal(TreeViewTokens::current().inset(size))
 }
 
 struct Row {
@@ -565,21 +572,21 @@ fn build_row(
     let id = row.node.id.clone();
     let mut content: Vec<Box<dyn LayoutItem>> = vec![caret(tree, &row)?];
     let label = row.node.label.clone();
-    let wrap = tree.places.text_wrap();
+    let (size, wrap) = (tree.places.size(), tree.places.text_wrap());
     let text = Text::declaring(
         move || label.to_string(),
         LayoutStyle::new()
             .flex_grow(1.0)
             .flex_shrink(1.0)
             .min_width(0.0),
-        move |t| shared::control_text(t, 1.0).with_text_wrap(wrap),
+        move |t| shared::control_text(size, t, 1.0).with_text_wrap(wrap),
     )?;
     content.push(box_item(ClippedItem::new(box_item(text), Clip::both())));
     if let Some(badge) = row.node.badge.clone() {
         content.push(box_item(Text::declaring(
             move || badge.to_string(),
             LayoutStyle::new().flex_shrink(0.0),
-            |t| shared::quiet(t, shared::CAPTION_RATIO).with_text_wrap(TextWrap::NoWrap),
+            move |t| shared::quiet(size, t, shared::CAPTION_RATIO).with_text_wrap(TextWrap::NoWrap),
         )?));
     }
     if let Some(trailing) = trailing {
@@ -632,12 +639,8 @@ fn build_row(
 
 /// The open-or-shut chevron, or the empty column a leaf keeps so its label lines up with its siblings'. Pressing it toggles the branch without selecting the row, and a reader hears the row's state rather than the mark.
 fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let column = LayoutStyle::row()
-        .width(shared::icon_size())
-        .height(tree.places.line_height())
-        .flex_shrink(0.0)
-        .align_items(AlignItems::CENTER)
-        .justify_content(JustifyContent::CENTER);
+    let size = tree.places.size();
+    let column = caret_column(size, tree.places.line_height());
     if !row.node.is_branch() {
         return Ok(box_item(Container::new(column, vec![])?));
     }
@@ -648,7 +651,7 @@ fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError>
             false => shared::Mark::ChevronForward,
         }
     };
-    let mark = shared::mark(point, |text| text.color.faded(shared::QUIET_ALPHA))?;
+    let mark = shared::mark(size, point, |text| text.color.faded(shared::QUIET_ALPHA))?;
     let toggle = {
         let (tree, id) = (tree.clone(), row.node.id.clone());
         move || {
@@ -663,15 +666,39 @@ fn caret(tree: &Rc<Tree>, row: &Row) -> Result<Box<dyn LayoutItem>, LayoutError>
     Ok(box_item(caret))
 }
 
+/// The caret's column, an icon wide and a line tall where it takes room, and at least the smallest pointer target where it is pressed: toward the label no further than the gap before it, which the label would otherwise cover, and the rest toward the row's start.
+fn caret_column(size: ControlSize, line: f32) -> LayoutStyle {
+    let side = shared::icon_size(size);
+    let grown = shared::target_outset(side) * 2.0;
+    let toward_label = (grown / 2.0).min(shared::gap_sm(size));
+    let down = shared::target_outset(line);
+    // Grown by negative margins rather than a hit outset: a plain container draws nothing, where the styled one an outset needs would add a box to the row's drawing.
+    let toward_start = grown - toward_label;
+    LayoutStyle::row()
+        .width(side + grown)
+        .height(line + down * 2.0)
+        .margin_inline_start(-toward_start)
+        .margin_inline_end(-toward_label)
+        .padding_start(toward_start)
+        .padding_end(toward_label)
+        .margin_block_start(-down)
+        .margin_block_end(-down)
+        .flex_shrink(0.0)
+        .align_items(AlignItems::CENTER)
+        .justify_content(JustifyContent::CENTER)
+}
+
 fn row_box(level: u32, places: &RowPlaces) -> LayoutStyle {
     let tokens = TreeViewTokens::current();
+    let size = places.size();
+    let indent = level.saturating_sub(1) as f32 * tokens.indent(size);
     places.sized(
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .flex_shrink(0.0)
-            .padding_start(tokens.pad_x() + level.saturating_sub(1) as f32 * tokens.indent())
-            .padding_end(tokens.pad_x())
-            .gap(shared::gap_sm()),
+            .padding_start(tokens.pad_x(size) + indent)
+            .padding_end(tokens.pad_x(size))
+            .gap(shared::gap_sm(size)),
     )
 }
 

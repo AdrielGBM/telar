@@ -18,17 +18,11 @@
 #![warn(rustdoc::broken_intra_doc_links)]
 
 mod context;
-mod density;
 mod mode;
 
 pub use context::{
     ScopedTheme, Theme, ThemeExtensions, ThemeTokens, nearest_theme, set_theme, use_theme,
     use_theme_extension, use_theme_tokens,
-};
-pub use density::{
-    ControlSize, ControlSizeContext, ScopedControlSize, control_scale, current_control_size,
-    nearest_control_size, set_control_size, set_surface_control_size, use_control_size,
-    use_surface_control_size,
 };
 pub use mode::{
     ModeContext, ResolvedScheme, SchemePreference, active_mode, follow_system, is_dark,

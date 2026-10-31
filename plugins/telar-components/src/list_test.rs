@@ -41,19 +41,15 @@ fn a_hint_fades_the_ink_of_the_row_it_trails() {
     assert_eq!(ink, declared.with_alpha(shared::QUIET_ALPHA));
 }
 
-/// A row of every list is the shared row height at the control size in force: smaller in a compact region, larger in a roomy one, and the same number every other list's rows are.
+/// A row of every list is the shared row height at its own size: smaller written small, larger written large, and the same number every other list's rows of that size are.
 #[test]
-fn a_row_stands_at_the_shared_row_height_at_every_control_size() {
-    use telar::{ControlSize, provide_control_size, track_layout};
+fn a_row_stands_at_the_shared_row_height_at_every_size() {
+    use telar::track_layout;
 
     let height_at = |size: ControlSize| {
         crate::test_support::fresh_layout_runtime();
-        let mut wanted = 0.0;
-        let row = provide_control_size(size, || {
-            wanted = ListTokens::current().row_height();
-            item(ItemProps::props().label("Move").build())
-        })
-        .unwrap();
+        let wanted = ListTokens::current().row_height(size);
+        let row = item(ItemProps::props().label("Move").size(size).build()).unwrap();
         let rect = track_layout(row.layout_node()).unwrap();
         compute_layout(
             row.layout_node(),
@@ -64,18 +60,13 @@ fn a_row_stands_at_the_shared_row_height_at_every_control_size() {
         let _tree = ComponentList::new(row);
         (rect.get().height, wanted)
     };
-    let sizes = [
-        ControlSize::Mini,
-        ControlSize::Small,
-        ControlSize::Regular,
-        ControlSize::Large,
-    ];
+    let sizes = [ControlSize::Small, ControlSize::Regular, ControlSize::Large];
     let heights: Vec<(f32, f32)> = sizes.into_iter().map(height_at).collect();
     for (height, wanted) in &heights {
         assert_eq!(height, wanted, "{heights:?}");
     }
     assert!(
         heights.windows(2).all(|pair| pair[0].0 < pair[1].0),
-        "rows grow with the control size: {heights:?}"
+        "rows grow with their size: {heights:?}"
     );
 }

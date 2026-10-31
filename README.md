@@ -251,7 +251,7 @@ Everything here is either always present or one word away. Nothing is bundled.
 - **Keyboard** — each focusable control declares the keys it keeps, so a browser build shares Tab and scrolling with the host page instead of fighting it for them. → [docs/keyboard.md](docs/keyboard.md)
 - **Internationalization** — translation catalogs baked at build time; `t!` validates keys and arguments at compile time. Full CLDR plural rules and locale-aware number and date formatting are in the plugin [`telar-i18n`](plugins/telar-i18n).
 - **Two renderers** — a CPU rasterizer on `tiny-skia` and a GPU one on `wgpu`, behind the same drawing vocabulary. `desktop` and `android` bring both, and `backend = "auto"` picks per machine.
-- **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest — in the plugin [`telar-components`](plugins/telar-components): add it with the groups you draw (`overlays`, `chrome`, `advanced`) and list it as a `prelude` in `telar.toml`. → [docs/targets.md](docs/targets.md#the-rest-of-the-features)
+- **A widget catalogue** — buttons, fields, selects, menus, modals, tabs, sliders, and the rest — in the plugin [`telar-components`](plugins/telar-components): add it, with `icons` to draw icons through `telar-icons`, and list it as a `prelude` in `telar.toml`. → [docs/targets.md](docs/targets.md#the-rest-of-the-features)
 - **Navigation** — a reactive page stack with animated transitions, or one stack per tab, that follows the app's address — in the plugin [`telar-navigate`](plugins/telar-navigate): add it and list it as a `prelude` in `telar.toml`. → [docs/targets.md](docs/targets.md#the-rest-of-the-features)
 - **Location** — one address per app on every target: browser history with scroll restoration, `--location` deep links remembered between runs, Android `ACTION_VIEW` and the back button. → [docs/location.md](docs/location.md)
 - **Surface title** — the window, tab, recents label or terminal title is derived from the app's title, the current route's title and the locale, and follows all three. → [docs/surface-title.md](docs/surface-title.md)
@@ -297,7 +297,7 @@ Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 
 | Plugin | What it adds |
 | --- | --- |
-| [`telar-components`](plugins/telar-components) | The widget catalogue. No default features; groups `overlays`, `chrome` and `advanced` |
+| [`telar-components`](plugins/telar-components) | The widget catalogue, every widget in every build. No default features; `icons` draws icon ids through `telar-icons` |
 | [`telar-navigate`](plugins/telar-navigate) | The page stack: `Navigator`, the host that animates between pages, per-tab stacks |
 | [`telar-watch`](plugins/telar-watch) | Filesystem watching delivered on the UI thread: `watch_path` |
 | [`telar-dynamic`](plugins/telar-dynamic) | Decoders and transports for assets that arrive at run time, one feature each |
@@ -309,10 +309,10 @@ Two exceptions. [`cargo-telar`](crates/tools/cargo-telar) is a binary you instal
 
 **The layout rule.** `plugins/` holds every crate built on top of the facade, including what the tooling adds on its own, such as the devtools overlay `cargo telar dev` turns on and the workshop `cargo telar preview` opens. `crates/` holds `telar`, the kernel crates behind it and host-side tooling (`crates/tools/`); a crate a `telar` feature pulls in and compiles into the target is core, even when it is opt-in. Nothing under `crates/` depends on `plugins/`, which `.github/scripts/check-layering.sh` enforces in CI.
 
-**Adding one.** Add the crate, name the feature groups you draw, and, for a plugin that ships `.rsx` tags, list it in `telar.toml` so every `.rsx` file sees them without a `use`:
+**Adding one.** Add the crate, name the features whose dependencies you want, and, for a plugin that ships `.rsx` tags, list it in `telar.toml` so every `.rsx` file sees them without a `use`:
 
 ```sh
-cargo add telar-components --features overlays
+cargo add telar-components --features icons
 cargo add telar-navigate
 ```
 

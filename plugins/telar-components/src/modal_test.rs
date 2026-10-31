@@ -380,36 +380,61 @@ fn the_card_is_rounded_by_the_dialog_role_until_the_tokens_name_a_radius() {
 }
 
 #[test]
-fn the_tokens_size_and_pad_the_card_at_the_control_size_in_force() {
+fn the_tokens_size_and_pad_the_card_at_the_modal_s_size() {
     let tokens = ModalTokens {
         pad: Some(10.0),
         min_width: Some(200.0),
         max_width: Some(300.0),
         ..ModalTokens::default()
     };
-    telar::set_control_size(telar::ControlSize::Small);
-    let small = (tokens.pad(), tokens.min_width(), tokens.max_width());
-    telar::set_control_size(telar::ControlSize::Regular);
-    let scale = telar::ControlSize::Small.scale();
+    let small = ControlSize::Small;
     assert_eq!(
-        small,
         (
-            10.0 * scale,
-            (200.0 * scale).round(),
-            (300.0 * scale).round()
+            tokens.pad(small),
+            tokens.min_width(small),
+            tokens.max_width(small)
+        ),
+        (
+            10.0 * small.scale(),
+            (200.0 * small.text_scale()).round(),
+            (300.0 * small.text_scale()).round()
         )
     );
 
     let unset = ModalTokens::default();
-    assert_eq!(
-        unset.pad(),
-        crate::metrics::gap_xl(),
-        "an unset pad is the extra-large gap"
-    );
-    assert!(
-        unset.min_width() < unset.max_width(),
-        "the measured defaults leave the card room to grow"
-    );
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        assert_eq!(
+            unset.pad(size),
+            crate::metrics::gap_xl(size),
+            "an unset pad is the extra-large gap of the modal's size"
+        );
+        assert!(
+            unset.min_width(size) < unset.max_width(size),
+            "the measured defaults leave the card room to grow"
+        );
+    }
+}
+
+/// A modal laid out at a size is as wide as its tokens say at that size, and stands that size's pad off a narrow window's edge.
+#[test]
+fn the_card_is_laid_out_at_the_modal_s_size() {
+    plain_theme(Some(ModalTokens {
+        pad: Some(20.0),
+        min_width: Some(250.0),
+        max_width: Some(250.0),
+        ..ModalTokens::default()
+    }));
+    for size in [ControlSize::Small, ControlSize::Large] {
+        let tree = open_modal_sized(size, text_body("Body"), (800.0, 400.0));
+        assert_eq!(
+            card_rect(&tree).width,
+            (250.0 * size.text_scale()).round(),
+            "{size:?}"
+        );
+        drop(tree);
+        let tree = open_modal_sized(size, text_body("Body"), (200.0, 400.0));
+        assert_eq!(card_rect(&tree).x, 20.0 * size.scale(), "{size:?}");
+    }
 }
 
 #[test]
@@ -473,12 +498,21 @@ fn the_scrim_is_the_theme_overlay_and_follows_a_switch() {
 }
 
 fn open_modal_with(body: Children, window: (f32, f32)) -> telar::testing::Scoped<ComponentList> {
+    open_modal_sized(ControlSize::Regular, body, window)
+}
+
+fn open_modal_sized(
+    size: ControlSize,
+    body: Children,
+    window: (f32, f32),
+) -> telar::testing::Scoped<ComponentList> {
     crate::test_support::fresh_layout_runtime();
     let tree = telar::testing::scoped(|| {
         let modal = modal(
             ModalProps::props()
                 .open(signal(true))
                 .title("Confirm")
+                .size(size)
                 .children(body)
                 .build(),
         )
@@ -543,7 +577,7 @@ fn an_unset_width_is_the_tokens_and_the_window_bounds_it() {
 #[test]
 fn a_narrow_window_never_overflows_the_card() {
     plain_theme(None);
-    let pad = ModalTokens::default().pad();
+    let pad = ModalTokens::default().pad(ControlSize::Regular);
     for width in [120.0, 200.0, 300.0, 368.0] {
         let tree = open_modal_with(text_body("Body"), (width, 400.0));
         let card = card_rect(&tree);
@@ -559,7 +593,7 @@ fn a_narrow_window_never_overflows_the_card() {
 #[test]
 fn a_tall_body_scrolls_inside_a_card_that_fits_the_window() {
     plain_theme(None);
-    let pad = ModalTokens::default().pad();
+    let pad = ModalTokens::default().pad(ControlSize::Regular);
     let tree = open_modal_with(tall_body(40), (600.0, 400.0));
     let card = card_rect(&tree);
     assert!(card.y >= 0.0 && card.y + card.height <= 400.0, "{card:?}");

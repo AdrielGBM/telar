@@ -23,7 +23,6 @@ col gap:20
                 tag label:"design"
                 tag label:"rust" selected:$rust
                 tag label:"removable"
-                    box role:button label:"Remove removable" width:24 height:24 align:center justify:center cursor:pointer on_press:(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) }) slot:"action"
-                        text "×"
+                    icon_button icon:"lucide:x" label:"Remove removable" size:(ControlSize::Small) on_press:(|| { $tags.update(|n| if *n > 0 { *n -= 1 }) }) slot:"action"
             text "tags · {$tags}" font_size:13 color:$theme.muted
-        code_line code:"tag label:'removable' / box role:button label:'Remove removable' slot:'action'"
+        code_line code:"tag label:'removable' / icon_button icon:'lucide:x' size:(ControlSize::Small) slot:'action'"

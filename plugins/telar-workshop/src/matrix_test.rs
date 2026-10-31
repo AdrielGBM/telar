@@ -7,12 +7,12 @@ use telar::preview::{
 };
 use telar::testing::{Scoped, centre, mount, named as named_key, press, release, route, texts};
 use telar::{
-    AccessNode, App, AppRuntime, Color, ColorScheme, ComponentList, ControlSize, Direction,
-    DrawCommand, Event, LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect, Role, Size,
-    SystemPreferences, Text, TextStyle, box_item, focus, for_each_with_matrix,
-    reset_layout_runtime, set_system_preferences, transform_clip_rect,
+    AccessNode, App, AppRuntime, Color, ColorScheme, ComponentList, Direction, DrawCommand, Event,
+    LayoutError, LayoutItem, LayoutStyle, LocalApp, NamedKey, Rect, Role, Size, SystemPreferences,
+    Text, TextStyle, box_item, focus, for_each_with_matrix, reset_layout_runtime,
+    set_system_preferences, transform_clip_rect,
 };
-use telar_components::{ButtonProps, ModalProps, button, modal};
+use telar_components::{ButtonProps, ControlSize, ModalProps, button, modal};
 
 use super::cell::{Status, seed, sizing};
 use super::plan::{self, CustomAxis, MatrixAxes, PickedAxis, Problem, grid, toggled};
@@ -670,12 +670,6 @@ fn a_built_matrix_varies_the_globals_and_the_args_with_a_fixed_set_of_values() {
         CustomAxis::Viewport.axis(&[], &Matrices::default()),
         Some(Axis::Viewport(crate::settings::PRESET_VIEWPORTS))
     );
-    assert_eq!(
-        CustomAxis::ControlSize
-            .axis(&[], &Matrices::default())
-            .map(|axis| Matrix::count(&[axis], &Matrices::default())),
-        Some(4)
-    );
     assert_eq!(CustomAxis::Arg("missing".into()).axis(&[], &project), None);
 
     let entry = PreviewEntry::new(PLAIN, "badge", "Plain", widget).args(&GHOST);
@@ -684,6 +678,34 @@ fn a_built_matrix_varies_the_globals_and_the_args_with_a_fixed_set_of_values() {
     assert_eq!(
         CustomAxis::Arg("ghost".into()).axis(&args, &project),
         Some(Axis::Arg("ghost", &["false", "true"]))
+    );
+}
+
+fn size_control() -> ControlKind {
+    <ControlSize as telar::preview::PreviewArg>::CONTROL
+}
+
+static SIZE: [ArgSpec; 1] = [ArgSpec::new("size")
+    .control(size_control)
+    .default("Regular")];
+
+#[test]
+fn a_built_matrix_varies_a_component_s_size_as_its_size_arg() {
+    let entry = PreviewEntry::new(PLAIN, "badge", "Plain", widget).args(&SIZE);
+    let args = telar::preview::host::Args::in_memory_for(&entry).states();
+    assert_eq!(plan::varied_args(&args), ["size"]);
+    let axis = CustomAxis::Arg("size".into())
+        .axis(&args, &Matrices::default())
+        .unwrap();
+    assert_eq!(axis, Axis::Arg("size", &["Small", "Regular", "Large"]));
+    let sizes: Vec<ControlSize> = Matrix::expand(&[axis], &entry, &Matrices::default())
+        .unwrap()
+        .iter()
+        .map(|cell| cell.ctx(&entry).unwrap().arg("size", ControlSize::Regular))
+        .collect();
+    assert_eq!(
+        sizes,
+        [ControlSize::Small, ControlSize::Regular, ControlSize::Large]
     );
 }
 
@@ -743,7 +765,6 @@ fn a_cell_is_set_up_in_the_toolbar_settings_under_its_own() {
     let settings = CanvasSettings {
         mode: ModeChoice::Named("night".into()),
         locale: Some("fr".into()),
-        control_size: Some(ControlSize::Small),
         background: Background::Dark,
         ..CanvasSettings::default()
     };
@@ -760,7 +781,6 @@ fn a_cell_is_set_up_in_the_toolbar_settings_under_its_own() {
         Some(Direction::Rtl),
         "read in the cell's locale's direction"
     );
-    assert_eq!(globals.control_size().peek(), Some(ControlSize::Small));
     assert_eq!(
         globals.background().peek(),
         Some(crate::settings::DARK_BACKGROUND)

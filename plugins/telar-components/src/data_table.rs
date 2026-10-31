@@ -19,7 +19,7 @@ use telar::{
 use crate::resizable::{ResizeEdge, ResizeHandleProps, resize_handle};
 use crate::rows::{BuiltRows, RowPlaces, RowState, counted, cursor_row_paint, with_empty_state};
 use crate::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
-use crate::{shared, strings};
+use crate::{ControlSize, shared, strings};
 
 const OVERSCAN: usize = 4;
 const MIN_COLUMN_WIDTH: f32 = 48.0;
@@ -29,7 +29,7 @@ const MIN_COLUMN_WIDTH: f32 = 48.0;
 /// Every field left `None` follows the role named beside it, read when the table is built or painted, so a table's rows stand at the height every other list's do.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DataTableTokens {
-    /// Height of a row, the header's included, at the regular control size and scaled with the control size in force. `None` is [`metrics::row_height`](crate::metrics::row_height).
+    /// Height of a row, the header's included, at the regular size and scaled with the table's own. `None` is [`metrics::row_height`](crate::metrics::row_height).
     pub row_height: Option<f32>,
     /// Space between a cell's edges and what it shows, likewise. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
     pub pad_x: Option<f32>,
@@ -43,16 +43,15 @@ impl DataTableTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    /// In whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
-    pub fn row_height(&self) -> f32 {
-        self.row_height
-            .map_or_else(shared::row_height, |height| height * telar::control_scale())
-            .round()
+    /// The height of a row of a table of `size`, in whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
+    pub fn row_height(&self, size: ControlSize) -> f32 {
+        crate::list::scaled_row_height(self.row_height, size)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between a cell's edges and what it shows in a table of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
     }
 
     pub fn radius(&self) -> f32 {
@@ -237,6 +236,9 @@ pub struct DataTableProps {
     pub columns: Vec<Column>,
     #[props(into, default)]
     pub rows: Reactive<Vec<TableRow>>,
+    /// How large the rows and the header are drawn: their height, padding, text and sort marks, and the message shown while there are no rows, as [`ControlSize`] works them out. What a column's [`cell`](Column::cell) builds is sized where it is written.
+    #[props(default)]
+    pub size: ControlSize,
     /// The bound sort. `None` (the default) is uncontrolled and starts unsorted.
     #[props(some, into, default)]
     pub sort: Option<RwSignal<Option<TableSort>>>,
@@ -283,6 +285,7 @@ pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutEr
     let DataTableProps {
         columns,
         rows,
+        size,
         sort,
         on_sort,
         sort_rows,
@@ -311,7 +314,7 @@ pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutEr
             Ordered(Rc::new(rows))
         })
     };
-    let row_height = DataTableTokens::current().row_height();
+    let row_height = DataTableTokens::current().row_height(size);
     let wraps = columns.iter().any(|column| column.wrap);
 
     let mut made: Option<Rc<Table>> = None;
@@ -325,7 +328,7 @@ pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutEr
             selection,
             on_select,
             cursor: signal(None),
-            places: RowPlaces::new(viewport, row_height, wraps).under_header(row_height),
+            places: RowPlaces::new(viewport, size, row_height, wraps).under_header(row_height),
             row_height,
             focus: Cell::new(None),
             built: BuiltRows::new(),
@@ -372,6 +375,7 @@ pub fn data_table(props: DataTableProps) -> Result<Box<dyn LayoutItem>, LayoutEr
         None => box_item(scroll),
     };
     with_empty_state(
+        size,
         scroll,
         move || ordered.with(|rows| rows.0.is_empty()),
         row_height,
@@ -709,6 +713,7 @@ impl Table {
 
 /// A cell's box in the column at `index`, in the header or in a row: its width, its height, where its content sits across it, and the space from its edges.
 fn cell_box(table: &Table, index: usize, header: bool) -> LayoutStyle {
+    let size = table.places.size();
     let style = LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(match table.columns[index].align {
@@ -717,7 +722,7 @@ fn cell_box(table: &Table, index: usize, header: bool) -> LayoutStyle {
             CellAlign::End => JustifyContent::END,
         })
         .min_width(0.0)
-        .padding_horizontal(DataTableTokens::current().pad_x());
+        .padding_horizontal(DataTableTokens::current().pad_x(size));
     let style = match header {
         true => style.height(table.row_height),
         false => table.places.sized(style),
@@ -752,8 +757,12 @@ fn cell_text(
     Ok(box_item(ClippedItem::new(box_item(text), Clip::both())))
 }
 
-/// `text` on as many lines as its cell's width needs, each set across it as `align` says.
-fn wrapped_text(text: Arc<str>, align: CellAlign) -> Result<Box<dyn LayoutItem>, LayoutError> {
+/// `text` at the table's `size` on as many lines as its cell's width needs, each set across it as `align` says.
+fn wrapped_text(
+    size: ControlSize,
+    text: Arc<str>,
+    align: CellAlign,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let align = match align {
         CellAlign::Start => TextAlign::Start,
         CellAlign::Center => TextAlign::Center,
@@ -766,7 +775,7 @@ fn wrapped_text(text: Arc<str>, align: CellAlign) -> Result<Box<dyn LayoutItem>,
             .flex_shrink(1.0)
             .min_width(0.0),
         move |t| {
-            shared::control_text(t, 1.0)
+            shared::control_text(size, t, 1.0)
                 .with_text_wrap(TextWrap::Wrap)
                 .with_text_align(align)
         },
@@ -808,12 +817,13 @@ fn header_row(table: &Rc<Table>) -> Result<Box<dyn LayoutItem>, LayoutError> {
 /// A column's header, named by the column's label alone so a reader does not hear its splitter's name in it too.
 fn header_cell(table: &Rc<Table>, index: usize) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let column = &table.columns[index];
+    let size = table.places.size();
     let at = At {
         row: None,
         column: index,
     };
-    let label = cell_text(column.label.clone(), |t| {
-        shared::control_text(t, 1.0).with_font_weight(shared::strong_weight())
+    let label = cell_text(column.label.clone(), move |t| {
+        shared::control_text(size, t, 1.0).with_font_weight(shared::strong_weight())
     })?;
     let mut content = vec![label];
     if column.sortable {
@@ -831,11 +841,11 @@ fn header_cell(table: &Rc<Table>, index: usize) -> Result<Box<dyn LayoutItem>, L
                     Some(SortDirection::Descending) => shared::Mark::ChevronDown,
                     _ => shared::Mark::ChevronUp,
                 };
-                let mark = shared::mark(point, |text| text.color)?;
+                let mark = shared::mark(size, point, |text| text.color)?;
                 let spaced = Container::new(
                     LayoutStyle::row()
                         .align_items(AlignItems::CENTER)
-                        .padding_start(shared::gap_xs()),
+                        .padding_start(shared::gap_xs(size)),
                     vec![mark],
                 )?;
                 Ok(box_item(spaced))
@@ -958,6 +968,7 @@ fn body_row(
     row: TableRow,
     place: SetPosition,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let size = table.places.size();
     let cells = table
         .columns
         .iter()
@@ -966,8 +977,8 @@ fn body_row(
             let text = row.cells.get(index).cloned().unwrap_or_default();
             let content = match &column.cell {
                 Some(build) => build(&row)?,
-                None if column.wrap => wrapped_text(text, column.align)?,
-                None => cell_text(text, |t| shared::control_text(t, 1.0))?,
+                None if column.wrap => wrapped_text(size, text, column.align)?,
+                None => cell_text(text, move |t| shared::control_text(size, t, 1.0))?,
             };
             let at = At {
                 row: Some(row.id.clone()),

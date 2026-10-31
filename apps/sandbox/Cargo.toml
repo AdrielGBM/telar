@@ -52,8 +52,8 @@ telar = { workspace = true, features = [
     "runtime",
     "svg",
 ] }
-# Menus, dialogs and drawers draw over the page; steppers, accordions and reorderable lists are the rest.
-telar-components = { workspace = true, features = ["overlays", "advanced"] }
+# `icons` draws the icons this app bakes in its icon buttons, rather than their Unicode stand-ins.
+telar-components = { workspace = true, features = ["icons"] }
 telar-devtools = { workspace = true, optional = true }
 # `demo_svgs.rs` builds its icons with `SvgData::from_str`, and the runtime parser behind it lives here now
 # rather than under a `telar` feature. The demo never reaches for a name in this crate — the dependency is

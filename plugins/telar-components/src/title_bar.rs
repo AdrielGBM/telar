@@ -10,6 +10,7 @@ use telar::{
 };
 use web_time::Instant;
 
+use crate::ControlSize;
 use crate::shared::{self, DOUBLE_CLICK, Mark};
 use crate::strings;
 
@@ -25,6 +26,9 @@ pub struct WindowControlsProps {
     /// Draw the button that maximizes the window, which is drawn and named as restoring it while the window is maximized. On by default.
     #[props(default = true)]
     pub maximize: bool,
+    /// How large the buttons are drawn: their marks and the padding round them, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// What the close button does. The default closes the window, and with it a single-window app.
     #[props(default = Rc::new(telar::window::close))]
     pub on_close: Rc<dyn Fn()>,
@@ -43,7 +47,7 @@ pub struct WindowControlsProps {
     /// The close mark under the pointer. `Color::TRANSPARENT` (the default) keeps the mark as it is.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub close_hover_glyph: Reactive<Color>,
-    /// The least each button measures on either side, in px. `None` (the default) is [`metrics::MIN_TARGET`](crate::metrics::MIN_TARGET); a bar of other controls passes `Reactive::of(metrics::control_height)` so the window's controls stand as tall as the rest.
+    /// The least each button measures on either side, in px. `None` (the default) is [`metrics::MIN_TARGET`](crate::metrics::MIN_TARGET); a bar of other controls passes their [`metrics::control_height`](crate::metrics::control_height) so the window's controls stand as tall as the rest.
     #[props(some, into, default)]
     pub min_size: Option<Reactive<f32>>,
     /// Amends the paint of each button — the controls' **principal surface** — at rest and under the pointer. See [`telar::SurfaceStyle`] for when a theme token is the right instrument instead.
@@ -59,9 +63,10 @@ struct ControlPaint {
     hover_glyph: Reactive<Color>,
 }
 
-/// What every button of one [`window_controls`] shares: its least size and the caller's amendment.
+/// What every button of one [`window_controls`] shares: its size, its least size and the caller's amendment.
 #[derive(Clone)]
 struct ControlLook {
+    size: ControlSize,
     min_size: Option<Reactive<f32>>,
     style: Option<SurfaceAmendment>,
 }
@@ -75,8 +80,8 @@ impl ControlLook {
         LayoutStyle::column()
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
-            .padding_horizontal(shared::gap_md())
-            .padding_vertical(shared::gap_xs())
+            .padding_horizontal(shared::gap_md(self.size))
+            .padding_vertical(shared::gap_xs(self.size))
             .min_width(side)
             .min_height(side)
     }
@@ -97,6 +102,7 @@ fn control_button(
     press: Rc<dyn Fn()>,
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let name = Reactive::of(name);
+    let size = look.size;
     let button = ControlButton {
         shape: Rc::new(shape),
         name: name.clone(),
@@ -104,7 +110,7 @@ fn control_button(
         look,
         press,
     };
-    shared::hinted(move || button.build(), name, Reactive::default())
+    shared::hinted(move || button.build(), size, name, Reactive::default())
 }
 
 /// Everything one window-control button is built from, so the tooltip naming it can build it wherever and however often it places it.
@@ -133,6 +139,7 @@ impl ControlButton {
         } = paint;
         let hovered = signal(false);
         let mark = shared::mark(
+            look.size,
             move || shape(),
             move |inherited| {
                 let color = match hovered.get() {
@@ -174,6 +181,7 @@ pub fn window_controls(props: WindowControlsProps) -> Result<Box<dyn LayoutItem>
     let WindowControlsProps {
         minimize,
         maximize,
+        size,
         on_close,
         glyph,
         hover,
@@ -183,7 +191,11 @@ pub fn window_controls(props: WindowControlsProps) -> Result<Box<dyn LayoutItem>
         min_size,
         style,
     } = props;
-    let look = ControlLook { min_size, style };
+    let look = ControlLook {
+        size,
+        min_size,
+        style,
+    };
     let quiet = || ControlPaint {
         glyph: glyph.clone(),
         hover: hover.clone(),

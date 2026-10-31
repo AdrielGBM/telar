@@ -8,6 +8,7 @@ use telar::{
     SurfaceAmendment, amend_surface, box_item, children, focus::Role, signal,
 };
 
+use crate::ControlSize;
 use crate::shared;
 
 /// A swatch row's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -15,7 +16,7 @@ use crate::shared;
 /// Every field left `None` follows the role named beside it, read when the swatches paint.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SwatchesTokens {
-    /// Diameter of a swatch at the regular control size, scaled with the control size in force. `None` is [`metrics::icon_size`](crate::metrics::icon_size) and [`metrics::gap_sm`](crate::metrics::gap_sm).
+    /// Diameter of a swatch at the regular size, scaled with the row's own. `None` is [`metrics::icon_size`](crate::metrics::icon_size) and [`metrics::gap_sm`](crate::metrics::gap_sm).
     pub size: Option<f32>,
     /// Width of the frame round the chosen swatch. `None` is the theme's `border_width_strong`.
     pub ring: Option<f32>,
@@ -27,10 +28,11 @@ impl SwatchesTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    pub fn size(&self) -> f32 {
+    /// The diameter of a swatch in a row of `size`.
+    pub fn size(&self, size: ControlSize) -> f32 {
         self.size.map_or_else(
-            || shared::icon_size() + shared::gap_sm(),
-            |size| size * telar::control_scale(),
+            || shared::icon_size(size) + shared::gap_sm(size),
+            |diameter| diameter * size.scale(),
         )
     }
 
@@ -39,22 +41,22 @@ impl SwatchesTokens {
     }
 }
 
-fn hit_size(size: f32) -> f32 {
-    size.max(shared::MIN_TARGET)
+fn hit_size(diameter: f32) -> f32 {
+    diameter.max(shared::MIN_TARGET)
 }
 
 /// The swatches stand `gap_sm` apart where they are drawn, so the air their hit areas already take is subtracted from it.
-fn row(size: f32) -> LayoutStyle {
-    let spacing = (shared::gap_sm() - (hit_size(size) - size)).max(0.0);
+fn row(size: ControlSize, diameter: f32) -> LayoutStyle {
+    let spacing = (shared::gap_sm(size) - (hit_size(diameter) - diameter)).max(0.0);
     LayoutStyle::row().flex_wrap().gap(spacing)
 }
 
-fn disc(size: f32) -> LayoutStyle {
-    LayoutStyle::new().width(size).height(size)
+fn disc(diameter: f32) -> LayoutStyle {
+    LayoutStyle::new().width(diameter).height(diameter)
 }
 
-fn cell(size: f32) -> LayoutStyle {
-    let hit = hit_size(size);
+fn cell(diameter: f32) -> LayoutStyle {
+    let hit = hit_size(diameter);
     LayoutStyle::new()
         .width(hit)
         .height(hit)
@@ -74,9 +76,12 @@ pub struct SwatchesProps {
     /// Bound selection: the index of the chosen colour, `None` for none of them. `None` for the prop itself (the default) is uncontrolled.
     #[props(some, into, default)]
     pub selected: Option<RwSignal<Option<u32>>>,
-    /// Each swatch's drawn diameter in px. `0.0` (the default) means "unset": the [`SwatchesTokens`] size at the control size in force. What takes the press around it is never smaller than 24 px, so a small swatch stays easy to hit.
+    /// How large the row is drawn: its swatches and the gap between them, as [`ControlSize`] works them out.
     #[props(default)]
-    pub size: f32,
+    pub size: ControlSize,
+    /// Each swatch's drawn diameter in px. `0.0` (the default) means "unset": the [`SwatchesTokens`] size at the row's size. What takes the press around it is never smaller than 24 px, so a small swatch stays easy to hit.
+    #[props(default)]
+    pub diameter: f32,
     /// Fires with the index a press or a key selected.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(u32)>>,
@@ -92,14 +97,15 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
         names,
         selected,
         size,
+        diameter,
         on_select,
         style,
     } = props;
-    let size = move || {
-        if size > 0.0 {
-            size
+    let diameter = move || {
+        if diameter > 0.0 {
+            diameter
         } else {
-            SwatchesTokens::current().size()
+            SwatchesTokens::current().size(size)
         }
     };
     let selected = selected.unwrap_or_else(|| signal(None::<u32>));
@@ -119,7 +125,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
         let style = style.clone();
 
         let face = StyledContainer::new(
-            disc(size()),
+            disc(diameter()),
             move |r| {
                 let rest = swatch_rect(color, paint_selected.get() == Some(idx))
                     .with_radius(shared::pill(r));
@@ -127,10 +133,10 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
             },
             vec![],
         )?
-        .styled_by(move || disc(size()));
+        .styled_by(move || disc(diameter()));
         let swatch =
-            StyledContainer::new(cell(size()), |_r| RectStyle::default(), children![face])?
-                .styled_by(move || cell(size()))
+            StyledContainer::new(cell(diameter()), |_r| RectStyle::default(), children![face])?
+                .styled_by(move || cell(diameter()))
                 .a11y_label(move || name.clone())
                 .control(Role::Radio)
                 .toggled(move || announced.get() == Some(idx))
@@ -155,7 +161,7 @@ pub fn swatches(props: SwatchesProps) -> Result<Box<dyn LayoutItem>, LayoutError
     }
 
     Ok(box_item(
-        Container::new(row(size()), cells)?.styled_by(move || row(size())),
+        Container::new(row(size, diameter()), cells)?.styled_by(move || row(size, diameter())),
     ))
 }
 

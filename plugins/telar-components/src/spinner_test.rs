@@ -17,7 +17,7 @@ fn spinner_builds_with_default_size() {
 #[test]
 fn spinner_builds_with_custom_size() {
     crate::test_support::fresh_layout_runtime();
-    let widget = spinner(SpinnerProps::props().size(48.0).build()).unwrap();
+    let widget = spinner(SpinnerProps::props().diameter(48.0).build()).unwrap();
     lay_out(widget.layout_node());
 }
 
@@ -54,7 +54,10 @@ fn ring(props: SpinnerProps) -> (telar::Rect, RectStyle) {
 fn an_unsized_spinner_stands_a_control_height_tall_and_follows_its_tokens() {
     telar::set_theme(Plain::default());
     let (rect, style) = ring(SpinnerProps::props().build());
-    assert_eq!(rect.width, crate::metrics::control_height());
+    assert_eq!(
+        rect.width,
+        crate::metrics::control_height(crate::ControlSize::Regular)
+    );
     assert_eq!(style.radius, telar::BorderRadius::all(rect.width / 2.0));
 
     telar::set_theme(Plain {
@@ -62,8 +65,29 @@ fn an_unsized_spinner_stands_a_control_height_tall_and_follows_its_tokens() {
     });
     let (rect, _) = ring(SpinnerProps::props().build());
     assert_eq!(rect.width, 40.0);
-    let (rect, _) = ring(SpinnerProps::props().size(32.0).build());
-    assert_eq!(rect.width, 32.0, "a size the caller names wins");
+    let (rect, _) = ring(SpinnerProps::props().diameter(32.0).build());
+    assert_eq!(rect.width, 32.0, "a diameter the caller names wins");
+}
+
+#[test]
+fn a_spinner_stands_as_tall_as_a_control_of_its_size_and_scales_its_token() {
+    use crate::ControlSize;
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        telar::set_theme(Plain::default());
+        let (rect, _) = ring(SpinnerProps::props().size(size).build());
+        assert_eq!(rect.width, crate::metrics::control_height(size), "{size:?}");
+
+        telar::set_theme(Plain {
+            spinners: Some(SpinnerTokens { size: Some(40.0) }),
+        });
+        let (rect, _) = ring(SpinnerProps::props().size(size).build());
+        assert_eq!(rect.width, 40.0 * size.scale(), "{size:?}");
+        let (rect, _) = ring(SpinnerProps::props().size(size).diameter(32.0).build());
+        assert_eq!(
+            rect.width, 32.0,
+            "{size:?}: the diameter wins at every size"
+        );
+    }
 }
 
 #[test]

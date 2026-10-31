@@ -12,7 +12,7 @@ use telar::{
 
 use crate::shared;
 use crate::test_support::{find_text, first_painted, fresh_layout_runtime, painted_at};
-use crate::{TagProps, TagTokens, Tone, Variant, tag};
+use crate::{ControlSize, TagProps, TagTokens, Tone, Variant, tag};
 use telar::testing::{centre, moved, press};
 
 const TONES: [Tone; 6] = [
@@ -243,28 +243,132 @@ fn a_style_amendment_reshapes_the_tag() {
     assert!(painted.border.is_some(), "the frame is kept");
 }
 
-/// The padding is a length at the regular size, so a larger control size pads it in proportion.
+const SIZES: [ControlSize; 3] = [ControlSize::Small, ControlSize::Regular, ControlSize::Large];
+
+/// Every length follows the size the tag is written at: the padding either side of its label, and the label's share of the text around it.
 #[test]
-fn the_padding_scales_with_the_control_size() {
-    fresh_layout_runtime();
-    let tag = telar::provide_control_size(telar::ControlSize::Large, || {
-        tag(TagProps::props().label("Beta").build())
+fn the_padding_and_the_label_follow_the_size() {
+    for size in SIZES {
+        let (tree, rect) = mounted(TagProps::props().label("Beta").size(size).build());
+        let padding = rect.width - label_rect(&tree, "Beta").width;
+        let expected = 2.0 * shared::gap_md(size);
+        assert!(
+            (padding - expected).abs() <= 0.5,
+            "{size:?} padded by {padding}, not {expected}, within the half pixel layout rounds the box by"
+        );
+        let font_size = tree
+            .commands()
+            .iter()
+            .find_map(|command| match command {
+                DrawCommand::Text { style, .. } => Some(style.font_size),
+                _ => None,
+            })
+            .expect("the tag draws its label");
+        let expected =
+            telar::Inherited::initial().text.font_size * size.text_scale() * shared::CAPTION_RATIO;
+        assert!(
+            (font_size - expected).abs() < 0.01,
+            "{size:?} draws its label at {font_size}, not {expected}"
+        );
+    }
+}
+
+/// A tag stands 20, 24 and 28 px tall from small to large, and a filter never below the smallest pointer target.
+#[test]
+fn a_tag_stands_at_its_size_s_height_and_a_filter_at_the_smallest_target_at_least() {
+    for (size, plain, filter) in [
+        (ControlSize::Small, 20.0, 24.0),
+        (ControlSize::Regular, 24.0, 24.0),
+        (ControlSize::Large, 28.0, 28.0),
+    ] {
+        let (_, rect) = mounted(TagProps::props().label("Beta").size(size).build());
+        assert_eq!(rect.height, plain, "a static {size:?} tag");
+        let (_, rect) = mounted(
+            TagProps::props()
+                .label("Beta")
+                .size(size)
+                .selected(telar::signal(false))
+                .build(),
+        );
+        assert_eq!(rect.height, filter, "a {size:?} filter");
+    }
+}
+
+/// A padding the theme names is a length at the regular size, scaled to the tag's own.
+#[test]
+fn a_named_padding_scales_with_the_size() {
+    let tokens = TagTokens {
+        pad_x: Some(10.0),
+        ..TagTokens::default()
+    };
+    assert_eq!(tokens.pad_x(ControlSize::Regular), 10.0);
+    assert_eq!(tokens.pad_x(ControlSize::Large), 12.5);
+}
+
+fn small_remove(name: &'static str, run: Rc<dyn Fn()>) -> telar::Children {
+    telar::Children::one(move || {
+        crate::icon_button(
+            crate::IconButtonProps::props()
+                .icon("lucide:x")
+                .label(name)
+                .size(ControlSize::Small)
+                .on_press(run.clone())
+                .build(),
+        )
     })
-    .unwrap();
-    let rect = track_layout(tag.layout_node()).unwrap();
-    compute_layout(
-        tag.layout_node(),
-        AvailableSpace::MaxContent,
-        AvailableSpace::MaxContent,
-    )
-    .unwrap();
-    let tree = ComponentList::new(tag);
-    let padding = rect.get().width - label_rect(&tree, "Beta").width;
-    let expected = 2.0 * shared::gap_md() * 1.25;
-    assert!(
-        (padding - expected).abs() <= 0.5,
-        "padded by {padding}, not {expected}, within the half pixel layout rounds the box by"
-    );
+}
+
+/// A small icon button is as tall as a regular tag and as a small one round an action, so removing a tag never makes it taller than a filter of its size.
+#[test]
+fn a_small_icon_button_in_the_action_keeps_the_tag_at_its_own_height() {
+    for (size, height) in [
+        (ControlSize::Small, 24.0),
+        (ControlSize::Regular, 24.0),
+        (ControlSize::Large, 28.0),
+    ] {
+        let (_, removable) = mounted(
+            TagProps::props()
+                .label("Logo")
+                .size(size)
+                .action(small_remove("Remove Logo", Rc::new(|| {})))
+                .build(),
+        );
+        assert_eq!(
+            removable.height, height,
+            "a {size:?} tag round a small action"
+        );
+    }
+}
+
+/// A filter's toggle and the small action beside it are each a whole pointer target at every size, however short the label, and side by side rather than over each other.
+#[test]
+fn a_filter_and_its_small_action_are_each_a_full_target_side_by_side_at_every_size() {
+    for size in SIZES {
+        fresh_layout_runtime();
+        telar::focus::clear();
+        let tag = tag(TagProps::props()
+            .label("3")
+            .size(size)
+            .selected(telar::signal(true))
+            .action(small_remove("Remove 3", Rc::new(|| {})))
+            .build())
+        .unwrap();
+        in_a_row_node(tag.layout_node());
+        let _tree = ComponentList::new(tag);
+        let [toggle, remove] = crate::test_support::drawn(Role::Button)[..] else {
+            panic!("a {size:?} filter with an action shows two buttons");
+        };
+        for (part, rect) in [("toggle", toggle), ("action", remove)] {
+            assert!(
+                rect.width >= shared::MIN_TARGET && rect.height >= shared::MIN_TARGET,
+                "the {size:?} {part} is {rect:?}"
+            );
+        }
+        assert!(
+            toggle.x + toggle.width <= remove.x + 0.5,
+            "the {size:?} toggle {toggle:?} runs into the action {remove:?}"
+        );
+    }
 }
 
 /// The outline's frame is drawn inside the box, so swapping one variant for another never moves what is beside it.
@@ -781,45 +885,49 @@ fn the_action_keeps_its_full_pointer_target() {
     }
 }
 
-/// The action sits beside the toggle, not over it, so a press at the end of the toggle's label is the toggle's.
+/// The action sits beside the toggle, not over it, so a press at the end of the toggle's label is the toggle's at every size.
 #[test]
 fn a_press_at_the_toggle_s_label_edge_toggles_and_does_not_reach_the_action() {
-    fresh_layout_runtime();
-    let on = telar::signal(false);
-    let removed = Rc::new(Cell::new(0));
-    let sink = removed.clone();
-    let mut tag = tag(TagProps::props()
-        .label("Images")
-        .selected(on)
-        .action(acting(
-            "Remove Images",
-            Rc::new(move || sink.set(sink.get() + 1)),
-        ))
-        .build())
-    .unwrap();
-    in_a_row_node(tag.layout_node());
-    let body = crate::test_support::drawn(Role::Button)[0];
-    let y = (body.y + body.height / 2.0) as f64;
-    let label_end = body.x + body.width - TagTokens::current().pad_x();
-    for x in [label_end - 0.5, body.x + body.width - 0.5] {
-        let before = on.get();
-        for event in [
-            Event::PointerPressed {
-                x: x as f64,
-                y,
-                button: PointerButton::Primary,
-                source: PointerSource::Mouse,
-            },
-            Event::PointerReleased {
-                x: x as f64,
-                y,
-                button: PointerButton::Primary,
-                source: PointerSource::Mouse,
-            },
-        ] {
-            tag.on_event(&event);
+    for size in SIZES {
+        fresh_layout_runtime();
+        telar::focus::clear();
+        let on = telar::signal(false);
+        let removed = Rc::new(Cell::new(0));
+        let sink = removed.clone();
+        let mut tag = tag(TagProps::props()
+            .label("Images")
+            .size(size)
+            .selected(on)
+            .action(acting(
+                "Remove Images",
+                Rc::new(move || sink.set(sink.get() + 1)),
+            ))
+            .build())
+        .unwrap();
+        in_a_row_node(tag.layout_node());
+        let body = crate::test_support::drawn(Role::Button)[0];
+        let y = (body.y + body.height / 2.0) as f64;
+        let label_end = body.x + body.width - TagTokens::current().pad_x(size);
+        for x in [label_end - 0.5, body.x + body.width - 0.5] {
+            let before = on.get();
+            for event in [
+                Event::PointerPressed {
+                    x: x as f64,
+                    y,
+                    button: PointerButton::Primary,
+                    source: PointerSource::Mouse,
+                },
+                Event::PointerReleased {
+                    x: x as f64,
+                    y,
+                    button: PointerButton::Primary,
+                    source: PointerSource::Mouse,
+                },
+            ] {
+                tag.on_event(&event);
+            }
+            assert_eq!(on.get(), !before, "a {size:?} press at x={x} toggles");
         }
-        assert_eq!(on.get(), !before, "a press at x={x} toggles");
+        assert_eq!(removed.get(), 0, "and a {size:?} one never removes");
     }
-    assert_eq!(removed.get(), 0, "and never removes");
 }

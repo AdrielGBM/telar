@@ -7,6 +7,7 @@ use telar::{
     amend_surface, box_item, children, focus::Role, signal,
 };
 
+use crate::ControlSize;
 use crate::shared;
 
 /// An accordion's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -14,7 +15,7 @@ use crate::shared;
 /// Every field left `None` follows the role named beside it, read when the header paints.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct AccordionTokens {
-    /// Space between the header's edge and its title at the regular control size, scaled with the control size in force. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    /// Space between the header's edge and its title at the regular size, scaled with the accordion's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
     pub pad_x: Option<f32>,
     /// Corner radius of the header's wash. `None` is the theme's `radius_control`.
     pub radius: Option<f32>,
@@ -26,9 +27,10 @@ impl AccordionTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between the edge and the title of the header of an accordion of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::control_pad_x, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
     }
 
     pub fn radius(&self) -> f32 {
@@ -37,13 +39,13 @@ impl AccordionTokens {
 }
 
 /// A header is a row of a list, a control height with the step that parts one row's wash from the next, so a stack of accordions reads like one.
-fn header_box() -> LayoutStyle {
+fn header_box(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::SPACE_BETWEEN)
-        .gap(shared::gap_md())
-        .padding_horizontal(AccordionTokens::current().pad_x())
-        .min_height(shared::row_height())
+        .gap(shared::gap_md(size))
+        .padding_horizontal(AccordionTokens::current().pad_x(size))
+        .min_height(shared::row_height(size))
 }
 
 /// Which of its paints the header is showing.
@@ -75,6 +77,9 @@ pub struct AccordionProps {
     /// Bound open/closed state. `None` (the default) is uncontrolled — the widget owns its own `signal(false)`.
     #[props(some, into, default)]
     pub open: Option<RwSignal<bool>>,
+    /// How large the header is drawn: its height, padding, title and caret, as [`ControlSize`] works them out. The body is sized where it is written.
+    #[props(default)]
+    pub size: ControlSize,
     /// Accent (the caret). `Color::TRANSPARENT` (the default) means "unset": falls back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -91,6 +96,7 @@ pub fn accordion(props: AccordionProps) -> Result<Box<dyn LayoutItem>, LayoutErr
     let AccordionProps {
         title,
         open,
+        size,
         color,
         style,
         children,
@@ -101,6 +107,7 @@ pub fn accordion(props: AccordionProps) -> Result<Box<dyn LayoutItem>, LayoutErr
     let caret_open = open;
     let caret_color = color.clone();
     let caret = shared::mark(
+        size,
         move || match caret_open.get() {
             true => shared::Mark::ChevronDown,
             false => shared::Mark::ChevronForward,
@@ -111,7 +118,7 @@ pub fn accordion(props: AccordionProps) -> Result<Box<dyn LayoutItem>, LayoutErr
     let title_widget = Text::declaring(
         move || title.get(),
         LayoutStyle::new(),
-        |t| shared::control_text(t, 1.0),
+        move |t| shared::control_text(size, t, 1.0),
     )?;
 
     let announced_open = open;
@@ -119,11 +126,11 @@ pub fn accordion(props: AccordionProps) -> Result<Box<dyn LayoutItem>, LayoutErr
     let paint = std::rc::Rc::new(move |state: State| amend_surface(header_surface(state), &style));
     let (rest, hover, press) = (paint.clone(), paint.clone(), paint);
     let header = StyledContainer::new(
-        header_box(),
+        header_box(size),
         move |_r| rest(State::Rest),
         vec![box_item(title_widget), caret],
     )?
-    .styled_by(header_box)
+    .styled_by(move || header_box(size))
     .hover_style(move |_r| hover(State::Hovered))
     .active_style(move |_r| press(State::Pressed))
     .control(Role::Disclosure)

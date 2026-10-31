@@ -11,7 +11,6 @@ fn new_globals_set_nothing() {
     assert_eq!(globals.direction().get(), None);
     assert_eq!(globals.viewport().get(), None);
     assert_eq!(globals.background().get(), None);
-    assert_eq!(globals.control_size().get(), None);
     assert_eq!(globals.high_contrast().get(), None);
     assert_eq!(globals.safe_area().get(), Insets::default());
 }
@@ -41,11 +40,9 @@ fn a_preview_env_seeds_what_it_names() {
 fn seeding_leaves_what_the_env_does_not_name_as_the_host_set_it() {
     let globals = Globals::new();
     globals.locale().set(Some("es".to_string()));
-    globals.control_size().set(Some(ControlSize::Small));
     globals.seed(&PreviewEnv::NONE.mode("dark"));
     assert_eq!(globals.mode().get().as_deref(), Some("dark"));
     assert_eq!(globals.locale().get().as_deref(), Some("es"));
-    assert_eq!(globals.control_size().get(), Some(ControlSize::Small));
 }
 
 #[test]
@@ -58,14 +55,12 @@ fn a_canvas_follows_the_globals() {
     globals.mode().set(Some("dark".to_string()));
     globals.direction().set(Some(Direction::Rtl));
     globals.locale().set(Some("ar".to_string()));
-    globals.control_size().set(Some(ControlSize::Large));
     globals.high_contrast().set(Some(true));
     globals.viewport().set(Some(Size::new(390.0, 844.0)));
     globals.safe_area().set(Insets::new(47.0, 0.0, 34.0, 0.0));
     assert_eq!(canvas.mode().as_deref(), Some("dark"));
     assert_eq!(canvas.direction(), Some(Direction::Rtl));
     assert_eq!(canvas.locale().as_deref(), Some("ar"));
-    assert_eq!(canvas.control_size(), Some(ControlSize::Large));
     assert_eq!(canvas.high_contrast(), Some(true));
     assert_eq!(canvas.size(), Size::new(390.0, 844.0));
     assert_eq!(canvas.safe_area(), Insets::new(47.0, 0.0, 34.0, 0.0));

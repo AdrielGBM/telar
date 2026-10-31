@@ -5,6 +5,7 @@ use telar::{
     ShapeStyle, StyledContainer, SurfaceAmendment, Transform, amend_surface, box_item, children,
 };
 
+use crate::ControlSize;
 use crate::shared;
 
 /// A progress bar's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
@@ -14,9 +15,9 @@ use crate::shared;
 pub struct ProgressTokens {
     /// Corner radius of the track and its fill. `None` rounds both ends fully, whatever the bar's thickness.
     pub radius: Option<f32>,
-    /// The track's width when the bar names none, at the regular control size, scaled with the control size in force. `None` is 16 ems of the document's text.
+    /// The track's width when the bar names none, at the regular size, scaled with the bar's own. `None` is 16 ems of the document's text.
     pub width: Option<f32>,
-    /// The track's thickness when the bar names none, at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    /// The track's thickness when the bar names none, at the regular size, scaled with the bar's own. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
     pub height: Option<f32>,
 }
 
@@ -32,13 +33,15 @@ impl ProgressTokens {
             .map_or_else(|| shared::pill(rect), BorderRadius::all)
     }
 
-    pub fn width(&self) -> f32 {
-        shared::width_or_measure(self.width, 16.0)
+    /// The track's width in a bar of `size` whose call names none.
+    pub fn width(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.width, 16.0)
     }
 
-    pub fn height(&self) -> f32 {
+    /// The track's thickness in a bar of `size` whose call names none.
+    pub fn height(&self, size: ControlSize) -> f32 {
         self.height
-            .map_or_else(shared::gap_md, |height| height * telar::control_scale())
+            .map_or_else(|| shared::gap_md(size), |height| height * size.scale())
     }
 }
 
@@ -50,6 +53,9 @@ pub struct ProgressProps {
     /// A closure rather than a signal, like [`color`](Self::color) beside it: a bar *reports* a reading, it never writes one, and a caller whose reading is derived from two services has no signal to hand over. Insisting on one is what makes a shell reimplement this widget next to the catalogue.
     #[props(into, default)]
     pub value: Reactive<f32>,
+    /// How large the bar is drawn: its thickness and, unless it names one or stretches, its width, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// Fill accent. `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -74,6 +80,7 @@ pub struct ProgressProps {
 pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ProgressProps {
         value,
+        size,
         color,
         track_color,
         width,
@@ -106,9 +113,9 @@ pub fn progress(props: ProgressProps) -> Result<Box<dyn LayoutItem>, LayoutError
             .width(if stretch {
                 telar::SizeDimension::Percent(1.0)
             } else {
-                telar::SizeDimension::Px(width.unwrap_or_else(|| tokens.width()))
+                telar::SizeDimension::Px(width.unwrap_or_else(|| tokens.width(size)))
             })
-            .height(height.unwrap_or_else(|| tokens.height()))
+            .height(height.unwrap_or_else(|| tokens.height(size)))
     };
     let track = StyledContainer::new(
         track_box(),

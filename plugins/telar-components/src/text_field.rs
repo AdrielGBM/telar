@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use crate::ControlSize;
 use crate::shared;
 use crate::strings;
 use telar::{
@@ -25,11 +26,11 @@ const ROWS: u32 = 3;
 pub struct TextFieldTokens {
     /// Corner radius. `None` is the theme's `radius_control`.
     pub radius: Option<f32>,
-    /// Space between the frame and the text at the regular control size, scaled with the control size in force. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    /// Space between the frame and the text at the regular size, scaled with the field's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
     pub pad_x: Option<f32>,
     /// Width of the frame. `None` is the theme's `border_width`.
     pub border_width: Option<f32>,
-    /// Width of a field whose call names none, at the regular control size, scaled with the control size in force. `None` is 21.5 ems of the document's text.
+    /// Width of a field whose call names none, at the regular size, scaled with the field's text. `None` is 21.5 ems of the document's text.
     pub width: Option<f32>,
 }
 
@@ -43,40 +44,46 @@ impl TextFieldTokens {
         self.radius.unwrap_or_else(shared::radius_control)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between the frame and the text of a field of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::control_pad_x, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
     }
 
     pub fn border_width(&self) -> f32 {
         self.border_width.unwrap_or_else(shared::border_width)
     }
 
-    pub fn width(&self) -> f32 {
-        shared::width_or_measure(self.width, WIDTH_EMS)
+    /// The width of a field of `size` whose call names none.
+    pub fn width(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.width, WIDTH_EMS)
     }
 }
 
 /// A field's width: `width` where its call names one, else [`TextFieldTokens::width`].
-pub(crate) fn field_width(width: f32) -> f32 {
+pub(crate) fn field_width(size: ControlSize, width: f32) -> f32 {
     if width > 0.0 {
         width
     } else {
-        TextFieldTokens::current().width()
+        TextFieldTokens::current().width(size)
     }
 }
 
-/// The input is the whole height of the field, so the press and the audit see the whole field rather than the bare line inside it, and the line is centred in it.
-fn line_box() -> LayoutStyle {
-    LayoutStyle::new().height(shared::control_height())
+/// The input is the whole height of the field, so the press and the audit see the whole field rather than the bare line inside it, and the line is centred in it. Beside an adornment it takes the room the adornments leave.
+fn line_box(size: ControlSize, adorned: bool) -> LayoutStyle {
+    let line = LayoutStyle::new().height(shared::control_height(size));
+    match adorned {
+        true => line.flex_grow(1.0).flex_shrink(1.0).min_width(0.0),
+        false => line,
+    }
 }
 
 /// The framed box every catalogue field is drawn in — a text field of one line or of several, a search field — before what it holds is arranged in it: `width` wide, never wider than its parent, and padded from the frame by [`TextFieldTokens::pad_x`].
-pub(crate) fn field_box(width: f32) -> LayoutStyle {
+pub(crate) fn field_box(size: ControlSize, width: f32) -> LayoutStyle {
     LayoutStyle::column()
         .width(width)
         .max_width(telar::SizeDimension::Percent(1.0))
-        .padding_horizontal(TextFieldTokens::current().pad_x())
+        .padding_horizontal(TextFieldTokens::current().pad_x(size))
         // The border below is unconditional, and on a surface that draws one in whole cells it needs a cell to draw in — without it a field whose padding quantised away had its frame and its own text on the same row.
         .bordered()
 }
@@ -98,6 +105,9 @@ pub struct TextFieldProps {
     /// Box width in logical px. `0.0` (the default) means "unset" and resolves to [`TextFieldTokens::width`].
     #[props(default)]
     pub width: f32,
+    /// How large the field is drawn: its height, padding, text, caption and counter, and the width it takes when its call names none, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// Several lines rather than one: Enter breaks the line instead of submitting, and the box is `rows` lines tall. Off by default.
     #[props(default)]
     pub multiline: bool,
@@ -174,6 +184,7 @@ pub(crate) fn adorned_field(
         placeholder,
         label,
         width,
+        size,
         multiline,
         rows,
         max_rows,
@@ -189,9 +200,9 @@ pub(crate) fn adorned_field(
         focus_id,
     } = props;
     let value = value.unwrap_or_else(|| signal(String::new()));
-    let width = move || field_width(width);
+    let width = move || field_width(size, width);
     let text = move |t: TextStyle| {
-        let t = shared::control_text(t, 1.0);
+        let t = shared::control_text(size, t, 1.0);
         match color.get() {
             c if c == Color::TRANSPARENT => t,
             c => t.with_color(c),
@@ -208,14 +219,22 @@ pub(crate) fn adorned_field(
     let (leads, trails) = (leading.is_some(), trailing.is_some());
     let adorned = leads || trails;
     let editor = match multiline {
-        false => single_line(value, &placeholder, name, text, on_submit, on_key, adorned)?,
+        false => single_line(
+            value,
+            &placeholder,
+            name,
+            text,
+            on_submit,
+            on_key,
+            Box::new(move || line_box(size, adorned)),
+        )?,
         true => {
             let lines = Lines {
                 rows: rows.max(1),
                 max_rows: max_rows.max(rows.max(1)),
                 wrap: text_wrap,
             };
-            several_lines(value, &placeholder, name, text, on_key, lines)?
+            several_lines(size, value, &placeholder, name, text, on_key, lines)?
         }
     };
     let Editor {
@@ -236,27 +255,27 @@ pub(crate) fn adorned_field(
     }
     let mut content: Vec<Box<dyn LayoutItem>> = Vec::new();
     if let Some(leading) = leading {
-        content.push(icon_square(leading)?);
+        content.push(icon_square(size, leading)?);
     }
     content.push(item);
     if let Some(trailing) = trailing {
-        content.push(icon_square(trailing)?);
+        content.push(icon_square(size, trailing)?);
     }
 
     let arranged = move || {
         let framed = match multiline {
-            true => field_box(width()).padding_vertical(pad_y(line_node)),
-            false => field_box(width()),
+            true => field_box(size, width()).padding_vertical(pad_y(size, line_node)),
+            false => field_box(size, width()),
         };
         match (adorned, multiline) {
             (false, _) => framed,
-            (true, multiline) => adornment_insets(framed, leads, trails)
+            (true, multiline) => adornment_insets(size, framed, leads, trails)
                 .flex_row()
                 .align_items(match multiline {
                     true => AlignItems::START,
                     false => AlignItems::CENTER,
                 })
-                .gap(shared::gap_sm()),
+                .gap(shared::gap_sm(size)),
         }
     };
     let box_ = StyledContainer::new(
@@ -268,24 +287,27 @@ pub(crate) fn adorned_field(
     .styled_by(arranged);
     style_follows(line_node, layout);
 
-    let field = shared::captioned(box_item(box_), label, Reactive::of(width))?;
+    let field = shared::captioned(size, box_item(box_), label, Reactive::of(width))?;
     if !counter {
         return Ok((field, line_focus));
     }
-    let count = counted(value, max_length, width)?;
+    let count = counted(size, value, max_length, width)?;
     let column = Container::new(
-        LayoutStyle::column().gap(shared::gap_xs()),
+        LayoutStyle::column().gap(shared::gap_xs(size)),
         children![field, count],
     )?;
     Ok((box_item(column), line_focus))
 }
 
 /// `adornment` centred in a square an icon wide, so the inset [`adornment_insets`] gives is the one the eye sees however narrow its mark is.
-fn icon_square(adornment: Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let square = || {
+fn icon_square(
+    size: ControlSize,
+    adornment: Box<dyn LayoutItem>,
+) -> Result<Box<dyn LayoutItem>, LayoutError> {
+    let square = move || {
         LayoutStyle::row()
-            .width(shared::icon_size())
-            .height(shared::icon_size())
+            .width(shared::icon_size(size))
+            .height(shared::icon_size(size))
             .flex_shrink(0.0)
             .align_items(AlignItems::CENTER)
             .justify_content(JustifyContent::CENTER)
@@ -296,8 +318,13 @@ fn icon_square(adornment: Box<dyn LayoutItem>) -> Result<Box<dyn LayoutItem>, La
 }
 
 /// An adornment stands as far from the frame's side as from its top and bottom, as an icon centred in a square at that end would.
-fn adornment_insets(framed: LayoutStyle, leads: bool, trails: bool) -> LayoutStyle {
-    let inset = ((shared::control_height() - shared::icon_size()) / 2.0).max(0.0);
+fn adornment_insets(
+    size: ControlSize,
+    framed: LayoutStyle,
+    leads: bool,
+    trails: bool,
+) -> LayoutStyle {
+    let inset = ((shared::control_height(size) - shared::icon_size(size)) / 2.0).max(0.0);
     let framed = if leads {
         framed.padding_start(inset)
     } else {
@@ -310,7 +337,7 @@ fn adornment_insets(framed: LayoutStyle, leads: bool, trails: bool) -> LayoutSty
     }
 }
 
-/// The field of one line: an `Input` the whole height of the box.
+/// The field of one line: an `Input` laid out as `layout` says, the whole height of the box.
 fn single_line(
     value: RwSignal<String>,
     placeholder: &Reactive<String>,
@@ -318,7 +345,7 @@ fn single_line(
     text: impl Fn(TextStyle) -> TextStyle + 'static,
     on_submit: Option<Rc<dyn Fn()>>,
     on_key: Option<FieldKeyHandler>,
-    adorned: bool,
+    layout: Box<dyn Fn() -> LayoutStyle>,
 ) -> Result<Editor, LayoutError> {
     let mut input = Input::declaring(value, LayoutStyle::new(), text)?
         .placeholder(placeholder.get())
@@ -330,10 +357,6 @@ fn single_line(
         input = input.on_key(move |key, modifiers| hook(key, modifiers));
     }
     let (focus, node) = (input.focus_id(), input.layout_node());
-    let layout = Box::new(move || match adorned {
-        true => line_box().flex_grow(1.0).flex_shrink(1.0).min_width(0.0),
-        false => line_box(),
-    });
     Ok(Editor {
         item: box_item(input),
         focus,
@@ -351,6 +374,7 @@ struct Lines {
 
 /// The field of several lines: a `TextArea` filling a scroll `rows` lines tall that grows to `max_rows`, so a press anywhere in the view lands in it.
 fn several_lines(
+    size: ControlSize,
     value: RwSignal<String>,
     placeholder: &Reactive<String>,
     name: impl Fn() -> String + 'static,
@@ -370,7 +394,7 @@ fn several_lines(
         area = area.on_key(move |key, modifiers| hook(key, modifiers));
     }
     let (focus, node) = (area.focus_id(), area.layout_node());
-    let line = move || line_height(node);
+    let line = move || line_height(size, node);
     let view = move || {
         LayoutStyle::new()
             .min_height(rows as f32 * line())
@@ -388,20 +412,22 @@ fn several_lines(
 }
 
 /// The height of one line the editor draws, in the text style in force where it is.
-fn line_height(node: NodeId) -> f32 {
+fn line_height(size: ControlSize, node: NodeId) -> f32 {
     telar::line_box(&shared::control_text(
+        size,
         telar::inherited_text_style(node),
         1.0,
     ))
 }
 
 /// The space above and below the lines of a field of several, so one a single line tall is as tall as a field of one line beside it.
-fn pad_y(node: NodeId) -> f32 {
-    ((shared::control_height() - line_height(node)) / 2.0).max(0.0)
+fn pad_y(size: ControlSize, node: NodeId) -> f32 {
+    ((shared::control_height(size) - line_height(size, node)) / 2.0).max(0.0)
 }
 
 /// How many characters `value` holds, against `max` where there is one, at the end of a row as wide as the box, and in the theme's error colour once it is past `max`.
 fn counted(
+    size: ControlSize,
     value: RwSignal<String>,
     max: usize,
     width: impl Fn() -> f32 + Clone + 'static,
@@ -423,7 +449,7 @@ fn counted(
         }
     };
     let text = Text::declaring(shown, LayoutStyle::new(), move |t| {
-        let text = shared::quiet(t, shared::CAPTION_RATIO);
+        let text = shared::quiet(size, t, shared::CAPTION_RATIO);
         if over() {
             text.with_color(use_theme_tokens().error())
         } else {

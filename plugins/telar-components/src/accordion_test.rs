@@ -127,11 +127,19 @@ impl telar::ThemeTokens for Plain {
 }
 
 fn header_paint(style: Option<SurfaceAmendment>, hovered: bool) -> (telar::Rect, f32, RectStyle) {
+    header_paint_at(ControlSize::Regular, style, hovered)
+}
+
+fn header_paint_at(
+    size: ControlSize,
+    style: Option<SurfaceAmendment>,
+    hovered: bool,
+) -> (telar::Rect, f32, RectStyle) {
     use telar::testing::{centre, moved, route};
 
     crate::test_support::fresh_layout_runtime();
     let mut tree = telar::testing::scoped(|| {
-        let mut props = AccordionProps::props().title("Details").build();
+        let mut props = AccordionProps::props().title("Details").size(size).build();
         props.style = style;
         let item = accordion(AccordionProps {
             children: text_body("Body"),
@@ -173,8 +181,11 @@ fn header_paint(style: Option<SurfaceAmendment>, hovered: bool) -> (telar::Rect,
 fn the_header_is_a_row_tall_and_padded_like_a_control() {
     telar::set_theme(Plain::default());
     let (header, title, _) = header_paint(None, false);
-    assert!(header.height >= crate::metrics::row_height());
-    assert_eq!(title - header.x, crate::metrics::control_pad_x());
+    assert!(header.height >= crate::metrics::row_height(crate::ControlSize::Regular));
+    assert_eq!(
+        title - header.x,
+        crate::metrics::control_pad_x(crate::ControlSize::Regular)
+    );
 
     telar::set_theme(Plain {
         accordions: Some(AccordionTokens {
@@ -184,6 +195,30 @@ fn the_header_is_a_row_tall_and_padded_like_a_control() {
     });
     let (header, title, _) = header_paint(None, false);
     assert_eq!(title - header.x, 20.0);
+}
+
+/// The header is a row of the accordion's own size, padded at that size, and a pad its tokens name at the regular size scales with it.
+#[test]
+fn the_header_scales_with_the_accordion_s_size() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        telar::set_theme(Plain::default());
+        let (header, title, _) = header_paint_at(size, None, false);
+        assert_eq!(header.height, crate::metrics::row_height(size), "{size:?}");
+        assert_eq!(
+            title - header.x,
+            crate::metrics::control_pad_x(size),
+            "{size:?}"
+        );
+
+        telar::set_theme(Plain {
+            accordions: Some(AccordionTokens {
+                pad_x: Some(20.0),
+                radius: None,
+            }),
+        });
+        let (header, title, _) = header_paint_at(size, None, false);
+        assert_eq!(title - header.x, 20.0 * size.scale(), "{size:?}");
+    }
 }
 
 #[test]

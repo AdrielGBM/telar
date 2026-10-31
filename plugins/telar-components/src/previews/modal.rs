@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Container, LayoutError, LayoutStyle, Role, Text, box_item};
 
+use crate::ControlSize;
 use crate::button::{ButtonProps, button};
 use crate::modal::{ModalProps, modal};
 
@@ -51,6 +52,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .on_close(Rc::new(|| {}))
                     .open(open)
                     .title(p.arg("title", "Confirm"))
+                    .size(p.arg("size", ControlSize::Regular))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .children(body())
                     .build(),

@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_text, preview};
 use telar::{Container, LayoutError, LayoutStyle};
 
+use crate::ControlSize;
 use crate::list::{GroupProps, ItemProps, SeparatorProps, group, item, separator};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -15,6 +16,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .disabled(p.arg("disabled", false))
                     .checked(p.arg("checked", false))
                     .shortcut(p.arg("shortcut", "F2"))
+                    .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )
         })

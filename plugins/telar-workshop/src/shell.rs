@@ -12,8 +12,8 @@ use telar::{
     StyledContainer, box_item, effect, use_theme_tokens,
 };
 use telar_components::{
-    DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer, metrics,
-    split_pane, window_edges,
+    ControlSize, DrawerProps, SizedPane, SplitDirection, SplitPaneProps, SplitRegion, drawer,
+    metrics, split_pane, window_edges,
 };
 use telar_devtools::{use_workbench_tokens, workbench_card, workbench_fill};
 
@@ -73,7 +73,7 @@ fn body(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {
     });
     let regions = Regions::new(state)?;
     let building = state.clone();
-    let gap = metrics::gap_sm();
+    let gap = metrics::gap_sm(ControlSize::Regular);
     let body = ReactiveList::with_style(
         workbench_fill().padding_horizontal(gap).padding_bottom(gap),
         move || vec![arrangement.get().sidebar_in_drawer()],

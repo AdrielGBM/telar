@@ -57,20 +57,15 @@ fn an_inline_matrix_is_a_constant_a_preview_writes_in_place() {
 
 #[test]
 fn every_global_axis_sets_its_global() {
-    let matrix = Matrix::Axes(&[
-        Axis::Dir(&[Direction::Rtl]),
-        Axis::Viewport(&["390x844"]),
-        Axis::ControlSize(&[ControlSize::Small]),
-    ]);
+    let matrix = Matrix::Axes(&[Axis::Dir(&[Direction::Rtl]), Axis::Viewport(&["390x844"])]);
     let cells = matrix.cells(&entry(), &Matrices::default()).unwrap();
     assert_eq!(
         ids(&cells),
-        ["kit--button--primary--dir=rtl--viewport=390x844--control_size=small"]
+        ["kit--button--primary--dir=rtl--viewport=390x844"]
     );
     let globals = &cells[0].globals;
     assert_eq!(globals.direction, Some(Direction::Rtl));
     assert_eq!(globals.viewport, Some(Size::new(390.0, 844.0)));
-    assert_eq!(globals.control_size, Some(ControlSize::Small));
     assert!(cells[0].args.is_empty());
 }
 
@@ -308,7 +303,6 @@ fn the_installed_matrices_are_the_applications() {
         &[
             Axis::Dir(&[crate::Direction::Ltr, crate::Direction::Rtl]),
             Axis::Viewport(&["phone"]),
-            Axis::ControlSize(&[crate::ControlSize::Small]),
             Axis::Arg("size", &["12", "1.5"]),
         ],
     )];

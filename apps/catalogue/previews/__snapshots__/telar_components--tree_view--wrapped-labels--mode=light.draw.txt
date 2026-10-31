@@ -11,83 +11,83 @@ element group
                 element group
                   element group
                     element treeitem
-                      rect 4,0 252x32 radius=6
+                      rect 4,0 252x36 radius=6
                       element group
                         element group
-                          matrix 1,0,0,1,17,10
+                          matrix 1,0,0,1,17,12
                             path M0,0 L6,6 L0,12 stroke=1.5 stroke-color=#171a2eb3
                           end
                         end
                       end
                       element group
-                        clip 32,4 216x24
+                        clip 32,4 216x28
                           matrix 1,0,0,1,32,4
-                            text 0,3 216x16.8 "Getting started" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                            text 0,5 216x16.8 "Getting started" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                           end
                         end
                       end
                     end
                     element treeitem
-                      rect 4,32 252x32 radius=6
+                      rect 4,36 252x36 radius=6
                       element group
                         element group
-                          matrix 1,0,0,1,14,45
+                          matrix 1,0,0,1,14,51
                             path M0,0 L6,6 L12,0 stroke=1.5 stroke-color=#171a2eb3
                           end
                         end
                       end
                       element group
-                        clip 32,36 216x24
-                          matrix 1,0,0,1,32,36
-                            text 0,3 216x16.8 "Views" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                        clip 32,40 216x28
+                          matrix 1,0,0,1,32,40
+                            text 0,5 216x16.8 "Views" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                           end
                         end
                       end
                     end
                     element treeitem
-                      rect 4,64 252x32 fill=#00000014 radius=6
+                      rect 4,72 252x36 fill=#00000014 radius=6
                       element group
                       end
                       element group
-                        clip 48,68 200x24
-                          matrix 1,0,0,1,48,68
-                            text 0,3 200x16.8 "Writing a view in .rsx" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                        clip 48,76 200x28
+                          matrix 1,0,0,1,48,76
+                            text 0,5 200x16.8 "Writing a view in .rsx" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                           end
                         end
                       end
                     end
                     element treeitem
-                      rect 4,96 252x58 radius=6
+                      rect 4,108 252x58 radius=6
                       element group
                       end
                       element group
-                        clip 48,100 200x50
-                          matrix 1,0,0,1,48,100
+                        clip 48,112 200x50
+                          matrix 1,0,0,1,48,112
                             text 0,0 200x50.4 "Long lists, and why a virtual one builds only the rows that are on screen" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                           end
                         end
                       end
                     end
                     element treeitem
-                      rect 4,154 252x59 radius=6
+                      rect 4,166 252x59 radius=6
                       element group
                       end
                       element group
-                        clip 32,158 216x51
-                          matrix 1,0,0,1,32,158
+                        clip 32,170 216x51
+                          matrix 1,0,0,1,32,170
                             text 0,0 216x50.4 "Themes, tokens and the control size every component scales with" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                           end
                         end
                       end
                     end
                     element treeitem
-                      rect 4,213 252x32 radius=6
+                      rect 4,225 252x36 radius=6
                       element group
                       end
                       element group
-                        clip 32,217 216x24
-                          matrix 1,0,0,1,32,217
-                            text 0,3 216x16.8 "FAQ" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+                        clip 32,229 216x28
+                          matrix 1,0,0,1,32,229
+                            text 0,5 216x16.8 "FAQ" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
                           end
                         end
                       end

@@ -1,6 +1,7 @@
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Role};
 
+use crate::ControlSize;
 use crate::tabs::{TabsProps, tabs};
 
 const LABELS: [&str; 6] = [
@@ -17,6 +18,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
             tabs(
                 TabsProps::props()
                     .items(labels(p.arg("count", 3u32)))
+                    .size(p.arg("size", ControlSize::Regular))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
             )

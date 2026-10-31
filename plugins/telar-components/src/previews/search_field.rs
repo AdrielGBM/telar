@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Key, NamedKey, Role};
 
+use crate::ControlSize;
 use crate::search_field::{SearchFieldProps, search_field};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -15,6 +16,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .on_clear(Rc::new(|| {}))
                     .value(value)
                     .width(p.arg("width", 280.0f32))
+                    .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )
         })

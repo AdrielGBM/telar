@@ -8,11 +8,12 @@ use telar::{
     box_transform, children, focus::Role, signal,
 };
 
+use crate::ControlSize;
 use crate::shared;
 
 /// A switch's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
-/// Every length is at the regular control size and scaled with the control size in force, and every field left `None` follows the role named beside it, read when the switch paints. The track is sized from the knob: two knobs and an inset each side long, one knob and an inset each side tall, so the knob travels one diameter.
+/// Every length is at the regular size and scaled with the switch's own, and every field left `None` follows the role named beside it, read when the switch paints. The track is sized from the knob: two knobs and an inset each side long, one knob and an inset each side tall, so the knob travels one diameter.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ToggleTokens {
     /// Diameter of the knob. `None` is [`metrics::icon_size`](crate::metrics::icon_size).
@@ -29,14 +30,16 @@ impl ToggleTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    pub fn knob(&self) -> f32 {
+    /// The knob's diameter in a switch of `size`.
+    pub fn knob(&self, size: ControlSize) -> f32 {
         self.knob
-            .map_or_else(shared::icon_size, |knob| knob * telar::control_scale())
+            .map_or_else(|| shared::icon_size(size), |knob| knob * size.scale())
     }
 
-    pub fn inset(&self) -> f32 {
+    /// The space between the knob and the track's edge in a switch of `size`.
+    pub fn inset(&self, size: ControlSize) -> f32 {
         self.inset
-            .map_or_else(shared::gap_xs, |inset| inset * telar::control_scale())
+            .map_or_else(|| shared::gap_xs(size), |inset| inset * size.scale())
     }
 
     /// The track's corner for a track laid out at `rect`.
@@ -45,16 +48,16 @@ impl ToggleTokens {
             .map_or_else(|| shared::pill(rect), BorderRadius::all)
     }
 
-    /// The knob's corner for a knob laid out at `rect`: concentric with the track's.
-    pub fn knob_radius(&self, rect: telar::Rect) -> BorderRadius {
+    /// The knob's corner for a knob laid out at `rect`, `inset` inside its track: concentric with the track's.
+    pub fn knob_radius(&self, rect: telar::Rect, inset: f32) -> BorderRadius {
         self.radius.map_or_else(
             || shared::pill(rect),
-            |radius| BorderRadius::all((radius - self.inset()).max(0.0)),
+            |radius| BorderRadius::all((radius - inset).max(0.0)),
         )
     }
 }
 
-/// The two lengths a switch is drawn from, at the control size in force: the knob's diameter and the space round it inside the track.
+/// The two lengths a switch is drawn from: the knob's diameter and the space round it inside the track.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct SwitchSize {
     pub knob: f32,
@@ -62,32 +65,30 @@ pub(crate) struct SwitchSize {
 }
 
 impl SwitchSize {
-    /// A standalone switch's: the knob and inset its [`ToggleTokens`] name.
-    pub(crate) fn control() -> Self {
+    /// What a standalone switch of `size` is drawn from: the knob and inset its [`ToggleTokens`] name.
+    pub(crate) fn control(size: ControlSize) -> Self {
         let tokens = ToggleTokens::current();
         Self {
-            knob: tokens.knob(),
-            inset: tokens.inset(),
+            knob: tokens.knob(size),
+            inset: tokens.inset(size),
         }
     }
 
-    /// A switch at the end of a row: as tall as the tick column's icon, so a switch row stands as tall as a ticked one, with the knob taking what the inset leaves.
-    pub(crate) fn row() -> Self {
-        let inset = ToggleTokens::current().inset();
+    /// A switch at the end of a row of `size`: as tall as the tick column's icon, so a switch row stands as tall as a ticked one, with the knob taking what the inset leaves.
+    pub(crate) fn row(size: ControlSize) -> Self {
+        let inset = ToggleTokens::current().inset(size);
         Self {
-            knob: (shared::icon_size() - inset * 2.0).max(0.0),
+            knob: (shared::icon_size(size) - inset * 2.0).max(0.0),
             inset,
         }
     }
 }
 
-fn knob_box(size: fn() -> SwitchSize) -> LayoutStyle {
-    let knob = size().knob;
+fn knob_box(SwitchSize { knob, .. }: SwitchSize) -> LayoutStyle {
     LayoutStyle::new().width(knob).height(knob)
 }
 
-fn track_box(size: fn() -> SwitchSize) -> LayoutStyle {
-    let SwitchSize { knob, inset } = size();
+fn track_box(SwitchSize { knob, inset }: SwitchSize) -> LayoutStyle {
     LayoutStyle::row()
         .flex_shrink(0.0)
         .width(knob * 2.0 + inset * 2.0)
@@ -110,29 +111,29 @@ pub(crate) fn switch_track(
     on: impl Fn() -> bool + Clone + 'static,
     color: Reactive<Color>,
     style: Option<SurfaceAmendment>,
-    size: fn() -> SwitchSize,
+    size: impl Fn() -> SwitchSize + Copy + 'static,
 ) -> Result<StyledContainer, LayoutError> {
     let knob_on = on.clone();
     let knob_color = color.clone();
     let travel_on = on.clone();
     let knob = StyledContainer::new(
-        knob_box(size),
+        knob_box(size()),
         move |r| {
             let track = shared::over(track_fill(knob_on(), &knob_color), shared::surface());
             RectStyle::default()
                 .with_fill(shared::thumb_on(track))
-                .with_radius(ToggleTokens::current().knob_radius(r))
+                .with_radius(ToggleTokens::current().knob_radius(r, size().inset))
         },
         vec![],
     )?
-    .styled_by(move || knob_box(size))
+    .styled_by(move || knob_box(size()))
     .with_transform(move |r| {
         let travel = if travel_on() { size().knob } else { 0.0 };
         box_transform(r, 0.0, 1.0, 1.0, travel, 0.0)
     });
 
     Ok(StyledContainer::new(
-        track_box(size),
+        track_box(size()),
         move |r| {
             let rest = RectStyle::default()
                 .with_fill(track_fill(on(), &color))
@@ -141,7 +142,7 @@ pub(crate) fn switch_track(
         },
         children![knob],
     )?
-    .styled_by(move || track_box(size)))
+    .styled_by(move || track_box(size())))
 }
 
 /// A labelled switch: a pill track whose knob sits at the start (off) or the end (on) and whose track fills with the accent while on; tapping the row toggles its bound `checked` signal (and fires `on_toggle`). High-level sugar over the primitives (`box` + `on_press` + a reactive fill + a `translate`); lives in `telar-components`, not the kernel. `checked` is `Option` so `Props` can derive `Default`: `None` is uncontrolled (the widget owns its own signal), `Some` is caller-bound.
@@ -152,6 +153,9 @@ pub struct ToggleProps {
     pub checked: Option<RwSignal<bool>>,
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// How large the switch is drawn: its knob, track, row and label, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// Accent (the on-track fill). `Color::TRANSPARENT` (the default) means "unset": fall back to the theme accent.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -168,17 +172,24 @@ pub fn toggle(props: ToggleProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ToggleProps {
         checked,
         label,
+        size,
         color,
         on_toggle,
         style,
     } = props;
     let checked = checked.unwrap_or_else(|| signal(false));
 
-    let track = switch_track(move || checked.get(), color, style, SwitchSize::control)?;
+    let track = switch_track(
+        move || checked.get(),
+        color,
+        style,
+        move || SwitchSize::control(size),
+    )?;
 
     let toggle_on = checked;
     let announced = checked;
     shared::labelled_control(
+        size,
         box_item(track),
         label,
         Role::Switch,

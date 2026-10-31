@@ -874,7 +874,10 @@ fn bar_paint(style: Option<SurfaceAmendment>) -> (Rect, RectStyle) {
 fn the_rule_is_a_pill_half_a_step_wide_until_the_tokens_say_otherwise() {
     telar::set_theme(Plain::default());
     let (bar, style) = bar_paint(None);
-    assert_eq!(bar.width, crate::metrics::gap_sm() / 2.0);
+    assert_eq!(
+        bar.width,
+        crate::metrics::gap_sm(crate::ControlSize::Regular) / 2.0
+    );
     assert_eq!(style.radius, BorderRadius::all(bar.width / 2.0));
 
     telar::set_theme(Plain {

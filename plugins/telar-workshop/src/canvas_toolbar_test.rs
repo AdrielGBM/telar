@@ -585,7 +585,6 @@ fn the_settings_menu_holds_a_submenu_per_choice_and_the_switches() {
         (Role::MenuItem, "Mode System"),
         (Role::MenuItem, "Locale Default locale"),
         (Role::MenuItem, "Direction Auto direction"),
-        (Role::MenuItem, "Control size Default size"),
         (Role::MenuItem, "Background Preview background"),
         (Role::MenuItemCheckBox, "Reduce motion"),
         (Role::MenuItemCheckBox, "High contrast"),
@@ -597,7 +596,7 @@ fn the_settings_menu_holds_a_submenu_per_choice_and_the_switches() {
             .map(|(role, name)| (*role, name.to_string()))
             .collect::<Vec<_>>()
     );
-    for (role, name) in &expected[..5] {
+    for (role, name) in &expected[..4] {
         let row = workshop.control(*role, name);
         assert_eq!(row.has_popup, Some(telar::HasPopup::Menu), "{name}");
         assert_eq!(row.expanded, Some(false), "{name}");

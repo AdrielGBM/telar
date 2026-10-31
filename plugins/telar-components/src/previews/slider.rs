@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Key, NamedKey, Role};
 
+use crate::ControlSize;
 use crate::slider::{SliderProps, slider};
 
 pub(crate) fn previews() -> Vec<PreviewEntry> {
@@ -16,6 +17,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .color(p.arg("color", Color::TRANSPARENT))
                     .track_color(p.arg("track_color", Color::TRANSPARENT))
                     .width(p.arg("width", 0.0f32))
+                    .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )
         })

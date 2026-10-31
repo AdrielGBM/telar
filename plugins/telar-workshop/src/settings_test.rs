@@ -20,7 +20,6 @@ fn settings_left_at_their_defaults_take_what_the_preview_asks_for() {
             mode: Some("night".into()),
             locale: Some("fr".into()),
             direction: Some(Direction::Ltr),
-            control_size: None,
             high_contrast: None,
             background: Some(RED),
             viewport: Some(Size::new(300.0, 200.0)),
@@ -33,7 +32,6 @@ fn settings_left_at_their_defaults_take_what_the_preview_asks_for() {
             mode: None,
             locale: None,
             direction: None,
-            control_size: None,
             high_contrast: None,
             background: None,
             viewport: None,
@@ -48,7 +46,6 @@ fn a_setting_wins_over_what_the_preview_asks_for() {
     let settings = CanvasSettings {
         mode: ModeChoice::Named("day".into()),
         locale: Some("en".into()),
-        control_size: Some(ControlSize::Small),
         background: Background::Dark,
         size: CanvasSize::Preset("tablet".into()),
         ..CanvasSettings::default()
@@ -61,7 +58,6 @@ fn a_setting_wins_over_what_the_preview_asks_for() {
     let resolved = resolve(&settings, env);
     assert_eq!(resolved.mode.as_deref(), Some("day"));
     assert_eq!(resolved.locale.as_deref(), Some("en"));
-    assert_eq!(resolved.control_size, Some(ControlSize::Small));
     assert_eq!(resolved.background, Some(DARK_BACKGROUND));
     assert_eq!(resolved.viewport, Some(Size::new(768.0, 1024.0)));
 }
@@ -213,7 +209,6 @@ fn the_settings_are_kept_as_one_json_value() {
         mode: ModeChoice::Named("night".into()),
         locale: Some("ar".into()),
         direction: Some(Direction::Rtl),
-        control_size: Some(ControlSize::Large),
         background: Background::Transparent,
         size: CanvasSize::Device("phone".into()),
         rotated: true,
@@ -226,7 +221,7 @@ fn the_settings_are_kept_as_one_json_value() {
     let json = serde_json::to_string(&settings).unwrap();
     assert_eq!(
         json,
-        r#"{"mode":"night","locale":"ar","direction":"rtl","control_size":"large","background":"transparent","size":{"device":"phone"},"rotated":true,"zoom":{"percent":50},"reduced_motion":true,"high_contrast":true,"grid":true,"rulers":true}"#
+        r#"{"mode":"night","locale":"ar","direction":"rtl","background":"transparent","size":{"device":"phone"},"rotated":true,"zoom":{"percent":50},"reduced_motion":true,"high_contrast":true,"grid":true,"rulers":true}"#
     );
     assert_eq!(
         serde_json::from_str::<CanvasSettings>(&json).unwrap(),
@@ -394,6 +389,25 @@ fn the_mode_choices_are_the_system_the_application_s_schemes_and_its_other_modes
             .map(ModeChoice::label)
             .collect::<Vec<_>>(),
         ["System", "Light", "Dark", "sepia"]
+    );
+}
+
+#[test]
+fn settings_kept_with_a_control_size_load_without_it() {
+    let kept: CanvasSettings =
+        serde_json::from_str(r#"{"locale":"ar","control_size":"large","grid":true}"#).unwrap();
+    assert_eq!(
+        kept,
+        CanvasSettings {
+            locale: Some("ar".into()),
+            grid: true,
+            ..CanvasSettings::default()
+        }
+    );
+    assert!(
+        !serde_json::to_string(&kept)
+            .unwrap()
+            .contains("control_size")
     );
 }
 

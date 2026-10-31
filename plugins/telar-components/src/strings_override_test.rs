@@ -39,7 +39,6 @@ fn a_locale_the_app_does_not_translate_keeps_the_plugin_text() {
     assert!(select_placeholder().contains(&"Seleccionar".to_string()));
 }
 
-#[cfg(feature = "overlays")]
 mod modal {
     use super::*;
     use telar::signal;

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutItem, LayoutStyle, NamedKey, Role, signal};
 
+use crate::ControlSize;
 use crate::data_table::{CellAlign, Column, DataTableProps, TableRow, data_table};
 use crate::selection::SelectionMode;
 
@@ -105,6 +106,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .columns(columns())
                     .rows(files())
                     .label(p.arg("label", "Files"))
+                    .size(p.arg("size", ControlSize::Regular))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
             )?;

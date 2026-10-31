@@ -8,7 +8,7 @@ mod plan;
 use std::rc::Rc;
 
 use telar::preview::host::ArgState;
-use telar::preview::{Axis, Matrices, Matrix, MatrixCell, PreviewEntry, control_size_word};
+use telar::preview::{Axis, Matrices, Matrix, MatrixCell, PreviewEntry};
 use telar::{
     Accessible, AlignItems, Children, Clip, ClippedItem, ColorScheme, Container, JustifyContent,
     LayoutError, LayoutItem, LayoutScrollArea, LayoutStyle, Reactive, ReactiveList, RectStyle,
@@ -267,9 +267,6 @@ pub(super) fn open_cell(state: &WorkshopState, entry: &PreviewEntry, cell: &Matr
             if let Some(direction) = globals.direction {
                 settings.direction = Some(direction);
             }
-            if let Some(size) = globals.control_size {
-                settings.control_size = Some(size);
-            }
             if let Some(viewport) = globals.viewport {
                 settings.size = CanvasSize::Custom {
                     width: viewport.width,
@@ -304,7 +301,6 @@ impl Asked {
             settings.mode.mode(asked, self.scheme),
             settings.locale.clone(),
             settings.direction,
-            settings.control_size.map(control_size_word),
             settings.high_contrast,
             settings.background,
             self.remounts,

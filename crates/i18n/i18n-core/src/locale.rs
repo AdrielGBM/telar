@@ -10,7 +10,7 @@ reactive_core::surface_scoped! {
 
 /// Sets the active locale (a BCP-47 tag such as `"en"` or `"es"`), re-rendering every translated string that reads it on a surface without a locale of its own. The tag should be one of the baked catalog's locales; an unknown tag simply falls back to the catalog's default locale at lookup time.
 ///
-/// **Scope: one reactive runtime, which is one UI thread** — the same as the theme, the control size and the text direction, all of which are thread-local signals for the same reason (a signal is `!Send`). Telar's own multi-surface runner drives every surface from one runtime, so there this reaches all of them. An out-of-tree platform that runs a runtime *per* thread owns fanning process-wide state across its threads, and owns it for all four signals rather than for this one: a locale-shaped broadcast in here would leave the same backend still hand-rolling the other three.
+/// **Scope: one reactive runtime, which is one UI thread** — the same as the theme and the text direction, all of which are thread-local signals for the same reason (a signal is `!Send`). Telar's own multi-surface runner drives every surface from one runtime, so there this reaches all of them. An out-of-tree platform that runs a runtime *per* thread owns fanning process-wide state across its threads, and owns it for all three signals rather than for this one: a locale-shaped broadcast in here would leave the same backend still hand-rolling the other two.
 pub fn set_locale(id: impl Into<String>) {
     locale().set(Some(id.into()));
 }

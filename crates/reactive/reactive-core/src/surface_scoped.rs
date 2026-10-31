@@ -1,6 +1,6 @@
 //! [`SurfaceScoped`] and [`surface_scoped!`](crate::surface_scoped): a value the whole thread shares, which a surface can shadow with one of its own.
 //!
-//! The writing direction, the locale and the control size all have this shape: one thread-wide signal every surface reads, and a per-surface override that takes its place on the surface that sets one, so a canvas can show a variant beside the chrome around it. The macro declares the two signals; the type answers every read and write of them, so the resolution and the skipped no-op writes are written once.
+//! The writing direction, the locale and high contrast all have this shape: one thread-wide signal every surface reads, and a per-surface override that takes its place on the surface that sets one, so a canvas can show a variant beside the chrome around it. The macro declares the two signals; the type answers every read and write of them, so the resolution and the skipped no-op writes are written once.
 
 use std::borrow::Borrow;
 

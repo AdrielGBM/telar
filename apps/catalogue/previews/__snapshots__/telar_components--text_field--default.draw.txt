@@ -6,17 +6,17 @@ element group
       element group
         element group
           element group
-            matrix 1,0,0,1,250,275
+            matrix 1,0,0,1,250,273
               text 0,0 300x14.28 "Name" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
             end
           end
           element group
-            rect 250,298 300x28 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+            rect 250,296 300x32 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
             element group
-              matrix 1,0,0,1,262,298
-                clip 0,0 276x28
-                  text 0,4 276x20 "Ada" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
-                  rect 26.09,4 1.5x16.8 fill=#171a2eff
+              matrix 1,0,0,1,262,296
+                clip 0,0 276x32
+                  text 0,6 276x20 "Ada" size=14 family=sans-serif weight=400 color=#171a2eff line-height=1.2 wrap=none
+                  rect 26.09,6 1.5x16.8 fill=#171a2eff
                 end
               end
             end

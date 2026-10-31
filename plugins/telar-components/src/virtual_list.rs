@@ -13,6 +13,7 @@ use telar::{
     key_nav_apply, memo, signal,
 };
 
+use crate::ControlSize;
 use crate::list::ListTokens;
 use crate::rows::{BuiltRows, RowPlaces, RowState, counted, cursor_row_paint, with_empty_state};
 use crate::selection::{Gesture, RowSelection, SelectionHandler, SelectionMode};
@@ -62,13 +63,16 @@ pub type RowBuilder = Rc<dyn Fn(&ListRow) -> Result<Box<dyn LayoutItem>, LayoutE
 
 /// A list of any length to choose rows from, read by a screen reader as a list box.
 ///
-/// It fills the height its parent gives it and scrolls within it, building only the rows on screen, so ten thousand rows cost what a screenful does. Every row stands at [`ListTokens::row_height`], which is what lets it place the rows it has not built, unless [`wrap`](Self::wrap) lets rows grow: then each is measured once built, and stands at the row height until then.
+/// It fills the height its parent gives it and scrolls within it, building only the rows on screen, so ten thousand rows cost what a screenful does. Every row stands at [`ListTokens::row_height`] of the list's size, which is what lets it place the rows it has not built, unless [`wrap`](Self::wrap) lets rows grow: then each is measured once built, and stands at the row height until then.
 ///
 /// The keyboard walks a cursor over the rows — the arrows, Home and End, Page Up and Page Down, and type-ahead on the rows' labels — and Enter, Space or a press chooses the row it is on. A reader hears the row the cursor is on as it moves. In [`SelectionMode::Multiple`] the list says it takes several rows, each row says whether it is one of them, and Shift, Ctrl (Command on a Mac) and Space choose them as [`SelectionMode::Multiple`] says.
 #[derive(Props)]
 pub struct VirtualListProps {
     #[props(into, default)]
     pub items: Reactive<Vec<ListRow>>,
+    /// How large the rows are drawn: their height, padding and text, and the message shown while there are none, as [`ControlSize`] works them out. What [`row`](Self::row) builds is sized where it is written.
+    #[props(default)]
+    pub size: ControlSize,
     /// How many rows can be chosen at once.
     #[props(default)]
     pub selection_mode: SelectionMode,
@@ -108,6 +112,7 @@ pub struct VirtualListProps {
 pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let VirtualListProps {
         items,
+        size,
         selection_mode,
         selected,
         selected_rows,
@@ -122,7 +127,7 @@ pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, Layo
     } = props;
     let selection = RowSelection::new(selection_mode, selected, selected_rows, on_selection_change);
     let rows = memo(move || Rows(Rc::new(items.get())));
-    let row_height = ListTokens::current().row_height();
+    let row_height = ListTokens::current().row_height(size);
 
     let mut made: Option<Rc<List>> = None;
     let scroll = LayoutScrollArea::new_with(LayoutStyle::new().flex_grow(1.0), |viewport| {
@@ -132,7 +137,7 @@ pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, Layo
             selection,
             search: RefCell::default(),
             on_select,
-            places: RowPlaces::new(viewport, row_height, wrap),
+            places: RowPlaces::new(viewport, size, row_height, wrap),
             focus: Cell::new(None),
             built: BuiltRows::new(),
         });
@@ -174,6 +179,7 @@ pub fn virtual_list(props: VirtualListProps) -> Result<Box<dyn LayoutItem>, Layo
         None => box_item(scroll),
     };
     with_empty_state(
+        size,
         scroll,
         move || rows.with(|rows| rows.0.is_empty()),
         row_height,
@@ -422,7 +428,7 @@ fn build_row(
 ) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let content = match content {
         Some(build) => vec![build(&row)?],
-        None => default_content(&row, list.places.text_wrap())?,
+        None => default_content(&row, list.places.size(), list.places.text_wrap())?,
     };
     let id = row.id.clone();
     let disabled = row.disabled;
@@ -450,12 +456,13 @@ fn build_row(
     };
     let places = list.places.clone();
     let row_box = move || {
+        let size = places.size();
         places.sized(
             LayoutStyle::row()
                 .align_items(AlignItems::CENTER)
                 .flex_shrink(0.0)
-                .padding_horizontal(ListTokens::current().pad_x())
-                .gap(shared::gap_md()),
+                .padding_horizontal(ListTokens::current().pad_x(size))
+                .gap(shared::gap_md(size)),
         )
     };
     let built = StyledContainer::new(row_box(), paint(false), content)?
@@ -472,8 +479,12 @@ fn build_row(
     Ok(box_item(built))
 }
 
-/// A row's label, taking the room the row has and broken as `wrap` says, and its detail after it, quiet.
-fn default_content(row: &ListRow, wrap: TextWrap) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+/// A row's label at the list's `size`, taking the room the row has and broken as `wrap` says, and its detail after it, quiet.
+fn default_content(
+    row: &ListRow,
+    size: ControlSize,
+    wrap: TextWrap,
+) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     let label = row.label.clone();
     let disabled = row.disabled;
     let text = Text::declaring(
@@ -483,7 +494,7 @@ fn default_content(row: &ListRow, wrap: TextWrap) -> Result<Vec<Box<dyn LayoutIt
             .flex_shrink(1.0)
             .min_width(0.0),
         move |t| {
-            let text = shared::control_text(t, 1.0).with_text_wrap(wrap);
+            let text = shared::control_text(size, t, 1.0).with_text_wrap(wrap);
             if disabled {
                 text.with_color(shared::muted())
             } else {
@@ -497,7 +508,7 @@ fn default_content(row: &ListRow, wrap: TextWrap) -> Result<Vec<Box<dyn LayoutIt
         content.push(box_item(Text::declaring(
             move || detail.to_string(),
             LayoutStyle::new().flex_shrink(0.0),
-            |t| shared::quiet(t, shared::CAPTION_RATIO).with_text_wrap(TextWrap::NoWrap),
+            move |t| shared::quiet(size, t, shared::CAPTION_RATIO).with_text_wrap(TextWrap::NoWrap),
         )?));
     }
     Ok(content)

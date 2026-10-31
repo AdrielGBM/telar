@@ -11,9 +11,7 @@ use telar::{
     ShapeStyle, SizeDimension, StyledContainer, WindowRoot, box_item, reset_layout_runtime,
     use_resolved_scheme,
 };
-use telar_devtools::{
-    WORKBENCH_CONTROL_SIZE, WorkbenchTheme, use_workbench_tokens, workbench_scope,
-};
+use telar_devtools::{WorkbenchTheme, use_workbench_tokens, workbench_scope};
 
 use crate::canvas::env::follow_reduced_motion;
 use crate::canvas::states::allow_editor_scheme;
@@ -76,8 +74,6 @@ impl WorkshopApp {
 impl App for WorkshopApp {
     fn root(&self) -> Box<dyn Component> {
         reset_layout_runtime();
-        // The window's own surface, not the thread: a canvas inside keeps the application's control size.
-        telar::set_surface_control_size(Some(WORKBENCH_CONTROL_SIZE));
         let keeper = store::install();
         self.keeper.replace(keeper.clone()).flush();
         let state = WorkshopState::kept_in(

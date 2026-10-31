@@ -1,4 +1,4 @@
-//! What every list that builds only the rows on screen and walks them with a cursor shares: the controls of the rows that are built, for the cursor to point a reader at, and where its rows stand, built or not, for scrolling one into view and paging; with `advanced`, what a list or a table shows while it has no rows.
+//! What every list that builds only the rows on screen and walks them with a cursor shares: the controls of the rows that are built, for the cursor to point a reader at, and where its rows stand, built or not, for scrolling one into view and paging, and what a list or a table shows while it has no rows.
 
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -8,15 +8,13 @@ use telar::{
     VirtualList, VirtualRows, focus::FocusId, on_cleanup, signal,
 };
 
+use crate::ControlSize;
 use crate::shared;
 
-#[cfg(feature = "advanced")]
 pub(crate) use empty::with_empty_state;
-#[cfg(any(feature = "advanced", feature = "workbench"))]
 pub(crate) use paint::{RowState, cursor_row_paint};
 
 /// How far past the view's edge a row may end and still count as shown whole when paging: rows are drawn snapped to whole pixels, and the offsets a page is worked out from are sums of fractional heights, so a run of rows that exactly fills the view would otherwise fit or not by rounding noise.
-#[cfg(any(feature = "advanced", feature = "workbench"))]
 const WHOLE_SLACK: f32 = 0.5;
 
 /// The presented control of each row that is built, by the key the list names its rows by: what a cursor resting on a row names to a reader, and nothing for a row scrolled out of the built window.
@@ -60,7 +58,6 @@ impl<K: Clone + Eq + Hash + 'static> BuiltRows<K> {
 }
 
 /// Each of `rows` with how many there are, which is what a row is keyed by: the place a row says it stands at among them all is its index and their count, so a list that grows or shrinks builds its rows again, and one only reordered keeps what it measured of each.
-#[cfg(feature = "advanced")]
 pub(crate) fn counted<T: Clone>(rows: &[T]) -> Vec<(T, usize)> {
     rows.iter().map(|row| (row.clone(), rows.len())).collect()
 }
@@ -71,34 +68,40 @@ pub(crate) fn counted<T: Clone>(rows: &[T]) -> Vec<(T, usize)> {
 #[derive(Clone)]
 pub(crate) struct RowPlaces {
     viewport: ScrollViewport,
+    /// The size of the list the rows are drawn at, which a measured row's padding follows.
+    size: ControlSize,
     row_height: f32,
     header: f32,
     measured: Option<VirtualRows>,
 }
 
 impl RowPlaces {
-    /// Rows of `viewport` every one `row_height` tall.
-    pub(crate) fn fixed(viewport: ScrollViewport, row_height: f32) -> Self {
+    /// Rows of `viewport` in a list of `size`, every one `row_height` tall.
+    pub(crate) fn fixed(viewport: ScrollViewport, size: ControlSize, row_height: f32) -> Self {
         Self {
             viewport,
+            size,
             row_height,
             header: 0.0,
             measured: None,
         }
     }
 
-    /// Rows of `viewport` at least `row_height` tall, measured when `varying`, else [`fixed`](Self::fixed).
-    #[cfg(any(feature = "advanced", feature = "workbench"))]
-    pub(crate) fn new(viewport: ScrollViewport, row_height: f32, varying: bool) -> Self {
+    /// Rows of `viewport` in a list of `size`, at least `row_height` tall, measured when `varying`, else [`fixed`](Self::fixed).
+    pub(crate) fn new(
+        viewport: ScrollViewport,
+        size: ControlSize,
+        row_height: f32,
+        varying: bool,
+    ) -> Self {
         let measured = varying.then(|| VirtualRows::new(viewport.clone(), row_height));
         Self {
             measured,
-            ..Self::fixed(viewport, row_height)
+            ..Self::fixed(viewport, size, row_height)
         }
     }
 
     /// Rows under a header `height` px tall held at the top of the view: a table's column headings.
-    #[cfg(feature = "advanced")]
     pub(crate) fn under_header(self, height: f32) -> Self {
         Self {
             measured: self.measured.map(|rows| rows.under_header(height)),
@@ -111,8 +114,12 @@ impl RowPlaces {
         &self.viewport
     }
 
+    /// The size of the list the rows are drawn at.
+    pub(crate) fn size(&self) -> ControlSize {
+        self.size
+    }
+
     /// Whether the rows are measured, and so may each be a different height.
-    #[cfg(feature = "advanced")]
     pub(crate) fn is_measured(&self) -> bool {
         self.measured.is_some()
     }
@@ -123,7 +130,7 @@ impl RowPlaces {
             None => style.height(self.row_height),
             Some(_) => style
                 .min_height(self.row_height)
-                .padding_vertical(shared::gap_sm()),
+                .padding_vertical(shared::gap_sm(self.size)),
         }
     }
 
@@ -180,7 +187,6 @@ impl RowPlaces {
     }
 
     /// Where Page Down (`forward`) or Page Up takes the cursor from the row at `from`, or from the header for `None`, among `count` rows: on by as many rows as the view shows whole under the header, counting a row not yet built at the row height, and at least one. `None` is the header, reached going up from a row a page or less below it; a list without one stops at its first row.
-    #[cfg(any(feature = "advanced", feature = "workbench"))]
     pub(crate) fn page(&self, from: Option<usize>, count: usize, forward: bool) -> Option<usize> {
         let last = count.checked_sub(1)?;
         let view = self.viewport.rect().peek().height - self.header;
@@ -208,16 +214,14 @@ impl RowPlaces {
     }
 
     /// How tall a one-line row's content stands: the whole row for fixed rows, and for measured ones what [`sized`](Self::sized) leaves inside its padding.
-    #[cfg(feature = "workbench")]
     pub(crate) fn line_height(&self) -> f32 {
         match self.measured {
             None => self.row_height,
-            Some(_) => (self.row_height - shared::gap_sm() * 2.0).max(0.0),
+            Some(_) => (self.row_height - shared::gap_sm(self.size) * 2.0).max(0.0),
         }
     }
 
     /// How a row's text breaks: onto more lines for measured rows, which grow to hold them, and on one line cut off where the row ends for fixed ones.
-    #[cfg(any(feature = "advanced", feature = "workbench"))]
     pub(crate) fn text_wrap(&self) -> telar::TextWrap {
         match self.measured {
             Some(_) => telar::TextWrap::Wrap,
@@ -225,7 +229,6 @@ impl RowPlaces {
         }
     }
 
-    #[cfg(any(feature = "advanced", feature = "workbench"))]
     fn top(&self, index: usize) -> f32 {
         match &self.measured {
             Some(rows) => rows.offset_of(index),
@@ -233,7 +236,6 @@ impl RowPlaces {
         }
     }
 
-    #[cfg(any(feature = "advanced", feature = "workbench"))]
     fn height_of(&self, index: usize) -> f32 {
         match &self.measured {
             Some(rows) => rows.height_of(index),
@@ -241,7 +243,6 @@ impl RowPlaces {
         }
     }
 
-    #[cfg(any(feature = "advanced", feature = "workbench"))]
     fn row_at(&self, offset: f32, count: usize) -> usize {
         match &self.measured {
             Some(rows) => rows.row_at(offset),
@@ -252,7 +253,6 @@ impl RowPlaces {
     }
 }
 
-#[cfg(any(feature = "advanced", feature = "workbench"))]
 mod paint {
     use telar::{Border, BorderRadius, Color, Reactive, RectStyle, ShapeStyle};
 
@@ -296,7 +296,6 @@ mod paint {
     }
 }
 
-#[cfg(feature = "advanced")]
 mod empty {
     use std::rc::Rc;
 
@@ -305,12 +304,13 @@ mod empty {
         Reactive, Text, box_item, focus::Role,
     };
 
-    use crate::{shared, strings};
+    use crate::{ControlSize, shared, strings};
 
-    /// What a list or a table that has no rows is wrapped in to say so: `scroll`, the list itself, and under it a status that holds, while `no_rows` answers `true`, what `empty` builds where it builds anything, else `label`, else the localized `telar_components.nothing_to_show`.
+    /// What a list or a table of `size` that has no rows is wrapped in to say so: `scroll`, the list itself, and under it a status that holds, while `no_rows` answers `true`, what `empty` builds where it builds anything, else `label`, else the localized `telar_components.nothing_to_show`.
     ///
     /// While empty, the list keeps only `kept` px, its header row or for a list without one a row's height, so it still has a box to hold focus in, and the message takes the rest, centred. Beside the list rather than over it, since a list box or a grid holds nothing but its rows, and a reader hears the message as its own; and a status that is there all along, so a reader hears it when the last row goes.
     pub(crate) fn with_empty_state(
+        size: ControlSize,
         scroll: Box<dyn LayoutItem>,
         no_rows: impl Fn() -> bool + 'static,
         kept: f32,
@@ -340,14 +340,14 @@ mod empty {
                             None => strings::text(strings::NOTHING_TO_SHOW),
                         },
                         LayoutStyle::new(),
-                        |t| shared::quiet(t, 1.0),
+                        move |t| shared::quiet(size, t, 1.0),
                     )?;
                     content.push(box_item(text));
                 }
                 let message = Container::new(
                     LayoutStyle::column()
                         .align_items(AlignItems::CENTER)
-                        .gap(shared::gap_md()),
+                        .gap(shared::gap_md(size)),
                     content,
                 )?;
                 Ok(box_item(message))
@@ -358,7 +358,7 @@ mod empty {
                 .flex_grow(1.0)
                 .align_items(AlignItems::CENTER)
                 .justify_content(JustifyContent::CENTER)
-                .padding_all(shared::gap_md()),
+                .padding_all(shared::gap_md(size)),
             false => LayoutStyle::column(),
         };
         let status = Container::new(status_box(), vec![message])?

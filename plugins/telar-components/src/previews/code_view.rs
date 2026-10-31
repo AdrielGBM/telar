@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 
+use crate::ControlSize;
 use crate::code_view::{CodeSpan, CodeViewProps, TokenKind, code_view};
 
 const SOURCE: &str = "/// Greets whoever is named.\nfn greet(name: &str) -> String {\n    let greeting = format!(\"Hello, {name}!\");\n    greeting\n}\n";
@@ -33,6 +34,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 CodeViewProps::props()
                     .on_copy(Rc::new(|_| {}))
                     .code(SOURCE)
+                    .size(p.arg("size", ControlSize::Regular))
                     .spans(spans())
                     .first_line(p.arg("first_line", 1u32))
                     .line_numbers(p.arg("line_numbers", true))

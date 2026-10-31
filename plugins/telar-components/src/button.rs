@@ -8,8 +8,8 @@ use telar::{
     amend_surface, box_item, children, focus::Role,
 };
 
-use crate::Variant;
 use crate::shared;
+use crate::{ControlSize, Variant};
 
 /// A button's own tokens, which an application's theme supplies through a `#[theme(extension)]` field.
 ///
@@ -18,7 +18,7 @@ use crate::shared;
 pub struct ButtonTokens {
     /// Corner radius. `None` is the theme's `radius_control`.
     pub radius: Option<f32>,
-    /// Space between the edge and the label at the regular control size, scaled with the control size in force. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    /// Space between the edge and the label at the regular size, scaled with the button's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
     pub pad_x: Option<f32>,
     /// Width of the outline variant's frame. `None` is the theme's `border_width_strong`.
     pub border_width: Option<f32>,
@@ -34,9 +34,10 @@ impl ButtonTokens {
         self.radius.unwrap_or_else(shared::radius_control)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between the edge and the label of a button of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::control_pad_x, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
     }
 
     pub fn border_width(&self) -> f32 {
@@ -46,12 +47,12 @@ impl ButtonTokens {
 }
 
 /// The label never wraps: a button names one action, and two lines of it without vertical padding would crowd the edge, so the layout around it gives way instead. A row so the label's measured width sets the box's main-axis size (a column would collapse the cross axis: `Text::new` sets `align_self_stretch`, which fights content-sizing and renders 0-wide). No vertical padding: the line is centred in the shared control height, so a button stands level with a field beside it.
-fn shell() -> LayoutStyle {
+fn shell(size: ControlSize) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(JustifyContent::CENTER)
-        .padding_horizontal(ButtonTokens::current().pad_x())
-        .min_height(shared::control_height())
+        .padding_horizontal(ButtonTokens::current().pad_x(size))
+        .min_height(shared::control_height(size))
 }
 
 /// A labelled, pressable button. This is the high-level convenience over the primitives (`box` + `on_press` + `hover` + a centred `text`); it lives in `telar-components`, not the kernel, so an app can drop it or ship its own.
@@ -60,6 +61,9 @@ pub struct ButtonProps {
     /// The text on the button.
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// How large the button is drawn: its height, padding and label, as [`ControlSize`] works them out.
+    #[props(default)]
+    pub size: ControlSize,
     /// How the button carries its colour.
     #[props(default)]
     pub variant: Variant,
@@ -86,6 +90,7 @@ enum State {
 pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ButtonProps {
         label,
+        size,
         variant,
         color,
         on_press,
@@ -97,7 +102,7 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         move || label.get(),
         LayoutStyle::new(),
         move |t| {
-            let text = shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap);
+            let text = shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::NoWrap);
             match label_color(variant, tone(&label_tone)) {
                 Some(color) => text.with_color(color),
                 None => text,
@@ -109,11 +114,11 @@ pub fn button(props: ButtonProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         Rc::new(move |state: State| amend_surface(surface(variant, tone(&color), state), &style));
     let (rest, hover, press) = (paint.clone(), paint.clone(), paint);
     let container = StyledContainer::new(
-        shell(),
+        shell(size),
         move |_r| rest(State::Rest),
         children![label_widget],
     )?
-    .styled_by(shell)
+    .styled_by(move || shell(size))
     .hover_style(move |_r| hover(State::Hovered))
     .active_style(move |_r| press(State::Pressed))
     .control(Role::Button)

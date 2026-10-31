@@ -24,14 +24,12 @@ pub(crate) enum Width {
     /// As wide as this, whatever its rows say: a select's list, lined up under its field.
     Exactly(f32),
     /// As wide as its widest row, and never narrower than this: a menu, whose rows say what they say in full. Never wider than the room the panel has.
-    #[cfg(feature = "overlays")]
     AtLeast(f32),
 }
 
 /// Where the keyboard is while a list is open, which is what the widget it belongs to is: the two patterns a list that drops from a control comes in.
 pub(crate) enum Keyboard {
     /// A menu's: the list is a menu that takes focus as it opens and points a reader at the row its cursor is on, `pointed`.
-    #[cfg(feature = "overlays")]
     Held {
         pointed: Rc<dyn Fn() -> Option<FocusId>>,
     },
@@ -42,7 +40,6 @@ pub(crate) enum Keyboard {
 /// An open panel, and what the widget it belongs to needs of it.
 pub(crate) struct Opened {
     pub panel: StyledContainer,
-    #[cfg(feature = "overlays")]
     pub view: telar::ScrollViewport,
     /// The list's own control: what a menu hands focus to, and what a select's control names as the one it controls.
     pub list: FocusId,
@@ -77,7 +74,6 @@ pub(crate) fn popup(
     })?;
     let view = handed.expect("a scroll area builds its content before it returns");
     let scroll = match keyboard {
-        #[cfg(feature = "overlays")]
         Keyboard::Held { pointed } => scroll
             .control(Role::Menu)
             .focus_style(|_r| RectStyle::default())
@@ -110,7 +106,6 @@ pub(crate) fn popup(
                 .padding_all(padding);
             match width {
                 Width::Exactly(width) => sheet.width(width),
-                #[cfg(feature = "overlays")]
                 Width::AtLeast(width) => {
                     sheet.min_width(width.min(room.width)).max_width(room.width)
                 }
@@ -126,12 +121,7 @@ pub(crate) fn popup(
         // A press on its own padding is not a press away from it. Answering one would make the box a button, so it says it is the group it is.
         .on_press(|| {})
         .role(Role::Group);
-    Ok(Opened {
-        panel,
-        #[cfg(feature = "overlays")]
-        view,
-        list,
-    })
+    Ok(Opened { panel, view, list })
 }
 
 /// Where the keyboard was when a popup opened, so that every way of closing it — a pick, Escape, a press away — puts the keyboard back there rather than leaving it nowhere.

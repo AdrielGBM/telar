@@ -1,4 +1,4 @@
-//! The two axes every component that carries a colour is drawn along: [`Variant`], how emphatic it is, and [`Tone`], what it means.
+//! The axes every component is drawn along: [`Variant`], how emphatic it is, and [`Tone`], what it means, for one that carries a colour; [`ControlSize`], how large it is, for one with metrics of its own.
 
 use std::fmt;
 
@@ -18,6 +18,46 @@ pub enum Variant {
     Outline,
     /// No surface until a pointer rests on it, the label alone carrying the colour: a toolbar's action.
     Ghost,
+}
+
+/// How large a component with metrics of its own is drawn: its height, padding, gaps, inner icon and text all follow from this one choice, made where the component is written and never inherited from what holds it.
+///
+/// Every length comes from the theme's spacing unit and icon size, at the default theme 8 and 16:
+///
+/// - **A control** (a button, an icon button, a field's box) is its icon with a spacing unit either side, both multiplied by [`scale`](Self::scale): 24, 32 and 40 px from small to large. The smallest is already the smallest pointer target, [`MIN_TARGET`](crate::metrics::MIN_TARGET), so nothing a pointer operates is grown past what it draws; a theme whose units would draw one below it is held at it.
+/// - **A tag** moves half as far: half a control's height plus one spacing unit, 20, 24 and 28 px, and never below the smallest target where it answers the pointer, as a filter or round an action, so a small one is 24 there.
+/// - **The gaps and padding** are the theme's spacing steps multiplied by [`scale`](Self::scale).
+/// - **The text** steps by [`text_scale`](Self::text_scale), less than the box round it, since type below about 12 px stops reading and a line is centred in its control rather than padding it.
+/// - **Corners** do not scale: a smaller control is smaller, not flatter.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, telar::PreviewArg)]
+pub enum ControlSize {
+    /// Compact: a control inside another, as a tag's remove button, or a dense inspector.
+    Small,
+    /// The size a view is laid out at.
+    #[default]
+    Regular,
+    /// A touch target, or a control that is the point of the screen it is on.
+    Large,
+}
+
+impl ControlSize {
+    /// What the theme's spacing steps and icon size are multiplied by at this size.
+    pub fn scale(self) -> f32 {
+        match self {
+            ControlSize::Small => 0.75,
+            ControlSize::Regular => 1.0,
+            ControlSize::Large => 1.25,
+        }
+    }
+
+    /// What the text around a control is multiplied by inside it at this size.
+    pub fn text_scale(self) -> f32 {
+        match self {
+            ControlSize::Small => 0.875,
+            ControlSize::Regular => 1.0,
+            ControlSize::Large => 1.125,
+        }
+    }
 }
 
 /// What a component's colour says: the theme's token of that intent, so a theme restyles every tone it defines, or a colour no tone names. Every variant and every state is worked out from it, with an ink that reads on its own fill in light and dark.

@@ -6,6 +6,7 @@ use std::sync::Arc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
+use crate::ControlSize;
 use crate::selection::SelectionMode;
 use crate::virtual_list::{ListRow, VirtualListProps, virtual_list};
 
@@ -64,6 +65,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .items(contacts())
                     .selected(signal(Some(Arc::from("contact-2"))))
                     .label(p.arg("label", "Contacts"))
+                    .size(p.arg("size", ControlSize::Regular))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
             )?;

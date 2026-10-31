@@ -185,9 +185,7 @@ pub use text_area::TextArea;
 pub use text_edit::DOUBLE_CLICK;
 pub use text_editor::{Caret, Underline};
 pub use text_input::text_input;
-pub use theme_provider::{
-    ScopeProvider, follow_control_size, follow_theme, provide_control_size, provide_theme,
-};
+pub use theme_provider::{ScopeProvider, follow_theme, provide_theme};
 pub use transform_origin::{TransformOrigin, box_transform_about};
 pub use ui_tree::{Component, ComponentList, EventResult, NodeVec, RenderNode};
 pub use virtual_list::{VirtualItem, VirtualList, VirtualRows, visible_window};

@@ -178,9 +178,8 @@ fn thumb_rect(view: RenderNode) -> (f32, BorderRadius) {
 }
 
 #[test]
-fn default_style_follows_theme_and_control_size_after_construction() {
+fn default_style_follows_the_theme_after_construction() {
     theme_core::set_theme(Silent);
-    theme_core::set_control_size(theme_core::ControlSize::Regular);
     let sa = tall();
     sa.core.bars_up();
     assert_eq!(thumb_rect(sa.view()), (6.0, BorderRadius::all(3.0)));
@@ -188,10 +187,6 @@ fn default_style_follows_theme_and_control_size_after_construction() {
     theme_core::set_theme(Chunky);
     assert_eq!(thumb_rect(sa.view()), (10.0, BorderRadius::all(5.0)));
 
-    theme_core::set_control_size(theme_core::ControlSize::Large);
-    assert_eq!(thumb_rect(sa.view()), (13.0, BorderRadius::all(5.0)));
-
-    theme_core::set_control_size(theme_core::ControlSize::Regular);
     theme_core::set_theme(Silent);
 }
 

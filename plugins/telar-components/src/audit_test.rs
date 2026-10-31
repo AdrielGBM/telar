@@ -1,4 +1,4 @@
-//! The document real widgets render to, audited the way an accessibility review would: axe-core's WCAG A/AA and best-practice rules, run over buttons, links, a field, a checkbox, a switch and a toggle button, a named tab list, a paragraph with a link in it and the boxes an application named, gave a language or hid; with `workbench`, a tree, a toolbar, a split pane and a resizable box too. Needs a browser and the dev shell's `TELAR_AXE_CORE`, so it runs under `wasm-bindgen-test` rather than `cargo test`.
+//! The document real widgets render to, audited the way an accessibility review would: axe-core's WCAG A/AA and best-practice rules, run over buttons, links, a field, a checkbox, a switch and a toggle button, a named tab list, a paragraph with a link in it, the boxes an application named, gave a language or hid, a tree, a toolbar, a split pane and a resizable box. Needs a browser and the dev shell's `TELAR_AXE_CORE`, so it runs under `wasm-bindgen-test` rather than `cargo test`.
 
 #![cfg(target_arch = "wasm32")]
 
@@ -15,7 +15,6 @@ use telar_components::{
     SearchFieldProps, SelectProps, TabsProps, TextFieldProps, button, checkbox, image, item,
     link as text_link, scrub_field, search_field, select, tabs, text_field,
 };
-#[cfg(feature = "overlays")]
 use telar_components::{
     Command, CommandPaletteProps, MenuProps, ModalProps, SubmenuProps, command_palette, menu,
     modal, submenu,
@@ -192,11 +191,8 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
     ];
     controls.extend(labelled_fields()?);
     controls.extend(everyday()?);
-    #[cfg(feature = "advanced")]
     controls.extend(data()?);
-    #[cfg(feature = "workbench")]
     controls.extend([tree()?, tools()?, split()?, resizable_box()?]);
-    #[cfg(feature = "overlays")]
     controls.extend(overlays()?);
     let column = Container::new(
         LayoutStyle::new().flex_column().gap(12.0).padding_all(16.0),
@@ -206,7 +202,6 @@ fn controls() -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 /// A tree with an open branch, a selected row and a badge, in a box of its own height: a tree fills the height it is given and scrolls inside it.
-#[cfg(feature = "workbench")]
 fn tree() -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_components::{TreeNode, TreeViewProps, tree_view};
     let items = vec![
@@ -231,7 +226,6 @@ fn tree() -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 /// A toolbar of two icon buttons, one of them a toggle.
-#[cfg(feature = "workbench")]
 fn tools() -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_components::{IconButtonProps, ToolbarProps, icon_button, toolbar};
     let children = Children::new(|| {
@@ -261,7 +255,6 @@ fn tools() -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 /// Two panes and the splitter between them, in a box of their own size.
-#[cfg(feature = "workbench")]
 fn split() -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_components::{SplitPaneProps, split_pane};
     let split = split_pane(
@@ -278,7 +271,6 @@ fn split() -> Result<Box<dyn LayoutItem>, LayoutError> {
 }
 
 /// A box of words with handles on its end edge, its bottom edge and the corner between them.
-#[cfg(feature = "workbench")]
 fn resizable_box() -> Result<Box<dyn LayoutItem>, LayoutError> {
     use telar_components::{ResizableProps, resizable};
     resizable(
@@ -454,7 +446,6 @@ fn the_keyboard_s_box_wears_telar_s_ring() {
 }
 
 /// The rows reach the document as tree items that say they are chosen, open and where they sit, and a focused tree adds no violations.
-#[cfg(feature = "workbench")]
 #[wasm_bindgen_test]
 async fn a_tree_s_rows_carry_their_state_into_the_document() {
     focus::request(focusable(Role::Tree).id);
@@ -477,7 +468,6 @@ async fn a_tree_s_rows_carry_their_state_into_the_document() {
 }
 
 /// The element the box of `role` that has a cursor points a reader at with `aria-activedescendant`, which has to be inside it. Only a focused list, tree or table has one: the page holds several of each.
-#[cfg(any(feature = "advanced", feature = "workbench", feature = "overlays"))]
 fn pointed_at(host: &web_sys::HtmlElement, role: &str) -> web_sys::Element {
     let container = host
         .query_selector(&format!(r#"[role="{role}"][aria-activedescendant]"#))
@@ -497,7 +487,6 @@ fn pointed_at(host: &web_sys::HtmlElement, role: &str) -> web_sys::Element {
 }
 
 /// A focused tree keeps the document's focus and points a reader at the row its cursor is on, and moving the cursor moves what it points at.
-#[cfg(feature = "workbench")]
 #[wasm_bindgen_test]
 async fn a_focused_tree_points_a_reader_at_its_cursor_row() {
     let tree = focusable(Role::Tree);
@@ -532,7 +521,6 @@ async fn a_focused_tree_points_a_reader_at_its_cursor_row() {
 }
 
 /// A focused toolbar points a reader at the item its cursor is on, and its toggle says it is pressed.
-#[cfg(feature = "workbench")]
 #[wasm_bindgen_test]
 async fn a_focused_toolbar_points_a_reader_at_its_cursor_item() {
     focus::request(focusable(Role::Toolbar).id);
@@ -545,7 +533,6 @@ async fn a_focused_toolbar_points_a_reader_at_its_cursor_item() {
 }
 
 /// The splitter is named even when the application gave it no name.
-#[cfg(feature = "workbench")]
 #[wasm_bindgen_test]
 fn the_splitter_has_a_name() {
     focus::clear();
@@ -622,7 +609,6 @@ fn key(key: telar::NamedKey) {
 }
 
 /// A menu of more rows than the page holds and a command palette, both shut until a test opens them.
-#[cfg(feature = "overlays")]
 fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     let rows = Children::new(|| {
         let mut items = Vec::new();
@@ -674,7 +660,6 @@ fn overlays() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
 }
 
 /// A submenu of choices, one of them on, and a row beside it.
-#[cfg(feature = "overlays")]
 fn view_rows() -> Children {
     Children::new(|| {
         let mut items = Vec::new();
@@ -712,11 +697,9 @@ fn view_rows() -> Children {
     })
 }
 
-#[cfg(feature = "overlays")]
 const PALETTE: &str = "commands";
 
 /// A list that scrolls is one control that takes focus, drawn where it opened; focused, it points a reader at the row its cursor is on, a `menuitem` of a menu or an `option` of a list box.
-#[cfg(feature = "overlays")]
 async fn assert_list_points_at_its_cursor(list: Role, row_role: &str, what: &str) {
     focus::request(focusable(list).id);
     key(telar::NamedKey::ArrowDown);
@@ -726,7 +709,6 @@ async fn assert_list_points_at_its_cursor(list: Role, row_role: &str, what: &str
     assert_clean(&host, what).await;
 }
 
-#[cfg(feature = "overlays")]
 #[wasm_bindgen_test]
 async fn an_open_menu_too_long_for_the_page_adds_no_violations() {
     let trigger = focus::exposed()
@@ -756,14 +738,12 @@ async fn an_open_menu_too_long_for_the_page_adds_no_violations() {
     render();
 }
 
-#[cfg(all(feature = "overlays", feature = "advanced"))]
 fn inert_within(element: &web_sys::Element) -> bool {
     std::iter::successors(Some(element.clone()), |node| node.parent_element())
         .any(|node| node.has_attribute("inert"))
 }
 
 /// An open menu holds the keyboard, and the page behind it, the list and the table that overflow it included, is inert while it is open: out of reach of a reader as of Tab, not a scroll region left in the tree with no way to focus it. The menu's button stays, saying its menu is open; closing the menu gives the page back.
-#[cfg(all(feature = "overlays", feature = "advanced"))]
 #[wasm_bindgen_test]
 async fn an_open_menu_makes_the_page_behind_it_inert() {
     let trigger = focus::exposed()
@@ -811,7 +791,6 @@ async fn an_open_menu_makes_the_page_behind_it_inert() {
 }
 
 /// A row with a switch is a checkbox of the menu that says whether it is on; the switch drawn at its end is for the eye only, and the menu with it open adds no violations.
-#[cfg(feature = "overlays")]
 #[wasm_bindgen_test]
 async fn an_open_menu_with_a_switch_row_adds_no_violations() {
     let trigger = focus::exposed()
@@ -843,7 +822,6 @@ async fn an_open_menu_with_a_switch_row_adds_no_violations() {
 }
 
 /// A command that has keys says them as `aria-keyshortcuts` on the control that runs it, in the form UI Events names the keys, and keeps them in the row's name: the row of an open menu and an icon button.
-#[cfg(feature = "overlays")]
 #[wasm_bindgen_test]
 async fn a_shortcut_is_written_on_the_control_it_runs() {
     telar::set_keyboard_convention(telar::KeyboardConvention::Pc);
@@ -890,7 +868,6 @@ async fn a_shortcut_is_written_on_the_control_it_runs() {
 }
 
 /// A menu button and the row of its menu that opens a submenu each say what they open and whether it is open; the submenu is a menu of its own whose choices say which one is on, and the keyboard goes into it, back out of it and back to the button.
-#[cfg(feature = "overlays")]
 #[wasm_bindgen_test]
 async fn an_open_submenu_says_what_opened_it_and_adds_no_violations() {
     let trigger = focus::exposed()
@@ -944,7 +921,6 @@ async fn an_open_submenu_says_what_opened_it_and_adds_no_violations() {
     render();
 }
 
-#[cfg(feature = "overlays")]
 #[wasm_bindgen_test]
 async fn an_open_command_palette_adds_no_violations() {
     telar::open_overlay(PALETTE);
@@ -1066,11 +1042,9 @@ fn controlled(control: &web_sys::Element) -> (web_sys::Element, Option<web_sys::
     (list, row)
 }
 
-#[cfg(feature = "overlays")]
 const NOTICE: &str = "notice";
 
 /// A dialog whose body holds more than it shows makes the body a Tab stop the keyboard scrolls, named after the dialog, and adds no violations.
-#[cfg(feature = "overlays")]
 #[wasm_bindgen_test]
 async fn an_open_dialog_whose_body_scrolls_adds_no_violations() {
     telar::open_overlay(NOTICE);
@@ -1107,7 +1081,6 @@ async fn an_open_dialog_whose_body_scrolls_adds_no_violations() {
 }
 
 /// Each edge of a resizable box reaches the document as a named separator with its axis and its range, and an edge with no largest size writes none.
-#[cfg(feature = "workbench")]
 #[wasm_bindgen_test]
 async fn a_resizable_box_s_edges_carry_their_axis_and_range() {
     focus::clear();
@@ -1208,7 +1181,6 @@ fn everyday() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
 }
 
 /// A list to choose several from and a sortable table with resizable columns, each with more rows than the box it fills shows, as a real one has: both build only the rows on screen and say where each sits among them all. And a table with no rows, which says so.
-#[cfg(feature = "advanced")]
 fn data() -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
     use telar_components::{
         CellAlign, Column, DataTableProps, ListRow, SelectionMode, TableRow, VirtualListProps,
@@ -1350,7 +1322,6 @@ async fn a_text_area_and_a_search_field_are_named_and_add_no_violations() {
 }
 
 /// A focused list points a reader at the option its cursor is on, inside itself.
-#[cfg(feature = "advanced")]
 #[wasm_bindgen_test]
 async fn a_focused_virtual_list_points_a_reader_at_its_cursor_option() {
     mount();
@@ -1406,7 +1377,6 @@ async fn a_focused_virtual_list_points_a_reader_at_its_cursor_option() {
 }
 
 /// A focused table points a reader at the cell its cursor is on, the header of the column it is sorted by says which way, and the chosen row says it is chosen.
-#[cfg(feature = "advanced")]
 #[wasm_bindgen_test]
 async fn a_focused_data_table_points_a_reader_at_its_cursor_cell() {
     focus::request(focusable(Role::Grid).id);
@@ -1466,7 +1436,6 @@ async fn a_focused_data_table_points_a_reader_at_its_cursor_cell() {
 }
 
 /// Each resizable column's header holds a named separator that reads the column's width and its narrowest, and the header is named by its column alone.
-#[cfg(feature = "advanced")]
 #[wasm_bindgen_test]
 async fn a_data_table_s_resizable_columns_hold_named_separators() {
     focus::clear();
@@ -1509,7 +1478,6 @@ async fn a_data_table_s_resizable_columns_hold_named_separators() {
 }
 
 /// A table with no rows keeps its grid and its header, and says so in a status beside the grid rather than inside it.
-#[cfg(feature = "advanced")]
 #[wasm_bindgen_test]
 async fn an_empty_data_table_says_so_in_a_status_beside_its_grid() {
     focus::clear();

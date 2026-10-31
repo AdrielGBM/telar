@@ -6,12 +6,12 @@ element group
       element group
         element group
           element group
-            matrix 1,0,0,1,250,258
+            matrix 1,0,0,1,250,256
               text 0,1 300x14.28 "Delivery notes" size=11.9 family=sans-serif weight=400 color=#616680ff lang=en
             end
           end
           element group
-            rect 250,281 300x61 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
+            rect 250,279 300x65 fill=#f5f7fcff border=2 border-color=#4261edff radius=10
             element scrollarea
               clip 262,287 276x51
                 matrix 1,0,0,1,262,287

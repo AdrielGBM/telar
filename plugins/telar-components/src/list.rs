@@ -14,6 +14,7 @@ use telar::{
     signal, use_context,
 };
 
+use crate::ControlSize;
 use crate::shared::{self, shown_chord};
 use crate::toggle::{SwitchSize, switch_track};
 use crate::type_ahead::TypeAhead;
@@ -27,11 +28,11 @@ const HEADING_RATIO: f32 = 0.85;
 /// Every field left `None` follows the role named beside it, read when the row is laid out or painted, so every list in an application keeps one row height and one corner unless its theme says otherwise.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ListTokens {
-    /// Height of a row at the regular control size, scaled with the control size in force. `None` is [`metrics::row_height`](crate::metrics::row_height).
+    /// Height of a row at the regular size, scaled with the row's own. `None` is [`metrics::row_height`](crate::metrics::row_height).
     pub row_height: Option<f32>,
     /// Corner of the wash behind a row. `None` is the theme's `radius_item`.
     pub radius: Option<f32>,
-    /// Space between a row's edge and what it says at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    /// Space between a row's edge and what it says at the regular size, scaled with the row's own. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
     pub pad_x: Option<f32>,
 }
 
@@ -41,27 +42,34 @@ impl ListTokens {
         telar::use_theme_extension::<Self>()
     }
 
-    /// In whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
-    pub fn row_height(&self) -> f32 {
-        self.row_height
-            .map_or_else(shared::row_height, |height| height * telar::control_scale())
-            .round()
+    /// The height of a row of `size`, in whole pixels: a virtual list places the rows it has not built by multiplying it, and a fractional height drifts off the pixels layout snaps the built ones to.
+    pub fn row_height(&self, size: ControlSize) -> f32 {
+        scaled_row_height(self.row_height, size)
     }
 
     pub fn radius(&self) -> f32 {
         self.radius.unwrap_or_else(shared::radius_item)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between the edge and what a row of `size` says.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
     }
+}
+
+/// A row height `token` names at the regular size, scaled to `size`, else [`metrics::row_height`](crate::metrics::row_height) at `size`; in whole pixels either way.
+pub(crate) fn scaled_row_height(token: Option<f32>, size: ControlSize) -> f32 {
+    token
+        .map_or_else(|| shared::row_height(size), |height| height * size.scale())
+        .round()
 }
 
 /// How the rows of one list are drawn: what a menu's tokens decide for its rows, and the list tokens for every other list's.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct RowLook {
-    pub(crate) height: f32,
+    /// The height of a row at the regular size, which each row scales to its own. `None` is [`ListTokens::row_height`].
+    pub(crate) row_height: Option<f32>,
     /// A row's label. `None` is the ink the list inherits.
     pub(crate) label: Option<Color>,
     /// A hint, and a disabled row's label. `None` fades the ink a hint trails, and leaves a disabled label as it is.
@@ -74,11 +82,16 @@ impl RowLook {
     /// The look of a list that says nothing of its own: its theme's list tokens.
     pub(crate) fn list() -> Self {
         Self {
-            height: ListTokens::current().row_height(),
+            row_height: None,
             label: None,
             faint: None,
             highlight: None,
         }
+    }
+
+    /// The height of a row of `size` in this list.
+    pub(crate) fn height(&self, size: ControlSize) -> f32 {
+        scaled_row_height(self.row_height.or(ListTokens::current().row_height), size)
     }
 }
 
@@ -100,7 +113,6 @@ pub(crate) fn row_paint(fill: Option<Color>) -> RectStyle {
 #[derive(Clone)]
 pub(crate) enum Act {
     Run(Rc<dyn Fn()>),
-    #[cfg(feature = "overlays")]
     Opens,
 }
 
@@ -125,7 +137,6 @@ struct ListState {
     declaring: Cell<bool>,
     /// Whether any row draws a tick, so every row keeps the column the ticks stand in and the labels line up.
     ticked: RwSignal<bool>,
-    #[cfg(feature = "overlays")]
     menu: Option<Rc<crate::menu_panel::Cascade>>,
 }
 
@@ -156,13 +167,11 @@ impl ListContext {
             search: RefCell::new(TypeAhead::default()),
             declaring: Cell::new(false),
             ticked: signal(false),
-            #[cfg(feature = "overlays")]
             menu: None,
         }))
     }
 
     /// The list of one panel of a menu, whose rows move the cursor as the pointer rests on them, draw with the menu's tokens, and may open a submenu.
-    #[cfg(feature = "overlays")]
     pub(crate) fn menu(
         pick: Rc<dyn Fn(u32)>,
         highlighted: RwSignal<Option<u32>>,
@@ -184,14 +193,12 @@ impl ListContext {
     }
 
     /// The panel of a menu this list is, if it is one.
-    #[cfg(feature = "overlays")]
     pub(crate) fn cascade(&self) -> Option<&Rc<crate::menu_panel::Cascade>> {
         self.0.menu.as_ref()
     }
 
     /// How this list's rows are drawn, read where they are laid out or painted.
     pub(crate) fn look(&self) -> RowLook {
-        #[cfg(feature = "overlays")]
         if let Some(cascade) = &self.0.menu {
             return cascade.look();
         }
@@ -224,7 +231,6 @@ impl ListContext {
     }
 
     /// Puts the cursor on the first row that can take it, as soon as such a row exists. See [`ListState::seed`].
-    #[cfg(feature = "overlays")]
     pub(crate) fn seed_cursor(&self) {
         self.0.seed.set(true);
     }
@@ -308,7 +314,6 @@ impl ListContext {
         }
     }
 
-    #[cfg(feature = "overlays")]
     pub(crate) fn highlighted(&self) -> RwSignal<Option<u32>> {
         self.0.highlighted
     }
@@ -367,13 +372,10 @@ impl ListContext {
 
     /// The pointer came to rest on row `index`. In a menu that is where the cursor goes, and it opens the submenu the row hangs or closes one another row had open; any other list leaves its cursor where the keyboard put it.
     pub(crate) fn pointed(&self, index: u32) {
-        #[cfg(feature = "overlays")]
         if let Some(cascade) = &self.0.menu {
             self.0.highlighted.set_if_changed(Some(index));
             cascade.pointed(index, matches!(self.act_of(index), Some(Act::Opens)));
         }
-        #[cfg(not(feature = "overlays"))]
-        let _ = index;
     }
 }
 
@@ -384,6 +386,9 @@ impl ListContext {
 pub struct ItemProps {
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// How large the row is drawn: its height, padding, tick, switch and text, as [`ControlSize`] works them out. Written on each row, as the list it is in is sized where that is written: a list's rows are sized by whoever writes them.
+    #[props(default)]
+    pub size: ControlSize,
     /// Greys the row, takes it out of the keyboard's path, and stops it committing anything.
     #[props(into, default)]
     pub disabled: Reactive<bool>,
@@ -429,6 +434,7 @@ pub(crate) enum Mark {
 pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let ItemProps {
         label,
+        size,
         disabled,
         checked,
         radio,
@@ -471,6 +477,7 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             }
             let checked = checked.clone();
             Some(shared::mark(
+                size,
                 || shared::Mark::Check,
                 move |text| match checked.get() {
                     true => text.color,
@@ -480,10 +487,10 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         }
         None => None,
     };
-    let mut content = vec![tick_column(&list, tick, checked.is_some())?];
+    let mut content = vec![tick_column(size, &list, tick, checked.is_some())?];
     // Markup children are the row's content when there are any; `label` is the shorthand for the case that needs nothing else.
     if supplied.is_empty() {
-        content.push(box_item(label_text(label, disabled.clone(), &list)?));
+        content.push(box_item(label_text(size, label, disabled.clone(), &list)?));
     } else {
         content.push(box_item(Container::new(
             LayoutStyle::row()
@@ -493,11 +500,11 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         )?));
     }
     if let Some(hint) = hint {
-        content.push(box_item(hint_text(hint, &list)?));
+        content.push(box_item(hint_text(size, hint, &list)?));
     }
     if let Some(shortcut) = shortcut.clone() {
         let shown = Reactive::of(move || shown_chord(&shortcut.get()));
-        content.push(box_item(hint_text(shown, &list)?));
+        content.push(box_item(hint_text(size, shown, &list)?));
     }
     if let Some(on) = &switch {
         let on = on.clone();
@@ -505,7 +512,7 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             move || on.get(),
             Reactive::of(|| Color::TRANSPARENT),
             None,
-            SwitchSize::row,
+            move || SwitchSize::row(size),
         )?
         .a11y_hidden();
         content.push(box_item(track));
@@ -523,7 +530,7 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             }
         })
     };
-    let row = styled_row(&list, index, disabled.clone(), content)?.on_press({
+    let row = styled_row(size, &list, index, disabled.clone(), content)?.on_press({
         let commit = commit.clone();
         move || commit()
     });
@@ -550,8 +557,9 @@ pub fn item(props: ItemProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     shown_while(box_item(row), shown)
 }
 
-/// A row's box and paint in the list it is in — the wash under the cursor, the selection's, the pointer moving the cursor in a menu — around `content`, laid start to end.
+/// A row's box at `size` and its paint in the list it is in — the wash under the cursor, the selection's, the pointer moving the cursor in a menu — around `content`, laid start to end.
 pub(crate) fn styled_row(
+    size: ControlSize,
     list: &Option<ListContext>,
     index: Option<u32>,
     disabled: Reactive<bool>,
@@ -573,7 +581,7 @@ pub(crate) fn styled_row(
     };
     let layout = {
         let list = list.clone();
-        move || row_layout(look_of(&list))
+        move || row_layout(size, look_of(&list))
     };
     let pointed = {
         let (list, disabled) = (list.clone(), disabled.clone());
@@ -590,8 +598,9 @@ pub(crate) fn styled_row(
         .disabled(move || disabled.get()))
 }
 
-/// The column a row's tick stands in: as wide as a tick wherever a row of the list draws one, and out of the row, gap and all, in a list that has none.
+/// The column a row's tick stands in: as wide as a tick of the row's `size` wherever a row of the list draws one, and out of the row, gap and all, in a list that has none.
 pub(crate) fn tick_column(
+    size: ControlSize,
     list: &Option<ListContext>,
     tick: Option<Box<dyn LayoutItem>>,
     own: bool,
@@ -601,7 +610,7 @@ pub(crate) fn tick_column(
         move || {
             let ticked = own || list.as_ref().is_some_and(ListContext::is_ticked);
             LayoutStyle::row()
-                .width(shared::icon_size())
+                .width(shared::icon_size(size))
                 .shown(ticked)
                 .flex_shrink(0.0)
                 .align_items(AlignItems::CENTER)
@@ -614,8 +623,9 @@ pub(crate) fn tick_column(
     Ok(box_item(column))
 }
 
-/// A row's label, taking the room the row has: in a menu, in its tokens' colour, and faint while the row is disabled.
+/// A row's label at the row's `size`, taking the room the row has: in a menu, in its tokens' colour, and faint while the row is disabled.
 pub(crate) fn label_text(
+    size: ControlSize,
     label: Reactive<String>,
     disabled: Reactive<bool>,
     list: &Option<ListContext>,
@@ -625,7 +635,7 @@ pub(crate) fn label_text(
         move || label.get(),
         LayoutStyle::new().flex_grow(1.0).min_width(0.0),
         move |t| {
-            let text = shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap);
+            let text = shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::NoWrap);
             let look = look_of(&list);
             match (disabled.get(), look.faint, look.label) {
                 (true, Some(faint), _) => text.with_color(faint),
@@ -636,8 +646,9 @@ pub(crate) fn label_text(
     )
 }
 
-/// Trailing text, quiet: a shortcut, a count, the value a submenu holds.
+/// Trailing text at the row's `size`, quiet: a shortcut, a count, the value a submenu holds.
 pub(crate) fn hint_text(
+    size: ControlSize,
     hint: Reactive<String>,
     list: &Option<ListContext>,
 ) -> Result<Text, LayoutError> {
@@ -646,10 +657,10 @@ pub(crate) fn hint_text(
         move || hint.get(),
         LayoutStyle::new().flex_shrink(0.0),
         move |t| match look_of(&list).faint {
-            Some(faint) => shared::control_text(t, HINT_RATIO)
+            Some(faint) => shared::control_text(size, t, HINT_RATIO)
                 .with_text_wrap(TextWrap::NoWrap)
                 .with_color(faint),
-            None => shared::quiet(t, HINT_RATIO).with_text_wrap(TextWrap::NoWrap),
+            None => shared::quiet(size, t, HINT_RATIO).with_text_wrap(TextWrap::NoWrap),
         },
     )
 }
@@ -661,6 +672,9 @@ fn look_of(list: &Option<ListContext>) -> RowLook {
 /// A rule between groups of rows. Registered like a row so it takes a position in the list, and unreachable so the keyboard passes straight over it.
 #[derive(Props)]
 pub struct SeparatorProps {
+    /// How far the rule stands from the rows either side of it, as [`ControlSize`] works it out, written to match theirs.
+    #[props(default)]
+    pub size: ControlSize,
     /// Whether the rule is in the list, as an [`item`]'s `shown` says for a row.
     #[props(some, into, default)]
     pub shown: Option<Reactive<bool>>,
@@ -675,10 +689,11 @@ pub fn separator(props: SeparatorProps) -> Result<Box<dyn LayoutItem>, LayoutErr
     if let Some(bare) = declared_placeholder(&list) {
         return bare;
     }
-    let rule_box = || {
+    let size = props.size;
+    let rule_box = move || {
         LayoutStyle::new()
             .height(shared::border_width())
-            .margin(Margin::symmetric(shared::gap_xs(), 0.0))
+            .margin(Margin::symmetric(shared::gap_xs(size), 0.0))
     };
     let rule = StyledContainer::new(
         rule_box(),
@@ -709,6 +724,9 @@ fn shown_while(
 pub struct GroupProps {
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// How large the heading is drawn: its text, padding and the tick column it lines up with, as [`ControlSize`] works them out, written to match the rows under it.
+    #[props(default)]
+    pub size: ControlSize,
     /// What the heading shows in place of [`label`](Self::label): a strip of icons, a swatch.
     #[props(default)]
     pub children: Children,
@@ -716,7 +734,11 @@ pub struct GroupProps {
 
 /// A heading over the rows beneath it, or whatever markup its children are: a strip of icons, a swatch. Never takes the keyboard cursor.
 pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
-    let GroupProps { label, children } = props;
+    let GroupProps {
+        label,
+        size,
+        children,
+    } = props;
     let list = use_context::<ListContext>();
     if let Some(ctx) = &list {
         ctx.claim_unreachable();
@@ -729,21 +751,21 @@ pub fn group(props: GroupProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         supplied.push(box_item(Text::declaring(
             move || label.get(),
             LayoutStyle::new(),
-            |t| shared::quiet(t, HEADING_RATIO).with_text_wrap(TextWrap::NoWrap),
+            move |t| shared::quiet(size, t, HEADING_RATIO).with_text_wrap(TextWrap::NoWrap),
         )?));
     }
     let heading_box = move || {
         let ticked = list.as_ref().is_some_and(ListContext::is_ticked);
         let lead = match ticked {
-            true => shared::icon_size() + shared::gap_md(),
+            true => shared::icon_size(size) + shared::gap_md(size),
             false => 0.0,
         };
-        let pad = ListTokens::current().pad_x();
+        let pad = ListTokens::current().pad_x(size);
         LayoutStyle::row()
             .align_items(AlignItems::CENTER)
             .padding_start(pad + lead)
             .padding_end(pad)
-            .padding_vertical(shared::gap_xs())
+            .padding_vertical(shared::gap_xs(size))
     };
     let heading = Container::new(heading_box(), supplied)?.styled_by(heading_box);
     Ok(box_item(heading))
@@ -758,12 +780,12 @@ pub(crate) fn declared_placeholder(
         .then(|| Ok(box_item(Container::new(LayoutStyle::new(), vec![])?)))
 }
 
-fn row_layout(look: RowLook) -> LayoutStyle {
+fn row_layout(size: ControlSize, look: RowLook) -> LayoutStyle {
     LayoutStyle::row()
         .align_items(AlignItems::CENTER)
-        .height(look.height)
-        .padding_horizontal(ListTokens::current().pad_x())
-        .gap(shared::gap_md())
+        .height(look.height(size))
+        .padding_horizontal(ListTokens::current().pad_x(size))
+        .gap(shared::gap_md(size))
 }
 
 impl ListContext {

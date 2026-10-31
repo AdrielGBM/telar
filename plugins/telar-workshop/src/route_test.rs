@@ -1,4 +1,4 @@
-use telar::{ControlSize, Direction, LocationFormat};
+use telar::{Direction, LocationFormat};
 
 use super::*;
 
@@ -62,7 +62,6 @@ fn a_copied_link_carries_args_and_settings() {
         mode: ModeChoice::Named("dusk".into()),
         locale: Some("ar".into()),
         direction: Some(Direction::Rtl),
-        control_size: Some(ControlSize::Large),
         background: Background::Transparent,
         size: CanvasSize::Custom {
             width: 812.5,
@@ -173,7 +172,6 @@ fn axes_this_workshop_cannot_build_are_passed_over() {
         CustomAxis::Mode,
         CustomAxis::Locale,
         CustomAxis::Direction,
-        CustomAxis::ControlSize,
         CustomAxis::Viewport,
         CustomAxis::Arg("tone".into()),
     ];
@@ -348,5 +346,21 @@ fn each_mode_choice_is_written_as_its_word_and_read_back() {
         parse_settings("mode:system"),
         CanvasSettings::default(),
         "following the system is the default"
+    );
+}
+
+#[test]
+fn a_link_written_with_a_control_size_loads_without_it() {
+    assert_eq!(
+        parse_settings("dir:rtl;control_size:large;grid"),
+        CanvasSettings {
+            direction: Some(Direction::Rtl),
+            grid: true,
+            ..CanvasSettings::default()
+        }
+    );
+    assert_eq!(
+        parse_axes("control_size;declared.control_size;arg.size"),
+        [PickedAxis::all_of(CustomAxis::Arg("size".into()))]
     );
 }

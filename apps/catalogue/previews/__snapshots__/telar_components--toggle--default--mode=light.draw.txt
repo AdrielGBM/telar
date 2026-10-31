@@ -5,7 +5,7 @@ element group
     element group
       element group
         element switch
-          rect 336,286 128x28
+          rect 336,284 128x32
           element group
             rect 336,290 36x20 fill=#00000024 radius=10
             element group
@@ -13,8 +13,8 @@ element group
             end
           end
           element group
-            matrix 1,0,0,1,380,286
-              text 0,5 84x16.8 "Notifications" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
+            matrix 1,0,0,1,380,284
+              text 0,7 84x16.8 "Notifications" size=14 family=sans-serif weight=400 color=#171a2eff lang=en
             end
           end
         end

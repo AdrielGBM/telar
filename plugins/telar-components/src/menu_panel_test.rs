@@ -344,7 +344,11 @@ fn a_typed_letter_takes_the_cursor_to_the_row_it_names() {
 fn a_long_menu_is_capped_to_the_window_and_scrolls_to_the_keyboard() {
     let (mut tree, _) = opened_at((40.0, 30.0), rows(30));
     let panel = panels()[0];
-    assert_eq!(panel.y, 30.0 + crate::shared::panel_pad(), "at the point");
+    assert_eq!(
+        panel.y,
+        30.0 + crate::shared::panel_pad(crate::ControlSize::Regular),
+        "at the point"
+    );
     assert!(
         bottom(panel) <= WINDOW.height,
         "inside the window: {panel:?}"
@@ -385,7 +389,7 @@ fn a_submenu_opens_flush_beside_its_panel_and_level_with_its_row() {
 
     let found = panels();
     assert_eq!(found.len(), 2, "the submenu opened: {found:?}");
-    let pad = crate::shared::panel_pad();
+    let pad = crate::shared::panel_pad(crate::ControlSize::Regular);
     let (menu, sub) = (found[0], found[1]);
     assert_eq!(
         sub.x - pad,
@@ -699,8 +703,8 @@ fn a_menu_asked_for_from_the_keyboard_opens_under_the_focused_control() {
     settle(&tree);
     let panel = panels()[0];
     assert_eq!(
-        panel.y - crate::shared::panel_pad(),
-        bottom(control) + crate::shared::popup_offset()
+        panel.y - crate::shared::panel_pad(crate::ControlSize::Regular),
+        bottom(control) + crate::shared::popup_offset(crate::ControlSize::Regular)
     );
     route(&mut tree, &named(NamedKey::Enter));
     assert_eq!(*said.borrow(), vec!["fila 0"]);
@@ -946,7 +950,10 @@ fn the_highlighted_row_wears_the_theme_s_hover_wash() {
         .expect("the highlighted row is painted");
     assert_eq!(lit.fill, Some(Paint::Solid(crate::shared::hover_wash())));
     assert_eq!(lit.radius, BorderRadius::all(crate::shared::radius_item()));
-    assert_eq!(row.height, ListTokens::current().row_height());
+    assert_eq!(
+        row.height,
+        ListTokens::current().row_height(ControlSize::Regular)
+    );
 }
 
 /// The theme's menu tokens move every menu; one menu's own `tokens` win over them field by field; `style` amends the panel's paint last.
@@ -1049,19 +1056,23 @@ fn a_panel_widens_to_its_widest_row() {
         label >= measured - 0.5,
         "the label is whole: {label} of {measured}"
     );
-    assert!(panels()[0].width > MenuTokens::current().width());
+    assert!(panels()[0].width > MenuTokens::current().width(ControlSize::Regular));
     drop(tree);
 
     let (_tree, _) = opened_at((40.0, 30.0), rows(2));
     assert_eq!(
         panels()[0].width,
-        120.0 - crate::shared::panel_pad() * 2.0,
+        120.0 - crate::shared::panel_pad(crate::ControlSize::Regular) * 2.0,
         "short rows keep the least width"
     );
 }
 
 /// "Modo" (plain) · "Reducir" (a switch bound to the returned signal, flipped by its own `on_press`) · "Reglas" (ticked), as a menu with the given number of ticked rows.
 fn switching(ticked: bool) -> (Scoped<ComponentList>, RwSignal<bool>, Said) {
+    switching_at(ControlSize::Regular, ticked)
+}
+
+fn switching_at(size: ControlSize, ticked: bool) -> (Scoped<ComponentList>, RwSignal<bool>, Said) {
     fresh_layout_runtime();
     focus::clear();
     let said: Said = Rc::default();
@@ -1070,10 +1081,11 @@ fn switching(ticked: bool) -> (Scoped<ComponentList>, RwSignal<bool>, Said) {
     let tree = scoped(|| {
         let rows = Children::new(move || {
             let mut items = Vec::new();
-            items.push(item(ItemProps::props().label("Modo").build())?);
+            items.push(item(ItemProps::props().label("Modo").size(size).build())?);
             items.push(item(
                 ItemProps::props()
                     .label("Reducir")
+                    .size(size)
                     .switch(Reactive::of(move || on.get()))
                     .on_press(Rc::new(move || on.update(|on| *on = !*on)) as Rc<dyn Fn()>)
                     .build(),
@@ -1115,8 +1127,8 @@ fn text_rect(tree: &ComponentList, needle: &str) -> Rect {
 }
 
 /// The switch's track: the one box drawn at the size a row's switch is.
-fn track_rect(tree: &ComponentList) -> Rect {
-    let size = crate::toggle::SwitchSize::row();
+fn track_rect(tree: &ComponentList, size: ControlSize) -> Rect {
+    let size = crate::toggle::SwitchSize::row(size);
     let (width, height) = (
         size.knob * 2.0 + size.inset * 2.0,
         size.knob + size.inset * 2.0,
@@ -1167,7 +1179,7 @@ fn a_switch_row_leaves_the_tick_column_unclaimed() {
 fn a_switch_row_draws_its_switch_at_the_end_and_names_it_once() {
     let (tree, _, _) = switching(false);
     let row = switch_row(&tree);
-    let track = track_rect(&tree);
+    let track = track_rect(&tree, ControlSize::Regular);
     assert!(track.x + track.width <= row.x + row.width);
     assert!(
         track.x > text_rect(&tree, "Reducir").x,
@@ -1223,21 +1235,58 @@ fn a_switch_row_toggles_without_closing_the_panel() {
     assert_eq!(*said.borrow(), vec!["cerrar"], "Escape still closes it");
 }
 
-/// The track and knob follow the control size in force, as a standalone switch does.
+/// The track and knob follow the row's own size, as a standalone switch's follow its own.
 #[test]
-fn a_switch_row_scales_with_the_control_size() {
+fn a_switch_row_scales_with_the_row_s_size() {
     let (tree, _, _) = switching(false);
-    let regular = track_rect(&tree);
+    let regular = track_rect(&tree, ControlSize::Regular);
     drop(tree);
-    telar::set_control_size(telar::ControlSize::Large);
-    let (tree, _, _) = switching(false);
-    let large = track_rect(&tree);
-    telar::set_control_size(telar::ControlSize::Regular);
-    let scale = telar::ControlSize::Large.scale();
+    let (tree, _, _) = switching_at(ControlSize::Large, false);
+    let large = track_rect(&tree, ControlSize::Large);
+    let scale = ControlSize::Large.scale();
     assert_eq!(
         (large.width, large.height),
         (regular.width * scale, regular.height * scale)
     );
+}
+
+/// A context menu's panel is padded at the menu's own size, and a submenu's row stands at the submenu's.
+#[test]
+fn a_context_menu_s_panel_and_a_submenu_s_row_stand_at_their_sizes() {
+    for size in [ControlSize::Small, ControlSize::Large] {
+        fresh_layout_runtime();
+        focus::clear();
+        let tree = scoped(|| {
+            let rows = Children::new(move || {
+                Ok(vec![submenu(
+                    SubmenuProps::props()
+                        .label("Más")
+                        .size(size)
+                        .children(Children::new(move || {
+                            Ok(vec![item(
+                                ItemProps::props().label("Uno").size(size).build(),
+                            )?])
+                        }))
+                        .build(),
+                )?])
+            });
+            let menu = context_menu(
+                ContextMenuProps::props()
+                    .at((40.0, 30.0))
+                    .size(size)
+                    .within(WINDOW)
+                    .children(rows)
+                    .build(),
+            )
+            .unwrap();
+            lay_out(menu.layout_node(), WINDOW.width, WINDOW.height);
+            ComponentList::new(menu)
+        });
+        settle(&tree);
+        let row = crate::test_support::drawn(Role::MenuItem)[0];
+        assert_eq!(row.height, crate::metrics::row_height(size), "{size:?}");
+        assert_eq!(row.y, 30.0 + crate::metrics::panel_pad(size), "{size:?}");
+    }
 }
 
 /// In a right-to-left region the switch is at the row's left edge, its logical end.
@@ -1246,7 +1295,7 @@ fn a_switch_row_puts_its_switch_at_the_logical_end_in_a_right_to_left_region() {
     telar::set_direction(telar::Direction::Rtl);
     let (tree, _, _) = switching(false);
     let row = switch_row(&tree);
-    let track = track_rect(&tree);
+    let track = track_rect(&tree, ControlSize::Regular);
     assert!(track.x < row.x + row.width / 2.0, "{track:?} in {row:?}");
     assert!(
         text_rect(&tree, "Reducir").x >= track.x + track.width,

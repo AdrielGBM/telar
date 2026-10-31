@@ -5,10 +5,10 @@ use telar::{Accessible, Color, Container, Key, LayoutError, LayoutStyle, NamedKe
 
 use crate::metrics;
 use crate::tag::{TagProps, tag};
-use crate::{Tone, Variant};
+use crate::{ControlSize, Tone, Variant};
 
 fn row(tags: Vec<Box<dyn telar::LayoutItem>>) -> Result<Container, LayoutError> {
-    let style = || LayoutStyle::row().gap(metrics::gap_md());
+    let style = || LayoutStyle::row().gap(metrics::gap_md(ControlSize::Regular));
     Ok(Container::new(style(), tags)?.styled_by(style))
 }
 
@@ -20,6 +20,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .label(p.arg("label", "Tag"))
                     .tone(p.arg("tone", Tone::Accent))
                     .variant(p.arg("variant", Variant::Solid))
+                    .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )
         })
@@ -133,12 +134,9 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
     ];
     #[cfg(feature = "icons")]
     let entries = [entries, vec![with_slots()]].concat();
-    #[cfg(feature = "workbench")]
-    let entries = [entries, with_actions()].concat();
-    entries
+    [entries, with_actions()].concat()
 }
 
-#[cfg(feature = "workbench")]
 fn with_actions() -> Vec<PreviewEntry> {
     vec![
         preview!(tag: TagProps, "Removable layers", |p| {
@@ -147,8 +145,9 @@ fn with_actions() -> Vec<PreviewEntry> {
                 .into_iter()
                 .map(|label| {
                     let remove = action(
-                        telar_icons::icon!("lucide:x"),
+                        crate::icon_button::icon!("lucide:x"),
                         format!("Remove {label}"),
+                        ControlSize::Regular,
                         Rc::new(move || actions.log("remove", vec![label.to_string()])),
                     );
                     tag(TagProps::props().label(label).action(remove).build())
@@ -168,11 +167,39 @@ fn with_actions() -> Vec<PreviewEntry> {
             canvas.press(Key::Named(NamedKey::Space))?;
             canvas.expect_action("remove", 3)
         }),
+        preview!(tag: TagProps, "Small remove buttons", |p| {
+            let actions = p.actions();
+            let tags = ["Frame 1", "Logo"]
+                .into_iter()
+                .map(|label| {
+                    let remove = action(
+                        crate::icon_button::icon!("lucide:x"),
+                        format!("Remove {label}"),
+                        ControlSize::Small,
+                        Rc::new(move || actions.log("remove", vec![label.to_string()])),
+                    );
+                    tag(TagProps::props().label(label).action(remove).build())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            row(tags)
+        })
+        .title("Display/Tag")
+        .layout(Layout::Centered)
+        .matrix(Matrix::Named("themes"))
+        .play(|canvas| {
+            canvas.click(by_role(Role::Button).named("Remove Logo"))?;
+            canvas.expect_action("remove", 1)?;
+            canvas.tab_back()?;
+            canvas.expect_focused(by_role(Role::Button).named("Remove Frame 1"))?;
+            canvas.press(Key::Named(NamedKey::Enter))?;
+            canvas.expect_action("remove", 2)
+        }),
         preview!(tag: TagProps, "Open in a new tab", |p| {
             let actions = p.actions();
             let open = action(
-                telar_icons::icon!("lucide:external-link"),
+                crate::icon_button::icon!("lucide:external-link"),
                 "Open Logo.svg in a new tab".to_string(),
+                ControlSize::Regular,
                 Rc::new(move || actions.log("open", Vec::new())),
             );
             tag(
@@ -194,13 +221,18 @@ fn with_actions() -> Vec<PreviewEntry> {
     ]
 }
 
-#[cfg(feature = "workbench")]
-fn action(icon: telar_icons::IconName, label: String, run: Rc<dyn Fn()>) -> telar::Children {
+fn action(
+    icon: crate::icon_button::IconSource,
+    label: String,
+    size: ControlSize,
+    run: Rc<dyn Fn()>,
+) -> telar::Children {
     telar::Children::one(move || {
         crate::icon_button(
             crate::IconButtonProps::props()
                 .icon(icon.clone())
                 .label(label.clone())
+                .size(size)
                 .on_press(run.clone())
                 .build(),
         )
@@ -225,7 +257,7 @@ fn with_slots() -> PreviewEntry {
                 .leading(drawn(|| {
                     crate::spinner(
                         crate::SpinnerProps::props()
-                            .size(glyph_size())
+                            .diameter(glyph_size())
                             .color(telar::Reactive::of(|| telar::use_theme_tokens().info()))
                             .build(),
                     )
@@ -255,7 +287,7 @@ fn drawn(
 
 #[cfg(feature = "icons")]
 fn glyph_size() -> f32 {
-    metrics::icon_size() * 0.75
+    metrics::icon_size(ControlSize::Regular) * 0.75
 }
 
 #[cfg(feature = "icons")]

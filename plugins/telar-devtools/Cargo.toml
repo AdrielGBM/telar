@@ -12,7 +12,7 @@ repository = { workspace = true }
 
 [dependencies]
 telar = { workspace = true, features = ["runtime"] }
-telar-components = { workspace = true, features = ["workbench"] }
+telar-components = { workspace = true }
 
 tracing = { workspace = true }
 web-time = { workspace = true }

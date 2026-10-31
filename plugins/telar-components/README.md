@@ -8,23 +8,17 @@ language, reactive signals and a self-contained renderer.
 
 **An application depends on this crate directly**, alongside the [`telar`](https://crates.io/crates/telar)
 facade. The facade carries the primitives every widget is built from and no widgets of its own; this crate
-is the batteries, written against the same public API an application's own components use. Nothing is on by
-default, and the buttons, text fields (of one line or several), search fields, links, images, selects, tabs,
-sliders and indicators are in every build. Name the groups you draw beyond them:
+is the batteries, written against the same public API an application's own components use. Every widget is
+in every build, and an application links only the ones it calls; a feature brings in a dependency, and none is
+on by default:
 
-- `overlays`: menus, context menus, modals, drawers, tooltips, the command palette and the key caps its rows
-  show, and toasts
-- `chrome`: the window frame a desktop application draws itself, and the window controls and title-bar
-  behaviour it is built from, for a title bar of the application's own
-- `advanced`: reorderable lists, accordions, steppers, the virtual lists and data tables that build only the
-  rows on screen, and the `resize_handle` a table's columns are resized by
-- `workbench`: split panes, resizable boxes, trees, toolbars, icon buttons, a colour picker and a code view,
-  with the `icons` and `overlays` they build on
+- `icons`: draws `icon:"set:name"` ids through `telar-icons`, baked with the application. Without it, icon
+  buttons and icon tabs draw a Unicode stand-in read from the icon's name
 - `async-assets`: lets an `image` follow an `AssetLoader`, whose load state converts into what the image shows
 
 ```toml
 # Cargo.toml
-telar-components = { version = "0.2.2", features = ["overlays"] }
+telar-components = { version = "0.2.2", features = ["icons"] }
 ```
 
 Then list it in the app's `telar.toml`, so every `.rsx` file sees its components without a `use`:

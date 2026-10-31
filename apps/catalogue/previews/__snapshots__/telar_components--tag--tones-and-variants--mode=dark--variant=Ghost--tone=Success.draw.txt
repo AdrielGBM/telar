@@ -5,11 +5,11 @@ element group
     element group
       element group
         element group
-          rect 42,15 36x18 fill=#00000000 border=1 border-color=#00000000 radius=6
+          rect 42,12 36x24 fill=#00000000 border=1 border-color=#00000000 radius=6
           element group
             element group
-              matrix 1,0,0,1,50,17
-                text 0,0 20.8x14.28 "Tag" size=11.9 family=sans-serif weight=400 color=#4dc78cff wrap=none lang=en
+              matrix 1,0,0,1,50,12
+                text 0,4 20.8x14.28 "Tag" size=11.9 family=sans-serif weight=400 color=#4dc78cff wrap=none lang=en
               end
             end
           end

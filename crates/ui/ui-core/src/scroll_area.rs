@@ -13,7 +13,7 @@ use platform_core::{
 };
 use reactive_core::{Effect, ReadSignal, RwSignal, Timer, effect, run_after, signal};
 use renderer_core::{BorderRadius, Color, RectStyle, ShapeStyle};
-use theme_core::{current_control_size, use_theme_tokens};
+use theme_core::use_theme_tokens;
 use ui_tree::{Component, EventResult, RenderNode, Segment};
 
 use crate::context::track_layout;
@@ -27,7 +27,7 @@ use crate::pointer::{clip_pointer_event, occlude, offset_pointer, pointer_coords
 use crate::styled_container::default_focus_ring;
 use crate::surface_context::HomeSurface;
 
-/// How a scroll area's bars are painted, and how wide they are. The default reads the theme's `scrollbar`, `scrollbar_width`, `scrollbar_inset` and `scrollbar_radius` each time the bars are drawn or grabbed, the width scaled by the control size in force; a style given to the area replaces it.
+/// How a scroll area's bars are painted, and how wide they are. The default reads the theme's `scrollbar`, `scrollbar_width`, `scrollbar_inset` and `scrollbar_radius` each time the bars are drawn or grabbed; a style given to the area replaces it.
 #[derive(Clone, Copy)]
 pub struct ScrollbarStyle {
     pub color: Color,
@@ -39,7 +39,7 @@ pub struct ScrollbarStyle {
 impl Default for ScrollbarStyle {
     fn default() -> Self {
         let tokens = use_theme_tokens();
-        let width = tokens.scrollbar_width() * current_control_size().scale();
+        let width = tokens.scrollbar_width();
         let inset = tokens.scrollbar_inset();
         Self {
             color: tokens.scrollbar(),

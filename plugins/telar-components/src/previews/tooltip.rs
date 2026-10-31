@@ -3,6 +3,7 @@ use std::time::Duration;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Children, Color, Role};
 
+use crate::ControlSize;
 use crate::button::{ButtonProps, button};
 use crate::tooltip::{TooltipProps, tooltip};
 
@@ -23,17 +24,17 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 Side::Start => "start",
                 Side::End => "end",
             };
+            let size = p.arg("size", ControlSize::Regular);
             tooltip(
                 TooltipProps::props()
                     .text(p.arg("text", "Save"))
                     .shortcut(p.arg("shortcut", "Mod+S"))
                     .description(p.arg("description", "Writes the file to disk."))
                     .side(side)
+                    .size(size)
                     .color(p.arg("color", Color::TRANSPARENT))
-                    .children(Children::one(|| {
-                        button(
-                            ButtonProps::props().label("Hover me").build(),
-                        )
+                    .children(Children::one(move || {
+                        button(ButtonProps::props().label("Hover me").size(size).build())
                     }))
                     .build(),
             )

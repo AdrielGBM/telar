@@ -133,7 +133,14 @@ fn pages() -> Vec<Tab<Page>> {
 fn focused_row(selected: RwSignal<Page>) -> ComponentList {
     crate::test_support::fresh_layout_runtime();
     telar::focus::clear();
-    let item = tab_list(selected, pages(), Reactive::of(|| Color::TRANSPARENT), None).unwrap();
+    let item = tab_list(
+        selected,
+        pages(),
+        Reactive::of(|| Color::TRANSPARENT),
+        None,
+        ControlSize::Regular,
+    )
+    .unwrap();
     let r = lay_out(item.layout_node());
     let mut tree = ComponentList::new(item);
     let (x, y) = ((r.x + 2.0) as f64, (r.y + r.height / 2.0) as f64);
@@ -196,6 +203,7 @@ fn a_trailing_item_is_drawn_but_not_part_of_the_tabs_name() {
         vec![Tab::new(Page::First, "Actions").trailing(count_badge())],
         Reactive::of(|| Color::TRANSPARENT),
         None,
+        ControlSize::Regular,
     )
     .unwrap();
     lay_out(item.layout_node());
@@ -219,6 +227,7 @@ fn a_reactive_label_follows_what_it_reads() {
         vec![Tab::new(Page::First, word)],
         Reactive::of(|| Color::TRANSPARENT),
         None,
+        ControlSize::Regular,
     )
     .unwrap();
     let node = item.layout_node();
@@ -230,20 +239,20 @@ fn a_reactive_label_follows_what_it_reads() {
     assert!(telar::testing::find_text(&tree, "Lienzo"));
 }
 
-#[cfg(feature = "workbench")]
 #[test]
 fn an_icon_tab_is_the_same_square_as_an_icon_button() {
     crate::test_support::fresh_layout_runtime();
     let tab_list = tab_list(
         signal(0u32),
-        vec![Tab::new(0u32, "One").icon(telar_icons::icon!("lucide:square"))],
+        vec![Tab::new(0u32, "One").icon(crate::icon_button::icon!("lucide:square"))],
         Color::TRANSPARENT.into(),
         None,
+        ControlSize::Regular,
     )
     .unwrap();
     let button = crate::icon_button(
         crate::IconButtonProps::props()
-            .icon(telar_icons::icon!("lucide:square"))
+            .icon(crate::icon_button::icon!("lucide:square"))
             .label("Two")
             .build(),
     )
@@ -321,18 +330,62 @@ fn a_style_amendment_reshapes_every_tab_in_every_state() {
 }
 
 #[test]
-fn the_padding_tokens_scale_with_the_control_size() {
-    crate::test_support::fresh_layout_runtime();
+fn the_padding_tokens_scale_with_the_size() {
     let tokens = TabsTokens {
         pad_x: Some(10.0),
         ..TabsTokens::default()
     };
-    let mut padded = 0.0;
-    let _ = telar::provide_control_size(telar::ControlSize::Large, || {
-        padded = tokens.pad_x();
-        telar::Container::new(LayoutStyle::new(), vec![]).map(box_item)
-    });
-    assert_eq!(padded, 12.5);
+    assert_eq!(tokens.pad_x(ControlSize::Small), 7.5);
+    assert_eq!(tokens.pad_x(ControlSize::Large), 12.5);
+}
+
+/// Every tab of a bar stands at the bar's size, and so do the gaps between them.
+#[test]
+fn the_size_sets_every_tab_s_height_and_the_gap_between_them() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        crate::test_support::fresh_layout_runtime();
+        telar::focus::clear();
+        let item = tabs(
+            TabsProps::props()
+                .items(vec!["One", "Two"])
+                .size(size)
+                .build(),
+        )
+        .unwrap();
+        lay_out(item.layout_node());
+        let _tree = ComponentList::new(item);
+        let drawn = crate::test_support::drawn(Role::Tab);
+        assert_eq!(drawn.len(), 2, "{size:?}");
+        for tab in &drawn {
+            assert_eq!(tab.height, shared::control_height(size), "{size:?}");
+        }
+        let gap = drawn[1].x - (drawn[0].x + drawn[0].width);
+        assert!((gap - shared::gap_sm(size)).abs() < 0.5, "{size:?}: {gap}");
+    }
+}
+
+/// A tab list of values stands every tab at the size it is given, as a bar of indices does.
+#[test]
+fn a_tab_list_stands_its_tabs_at_its_size() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        crate::test_support::fresh_layout_runtime();
+        telar::focus::clear();
+        let item = tab_list(
+            signal(Page::First),
+            pages(),
+            Color::TRANSPARENT.into(),
+            None,
+            size,
+        )
+        .unwrap();
+        lay_out(item.layout_node());
+        let _tree = ComponentList::new(item);
+        let drawn = crate::test_support::drawn(Role::Tab);
+        assert_eq!(drawn.len(), 3, "{size:?}");
+        for tab in &drawn {
+            assert_eq!(tab.height, shared::control_height(size), "{size:?}");
+        }
+    }
 }
 
 /// A count after a tab's name reads as its own word, not run into the name.
@@ -345,6 +398,7 @@ fn a_trailing_item_keeps_a_gap_from_the_name() {
         vec![Tab::new(Page::First, "Actions").trailing(count_badge())],
         Reactive::of(|| Color::TRANSPARENT),
         None,
+        ControlSize::Regular,
     )
     .unwrap();
     lay_out(item.layout_node());
@@ -362,7 +416,10 @@ fn a_trailing_item_keeps_a_gap_from_the_name() {
     };
     let (name, count) = (at("Actions"), at("7"));
     let gap = count.x - (name.x + name.width);
-    assert!((gap - shared::gap_sm()).abs() < 0.5, "{gap}");
+    assert!(
+        (gap - shared::gap_sm(crate::ControlSize::Regular)).abs() < 0.5,
+        "{gap}"
+    );
 }
 
 const MANY: [&str; 6] = [
@@ -381,6 +438,7 @@ fn strip_of(width: f32, selected: RwSignal<u32>) -> (ComponentList, NodeId) {
             .collect(),
         Color::TRANSPARENT.into(),
         None,
+        ControlSize::Regular,
     )
     .unwrap();
     let node = item.layout_node();
@@ -511,6 +569,7 @@ fn a_tab_built_again_keeps_its_place_among_the_arrows() {
     let focus_ids: Rc<RefCell<Vec<FocusId>>> = Rc::default();
     let values: Rc<[Page]> = [Page::First, Page::Second].into();
     let button = |index: usize, value: Page, name: &'static str| TabButton {
+        size: ControlSize::Regular,
         selected: signal(Page::First),
         entry: Tab::new(value, name),
         index,

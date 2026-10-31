@@ -166,6 +166,22 @@ fn every_button_is_at_least_the_size_asked_for() {
     }
 }
 
+/// The size moves each button's mark and the padding round it, never below the smallest target.
+#[test]
+fn the_size_scales_the_buttons() {
+    let widths: Vec<f32> = [ControlSize::Small, ControlSize::Regular, ControlSize::Large]
+        .into_iter()
+        .map(|size| {
+            let tree = controls(WindowControlsProps::props().size(size).build());
+            let close = button(&tree, "Close");
+            assert!(close.height >= shared::MIN_TARGET, "{size:?}: {close:?}");
+            close.width
+        })
+        .collect();
+    assert!(widths[0] >= shared::MIN_TARGET, "{widths:?}");
+    assert!(widths[0] < widths[1] && widths[1] < widths[2], "{widths:?}");
+}
+
 /// A bar of `width` with nothing in it, made a title bar as `options` say.
 fn plain_bar() -> StyledContainer {
     crate::test_support::fresh_layout_runtime();

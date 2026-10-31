@@ -1,8 +1,8 @@
 use telar::Role;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
-use telar_icons::IconName;
 
-use crate::icon_button::{IconButtonProps, icon_button};
+use crate::ControlSize;
+use crate::icon_button::{IconButtonProps, IconSource, icon, icon_button};
 
 #[derive(Clone, Copy, telar::PreviewArg)]
 enum Glyph {
@@ -13,12 +13,12 @@ enum Glyph {
 }
 
 impl Glyph {
-    fn icon(self) -> IconName {
+    fn icon(self) -> IconSource {
         match self {
-            Self::Search => telar_icons::icon!("lucide:search"),
-            Self::Settings => telar_icons::icon!("lucide:settings"),
-            Self::Star => telar_icons::icon!("lucide:star"),
-            Self::Copy => telar_icons::icon!("lucide:copy"),
+            Self::Search => icon!("lucide:search"),
+            Self::Settings => icon!("lucide:settings"),
+            Self::Star => icon!("lucide:star"),
+            Self::Copy => icon!("lucide:copy"),
         }
     }
 }
@@ -30,6 +30,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 IconButtonProps::props()
                     .icon(p.arg("icon", Glyph::Search).icon())
                     .label(p.arg("label", "Search"))
+                    .size(p.arg("size", ControlSize::Regular))
                     .shortcut(p.arg("shortcut", "Mod+K"))
                     .disabled(p.arg("disabled", false))
                     .build(),

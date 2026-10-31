@@ -24,33 +24,16 @@ include = [
     "/.telar/icons-library.json",
 ]
 
-# docs.rs builds with every group on, so the whole catalogue is on one page rather than only the widgets a build with no features carries.
+# docs.rs builds with every feature on, so the pages show the `icon` props `telar-icons` draws and the `AssetLoader` conversions, rather than only what a build with no features carries.
 [package.metadata.docs.rs]
 all-features = true
 
 [features]
-#! Four groups rather than one knob per widget: they share `shared.rs` and `scrim.rs`, and the graph between them is what decides where a line can be drawn at all. `dropdown` stays in every build because `select` and `list` read its row styles; `scrim` travels with the two overlays that draw one.
-#!
-#! Nothing is on by default. The buttons, fields, text areas, search fields, links, images, selects, tabs, sliders and indicators are in every build, and an application names each group it draws beyond them.
+#! A feature brings in a dependency, never a choice of widgets: every widget is in every build, and an application links only the ones it calls.
 
 default = []
 
-## Anything that draws over the tree: menus, context menus, modals, drawers, tooltips, the command palette and the key
-## caps its rows show, toasts, and the scrim behind them.
-overlays = []
-
-## The window frame a desktop application draws itself — title bar, controls, resize edges. Inert anywhere
-## else, which is the whole reason it is nameable: a terminal or a document has no chrome to draw.
-chrome = []
-
-## Reorderable lists, accordions, steppers, the long lists and data tables that build only the rows on screen, and
-## the resize handle a table's columns are resized by.
-advanced = []
-
-## The pieces a tool's own window is built from: split panes, resizable boxes, trees, toolbars, icon buttons, a colour picker and a code view.
-workbench = ["icons", "overlays"]
-
-## Draws `icon:"set:name"` ids through `telar-icons`. Without it, icon buttons fall back to Unicode glyphs.
+## Draws `icon:"set:name"` ids through `telar-icons`, baked with the application. Without it, icon buttons and icon tabs draw a Unicode stand-in read from the icon's name.
 icons = ["dep:telar-icons"]
 
 ## Lets an `image` follow an `AssetLoader`: the state a load hands out converts into the picture an image shows.

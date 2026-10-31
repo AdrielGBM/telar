@@ -328,12 +328,11 @@ pub use surface::{
 pub use system_locale::follow_system_locale;
 #[cfg(feature = "runtime")]
 pub use theme_core::{
-    ControlSize, ResolvedScheme, SchemePreference, ScopedControlSize, ScopedTheme, Theme,
-    ThemeExtensions, ThemeTokens, active_mode, control_scale, current_control_size, follow_system,
-    is_dark, nearest_control_size, nearest_theme, register_mode, register_mode_theme,
-    registered_modes, scheme_mode, scheme_preference, set_control_size, set_mode, set_mode_scheme,
-    set_scheme_preference, set_surface_control_size, set_theme, use_control_size, use_mode,
-    use_resolved_scheme, use_scheme_preference, use_theme, use_theme_extension, use_theme_tokens,
+    ResolvedScheme, SchemePreference, ScopedTheme, Theme, ThemeExtensions, ThemeTokens,
+    active_mode, follow_system, is_dark, nearest_theme, register_mode, register_mode_theme,
+    registered_modes, scheme_mode, scheme_preference, set_mode, set_mode_scheme,
+    set_scheme_preference, set_theme, use_mode, use_resolved_scheme, use_scheme_preference,
+    use_theme, use_theme_extension, use_theme_tokens,
 };
 #[cfg(all(feature = "runtime", feature = "svg"))]
 pub use ui_core::Svg;
@@ -376,17 +375,16 @@ pub use ui_core::{
     Transition, Underline, VirtualList, VirtualRows, WindowRoot, absolute_rect, anchor_rect,
     animate_layout, apply_move, box_item, box_transform, box_transform_about, chord_pressed,
     close_overlay, compute_layout, confirm_top, current_direction, declare, dismiss_depth,
-    dismiss_top, drag_start, drag_travel, exits_in_flight, focus, focus_ring_border,
-    follow_control_size, follow_theme, fragment, fragment_positional, inherited_text_style,
-    insertion_index, interactive_rects, is_hidden, kept, key_held, key_nav_apply,
-    key_nav_apply_grid, key_pressed, line_box, logical_border_radius, logical_border_widths,
-    mark_dirty, modifiers, new_container, new_leaf, observe_keyboard, observe_pointer, on_relayout,
-    open_overlay, overlay_state, overlay_viewport, pointer_buttons, pointer_position,
-    provide_control_size, provide_theme, register_transaction, register_transaction_within,
-    relayout_if_dirty, remove_node, requested_cursor, set_children, set_direction, set_display,
-    set_min_height, set_overlay_host, shortcut_key, single_line_box, step_factor, style_follows,
-    track_layout, transform_pointer, undeclare, use_context, use_direction, use_dismiss_depth,
-    visible_rect, visible_window,
+    dismiss_top, drag_start, drag_travel, exits_in_flight, focus, focus_ring_border, follow_theme,
+    fragment, fragment_positional, inherited_text_style, insertion_index, interactive_rects,
+    is_hidden, kept, key_held, key_nav_apply, key_nav_apply_grid, key_pressed, line_box,
+    logical_border_radius, logical_border_widths, mark_dirty, modifiers, new_container, new_leaf,
+    observe_keyboard, observe_pointer, on_relayout, open_overlay, overlay_state, overlay_viewport,
+    pointer_buttons, pointer_position, provide_theme, register_transaction,
+    register_transaction_within, relayout_if_dirty, remove_node, requested_cursor, set_children,
+    set_direction, set_display, set_min_height, set_overlay_host, shortcut_key, single_line_box,
+    step_factor, style_follows, track_layout, transform_pointer, undeclare, use_context,
+    use_direction, use_dismiss_depth, visible_rect, visible_window,
 };
 #[cfg(feature = "async-assets")]
 pub use ui_core::{

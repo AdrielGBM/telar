@@ -3,6 +3,7 @@ use std::rc::Rc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, LayoutError, LayoutStyle, Role};
 
+use crate::ControlSize;
 use crate::metrics;
 use crate::radio::{RadioProps, radio};
 
@@ -13,6 +14,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(radio: RadioProps, "Group", |p| {
             let selected = p.signal("selected", 1u32);
             let color = p.arg("color", Color::TRANSPARENT);
+            let size = p.arg("size", ControlSize::Regular);
             let options = (0u32..)
                 .zip(SIZES)
                 .map(|(value, label)| {
@@ -22,13 +24,14 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                             .selected(selected)
                             .value(value)
                             .label(label)
+                            .size(size)
                             .color(color)
                             .build(),
                     )
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             Ok::<_, LayoutError>(Container::new(
-                LayoutStyle::column().gap(metrics::gap_xs()),
+                LayoutStyle::column().gap(metrics::gap_xs(size)),
                 options,
             )?)
         })

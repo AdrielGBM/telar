@@ -2,7 +2,7 @@
 
 use proc_macro2::{Literal, TokenStream as TokenStream2};
 use quote::quote;
-use telar_project::{MatrixAxis, MatrixControlSize, MatrixDirection, PreviewsSection};
+use telar_project::{MatrixAxis, MatrixDirection, PreviewsSection};
 
 use crate::Invocation;
 
@@ -58,15 +58,6 @@ fn axis_tokens(axis: &MatrixAxis) -> TokenStream2 {
             quote! { #axis_path::Dir(&[#(#directions),*]) }
         }
         MatrixAxis::Viewport(viewports) => quote! { #axis_path::Viewport(&[#(#viewports),*]) },
-        MatrixAxis::ControlSize(sizes) => {
-            let sizes = sizes.iter().map(|size| match size {
-                MatrixControlSize::Mini => quote! { ::telar::ControlSize::Mini },
-                MatrixControlSize::Small => quote! { ::telar::ControlSize::Small },
-                MatrixControlSize::Regular => quote! { ::telar::ControlSize::Regular },
-                MatrixControlSize::Large => quote! { ::telar::ControlSize::Large },
-            });
-            quote! { #axis_path::ControlSize(&[#(#sizes),*]) }
-        }
         MatrixAxis::Arg { name, values } => quote! { #axis_path::Arg(#name, &[#(#values),*]) },
     }
 }

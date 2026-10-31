@@ -11,22 +11,24 @@ use telar::{
     memo, signal, track_layout,
 };
 
+use crate::ControlSize;
 use crate::popup;
 use crate::shared;
 
 /// How many ems wide a trigger and the panel it opens are when their tokens name no width: room for a two-word label beside the caret, and a width the panel lines up under.
 const WIDTH_EMS: f32 = 13.0;
 
-/// The width a trigger and its panel take: what the tokens of the component they belong to name, else [`WIDTH_EMS`].
-pub(crate) fn width(token: Option<f32>) -> f32 {
-    shared::width_or_measure(token, WIDTH_EMS)
+/// The width a trigger of `size` and its panel take: what the tokens of the component they belong to name, else [`WIDTH_EMS`].
+pub(crate) fn width(size: ControlSize, token: Option<f32>) -> f32 {
+    shared::width_or_measure(size, token, WIDTH_EMS)
 }
 
-/// The space between a panel and the control it drops from: what the tokens of the component it belongs to name, at the regular control size and scaled with the control size in force, else [`metrics::popup_offset`](crate::metrics::popup_offset).
-pub(crate) fn offset(token: Option<f32>) -> f32 {
-    token.map_or_else(shared::popup_offset, |offset| {
-        offset * telar::control_scale()
-    })
+/// The space between a panel and the control of `size` it drops from: what the tokens of the component it belongs to name, at the regular size and scaled to `size`, else [`metrics::popup_offset`](crate::metrics::popup_offset).
+pub(crate) fn offset(size: ControlSize, token: Option<f32>) -> f32 {
+    token.map_or_else(
+        || shared::popup_offset(size),
+        |offset| offset * size.scale(),
+    )
 }
 
 /// What a trigger is drawn at, resolved from the tokens of the component it belongs to: a `menu`'s or a `select`'s.
@@ -41,14 +43,16 @@ pub(crate) struct Geometry {
 /// What a trigger shows and how it is shaped.
 pub(crate) struct Face {
     pub label: Reactive<String>,
+    /// The size of the control the trigger is.
+    pub size: ControlSize,
     /// The colour a bordered trigger is framed in.
     pub color: Reactive<Color>,
     pub bordered: bool,
     pub caret: bool,
     /// Whether the column the trigger stands in decides its width — a stretched or fitted trigger — rather than [`Geometry::width`].
     pub sized_by_root: bool,
-    /// Read wherever the trigger is laid out or painted, so a theme or a control size that changes moves it.
-    pub geometry: fn() -> Geometry,
+    /// Read at the trigger's size wherever it is laid out or painted, so a theme that changes moves it.
+    pub geometry: fn(ControlSize) -> Geometry,
     pub style: SurfaceStyle,
 }
 
@@ -60,6 +64,7 @@ pub(crate) fn trigger(
 ) -> Result<StyledContainer, LayoutError> {
     let Face {
         label,
+        size,
         color,
         bordered,
         caret,
@@ -71,7 +76,7 @@ pub(crate) fn trigger(
     let label_text = Text::declaring(
         move || label.get(),
         LayoutStyle::new().min_width(0.0),
-        |t| shared::control_text(t, 1.0).with_text_wrap(TextWrap::NoWrap),
+        move |t| shared::control_text(size, t, 1.0).with_text_wrap(TextWrap::NoWrap),
     )?;
     // Free to shrink and clipped, so a label longer than the trigger is cut at its edge rather than widening the control or running under the caret.
     let label_text = ClippedItem::new(box_item(label_text), Clip::x());
@@ -81,13 +86,14 @@ pub(crate) fn trigger(
             open: open.get(),
             hovered,
         };
-        amend_surface(trigger_rect_style(&color, face, geometry()), &surface)
+        amend_surface(trigger_rect_style(&color, face, geometry(size)), &surface)
     });
     let (rest, hover) = (paint.clone(), paint);
-    let trigger_box = move || trigger_layout(geometry(), caret, sized_by_root);
+    let trigger_box = move || trigger_layout(size, geometry(size), caret, sized_by_root);
     let mut children: Vec<Box<dyn LayoutItem>> = children![label_text];
     if caret {
         children.push(shared::mark(
+            size,
             || shared::Mark::ChevronDown,
             |text| text.color.faded(shared::QUIET_ALPHA),
         )?);
@@ -135,9 +141,7 @@ pub(crate) fn dismissable(open: RwSignal<bool>, trigger: NodeId) {
     });
 }
 
-/// Where a panel drops from its trigger: under it, `offset` away, flipping above it where there is more room there.
-///
-/// The offset is a memo made where the panel is built, so it is read at the control size in force there: the placement is worked out where the panel is drawn, outside any scope a subtree provided.
+/// Where a panel drops from its trigger: under it, `offset` away, flipping above it where there is more room there. The offset is a memo, so a theme switched while the panel is open moves it.
 pub(crate) fn below(
     trigger: NodeId,
     laid: RwSignal<Rect>,
@@ -185,20 +189,23 @@ pub(crate) fn root(
 pub(crate) struct Dropdown {
     /// Shown when `selected` names no row.
     pub placeholder: fn() -> String,
+    /// The size of the control: its trigger, and the panel's padding and offset. The rows are sized where they are written.
+    pub size: ControlSize,
     /// The panel's rows, as the recipe for making them rather than the rows themselves — see [`Children`](telar::Children). Two things need it that way: the rows are remade on every open, and each one has to be built inside the [`ListContext`](crate::list::ListContext) this scaffold provides.
     pub rows: Children,
     pub color: Reactive<Color>,
     pub on_pick: Option<Rc<dyn Fn(u32)>>,
     pub selected: RwSignal<u32>,
     pub stretch: bool,
-    pub geometry: fn() -> Geometry,
-    pub offset: fn() -> f32,
+    pub geometry: fn(ControlSize) -> Geometry,
+    pub offset: fn(ControlSize) -> f32,
     pub style: SurfaceStyle,
 }
 
 pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let Dropdown {
         placeholder,
+        size,
         rows,
         color,
         on_pick,
@@ -241,6 +248,7 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     });
     let face = Face {
         label,
+        size,
         color: color.clone(),
         bordered: true,
         caret: true,
@@ -334,16 +342,16 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
         // The registry is cleared first: this builder runs again on every open, and rows left over from the last would leave the keyboard walking positions that no longer exist.
         list.begin();
         let row_items = rows.build_with(list.clone())?;
-        let width = panel_width(geometry().width, stretch, trigger_node, &trigger_rect);
+        let width = panel_width(geometry(size).width, stretch, trigger_node, &trigger_rect);
         let row_column = Container::column(row_items)?;
         let cursor = {
             let list = list.clone();
             Rc::new(move || highlighted.get().and_then(|i| list.node_of(i)))
         };
         let placed = popup::Popup {
-            anchoring: below(trigger_node, trigger_rect, memo(offset)),
+            anchoring: below(trigger_node, trigger_rect, memo(move || offset(size))),
             width: popup::Width::Exactly(width),
-            padding: shared::panel_pad(),
+            padding: shared::panel_pad(size),
             cursor,
             keyboard: popup::Keyboard::Stays,
         };
@@ -376,12 +384,17 @@ pub(crate) fn dropdown(props: Dropdown) -> Result<Box<dyn LayoutItem>, LayoutErr
     root(trigger, holder, stretch)
 }
 
-/// The trigger's box: as tall as every control, padded by its tokens, and as wide as they say unless the root column decides its width.
+/// The trigger's box: as tall as every control of its `size`, padded by its tokens, and as wide as they say unless the root column decides its width.
 ///
 /// A stretched or fitted trigger is as wide as the root column by cross-axis stretch, which a fitted root takes from the label. Growing it would grow it along that column's main axis, which is its height.
 ///
 /// With a caret, `SPACE_BETWEEN` rather than a growing spacer: a spacer takes the free space before the label has claimed its own, and `File` came out wrapped to two letters a line. Without one the label is the whole face and stands centred, as a button's does: alone in a `SPACE_BETWEEN` row it sat at the start, and every pixel the trigger had beyond it showed as a gap after the label and none before.
-fn trigger_layout(geometry: Geometry, with_caret: bool, sized_by_root: bool) -> LayoutStyle {
+fn trigger_layout(
+    size: ControlSize,
+    geometry: Geometry,
+    with_caret: bool,
+    sized_by_root: bool,
+) -> LayoutStyle {
     let justify = if with_caret {
         JustifyContent::SPACE_BETWEEN
     } else {
@@ -390,9 +403,9 @@ fn trigger_layout(geometry: Geometry, with_caret: bool, sized_by_root: bool) -> 
     let row = LayoutStyle::row()
         .align_items(AlignItems::CENTER)
         .justify_content(justify)
-        .min_height(shared::control_height())
+        .min_height(shared::control_height(size))
         .padding_horizontal(geometry.pad_x)
-        .gap(shared::gap_sm());
+        .gap(shared::gap_sm(size));
     if sized_by_root {
         row
     } else {

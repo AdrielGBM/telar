@@ -2,6 +2,7 @@
 
 use telar::{Children, Container, LayoutError, LayoutItem, LayoutStyle, Props, Reactive, box_item};
 
+use crate::ControlSize;
 use crate::heading::{HeadingProps, heading};
 use crate::shared;
 
@@ -22,7 +23,7 @@ pub fn section(props: SectionProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
     let mut column_items: Vec<Box<dyn LayoutItem>> =
         vec![heading(HeadingProps::props().text(title).build())?];
     column_items.extend(content);
-    let column = || LayoutStyle::column().gap(shared::gap_md());
+    let column = || LayoutStyle::column().gap(shared::gap_md(ControlSize::Regular));
     let col = Container::new(column(), column_items)?.styled_by(column);
     Ok(box_item(col))
 }

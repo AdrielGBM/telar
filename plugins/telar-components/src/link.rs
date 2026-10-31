@@ -8,6 +8,7 @@ use telar::{
     SurfaceAmendment, Text, TextWrap, amend_surface, box_item, children,
 };
 
+use crate::ControlSize;
 use crate::shared;
 use crate::strings;
 
@@ -102,7 +103,7 @@ pub fn link(props: LinkProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
             move || label.get(),
             LayoutStyle::new(),
             move |t| {
-                let text = shared::control_text(t, 1.0)
+                let text = shared::control_text(ControlSize::Regular, t, 1.0)
                     .with_text_wrap(TextWrap::NoWrap)
                     .with_color(ink())
                     .with_underline(true);
@@ -122,11 +123,15 @@ pub fn link(props: LinkProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
         let ink = ink.clone();
         shared::shown_while(leaves.clone(), LayoutStyle::row(), move || {
             let ink = ink.clone();
-            let mark = shared::mark(|| shared::Mark::External, move |_| ink().into())?;
+            let mark = shared::mark(
+                ControlSize::Regular,
+                || shared::Mark::External,
+                move |_| ink().into(),
+            )?;
             let spaced = telar::Container::new(
                 LayoutStyle::row()
                     .align_items(AlignItems::CENTER)
-                    .padding_start(shared::gap_xs()),
+                    .padding_start(shared::gap_xs(ControlSize::Regular)),
                 vec![mark],
             )?;
             Ok(box_item(spaced))

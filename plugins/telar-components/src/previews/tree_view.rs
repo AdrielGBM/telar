@@ -6,6 +6,7 @@ use std::sync::Arc;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Color, Container, Key, LayoutError, LayoutStyle, NamedKey, Role, signal};
 
+use crate::ControlSize;
 use crate::tree_view::{TreeNode, TreeViewProps, tree_view};
 
 fn project() -> Vec<TreeNode> {
@@ -66,6 +67,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                     .expanded(signal(expanded))
                     .select_branches(p.arg("select_branches", true))
                     .label(p.arg("label", "Files"))
+                    .size(p.arg("size", ControlSize::Regular))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
             )?;

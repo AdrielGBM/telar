@@ -85,9 +85,9 @@ pub use prerender::{
     PrerenderState, PrerenderedPage, STATE_ELEMENT_ID, STATE_VERSION, Surface,
 };
 pub use previews::{
-    MATRIX_GLOBAL_AXES, MatrixAxes, MatrixAxis, MatrixControlSize, MatrixDirection, MatrixValue,
-    PreviewsInclude, PreviewsIncludeDeclaration, PreviewsIncludeProblem, PreviewsSection,
-    SnapshotSettings, Viewport, is_preview_name, preview_hosts, previews_include_declarations,
+    MATRIX_GLOBAL_AXES, MatrixAxes, MatrixAxis, MatrixDirection, MatrixValue, PreviewsInclude,
+    PreviewsIncludeDeclaration, PreviewsIncludeProblem, PreviewsSection, SnapshotSettings,
+    Viewport, is_preview_name, preview_hosts, previews_include_declarations,
     previews_include_problems,
 };
 pub use theme::{normalize_theme_path, theme_type_in_config};

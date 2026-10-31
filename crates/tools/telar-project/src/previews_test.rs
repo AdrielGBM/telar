@@ -32,7 +32,7 @@ viewports = { phone = "390x844", desktop = "1280X800" }
 
 [telar.previews.matrices]
 themes = { mode = ["light", "dark"] }
-sizes = { viewport = ["phone", "1024x768"], control_size = ["small", "large"], dir = ["ltr", "rtl"], ghost = [true, false], size = [12, 16] }
+sizes = { viewport = ["phone", "1024x768"], dir = ["ltr", "rtl"], ghost = [true, false], size = [12, 16] }
 "#,
         None,
     );
@@ -173,9 +173,9 @@ fn a_matrix_is_checked_against_the_axes_it_may_vary() {
             "\"up\" is not one of ltr, rtl",
         ),
         (
-            "size",
-            "themes = { control_size = [\"huge\"] }",
-            "\"huge\" is not one of mini",
+            "control_size",
+            "themes = { control_size = [\"small\"] }",
+            "axis `control_size` no longer exists: a component takes its own `size` arg",
         ),
         (
             "mode_type",
@@ -307,7 +307,7 @@ fn a_named_matrix_reads_into_axes_globals_first_then_args_by_name() {
 viewports = { phone = "390x844" }
 
 [telar.previews.matrices]
-everything = { size = [12, 1.5], viewport = ["phone", " 1280x800 "], control_size = ["mini", "large"], dir = ["rtl"], mode = ["dark"], locale = ["ar"], label = ['"Save"', "Primary"], ghost = [true] }
+everything = { size = [12, 1.5], viewport = ["phone", " 1280x800 "], dir = ["rtl"], mode = ["dark"], locale = ["ar"], label = ['"Save"', "Primary"], ghost = [true] }
 "#,
         None,
     );
@@ -324,7 +324,6 @@ everything = { size = [12, 1.5], viewport = ["phone", " 1280x800 "], control_siz
             MatrixAxis::Locale(vec!["ar".into()]),
             MatrixAxis::Dir(vec![MatrixDirection::Rtl]),
             MatrixAxis::Viewport(vec!["phone".into(), "1280x800".into()]),
-            MatrixAxis::ControlSize(vec![MatrixControlSize::Mini, MatrixControlSize::Large]),
             MatrixAxis::Arg {
                 name: "ghost".into(),
                 values: vec!["true".into()],
@@ -346,14 +345,7 @@ everything = { size = [12, 1.5], viewport = ["phone", " 1280x800 "], control_siz
     assert_eq!(
         names,
         [
-            "mode",
-            "locale",
-            "dir",
-            "viewport",
-            "control_size",
-            "ghost",
-            "label",
-            "size"
+            "mode", "locale", "dir", "viewport", "ghost", "label", "size"
         ]
     );
 }

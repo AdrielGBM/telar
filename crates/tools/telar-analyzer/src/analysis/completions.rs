@@ -533,16 +533,10 @@ fn axis_item(name: &str, description: &str) -> CompletionItem {
     }
 }
 
-/// The values of an inline matrix axis that can be listed: a direction, a control size, or a viewport the package names.
+/// The values of an inline matrix axis that can be listed: a direction, or a viewport the package names.
 pub fn matrix_axis_value_items(axis: &str, project: Option<&ProjectInfo>) -> Vec<CompletionItem> {
     match axis {
         "dir" => direction_items(),
-        "control_size" => word_items(&[
-            ("mini", "The smallest control size."),
-            ("small", "A size below the regular one."),
-            ("regular", "The default control size."),
-            ("large", "A size above the regular one."),
-        ]),
         "viewport" => project
             .and_then(|project| project.previews.viewports.as_ref())
             .into_iter()

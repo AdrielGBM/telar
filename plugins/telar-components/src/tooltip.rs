@@ -7,6 +7,7 @@ use telar::{
     box_item, children, signal, use_theme_tokens,
 };
 
+use crate::ControlSize;
 use crate::shared::{self, shown_chord};
 
 /// Leading for the description line, the only one that wraps (`leading-snug`).
@@ -21,7 +22,7 @@ const MAX_WIDTH_EMS: f32 = 17.0;
 pub struct TooltipTokens {
     /// Corner of the bubble. `None` is the theme's `radius_surface`.
     pub radius: Option<f32>,
-    /// Space between the bubble's sides and its text at the regular control size, scaled with the control size in force. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
+    /// Space between the bubble's sides and its text at the regular size, scaled with the tooltip's own. `None` is [`metrics::gap_md`](crate::metrics::gap_md).
     pub pad_x: Option<f32>,
     /// Space above and below the text, likewise. `None` is [`metrics::gap_sm`](crate::metrics::gap_sm).
     pub pad_y: Option<f32>,
@@ -39,18 +40,21 @@ impl TooltipTokens {
         self.radius.unwrap_or_else(shared::radius_surface)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between the bubble's sides and its text in a tooltip of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::gap_md, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_md(size), |pad| pad * size.scale())
     }
 
-    pub fn pad_y(&self) -> f32 {
+    /// The space above and below the text in a tooltip of `size`.
+    pub fn pad_y(&self, size: ControlSize) -> f32 {
         self.pad_y
-            .map_or_else(shared::gap_sm, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::gap_sm(size), |pad| pad * size.scale())
     }
 
-    pub fn max_width(&self) -> f32 {
-        shared::width_or_measure(self.max_width, MAX_WIDTH_EMS)
+    /// How wide the bubble of a tooltip of `size` may get before its text wraps.
+    pub fn max_width(&self, size: ControlSize) -> f32 {
+        shared::width_or_measure(size, self.max_width, MAX_WIDTH_EMS)
     }
 }
 
@@ -75,6 +79,9 @@ pub struct TooltipProps {
     /// Which side of the trigger the bubble takes: `"bottom"` (the default), `"top"`, `"start"`/`"left"` or `"end"`/`"right"`. It still flips when that side has no room.
     #[props(default = "")]
     pub side: &'static str,
+    /// How large the bubble is drawn: its padding, text and the width it wraps at, as [`ControlSize`] works them out. The trigger is the caller's, sized where it is written.
+    #[props(default)]
+    pub size: ControlSize,
     /// Bubble surface colour, its text inked in whichever of the theme's inks reads on it. `Color::TRANSPARENT` (the default) is the theme's `inverse_surface`, under its `inverse_ink`. A closure (re-read every frame) so a theme token or `$signal` colour re-colours live.
     #[props(into, default = Reactive::of(|| Color::TRANSPARENT))]
     pub color: Reactive<Color>,
@@ -107,6 +114,7 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
         shortcut,
         description,
         side,
+        size,
         color,
         style,
         stretch,
@@ -140,6 +148,7 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
                 )?));
             }
             build_bubble(
+                size,
                 Content {
                     text: text.clone(),
                     shortcut: shortcut.clone(),
@@ -167,6 +176,7 @@ pub fn tooltip(props: TooltipProps) -> Result<Box<dyn LayoutItem>, LayoutError> 
 
 /// Builds the bubble for the hovered state: a padded rounded chip with the tooltip `text`, anchored to the trigger where it is drawn, inside a NON-blocking overlay (a tooltip must not eat clicks on the page).
 fn build_bubble(
+    size: ControlSize,
     content: Content,
     color: Reactive<Color>,
     style: SurfaceStyle,
@@ -177,9 +187,9 @@ fn build_bubble(
     let bubble = move || {
         let tokens = TooltipTokens::current();
         LayoutStyle::column()
-            .max_width(tokens.max_width())
-            .padding_horizontal(tokens.pad_x())
-            .padding_vertical(tokens.pad_y())
+            .max_width(tokens.max_width(size))
+            .padding_horizontal(tokens.pad_x(size))
+            .padding_vertical(tokens.pad_y(size))
     };
     let ink = color.clone();
     let chip = StyledContainer::new(
@@ -192,7 +202,7 @@ fn build_bubble(
                 &style,
             )
         },
-        content.rows(ink)?,
+        content.rows(size, ink)?,
     )?
     .styled_by(bubble);
     // A flex row, for the chip to hug: a `LayoutStyle::new()` is a CSS block, and a block child fills its containing block whatever `align_items` says — so every bubble came out at its 240px cap. Click-through, because a tooltip must not eat clicks on the page it is describing.
@@ -216,7 +226,11 @@ impl Content {
     /// The name line, with its shortcut pushed to the far edge, over an optional sentence.
     ///
     /// The two optional parts are mounted reactively rather than decided here, because the strings are closures: a hint whose shortcut arrives with a signal would otherwise be built once, empty, and stay that way.
-    fn rows(self, color: Reactive<Color>) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
+    fn rows(
+        self,
+        size: ControlSize,
+        color: Reactive<Color>,
+    ) -> Result<Vec<Box<dyn LayoutItem>>, LayoutError> {
         let Content {
             text,
             shortcut,
@@ -224,7 +238,7 @@ impl Content {
         } = self;
         let line = move |ratio: f32, strength: f32| {
             let color = color.clone();
-            move |t: TextStyle| bubble_text(t, ratio, line_ink(&color, strength))
+            move |t: TextStyle| bubble_text(size, t, ratio, line_ink(&color, strength))
         };
         let name = Text::declaring(move || text.get(), LayoutStyle::new(), {
             let line = line(BUBBLE_RATIO, 1.0);
@@ -235,12 +249,12 @@ impl Content {
             move |t| line(t).with_text_wrap(TextWrap::NoWrap)
         })?;
         // `SPACE_BETWEEN` rather than a growing spacer: a spacer wants all the width there is, so the bubble took its 240px maximum whatever it said. This way the row stretches to the column and the key lands on its edge.
-        let title_box = || {
+        let title_box = move || {
             LayoutStyle::row()
                 .align_items(AlignItems::CENTER)
                 .justify_content(JustifyContent::SPACE_BETWEEN)
                 .align_self_stretch()
-                .gap(shared::gap_lg())
+                .gap(shared::gap_lg(size))
         };
         let title = Container::new(title_box(), children![name, key])?.styled_by(title_box);
         // The only line in a bubble that wraps, so the only one whose leading is set: at the shaper's default 1.2 a two-line hint reads as squashed text rather than short leading.
@@ -304,8 +318,8 @@ fn line_ink(color: &Reactive<Color>, strength: f32) -> Color {
 /// A bubble line: sized from the text around the control it describes, inked against the chip it is drawn on rather than against the page.
 ///
 /// The ink is the one thing here that does not inherit, and deliberately: the bubble paints its own inverse surface, so a page that declared dark text would hand this line dark-on-dark. Size still follows the region — a hint in a compact panel is a hint at that panel's scale.
-fn bubble_text(inherited: TextStyle, ratio: f32, ink: Color) -> TextStyle {
-    shared::control_text(inherited, ratio).with_color(ink)
+fn bubble_text(size: ControlSize, inherited: TextStyle, ratio: f32, ink: Color) -> TextStyle {
+    shared::control_text(size, inherited, ratio).with_color(ink)
 }
 
 #[cfg(test)]

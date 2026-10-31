@@ -4,9 +4,9 @@ use std::time::Duration;
 use telar::preview::{Layout, Matrix, PreviewEntry, by_role, preview};
 use telar::{Container, LayoutError, LayoutStyle, Role, box_item};
 
-use crate::Tone;
 use crate::button::{ButtonProps, button};
 use crate::toast::{Toast, ToasterProps, Toasts, toaster};
+use crate::{ControlSize, Tone};
 
 fn poster(
     label: &'static str,
@@ -52,6 +52,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
                 ToasterProps::props()
                     .toasts(queue)
                     .max_visible(p.arg("max_visible", 3u32))
+                    .size(p.arg("size", ControlSize::Regular))
                     .build(),
             )?;
             Ok::<_, LayoutError>(Container::column(vec![box_item(row), stack])?)

@@ -6,7 +6,7 @@ element group
       element group
         element group
           element group
-            rect 289,291 64x18 fill=#2eb073ff border=1 border-color=#00000000 radius=6
+            rect 289,288 64x24 fill=#2eb073ff border=1 border-color=#00000000 radius=6
             element group
               element group
                 rect 297,294 12x12
@@ -17,8 +17,8 @@ element group
                 end
               end
               element group
-                matrix 1,0,0,1,311,293
-                  text 0,0 34.83x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
+                matrix 1,0,0,1,311,288
+                  text 0,4 34.83x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#171a2eff wrap=none lang=en
                 end
               end
             end
@@ -26,7 +26,7 @@ element group
             end
           end
           element group
-            rect 362,291 84x18 fill=#3d8ce614 border=1 border-color=#00000000 radius=6
+            rect 362,288 84x24 fill=#3d8ce614 border=1 border-color=#00000000 radius=6
             element group
               element group
                 rect 370,294 12x12 border=1.44 border-color=#616680ff radius=6
@@ -40,8 +40,8 @@ element group
                 end
               end
               element group
-                matrix 1,0,0,1,384,293
-                  text 0,0 54x14.28 "Exporting" size=11.9 family=sans-serif weight=400 color=#3d65abff wrap=none lang=en
+                matrix 1,0,0,1,384,288
+                  text 0,4 54x14.28 "Exporting" size=11.9 family=sans-serif weight=400 color=#3d65abff wrap=none lang=en
                 end
               end
             end
@@ -49,11 +49,11 @@ element group
             end
           end
           element group
-            rect 454,291 58x18 fill=#00000000 border=1 border-color=#4261edff radius=6
+            rect 454,288 58x24 fill=#00000000 border=1 border-color=#4261edff radius=6
             element group
               element group
-                matrix 1,0,0,1,462,293
-                  text 0,0 28.31x14.28 "Logo" size=11.9 family=sans-serif weight=400 color=#4261edff wrap=none lang=en
+                matrix 1,0,0,1,462,288
+                  text 0,4 28.31x14.28 "Logo" size=11.9 family=sans-serif weight=400 color=#4261edff wrap=none lang=en
                 end
               end
               element group

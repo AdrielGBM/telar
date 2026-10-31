@@ -120,9 +120,19 @@ fn a_disabled_button_is_announced_as_unavailable_and_does_not_fire() {
 
 #[test]
 fn the_fallback_glyph_depends_on_the_name_and_not_the_set() {
-    assert_eq!(glyph_for("lucide:search"), "⌕");
-    assert_eq!(glyph_for("mdi:search"), "⌕");
-    assert_eq!(glyph_for("search"), "⌕");
+    assert_eq!(glyph_for("lucide:search"), "⚲");
+    assert_eq!(glyph_for("mdi:search"), "⚲");
+    assert_eq!(glyph_for("search"), "⚲");
+}
+
+#[test]
+fn the_icons_a_control_is_commonly_handed_have_a_stand_in() {
+    assert_eq!(glyph_for("lucide:x"), "✕");
+    assert_eq!(glyph_for("lucide:external-link"), "↗");
+    assert_eq!(glyph_for("lucide:chevron-left"), "‹");
+    assert_eq!(glyph_for("lucide:chevron-right"), "›");
+    assert_eq!(glyph_for("lucide:chevron-up"), "˄");
+    assert_eq!(glyph_for("lucide:chevron-down"), "˅");
 }
 
 #[test]
@@ -263,6 +273,7 @@ fn the_square_under_the_tooltip_builds_again_as_a_working_button() {
     let square = Square {
         icon: "lucide:search".into(),
         label: "Search".into(),
+        size: crate::ControlSize::Regular,
         shortcut: Reactive::default(),
         pressed: None,
         disabled: Reactive::default(),
@@ -288,4 +299,82 @@ fn the_square_under_the_tooltip_builds_again_as_a_working_button() {
     focus::focus_next();
     tree.on_event(&enter());
     assert_eq!(fired.get(), 1, "the second build presses like the first");
+}
+
+/// Lays `item` out alone in the middle of a 200×80 window, with room around it for a pointer to land past its edges.
+fn centred(item: Box<dyn LayoutItem>) -> ComponentList {
+    let root = Container::new(
+        LayoutStyle::row()
+            .width(200.0)
+            .height(80.0)
+            .align_items(AlignItems::CENTER)
+            .justify_content(JustifyContent::CENTER),
+        vec![item],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(200.0),
+        AvailableSpace::Definite(80.0),
+    )
+    .unwrap();
+    let tree = ComponentList::new(box_item(root));
+    let _ = tree.commands();
+    tree
+}
+
+fn sized(size: ControlSize, run: Rc<dyn Fn()>) -> ComponentList {
+    crate::test_support::fresh_layout_runtime();
+    focus::clear();
+    centred(
+        icon_button(
+            IconButtonProps::props()
+                .icon("lucide:x")
+                .label("Remove")
+                .size(size)
+                .on_press(run)
+                .build(),
+        )
+        .unwrap(),
+    )
+}
+
+/// The square is 24, 32 and 40 px across from small to large, the smallest pointer target at its least, and the icon in it follows the size too.
+#[test]
+fn the_square_and_its_icon_follow_the_size() {
+    for (size, side) in [
+        (ControlSize::Small, 24.0),
+        (ControlSize::Regular, 32.0),
+        (ControlSize::Large, 40.0),
+    ] {
+        let tree = sized(size, Rc::new(|| {}));
+        let face = crate::test_support::drawn(Role::Button)[0];
+        assert_eq!((face.width, face.height), (side, side), "{size:?}");
+        assert!(
+            draws_its_icon_at(&tree, size),
+            "{size:?} draws its icon at its size"
+        );
+    }
+}
+
+#[cfg(feature = "icons")]
+fn draws_its_icon_at(tree: &ComponentList, size: ControlSize) -> bool {
+    let icon = crate::metrics::icon_size(size);
+    tree.commands().iter().any(|command| match command {
+        telar::DrawCommand::Rect { rect, .. } => {
+            (rect.width - icon).abs() < 0.5 && (rect.height - icon).abs() < 0.5
+        }
+        _ => false,
+    })
+}
+
+#[cfg(not(feature = "icons"))]
+fn draws_its_icon_at(tree: &ComponentList, size: ControlSize) -> bool {
+    let font_size = telar::Inherited::initial().text.font_size * size.text_scale();
+    tree.commands().iter().any(|command| match command {
+        telar::DrawCommand::Text { text, style, .. } => {
+            text.as_ref() == glyph_for("lucide:x") && (style.font_size - font_size).abs() < 0.5
+        }
+        _ => false,
+    })
 }

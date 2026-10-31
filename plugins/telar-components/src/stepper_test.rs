@@ -8,7 +8,7 @@ use super::*;
 
 fn tap_minus(widget: &mut Box<dyn LayoutItem>, r: telar::Rect) {
     let (x, y) = (
-        (r.x + shared::control_height() / 2.0) as f64,
+        (r.x + shared::control_height(crate::ControlSize::Regular) / 2.0) as f64,
         (r.y + r.height / 2.0) as f64,
     );
     widget.on_event(&press(x, y));
@@ -16,7 +16,7 @@ fn tap_minus(widget: &mut Box<dyn LayoutItem>, r: telar::Rect) {
 }
 fn tap_plus(widget: &mut Box<dyn LayoutItem>, r: telar::Rect) {
     let (x, y) = (
-        (r.x + r.width - shared::control_height() / 2.0) as f64,
+        (r.x + r.width - shared::control_height(crate::ControlSize::Regular) / 2.0) as f64,
         (r.y + r.height / 2.0) as f64,
     );
     widget.on_event(&press(x, y));

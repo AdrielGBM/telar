@@ -1,6 +1,6 @@
 //! `Surface` — one RSX surface's complete per-surface world.
 //!
-//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale, control size, theme mode and high contrast it overrides the thread's with. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::with_entered`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
+//! A surface (a window, or a Wayland layer-surface) owns a set of thread-local worlds: its layout tree, its size, overlay registry, dismiss stack, overlay names, focus state, input region, force-tick, title, default font family, window-command queue, and the writing direction, locale, theme mode and high contrast it overrides the thread's with. Under M3 several surfaces share one UI thread and one reactive runtime, so those worlds are swappable: the runner activates a surface with [`Surface::with_entered`] around its build/event/frame, and the reactive flush re-enters the surface that owns each effect through the hook this module installs into reactive-core.
 //!
 //! Single-window apps never build a `Surface`: the reactive current-surface stays [`SurfaceHandle::NONE`], every effect captures `NONE`, and entering it is a no-op — so they run against the ambient thread-local worlds exactly as before, at zero added cost.
 
@@ -18,7 +18,7 @@ use reactive_core::{
     SurfaceHandle, cancel_tasks_for, cancel_timers_for, current_surface, dispose_surface,
     in_surface_world, set_surface_enter_hook, with_current_surface,
 };
-use theme_core::{ControlSizeContext, ModeContext};
+use theme_core::ModeContext;
 use ui_tree::OverlayContext;
 
 use crate::anchor_line::PlacesContext;
@@ -86,7 +86,6 @@ surface_worlds! {
     window_commands: WindowCommandContext,
     direction: DirectionContext,
     locale: LocaleContext,
-    control_size: ControlSizeContext,
     mode: ModeContext,
     high_contrast: HighContrastContext,
 }

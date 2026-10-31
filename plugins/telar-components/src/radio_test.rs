@@ -102,11 +102,14 @@ fn the_ring_and_its_dot_are_pills_framed_at_the_strong_width() {
     let [(ring, ring_style), (dot, dot_style)] = ring_and_dot(chosen(None))[..] else {
         panic!("a chosen radio paints its ring and its dot");
     };
-    let side = crate::metrics::icon_size();
+    let side = crate::metrics::icon_size(crate::ControlSize::Regular);
     assert_eq!((ring.width, ring.height), (side, side));
     assert_eq!(ring_style.radius, BorderRadius::all(side / 2.0));
     assert_eq!(ring_style.border.map(|b| b.widths[0]), Some(2.5));
-    assert_eq!(dot.width, side - crate::metrics::gap_sm() * 2.0);
+    assert_eq!(
+        dot.width,
+        side - crate::metrics::gap_sm(crate::ControlSize::Regular) * 2.0
+    );
     assert_eq!(dot_style.radius, BorderRadius::all(dot.width / 2.0));
 }
 
@@ -125,13 +128,31 @@ fn the_radio_tokens_win_over_the_roles() {
     assert_eq!(style.border.map(|b| b.widths[0]), Some(1.0));
 }
 
+/// The ring is the icon size of the radio's own size, and the dot stands inside it by that size's step.
 #[test]
-fn the_ring_scales_with_the_control_size_in_force() {
-    crate::test_support::fresh_layout_runtime();
-    let regular = crate::metrics::icon_size();
-    let large = telar::provide_control_size(telar::ControlSize::Mini, || Ok(chosen(None))).unwrap();
-    let (ring, _) = ring_and_dot(Box::new(large))[0];
-    assert_eq!(ring.width, regular * telar::ControlSize::Mini.scale());
+fn the_ring_and_its_dot_scale_with_the_radio_s_size() {
+    for size in [ControlSize::Small, ControlSize::Regular, ControlSize::Large] {
+        crate::test_support::fresh_layout_runtime();
+        let radio = radio(
+            RadioProps::props()
+                .selected(signal(1u32))
+                .value(1)
+                .label("Small")
+                .size(size)
+                .build(),
+        )
+        .unwrap();
+        let [(ring, _), (dot, _)] = ring_and_dot(radio)[..] else {
+            panic!("a chosen radio paints its ring and its dot");
+        };
+        let side = crate::metrics::icon_size(size);
+        assert_eq!(ring.width, side, "{size:?}");
+        assert_eq!(
+            dot.width,
+            side - crate::metrics::gap_sm(size) * 2.0,
+            "{size:?}"
+        );
+    }
 }
 
 #[test]

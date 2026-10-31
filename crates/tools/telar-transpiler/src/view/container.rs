@@ -395,7 +395,7 @@ impl ViewGen<'_> {
 
     ///
     /// A closure rather than a value, so a `$signal` is re-read instead of frozen at construction — the same treatment a reactive colour or string prop gets, and deliberately *not* the layout path: `width:$sig` re-runs the whole `LayoutStyle`, and whether a box is usable is not a layout property.
-    /// `hit_outset:` as `.hit_outset(…)`: one length past every edge, re-read on every event and query so it follows the theme or the control size it is worked out from.
+    /// `hit_outset:` as `.hit_outset(…)`: one length past every edge, re-read on every event and query so it follows the theme or the size it is worked out from.
     fn hit_outset_call(&self, el: &Element, errors: &mut Vec<String>) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == "hit_outset") else {
             return String::new();

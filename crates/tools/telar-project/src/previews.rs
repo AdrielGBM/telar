@@ -38,7 +38,7 @@ pub struct SnapshotSettings {
 pub type MatrixAxes = BTreeMap<String, Vec<MatrixValue>>;
 
 /// The axes a matrix varies the canvas's environment along, rather than an arg, in the order a matrix lists them.
-pub const MATRIX_GLOBAL_AXES: [&str; 5] = ["mode", "locale", "dir", "viewport", "control_size"];
+pub const MATRIX_GLOBAL_AXES: [&str; 4] = ["mode", "locale", "dir", "viewport"];
 
 /// One axis of a named matrix, read and checked.
 #[derive(Debug, Clone, PartialEq)]
@@ -50,7 +50,6 @@ pub enum MatrixAxis {
     Dir(Vec<MatrixDirection>),
     /// Each a size like `"390x844"` or a name in `[telar.previews.viewports]`.
     Viewport(Vec<String>),
-    ControlSize(Vec<MatrixControlSize>),
     /// An arg, by name, and each value in the text form a preview's arg values are written in: a bool, a number, `#ff8800`, a choice such as `Primary`, or text in quotes, `'"Save"'`.
     Arg {
         name: String,
@@ -66,7 +65,6 @@ impl MatrixAxis {
             Self::Locale(_) => "locale",
             Self::Dir(_) => "dir",
             Self::Viewport(_) => "viewport",
-            Self::ControlSize(_) => "control_size",
             Self::Arg { name, .. } => name,
         }
     }
@@ -88,32 +86,6 @@ impl MatrixDirection {
             .iter()
             .find(|(held, _)| *held == word)
             .map(|(_, direction)| *direction)
-    }
-}
-
-/// A value of a matrix's `control_size` axis.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MatrixControlSize {
-    Mini,
-    Small,
-    Regular,
-    Large,
-}
-
-impl MatrixControlSize {
-    const WORDS: [(&str, Self); 4] = [
-        ("mini", Self::Mini),
-        ("small", Self::Small),
-        ("regular", Self::Regular),
-        ("large", Self::Large),
-    ];
-
-    /// The control size `word` names: `mini`, `small`, `regular` or `large`.
-    pub fn parse(word: &str) -> Option<Self> {
-        Self::WORDS
-            .iter()
-            .find(|(held, _)| *held == word)
-            .map(|(_, size)| *size)
     }
 }
 
@@ -345,9 +317,12 @@ fn parse_axis(
         "viewport" => MatrixAxis::Viewport(read_each(at, values, problems_of, |value| {
             viewport_text(value, viewports)
         })),
-        "control_size" => MatrixAxis::ControlSize(read_each(at, values, problems_of, |value| {
-            word(value, &MatrixControlSize::WORDS)
-        })),
+        "control_size" => {
+            problems.push(format!(
+                "{at} no longer exists: a component takes its own `size` arg rather than inheriting one, so vary that, as `size = [\"Small\", \"Regular\", \"Large\"]`"
+            ));
+            return Err(problems);
+        }
         _ if is_plain_identifier(axis) => MatrixAxis::Arg {
             name: axis.to_string(),
             values: values.iter().map(arg_text).collect(),

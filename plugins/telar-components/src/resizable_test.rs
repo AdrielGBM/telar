@@ -423,7 +423,10 @@ fn fills(tree: &ComponentList) -> Vec<(Rect, Color)> {
 fn a_handle_is_a_spacing_step_thick_until_the_tokens_say_otherwise() {
     telar::set_theme(Plain::default());
     let tree = mount(ResizableProps::props().build());
-    assert_eq!(width_handle().width, crate::metrics::spacing());
+    assert_eq!(
+        width_handle().width,
+        crate::metrics::spacing(crate::ControlSize::Regular)
+    );
     drop(tree);
 
     telar::set_theme(Plain {

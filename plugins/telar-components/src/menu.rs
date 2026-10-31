@@ -11,14 +11,14 @@ use telar::{
     memo, signal, track_layout,
 };
 
+use crate::ControlSize;
 use crate::dropdown;
-use crate::list::ListTokens;
 use crate::menu_panel::{self, Config, Keys, Level, Spec};
 use crate::shared;
 // What the test module below reads via `use super::*` to compute click points.
 #[cfg(test)]
 fn panel_width() -> f32 {
-    dropdown::width(None)
+    dropdown::width(ControlSize::Regular, None)
 }
 #[cfg(test)]
 use crate::shared::{panel_pad, row_height};
@@ -40,13 +40,13 @@ pub struct MenuTokens {
     pub highlight: Option<Color>,
     /// Corner of a panel. `None` is the theme's `radius_surface`.
     pub radius: Option<f32>,
-    /// Height of a row, at the regular control size and scaled with the control size in force. `None` is [`ListTokens::row_height`].
+    /// Height of a row, at the regular size and scaled with each row's own. `None` is [`ListTokens::row_height`](crate::ListTokens::row_height).
     pub row_height: Option<f32>,
-    /// Space between a panel's edge and its rows, at the regular control size and scaled with the control size in force. `None` is [`metrics::panel_pad`](crate::metrics::panel_pad).
+    /// Space between a panel's edge and its rows, at the regular size and scaled with the menu's own. `None` is [`metrics::panel_pad`](crate::metrics::panel_pad).
     pub padding: Option<f32>,
-    /// The least width of a panel, at the regular control size and scaled with the control size in force: a panel widens to its widest row, as far as the room it has. `None` is 13 ems of the document's text. A `context_menu`'s `width` prop wins over it.
+    /// The least width of a panel, at the regular size and scaled with the menu's own: a panel widens to its widest row, as far as the room it has. `None` is 13 ems of the document's text. A `context_menu`'s `width` prop wins over it.
     pub width: Option<f32>,
-    /// Space between a `menu`'s panel and its trigger, or a `context_menu`'s and the control it was asked for from the keyboard, at the regular control size and scaled with the control size in force. `None` is [`metrics::popup_offset`](crate::metrics::popup_offset).
+    /// Space between a `menu`'s panel and its trigger, or a `context_menu`'s and the control it was asked for from the keyboard, at the regular size and scaled with the menu's own. `None` is [`metrics::popup_offset`](crate::metrics::popup_offset).
     pub offset: Option<f32>,
 }
 
@@ -92,24 +92,28 @@ impl MenuTokens {
         self.radius.unwrap_or_else(shared::radius_surface)
     }
 
-    pub fn row_height(&self) -> f32 {
-        self.row_height.map_or_else(
-            || ListTokens::current().row_height(),
-            |height| (height * telar::control_scale()).round(),
+    /// The height of a row of `size` in a panel drawn with these tokens.
+    pub fn row_height(&self, size: ControlSize) -> f32 {
+        crate::list::scaled_row_height(
+            self.row_height.or(crate::ListTokens::current().row_height),
+            size,
         )
     }
 
-    pub fn padding(&self) -> f32 {
+    /// The padding of a panel of a menu of `size`.
+    pub fn padding(&self, size: ControlSize) -> f32 {
         self.padding
-            .map_or_else(shared::panel_pad, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::panel_pad(size), |pad| pad * size.scale())
     }
 
-    pub fn width(&self) -> f32 {
-        dropdown::width(self.width)
+    /// The least width of a panel of a menu of `size`.
+    pub fn width(&self, size: ControlSize) -> f32 {
+        dropdown::width(size, self.width)
     }
 
-    pub fn offset(&self) -> f32 {
-        dropdown::offset(self.offset)
+    /// The space between a panel of a menu of `size` and what it opens from.
+    pub fn offset(&self, size: ControlSize) -> f32 {
+        dropdown::offset(size, self.offset)
     }
 }
 
@@ -120,11 +124,11 @@ impl MenuTokens {
 pub struct MenuTriggerTokens {
     /// Corner of the trigger. `None` is the theme's `radius_control`.
     pub radius: Option<f32>,
-    /// Space between the trigger's edge and its label at the regular control size, scaled with the control size in force. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
+    /// Space between the trigger's edge and its label at the regular size, scaled with the menu's own. `None` is [`metrics::control_pad_x`](crate::metrics::control_pad_x).
     pub pad_x: Option<f32>,
     /// Width of a bordered trigger's frame. `None` is the theme's `border_width`.
     pub border_width: Option<f32>,
-    /// Width of the trigger, unless it is stretched or fitted, at the regular control size and scaled with the control size in force. `None` is 13 ems of the document's text.
+    /// Width of the trigger, unless it is stretched or fitted, at the regular size and scaled with the menu's own. `None` is 13 ems of the document's text.
     pub width: Option<f32>,
 }
 
@@ -138,26 +142,28 @@ impl MenuTriggerTokens {
         self.radius.unwrap_or_else(shared::radius_control)
     }
 
-    pub fn pad_x(&self) -> f32 {
+    /// The space between the edge and the label of the trigger of a menu of `size`.
+    pub fn pad_x(&self, size: ControlSize) -> f32 {
         self.pad_x
-            .map_or_else(shared::control_pad_x, |pad| pad * telar::control_scale())
+            .map_or_else(|| shared::control_pad_x(size), |pad| pad * size.scale())
     }
 
     pub fn border_width(&self) -> f32 {
         self.border_width.unwrap_or_else(shared::border_width)
     }
 
-    pub fn width(&self) -> f32 {
-        dropdown::width(self.width)
+    /// The width of the trigger of a menu of `size`.
+    pub fn width(&self, size: ControlSize) -> f32 {
+        dropdown::width(size, self.width)
     }
 
-    fn geometry() -> dropdown::Geometry {
+    fn geometry(size: ControlSize) -> dropdown::Geometry {
         let tokens = Self::current();
         dropdown::Geometry {
             radius: tokens.radius(),
-            pad_x: tokens.pad_x(),
+            pad_x: tokens.pad_x(size),
             border_width: tokens.border_width(),
-            width: tokens.width(),
+            width: tokens.width(size),
         }
     }
 }
@@ -168,6 +174,9 @@ pub struct MenuProps {
     /// The trigger button's label.
     #[props(into, default)]
     pub label: Reactive<String>,
+    /// How large the trigger and its panel are drawn: the trigger's height, padding, label and caret, and the panel's padding, width and offset, as [`ControlSize`] works them out. The rows are sized where they are written.
+    #[props(default)]
+    pub size: ControlSize,
     /// Fired with the index of the row picked on the first panel, among its rows. A submenu's rows report to its own `on_select`.
     #[props(some, default)]
     pub on_select: Option<Rc<dyn Fn(u32)>>,
@@ -203,6 +212,7 @@ pub struct MenuProps {
 pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let MenuProps {
         label,
+        size,
         on_select,
         color,
         stretch,
@@ -224,6 +234,7 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
     let toggle: Rc<dyn Fn()> = Rc::new(move || open.set(!open.peek()));
     let face = dropdown::Face {
         label,
+        size,
         color: color.clone(),
         bordered,
         caret,
@@ -282,15 +293,16 @@ pub fn menu(props: MenuProps) -> Result<Box<dyn LayoutItem>, LayoutError> {
                 close: close.clone(),
             });
             let look = tokens.or(MenuTokens::current());
-            let offset = memo(move || tokens.or(MenuTokens::current()).offset());
+            let offset = memo(move || tokens.or(MenuTokens::current()).offset(size));
             let anchoring = dropdown::below(trigger_node, trigger_rect, offset);
             let built = menu_panel::panel(
                 Spec {
                     rows: children.clone(),
+                    size,
                     on_select: on_select.clone(),
                     anchoring,
                     width: dropdown::panel_width(
-                        look.width(),
+                        look.width(size),
                         stretch,
                         trigger_node,
                         &trigger_rect,
@@ -336,6 +348,9 @@ pub struct ContextMenuProps {
     /// The least width of each panel in logical px; a panel widens to its widest row. `0.0` (the default) is [`MenuTokens::width`].
     #[props(default)]
     pub width: f32,
+    /// How large its panel is drawn: its padding, width and offset, as [`ControlSize`] works them out. The rows are sized where they are written.
+    #[props(default)]
+    pub size: ControlSize,
     /// The box the panel is kept inside. The window, usually; a pane for a menu that belongs to one.
     #[props(default = Rect::new(0.0, 0.0, f32::MAX, f32::MAX))]
     pub within: Rect,
@@ -360,6 +375,7 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
         on_select,
         on_close,
         width,
+        size,
         within,
         tokens,
         style,
@@ -373,7 +389,7 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
         color: Reactive::of(|| Color::TRANSPARENT),
         close: on_close.clone(),
     });
-    let offset = memo(move || tokens.or(MenuTokens::current()).offset());
+    let offset = memo(move || tokens.or(MenuTokens::current()).offset(size));
     let anchoring: menu_panel::Anchored = Rc::new(move || {
         let inside = menu_panel::kept_inside(within);
         match around {
@@ -384,9 +400,10 @@ pub fn context_menu(props: ContextMenuProps) -> Result<Box<dyn LayoutItem>, Layo
     let built = menu_panel::panel(
         Spec {
             rows: children,
+            size,
             on_select,
             anchoring,
-            width: config.panel_width(),
+            width: config.panel_width(size),
             level: Level::Root,
             seed: around.is_some(),
         },

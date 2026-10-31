@@ -407,11 +407,10 @@ pub(crate) fn missing_workshop(resolved: &ResolvedPackage) -> Option<String> {
     ))
 }
 
-/// A `telar` feature that is a crate of its own now, and the feature groups of that crate it stood for.
+/// A `telar` feature that is a crate of its own now.
 struct MovedFeature {
     feature: &'static str,
     package: &'static str,
-    groups: &'static [&'static str],
 }
 
 const COMPONENTS: &str = "telar-components";
@@ -423,37 +422,30 @@ const MOVED_FEATURES: [MovedFeature; 7] = [
     MovedFeature {
         feature: "components",
         package: COMPONENTS,
-        groups: &["overlays", "chrome", "advanced"],
     },
     MovedFeature {
         feature: "components-base",
         package: COMPONENTS,
-        groups: &[],
     },
     MovedFeature {
         feature: "components-overlays",
         package: COMPONENTS,
-        groups: &["overlays"],
     },
     MovedFeature {
         feature: "components-chrome",
         package: COMPONENTS,
-        groups: &["chrome"],
     },
     MovedFeature {
         feature: "components-advanced",
         package: COMPONENTS,
-        groups: &["advanced"],
     },
     MovedFeature {
         feature: "navigate",
         package: "telar-navigate",
-        groups: &[],
     },
     MovedFeature {
         feature: "watch",
         package: WATCH,
-        groups: &[],
     },
 ];
 
@@ -530,25 +522,10 @@ pub(crate) fn moved_features_hint(
     let mut commands: Vec<String> = Vec::new();
     let mut entries: Vec<String> = prelude.iter().map(ToString::to_string).collect();
     for crate_package in [COMPONENTS, "telar-navigate", WATCH] {
-        let wanted: Vec<&&MovedFeature> = moved
-            .iter()
-            .filter(|m| m.package == crate_package)
-            .collect();
-        if wanted.is_empty() {
+        if !moved.iter().any(|m| m.package == crate_package) {
             continue;
         }
-        let groups: BTreeSet<&str> = wanted
-            .iter()
-            .flat_map(|m| m.groups.iter().copied())
-            .collect();
-        let features = match groups.is_empty() {
-            true => String::new(),
-            false => format!(
-                " --features {}",
-                groups.into_iter().collect::<Vec<_>>().join(",")
-            ),
-        };
-        commands.push(format!("cargo add -p {package} {crate_package}{features}"));
+        commands.push(format!("cargo add -p {package} {crate_package}"));
         let crate_name = crate_package.replace('-', "_");
         if crate_package != WATCH && !entries.contains(&crate_name) {
             entries.push(crate_name);
