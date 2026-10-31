@@ -255,3 +255,42 @@ fn a_reader_and_the_input_region_are_told_the_grown_area() {
     assert_eq!(splitter.rect, grown);
     assert_eq!(input_region::interactive_rects(), vec![grown]);
 }
+
+/// The grown area starts above its taller-standing sibling's top, and a reader still meets the two in the order they are drawn along the line.
+#[test]
+fn a_reader_meets_a_grown_control_where_it_is_drawn() {
+    reset_layout_runtime();
+    focus::clear();
+    let button = |outset: f32| {
+        StyledContainer::new(
+            LayoutStyle::new().width(40.0).height(18.0),
+            |_| RectStyle::default(),
+            vec![],
+        )
+        .unwrap()
+        .control(focus::Role::Button)
+        .on_press(|| {})
+        .hit_outset(Insets::all(outset))
+    };
+    let root = Container::new(
+        LayoutStyle::new().flex_row().width(300.0).height(100.0),
+        vec![box_item(button(0.0)), box_item(button(4.0))],
+    )
+    .unwrap();
+    compute_layout(
+        root.layout_node(),
+        AvailableSpace::Definite(300.0),
+        AvailableSpace::Definite(100.0),
+    )
+    .unwrap();
+    let widths: Vec<f32> = crate::accessibility::snapshot(&[])
+        .into_iter()
+        .filter(|node| node.role == focus::Role::Button)
+        .map(|node| node.rect.width)
+        .collect();
+    assert_eq!(
+        widths,
+        [40.0, 48.0],
+        "the plain one first, then the grown one"
+    );
+}

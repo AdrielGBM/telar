@@ -369,9 +369,11 @@ struct Found {
 }
 
 impl Found {
+    /// Keyed by the box as it is drawn, not by the area the pointer finds it in: a control that reaches past its edges is still read where it stands among its siblings.
     fn holding(node: AccessNode, at: NodeId, reading: &Reading) -> Self {
+        let drawn = visible_rect(at).unwrap_or(node.rect);
         Self {
-            key: reading.in_flow(node.rect, Some(at)),
+            key: reading.in_flow(drawn, Some(at)),
             within: reading.parent_of(at),
             holds: Some(at),
             node,
