@@ -44,6 +44,27 @@ pub(crate) fn group_ids(entries: &[PreviewEntry]) -> Vec<Arc<str>> {
     TreeNode::branch_ids(&tree(entries, "", |_| None))
 }
 
+/// The id of every group the preview `id` is listed under, outermost first; empty for an id no preview has.
+pub(crate) fn groups_holding(entries: &[PreviewEntry], id: &str) -> Vec<Arc<str>> {
+    let mut path = Vec::new();
+    path_to(&tree(entries, "", |_| None), id, &mut path);
+    path
+}
+
+fn path_to(nodes: &[TreeNode], id: &str, path: &mut Vec<Arc<str>>) -> bool {
+    nodes.iter().any(|node| {
+        if !node.is_branch() {
+            return *node.id == *id;
+        }
+        path.push(node.id.clone());
+        let found = path_to(&node.children, id, path);
+        if !found {
+            path.pop();
+        }
+        found
+    })
+}
+
 fn matches(query: &str, entry: &PreviewEntry) -> bool {
     query.split_whitespace().all(|token| {
         [entry.package, entry.title, entry.name]

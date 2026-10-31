@@ -37,6 +37,7 @@ fn only_the_workshop_s_own_keys_outlive_the_run() {
 }
 
 mod across_runs {
+    use std::collections::HashSet;
     use std::rc::Rc;
 
     use telar::preview::host::PreviewRequest;
@@ -73,6 +74,7 @@ mod across_runs {
         let keeper = Keeper::in_store(Arc::new(MemoryStore::default()));
         let first = run(&keeper, &PreviewRequest::default());
         first.select("fake--field--empty");
+        first.expanded().set(HashSet::from([Arc::from("/Layout")]));
         first.sidebar_width().set(300.0);
         first.panel_collapsed().set(true);
         first.panel_position().set(PanelPosition::Right);
@@ -86,6 +88,10 @@ mod across_runs {
         assert_eq!(
             next.selection().peek().as_deref(),
             Some("fake--field--empty")
+        );
+        assert_eq!(
+            next.expanded().peek(),
+            HashSet::from([Arc::from("/Layout")])
         );
         assert_eq!(next.sidebar_width().peek(), 300.0);
         assert!(next.panel_collapsed().peek());

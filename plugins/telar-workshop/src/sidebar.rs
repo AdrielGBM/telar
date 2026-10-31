@@ -24,7 +24,7 @@ use crate::snapshot::drift_badge;
 use crate::state::{SIDEBAR_MAX_WIDTH, WorkshopState};
 use crate::strings::{self, CLEAR_SEARCH, NO_MATCHES, NO_PREVIEWS, PREVIEWS, SEARCH};
 
-pub(crate) use model::{group_ids, listed};
+pub(crate) use model::{group_ids, groups_holding, listed};
 
 /// What fills the sidebar pane the shell sizes.
 pub(crate) fn sidebar(state: &WorkshopState) -> Result<Box<dyn LayoutItem>, LayoutError> {

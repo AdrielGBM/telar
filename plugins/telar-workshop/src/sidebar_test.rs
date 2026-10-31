@@ -44,11 +44,25 @@ struct Mounted {
 }
 
 impl Mounted {
+    /// The sidebar with every group open, so each row is on screen.
     fn new(entries: Vec<PreviewEntry>) -> Self {
+        Self::mount(entries, true)
+    }
+
+    fn first_run(entries: Vec<PreviewEntry>) -> Self {
+        Self::mount(entries, false)
+    }
+
+    fn mount(entries: Vec<PreviewEntry>, every_group_open: bool) -> Self {
         telar::testing::install_test_face();
         reset_layout_runtime();
         focus::clear();
         let state = WorkshopState::new(entries.into(), &Default::default());
+        if every_group_open {
+            state
+                .expanded()
+                .set(group_ids(state.entries()).into_iter().collect());
+        }
         let runtime = LocalApp(Workshop { state });
         let tree = mount(|| runtime.0.root(), 240, 600);
         let mounted = Self { runtime, tree };
@@ -149,6 +163,16 @@ fn a_group_counts_its_previews() {
     assert_eq!(after("Inputs"), "3");
     assert_eq!(after("Button"), "2");
     assert_eq!(after("Overlays"), "1");
+}
+
+#[test]
+fn a_first_run_opens_only_the_groups_holding_the_selection() {
+    let sidebar = Mounted::first_run(entries());
+    assert!(sidebar.drawn("Primary"));
+    assert!(sidebar.drawn("Checkbox"));
+    assert!(!sidebar.drawn("Checked"));
+    assert!(sidebar.drawn("Overlays"));
+    assert!(!sidebar.drawn("Modal"));
 }
 
 #[test]

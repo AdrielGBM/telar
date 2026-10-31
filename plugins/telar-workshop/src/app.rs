@@ -26,7 +26,7 @@ use crate::{address, canvas, store};
 ///
 /// It opens where the location it was started at points (`--location`, a link the workshop copied, a page's address), else on the preview [`requested_preview`] names by id, else where it was when it last closed, else on the first preview; the component the request names narrows the sidebar. After a hot reload it stays where it was. A `goto:` line on the hot-reload channel moves it while it runs.
 ///
-/// Under `cargo telar preview` it keeps the selection, the view, the pane sizes and the canvas toolbar's settings between runs in `<workspace>/.telar/workshop/state`, or in the page's `localStorage` in a browser. Edited args last the run and travel in its address, which also carries the Matrix view's axes and focused cell, so a page reloaded comes back where it was. Its Snapshot panel reviews the `report.json` the workspace's last `cargo telar test` wrote.
+/// Under `cargo telar preview` it keeps the selection, the view, the sidebar groups left open, the pane sizes and the canvas toolbar's settings between runs in `<workspace>/.telar/workshop/state`, or in the page's `localStorage` in a browser. Edited args last the run and travel in its address, which also carries the Matrix view's axes and focused cell, so a page reloaded comes back where it was. Its Snapshot panel reviews the `report.json` the workspace's last `cargo telar test` wrote.
 pub struct WorkshopApp {
     entries: Rc<[PreviewEntry]>,
     requested: PreviewRequest,

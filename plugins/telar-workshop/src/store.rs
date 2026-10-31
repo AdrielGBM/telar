@@ -1,4 +1,4 @@
-//! What the workshop remembers between runs: the selection, the view, the pane sizes, the canvas toolbar's settings and whether a play runs as its canvas mounts, each under a `workshop.*` key of the preference store.
+//! What the workshop remembers between runs: the selection, the view, the sidebar groups left open, the pane sizes, the canvas toolbar's settings and whether a play runs as its canvas mounts, each under a `workshop.*` key of the preference store.
 //!
 //! The workshop installs a store of its own, which keeps those keys where its target keeps things — `<workspace>/.telar/workshop/state` on the desktop, the page's `localStorage` in a browser — and every other key in memory: a preview's own preferences last the run and no longer. Edited args are never stored; they live in memory, and in the workshop's address.
 
@@ -18,6 +18,7 @@ use telar::{MemoryStore, PreferenceStore, RwSignal, Timer, effect, hot_signal, r
 pub(crate) mod keys {
     pub(crate) const SELECTION: &str = "workshop.selection";
     pub(crate) const VIEW: &str = "workshop.view";
+    pub(crate) const SIDEBAR_EXPANDED: &str = "workshop.sidebar.expanded";
     pub(crate) const SIDEBAR_WIDTH: &str = "workshop.sidebar.width";
     pub(crate) const SIDEBAR_COLLAPSED: &str = "workshop.sidebar.collapsed";
     pub(crate) const PANEL_SIZE: &str = "workshop.panel.size";

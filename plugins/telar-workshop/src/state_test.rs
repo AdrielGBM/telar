@@ -175,17 +175,24 @@ fn selecting_an_unknown_id_keeps_the_selection() {
 }
 
 #[test]
-fn every_group_starts_open() {
-    let state = WorkshopState::new(entries(), &PreviewRequest::default());
+fn only_the_groups_holding_the_selection_start_open() {
+    let state = WorkshopState::new(entries(), &id(FIELD));
     assert_eq!(
         sorted(&state.expanded().peek()),
-        ["/Inputs", "/Inputs/Button", "/Inputs/Field"]
+        ["/Inputs", "/Inputs/Field"]
     );
 }
 
 #[test]
 fn a_restored_set_of_open_groups_wins() {
     restore(&[(keys::SIDEBAR_EXPANDED, r#"["/Inputs"]"#)]);
+    let state = WorkshopState::new(entries(), &PreviewRequest::default());
+    assert_eq!(sorted(&state.expanded().peek()), ["/Inputs"]);
+}
+
+#[test]
+fn a_restored_group_the_previews_no_longer_have_is_dropped() {
+    restore(&[(keys::SIDEBAR_EXPANDED, r#"["/Inputs", "/Gone"]"#)]);
     let state = WorkshopState::new(entries(), &PreviewRequest::default());
     assert_eq!(sorted(&state.expanded().peek()), ["/Inputs"]);
 }

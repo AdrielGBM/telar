@@ -21,7 +21,7 @@ use crate::interactions::Interactions;
 use crate::matrix::MatrixAxes;
 use crate::route::{Page, WorkshopRoute, cell_past};
 use crate::settings::CanvasSettings;
-use crate::sidebar::{group_ids, listed};
+use crate::sidebar::{group_ids, groups_holding, listed};
 use crate::snapshot::SnapshotReview;
 use crate::store::{self, Keeper};
 
@@ -162,7 +162,7 @@ impl WorkshopState {
         Self::kept_in(entries, requested, &Keeper::none(), None)
     }
 
-    /// The state for `entries`, with what a hot reload restored, and otherwise what `keeper` kept on the last run: the selection, the view, the pane sizes and the canvas toolbar's settings, each kept there again as it changes.
+    /// The state for `entries`, with what a hot reload restored, and otherwise what `keeper` kept on the last run: the selection, the view, the sidebar groups left open, the pane sizes and the canvas toolbar's settings, each kept there again as it changes.
     ///
     /// The selection a hot reload restored wins while it still names a preview. Otherwise it is the preview `requested` names by id, else the stored one, else the first; where the requested component, read as a title filter, keeps any previews, the stored and the first are chosen among those. The search starts as that filter.
     ///
@@ -198,10 +198,10 @@ impl WorkshopState {
             selection.set(initial);
         }
         keeper.keep(selection, store::keys::SELECTION);
-        let every_group = group_ids(&entries).into_iter().collect();
+        let expanded = Self::open_groups(&entries, selection.peek().as_deref(), keeper);
         let state = Self {
             selection,
-            expanded: hot_signal(keys::SIDEBAR_EXPANDED, every_group),
+            expanded,
             view: keeper.kept(keys::VIEW, store::keys::VIEW, ViewMode::default()),
             search: hot_signal(keys::SEARCH, filter),
             sidebar_width: keeper.kept(
@@ -261,6 +261,27 @@ impl WorkshopState {
         state
     }
 
+    /// The sidebar's open groups as a hot reload restored them, else as `keeper` kept them, else the groups holding `selected`; groups the previews no longer have are dropped.
+    fn open_groups(
+        entries: &[PreviewEntry],
+        selected: Option<&str>,
+        keeper: &Keeper,
+    ) -> RwSignal<HashSet<Arc<str>>> {
+        let holding: HashSet<Arc<str>> = selected
+            .map(|id| groups_holding(entries, id).into_iter().collect())
+            .unwrap_or_default();
+        let expanded = keeper.kept(
+            keys::SIDEBAR_EXPANDED,
+            store::keys::SIDEBAR_EXPANDED,
+            holding,
+        );
+        let groups: HashSet<Arc<str>> = group_ids(entries).into_iter().collect();
+        if !expanded.peek_with(|open| open.is_subset(&groups)) {
+            expanded.update(|open| open.retain(|id| groups.contains(id)));
+        }
+        expanded
+    }
+
     /// Keeps [`panel_collapsed`](Self::panel_collapsed) to what the view shown keeps: a view brought up folds the panels as it last did, and folding them is kept for the view they were folded in.
     fn fold_per_view(&self) {
         let (view, collapsed, folded) = (self.view, self.panel_collapsed, self.panels_folded);
@@ -302,7 +323,7 @@ impl WorkshopState {
         listed
     }
 
-    /// The groups of the sidebar that are open, by the id the sidebar gives each. Every group starts open.
+    /// The groups of the sidebar that are open, by the id the sidebar gives each. On a first run only the groups holding the selection are.
     pub(crate) fn expanded(&self) -> RwSignal<HashSet<Arc<str>>> {
         self.expanded
     }
