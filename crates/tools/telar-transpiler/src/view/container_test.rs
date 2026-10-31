@@ -194,6 +194,14 @@ fn a_toggle_button_is_a_button_with_a_state() {
     assert!(!code.contains("compile_error!"), "{code}");
 }
 
+/// A parenthesised state is the expression inside, so the closure reading it raises no `unused_parens` in the crate it lands in.
+#[test]
+fn a_parenthesised_state_is_read_without_its_parentheses() {
+    let code = transpiled("box role:button toggled:(!$open) on_press:(|| ())\n    text \"B\"\n");
+    assert!(code.contains("move || !open.get()"), "{code}");
+    assert!(!code.contains("move || (!open.get())"), "{code}");
+}
+
 #[test]
 fn a_state_on_a_role_without_one_is_a_build_error() {
     for view in [
@@ -257,4 +265,32 @@ fn a_link_run_cannot_be_marked_current() {
         code.contains("`current` is not an attribute of `span`"),
         "{code}"
     );
+}
+
+#[test]
+fn a_hit_outset_grows_the_target_of_a_styled_box() {
+    let code =
+        transpiled("row role:button hit_outset:(4.0 - 1.0) on_press:(|| ())\n    text \"x\"\n");
+    assert!(code.contains("StyledContainer::new("), "{code}");
+    assert!(
+        code.contains(
+            ".hit_outset(::telar::Reactive::of(move || ::telar::Insets::all((4.0 - 1.0) as f32)))"
+        ),
+        "{code}"
+    );
+    assert!(!code.contains("compile_error!"), "{code}");
+}
+
+#[test]
+fn a_hit_outset_alone_makes_a_row_a_styled_box() {
+    let code = transpiled("row hit_outset:3\n    text \"x\"\n");
+    assert!(code.contains("StyledContainer::new("), "{code}");
+    assert!(code.contains("Insets::all((3) as f32)"), "{code}");
+}
+
+#[test]
+fn a_hit_outset_without_a_length_is_a_build_error() {
+    let code = transpiled("row hit_outset\n    text \"x\"\n");
+    assert!(code.contains("compile_error!"), "{code}");
+    assert!(code.contains("`hit_outset:` takes"), "{code}");
 }

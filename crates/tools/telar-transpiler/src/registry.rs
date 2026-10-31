@@ -380,6 +380,9 @@ const CONTAINER_PAINT: &[AttrSpec] = &[
     AttrSpec::free("inert").doc(
         "Takes the subtree out of input while it reads true: no pointer, keys, focus or input region.",
     ),
+    AttrSpec::free("hit_outset").doc(
+        "Grows the area the pointer finds the box in by this many pixels past each edge, without moving or drawing anything: a number, or an expression yielding one, re-read on every event. A small control stays small and is still a full-size target; the grown area wins over the box's siblings, and is the rect a reader and a target-size check are told.",
+    ),
     AttrSpec::flag("holds_stroke")
         .doc("A control inside something draggable, claiming the stroke that starts on it."),
     AttrSpec::free("hover_style"),

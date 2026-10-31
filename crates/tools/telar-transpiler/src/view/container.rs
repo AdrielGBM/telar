@@ -227,6 +227,7 @@ impl ViewGen<'_> {
             },
         };
         let toggled = self.predicate_call(el, "toggled");
+        let hit_outset = self.hit_outset_call(el, &mut errors);
         let holds_stroke = el
             .attributes
             .iter()
@@ -267,7 +268,7 @@ impl ViewGen<'_> {
 
         // Any of these forces the StyledContainer upgrade. `on_press` is excluded because its closure form wires on a plain Container; `on_press_forwarded` covers the other case, and `operated` a role only a StyledContainer can make a control.
         let styling = format!(
-            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{to}"
+            "{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{hit_outset}{to}"
         );
         let pieces = if always_style
             || has_paint(&attrs)
@@ -317,7 +318,7 @@ impl ViewGen<'_> {
             Some((closure, layer_calls)) => {
                 let _ = writeln!(
                     code,
-                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{layer_calls}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{holds_stroke}{role_call}{toggled}{to}{current}{styled_by}{declaring}{terminator}"
+                    "{inner_pad}{bind}StyledContainer::{ctor}({style}, {closure}, {children})?{layer_calls}{blend}{hover_call}{active_call}{disabled_call}{focus_ring}{disabled}{on_press}{transform_call}{on_hover}{on_pointer_move}{on_key}{on_drag}{on_drag_end}{on_scroll}{on_focus}{on_long_press}{on_alt_press}{cursor}{drag_button}{drag_threshold}{input}{inert}{consumes_keys}{hit_outset}{holds_stroke}{role_call}{toggled}{to}{current}{styled_by}{declaring}{terminator}"
                 );
             }
             None => {
@@ -394,6 +395,29 @@ impl ViewGen<'_> {
 
     ///
     /// A closure rather than a value, so a `$signal` is re-read instead of frozen at construction — the same treatment a reactive colour or string prop gets, and deliberately *not* the layout path: `width:$sig` re-runs the whole `LayoutStyle`, and whether a box is usable is not a layout property.
+    /// `hit_outset:` as `.hit_outset(…)`: one length past every edge, re-read on every event and query so it follows the theme or the control size it is worked out from.
+    fn hit_outset_call(&self, el: &Element, errors: &mut Vec<String>) -> String {
+        let Some(attr) = el.attributes.iter().find(|a| a.key == "hit_outset") else {
+            return String::new();
+        };
+        if attr.value.is_flag() {
+            errors.push(
+                "`hit_outset:` takes how far past each edge the pointer still finds the box: `hit_outset:4` or `hit_outset:(expr)`".to_string(),
+            );
+            return String::new();
+        }
+        let value = attr.value.text().trim();
+        let value = super::redundant_parens(value).unwrap_or(value);
+        let read = substitute_reads(value, self.theme_access);
+        format!(
+            ".hit_outset(::telar::Reactive::of({}))",
+            self.owning(
+                &[value],
+                &format!("move || ::telar::Insets::all(({read}) as f32)")
+            )
+        )
+    }
+
     fn predicate_call(&self, el: &Element, key: &str) -> String {
         let Some(attr) = el.attributes.iter().find(|a| a.key == key) else {
             return String::new();
@@ -402,6 +426,7 @@ impl ViewGen<'_> {
         if attr.value.is_flag() {
             return format!(".{key}(|| true)");
         }
+        let value = super::redundant_parens(value).unwrap_or(value);
         let read = substitute_reads(value, self.theme_access);
         format!(
             ".{key}({})",
