@@ -9,7 +9,7 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         preview!(badge: BadgeProps, "Default", |p| {
             badge(
                 BadgeProps::props()
-                    .label(p.arg("label", "New"))
+                    .label(p.arg("label", "Badge"))
                     .color(p.arg("color", Color::TRANSPARENT))
                     .build(),
             )
@@ -19,16 +19,16 @@ pub(crate) fn previews() -> Vec<PreviewEntry> {
         .matrix(Matrix::Named("themes")),
         preview!(badge: BadgeProps, "Semantic colours", |_p| {
             let badges = [
-                ("Info", Reactive::of(|| telar::use_theme_tokens().info())),
+                ("Beta", Reactive::of(|| telar::use_theme_tokens().info())),
                 (
-                    "Success",
+                    "Saved",
                     Reactive::of(|| telar::use_theme_tokens().success()),
                 ),
                 (
-                    "Warning",
+                    "Unsaved changes",
                     Reactive::of(|| telar::use_theme_tokens().warning()),
                 ),
-                ("Error", Reactive::of(|| telar::use_theme_tokens().error())),
+                ("Export failed", Reactive::of(|| telar::use_theme_tokens().error())),
             ]
             .into_iter()
             .map(|(label, color)| badge(BadgeProps::props().label(label).color(color).build()))

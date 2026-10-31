@@ -6,34 +6,34 @@ element group
       element group
         element group
           element group
-            rect 284,291 38x18 fill=#3d8ce6ff radius=9
+            rect 240,291 41x18 fill=#3d8ce6ff radius=9
             element group
-              matrix 1,0,0,1,292,293
-                text 0,0 22x14.28 "Info" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
+              matrix 1,0,0,1,248,293
+                text 0,0 25.36x14.28 "Beta" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
               end
             end
           end
           element group
-            rect 329,291 63x18 fill=#2eb073ff radius=9
+            rect 289,291 51x18 fill=#2eb073ff radius=9
             element group
-              matrix 1,0,0,1,337,293
-                text 0,0 47.78x14.28 "Success" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
+              matrix 1,0,0,1,297,293
+                text 0,0 35x14.28 "Saved" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
               end
             end
           end
           element group
-            rect 401,291 63x18 fill=#e69e29ff radius=9
+            rect 348,291 117x18 fill=#e69e29ff radius=9
             element group
-              matrix 1,0,0,1,409,293
-                text 0,0 47x14.28 "Warning" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
+              matrix 1,0,0,1,356,293
+                text 0,0 101x14.28 "Unsaved changes" size=11.9 family=sans-serif weight=400 color=#171a2eff lang=en
               end
             end
           end
           element group
-            rect 472,291 44x18 fill=#cc3342ff radius=9
+            rect 473,291 87x18 fill=#cc3342ff radius=9
             element group
-              matrix 1,0,0,1,480,293
-                text 0,0 28x14.28 "Error" size=11.9 family=sans-serif weight=400 color=#ffffffff lang=en
+              matrix 1,0,0,1,481,293
+                text 0,0 71x14.28 "Export failed" size=11.9 family=sans-serif weight=400 color=#ffffffff lang=en
               end
             end
           end

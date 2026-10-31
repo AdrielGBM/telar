@@ -5,10 +5,10 @@ element group
     element group
       element group
         element group
-          rect 379,291 42x18 fill=#4261edff radius=9
+          rect 374,291 52x18 fill=#4261edff radius=9
           element group
-            matrix 1,0,0,1,387,293
-              text 0,0 26x14.28 "New" size=11.9 family=sans-serif weight=400 color=#ffffffff lang=en
+            matrix 1,0,0,1,382,293
+              text 0,0 36x14.28 "Badge" size=11.9 family=sans-serif weight=400 color=#ffffffff lang=en
             end
           end
         end
