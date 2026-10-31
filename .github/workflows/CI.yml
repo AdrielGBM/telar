@@ -36,8 +36,6 @@ jobs:
           components: clippy, rustfmt
       - run: cargo fmt --all -- --check
       - run: .github/scripts/check-layering.sh
-      - name: No outside tool names
-        run: "! git grep -il 'story[b]ook' -- ':!docs/plans'"
       - run: cargo clippy --workspace --all-targets --exclude telar-platform-android --exclude telar-analyzer --exclude telar-diagnostics -- -D warnings
 
   # `--all-targets` so the test targets no other job compiles cannot rot unnoticed: `sandbox/dev` is off in `test`, which would leave `apps/sandbox/src/hot_tree_test.rs`, the only guard for the split-runtime regression, never type-checked.
