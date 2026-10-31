@@ -18,6 +18,7 @@ mod icons;
 mod library;
 mod manifest;
 pub mod naming;
+mod orphan_tests;
 mod paths;
 mod prelude;
 mod prerender;
@@ -69,6 +70,7 @@ pub use manifest::{
     DevSection, I18nSection, MANIFEST_FILENAME, ManifestError, PrerenderSection, RendererBackend,
     TelarManifest, TelarSection, WebSection, WindowSection,
 };
+pub use orphan_tests::orphan_test_warnings;
 pub use paths::{
     cargo_metadata, find_ancestor_dir, find_package_root, find_target_dir, find_telar_root,
     find_workspace_root, resolve_telar_version, telar_version_in, workspace_member_dirs,
