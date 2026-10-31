@@ -4,13 +4,16 @@ crate::surface_local! {
     context ProbeContext;
 }
 
-static WORLDS_DROPPED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+// Per thread: tests run in parallel and drop worlds of their own, so a process-wide count races the one being measured.
+thread_local! {
+    static WORLDS_DROPPED: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
 
 struct World;
 
 impl Drop for World {
     fn drop(&mut self) {
-        WORLDS_DROPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        WORLDS_DROPPED.with(|dropped| dropped.set(dropped.get() + 1));
     }
 }
 
@@ -21,7 +24,7 @@ crate::surface_local! {
 }
 
 fn worlds_dropped() -> u32 {
-    WORLDS_DROPPED.load(std::sync::atomic::Ordering::Relaxed)
+    WORLDS_DROPPED.with(std::cell::Cell::get)
 }
 
 fn probe() -> u32 {
